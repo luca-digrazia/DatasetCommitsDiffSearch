@@ -24,7 +24,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import static com.oracle.truffle.espresso.EspressoOptions.VerifyMode;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINALIZER;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_SUPER;
 import static com.oracle.truffle.espresso.classfile.Constants.JVM_ACC_WRITTEN_FLAGS;
 
@@ -41,6 +40,7 @@ import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
+import com.oracle.truffle.espresso.debugger.api.VMEventListeners;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -113,11 +113,11 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal private int computedModifiers = -1;
 
-    private static final int LOADED = 0;
-    private static final int LINKED = 1;
-    private static final int PREPARED = 2;
-    private static final int INITIALIZED = 3;
-    private static final int ERRONEOUS = 99;
+    public static final int LOADED = 0;
+    public static final int LINKED = 1;
+    public static final int PREPARED = 2;
+    public static final int INITIALIZED = 3;
+    public static final int ERRONEOUS = 99;
 
     public final Attribute getAttribute(Symbol<Name> name) {
         return linkedKlass.getAttribute(name);
@@ -240,6 +240,10 @@ public final class ObjectKlass extends Klass {
         return initState == PREPARED;
     }
 
+    public int getState() {
+        return initState;
+    }
+
     private boolean isInitializedOrPrepared() {
         return isPrepared() || isInitialized();
     }
@@ -263,13 +267,16 @@ public final class ObjectKlass extends Klass {
                      */
                     prepare();
                     initState = PREPARED;
+                    if (getContext().isMainThreadCreated()) {
+                        VMEventListeners.getDefault().classPrepared(this, getContext().getCurrentThread());
+                    }
                     if (getSuperKlass() != null) {
                         getSuperKlass().initialize();
                     }
                     for (ObjectKlass interf : getSuperInterfaces()) {
-                        // Initialize all super interfaces, direct and indirect, with default
-                        // methods.
-                        interf.recursiveInitialize();
+                        if (interf.needsRecursiveInit) {
+                            interf.recursiveInitialize();
+                        }
                     }
                     Method clinit = getClassInitializer();
                     if (clinit != null) {
@@ -277,7 +284,7 @@ public final class ObjectKlass extends Klass {
                     }
                 } catch (EspressoException e) {
                     setErroneous();
-                    StaticObject cause = e.getExceptionObject();
+                    StaticObject cause = e.getException();
                     if (!InterpreterToVM.instanceOf(cause, getMeta().Error)) {
                         throw getMeta().throwExWithCause(ExceptionInInitializerError.class, cause);
                     } else {
@@ -768,12 +775,6 @@ public final class ObjectKlass extends Klass {
             System.err.println();
         }
     }
-
-    public final boolean hasFinalizer() {
-        return (getModifiers() & ACC_FINALIZER) != 0;
-    }
-
-    // Verification data
 
     // Verification data
     @CompilationFinal //

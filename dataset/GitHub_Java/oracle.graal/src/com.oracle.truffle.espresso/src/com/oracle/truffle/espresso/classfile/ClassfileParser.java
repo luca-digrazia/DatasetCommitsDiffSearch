@@ -30,7 +30,6 @@ import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINALIZER;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_INNER_CLASS;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_INTERFACE;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_LAMBDA_FORM_COMPILED;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_MODULE;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_NATIVE;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_PRIVATE;
@@ -72,6 +71,8 @@ import com.oracle.truffle.espresso.impl.ParserKlass;
 import com.oracle.truffle.espresso.impl.ParserMethod;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.meta.Local;
+import com.oracle.truffle.espresso.meta.LocalVariableTable;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -463,8 +464,9 @@ public final class ClassfileParser {
             throw classFormatError("Too many arguments in method signature: " + signature);
         }
 
-        if (name.equals(Name.finalize) && signature.equals(Signature._void) && !Modifier.isStatic(methodFlags) && !Type.Object.equals(classType)) {
-            // This class has a finalizer method implementation (ignore for java.lang.Object).
+        if (name.equals(Name.finalize) && signature.equals(Signature._void) && Modifier.isStatic(methodFlags)) {
+            // this class has a finalizer method implementation
+            // (this bit will be cleared for java.lang.Object later)
             classFlags |= ACC_FINALIZER;
         }
 
@@ -508,20 +510,7 @@ public final class ClassfileParser {
                         methodAttributes[i] = genericSignature = parseSignatureAttribute(attributeName);
                     } else if (attributeName.equals(Name.RuntimeVisibleAnnotations)) {
                         assert runtimeVisibleAnnotations == null;
-                        // Check if java.lang.invoke.LambdaForm.Compiled is present here.
-                        byte[] data = stream.readByteArray(attributeSize);
-                        ClassfileStream subStream = new ClassfileStream(data, this.classfile);
-                        int count = subStream.readU2();
-                        for (int j = 0; j < count; j++) {
-                            int typeIndex = parseAnnotation(subStream);
-                            Utf8Constant constant = pool.utf8At(typeIndex, "annotation type");
-                            constant.validateType(false);
-                            Symbol<Type> annotType = constant.value();
-                            if (Type.LambdaForm$Compiled.equals(annotType)) {
-                                methodFlags |= ACC_LAMBDA_FORM_COMPILED;
-                            }
-                        }
-                        methodAttributes[i] = runtimeVisibleAnnotations = new Attribute(attributeName, data);
+                        methodAttributes[i] = runtimeVisibleAnnotations = new Attribute(attributeName, stream.readByteArray(attributeSize));
                     } else if (attributeName.equals(Name.RuntimeVisibleTypeAnnotations)) {
                         if (runtimeVisibleTypeAnnotations != null) {
                             throw classFormatError("Duplicate RuntimeVisibleTypeAnnotations attribute");
@@ -569,52 +558,6 @@ public final class ClassfileParser {
         }
 
         return ParserMethod.create(methodFlags, name, signature, methodAttributes);
-    }
-
-    private static int parseAnnotation(ClassfileStream subStream) {
-        int typeIndex = subStream.readU2();
-        int numElementValuePairs = subStream.readU2();
-        for (int k = 0; k < numElementValuePairs; k++) {
-            /* elementNameIndex */ subStream.readU2();
-            skipElementValue(subStream);
-        }
-        return typeIndex;
-    }
-
-    private static void skipElementValue(ClassfileStream subStream) {
-        char tag = (char) subStream.readU1();
-        switch (tag) {
-            case 'B':
-            case 'C':
-            case 'D':
-            case 'F':
-            case 'I':
-            case 'J':
-            case 'S':
-            case 'Z':
-            case 's':
-                /* constValueIndex */ subStream.readU2();
-                break;
-            case 'e':
-                /* typeNameIndex */ subStream.readU2();
-                /* constNameIndex */ subStream.readU2();
-                break;
-            case 'c':
-                /* classInfoIndex */ subStream.readU2();
-                break;
-            case '@':
-                /* ignore */ parseAnnotation(subStream);
-                break;
-            case '[':
-                int numValues = subStream.readU2();
-                for (int i = 0; i < numValues; i++) {
-                    skipElementValue(subStream);
-                }
-                break;
-            default:
-                throw classFormatError("Invalid annotation tag: " + tag);
-        }
-
     }
 
     private Attribute[] parseClassAttributes() {
@@ -721,6 +664,29 @@ public final class ClassfileParser {
             entries[i] = new LineNumberTable.Entry(bci, lineNumber);
         }
         return new LineNumberTable(name, entries);
+    }
+
+    private LocalVariableTable parseLocalVariableAtttribute(Symbol<Name> name) {
+        assert Name.LocalVariableTable.equals(name);
+
+        int entryCount = stream.readU2();
+        if (entryCount == 0) {
+            return LocalVariableTable.EMPTY;
+        }
+        Local[] locals = new Local[entryCount];
+        for (int i = 0; i < entryCount; i++) {
+            int bci = stream.readU2();
+            int length = stream.readU2();
+            int nameIndex = stream.readU2();
+            int descIndex = stream.readU2();
+            int slot = stream.readU2();
+
+            Utf8Constant poolName = pool.utf8At(nameIndex);
+            Utf8Constant typeName = pool.utf8At(descIndex);
+            locals[i] = new Local(poolName, typeName, bci, bci + length, slot);
+
+        }
+        return new LocalVariableTable(locals);
     }
 
     private SignatureAttribute parseSignatureAttribute(Symbol<Name> name) {
@@ -971,6 +937,8 @@ public final class ClassfileParser {
 
             if (attributeName.equals(Name.LineNumberTable)) {
                 codeAttributes[i] = parseLineNumberTable(attributeName);
+            } else if (attributeName.equals(Name.LocalVariableTable)) {
+                codeAttributes[i] = parseLocalVariableAtttribute(attributeName);
             } else if (attributeName.equals(Name.StackMapTable)) {
                 if (stackMapTable != null) {
                     throw classFormatError("Duplicate StackMapTable attribute");
