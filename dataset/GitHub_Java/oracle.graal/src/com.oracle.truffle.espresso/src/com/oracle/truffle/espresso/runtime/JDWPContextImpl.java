@@ -51,8 +51,6 @@ import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.impl.DebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
-import com.oracle.truffle.espresso.jdwp.impl.MonitorInfo;
-import com.oracle.truffle.espresso.jdwp.impl.TypeTag;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
@@ -441,7 +439,7 @@ public final class JDWPContextImpl implements JDWPContext {
     public Object getArrayValue(Object array, int index) {
         StaticObject arrayRef = (StaticObject) array;
         Object value;
-        if (arrayRef.getKlass().getComponentType().isPrimitive()) {
+        if (((ArrayKlass) arrayRef.getKlass()).getComponentType().isPrimitive()) {
             // primitive array type needs wrapping
             Object boxedArray = getUnboxedArray(array);
             value = Array.get(boxedArray, index);
@@ -516,6 +514,15 @@ public final class JDWPContextImpl implements JDWPContext {
         // tracked here: /browse/GR-20496
     }
 
+    public void holdEvents() {
+        eventListener.holdEvents();
+    }
+
+    @Override
+    public void releaseEvents() {
+        eventListener.releaseEvents();
+    }
+
     @Override
     public List<Path> getClassPath() {
         return context.getVmProperties().classpath();
@@ -580,46 +587,5 @@ public final class JDWPContextImpl implements JDWPContext {
             }
         }
         return -1;
-    }
-
-    @Override
-    public CallFrame locateObjectWaitFrame() {
-        Object currentThread = asGuestThread(Thread.currentThread());
-        KlassRef klass = context.getMeta().java_lang_Object;
-        MethodRef method = context.getMeta().Object_wait;
-        return new CallFrame(ids.getIdAsLong(currentThread), TypeTag.CLASS, ids.getIdAsLong(klass), ids.getIdAsLong(method), 0, null, null, null);
-    }
-
-    @Override
-    public Object getMonitorOwnerThread(Object object) {
-        if (object instanceof StaticObject) {
-            EspressoLock lock = ((StaticObject) object).getLock();
-            return asGuestThread(lock.getOwnerThread());
-        }
-        return null;
-    }
-
-    @Override
-    public MonitorInfo getMonitorInfo(Object object) {
-        if (object instanceof StaticObject) {
-            EspressoLock lock = ((StaticObject) object).getLock();
-            Thread[] queuedThreads = lock.getWaitingThreads();
-            Object[] asGuestThreads = new Object[queuedThreads.length];
-            for (int i = 0; i < asGuestThreads.length; i++) {
-                asGuestThreads[i] = asGuestThread(queuedThreads[i]);
-            }
-            return new MonitorInfo(asGuestThread(lock.getOwnerThread()), lock.getHoldCount(lock.getOwnerThread()), asGuestThreads);
-        }
-        return null;
-    }
-
-    @Override
-    public Object[] getOwnedMonitors(Object guestThread) {
-        return eventListener.getOwnedMonitors(guestThread);
-    }
-
-    @Override
-    public Object getCurrentContendedMonitor(Object guestThread) {
-        return eventListener.getCurrentContendedMonitor(guestThread);
     }
 }

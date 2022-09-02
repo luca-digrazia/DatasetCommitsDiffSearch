@@ -37,7 +37,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.EnclosingMethodAttribute;
@@ -48,6 +47,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -63,6 +63,8 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 public final class ObjectKlass extends Klass {
 
     public static final ObjectKlass[] EMPTY_ARRAY = new ObjectKlass[0];
+
+    public static final JavaKind FIELD_REPRESENTATION = JavaKind.Byte;
 
     private final EnclosingMethodAttribute enclosingMethod;
 
@@ -130,7 +132,7 @@ public final class ObjectKlass extends Klass {
     }
 
     public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader, Klass hostKlass) {
-        super(context, linkedKlass.getName(), linkedKlass.getType(), superKlass, superInterfaces, linkedKlass.getFlags());
+        super(context, linkedKlass.getName(), linkedKlass.getType(), superKlass, superInterfaces);
 
         this.linkedKlass = linkedKlass;
         this.hostKlass = hostKlass;
@@ -208,7 +210,8 @@ public final class ObjectKlass extends Klass {
         return true;
     }
 
-    StaticObject getStaticsImpl() {
+    @Override
+    public StaticObject getStatics() {
         if (statics == null) {
             obtainStatics();
         }
@@ -222,7 +225,18 @@ public final class ObjectKlass extends Klass {
         }
     }
 
-    boolean isInitializedImpl() {
+    @Override
+    public boolean isInstanceClass() {
+        return /* !isArray() && */ !isInterface();
+    }
+
+    @Override
+    public int getModifiers() {
+        return linkedKlass.getFlags();
+    }
+
+    @Override
+    public boolean isInitialized() {
         return initState == INITIALIZED;
     }
 
@@ -283,7 +297,8 @@ public final class ObjectKlass extends Klass {
                         throw e;
                     }
                 } catch (Throwable e) {
-                    EspressoLanguage.EspressoLogger.severe("Host exception during class initialization: " + this);
+                    System.err.println("Host exception happened during class initialization");
+                    e.printStackTrace();
                     setErroneous();
                     throw e;
                 }
@@ -359,7 +374,8 @@ public final class ObjectKlass extends Klass {
 
     // Need to carefully synchronize, as the work of other threads can erase our own work.
 
-    void initializeImpl() {
+    @Override
+    public void initialize() {
         if (!isInitialized()) { // Skip synchronization and locks if already init.
             CompilerDirectives.transferToInterpreterAndInvalidate();
             verify();
@@ -476,16 +492,19 @@ public final class ObjectKlass extends Klass {
         return primitiveStaticFieldTotalByteCount;
     }
 
-    Klass getHostClassImpl() {
+    @Override
+    public Klass getHostClass() {
         return hostKlass;
     }
 
-    Field lookupFieldTableImpl(int slot) {
+    @Override
+    public Field lookupFieldTable(int slot) {
         assert (slot >= 0 && slot < getInstanceFieldSlots());
         return fieldTable[slot];
     }
 
-    Field lookupStaticFieldTableImpl(int slot) {
+    @Override
+    public Field lookupStaticFieldTable(int slot) {
         assert (slot >= 0 && slot < getStaticFieldSlots());
         return staticFieldTable[slot];
     }
@@ -511,9 +530,10 @@ public final class ObjectKlass extends Klass {
         return vtable;
     }
 
-    Method vtableLookupImpl(int vtableIndex) {
-        assert (vtableIndex >= 0) : "Undeclared virtual method";
-        return vtable[vtableIndex];
+    @Override
+    public Method vtableLookup(int index) {
+        assert (index >= 0) : "Undeclared virtual method";
+        return vtable[index];
     }
 
     public Method itableLookup(Klass interfKlass, int index) {
@@ -534,7 +554,7 @@ public final class ObjectKlass extends Klass {
             }
             return -1;
         } else {
-            return Arrays.binarySearch(iKlassTable, interfKlass, KLASS_ID_COMPARATOR);
+            return Arrays.binarySearch(iKlassTable, interfKlass, COMPARATOR);
         }
     }
 
@@ -644,7 +664,7 @@ public final class ObjectKlass extends Klass {
 
     @Override
     public Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
-        KLASS_LOOKUP_METHOD_COUNT.inc();
+        methodLookupCount.inc();
         Method method = lookupDeclaredMethod(methodName, signature);
         if (method == null) {
             // Implicit interface methods.
