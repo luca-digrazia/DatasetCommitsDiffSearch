@@ -70,18 +70,11 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
     public abstract static class SharedBytecodeParser extends BytecodeParser {
 
         private final boolean explicitExceptionEdges;
-        private final boolean allowIncompleteClassPath;
 
         protected SharedBytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI,
                         IntrinsicContext intrinsicContext, boolean explicitExceptionEdges) {
-            this(graphBuilderInstance, graph, parent, method, entryBCI, intrinsicContext, explicitExceptionEdges, NativeImageOptions.AllowIncompleteClasspath.getValue());
-        }
-
-        protected SharedBytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI,
-                        IntrinsicContext intrinsicContext, boolean explicitExceptionEdges, boolean allowIncompleteClasspath) {
             super(graphBuilderInstance, graph, parent, method, entryBCI, intrinsicContext);
             this.explicitExceptionEdges = explicitExceptionEdges;
-            this.allowIncompleteClassPath = allowIncompleteClasspath;
         }
 
         @Override
@@ -182,12 +175,16 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
             handleUnresolvedMethod(javaMethod);
         }
 
+        private boolean allowIncompleteClasspath() {
+            return this.graphBuilderConfig.allowIncompleteClasspath(NativeImageOptions.AllowIncompleteClasspath.getValue());
+        }
+
         private void handleUnresolvedType(JavaType type) {
             /*
              * If --allow-incomplete-classpath is set defer the error reporting to runtime,
              * otherwise report the error during image building.
              */
-            if (allowIncompleteClassPath) {
+            if (allowIncompleteClasspath()) {
                 ExceptionSynthesizer.throwNoClassDefFoundError(this, type.toJavaName());
             } else {
                 reportUnresolvedElement("type", type.toJavaName());
@@ -204,7 +201,7 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
                  * If --allow-incomplete-classpath is set defer the error reporting to runtime,
                  * otherwise report the error during image building.
                  */
-                if (allowIncompleteClassPath) {
+                if (allowIncompleteClasspath()) {
                     ExceptionSynthesizer.throwNoSuchFieldError(this, field.format("%H.%n"));
                 } else {
                     reportUnresolvedElement("field", field.format("%H.%n"));
@@ -222,7 +219,7 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
                  * If --allow-incomplete-classpath is set defer the error reporting to runtime,
                  * otherwise report the error during image building.
                  */
-                if (allowIncompleteClassPath) {
+                if (allowIncompleteClasspath()) {
                     ExceptionSynthesizer.throwNoSuchMethodError(this, javaMethod.format("%H.%n(%P)"));
                 } else {
                     reportUnresolvedElement("method", javaMethod.format("%H.%n(%P)"));
