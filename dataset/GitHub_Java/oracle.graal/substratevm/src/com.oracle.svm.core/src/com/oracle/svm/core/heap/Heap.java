@@ -25,7 +25,6 @@
 package com.oracle.svm.core.heap;
 
 import java.lang.ref.Reference;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.graalvm.compiler.api.replacements.Fold;
@@ -37,8 +36,6 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.hub.PredefinedClassesSupport;
 import com.oracle.svm.core.os.CommittedMemoryProvider;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -97,26 +94,11 @@ public abstract class Heap {
      */
     public abstract boolean walkCollectedHeapObjects(ObjectVisitor visitor);
 
-    /** Returns the number of classes in the heap (initialized as well as uninitialized). */
+    /** Returns the number of classes in the heap. */
     public abstract int getClassCount();
 
-    /** Return a list of all the initialized classes in the heap. */
-    public List<Class<?>> getInitializedClasses() {
-        List<Class<?>> allClasses = getAllClasses();
-        ArrayList<Class<?>> initializedClasses = new ArrayList<>(allClasses.size());
-        for (Class<?> clazz : allClasses) {
-            if (DynamicHub.fromClass(clazz).isInitialized()) {
-                initializedClasses.add(clazz);
-            }
-        }
-        return initializedClasses;
-    }
-
-    /**
-     * Get all known classes. Intentionally protected to prevent access to uninitialized classes,
-     * including those that have not been "loaded" yet, see {@link PredefinedClassesSupport}.
-     */
-    protected abstract List<Class<?>> getAllClasses();
+    /** Return a list of all the classes in the heap. */
+    public abstract List<Class<?>> getClassList();
 
     /**
      * Get the ObjectHeader implementation that this Heap uses.

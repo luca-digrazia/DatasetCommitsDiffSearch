@@ -30,12 +30,10 @@ import com.oracle.svm.core.image.ImageHeapLayoutInfo;
 
 public class LinearImageHeapLayouter extends AbstractImageHeapLayouter<LinearImageHeapPartition> {
     private final ImageHeapInfo heapInfo;
-    private final long startOffset;
     private final boolean compressedNullPadding;
 
-    public LinearImageHeapLayouter(ImageHeapInfo heapInfo, long startOffset, boolean compressedNullPadding) {
+    public LinearImageHeapLayouter(ImageHeapInfo heapInfo, boolean compressedNullPadding) {
         this.heapInfo = heapInfo;
-        this.startOffset = startOffset;
         this.compressedNullPadding = compressedNullPadding;
     }
 
@@ -51,20 +49,20 @@ public class LinearImageHeapLayouter extends AbstractImageHeapLayouter<LinearIma
 
     @Override
     protected ImageHeapLayoutInfo doLayout(ImageHeap imageHeap) {
-        long beginOffset = startOffset;
+        long startOffset = 0;
         if (compressedNullPadding) {
             /*
              * Zero designates null, so adding some explicit padding at the beginning of the native
              * image heap is the easiest approach to make object offsets strictly greater than 0.
              */
-            beginOffset += ConfigurationValues.getObjectLayout().getAlignment();
+            startOffset += ConfigurationValues.getObjectLayout().getAlignment();
         }
-        LinearImageHeapAllocator allocator = new LinearImageHeapAllocator(beginOffset);
+        LinearImageHeapAllocator allocator = new LinearImageHeapAllocator(startOffset);
         for (LinearImageHeapPartition partition : getPartitions()) {
             partition.allocateObjects(allocator);
         }
         initializeHeapInfo(imageHeap.countDynamicHubs());
-        return createLayoutInfo(startOffset, getWritablePrimitive().getStartOffset());
+        return createDefaultLayoutInfo();
     }
 
     /**
