@@ -108,7 +108,6 @@ import com.oracle.truffle.espresso.jni.IntrinsifiedNativeEnv;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.jni.JniImpl;
 import com.oracle.truffle.espresso.jni.JniVersion;
-import com.oracle.truffle.espresso.jvmti.JVMTI;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -164,7 +163,6 @@ public final class VM extends IntrinsifiedNativeEnv implements ContextAccess {
 
     private final JniEnv jniEnv;
     private final Management management;
-    private final JVMTI.JvmtiFactory jvmti;
 
     private @Pointer TruffleObject mokapotEnvPtr;
 
@@ -259,8 +257,6 @@ public final class VM extends IntrinsifiedNativeEnv implements ContextAccess {
             } else {
                 management = null;
             }
-
-            jvmti = new JVMTI.JvmtiFactory(getContext(), mokapotLibrary);
 
             getJavaVM = getNativeAccess().lookupAndBindSymbol(mokapotLibrary,
                             "getJavaVM",
@@ -747,7 +743,7 @@ public final class VM extends IntrinsifiedNativeEnv implements ContextAccess {
      * <h3>jint GetEnv(JavaVM *vm, void **env, jint version);</h3>
      *
      * @param vmPtr_ The virtual machine instance from which the interface will be retrieved.
-     * @param envPtr pointer to the location where the env interface pointer for the current thread
+     * @param envPtr pointer to the location where the JNI interface pointer for the current thread
      *            will be placed.
      * @param version The requested JNI version.
      *
@@ -760,24 +756,13 @@ public final class VM extends IntrinsifiedNativeEnv implements ContextAccess {
     @TruffleBoundary
     public int GetEnv(@Pointer TruffleObject vmPtr_, @Pointer TruffleObject envPtr, int version) {
         assert NativeUtils.interopAsPointer(getJavaVM()) == NativeUtils.interopAsPointer(vmPtr_);
-        TruffleObject interopPtr = null;
-        if (JVMTI.isJvmtiVersion(version)) {
-            // JVMTI is requested before the main thread is created.
-            interopPtr = jvmti.create(version);
-            if (interopPtr == null) {
-                return JNI_EVERSION;
-            }
+        StaticObject currentThread = getContext().getGuestThreadFromHost(Thread.currentThread());
+        if (currentThread == null) {
+            return JNI_EDETACHED;
         }
         if (JniVersion.isSupported(version, getContext().getJavaVersion())) {
-            StaticObject currentThread = getContext().getGuestThreadFromHost(Thread.currentThread());
-            if (currentThread == null) {
-                return JNI_EDETACHED;
-            }
-            interopPtr = jniEnv.getNativePointer();
-        }
-        if (interopPtr != null) {
             LongBuffer buf = NativeUtils.directByteBuffer(envPtr, 1, JavaKind.Long).asLongBuffer();
-            buf.put(NativeUtils.interopAsPointer(interopPtr));
+            buf.put(NativeUtils.interopAsPointer(jniEnv.getNativePointer()));
             return JNI_OK;
         }
         return JNI_EVERSION;
@@ -1125,13 +1110,11 @@ public final class VM extends IntrinsifiedNativeEnv implements ContextAccess {
     public void dispose() {
         assert !getUncached().isNull(mokapotEnvPtr) : "Mokapot already disposed";
         try {
-            if (management != null) {
-                assert getContext().EnableManagement;
+
+            if (getContext().EnableManagement) {
                 management.dispose();
             }
-            if (jvmti != null) {
-                jvmti.dispose();
-            }
+
             getUncached().execute(disposeMokapotContext, mokapotEnvPtr, RawPointer.nullInstance());
             this.mokapotEnvPtr = RawPointer.nullInstance();
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {

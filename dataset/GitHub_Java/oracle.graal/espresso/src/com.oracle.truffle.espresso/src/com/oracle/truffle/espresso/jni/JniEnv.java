@@ -142,11 +142,6 @@ public final class JniEnv extends IntrinsifiedNativeEnv {
         return JniEnvCollector.getCollector();
     }
 
-    @Override
-    protected JniEnv jni() {
-        return this;
-    }
-
     private final WeakHandles<Field> fieldIds = new WeakHandles<>();
     private final WeakHandles<Method> methodIds = new WeakHandles<>();
 
@@ -343,7 +338,7 @@ public final class JniEnv extends IntrinsifiedNativeEnv {
             popLong = getNativeAccess().lookupAndBindSymbol(nespressoLibrary, "pop_long", NativeSignature.create(NativeType.LONG, NativeType.POINTER));
             popObject = getNativeAccess().lookupAndBindSymbol(nespressoLibrary, "pop_object", NativeSignature.create(NativeType.OBJECT, NativeType.POINTER));
 
-            this.jniEnvPtr = initializeAndGetEnv(initializeNativeContext);
+            this.jniEnvPtr = (TruffleObject) getUncached().execute(initializeNativeContext, getLookupCallback());
             assert getUncached().isPointer(jniEnvPtr);
 
             this.handles = new JNIHandles();

@@ -65,7 +65,7 @@ import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
 @GenerateIntrinsification(target = ManagementImpl.class)
-public final class Management extends IntrinsifiedNativeEnv {
+public class Management extends IntrinsifiedNativeEnv {
     // Partial/incomplete implementation disclaimer!
     //
     // This is a partial implementation of the {@link java.lang.management} APIs. Some APIs go
@@ -146,10 +146,10 @@ public final class Management extends IntrinsifiedNativeEnv {
         assert context.EnableManagement;
         this.context = context;
         this.initializeManagementContext = getNativeAccess().lookupAndBindSymbol(mokapotLibrary, "initializeMokapotContext",
-                        NativeSignature.create(NativeType.POINTER, NativeType.POINTER, NativeType.INT));
+                        NativeSignature.create(NativeType.POINTER, NativeType.POINTER, NativeType.POINTER));
 
         this.disposeManagementContext = getNativeAccess().lookupAndBindSymbol(mokapotLibrary, "disposeMokapotContext",
-                        NativeSignature.create(NativeType.VOID, NativeType.POINTER, NativeType.INT, NativeType.POINTER));
+                        NativeSignature.create(NativeType.VOID, NativeType.POINTER, NativeType.POINTER));
     }
 
     /**
@@ -168,7 +168,7 @@ public final class Management extends IntrinsifiedNativeEnv {
      * <li>Ideally implement the method in this class.</li>
      * </ul>
      */
-    public static boolean isSupportedManagementVersion(int version) {
+    private static boolean isSupportedManagementVersion(int version) {
         return version == JMM_VERSION_1 || version == JMM_VERSION_2 || version == JMM_VERSION_3;
     }
 
@@ -177,9 +177,13 @@ public final class Management extends IntrinsifiedNativeEnv {
             return RawPointer.nullInstance();
         }
         if (managementPtr == null) {
-            managementPtr = initializeAndGetEnv(initializeManagementContext, version);
-            managementVersion = version;
-            assert getUncached().isPointer(managementPtr);
+            try {
+                managementPtr = (TruffleObject) getUncached().execute(initializeManagementContext, getLookupCallback(), version);
+                managementVersion = version;
+                assert getUncached().isPointer(managementPtr);
+            } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+                throw EspressoError.shouldNotReachHere(e);
+            }
             assert managementPtr != null && !getUncached().isNull(managementPtr);
         } else if (version != managementVersion) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -211,8 +215,6 @@ public final class Management extends IntrinsifiedNativeEnv {
     public EspressoContext getContext() {
         return context;
     }
-
-    // Checkstyle: stop method name check
 
     @JniImpl
     @ManagementImpl
@@ -627,6 +629,4 @@ public final class Management extends IntrinsifiedNativeEnv {
             }
         }
     }
-
-    // Checkstyle: resume method name check
 }

@@ -58,7 +58,6 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
     private static final String INVOKE = "invoke(Object " + ENV_ARG_NAME + ", Object[] " + ARGS_NAME + ") {\n";
 
     private static final String GENERATE_INTRISIFICATION = "com.oracle.truffle.espresso.substitutions.GenerateIntrinsification";
-    private static final String PREPEND_ENV = "com.oracle.truffle.espresso.substitutions.GenerateIntrinsification.PrependEnv";
 
     protected static final String IMPORT_NATIVE_SIGNATURE = "import " + FFI_PACKAGE + "." + "NativeSignature" + ";\n";
     protected static final String IMPORT_NATIVE_TYPE = "import " + FFI_PACKAGE + "." + "NativeType" + ";\n";
@@ -79,8 +78,6 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
     private TypeElement generateIntrinsification;
     // @GenerateIntrinsification.target()
     private ExecutableElement targetAttribute;
-    // @GenerateIntrinsification.PrependEnv()
-    private TypeElement prependEnvAnnotation;
     // @JniImpl
     private TypeElement jniImpl;
 
@@ -105,7 +102,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         final NativeType[] jniNativeSignature;
         final List<Boolean> referenceTypes;
         final boolean isStatic;
-        final boolean prependEnv;
+        final boolean isJni;
         final boolean needsHandlify;
 
         public IntrinsincsHelper(EspressoProcessor processor,
@@ -113,13 +110,13 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
                         NativeType[] jniNativeSignature,
                         List<Boolean> referenceTypes,
                         boolean isStatic,
-                        boolean prependEnv,
+                        boolean isJni,
                         boolean needsHandlify) {
             super(processor, method);
             this.jniNativeSignature = jniNativeSignature;
             this.referenceTypes = referenceTypes;
             this.isStatic = isStatic;
-            this.prependEnv = prependEnv;
+            this.isJni = isJni;
             this.needsHandlify = needsHandlify;
         }
     }
@@ -137,7 +134,6 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
     void processImpl(RoundEnvironment env) {
         // Set up the different annotations, along with their values, that we will need.
         this.generateIntrinsification = processingEnv.getElementUtils().getTypeElement(GENERATE_INTRISIFICATION);
-        this.prependEnvAnnotation = processingEnv.getElementUtils().getTypeElement(PREPEND_ENV);
         this.jniImpl = processingEnv.getElementUtils().getTypeElement(JNI_IMPL);
         initNfiType();
         for (Element e : generateIntrinsification.getEnclosedElements()) {
@@ -194,7 +190,6 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         ExecutableElement method = (ExecutableElement) element;
         assert method.getEnclosingElement().getKind() == ElementKind.CLASS;
         TypeElement declaringClass = (TypeElement) method.getEnclosingElement();
-        boolean prependEnv = getAnnotation(declaringClass, this.prependEnvAnnotation) != null || isJni(method);
         if (declaringClass.getQualifiedName().toString().equals(envPackage + "." + envClassName)) {
             String className = envClassName;
             // Extract the class name.
@@ -207,12 +202,14 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
             // Spawn the name of the Substitutor we will create.
             String substitutorName = getSubstitutorClassName(className, targetMethodName, espressoTypes);
             if (!classes.contains(substitutorName)) {
+                // Check if this method has the @JniImpl annotation
+                boolean isJni = isJni(method);
                 // Obtain the jniNativeSignature
-                NativeType[] jniNativeSignature = jniNativeSignature(method, prependEnv);
+                NativeType[] jniNativeSignature = jniNativeSignature(method, isJni);
                 // Check if we need to call an instance method
                 boolean isStatic = method.getModifiers().contains(Modifier.STATIC);
                 // Spawn helper
-                IntrinsincsHelper h = new IntrinsincsHelper(this, method, jniNativeSignature, referenceTypes, isStatic, prependEnv, needsHandlify);
+                IntrinsincsHelper h = new IntrinsincsHelper(this, method, jniNativeSignature, referenceTypes, isStatic, isJni, needsHandlify);
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
                                 className,
@@ -273,7 +270,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         }
     }
 
-    NativeType[] jniNativeSignature(ExecutableElement method, boolean prependEnv) {
+    NativeType[] jniNativeSignature(ExecutableElement method, boolean prependJniEnv) {
         List<NativeType> signature = new ArrayList<>(16);
 
         // Return type is always first.
@@ -281,8 +278,8 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
 
         // Arguments...
 
-        // Prepend _Env* . The raw pointer will be substituted by the proper `this` reference.
-        if (prependEnv) {
+        // Prepend JNIEnv* . The raw pointer will be substituted by the proper `this` reference.
+        if (prependJniEnv) {
             signature.add(NativeType.POINTER);
         }
 
@@ -359,7 +356,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         str.append(TAB_4).append(generateString(targetMethodName)).append(",\n");
         str.append(TAB_4).append(generateNativeSignature(h.jniNativeSignature)).append(",\n");
         str.append(TAB_4).append(parameterTypeName.size()).append(",\n");
-        str.append(TAB_4).append(h.prependEnv).append("\n");
+        str.append(TAB_4).append(h.isJni).append("\n");
         str.append(TAB_3).append(");\n");
         str.append(TAB_2).append("}\n");
         return str.toString();
@@ -376,7 +373,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         int argIndex = 0;
         for (String type : parameterTypes) {
             boolean isNonPrimitive = h.referenceTypes.get(argIndex);
-            str.append(extractArg(argIndex++, type, isNonPrimitive, h.prependEnv ? 1 : 0, TAB_2));
+            str.append(extractArg(argIndex++, type, isNonPrimitive, h.isJni ? 1 : 0, TAB_2));
         }
         switch (h.jniNativeSignature[0]) {
             case VOID:
