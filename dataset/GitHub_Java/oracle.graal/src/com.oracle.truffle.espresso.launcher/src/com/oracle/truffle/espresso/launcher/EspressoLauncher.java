@@ -103,9 +103,6 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                         polyglotOptions.put("java.BootClasspathAppend", arg.substring("-Xbootclasspath/a:".length()));
                     } else if (arg.startsWith("-Xbootclasspath/p:")) {
                         polyglotOptions.put("java.BootClasspathPrepend", arg.substring("-Xbootclasspath/p:".length()));
-                    } else if (arg.startsWith("-Xverify:")) {
-                        String mode = arg.substring("-Xverify:".length());
-                        polyglotOptions.put("java.Verify", mode);
                     } else
                     // -Dsystem.property=value
                     if (arg.startsWith("-D")) {
@@ -230,8 +227,6 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
         for (String propKey : properties.keySet()) {
             contextBuilder.option("java.Properties." + propKey, properties.get(propKey));
         }
-
-        contextBuilder.allowCreateThread(true);
 
         int rc = 1;
         try (Context context = contextBuilder.build()) {

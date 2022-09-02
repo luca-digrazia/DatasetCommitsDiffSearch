@@ -53,7 +53,6 @@ import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-import com.oracle.truffle.espresso.vm.VM;
 
 @EspressoSubstitutions
 public final class Target_java_lang_Class {
@@ -545,7 +544,7 @@ public final class Target_java_lang_Class {
      * @since JDK1.1
      */
     @Substitution(hasReceiver = true)
-    public static boolean isInstance(@Host(Class.class) StaticObjectClass self, @Host(Object.class) StaticObject obj) {
+    public static boolean isInstance(StaticObjectClass self, StaticObject obj) {
         return InterpreterToVM.instanceOf(obj, self.getMirrorKlass());
     }
 
@@ -560,7 +559,7 @@ public final class Target_java_lang_Class {
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(byte[].class) StaticObject getRawAnnotations(@Host(Class.class) StaticObjectClass self) {
+    public static @Host(byte[].class) StaticObject getRawAnnotations(StaticObjectClass self) {
         Klass klass = self.getMirrorKlass();
         if (klass instanceof ObjectKlass) {
             Attribute annotations = ((ObjectKlass) klass).getAttribute(Name.RuntimeVisibleAnnotations);
