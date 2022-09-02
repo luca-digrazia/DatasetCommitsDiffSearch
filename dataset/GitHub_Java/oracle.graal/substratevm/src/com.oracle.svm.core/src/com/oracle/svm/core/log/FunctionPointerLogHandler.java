@@ -27,6 +27,7 @@ package com.oracle.svm.core.log;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
@@ -36,11 +37,12 @@ import org.graalvm.word.UnsignedWord;
  * A {@link LogHandler} that can use provided function pointers for each operation. If a function
  * pointer is missing, it forwards the operation to the delegate set in the constructor.
  */
-public class FunctionPointerLogHandler implements LogHandler {
+public class FunctionPointerLogHandler implements LogHandlerExtension {
 
     private final LogHandler delegate;
 
     private LogFunctionPointer logFunctionPointer;
+    private LogFunctionPointer fatalLogFunctionPointer;
     private VoidFunctionPointer flushFunctionPointer;
     private VoidFunctionPointer fatalErrorFunctionPointer;
 
@@ -67,6 +69,39 @@ public class FunctionPointerLogHandler implements LogHandler {
     }
 
     @Override
+    public Log enterFatalContext(CodePointer callerIP, String msg, Throwable ex) {
+        if (delegate instanceof LogHandlerExtension) {
+            return ((LogHandlerExtension) delegate).enterFatalContext(callerIP, msg, ex);
+        }
+        return fatalLog;
+    }
+
+    /**
+     * Sends output to {@link FunctionPointerLogHandler#fatalLogFunctionPointer} if it is non-null.
+     */
+    class FatalLog extends RealLog {
+        @Override
+        protected Log rawBytes(CCharPointer bytes, UnsignedWord length) {
+            if (fatalLogFunctionPointer.isNonNull()) {
+                fatalLogFunctionPointer.invoke(bytes, length);
+            } else {
+                FunctionPointerLogHandler.this.log(bytes, length);
+            }
+            return this;
+        }
+
+        @Override
+        public Log flush() {
+            if (fatalLogFunctionPointer.isNull()) {
+                FunctionPointerLogHandler.this.flush();
+            }
+            return this;
+        }
+    }
+
+    private final FatalLog fatalLog = new FatalLog();
+
+    @Override
     public void fatalError() {
         if (fatalErrorFunctionPointer.isNonNull()) {
             fatalErrorFunctionPointer.invoke();
@@ -89,6 +124,11 @@ public class FunctionPointerLogHandler implements LogHandler {
         void invoke();
     }
 
+    interface FatalContextFunctionPointer extends CFunctionPointer {
+        @InvokeCFunctionPointer
+        boolean invoke(CodePointer callerIP, String msg, Throwable ex);
+    }
+
     /**
      * Parses a {@code JavaVMOption} passed to {@code JNI_CreateJavaVM}.
      *
@@ -99,6 +139,9 @@ public class FunctionPointerLogHandler implements LogHandler {
     public static boolean parseVMOption(String optionString, WordPointer extraInfo) {
         if (optionString.equals("_log")) {
             handler(optionString).logFunctionPointer = (LogFunctionPointer) extraInfo;
+            return true;
+        } else if (optionString.equals("_fatal_log")) {
+            handler(optionString).fatalLogFunctionPointer = (LogFunctionPointer) extraInfo;
             return true;
         } else if (optionString.equals("_flush_log")) {
             handler(optionString).flushFunctionPointer = (VoidFunctionPointer) extraInfo;
