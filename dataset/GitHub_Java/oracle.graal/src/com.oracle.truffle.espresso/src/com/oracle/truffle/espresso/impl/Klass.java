@@ -23,9 +23,7 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_INNER_CLASS;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_SUPER;
-import static com.oracle.truffle.espresso.classfile.Constants.RECOGNIZED_INNER_CLASS_MODIFIERS;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeVirtual;
 import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeBasic;
 import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeGeneric;
@@ -656,14 +654,12 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
             }, id);
         } else if (id == InvokeBasic) {
             return getMeta().invokeBasic.findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
-
                 @Override
                 public EspressoBaseNode apply(Method method) {
                     return new MHInvokeBasicNode(method);
                 }
             }, id);
         } else {
-
             Symbol<Signature> basicSignature = toBasic(getSignatures().parsed(signature), true, getSignatures());
             switch (id) {
                 case LinkToInterface:
@@ -690,15 +686,9 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     }
 
     @Override
-    public int getModifiers() {
+    public final int getModifiers() {
         // ACC_SUPER is kept for backward compatibility, should be ignored.
-        int result = getFlags();
-        if ((result & ACC_INNER_CLASS) != 0) {
-            result &= RECOGNIZED_INNER_CLASS_MODIFIERS;
-        } else {
-            result &= Constants.JVM_RECOGNIZED_CLASS_MODIFIERS;
-        }
-        return result & ~ACC_SUPER;
+        return (getFlags() & Constants.JVM_RECOGNIZED_CLASS_MODIFIERS & ~ACC_SUPER);
     }
 
     protected abstract int getFlags();

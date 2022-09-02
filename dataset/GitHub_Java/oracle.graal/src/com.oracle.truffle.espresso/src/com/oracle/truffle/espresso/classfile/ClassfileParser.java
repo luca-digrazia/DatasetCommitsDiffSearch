@@ -25,12 +25,10 @@ package com.oracle.truffle.espresso.classfile;
 
 import static com.oracle.truffle.espresso.classfile.ConstantPool.classFormatError;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_ANNOTATION;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_ENUM;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINALIZER;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_INTERFACE;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_MODULE;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_NATIVE;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_PRIVATE;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_PROTECTED;
@@ -42,6 +40,7 @@ import static com.oracle.truffle.espresso.classfile.Constants.ACC_SYNCHRONIZED;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_SYNTHETIC;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_VARARGS;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_VOLATILE;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_ANNOTATION;
 import static com.oracle.truffle.espresso.classfile.Constants.APPEND_FRAME_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.CHOP_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.FULL_FRAME;
@@ -60,7 +59,7 @@ import java.util.Objects;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.ModifiedUTF8;
+import com.oracle.truffle.espresso.descriptors.Symbol.Constant;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
@@ -76,7 +75,6 @@ import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Host;
 
 public final class ClassfileParser {
 
@@ -124,10 +122,9 @@ public final class ClassfileParser {
     private final StaticObject[] constantPoolPatches;
 
     private Symbol<Type> classType;
-
     private int minorVersion;
     private int majorVersion;
-    private int classFlags;
+    int classFlags;
 
     private Symbol<Type>[] classInnerClasses;
 
@@ -135,6 +132,7 @@ public final class ClassfileParser {
     private Tag badConstantSeen;
 
     private ConstantPool pool;
+    private int thisKlassIndex;
 
     @SuppressWarnings("unused")
     public Klass getHostClass() {
@@ -146,7 +144,26 @@ public final class ClassfileParser {
      */
     private final Klass hostClass;
 
-    private ClassfileParser(ClassfileStream stream, String requestedClassType, Klass hostClass, EspressoContext context, StaticObject[] constantPoolPatches) {
+    @SuppressWarnings("unused")
+    private ClassfileParser(ClasspathFile classpathFile, String requestedClassType, @SuppressWarnings("unused") Klass hostClass, EspressoContext context) {
+        this.requestedClassType = requestedClassType;
+        this.hostClass = hostClass;
+        this.context = context;
+        this.classfile = classpathFile;
+        this.stream = new ClassfileStream(classfile);
+        this.constantPoolPatches = null;
+    }
+
+    private ClassfileParser(ClassfileStream stream, String requestedClassType, @SuppressWarnings("unused") Klass hostClass, EspressoContext context) {
+        this.requestedClassType = requestedClassType;
+        this.hostClass = hostClass;
+        this.context = context;
+        this.classfile = null;
+        this.stream = Objects.requireNonNull(stream);
+        this.constantPoolPatches = null;
+    }
+
+    public ClassfileParser(ClassfileStream stream, String requestedClassType, @SuppressWarnings("unused") Klass hostClass, EspressoContext context, StaticObject[] constantPoolPatches) {
         this.requestedClassType = requestedClassType;
         this.hostClass = hostClass;
         this.context = context;
@@ -172,6 +189,12 @@ public final class ClassfileParser {
         }
     }
 
+    void verifyMaxBootstrapMethodAttrIndex(int bsmAttrIndex) {
+        if (maxBootstrapMethodAttrIndex < bsmAttrIndex) {
+            throw classFormatError(".bsmAttrIndex > maxBootstrapMethodAttrIndex");
+        }
+    }
+
     void checkInvokeDynamicSupport(Tag tag) {
         if (majorVersion < INVOKEDYNAMIC_MAJOR_VERSION) {
             stream.classFormatError("Class file version does not support constant tag %d", tag.getValue());
@@ -184,20 +207,24 @@ public final class ClassfileParser {
         }
     }
 
+    boolean useStackMapTables() {
+        return majorVersion >= JAVA_6_VERSION;
+    }
+
     public static ParserKlass parse(ClassfileStream stream, String requestedClassName, Klass hostClass, EspressoContext context) {
-        return parse(stream, requestedClassName, hostClass, context, null);
+        return new ClassfileParser(stream, requestedClassName, hostClass, context).parseClass();
     }
 
-    public static ParserKlass parse(ClassfileStream stream, String requestedClassName, Klass hostClass, EspressoContext context, @Host(Object[].class) StaticObject[] constantPoolPatches) {
-        return new ClassfileParser(stream, requestedClassName, hostClass, context, constantPoolPatches).parseClass();
+    public static ParserKlass parse(ClasspathFile classpathFile, String requestedClassName, Klass hostClass, EspressoContext context) {
+        return parse(new ClassfileStream(classpathFile), requestedClassName, hostClass, context);
     }
 
-    private ParserKlass parseClass() {
+    public ParserKlass parseClass() {
         try {
             return parseClassImpl();
         } catch (EspressoException e) {
             throw e;
-        } catch (ClassFormatError e) {
+        } catch (ClassFormatError | VerifyError e) {
             // These exceptions are expected.
             throw context.getMeta().throwExWithMessage(e.getClass(), e.getMessage());
         } catch (Throwable e) {
@@ -208,7 +235,7 @@ public final class ClassfileParser {
         }
     }
 
-    private void readMagic() {
+    protected void readMagic() {
         int magic = stream.readS4();
         if (magic != MAGIC) {
             throw classFormatError("Invalid magic number 0x" + Integer.toHexString(magic));
@@ -221,7 +248,7 @@ public final class ClassfileParser {
      * @param major the major version number
      * @param minor the minor version number
      */
-    private static void verifyVersion(int major, int minor) {
+    public static void verifyVersion(int major, int minor) {
         if ((major >= JAVA_MIN_SUPPORTED_VERSION) &&
                         (major <= JAVA_MAX_SUPPORTED_VERSION) &&
                         ((major != JAVA_MAX_SUPPORTED_VERSION) ||
@@ -237,7 +264,7 @@ public final class ClassfileParser {
      * @param flags the flags to test
      * @throws ClassFormatError if the flags are invalid
      */
-    private static void verifyClassFlags(int flags, int majorVersion) {
+    public static void verifyClassFlags(int flags, int majorVersion) {
         final boolean isInterface = (flags & ACC_INTERFACE) != 0;
         final boolean isAbstract = (flags & ACC_ABSTRACT) != 0;
         final boolean isFinal = (flags & ACC_FINAL) != 0;
@@ -254,7 +281,7 @@ public final class ClassfileParser {
         }
     }
 
-    private ParserKlass parseClassImpl() {
+    public ParserKlass parseClassImpl() {
         readMagic();
 
         minorVersion = stream.readU2();
@@ -269,7 +296,7 @@ public final class ClassfileParser {
 
         // JVM_ACC_MODULE is defined in JDK-9 and later.
         if (majorVersion >= JAVA_9_VERSION) {
-            classFlags = stream.readU2() & (JVM_RECOGNIZED_CLASS_MODIFIERS | ACC_MODULE);
+            classFlags = stream.readU2() & (JVM_RECOGNIZED_CLASS_MODIFIERS | Constants.ACC_MODULE);
         } else {
             classFlags = stream.readU2() & (JVM_RECOGNIZED_CLASS_MODIFIERS);
         }
@@ -279,7 +306,7 @@ public final class ClassfileParser {
             classFlags |= ACC_ABSTRACT;
         }
 
-        boolean isModule = (classFlags & ACC_MODULE) != 0;
+        boolean isModule = (classFlags & Constants.ACC_MODULE) != 0;
         if (isModule) {
             throw new NoClassDefFoundError(classType + " is not a class because access_flag ACC_MODULE is set");
         }
@@ -294,7 +321,7 @@ public final class ClassfileParser {
         verifyClassFlags(classFlags, majorVersion);
 
         // this class
-        int thisKlassIndex = stream.readU2();
+        thisKlassIndex = stream.readU2();
 
         Symbol<Name> thisKlassName = pool.classAt(thisKlassIndex).getName(pool);
 
@@ -334,7 +361,7 @@ public final class ClassfileParser {
         // Ensure there are no trailing bytes
         stream.checkEndOfFile();
 
-        return new ParserKlass(pool, classFlags, thisKlassName, thisKlassType, superKlass, superInterfaces, methods, fields, attributes, thisKlassIndex);
+        return new ParserKlass(pool, classFlags, thisKlassName, thisKlassType, superKlass, superInterfaces, methods, fields, attributes);
     }
 
     private ParserMethod[] parseMethods(boolean isInterface) {
@@ -364,7 +391,7 @@ public final class ClassfileParser {
      * @param majorVersion the version of the class file
      * @throws ClassFormatError if the flags are invalid
      */
-    private static void verifyMethodFlags(int flags, boolean isInterface, boolean isInit, boolean isClinit, int majorVersion) {
+    public static void verifyMethodFlags(int flags, boolean isInterface, boolean isInit, boolean isClinit, int majorVersion) {
         // The checks below are based on JVMS8 4.6
 
         // Class and interface initialization methods are called
@@ -381,7 +408,7 @@ public final class ClassfileParser {
         // must not have any of its ACC_PRIVATE, ACC_STATIC, ACC_FINAL,
         // ACC_SYNCHRONIZED, ACC_NATIVE, or ACC_STRICT flags set.
         if ((flags & ACC_ABSTRACT) != 0) {
-            valid &= (flags & (ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_NATIVE)) == 0;
+            valid &= (flags & (ACC_PRIVATE | ACC_STATIC | ACC_FINAL | Constants.ACC_NATIVE)) == 0;
             if (majorVersion >= JAVA_1_5_VERSION) {
                 valid &= (flags & (ACC_SYNCHRONIZED | ACC_STRICT)) == 0;
             }
@@ -505,7 +532,7 @@ public final class ClassfileParser {
                     }
                     methodAttributes[i] = checkedExceptions = parseExceptions(attributeName);
                 } else if (attributeName.equals(Name.Synthetic)) {
-                    methodFlags |= ACC_SYNTHETIC;
+                    methodFlags |= Constants.ACC_SYNTHETIC;
                     methodAttributes[i] = checkedExceptions = new Attribute(attributeName, null);
                 } else if (majorVersion >= JAVA_1_5_VERSION) {
                     if (attributeName.equals(Name.Signature)) {
@@ -592,7 +619,7 @@ public final class ClassfileParser {
                 }
                 classAttributes[i] = sourceFileName = parseSourceFileAttribute(attributeName);
             } else if (attributeName.equals(Name.Synthetic)) {
-                classFlags |= ACC_SYNTHETIC;
+                classFlags |= Constants.ACC_SYNTHETIC;
                 classAttributes[i] = new Attribute(attributeName, null);
             } else if (attributeName.equals(Name.InnerClasses)) {
                 if (innerClasses != null) {
@@ -998,13 +1025,13 @@ public final class ClassfileParser {
         return isFirstChar ? -1 : i;
     }
 
-    private static void verifyFieldName(Symbol<Name> name) {
+    public static void verifyFieldName(Symbol<Name> name) {
         if (!isValidFieldName(name)) {
             throw classFormatError("Invalid field name: " + name);
         }
     }
 
-    private static boolean isValidMethodName(Symbol<Name> name, boolean allowClinit) {
+    public static boolean isValidMethodName(Symbol<Name> name, boolean allowClinit) {
         if (name.equals(Name.INIT)) {
             return true;
         }
@@ -1014,13 +1041,13 @@ public final class ClassfileParser {
         return parseUnqualifiedName(name.toString(), 0, true) == name.toString().length();
     }
 
-    private static void verifyMethodName(Symbol<Name> name, boolean allowClinit) {
+    public static void verifyMethodName(Symbol<Name> name, boolean allowClinit) {
         if (!isValidMethodName(name, allowClinit)) {
             throw classFormatError("Invalid method name: " + name);
         }
     }
 
-    private static boolean isValidFieldName(Symbol<Name> name) {
+    public static boolean isValidFieldName(Symbol<Name> name) {
 
         return name.isValid() && parseUnqualifiedName(name.toString(), 0, false) == name.toString().length();
     }
@@ -1033,7 +1060,7 @@ public final class ClassfileParser {
      * @param isInterface if the field flags are being tested for an interface
      * @throws ClassFormatError if the flags are invalid
      */
-    private static void verifyFieldFlags(Symbol<Name> name, int flags, boolean isInterface) {
+    public static void verifyFieldFlags(Symbol<Name> name, int flags, boolean isInterface) {
         boolean valid;
         if (!isInterface) {
             // Class or instance fields
@@ -1069,7 +1096,7 @@ public final class ClassfileParser {
 
         final boolean isStatic = Modifier.isStatic(fieldFlags);
 
-        Symbol<ModifiedUTF8> rawDescriptor = pool.utf8At(typeIndex, "field descriptor");
+        Symbol<Constant> rawDescriptor = pool.utf8At(typeIndex, "field descriptor");
         final Symbol<Type> descriptor = Types.fromSymbol(rawDescriptor);
         if (descriptor == null) {
             throw classFormatError("Invalid descriptor: " + rawDescriptor);
@@ -1098,7 +1125,7 @@ public final class ClassfileParser {
                     throw classFormatError("Invalid ConstantValue index");
                 }
             } else if (attributeName.equals(Name.Synthetic)) {
-                fieldFlags |= ACC_SYNTHETIC;
+                fieldFlags |= Constants.ACC_SYNTHETIC;
                 fieldAttributes[i] = new Attribute(attributeName, null);
             } else if (majorVersion >= JAVA_1_5_VERSION) {
                 if (attributeName.equals(Name.Signature)) {
@@ -1169,7 +1196,7 @@ public final class ClassfileParser {
             }
         }
 
-        return new ParserField(fieldFlags, name, descriptor, fieldAttributes);
+        return new ParserField(fieldFlags, pool.utf8At(nameIndex), pool.utf8At(typeIndex), typeIndex, fieldAttributes);
     }
 
     private ParserField[] parseFields(boolean isInterface) {
@@ -1220,10 +1247,14 @@ public final class ClassfileParser {
                 throw classFormatError(classType + " contains invalid superinterface name: " + interfaceName);
             }
             if (Types.isPrimitive(interfaceType) || Types.isArray(interfaceType)) {
-                throw classFormatError(classType + " superinterfaces cannot contain arrays nor primitives");
+                throw classFormatError(classType + " superinterfaces cannot contains arrays nor primitives");
             }
             interfaces[i] = interfaceType;
         }
         return interfaces;
+    }
+
+    public int getThisKlassIndex() {
+        return thisKlassIndex;
     }
 }
