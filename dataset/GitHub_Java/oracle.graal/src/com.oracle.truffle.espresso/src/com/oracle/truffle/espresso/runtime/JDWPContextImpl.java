@@ -550,7 +550,7 @@ public final class JDWPContextImpl implements JDWPContext {
                 return espressoRootNode.getCurrentBCI();
             }
         }
-        return -1;
+        return 0;
     }
 
     @Override
