@@ -199,7 +199,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
          */
         Atom,
         /**
-         * A term followed by any kind of quantifier.
+         * Any kind of quantifier.
          */
         Quantifier,
         /**
@@ -299,13 +299,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     private TermCategory lastTerm;
 
     /**
-     * The position within the output stream {@link #outPattern} at which starts the translation
-     * of the last translated term. The range [ lastTermOutPosition, position ), gives the part
-     * of the output buffer that's occupied by the last term.
-     */
-    private int lastTermOutPosition;
-
-    /**
      * The contents of the character class that is currently being parsed.
      */
     private CodePointSetAccumulator curCharClass = new CodePointSetAccumulator();
@@ -334,7 +327,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         this.namedCaptureGroups = null;
         this.groupIndex = 0;
         this.lastTerm = TermCategory.None;
-        this.lastTermOutPosition = -1;
     }
 
     @Override
@@ -463,8 +455,10 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     /**
      * Emits the argument into the output pattern <em>verbatim</em>. This is useful for syntax
      * characters or for prebaked snippets.
+     *
+     * @param snippet
      */
-    private void emitSnippet(CharSequence snippet) {
+    private void emitSnippet(String snippet) {
         if (!silent) {
             outPattern.append(snippet);
         }
@@ -517,16 +511,11 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
 
     /**
      * Emits a series of matchers that would match the characters in {@code string}.
-     *
-     * This method treats the string as a sequence of literal character terms.
      */
     private void emitString(String string) {
         if (!silent) {
             for (int i = 0; i < string.length(); i = string.offsetByCodePoints(i, 1)) {
-                int outPosition = outPattern.length();
                 emitChar(string.codePointAt(i));
-                lastTerm = TermCategory.Atom;
-                lastTermOutPosition = outPosition;
             }
         }
     }
@@ -715,7 +704,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             if (match("|")) {
                 emitSnippet("|");
                 lastTerm = TermCategory.None;
-                lastTermOutPosition = -1;
             } else {
                 break;
             }
@@ -749,7 +737,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * </ul>
      */
     private void term() {
-        int outPosition = outPattern.length();
         int ch = consumeChar();
 
         if (getLocalFlags().isExtended()) {
@@ -769,7 +756,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             case '[':
                 characterClass();
                 lastTerm = TermCategory.Atom;
-                lastTermOutPosition = outPosition;
                 break;
             case '*':
             case '+':
@@ -784,7 +770,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     emitSnippet("[^\n]");
                 }
                 lastTerm = TermCategory.Atom;
-                lastTermOutPosition = outPosition;
                 break;
             case '(':
                 parens();
@@ -792,17 +777,14 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             case '^':
                 emitSnippet("(?:^|(?<=[\\n])(?=.))");
                 lastTerm = TermCategory.OtherAssertion;
-                lastTermOutPosition = outPosition;
                 break;
             case '$':
                 emitSnippet("(?:$|(?=[\\n]))");
                 lastTerm = TermCategory.OtherAssertion;
-                lastTermOutPosition = outPosition;
                 break;
             default:
                 emitChar(ch);
                 lastTerm = TermCategory.Atom;
-                lastTermOutPosition = outPosition;
         }
     }
 
@@ -840,7 +822,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * </ul>
      */
     private void escape() {
-        int outPosition = outPattern.length();
         if (assertionEscape()) {
             lastTerm = TermCategory.OtherAssertion;
         } else if (categoryEscape(false)) {
@@ -868,7 +849,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             characterEscape();
             lastTerm = TermCategory.Atom;
         }
-        lastTermOutPosition = outPosition;
     }
 
     /**
@@ -1529,13 +1509,21 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * Parses a quantifier whose first character is the argument {@code ch}.
      */
     private void quantifier(int ch) {
-        StringBuilder quantifier = new StringBuilder();
+        switch (lastTerm) {
+            case None:
+                throw syntaxError("nothing to repeat");
+            case Quantifier:
+                throw syntaxError("multiple repeat");
+                // TODO: Nested quantifiers should be supported.
+        }
+
         int start = position - 1;
         if (ch == '{') {
             if (match("}") || match(",}")) {
                 // We did not find a complete quantifier, so we should just emit a string of
                 // matchers the individual characters.
                 emitString(inPattern.substring(start, position));
+                lastTerm = TermCategory.Atom;
                 return;
             } else {
                 Optional<BigInteger> lowerBound = Optional.empty();
@@ -1556,28 +1544,29 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     // We did not find a complete quantifier, so we should just emit a string of
                     // matchers the individual characters.
                     emitString(inPattern.substring(start, position));
+                    lastTerm = TermCategory.Atom;
                     return;
                 }
                 if (lowerBound.isPresent() && upperBound.isPresent() && lowerBound.get().compareTo(upperBound.get()) > 0) {
                     throw syntaxError("min repeat greater than max repeat");
                 }
                 if (lowerBound.isPresent()) {
-                    quantifier.append(inPattern.subSequence(start, position));
+                    emitSnippet(inPattern.substring(start, position));
                 } else {
                     // {,upperBound} is invalid in ECMAScript in unicode mode, but always valid in Ruby,
                     // so we insert an explicit lower bound 0
-                    quantifier.append("{0,");
+                    emitSnippet("{0,");
                     assert inPattern.charAt(start) == '{' && inPattern.charAt(start + 1) == ',';
-                    quantifier.append(inPattern.subSequence(start + 2, position));
+                    emitSnippet(inPattern.substring(start + 2, position));
                 }
             }
             if (match("?")) {
-                quantifier.append("?");
+                emitSnippet("?");
             }
         } else {
-            quantifier.appendCodePoint(ch);
+            emitRawCodepoint(ch);
             if (match("?")) {
-                quantifier.append("?");
+                emitSnippet("?");
             } else if (match("+")) {
                 bailOut("possessive quantifiers not supported");
             }
@@ -1587,8 +1576,8 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             case None:
                 throw syntaxError("nothing to repeat");
             case Quantifier:
-                wrapLastTerm("(?:", ")" + quantifier.toString());
-                break;
+                throw syntaxError("multiple repeat");
+                // TODO: Nested quantifiers should be supported.
             case LookAroundAssertion:
                 // A lookaround assertion might contain capture groups and thus have side effects. ECMAScript regular
                 // expressions do not accept extraneous empty matches. Therefore, an expression like /(?:(?=(a)))?/
@@ -1600,16 +1589,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 bailOut("quantifiers on lookaround assertions not supported");
             case OtherAssertion:
             case Atom:
-                emitSnippet(quantifier);
                 lastTerm = TermCategory.Quantifier;
-                // lastTermOutPosition stays the same: the term with its quantifier is considered as the last term
-        }
-    }
-
-    private void wrapLastTerm(String prefix, String suffix) {
-        if (!silent) {
-            outPattern.insert(lastTermOutPosition, prefix);
-            emitSnippet(suffix);
         }
     }
 
@@ -1733,7 +1713,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * @param capturing whether or not we should emit a capturing group
      */
     private void group(boolean capturing) {
-        int outPosition = outPattern.length();
         if (capturing) {
             groupIndex++;
             groupStack.push(new Group(groupIndex));
@@ -1751,7 +1730,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             groupStack.pop();
         }
         lastTerm = TermCategory.Atom;
-        lastTermOutPosition = outPosition;
     }
 
     /**
@@ -1761,7 +1739,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * @param positive {@code true} if the assertion to be emitted is a positive lookahead assertion
      */
     private void lookahead(boolean positive) {
-        int outPosition = outPattern.length();
         if (positive) {
             emitSnippet("(?:(?=");
         } else {
@@ -1774,14 +1751,12 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.LookAroundAssertion;
-        lastTermOutPosition = outPosition;
     }
 
     /**
      * Just like {@link #lookahead}, but for lookbehind assertions.
      */
     private void lookbehind(boolean positive) {
-        int outPosition = outPattern.length();
         if (positive) {
             emitSnippet("(?:(?<=");
         } else {
@@ -1796,7 +1771,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.LookAroundAssertion;
-        lastTermOutPosition = outPosition;
     }
 
     /**
@@ -1826,7 +1800,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.Atom;
-        lastTermOutPosition = -1; // bail out
     }
 
     /**
@@ -1840,7 +1813,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.Atom;
-        lastTermOutPosition = -1; // bail out
     }
 
     /**
@@ -1898,7 +1870,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     private void openEndedLocalFlags(RubyFlags newFlags) {
         setLocalFlags(newFlags);
         lastTerm = TermCategory.None;
-        lastTermOutPosition = -1;
         // Using "open-ended" flag modifiers, e.g. /a(?i)b|c/, makes Ruby wrap the continuation
         // of the flag modifier in parentheses, so that the above regex is equivalent to
         // /a(?i:b|c)/.
