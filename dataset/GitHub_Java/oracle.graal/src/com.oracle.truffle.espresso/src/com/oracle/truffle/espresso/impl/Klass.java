@@ -23,7 +23,6 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_SUPER;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeVirtual;
 import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeBasic;
 import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeGeneric;
@@ -687,8 +686,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
 
     @Override
     public final int getModifiers() {
-        // ACC_SUPER is kept for backward compatibility, should be ignored.
-        return (getFlags() & Constants.JVM_RECOGNIZED_CLASS_MODIFIERS & ~ACC_SUPER);
+        return getFlags() & Constants.JVM_RECOGNIZED_CLASS_MODIFIERS;
     }
 
     protected abstract int getFlags();
