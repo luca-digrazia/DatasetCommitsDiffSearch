@@ -484,6 +484,9 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
 
                 if (target instanceof OptimizedCallTarget) {
                     OptimizedCallTarget callTarget = ((OptimizedCallTarget) target);
+                    if (callTarget.isValid()) {
+                        builder.append(" <opt>");
+                    }
                     if (callTarget.getSourceCallTarget() != null) {
                         builder.append(" <split-" + Integer.toHexString(callTarget.hashCode()) + ">");
                     }

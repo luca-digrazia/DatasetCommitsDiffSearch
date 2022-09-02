@@ -126,12 +126,6 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
         return LibGraal.unhand(JavaConstant.class, javaConstantHandle);
     }
 
-    @Override
-    public boolean isTrivial() {
-        // TODO: Implement
-        return false;
-    }
-
     @TruffleFromLibGraal(AsJavaConstant)
     @Override
     public JavaConstant asJavaConstant() {
