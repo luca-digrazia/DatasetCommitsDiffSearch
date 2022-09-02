@@ -28,11 +28,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -43,12 +39,10 @@ import jdk.jfr.consumer.RecordingFile;
 final class CompilationTimeMetric implements Metric {
 
     private static final Logger LOG = Logger.getLogger(CompilationTimeMetric.class.getName());
-    private static final Set<String> TRUFFLE_COMPILATION_EVENTS = Collections.unmodifiableSet(new TreeSet<>(Arrays.asList(
-                    "org.graalvm.compiler.truffle.jfr.impl.CompilationEventImpl",
-                    "com.oracle.svm.enterprise.truffle.jfr.impl.CompilationEventImpl")));
+    private static final String TRUFFLE_COMPILATION_EVENT = "org.graalvm.compiler.truffle.Compilation";
 
     private Recording recording;
-    private long cumulativeTime = 0L;
+    private Recording snapshot;
 
     CompilationTimeMetric() {
         if (!FlightRecorder.isAvailable()) {
@@ -58,17 +52,15 @@ final class CompilationTimeMetric implements Metric {
 
     @Override
     public void beforeIteration(boolean warmup, int iteration, Config config) {
-        // Reset the cumulative time. It's recomputed in the afterIteration from the JFR snapshot.
-        cumulativeTime = 0L;
         if (recording == null) {
             // First iteration, create a new Recording used for all iterations until reset.
             recording = new Recording();
-            for (String eventName : TRUFFLE_COMPILATION_EVENTS) {
-                recording.enable(eventName);
-            }
+            recording.enable(TRUFFLE_COMPILATION_EVENT);
             recording.setDumpOnExit(false);
             recording.start();
         }
+        dispose(snapshot, false);
+        snapshot = null;
     }
 
     @Override
@@ -76,41 +68,29 @@ final class CompilationTimeMetric implements Metric {
         if (recording == null) {
             throw new IllegalStateException("Missing JFR recording.");
         }
-        if (cumulativeTime != 0L) {
-            throw new IllegalStateException("Missing a call to beforeIteration().");
+        if (snapshot != null) {
+            throw new IllegalStateException("Existing JFR snapshot.");
         }
-        try {
-            Path file = Files.createTempFile("recording", ".jfr");
-            try {
-                // Copy a JFR events snapshot into a temp file.
-                recording.dump(file);
-                // Calculate a cumulative Truffle compilation time from all events in the snapshot.
-                cumulativeTime = processRecordings(file);
-            } finally {
-                Files.delete(file);
-            }
-        } catch (IOException ioe) {
-            LOG.log(Level.SEVERE, "Cannot write recording", ioe);
-        }
+        snapshot = recording.copy(true);
     }
 
     @Override
     public void reset() {
-        cumulativeTime = 0L;
         // Stop and dispose JFR recording.
-        recording.stop();
-        recording.close();
+        dispose(recording, true);
         recording = null;
+        dispose(snapshot, false);
+        snapshot = null;
     }
 
     @Override
     public Optional<Double> reportAfterIteration(Config config) {
-        return Optional.of(cumulativeTime * 1.0);
+        return computeCumulativeTime();
     }
 
     @Override
     public Optional<Double> reportAfterAll() {
-        return Optional.of(cumulativeTime * 1.0);
+        return computeCumulativeTime();
     }
 
     @Override
@@ -123,10 +103,39 @@ final class CompilationTimeMetric implements Metric {
         return "compilation time";
     }
 
+    private Optional<Double> computeCumulativeTime() {
+        if (snapshot == null) {
+            throw new IllegalStateException("No snapshot.");
+        }
+        try {
+            Path file = Files.createTempFile("recording", ".jfr");
+            try {
+                // Copy a JFR events snapshot into a temp file.
+                snapshot.dump(file);
+                // Calculate a cumulative Truffle compilation time from all events in the snapshot.
+                return Optional.of(1.0 * processRecordings(file));
+            } finally {
+                Files.delete(file);
+            }
+        } catch (IOException ioe) {
+            LOG.log(Level.SEVERE, "Cannot write recording.", ioe);
+            return Optional.empty();
+        }
+    }
+
+    private static void dispose(Recording toDispose, boolean stop) {
+        if (toDispose != null) {
+            if (stop) {
+                toDispose.stop();
+            }
+            toDispose.close();
+        }
+    }
+
     private static long processRecordings(Path jfrFile) throws IOException {
         return RecordingFile.readAllEvents(jfrFile).stream()
                         .filter((event) -> {
-                            return TRUFFLE_COMPILATION_EVENTS.contains(event.getEventType().getName());
+                            return TRUFFLE_COMPILATION_EVENT.equals(event.getEventType().getName());
                         })
                         .map((event) -> event.getDuration())
                         .collect(Collectors.reducing(Duration.ofNanos(0), (a, b) -> a.plus(b)))
