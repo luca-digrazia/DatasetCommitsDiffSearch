@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -61,6 +61,12 @@ public interface FrameInstance {
      * @since 0.8 or earlier
      */
     enum FrameAccess {
+        /**
+         * @since 0.8 or earlier
+         * @deprecated without replacement. This mode always returns <code>null</code>.
+         **/
+        @Deprecated //
+        NONE,
 
         /**
          * This mode allows to read the frame and provides read only access to its local variables.
@@ -89,32 +95,28 @@ public interface FrameInstance {
     }
 
     /**
+     *
+     * @since 0.8 or earlier
+     * @deprecated use {@link #getFrame(FrameAccess)} instead. It is equivalent to
+     *             <code>FrameInstance.getFrame(access, true)</code>.
+     */
+    @Deprecated
+    default Frame getFrame(FrameAccess access, @SuppressWarnings("unused") boolean slowPath) {
+        return getFrame(access);
+    }
+
+    /**
      * Accesses the underlying frame using a specified {@link FrameAccess access mode}.
      *
      * @see FrameAccess
      * @since 0.23
      */
-    Frame getFrame(FrameAccess access);
+    default Frame getFrame(FrameAccess access) {
+        return getFrame(access, true);
+    }
 
     /** @since 0.8 or earlier */
     boolean isVirtualFrame();
-
-    /**
-     * Returns an integer for the optimized tier of this method. If <code>0</code> is returned then
-     * this means that the frame is currently being interpreted without any optimization. The number
-     * of tiers is unlimited, but is typically restricted to a small set. e.g. 0-2. Where 0 could
-     * indicate interpreted, 1 indicates first tier and 2 indicates last tier compilation. It is
-     * best to not interpret this number and just print it for the user.
-     *
-     * @since 21.2
-     */
-    default int getCompilationTier() {
-        return 0;
-    }
-
-    default boolean isCompilationRoot() {
-        return true;
-    }
 
     /**
      * Returns a node representing the callsite of the next new target on the stack.
