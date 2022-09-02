@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,12 +26,12 @@ package org.graalvm.compiler.virtual.phases.ea;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
+import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -54,12 +56,25 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
      */
     private ObjectState[] objectStates;
 
+    public boolean contains(VirtualObjectNode value) {
+        for (ObjectState state : objectStates) {
+            if (state != null && state.isVirtual() && state.getEntries() != null) {
+                for (ValueNode entry : state.getEntries()) {
+                    if (entry == value) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private static class RefCount {
         private int refCount = 1;
     }
 
     /**
-     * Usage count for the objectStates array, to avoid unneessary copying.
+     * Usage count for the objectStates array, to avoid unnecessary copying.
      */
     private RefCount arrayRefCount;
 
@@ -103,6 +118,10 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
 
     public ObjectState getObjectStateOptional(int object) {
         return object >= objectStates.length ? null : objectStates[object];
+    }
+
+    public boolean hasObjectState(int object) {
+        return object >= 0 && object < objectStates.length && objectStates[object] != null;
     }
 
     /**
@@ -172,6 +191,7 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
      * This transitively also materializes all other virtual objects that are reachable from the
      * entries.
      */
+    @SuppressWarnings("try")
     public void materializeBefore(FixedNode fixed, VirtualObjectNode virtual, GraphEffectList materializeEffects) {
         PartialEscapeClosure.COUNTER_MATERIALIZATIONS.increment(fixed.getDebug());
         List<AllocatedObjectNode> objects = new ArrayList<>(2);
@@ -198,8 +218,10 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
                     if (fixed.predecessor() instanceof CommitAllocationNode) {
                         commit = (CommitAllocationNode) fixed.predecessor();
                     } else {
-                        commit = graph.add(new CommitAllocationNode());
-                        graph.addBeforeFixed(fixed, commit);
+                        try (DebugCloseable context = graph.withNodeSourcePosition(NodeSourcePosition.placeholder(graph.method()))) {
+                            commit = graph.add(new CommitAllocationNode());
+                            graph.addBeforeFixed(fixed, commit);
+                        }
                     }
                     for (AllocatedObjectNode obj : objects) {
                         graph.addWithoutUnique(obj);
@@ -308,41 +330,6 @@ public abstract class PartialEscapeBlockState<T extends PartialEscapeBlockState<
             }
         }
         return true;
-    }
-
-    protected static <K, V> boolean compareMaps(Map<K, V> left, Map<K, V> right) {
-        if (left.size() != right.size()) {
-            return false;
-        }
-        return compareMapsNoSize(left, right);
-    }
-
-    protected static <K, V> boolean compareMapsNoSize(Map<K, V> left, Map<K, V> right) {
-        if (left == right) {
-            return true;
-        }
-        for (Map.Entry<K, V> entry : right.entrySet()) {
-            K key = entry.getKey();
-            V value = entry.getValue();
-            assert value != null;
-            V otherValue = left.get(key);
-            if (otherValue != value && !value.equals(otherValue)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    protected static <U, V> void meetMaps(Map<U, V> target, Map<U, V> source) {
-        Iterator<Map.Entry<U, V>> iter = target.entrySet().iterator();
-        while (iter.hasNext()) {
-            Map.Entry<U, V> entry = iter.next();
-            if (source.containsKey(entry.getKey())) {
-                assert source.get(entry.getKey()) == entry.getValue();
-            } else {
-                iter.remove();
-            }
-        }
     }
 
     public void resetObjectStates(int size) {
