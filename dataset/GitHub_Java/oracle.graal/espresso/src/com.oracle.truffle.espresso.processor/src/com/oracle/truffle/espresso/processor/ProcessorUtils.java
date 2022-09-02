@@ -24,12 +24,10 @@
 package com.oracle.truffle.espresso.processor;
 
 public class ProcessorUtils {
-    /** Appends and prepends a quotation mark around the given string. */
     public static String stringify(String str) {
         return '\"' + str + '\"';
     }
 
-    /** "[modifiers] [returnType] methodName(comma-separated arguments)". */
     public static String methodDeclaration(String modifiers, String returnType, String methodName, String[] arguments) {
         StringBuilder str = new StringBuilder();
         if (modifiers != null) {
@@ -44,22 +42,18 @@ public class ProcessorUtils {
         return str.toString();
     }
 
-    /** "[modifiers] type fieldName[ = defaultValue];". */
     public static String fieldDeclaration(String modifiers, String type, String fieldName, String defaultValue) {
-        return (modifiers == null ? "" : (modifiers + " ")) + type + " " + fieldName + ((defaultValue == null) ? "" : (" = " + defaultValue)) + ";";
+        return modifiers + " " + type + " " + fieldName + ((defaultValue == null) ? "" : (" = " + defaultValue)) + ";";
     }
 
-    /** "className argName". */
     public static String argument(String className, String argName) {
         return className + " " + argName;
     }
 
-    /** "varName = value;" */
     public static String assignment(String varName, String value) {
         return varName + " = " + value + ";";
     }
 
-    /** "[receiver.]methodName(comma-separated args)" */
     public static String call(String receiver, String methodName, String[] args) {
         StringBuilder str = new StringBuilder();
         if (receiver != null) {
@@ -72,54 +66,7 @@ public class ProcessorUtils {
         return str.toString();
     }
 
-    /** Returns the given string whose first letter is upper case */
-    public static String capitalize(String str) {
-        if (str.length() > 0) {
-            char[] c = str.toCharArray();
-            c[0] = Character.toUpperCase(c[0]);
-            return new String(c);
-        }
-        return "";
-    }
-
-    /** Returns the given string whose first letter is lower case */
-    public static String decapitalize(String str) {
-        if (str.length() > 0) {
-            char[] c = str.toCharArray();
-            c[0] = Character.toLowerCase(c[0]);
-            return new String(c);
-        }
-        return "";
-    }
-
-    /**
-     * Converts a C-like name convention to a java like class name convention. In practice, this
-     * removes underscores, and converts the character following it to upper case, along with
-     * converting the first letter to upper case.
-     * <p>
-     * For example:
-     * <ul>
-     * <li>"native_member" -> "NativeMember"</li>
-     * <li>"_struct_type" -> "StructType"</li>
-     * </ul>
-     */
-    public static String removeUnderscores(String strName) {
-        StringBuilder builder = new StringBuilder();
-        int current = 0;
-        int index;
-        while ((current < strName.length()) && ((index = strName.indexOf("_", current)) >= 0)) {
-            if (index > current) {
-                String substring = strName.substring(current, index);
-                builder.append(capitalize(substring));
-            }
-            current = index + 1;
-        }
-        String substring = strName.substring(current);
-        builder.append(capitalize(substring));
-        return builder.toString();
-    }
-
-    private static String listToString(String[] strs, String separator) {
+    public static String listToString(String[] strs, String separator) {
         StringBuilder str = new StringBuilder();
         boolean first = true;
         for (String arg : strs) {

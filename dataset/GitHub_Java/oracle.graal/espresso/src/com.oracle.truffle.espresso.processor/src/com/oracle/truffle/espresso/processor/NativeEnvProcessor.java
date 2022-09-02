@@ -165,8 +165,7 @@ public final class NativeEnvProcessor extends EspressoProcessor {
         this.envName = envClassName.toLowerCase();
         this.imports = "import " + envPackage + "." + envClassName + ";\n";
 
-        // Generate collector in the same package as env annotation.
-        initCollector(envPackage, envClassName + "Collector");
+        initCollector(envClassName + "Collector");
     }
 
     private void findIntrisificationTarget(Element e) {
@@ -216,7 +215,6 @@ public final class NativeEnvProcessor extends EspressoProcessor {
                 IntrinsincsHelper h = new IntrinsincsHelper(this, method, jniNativeSignature, referenceTypes, isStatic, prependEnv, needsHandlify);
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
-                                envPackage,
                                 className,
                                 targetMethodName,
                                 espressoTypes, h);
@@ -340,10 +338,6 @@ public final class NativeEnvProcessor extends EspressoProcessor {
         str.append(imports);
         str.append(IMPORT_NATIVE_SIGNATURE);
         str.append(IMPORT_NATIVE_TYPE);
-        str.append("import " + SUBSTITUTOR_PACKAGE + "." + SUBSTITUTOR + ";\n");
-        if (helper.hasProfileInjection) {
-            str.append(IMPORT_PROFILE);
-        }
         if (parameterTypeName.contains("String")) {
             str.append(IMPORT_INTEROP_LIBRARY);
         }
