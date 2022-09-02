@@ -213,7 +213,7 @@ public final class ObjectKlass extends Klass {
                 if (f.isStatic()) {
                     ConstantValueAttribute a = (ConstantValueAttribute) f.getAttribute(Name.ConstantValue);
                     if (a == null) {
-                        break;
+                        continue;
                     }
                     switch (f.getKind()) {
                         case Boolean: {
@@ -507,7 +507,7 @@ public final class ObjectKlass extends Klass {
             for (Method m : declaredMethods) {
                 CodeAttribute code = m.hasCode() ? m.getCodeAttribute() : null;
                 try {
-                    MethodVerifier.verify(code, getConstantPool(), m.getRawSignature().toString(), m.isStatic());
+                    MethodVerifier.verify(code, getConstantPool());
                 } catch (Throwable e) {
                     throw e;
                 }
