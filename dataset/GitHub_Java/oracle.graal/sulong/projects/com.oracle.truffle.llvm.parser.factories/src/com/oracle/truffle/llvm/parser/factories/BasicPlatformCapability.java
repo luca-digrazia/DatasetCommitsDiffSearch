@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,25 +32,18 @@ package com.oracle.truffle.llvm.parser.factories;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import com.oracle.truffle.llvm.runtime.ExternalLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMSyscallEntry;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64UnknownSyscallNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMInfo;
-import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMUnknownSyscallNode;
 
 public abstract class BasicPlatformCapability<S extends Enum<S> & LLVMSyscallEntry> extends PlatformCapability<S> {
 
     public static BasicPlatformCapability<?> create(boolean loadCxxLibraries) {
-        if (LLVMInfo.SYSNAME.equalsIgnoreCase("linux")) {
-            if (LLVMInfo.MACHINE.equalsIgnoreCase("x86_64")) {
-                return new LinuxAMD64PlatformCapability(loadCxxLibraries);
-            }
-            if (LLVMInfo.MACHINE.equalsIgnoreCase("aarch64")) {
-                return new LinuxAArch64PlatformCapability(loadCxxLibraries);
-            }
+        if (LLVMInfo.SYSNAME.equalsIgnoreCase("linux") && LLVMInfo.MACHINE.equalsIgnoreCase("x86_64")) {
+            return new LinuxAMD64PlatformCapability(loadCxxLibraries);
         }
         if (LLVMInfo.SYSNAME.equalsIgnoreCase("mac os x") && LLVMInfo.MACHINE.equalsIgnoreCase("x86_64")) {
             return new DarwinAMD64PlatformCapability(loadCxxLibraries);
@@ -59,9 +52,8 @@ public abstract class BasicPlatformCapability<S extends Enum<S> & LLVMSyscallEnt
     }
 
     private static final Path SULONG_LIBDIR = Paths.get("native", "lib");
-    public static final String LIBSULONG_FILENAME = "libsulong." + NFIContextExtension.getNativeLibrarySuffix();
-    public static final String LIBSULONGXX_FILENAME = "libsulong++." + NFIContextExtension.getNativeLibrarySuffix();
-    public static final String LIBCXXABI_PREFIX = "libc++abi.";
+    public static final String LIBSULONG_FILENAME = "libsulong.bc";
+    public static final String LIBSULONGXX_FILENAME = "libsulong++.bc";
 
     private final boolean loadCxxLibraries;
 
@@ -90,23 +82,11 @@ public abstract class BasicPlatformCapability<S extends Enum<S> & LLVMSyscallEnt
     }
 
     @Override
-    public String injectDependency(LLVMContext ctx, ExternalLibrary library) {
-        if (ctx.isInternalLibrary(library) && library.hasFile()) {
-            Path path = Paths.get(library.getFile().getPath());
-            String remainder = ctx.getInternalLibraryPath().relativize(path).toString();
-            if (remainder.startsWith(LIBCXXABI_PREFIX)) {
-                return LIBSULONGXX_FILENAME;
-            }
-        }
-        return null;
-    }
-
-    @Override
     public LLVMSyscallOperationNode createSyscallNode(long index) {
         try {
             return createSyscallNode(getSyscall(index));
         } catch (IllegalArgumentException e) {
-            return new LLVMUnknownSyscallNode(index);
+            return new LLVMAMD64UnknownSyscallNode(index);
         }
     }
 
