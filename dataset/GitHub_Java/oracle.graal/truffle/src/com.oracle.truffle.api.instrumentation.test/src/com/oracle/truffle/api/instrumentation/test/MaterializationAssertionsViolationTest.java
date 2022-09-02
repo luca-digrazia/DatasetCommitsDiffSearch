@@ -40,6 +40,8 @@
  */
 package com.oracle.truffle.api.instrumentation.test;
 
+import static com.oracle.truffle.api.instrumentation.test.MaterializationAssertionsViolationTest.MaterializationAssertionViolationLanguage.ID;
+
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -85,7 +87,7 @@ public class MaterializationAssertionsViolationTest {
 
     @Before
     public void setup() {
-        context = Context.create(MaterializationAssertionViolationLanguage.ID);
+        context = Context.create(ID);
         instrumentEnv = context.getEngine().getInstruments().get("InstrumentationUpdateInstrument").lookup(TruffleInstrument.Env.class);
     }
 
@@ -100,7 +102,7 @@ public class MaterializationAssertionsViolationTest {
     public void testMultipleMaterializationAssertion() {
         expectedException.expect(PolyglotException.class);
         expectedException.expectMessage("java.lang.AssertionError: Node must not be materialized multiple times for the same set of tags!");
-        Source source = Source.create(MaterializationAssertionViolationLanguage.ID, "S2E0()");
+        Source source = Source.create(ID, "S2E0()");
         ExecutionEventListener listener = createListener();
         instrumentEnv.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build(), listener);
         instrumentEnv.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build(), listener);
@@ -114,7 +116,7 @@ public class MaterializationAssertionsViolationTest {
      */
     @Test
     public void testGradualMaterializationAssertionUncaught() {
-        Source source = Source.create(MaterializationAssertionViolationLanguage.ID, "S1E2()");
+        Source source = Source.create(ID, "S1E2()");
         ExecutionEventListener listener = createListener();
         EventBinding<ExecutionEventListener> binding = instrumentEnv.getInstrumenter().attachExecutionEventListener(
                         SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class, StandardTags.ExpressionTag.class).build(), listener);
@@ -127,7 +129,7 @@ public class MaterializationAssertionsViolationTest {
     public void testGradualMaterializationAssertionCaught() {
         expectedException.expect(AssertionError.class);
         expectedException.expectMessage("There should always be some new materialize tag!");
-        Source source = Source.create(MaterializationAssertionViolationLanguage.ID, "S1E2()");
+        Source source = Source.create(ID, "S1E2()");
         ExecutionEventListener listener = createListener();
         /*
          * Execute first so that for the subsequent instrumentation, the materializeTags are
@@ -145,7 +147,7 @@ public class MaterializationAssertionsViolationTest {
     public void testNewTreeMaterializationAssertion() {
         expectedException.expect(PolyglotException.class);
         expectedException.expectMessage("java.lang.AssertionError: New tree should be fully materialized!");
-        Source source = Source.create(MaterializationAssertionViolationLanguage.ID, "S1E0(S1E0())");
+        Source source = Source.create(ID, "S1E0(S1E0())");
         ExecutionEventListener listener = createListener();
         instrumentEnv.getInstrumenter().attachExecutionEventListener(SourceSectionFilter.newBuilder().tagIs(StandardTags.StatementTag.class).build(), listener);
         context.eval(source);
@@ -170,7 +172,7 @@ public class MaterializationAssertionsViolationTest {
         };
     }
 
-    @TruffleLanguage.Registration(id = MaterializationAssertionViolationLanguage.ID, name = "Materialization Assertion Violation Language", version = "1.0")
+    @TruffleLanguage.Registration(id = ID, name = "Materialization Assertion Violation Language", version = "1.0")
     @ProvidedTags({StandardTags.RootTag.class, StandardTags.StatementTag.class, StandardTags.ExpressionTag.class})
     public static class MaterializationAssertionViolationLanguage extends ProxyLanguage {
 
