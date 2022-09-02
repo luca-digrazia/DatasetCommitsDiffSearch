@@ -421,11 +421,11 @@ public final class GenerateCatalog {
                 String url = (urlPrefix == null || urlPrefix.isEmpty()) ? name : urlPrefix + "/" + name;
                 String sel;
                 String hashSuffix;
-
+                
                 switch (formatVer) {
                     case 1:
                         sel = "Component.{0}.{1}";
-                        hashSuffix = "-hash";
+                        hashSuffix = ".hash";
                         break;
                     case 2:
                         sel = "Component.{0}/{1}";
