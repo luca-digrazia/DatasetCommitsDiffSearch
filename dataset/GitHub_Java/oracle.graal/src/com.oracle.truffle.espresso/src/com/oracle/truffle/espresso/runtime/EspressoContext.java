@@ -28,7 +28,6 @@ import java.io.OutputStream;
 import java.lang.ref.ReferenceQueue;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -92,7 +91,7 @@ public final class EspressoContext {
     private final AtomicInteger loaderIdProvider = new AtomicInteger();
     private final int bootClassLoaderID = getNewLoaderId();
 
-    public long initDoneTimeNanos;
+    public long initVMDoneMs;
 
     private boolean mainThreadCreated;
     private JDWPContextImpl jdwpContext;
@@ -383,7 +382,7 @@ public final class EspressoContext {
 
     private void spawnVM() {
 
-        long initStartTimeNanos = System.nanoTime();
+        long ticks = System.currentTimeMillis();
 
         initVmProperties();
 
@@ -493,9 +492,8 @@ public final class EspressoContext {
         // Create application (system) class loader.
         meta.java_lang_ClassLoader_getSystemClassLoader.invokeDirect(null);
 
-        initDoneTimeNanos = System.nanoTime();
-        long elapsedNanos = initDoneTimeNanos - initStartTimeNanos;
-        getLogger().log(Level.FINE, "VM booted in {0} ms", TimeUnit.NANOSECONDS.toMillis(elapsedNanos));
+        getLogger().log(Level.FINE, "VM booted in {0} ms", System.currentTimeMillis() - ticks);
+        initVMDoneMs = System.currentTimeMillis();
 
         // Truffle considers a language to be multi-threaded if it creates at least one
         // polyglot thread, even if the thread is never started.
@@ -588,7 +586,7 @@ public final class EspressoContext {
         // TODO(Gregersen) - /browse/GR-20077
     }
 
-    private static final long MAX_KILL_PHASE_WAIT_NANOS = 100_000_000; // 100 ms
+    private static final long MAX_KILL_PHASE_WAIT = 100;
 
     public void teardown() {
         assert isClosing();
@@ -709,11 +707,11 @@ public final class EspressoContext {
      * @return true if all threads are completed, false otherwise.
      */
     private boolean waitSpin(Thread initiatingThread) {
-        long nanos = System.nanoTime();
+        long tick = System.currentTimeMillis();
         spinLoop: //
         while (true) {
-            long elapsedNanos = System.nanoTime() - nanos;
-            if (elapsedNanos > MAX_KILL_PHASE_WAIT_NANOS) {
+            long time = System.currentTimeMillis() - tick;
+            if (time > MAX_KILL_PHASE_WAIT) {
                 return false;
             }
             for (StaticObject guest : threadManager.activeThreads()) {
