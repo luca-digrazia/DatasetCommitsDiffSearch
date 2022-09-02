@@ -1,26 +1,42 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.instrumentation;
 
@@ -30,6 +46,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -49,28 +66,6 @@ public abstract class Instrumenter {
     }
 
     /**
-     * @since 0.12
-     * @deprecated in 0.30 use
-     *             {@link #attachExecutionEventFactory(SourceSectionFilter, ExecutionEventNodeFactory)
-     *             instead (rename only)
-     */
-    @Deprecated
-    public final <T extends ExecutionEventNodeFactory> EventBinding<T> attachFactory(SourceSectionFilter eventFilter, T factory) {
-        return attachExecutionEventFactory(eventFilter, null, factory);
-    }
-
-    /**
-     * @since 0.12
-     * @deprecated in 0.30 use
-     *             {@link #attachExecutionEventFactory(SourceSectionFilter, ExecutionEventNodeFactory)}
-     *             instead (rename only)
-     */
-    @Deprecated
-    public final <T extends ExecutionEventListener> EventBinding<T> attachListener(SourceSectionFilter eventFilter, T listener) {
-        return attachExecutionEventListener(eventFilter, null, listener);
-    }
-
-    /**
      * Starts execution event notification for a given {@link SourceSectionFilter event filter} and
      * {@link ExecutionEventListener listener}. The execution events are delivered to the
      * {@link ExecutionEventListener}.
@@ -82,15 +77,13 @@ public abstract class Instrumenter {
      * <p>
      * By default no
      * {@link ExecutionEventNode#onInputValue(com.oracle.truffle.api.frame.VirtualFrame, EventContext, int, Object)
-     * input value events} are delivered to the listener. To deliver inputs events use
-     * {@link #attachExecutionEventListener(SourceSectionFilter, SourceSectionFilter, ExecutionEventListener)}
-     * instead.
+     * input value events} are delivered to the listener.
      *
      * @param eventFilter filters the events that are reported to the given
      *            {@link ExecutionEventListener listener}
      * @param listener that listens to execution events.
      * @see ExecutionEventListener
-     * @since 0.30
+     * @since 0.33
      */
     public final <T extends ExecutionEventListener> EventBinding<T> attachExecutionEventListener(SourceSectionFilter eventFilter, T listener) {
         return attachExecutionEventListener(eventFilter, null, listener);
@@ -119,7 +112,7 @@ public abstract class Instrumenter {
      * @see ExecutionEventNodeFactory
      * @see #attachExecutionEventFactory(SourceSectionFilter, SourceSectionFilter,
      *      ExecutionEventNodeFactory)
-     * @since 0.30
+     * @since 0.33
      */
     public final <T extends ExecutionEventNodeFactory> EventBinding<T> attachExecutionEventFactory(SourceSectionFilter eventFilter, T factory) {
         return attachExecutionEventFactory(eventFilter, null, factory);
@@ -146,8 +139,14 @@ public abstract class Instrumenter {
      * @see ExecutionEventListener
      * @see ExecutionEventListener#onInputValue(EventContext,
      *      com.oracle.truffle.api.frame.VirtualFrame, EventContext, int, Object)
-     * @since 0.30
+     * @since 0.33
+     * @deprecated inputFilters do not work for execution event listeners Use
+     *             {@link #attachExecutionEventFactory(SourceSectionFilter, SourceSectionFilter, ExecutionEventNodeFactory)}
+     *             or use
+     *             {@link #attachExecutionEventListener(SourceSectionFilter, ExecutionEventListener)}
+     *             instead.
      */
+    @Deprecated
     public abstract <T extends ExecutionEventListener> EventBinding<T> attachExecutionEventListener(SourceSectionFilter eventFilter, SourceSectionFilter inputFilter, T listener);
 
     /**
@@ -171,7 +170,7 @@ public abstract class Instrumenter {
      * @see ExecutionEventNodeFactory
      * @see ExecutionEventNode#onInputValue(com.oracle.truffle.api.frame.VirtualFrame, EventContext,
      *      int, Object)
-     * @since 0.30
+     * @since 0.33
      */
     public abstract <T extends ExecutionEventNodeFactory> EventBinding<T> attachExecutionEventFactory(SourceSectionFilter eventFilter, SourceSectionFilter inputFilter, T factory);
 
@@ -213,9 +212,29 @@ public abstract class Instrumenter {
      *
      * @see LoadSourceListener#onLoad(LoadSourceEvent)
      *
-     * @since 0.32
+     * @since 0.33
      */
     public abstract <T extends LoadSourceListener> EventBinding<T> attachLoadSourceListener(SourceFilter filter, T listener, boolean includeExistingSources);
+
+    /**
+     * Starts notifications for each newly executed {@link Source} and returns a
+     * {@linkplain EventBinding binding} that can be used to terminate notifications. Only
+     * subsequent executions will be notified unless {@code includeExecutedSources} is true, in
+     * which case a notification for each previously executed source will be delivered before this
+     * method returns. A source is reported as executed if any of it's {@link RootNode}s start to be
+     * executed.
+     *
+     * @param filter a filter on which source events are triggered.
+     * @param listener a listener that gets notified if a source was loaded
+     * @param includeExecutedSources whether or not this listener should be notified for sources
+     *            which were already executed at the time when this listener was attached.
+     * @return a handle for stopping the notification stream
+     *
+     * @see ExecuteSourceListener#onExecute(ExecuteSourceEvent)
+     *
+     * @since 0.33
+     */
+    public abstract <T extends ExecuteSourceListener> EventBinding<T> attachExecuteSourceListener(SourceFilter filter, T listener, boolean includeExecutedSources);
 
     /**
      * Starts notifications for each {@link SourceSection} in every newly loaded {@link Source} and
@@ -237,12 +256,25 @@ public abstract class Instrumenter {
     public abstract <T extends LoadSourceSectionListener> EventBinding<T> attachLoadSourceSectionListener(SourceSectionFilter filter, T listener, boolean includeExistingSourceSections);
 
     /**
+     * Notifies the listener for each {@link SourceSection} in every loaded {@link Source} that
+     * corresponds to the filter. Only loaded sections are notified, synchronously.
+     *
+     * @param filter a filter on which source sections trigger events
+     * @param listener a listener that gets notified with loaded source sections
+     *
+     * @see LoadSourceSectionListener#onLoad(LoadSourceSectionEvent)
+     *
+     * @since 19.0
+     */
+    public abstract void visitLoadedSourceSections(SourceSectionFilter filter, LoadSourceSectionListener listener);
+
+    /**
      * Attach an output stream as a consumer of the {@link TruffleInstrument.Env#out() standard
      * output}. The consumer output stream receives all output that goes to
      * {@link TruffleInstrument.Env#out()} since this call, including output emitted by the
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine} this instrumenter is being executed in,
-     * output from instruments (including this one), etc. Be sure to {@link EventBinding#dispose()
-     * dispose} the binding when it's not used any more.
+     * {@link org.graalvm.polyglot.Engine} this instrumenter is being executed in, output from
+     * instruments (including this one), etc. Be sure to {@link EventBinding#dispose() dispose} the
+     * binding when it's not used any more.
      *
      * @since 0.25
      */
@@ -252,9 +284,9 @@ public abstract class Instrumenter {
      * Attach an output stream as a consumer of the {@link TruffleInstrument.Env#err() error output}
      * . The consumer output stream receives all error output that goes to
      * {@link TruffleInstrument.Env#err()} since this call, including error output emitted by the
-     * {@link com.oracle.truffle.api.vm.PolyglotEngine} this instrumenter is being executed in,
-     * error output from instruments (including this one), etc. Be sure to
-     * {@link EventBinding#dispose() dispose} the binding when it's not used any more.
+     * {@link org.graalvm.polyglot.Engine} this instrumenter is being executed in, error output from
+     * instruments (including this one), etc. Be sure to {@link EventBinding#dispose() dispose} the
+     * binding when it's not used any more.
      *
      * @since 0.25
      */
@@ -296,6 +328,20 @@ public abstract class Instrumenter {
     public abstract <T extends ThreadsListener> EventBinding<T> attachThreadsListener(T listener, boolean includeInitializedThreads);
 
     /**
+     * Attach a {@link ThreadsActivationListener listener} to be notified about when a thread gets
+     * entered or left in guest language applications.
+     * <p>
+     * The event notification starts after the listener registration is completed. This means that
+     * currently activated threads won't get a notification. It is also possible that
+     * {@link ThreadsActivationListener#onLeaveThread(TruffleContext)} is called without ever
+     * invoking {@link ThreadsActivationListener#onEnterThread(TruffleContext)}.
+     *
+     * @return a handle for unregistering the listener.
+     * @since 20.3
+     */
+    public abstract EventBinding<? extends ThreadsActivationListener> attachThreadsActivationListener(ThreadsActivationListener listener);
+
+    /**
      * Returns a filtered list of loaded {@link SourceSection} instances.
      *
      * @param filter criterion for inclusion
@@ -305,12 +351,12 @@ public abstract class Instrumenter {
      */
     public final List<SourceSection> querySourceSections(SourceSectionFilter filter) {
         final List<SourceSection> sourceSectionList = new ArrayList<>();
-        EventBinding<?> binding = attachLoadSourceSectionListener(filter, new LoadSourceSectionListener() {
+        visitLoadedSourceSections(filter, new LoadSourceSectionListener() {
+            @Override
             public void onLoad(LoadSourceSectionEvent event) {
                 sourceSectionList.add(event.getSourceSection());
             }
-        }, true);
-        binding.dispose();
+        });
         return Collections.unmodifiableList(sourceSectionList);
     }
 
@@ -328,5 +374,17 @@ public abstract class Instrumenter {
      * @since 0.12
      */
     public abstract Set<Class<?>> queryTags(Node node);
+
+    /**
+     * Returns the execution event node that was inserted at the node's location given an event
+     * binding, if any. This is useful to identify and find information from nodes that were created
+     * for a specific instrumentation.
+     *
+     * @param node an instrumentable node specifying the location
+     * @param binding the binding to lookup the execution nodes of
+     * @return the {@link ExecutionEventNode}, or <code>null</code>.
+     * @since 19.0
+     */
+    public abstract ExecutionEventNode lookupExecutionEventNode(Node node, EventBinding<?> binding);
 
 }

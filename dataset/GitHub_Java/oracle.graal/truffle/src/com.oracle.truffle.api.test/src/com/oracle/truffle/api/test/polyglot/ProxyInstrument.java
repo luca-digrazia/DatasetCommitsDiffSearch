@@ -56,8 +56,6 @@ public class ProxyInstrument extends TruffleInstrument {
     public static final String ID = "proxyInstrument";
 
     public interface Initialize {
-
-        Env getEnv();
     }
 
     private static volatile ProxyInstrument delegate = new ProxyInstrument();
@@ -103,9 +101,6 @@ public class ProxyInstrument extends TruffleInstrument {
     protected void onCreate(Env env) {
         this.environment = env;
         env.registerService(new Initialize() {
-            public Env getEnv() {
-                return env;
-            }
         });
         if (wrapper) {
             delegate.instrument = this;
@@ -131,6 +126,15 @@ public class ProxyInstrument extends TruffleInstrument {
             delegate.instrument = this;
             delegate.onFinalize(env);
         }
+    }
+
+    public Env getLastEnvironment() {
+        if (environment != null) {
+            return environment;
+        } else if (instrument != null) {
+            return instrument.environment;
+        }
+        return null;
     }
 
     public static ProxyInstrument getCurrent() {
