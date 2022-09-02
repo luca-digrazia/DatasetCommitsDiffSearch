@@ -27,9 +27,6 @@ package com.oracle.svm.reflect.target;
 
 // Checkstyle: allow reflection
 
-import java.lang.reflect.Field;
-
-import com.oracle.svm.core.StaticFieldsSupport;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
@@ -38,30 +35,27 @@ import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.Package_jdk_internal_misc;
 import com.oracle.svm.core.util.VMError;
 
+import java.lang.reflect.Field;
+
 @TargetClass(classNameProvider = Package_jdk_internal_misc.class, className = "Unsafe")
 @SuppressWarnings({"static-method"})
 public final class Target_jdk_internal_misc_Unsafe_Reflection {
 
     @Substitute
     public long objectFieldOffset(Target_java_lang_reflect_Field field) {
-        return UnsafeUtil.getFieldOffset(field);
-    }
 
-    @Substitute
-    public long staticFieldOffset(Target_java_lang_reflect_Field field) {
-        return UnsafeUtil.getFieldOffset(field);
-    }
+        int offset = field.root == null ? field.offset : field.root.offset;
 
-    @Substitute
-    public Object staticFieldBase(Target_java_lang_reflect_Field field) {
-        if (field == null) {
-            throw new NullPointerException();
+        if (offset > 0) {
+            return offset;
         }
-        if (SubstrateUtil.cast(field, Field.class).getType().isPrimitive()) {
-            return StaticFieldsSupport.getStaticPrimitiveFields();
-        } else {
-            return StaticFieldsSupport.getStaticObjectFields();
-        }
+
+        throw VMError.unsupportedFeature("The offset of " + field + " is accessed without the field being first registered as unsafe accessed. " +
+                        "Please register the field as unsafe accessed. You can do so by using a custom Feature. " +
+                        "First, create a class that implements the org.graalvm.nativeimage.hosted.Feature interface. " +
+                        "Then, implement the method beforeAnalysis(org.graalvm.nativeimage.BeforeAnalysisAccess config). " +
+                        "Next, use the config object to register the field for unsafe access by calling config.registerAsUnsafeAccessed(java.lang.reflect.Field) method. " +
+                        "Finally, specify the custom feature to the native image building tool using the -H:Features=MyCustomFeature option.");
     }
 
     @Substitute
@@ -78,21 +72,4 @@ public final class Target_jdk_internal_misc_Unsafe_Reflection {
             throw new InternalError();
         }
     }
-}
-
-class UnsafeUtil {
-    static long getFieldOffset(Target_java_lang_reflect_Field field) {
-        if (field == null) {
-            throw new NullPointerException();
-        }
-        int offset = field.root == null ? field.offset : field.root.offset;
-        if (offset > 0) {
-            return offset;
-        }
-        throw VMError.unsupportedFeature("The offset of " + field + " is accessed without the field being first registered as unsafe accessed. " +
-                        "Please register the field as unsafe accessed. You can do so with a reflection configuration that " +
-                        "contains an entry for the field with the attribute \"allowUnsafeAccess\": true. Such a configuration " +
-                        "file can be generated for you. Read BuildConfiguration.md and Reflection.md for details.");
-    }
-
 }
