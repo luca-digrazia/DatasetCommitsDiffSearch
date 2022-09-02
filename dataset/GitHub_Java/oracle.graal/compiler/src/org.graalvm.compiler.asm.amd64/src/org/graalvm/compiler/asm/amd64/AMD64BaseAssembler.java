@@ -356,7 +356,7 @@ public abstract class AMD64BaseAssembler extends Assembler {
         }
     }
 
-    protected static boolean needsRex(Register reg) {
+    private static boolean needsRex(Register reg) {
         return reg.encoding >= MinEncodingNeedsRex;
     }
 
@@ -559,7 +559,7 @@ public abstract class AMD64BaseAssembler extends Assembler {
         int disp = addr.getDisplacement();
 
         if (base.equals(AMD64.rip)) { // also matches addresses returned by getPlaceholder()
-            // [00 reg 101] disp32
+            // [00 000 101] disp32
             assert index.equals(Register.None) : "cannot use RIP relative addressing with index register";
             emitByte(0x05 | regenc);
             if (codePatchingAnnotationConsumer != null && addr.instructionStartPosition >= 0) {
@@ -944,7 +944,7 @@ public abstract class AMD64BaseAssembler extends Assembler {
     }
 
     public final boolean vexPrefix(Register dst, Register nds, Register src, AVXSize size, int pp, int mmmmm, int w, int wEvex, boolean checkAVX) {
-        if (isAVX512Register(dst) || isAVX512Register(nds) || isAVX512Register(src) || size == AVXSize.ZMM) {
+        if (isAVX512Register(dst) || isAVX512Register(nds) || isAVX512Register(src)) {
             evexPrefix(dst, Register.None, nds, src, size, pp, mmmmm, wEvex, Z0, B0);
             return true;
         }
@@ -953,7 +953,7 @@ public abstract class AMD64BaseAssembler extends Assembler {
     }
 
     public final boolean vexPrefix(Register dst, Register nds, AMD64Address src, AVXSize size, int pp, int mmmmm, int w, int wEvex, boolean checkAVX) {
-        if (isAVX512Register(dst) || isAVX512Register(nds) || size == AVXSize.ZMM) {
+        if (isAVX512Register(dst) || isAVX512Register(nds)) {
             evexPrefix(dst, Register.None, nds, src, size, pp, mmmmm, wEvex, Z0, B0);
             return true;
         }

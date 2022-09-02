@@ -37,7 +37,7 @@ import static org.graalvm.compiler.lir.amd64.AMD64StringLatin1InflateOp.useAVX51
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
+import org.graalvm.compiler.asm.amd64.AMD64Assembler;
 import org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.EVEXComparisonPredicate;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.core.common.LIRKind;
@@ -155,14 +155,16 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
 
             // If the length of the string is less than 32, we chose not to use the
             // AVX512 instructions.
-            masm.testlAndJcc(len, -32, ConditionFlag.Zero, labelBelowThreshold, false);
+            masm.testl(len, -32);
+            masm.jcc(AMD64Assembler.ConditionFlag.Zero, labelBelowThreshold);
 
             // First check whether a character is compressible (<= 0xff).
             // Create mask to test for Unicode chars inside (zmm) vector.
             masm.movl(result, 0x00ff);
             masm.evpbroadcastw(tmp2Reg, result);
 
-            masm.testlAndJcc(len, -64, ConditionFlag.Zero, labelPostAlignment, false);
+            masm.testl(len, -64);
+            masm.jcc(AMD64Assembler.ConditionFlag.Zero, labelPostAlignment);
 
             masm.movl(tmp5, dst);
             masm.andl(tmp5, (32 - 1));
@@ -170,7 +172,8 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
             masm.andl(tmp5, (32 - 1));
 
             // bail out when there is nothing to be done
-            masm.testlAndJcc(tmp5, tmp5, ConditionFlag.Zero, labelPostAlignment, false);
+            masm.testl(tmp5, tmp5);
+            masm.jcc(AMD64Assembler.ConditionFlag.Zero, labelPostAlignment);
 
             // Compute (1 << N) - 1 = ~(~0 << N), where N is the remaining number
             // of characters to process.
@@ -182,7 +185,7 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
             masm.evmovdqu16(tmp1Reg, k3, new AMD64Address(src));
             masm.evpcmpuw(k2, k3, tmp1Reg, tmp2Reg, EVEXComparisonPredicate.LE);
             masm.ktestd(k2, k3);
-            masm.jcc(ConditionFlag.CarryClear, labelReturnZero);
+            masm.jcc(AMD64Assembler.ConditionFlag.CarryClear, labelReturnZero);
 
             masm.evpmovwb(new AMD64Address(dst), k3, tmp1Reg);
 
@@ -196,8 +199,8 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
 
             masm.movl(tmp5, len);
             masm.andl(tmp5, 32 - 1);    // The tail count (in chars).
-            // The vector count (in chars).
-            masm.andlAndJcc(len, ~(32 - 1), ConditionFlag.Zero, labelCopyLoopTail, false);
+            masm.andl(len, ~(32 - 1)); // The vector count (in chars).
+            masm.jcc(AMD64Assembler.ConditionFlag.Zero, labelCopyLoopTail);
 
             masm.leaq(src, new AMD64Address(src, len, AMD64Address.Scale.Times2));
             masm.leaq(dst, new AMD64Address(dst, len, AMD64Address.Scale.Times1));
@@ -209,16 +212,18 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
             masm.evmovdqu16(tmp1Reg, new AMD64Address(src, len, AMD64Address.Scale.Times2));
             masm.evpcmpuw(k2, tmp1Reg, tmp2Reg, EVEXComparisonPredicate.LE);
             masm.kortestd(k2, k2);
-            masm.jcc(ConditionFlag.CarryClear, labelReturnZero);
+            masm.jcc(AMD64Assembler.ConditionFlag.CarryClear, labelReturnZero);
 
             // All 32 chars in the current vector (chunk) are valid for compression,
             // write truncated byte elements to memory.
             masm.evpmovwb(new AMD64Address(dst, len, AMD64Address.Scale.Times1), tmp1Reg);
-            masm.addqAndJcc(len, 32, ConditionFlag.NotZero, labelCopy32Loop, false);
+            masm.addq(len, 32);
+            masm.jcc(AMD64Assembler.ConditionFlag.NotZero, labelCopy32Loop);
 
             masm.bind(labelCopyLoopTail);
             // All done if the tail count is zero.
-            masm.testlAndJcc(tmp5, tmp5, ConditionFlag.Zero, labelReturnLength, false);
+            masm.testl(tmp5, tmp5);
+            masm.jcc(AMD64Assembler.ConditionFlag.Zero, labelReturnLength);
 
             masm.movl(len, tmp5);
 
@@ -233,7 +238,7 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
             masm.evmovdqu16(tmp1Reg, k3, new AMD64Address(src));
             masm.evpcmpuw(k2, k3, tmp1Reg, tmp2Reg, EVEXComparisonPredicate.LE);
             masm.ktestd(k2, k3);
-            masm.jcc(ConditionFlag.CarryClear, labelReturnZero);
+            masm.jcc(AMD64Assembler.ConditionFlag.CarryClear, labelReturnZero);
 
             masm.evpmovwb(new AMD64Address(dst), k3, tmp1Reg);
             masm.jmp(labelReturnLength);
@@ -253,7 +258,8 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
             // vectored compression
             masm.andl(len, 0xfffffff0); // vector count (in chars)
             masm.andl(result, 0x0000000f); // tail count (in chars)
-            masm.testlAndJcc(len, len, ConditionFlag.Zero, labelCopy16, false);
+            masm.testl(len, len);
+            masm.jcc(AMD64Assembler.ConditionFlag.Zero, labelCopy16);
 
             // Compress 16 chars per iteration.
             masm.movdl(tmp1Reg, tmp5);
@@ -274,17 +280,19 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
             masm.movdqu(tmp3Reg, new AMD64Address(src, len, AMD64Address.Scale.Times2, 16));
             masm.por(tmp4Reg, tmp3Reg);
             masm.ptest(tmp4Reg, tmp1Reg);        // Check for Unicode chars in vector.
-            masm.jcc(ConditionFlag.NotZero, labelReturnZero);
+            masm.jcc(AMD64Assembler.ConditionFlag.NotZero, labelReturnZero);
             masm.packuswb(tmp2Reg, tmp3Reg);     // Only ASCII chars; compress each to a byte.
             masm.movdqu(new AMD64Address(dst, len, AMD64Address.Scale.Times1), tmp2Reg);
-            masm.addqAndJcc(len, 16, ConditionFlag.NotZero, labelCopy32Loop, false);
+            masm.addq(len, 16);
+            masm.jcc(AMD64Assembler.ConditionFlag.NotZero, labelCopy32Loop);
 
             // Test and compress another 8 chars before final tail copy.
             masm.bind(labelCopy16);
             masm.movl(len, result);
             masm.andl(len, 0xfffffff8); // vector count (in chars)
             masm.andl(result, 0x00000007); // tail count (in chars)
-            masm.testlAndJcc(len, len, ConditionFlag.Zero, labelCopyTail, true);
+            masm.testl(len, len);
+            masm.jccb(AMD64Assembler.ConditionFlag.Zero, labelCopyTail);
 
             masm.movdl(tmp1Reg, tmp5);
             masm.pshufd(tmp1Reg, tmp1Reg, 0);    // Store Unicode mask in 'vtmp1'.
@@ -292,7 +300,7 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
 
             masm.movdqu(tmp2Reg, new AMD64Address(src));
             masm.ptest(tmp2Reg, tmp1Reg);        // Check for Unicode chars in vector.
-            masm.jccb(ConditionFlag.NotZero, labelReturnZero);
+            masm.jccb(AMD64Assembler.ConditionFlag.NotZero, labelReturnZero);
             masm.packuswb(tmp2Reg, tmp3Reg);     // Only ASCII chars; compress each to a byte.
             masm.movq(new AMD64Address(dst), tmp2Reg);
             masm.addq(src, 16);
@@ -303,7 +311,8 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
         }
 
         // Compress any remaining characters using a vanilla implementation.
-        masm.testlAndJcc(len, len, ConditionFlag.Zero, labelReturnLength, true);
+        masm.testl(len, len);
+        masm.jccb(AMD64Assembler.ConditionFlag.Zero, labelReturnLength);
         masm.leaq(src, new AMD64Address(src, len, AMD64Address.Scale.Times2));
         masm.leaq(dst, new AMD64Address(dst, len, AMD64Address.Scale.Times1));
         masm.negq(len);
@@ -311,11 +320,12 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
         // Compress a single character per iteration.
         masm.bind(labelCopyCharsLoop);
         masm.movzwl(result, new AMD64Address(src, len, AMD64Address.Scale.Times2));
-        // Check if Unicode character.
-        masm.testlAndJcc(result, 0xff00, ConditionFlag.NotZero, labelReturnZero, true);
+        masm.testl(result, 0xff00);     // Check if Unicode character.
+        masm.jccb(AMD64Assembler.ConditionFlag.NotZero, labelReturnZero);
         // An ASCII character; compress to a byte.
         masm.movb(new AMD64Address(dst, len, AMD64Address.Scale.Times1), result);
-        masm.incqAndJcc(len, ConditionFlag.NotZero, labelCopyCharsLoop, false);
+        masm.incrementq(len, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotZero, labelCopyCharsLoop);
 
         // If compression succeeded, return the length.
         masm.bind(labelReturnLength);
@@ -330,8 +340,4 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
         masm.bind(labelDone);
     }
 
-    @Override
-    public boolean needsClearUpperVectorRegisters() {
-        return true;
-    }
 }
