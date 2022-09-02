@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,19 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
-public class RequestedJDWPEvents {
+import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
+import com.oracle.truffle.espresso.jdwp.api.FieldRef;
+import com.oracle.truffle.espresso.jdwp.api.Ids;
+import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
+import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
+
+public final class RequestedJDWPEvents {
 
     public static final byte SINGLE_STEP = 1;
     public static final byte BREAKPOINT = 2;
@@ -57,185 +61,340 @@ public class RequestedJDWPEvents {
     public static final byte VM_DISCONNECTED = 100;
 
     private final VMEventListener eventListener;
-    private final Ids ids;
+    private final DebuggerController controller;
+    private final Ids<Object> ids;
 
-    RequestedJDWPEvents(SocketConnection connection, JDWPContext context) {
-        eventListener = new VMEventListenerImpl(connection, context);
-        VMEventListeners.getDefault().registerListener(eventListener);
-        this.ids = context.getIds();
+    RequestedJDWPEvents(DebuggerController controller) {
+        this.controller = controller;
+        this.eventListener = controller.getEventListener();
+        this.ids = controller.getContext().getIds();
     }
 
-    public JDWPResult registerEvent(Packet packet, JDWPCommands callback) {
-        PacketStream reply = null;
-        Callable future = null;
+    public CommandResult registerEvent(Packet packet, Commands callback) {
+        ArrayList<Callable<Void>> preFutures = new ArrayList<>();
+        ArrayList<Callable<Void>> postFutures = new ArrayList<>();
         PacketStream input = new PacketStream(packet);
+        JDWPContext context = controller.getContext();
 
         byte eventKind = input.readByte();
         byte suspendPolicy = input.readByte();
         int modifiers = input.readInt();
 
-        RequestFilter filter = new RequestFilter(packet.id, eventKind, modifiers);
+        RequestFilter filter = new RequestFilter(packet.id, eventKind, suspendPolicy);
+        JDWPLogger.log("New event request with ID: %d with kind: %d and %d modifiers", JDWPLogger.LogLevel.STEPPING, packet.id, eventKind, modifiers);
         for (int i = 0; i < modifiers; i++) {
-            byte modCount = input.readByte();
-            future = handleModCount(filter, input, modCount, suspendPolicy, callback);
+            byte modKind = input.readByte();
+            JDWPLogger.log("Handling modKind: %d", JDWPLogger.LogLevel.STEPPING, modKind);
+            handleModKind(filter, input, modKind, context);
         }
 
         switch (eventKind) {
             case SINGLE_STEP:
+                StepInfo stepInfo = filter.getStepInfo();
+                Object thread = stepInfo.getGuestThread();
+                switch (stepInfo.getDepth()) {
+                    case SteppingConstants.INTO:
+                        callback.stepInto(thread, filter);
+                        break;
+                    case SteppingConstants.OVER:
+                        callback.stepOver(thread, filter);
+                        break;
+                    case SteppingConstants.OUT:
+                        callback.stepOut(thread, filter);
+                        break;
+                }
+                break;
             case METHOD_EXIT_WITH_RETURN_VALUE:
+            case METHOD_EXIT:
+                MethodBreakpointInfo methodInfo = new MethodBreakpointInfo(filter);
+                methodInfo.addSuspendPolicy(suspendPolicy);
+                eventListener.addBreakpointRequest(filter.getRequestId(), methodInfo);
+                eventListener.increaseMethodBreakpointCount();
+                for (KlassRef klass : filter.getKlassRefPatterns()) {
+                    for (MethodRef method : klass.getDeclaredMethodRefs()) {
+                        method.addMethodBreakpointInfo(methodInfo);
+                        methodInfo.addMethod(method);
+                    }
+                }
+                filter.addBreakpointInfo(methodInfo);
+                break;
+            case METHOD_ENTRY:
+                BreakpointInfo info = filter.getBreakpointInfo();
+                if (info == null) {
+                    info = new MethodBreakpointInfo(filter);
+                }
+                info.addSuspendPolicy(suspendPolicy);
+                eventListener.addBreakpointRequest(filter.getRequestId(), info);
+                preFutures.add(callback.createMethodEntryBreakpointCommand(info));
+                break;
             case BREAKPOINT:
+                info = filter.getBreakpointInfo();
+                info.addSuspendPolicy(suspendPolicy);
+                eventListener.addBreakpointRequest(filter.getRequestId(), info);
+                postFutures.add(callback.createLineBreakpointCommand(info));
+                break;
+            case EXCEPTION:
+                info = filter.getBreakpointInfo();
+                if (info == null) {
+                    // no filtering then, so setup a report all info
+                    info = new ExceptionBreakpointInfo(filter, null, true, true);
+                }
+                info.addSuspendPolicy(suspendPolicy);
+                eventListener.addBreakpointRequest(filter.getRequestId(), info);
+                preFutures.add(callback.createExceptionBreakpoint(info));
+                JDWPLogger.log("Submitting new exception breakpoint", JDWPLogger.LogLevel.STEPPING);
+                break;
             case CLASS_PREPARE:
-                reply = toReply(packet);
+                eventListener.addClassPrepareRequest(new ClassPrepareRequest(filter));
+                JDWPLogger.log("Class prepare request received", JDWPLogger.LogLevel.PACKET);
+                break;
+            case FIELD_ACCESS:
+                FieldBreakpointInfo fieldBreakpointInfo = (FieldBreakpointInfo) filter.getBreakpointInfo();
+                fieldBreakpointInfo.addSuspendPolicy(suspendPolicy);
+                fieldBreakpointInfo.setAccessBreakpoint();
+                fieldBreakpointInfo.getField().addFieldBreakpointInfo(fieldBreakpointInfo);
+                String location = fieldBreakpointInfo.getKlass().getNameAsString() + "." + fieldBreakpointInfo.getField().getNameAsString();
+                JDWPLogger.log("Submitting field access breakpoint: %s", JDWPLogger.LogLevel.STEPPING, location);
+                eventListener.increaseFieldBreakpointCount();
+                break;
+            case FIELD_MODIFICATION:
+                fieldBreakpointInfo = (FieldBreakpointInfo) filter.getBreakpointInfo();
+                fieldBreakpointInfo.addSuspendPolicy(suspendPolicy);
+                fieldBreakpointInfo.setModificationBreakpoint();
+                fieldBreakpointInfo.getField().addFieldBreakpointInfo(fieldBreakpointInfo);
+                location = fieldBreakpointInfo.getKlass().getNameAsString() + "." + fieldBreakpointInfo.getField().getNameAsString();
+                JDWPLogger.log("Submitting field modification breakpoint: %s", JDWPLogger.LogLevel.STEPPING, location);
+                eventListener.increaseFieldBreakpointCount();
                 break;
             case THREAD_START:
-                eventListener.addThreadStartedRequestId(packet.id);
-                reply = toReply(packet);
+                eventListener.addThreadStartedRequestId(packet.id, suspendPolicy);
                 break;
             case THREAD_DEATH:
-                eventListener.addThreadDiedRequestId(packet.id);
-                reply = toReply(packet);
+                eventListener.addThreadDiedRequestId(packet.id, suspendPolicy);
                 break;
             case CLASS_UNLOAD:
                 eventListener.addClassUnloadRequestId(packet.id);
-                reply = toReply(packet);
+                break;
+            case VM_START: // no debuggers should ask for this event
+                eventListener.addVMStartRequest(packet.id);
+                break;
+            case VM_DEATH: // no debuggers should request this event
+                eventListener.addVMDeathRequest(packet.id);
+                break;
+            case MONITOR_CONTENDED_ENTER:
+                eventListener.addMonitorContendedEnterRequest(packet.id, filter);
+                break;
+            case MONITOR_CONTENDED_ENTERED:
+                eventListener.addMonitorContendedEnteredRequest(packet.id, filter);
+                break;
+            case MONITOR_WAIT:
+                eventListener.addMonitorWaitRequest(packet.id, filter);
+                break;
+            case MONITOR_WAITED:
+                eventListener.addMonitorWaitedRequest(packet.id, filter);
                 break;
             default:
-                System.out.println("unhandled event kind " + eventKind);
+                JDWPLogger.log("unhandled event kind %d", JDWPLogger.LogLevel.PACKET, eventKind);
                 break;
         }
 
         // register the request filter for this event
-        EventFilters.getDefault().addFilter(filter);
-        return new JDWPResult(reply, future);
+        controller.getEventFilters().addFilter(filter);
+        return new CommandResult(toReply(packet), preFutures, postFutures);
     }
 
-    private PacketStream toReply(Packet packet) {
+    private static PacketStream toReply(Packet packet) {
         PacketStream reply;
         reply = new PacketStream().replyPacket().id(packet.id);
         reply.writeInt(packet.id);
         return reply;
     }
 
-    private Callable handleModCount(RequestFilter filter, PacketStream stream, byte modCount, byte suspendPolicy, JDWPCommands callback) {
-        switch (modCount) {
+    private void handleModKind(RequestFilter filter, PacketStream input, byte modKind, JDWPContext context) {
+        switch (modKind) {
             case 1:
-                int count = stream.readInt();
-                filter.addEventLimit(count);
+                int count = input.readInt();
+                JDWPLogger.log("adding count limit: %d to filter", JDWPLogger.LogLevel.STEPPING, count);
+                filter.addEventCount(count);
                 break;
             case 2:
-                System.out.println("unhandled modcount 2");
+                JDWPLogger.log("unhandled modKind 2", JDWPLogger.LogLevel.PACKET);
                 break;
-            case 3:
-                System.out.println("unhandled modcount 3");
+            case 3: // limit to specific thread
+                long threadId = input.readLong();
+                Object thread = ids.fromId((int) threadId);
+                filter.addThread(thread);
+                JDWPLogger.log("limiting to thread: %s", JDWPLogger.LogLevel.STEPPING, context.getThreadName(thread));
                 break;
             case 4:
-                long refTypeId = stream.readLong();
-                filter.addRefTypeLimit((KlassRef) ids.fromId((int) refTypeId));
+                long refTypeId = input.readLong();
+                KlassRef klass = (KlassRef) ids.fromId((int) refTypeId);
+                filter.addRefTypeLimit(klass);
+                JDWPLogger.log("RefType limit: %s", JDWPLogger.LogLevel.STEPPING, klass);
                 break;
-            case 5: // class prepare positive pattern
-                String classPattern = stream.readString();
-                ClassPrepareRequest classPrepareRequest = new ClassPrepareRequest(Pattern.compile(classPattern), filter.getRequestId());
-                return eventListener.addClassPrepareRequest(classPrepareRequest);
-            case 6:
-                String classExcludePattern = stream.readString();
-                filter.addExcludePattern(classExcludePattern);
-                break;
-            case 7: // location-specific
-                byte typeTag = stream.readByte();
-                long classId = stream.readLong();
-                long methodId = stream.readLong();
-                long bci = stream.readLong();
-                BreakpointInfo info = new BreakpointInfo(filter.getRequestId(), typeTag, classId, methodId, bci);
-
-                KlassRef klass = (KlassRef) ids.fromId((int) classId);
-                String slashName = klass.getTypeAsString();
-                MethodRef method = (MethodRef) ids.fromId((int) methodId);
-                int line = method.BCItoLineNumber((int) bci);
-                callback.createLineBreakpointCommand(slashName, line, suspendPolicy, info);
-                eventListener.addBreakpointRequest(filter.getRequestId(), info);
-                break;
-            case 8:
-                System.out.println("unhandled modcount 8");
-                break;
-            case 9:
-                System.out.println("unhandled modcount 9");
-                break;
-            case 10:
-                filter.setStepping(true);
-                long threadId = stream.readLong();
-                int size = stream.readInt();
-
-                int depth = stream.readInt();
-                switch (depth) {
-                    case SteppingConstants.INTO:
-                        callback.stepInto(filter.getRequestId());
-                        break;
-                    case SteppingConstants.OVER:
-                        callback.stepOver(filter.getRequestId());
-                        break;
-                    case SteppingConstants.OUT:
-                        callback.stepOut(filter.getRequestId());
-                        break;
+            case 5: // class positive pattern
+                String classPattern = Pattern.quote(input.readString()).replace("*", "\\E.*\\Q");
+                try {
+                    Pattern pattern = Pattern.compile(classPattern);
+                    filter.addPositivePattern(pattern);
+                    JDWPLogger.log("adding positive refType pattern: %s", JDWPLogger.LogLevel.STEPPING, pattern.pattern());
+                } catch (PatternSyntaxException ex) {
+                    // wrong input pattern
+                    throw new RuntimeException("should not reach here");
                 }
                 break;
+            case 6:
+                classPattern = Pattern.quote(input.readString()).replace("*", "\\E.*\\Q");
+                try {
+                    Pattern pattern = Pattern.compile(classPattern);
+                    filter.addExcludePattern(pattern);
+                    JDWPLogger.log("adding negative refType pattern: %s", JDWPLogger.LogLevel.STEPPING, pattern.pattern());
+                } catch (PatternSyntaxException ex) {
+                    // wrong input pattern
+                    throw new RuntimeException("should not reach here");
+                }
+                break;
+            case 7: // location-specific
+                byte typeTag = input.readByte();
+                long classId = input.readLong();
+                long methodId = input.readLong();
+                long bci = input.readLong();
+
+                klass = (KlassRef) ids.fromId((int) classId);
+                String slashName = klass.getTypeAsString();
+                MethodRef method = (MethodRef) ids.fromId((int) methodId);
+                int line = method.bciToLineNumber((int) bci);
+
+                LineBreakpointInfo info = new LineBreakpointInfo(filter, typeTag, classId, methodId, bci, slashName, line);
+                filter.addBreakpointInfo(info);
+                JDWPLogger.log("Adding breakpoint info for location: %s.%s:%d", JDWPLogger.LogLevel.STEPPING, klass.getNameAsString(), method.getNameAsString(), line);
+                break;
+            case 8:
+                refTypeId = input.readLong();
+                klass = null;
+                if (refTypeId != 0) {
+                    klass = (KlassRef) ids.fromId((int) refTypeId);
+                }
+
+                boolean caught = input.readBoolean();
+                boolean unCaught = input.readBoolean();
+                ExceptionBreakpointInfo exceptionBreakpointInfo = new ExceptionBreakpointInfo(filter, klass, caught, unCaught);
+                filter.addBreakpointInfo(exceptionBreakpointInfo);
+                JDWPLogger.log("adding exception filter: caught=%b, uncaught=%b", JDWPLogger.LogLevel.STEPPING, caught, unCaught);
+                break;
+            case 9: // limit to specific field
+                refTypeId = input.readLong();
+                long fieldId = input.readLong();
+                klass = (KlassRef) ids.fromId((int) refTypeId);
+                FieldRef field = (FieldRef) ids.fromId((int) fieldId);
+
+                FieldBreakpointInfo fieldBreakpointInfo = new FieldBreakpointInfo(filter, klass, field);
+                filter.addBreakpointInfo(fieldBreakpointInfo);
+                JDWPLogger.log("limiting to field: %s", JDWPLogger.LogLevel.STEPPING, field.getNameAsString());
+                break;
+            case 10:
+                threadId = input.readLong();
+                thread = ids.fromId((int) threadId);
+
+                int size = input.readInt();
+                int depth = input.readInt();
+
+                StepInfo stepInfo = new StepInfo(size, depth, thread);
+                filter.setStepInfo(stepInfo);
+
+                JDWPLogger.log("Step command: size= %d, depth=%d", JDWPLogger.LogLevel.STEPPING, size, depth);
+                break;
             case 11:
-                System.out.println("unhandled modcount 11");
+                long thisId = input.readLong();
+                JDWPLogger.log("adding instance filter for object ID: %d", JDWPLogger.LogLevel.STEPPING, thisId);
+                filter.addThisFilterId(thisId);
                 break;
             case 12:
-                System.out.println("unhandled modcount 12");
+                JDWPLogger.log("unhandled modKind 12", JDWPLogger.LogLevel.PACKET);
                 break;
             default:
                 break;
         }
-        return null;
     }
 
-    public JDWPResult clearRequest(Packet packet, DebuggerConnection debuggerConnection) {
+    public CommandResult clearRequest(Packet packet) {
         PacketStream reply = new PacketStream().id(packet.id).replyPacket();
         PacketStream input = new PacketStream(packet);
 
         byte eventKind = input.readByte();
         int requestId = input.readInt();
-        RequestFilter requestFilter = EventFilters.getDefault().getRequestFilter(requestId);
+        RequestFilter requestFilter = controller.getEventFilters().getRequestFilter(requestId);
 
         if (requestFilter != null) {
             byte kind = requestFilter.getEventKind();
             if (kind == eventKind) {
                 switch (eventKind) {
                     case SINGLE_STEP:
-                        //System.out.println("clear single step not implemented");
+                        JDWPLogger.log("Clearing step command: %d", JDWPLogger.LogLevel.STEPPING, requestId);
+                        controller.clearStepCommand(requestFilter.getStepInfo());
                         break;
                     case METHOD_EXIT_WITH_RETURN_VALUE:
+                    case METHOD_EXIT:
+                        MethodBreakpointInfo methodInfo = (MethodBreakpointInfo) requestFilter.getBreakpointInfo();
+                        for (MethodRef method : methodInfo.getMethods()) {
+                            method.removeMethodBreakpointInfo(requestFilter.getRequestId());
+                        }
+                        eventListener.decreaseMethodBreakpointCount();
                         break;
                     case BREAKPOINT:
+                    case METHOD_ENTRY:
+                    case EXCEPTION:
                         eventListener.removeBreakpointRequest(requestFilter.getRequestId());
+                        break;
+                    case FIELD_ACCESS:
+                    case FIELD_MODIFICATION:
+                        FieldBreakpointInfo info = (FieldBreakpointInfo) requestFilter.getBreakpointInfo();
+                        info.getField().removeFieldBreakpointInfo(requestFilter.getRequestId());
+                        eventListener.decreaseFieldBreakpointCount();
                         break;
                     case CLASS_PREPARE:
                         eventListener.removeClassPrepareRequest(requestFilter.getRequestId());
                         break;
                     case THREAD_START:
-                        eventListener.addThreadStartedRequestId(packet.id);
-
+                        eventListener.removeThreadStartedRequestId();
                         break;
                     case THREAD_DEATH:
-                        eventListener.addThreadDiedRequestId(packet.id);
-
+                        eventListener.removeThreadDiedRequestId();
                         break;
                     case CLASS_UNLOAD:
                         eventListener.addClassUnloadRequestId(packet.id);
-
+                        break;
+                    case MONITOR_CONTENDED_ENTER:
+                        eventListener.removeMonitorContendedEnterRequest(requestId);
+                        break;
+                    case MONITOR_CONTENDED_ENTERED:
+                        eventListener.removeMonitorContendedEnteredRequest(requestId);
+                        break;
+                    case MONITOR_WAIT:
+                        eventListener.removeMonitorWaitRequest(requestId);
+                        break;
+                    case MONITOR_WAITED:
+                        eventListener.removeMonitorWaitedRequest(requestId);
                         break;
                     default:
-                        System.out.println("unhandled event clear kind " + eventKind);
+                        JDWPLogger.log("unhandled event clear kind %d", JDWPLogger.LogLevel.PACKET, eventKind);
                         break;
                 }
             } else {
-                reply.errorCode(102);
+                reply.errorCode(ErrorCodes.INVALID_EVENT_TYPE);
             }
         } else {
-            reply.errorCode(102); // TODO(Gregersen) - add INVALID_EVENT_TYPE constant
+            reply.errorCode(ErrorCodes.INVALID_EVENT_TYPE);
         }
 
-        return new JDWPResult(reply, null);
+        return new CommandResult(reply);
+    }
+
+    public CommandResult clearAllRequests(Packet packet) {
+        PacketStream reply = new PacketStream().id(packet.id).replyPacket();
+
+        eventListener.clearAllBreakpointRequests();
+        controller.clearBreakpoints();
+        return new CommandResult(reply);
     }
 }
