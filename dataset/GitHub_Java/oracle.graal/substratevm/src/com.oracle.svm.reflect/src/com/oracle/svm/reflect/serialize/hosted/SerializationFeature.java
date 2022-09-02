@@ -34,9 +34,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.graalvm.nativeimage.ImageSingletons;
@@ -57,7 +55,6 @@ import com.oracle.svm.hosted.FeatureImpl;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.config.ConfigurationParserUtils;
-import com.oracle.svm.reflect.hosted.ReflectionFeature;
 import com.oracle.svm.reflect.serialize.SerializationSupport;
 import com.oracle.svm.util.ReflectionUtil;
 
@@ -68,13 +65,8 @@ public class SerializationFeature implements Feature {
     private int loadedConfigurations;
 
     @Override
-    public List<Class<? extends Feature>> getRequiredFeatures() {
-        return Collections.singletonList(ReflectionFeature.class);
-    }
-
-    @Override
-    public void duringSetup(DuringSetupAccess a) {
-        FeatureImpl.DuringSetupAccessImpl access = (FeatureImpl.DuringSetupAccessImpl) a;
+    public void beforeAnalysis(BeforeAnalysisAccess a) {
+        FeatureImpl.BeforeAnalysisAccessImpl access = (FeatureImpl.BeforeAnalysisAccessImpl) a;
         SerializationBuilder serializationBuilder = new SerializationBuilder(access);
 
         Map<Class<?>, Boolean> deniedClasses = new HashMap<>();
@@ -214,7 +206,7 @@ final class SerializationBuilder {
 
     private final SerializationSupport serializationSupport;
 
-    SerializationBuilder(FeatureImpl.DuringSetupAccessImpl access) {
+    SerializationBuilder(FeatureImpl.BeforeAnalysisAccessImpl access) {
         try {
             Class<?> reflectionFactoryClass = access.findClassByName(Package_jdk_internal_reflect.getQualifiedName() + ".ReflectionFactory");
             Method getReflectionFactoryMethod = ReflectionUtil.lookupMethod(reflectionFactoryClass, "getReflectionFactory");
