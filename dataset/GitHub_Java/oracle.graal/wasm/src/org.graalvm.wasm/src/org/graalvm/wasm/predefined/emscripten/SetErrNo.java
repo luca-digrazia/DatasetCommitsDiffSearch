@@ -45,11 +45,11 @@ import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
 import static org.graalvm.wasm.WasmTracing.trace;
 
-public class SetErrNo extends WasmBuiltinRootNode {
+public class SetErrNo extends WasmPredefinedRootNode {
     public SetErrNo(WasmLanguage language, WasmModule module) {
         super(language, module);
     }
@@ -68,13 +68,13 @@ public class SetErrNo extends WasmBuiltinRootNode {
 
         // TODO: Get address (3120) via call to `___errno_location` WebAssembly function.
         WasmMemory memory = module.symbolTable().memory();
-        memory.store_i32(this, 3120, value);
+        memory.store_i32(3120, value);
 
         return value;
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return "___setErrNo";
     }
 }

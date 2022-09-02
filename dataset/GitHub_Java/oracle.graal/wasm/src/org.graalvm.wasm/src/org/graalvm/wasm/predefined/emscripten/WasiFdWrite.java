@@ -49,11 +49,11 @@ import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.exception.WasmTrap;
 import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
 import static org.graalvm.wasm.WasmTracing.trace;
 
-public class WasiFdWrite extends WasmBuiltinRootNode {
+public class WasiFdWrite extends WasmPredefinedRootNode {
 
     public WasiFdWrite(WasmLanguage language, WasmModule module) {
         super(language, module);
@@ -94,21 +94,21 @@ public class WasiFdWrite extends WasmBuiltinRootNode {
         WasmMemory memory = module.symbolTable().memory();
         int num = 0;
         for (int i = 0; i < iovcnt; i++) {
-            int ptr = memory.load_i32(this, iov + (i * 8 + 0));
-            int len = memory.load_i32(this, iov + (i * 8 + 4));
+            int ptr = memory.load_i32(iov + (i * 8 + 0));
+            int len = memory.load_i32(iov + (i * 8 + 4));
             for (int j = 0; j < len; j++) {
-                final char c = (char) memory.load_i32_8u(this, ptr + j);
+                final char c = (char) memory.load_i32_8u(ptr + j);
                 charPrinter.accept(c);
             }
             num += len;
-            memory.store_i32(this, pnum, num);
+            memory.store_i32(pnum, num);
         }
 
         return 0;
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return "___wasi_fd_write";
     }
 }

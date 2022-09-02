@@ -44,16 +44,16 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmInstance;
+import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.WasmVoidResult;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
 /**
  * Resets the memory and the globals of the modules in the context to the values specified in the
  * module's binary.
  */
-public class ResetContextNode extends WasmBuiltinRootNode {
-    public ResetContextNode(WasmLanguage language, WasmInstance module) {
+public class ResetContextNode extends WasmPredefinedRootNode {
+    public ResetContextNode(WasmLanguage language, WasmModule module) {
         super(language, module);
     }
 
@@ -65,22 +65,14 @@ public class ResetContextNode extends WasmBuiltinRootNode {
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return TestutilModule.Names.RESET_CONTEXT;
     }
 
     @CompilerDirectives.TruffleBoundary
     private void resetModuleState(boolean zeroMemory) {
-        boolean first = true;
-        WasmContext context = contextReference().get();
-        for (WasmInstance m : context.moduleInstances().values()) {
-            // TODO: Note that this approach assumes that there is only one memory per context.
-            // If we want to support multiple memories _in a context_ in our tests,
-            // and we want to reset them, this code will have to be changed.
-            if (!m.isBuiltin()) {
-                context.linker().resetModuleState(context, m, m.data(), first && zeroMemory);
-                first = false;
-            }
-        }
+        // TODO: Reset globals and the memory in all modules of the context.
+        WasmModule testModule = contextReference().get().modules().get("test");
+        contextReference().get().linker().resetModuleState(testModule, testModule.data(), zeroMemory);
     }
 }

@@ -45,11 +45,11 @@ import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.WasmVoidResult;
 import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 
-public class WasiArgsSizesGetNode extends WasmBuiltinRootNode {
+public class WasiArgsSizesGetNode extends WasmPredefinedRootNode {
     WasiArgsSizesGetNode(WasmLanguage language, WasmModule module) {
         super(language, module);
     }
@@ -67,14 +67,14 @@ public class WasiArgsSizesGetNode extends WasmBuiltinRootNode {
             argvBufSize += argument.length() + 1;
         }
 
-        memory.store_i32(this, argcAddress, argc);
-        memory.store_i32(this, argvBufSizeAddress, argvBufSize);
+        memory.store_i32(argcAddress, argc);
+        memory.store_i32(argvBufSizeAddress, argvBufSize);
 
         return WasmVoidResult.getInstance();
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return "__wasi_args_sizes_get";
     }
 }

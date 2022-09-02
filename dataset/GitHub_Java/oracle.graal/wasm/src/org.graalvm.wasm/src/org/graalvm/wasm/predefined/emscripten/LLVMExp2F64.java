@@ -44,13 +44,13 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmInstance;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.WasmModule;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
 import static org.graalvm.wasm.WasmTracing.trace;
 
-public class LLVMExp2F64 extends WasmBuiltinRootNode {
-    public LLVMExp2F64(WasmLanguage language, WasmInstance module) {
+public class LLVMExp2F64 extends WasmPredefinedRootNode {
+    public LLVMExp2F64(WasmLanguage language, WasmModule module) {
         super(language, module);
     }
 
@@ -70,7 +70,7 @@ public class LLVMExp2F64 extends WasmBuiltinRootNode {
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return "_llvm_exp2_f64";
     }
 

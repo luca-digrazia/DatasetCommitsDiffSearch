@@ -44,15 +44,15 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmInstance;
+import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.exception.WasmTrap;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
-public class UnimplementedNode extends WasmBuiltinRootNode {
+public class UnimplementedNode extends WasmPredefinedRootNode {
     private final String name;
 
-    public UnimplementedNode(String name, WasmLanguage language, WasmInstance module) {
+    public UnimplementedNode(String name, WasmLanguage language, WasmModule module) {
         super(language, module);
         this.name = name;
     }
@@ -63,12 +63,12 @@ public class UnimplementedNode extends WasmBuiltinRootNode {
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return name;
     }
 
     @CompilerDirectives.TruffleBoundary
     private WasmTrap fail() {
-        throw new WasmExecutionException(this, "Not implemented: " + builtinNodeName());
+        throw new WasmExecutionException(this, "Not implemented: " + predefinedNodeName());
     }
 }

@@ -42,20 +42,20 @@ package org.graalvm.wasm.predefined.testutil;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import org.graalvm.wasm.GlobalRegistry;
+import org.graalvm.wasm.Globals;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.WasmVoidResult;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 import org.graalvm.wasm.predefined.testutil.SaveContextNode.ContextState;
 
 /**
  * Records the context state (memory and global variables) into a custom object.
  */
-public class CompareContextsNode extends WasmBuiltinRootNode {
+public class CompareContextsNode extends WasmPredefinedRootNode {
     public CompareContextsNode(WasmLanguage language, WasmModule module) {
         super(language, module);
     }
@@ -69,7 +69,7 @@ public class CompareContextsNode extends WasmBuiltinRootNode {
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return TestutilModule.Names.RESET_CONTEXT;
     }
 
@@ -80,8 +80,8 @@ public class CompareContextsNode extends WasmBuiltinRootNode {
     }
 
     private void compareGlobals(ContextState firstState, ContextState lastState) {
-        final GlobalRegistry firstGlobals = firstState.globals();
-        final GlobalRegistry lastGlobals = lastState.globals();
+        final Globals firstGlobals = firstState.globals();
+        final Globals lastGlobals = lastState.globals();
         if (firstGlobals.count() != lastGlobals.count()) {
             throw new WasmExecutionException(this, "Mismatch in memory lengths.");
         }
@@ -109,8 +109,8 @@ public class CompareContextsNode extends WasmBuiltinRootNode {
                             lastMemory.byteSize());
         }
         for (int ptr = 0; ptr < firstMemory.byteSize(); ptr++) {
-            byte first = (byte) firstMemory.load_i32_8s(this, ptr);
-            byte last = (byte) lastMemory.load_i32_8s(this, ptr);
+            byte first = (byte) firstMemory.load_i32_8s(ptr);
+            byte last = (byte) lastMemory.load_i32_8s(ptr);
             if (first != last) {
                 long from = (ptr - 100) / 8 * 8;
                 throw new WasmExecutionException(this, "Memory mismatch.\n" +

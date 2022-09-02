@@ -46,13 +46,13 @@ import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.WasmVoidResult;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
+import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 
 import java.nio.charset.StandardCharsets;
 
-public class WasiArgsGetNode extends WasmBuiltinRootNode {
+public class WasiArgsGetNode extends WasmPredefinedRootNode {
     WasiArgsGetNode(WasmLanguage language, WasmModule module) {
         super(language, module);
     }
@@ -67,7 +67,7 @@ public class WasiArgsGetNode extends WasmBuiltinRootNode {
         int argvPointer = argvAddress;
         int argvBuffPointer = argvBuffAddress;
         for (String argument : arguments) {
-            memory.store_i32(this, argvPointer, argvBuffPointer);
+            memory.store_i32(argvPointer, argvBuffPointer);
             argvPointer += 4;
             if (!StandardCharsets.US_ASCII.newEncoder().canEncode(argument)) {
                 throw new WasmExecutionException(this, "Argument '" + argument + "' contains non-ASCII characters.");
@@ -75,10 +75,10 @@ public class WasiArgsGetNode extends WasmBuiltinRootNode {
             for (int i = 0; i < argument.length(); i++) {
                 final char character = argument.charAt(i);
                 final byte charByte = (byte) character;
-                memory.store_i32_8(this, argvBuffPointer, charByte);
+                memory.store_i32_8(argvBuffPointer, charByte);
                 argvBuffPointer++;
             }
-            memory.store_i32_8(this, argvBuffPointer, (byte) 0);
+            memory.store_i32_8(argvBuffPointer, (byte) 0);
             argvBuffPointer++;
         }
 
@@ -86,7 +86,7 @@ public class WasiArgsGetNode extends WasmBuiltinRootNode {
     }
 
     @Override
-    public String builtinNodeName() {
-        return "__wasi_args_get";
+    public String predefinedNodeName() {
+        return "__wasi_args_sizes_get";
     }
 }

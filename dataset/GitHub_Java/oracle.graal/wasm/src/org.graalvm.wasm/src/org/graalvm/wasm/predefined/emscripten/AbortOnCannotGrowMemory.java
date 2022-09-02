@@ -45,10 +45,10 @@ import static org.graalvm.wasm.WasmTracing.trace;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmInstance;
+import org.graalvm.wasm.WasmModule;
 
 public class AbortOnCannotGrowMemory extends AbortNode {
-    public AbortOnCannotGrowMemory(WasmLanguage language, WasmInstance module) {
+    public AbortOnCannotGrowMemory(WasmLanguage language, WasmModule module) {
         super(language, module);
     }
 
@@ -59,7 +59,7 @@ public class AbortOnCannotGrowMemory extends AbortNode {
     }
 
     @Override
-    public String builtinNodeName() {
+    public String predefinedNodeName() {
         return "abortOnCannotGrowMemory";
     }
 }
