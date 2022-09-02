@@ -167,7 +167,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     private static final class ArgumentsProfile {
         private static final String ARGUMENT_TYPES_ASSUMPTION_NAME = "Profiled Argument Types";
-        private static final Class<?>[] EMPTY_ARGUMENT_TYPES = new Class<?>[0];
         private static final ArgumentsProfile INVALID = new ArgumentsProfile();
 
         // Invariant to simplify conditions: types is non-null if assumption is valid
@@ -1007,7 +1006,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         assert !callProfiled;
         final ArgumentsProfile newProfile;
         if (args.length <= MAX_PROFILED_ARGUMENTS && engine.argumentTypeSpeculation) {
-            Class<?>[] types = args.length == 0 ? ArgumentsProfile.EMPTY_ARGUMENT_TYPES : new Class<?>[args.length];
+            Class<?>[] types = new Class<?>[args.length];
             for (int i = 0; i < args.length; i++) {
                 types[i] = classOf(args[i]);
             }
