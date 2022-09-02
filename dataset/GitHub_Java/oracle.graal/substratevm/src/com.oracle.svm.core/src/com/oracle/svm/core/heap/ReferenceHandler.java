@@ -28,9 +28,12 @@ import java.lang.ref.Reference;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
+import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.stack.StackOverflowCheck;
 import com.oracle.svm.core.thread.ThreadingSupportImpl;
 import com.oracle.svm.core.thread.VMThreads;
@@ -38,7 +41,7 @@ import com.oracle.svm.core.util.VMError;
 
 public final class ReferenceHandler {
     @Fold
-    public static boolean useDedicatedThread() {
+    static boolean useDedicatedThread() {
         return SubstrateOptions.UseReferenceHandlerThread.getValue() && SubstrateOptions.MultiThreaded.getValue();
     }
 
@@ -112,5 +115,21 @@ final class ReferenceHandlerRunnable implements Runnable {
         } finally {
             ThreadingSupportImpl.resumeRecurringCallback();
         }
+    }
+}
+
+@AutomaticFeature
+class ReferenceHandlerThreadFeature implements Feature {
+    @Override
+    public boolean isInConfiguration(IsInConfigurationAccess access) {
+        return ReferenceHandler.useDedicatedThread();
+    }
+
+    @Override
+    public void duringSetup(DuringSetupAccess access) {
+        Thread thread = new Thread(new ReferenceHandlerRunnable(), "Reference Handler");
+        thread.setPriority(Thread.MAX_PRIORITY);
+        thread.setDaemon(true);
+        RuntimeSupport.getRuntimeSupport().addInitializationHook(thread::start);
     }
 }
