@@ -65,7 +65,6 @@ final class PolyglotThreadInfo {
     private ClassLoaderEntry prevContextClassLoader;
     private SpecializationStatisticsEntry executionStatisticsEntry;
 
-    private boolean safepointActive; // only accessed from current thread
     private volatile Object[] contextThreadLocals;
 
     PolyglotThreadInfo(PolyglotContextImpl context, Thread thread) {
@@ -75,16 +74,6 @@ final class PolyglotThreadInfo {
 
     Thread getThread() {
         return thread.get();
-    }
-
-    boolean isSafepointActive() {
-        assert isCurrent();
-        return safepointActive;
-    }
-
-    public void setSafepointActive(boolean safepointActive) {
-        assert isCurrent();
-        this.safepointActive = safepointActive;
     }
 
     public Object[] getContextThreadLocals() {
