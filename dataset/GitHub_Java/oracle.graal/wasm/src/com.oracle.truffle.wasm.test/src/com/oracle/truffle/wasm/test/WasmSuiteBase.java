@@ -146,7 +146,6 @@ public abstract class WasmSuiteBase extends WasmTestBase {
             context = getInterpretedNoInline(contextBuilder);
             final Value resultInterpreted = runInContext(context, source, 1);
 
-            // TODO: We should validate the result for all intermediate runs.
             validateResult(testCase.data.resultValidator, resultInterpreted, capturedStdout);
             capturedStdout.reset();
 
