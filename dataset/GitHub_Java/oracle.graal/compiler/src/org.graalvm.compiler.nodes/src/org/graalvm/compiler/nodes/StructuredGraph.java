@@ -238,7 +238,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         }
 
         /**
-         * @see StructuredGraph#isSubstitution()
+         * @see StructuredGraph#isSubstitution
          */
         public Builder setIsSubstitution(boolean flag) {
             this.isSubstitution = flag;
@@ -1042,16 +1042,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      */
     public AllowAssumptions allowAssumptions() {
         return AllowAssumptions.ifNonNull(assumptions);
-    }
-
-    public void recordAssumptions(StructuredGraph inlineGraph) {
-        if (this != inlineGraph && getAssumptions() != null) {
-            if (inlineGraph.getAssumptions() != null) {
-                getAssumptions().record(inlineGraph.getAssumptions());
-            }
-        } else {
-            assert inlineGraph.getAssumptions() == null : String.format("cannot inline graph (%s) which makes assumptions into a graph (%s) that doesn't", inlineGraph, this);
-        }
     }
 
     /**
