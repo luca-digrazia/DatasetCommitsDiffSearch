@@ -51,14 +51,12 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.StringJoiner;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.Node;
 
 abstract class HostMethodDesc {
 
@@ -118,8 +116,6 @@ abstract class HostMethodDesc {
 
         public abstract Object invoke(Object receiver, Object[] arguments) throws Throwable;
 
-        public abstract Object invokeGuestToHost(Object receiver, Object[] arguments, PolyglotLanguageContext context, Node node);
-
         @Override
         public boolean isMethod() {
             return getReflectionMethod() instanceof Method;
@@ -169,34 +165,7 @@ abstract class HostMethodDesc {
             return "Method[" + getReflectionMethod().toString() + "]";
         }
 
-        abstract static class ReflectBase extends SingleMethod {
-
-            ReflectBase(Executable executable) {
-                super(executable);
-            }
-
-            @Override
-            public Object invokeGuestToHost(Object receiver, Object[] arguments, PolyglotLanguageContext context, Node node) {
-                return GuestToHostRootNode.guestToHostCall(node, INVOKE, context, receiver, this, arguments);
-            }
-
-            private static final CallTarget INVOKE = GuestToHostRootNode.createGuestToHost(new GuestToHostRootNode(HostObject.class, "doInvoke") {
-                @Override
-                protected Object executeImpl(Object obj, Object[] callArguments) {
-                    SingleMethod.ReflectBase method = (SingleMethod.ReflectBase) callArguments[ARGUMENT_OFFSET];
-                    Object[] arguments = (Object[]) callArguments[ARGUMENT_OFFSET + 1];
-                    Object ret;
-                    try {
-                        ret = method.invoke(obj, arguments);
-                    } catch (Throwable e) {
-                        throw HostInteropReflect.rethrow(e);
-                    }
-                    return ret;
-                }
-            });
-        }
-
-        private static final class MethodReflectImpl extends ReflectBase {
+        private static final class MethodReflectImpl extends SingleMethod {
             private final Method reflectionMethod;
 
             MethodReflectImpl(Method reflectionMethod) {
@@ -238,7 +207,7 @@ abstract class HostMethodDesc {
             }
         }
 
-        private static final class ConstructorReflectImpl extends ReflectBase {
+        private static final class ConstructorReflectImpl extends SingleMethod {
             private final Constructor<?> reflectionConstructor;
 
             ConstructorReflectImpl(Constructor<?> reflectionConstructor) {
@@ -275,7 +244,7 @@ abstract class HostMethodDesc {
             }
         }
 
-        abstract static class MHBase extends SingleMethod {
+        private abstract static class MHBase extends SingleMethod {
             @CompilationFinal private MethodHandle methodHandle;
 
             MHBase(Executable executable) {
@@ -284,21 +253,19 @@ abstract class HostMethodDesc {
 
             @Override
             public final Object invoke(Object receiver, Object[] arguments) throws Throwable {
-                MethodHandle handle = methodHandle;
-                if (handle == null) {
+                if (methodHandle == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    handle = makeMethodHandle();
-                    methodHandle = handle;
+                    methodHandle = makeMethodHandle();
                 }
                 try {
-                    return invokeHandle(handle, receiver, arguments);
+                    return invokeHandle(methodHandle, receiver, arguments);
                 } catch (ClassCastException ex) {
                     throw UnsupportedTypeException.create(arguments);
                 }
             }
 
             @TruffleBoundary(allowInlining = true)
-            static Object invokeHandle(MethodHandle invokeHandle, Object receiver, Object[] arguments) throws Throwable {
+            private static Object invokeHandle(MethodHandle invokeHandle, Object receiver, Object[] arguments) throws Throwable {
                 return invokeHandle.invokeExact(receiver, arguments);
             }
 
@@ -315,34 +282,6 @@ abstract class HostMethodDesc {
                 adaptedHandle = adaptedHandle.asSpreader(Object[].class, parameterCount);
                 return adaptedHandle;
             }
-
-            @Override
-            public Object invokeGuestToHost(Object receiver, Object[] arguments, PolyglotLanguageContext context, Node node) {
-                MethodHandle handle = methodHandle;
-                if (handle == null) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    handle = makeMethodHandle();
-                    methodHandle = handle;
-                }
-                return GuestToHostRootNode.guestToHostCall(node, INVOKE, context, receiver, handle, arguments);
-            }
-
-            private static final CallTarget INVOKE = GuestToHostRootNode.createGuestToHost(new GuestToHostRootNode(HostObject.class, "doInvoke") {
-                @Override
-                protected Object executeImpl(Object receiver, Object[] callArguments) {
-                    MethodHandle methodHandle = (MethodHandle) callArguments[ARGUMENT_OFFSET];
-                    Object[] arguments = (Object[]) callArguments[ARGUMENT_OFFSET + 1];
-                    Object ret;
-                    try {
-                        ret = invokeHandle(methodHandle, receiver, arguments);
-                    } catch (ClassCastException ex) {
-                        throw HostInteropReflect.rethrow(UnsupportedTypeException.create(arguments));
-                    } catch (Throwable e) {
-                        throw HostInteropReflect.rethrow(e);
-                    }
-                    return ret;
-                }
-            });
         }
 
         private static final class MethodMHImpl extends MHBase {

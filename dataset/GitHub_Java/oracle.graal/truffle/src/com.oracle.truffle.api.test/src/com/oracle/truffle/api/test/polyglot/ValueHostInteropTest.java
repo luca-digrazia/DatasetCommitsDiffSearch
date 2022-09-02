@@ -85,7 +85,6 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
@@ -122,9 +121,6 @@ public class ValueHostInteropTest extends AbstractPolyglotTest {
 
     @Test
     public void testAccessInvisibleAPIVirtualCall() {
-        if (TruffleOptions.AOT) {
-            return;
-        }
         Value imageClass = context.asValue(java.awt.image.BufferedImage.class);
         Value image = imageClass.newInstance(450, 450, BufferedImage.TYPE_INT_RGB);
         Value graphics = image.invokeMember("getGraphics");
@@ -133,9 +129,6 @@ public class ValueHostInteropTest extends AbstractPolyglotTest {
 
     @Test
     public void testAccessInvisibleAPIDirect() {
-        if (TruffleOptions.AOT) {
-            return;
-        }
         try {
             languageEnv.lookupHostSymbol("sun.awt.image.OffScreenImage");
             if (Java9OrLater) {
