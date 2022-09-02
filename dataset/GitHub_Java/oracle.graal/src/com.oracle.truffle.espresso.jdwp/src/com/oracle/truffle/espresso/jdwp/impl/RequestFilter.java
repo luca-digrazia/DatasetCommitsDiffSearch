@@ -24,23 +24,27 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
+import java.util.Arrays;
 import java.util.regex.Pattern;
 
-public class RequestFilter {
+public final class RequestFilter {
 
     private final int requestId;
     private final byte eventKind;
-    private Pattern[] classExcludePatterns;
-    private KlassRef[] klassRefPatterns;
-    private int nextIndex;
-    private boolean stepping;
-    private int eventLimit = Integer.MAX_VALUE;
+    private final byte suspendPolicy;
+    private Pattern[] classExcludePatterns = new Pattern[0];
+    private KlassRef[] klassRefPatterns = new KlassRef[0];
+    private int count = 0;
+    private Object thread;
+    private Pattern[] positivePatterns = new Pattern[0];
+    private BreakpointInfo breakpointInfo;
+    private long thisFilterId = 0;
+    private StepInfo stepInfo;
 
-    public RequestFilter(int requestId, byte eventKind, int modifiers) {
+    public RequestFilter(int requestId, byte eventKind, byte suspendPolicy) {
         this.requestId = requestId;
         this.eventKind = eventKind;
-        this.classExcludePatterns = new Pattern[modifiers];
-        this.klassRefPatterns = new KlassRef[modifiers];
+        this.suspendPolicy = suspendPolicy;
     }
 
     public int getRequestId() {
@@ -51,32 +55,30 @@ public class RequestFilter {
         return eventKind;
     }
 
-    public void addExcludePattern(String classExcludePattern) {
-        classExcludePatterns[nextIndex] = Pattern.compile(classExcludePattern);
-        nextIndex++;
+    public void addExcludePattern(Pattern pattern) {
+        int length = classExcludePatterns.length;
+        classExcludePatterns = Arrays.copyOf(classExcludePatterns, length + 1);
+        classExcludePatterns[length] = pattern;
     }
 
-    public void setStepping(boolean stepping) {
-        this.stepping = stepping;
+    public void setStepInfo(StepInfo info) {
+        this.stepInfo = info;
     }
 
-    public boolean isStepping() {
-        return stepping;
+    public StepInfo getStepInfo() {
+        return stepInfo;
     }
 
     public void addRefTypeLimit(KlassRef klassRef) {
-        klassRefPatterns[nextIndex] = klassRef;
-        nextIndex++;
-    }
-
-    public KlassRef[] getKlassRefPatterns() {
-        return klassRefPatterns;
+        int length = klassRefPatterns.length;
+        klassRefPatterns = Arrays.copyOf(klassRefPatterns, length + 1);
+        klassRefPatterns[length] = klassRef;
     }
 
     public boolean isKlassExcluded(KlassRef klass) {
         for (Pattern pattern : classExcludePatterns) {
             if (pattern != null) {
-                if (pattern.matcher(klass.getNameAsString()).matches()) {
+                if (pattern.matcher(klass.getNameAsString().replace('/', '.')).matches()) {
                     return true;
                 }
             }
@@ -84,7 +86,57 @@ public class RequestFilter {
         return false;
     }
 
-    public void addEventLimit(int count) {
-        this.eventLimit = count;
+    public void addEventCount(int eventCount) {
+        this.count = eventCount;
+    }
+
+    public int getIgnoreCount() {
+        return count;
+    }
+
+    public void addThread(Object guestThread) {
+        this.thread = guestThread;
+    }
+
+    public Object getThread() {
+        return thread;
+    }
+
+    public void addPositivePattern(Pattern pattern) {
+        int length = positivePatterns.length;
+        positivePatterns = Arrays.copyOf(positivePatterns, length + 1);
+        positivePatterns[length] = pattern;
+    }
+
+    public Pattern[] getIncludePatterns() {
+        return positivePatterns;
+    }
+
+    public Pattern[] getExcludePatterns() {
+        return classExcludePatterns;
+    }
+
+    public KlassRef[] getKlassRefPatterns() {
+        return klassRefPatterns;
+    }
+
+    public void addBreakpointInfo(BreakpointInfo info) {
+        this.breakpointInfo = info;
+    }
+
+    public BreakpointInfo getBreakpointInfo() {
+        return breakpointInfo;
+    }
+
+    public void addThisFilterId(long thisId) {
+        this.thisFilterId = thisId;
+    }
+
+    public long getThisFilterId() {
+        return thisFilterId;
+    }
+
+    public byte getSuspendPolicy() {
+        return suspendPolicy;
     }
 }
