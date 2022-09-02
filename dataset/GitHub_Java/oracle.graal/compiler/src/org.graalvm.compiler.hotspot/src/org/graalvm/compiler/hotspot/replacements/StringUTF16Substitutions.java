@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,7 @@
  */
 package org.graalvm.compiler.hotspot.replacements;
 
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfigBase.INJECTED_VMCONFIG;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probability;
 
@@ -57,7 +57,8 @@ public class StringUTF16Substitutions {
         }
         byte[] val = (byte[]) NewArrayNode.newUninitializedArray(Byte.TYPE, length << 1);
         // the intrinsic does not perform bounds/type checks, so it can be used here.
-        ArrayCopyCallNode.disjointArraycopyKillsInit(value, srcBegin, val, 0, length, JavaKind.Char, HotSpotReplacementsUtil.getHeapWordSize(INJECTED_VMCONFIG));
+        // Using KillsAny variant since we are reading and writing 2 different types.
+        ArrayCopyCallNode.disjointArraycopyKillsAny(value, srcBegin, val, 0, length, JavaKind.Char, HotSpotReplacementsUtil.getHeapWordSize(INJECTED_VMCONFIG));
         return val;
     }
 

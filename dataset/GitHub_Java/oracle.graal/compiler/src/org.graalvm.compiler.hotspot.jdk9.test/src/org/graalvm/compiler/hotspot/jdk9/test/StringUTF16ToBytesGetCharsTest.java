@@ -26,6 +26,8 @@ package org.graalvm.compiler.hotspot.jdk9.test;
 
 import static org.junit.Assume.assumeFalse;
 
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.hotspot.replacements.StringUTF16Substitutions;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -33,10 +35,8 @@ import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopyCallNode;
 import org.graalvm.compiler.replacements.test.MethodSubstitutionTest;
 import org.graalvm.compiler.test.AddExports;
+import org.junit.Before;
 import org.junit.Test;
-
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Test substitutions for (innate) methods StringUTF16.toBytes and StringUTF16.getChars provided by
@@ -48,7 +48,8 @@ public final class StringUTF16ToBytesGetCharsTest extends MethodSubstitutionTest
     private static final int N = 1000;
     private static final int N_OVERFLOW = 10;
 
-    public StringUTF16ToBytesGetCharsTest() {
+    @Before
+    public void checkAMD64() {
         assumeFalse(Java8OrEarlier);
     }
 
