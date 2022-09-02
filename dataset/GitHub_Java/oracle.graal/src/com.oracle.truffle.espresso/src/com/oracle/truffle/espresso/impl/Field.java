@@ -37,6 +37,8 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
+import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_FIELD_KEY;
+
 /**
  * Represents a resolved Espresso field.
  */
@@ -80,17 +82,17 @@ public final class Field implements ModifiersProvider {
     }
 
     // Hidden field. Placeholder in the fieldTable
-    public Field(ObjectKlass holder, int hiddenSlot, int hiddenIndex, Symbol<Name> name) {
+    public Field(ObjectKlass holder, int hiddenSlot, int hiddenIndex) {
         this.holder = holder;
-        this.linkedField = new LinkedField(new ParserField(0, name, Type.Object, -1, null), holder.getLinkedKlass(), -1);
+        this.linkedField = new LinkedField(new ParserField(0, null, Type.Object, -1, null), holder.getLinkedKlass(), -1);
         this.type = null;
-        this.name = name;
+        this.name = null;
         this.slot = hiddenSlot;
         this.fieldIndex = hiddenIndex;
     }
 
     public boolean isHidden() {
-        return linkedField.getParserField().getTypeIndex() == -1;
+        return name == null;
     }
 
     public JavaKind getKind() {
@@ -196,7 +198,7 @@ public final class Field implements ModifiersProvider {
         StaticObject curField = seed;
         Field target = null;
         while (target == null) {
-            target = (Field) ((StaticObjectImpl) curField).getHiddenField(meta.HIDDEN_FIELD_KEY);
+            target = (Field) ((StaticObjectImpl) curField).getHiddenField(HIDDEN_FIELD_KEY);
             if (target == null) {
                 curField = (StaticObject) meta.Field_root.get(curField);
             }

@@ -22,6 +22,13 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
+import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_HOST_THREAD;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -43,11 +50,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
-
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Arrays;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class EspressoContext {
 
@@ -194,7 +196,7 @@ public final class EspressoContext {
         initializeKnownClass(Type.java_lang_ref_Finalizer);
 
         // Call System.initializeSystemClass
-        meta.System_initializeSystemClass.invokeDirect(null);
+        meta.System.lookupDeclaredMethod(Name.initializeSystemClass, Signature._void).invokeDirect(null);
 
         // System exceptions.
         for (Symbol<Type> type : Arrays.asList(
@@ -209,7 +211,6 @@ public final class EspressoContext {
             initializeKnownClass(type);
         }
 
-
         System.err.println("spawnVM: " + (System.currentTimeMillis() - ticks) + " ms");
     }
 
@@ -220,7 +221,7 @@ public final class EspressoContext {
         meta.Thread_group.set(mainThread, threadGroup);
         meta.Thread_name.set(mainThread, meta.toGuestString("mainThread"));
         meta.Thread_priority.set(mainThread, 5);
-        mainThread.setHiddenField(meta.HIDDEN_HOST_THREAD, Thread.currentThread());
+        mainThread.setHiddenField(HIDDEN_HOST_THREAD, Thread.currentThread());
         host2guest.put(Thread.currentThread(), mainThread);
 
         // Lock object used by NIO.

@@ -29,12 +29,16 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.StaticObjectArray;
+import com.oracle.truffle.espresso.runtime.StaticObjectClass;
+import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
+
+import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_METHOD_KEY;
 
 /**
  * This substitution is merely for performance reasons, to avoid the deep-dive to native. libjava
@@ -229,14 +233,14 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
 
         Method reflectedMethod = null;
         while (reflectedMethod == null) {
-            reflectedMethod = (Method) curMethod.getHiddenField(meta.HIDDEN_METHOD_KEY);
+            reflectedMethod = (Method) ((StaticObjectImpl) curMethod).getHiddenField(HIDDEN_METHOD_KEY);
             if (reflectedMethod == null) {
                 curMethod = (StaticObject) meta.Method_root.get(curMethod);
             }
         }
 
-        Klass klass = ((StaticObject) meta.Method_clazz.get(guestMethod)).getMirrorKlass();
-        StaticObject parameterTypes = (StaticObject) meta.Method_parameterTypes.get(guestMethod);
+        Klass klass = ((StaticObjectClass) meta.Method_clazz.get(guestMethod)).getMirrorKlass();
+        StaticObjectArray parameterTypes = (StaticObjectArray) meta.Method_parameterTypes.get(guestMethod);
         // System.err.println(EspressoOptions.INCEPTION_NAME + " Reflective method for " +
         // reflectedMethod.getName());
         StaticObject result = callMethodReflectively(meta, receiver, args, reflectedMethod, klass, parameterTypes);
@@ -246,7 +250,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
     }
 
     public static @Host(Object.class) StaticObject callMethodReflectively(Meta meta, @Host(Object.class) StaticObject receiver, @Host(Object[].class) StaticObject args, Method reflectedMethod,
-                    Klass klass, StaticObject parameterTypes) {
+                    Klass klass, StaticObjectArray parameterTypes) {
         klass.safeInitialize();
 
         Method method;      // actual method to invoke
@@ -279,8 +283,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
                     // Match resolution errors with those thrown due to reflection inlining
                     // Linktime resolution & IllegalAccessCheck already done by Class.getMethod()
                     method = reflectedMethod;
-                    assert targetKlass instanceof ObjectKlass;
-                    method = ((ObjectKlass) targetKlass).itableLookup(method.getDeclaringKlass(), method.getITableIndex());
+                    method = targetKlass.itableLookup(method.getDeclaringKlass(), method.getITableIndex());
                     if (method != null) {
                         // Check for abstract methods as well
                         if (!method.hasCode()) {
@@ -311,7 +314,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
             throw meta.throwExWithMessage(meta.NoSuchMethodError, meta.toGuestString("please let Karen know"));
         }
 
-        int argsLen = StaticObject.isNull(args) ? 0 : args.length();
+        int argsLen = StaticObject.isNull(args) ? 0 : ((StaticObjectArray) args).length();
         final Symbol<Type>[] signature = method.getParsedSignature();
 
         // Check number of arguments.
@@ -321,9 +324,9 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
 
         Object[] adjustedArgs = new Object[argsLen];
         for (int i = 0; i < argsLen; ++i) {
-            StaticObject arg = args.get(i);
+            StaticObject arg = ((StaticObjectArray) args).get(i);
             StaticObject paramTypeMirror = parameterTypes.get(i);
-            Klass paramKlass = paramTypeMirror.getMirrorKlass();
+            Klass paramKlass = ((StaticObjectClass) paramTypeMirror).getMirrorKlass();
             // Throws guest IllegallArgumentException if the parameter cannot be casted or widened.
             adjustedArgs[i] = checkAndWiden(meta, arg, paramKlass);
         }

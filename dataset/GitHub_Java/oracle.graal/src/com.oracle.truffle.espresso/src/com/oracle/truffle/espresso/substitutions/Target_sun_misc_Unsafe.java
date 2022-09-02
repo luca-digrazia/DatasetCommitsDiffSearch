@@ -23,6 +23,10 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
+import java.lang.reflect.Array;
+import java.security.ProtectionDomain;
+import java.util.Arrays;
+
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
@@ -40,13 +44,12 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
+import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import sun.misc.Unsafe;
 
-import java.lang.reflect.Array;
-import java.security.ProtectionDomain;
-import java.util.Arrays;
+import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_HOST_THREAD;
 
 @EspressoSubstitutions
 public final class Target_sun_misc_Unsafe {
@@ -68,7 +71,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static @Host(Class.class) StaticObject defineAnonymousClass(
                     @Host(Unsafe.class) StaticObject self,
-                    @Host(Class.class) StaticObjectImpl hostClass,
+                    @Host(Class.class) StaticObjectClass hostClass,
                     @Host(typeName = "[B") StaticObjectArray data,
                     @Host(typeName = "[Ljava/lang/Object;") StaticObject constantPoolPatches) {
 
@@ -136,7 +139,7 @@ public final class Target_sun_misc_Unsafe {
      * @see #putInt
      */
     @Substitution(hasReceiver = true)
-    public static int arrayBaseOffset(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObjectImpl clazz) {
+    public static int arrayBaseOffset(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObjectClass clazz) {
         assert clazz.getMirrorKlass().isArray();
         if (clazz.getMirrorKlass().getComponentType().isPrimitive()) {
             Class<?> hostPrimitive = clazz.getMirrorKlass().getComponentType().getJavaKind().toJavaClass();
@@ -157,7 +160,7 @@ public final class Target_sun_misc_Unsafe {
      * @see #putInt
      */
     @Substitution(hasReceiver = true)
-    public static int arrayIndexScale(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObjectImpl clazz) {
+    public static int arrayIndexScale(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObjectClass clazz) {
         assert clazz.getMirrorKlass().isArray();
         if (clazz.getMirrorKlass().getComponentType().isPrimitive()) {
             Class<?> hostPrimitive = clazz.getMirrorKlass().getComponentType().getJavaKind().toJavaClass();
@@ -469,7 +472,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getLongVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return ((StaticObjectImpl) holder).getLongFieldVolatile(f);
+        return (long) ((StaticObjectImpl) holder).getFieldVolatile(f);
     }
 
     @Substitution(hasReceiver = true)
@@ -478,7 +481,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getDoubleVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return Double.longBitsToDouble(((StaticObjectImpl) holder).getLongFieldVolatile(f));
+        return (double) ((StaticObjectImpl) holder).getFieldVolatile(f);
     }
 
     @Substitution(hasReceiver = true)
@@ -558,7 +561,7 @@ public final class Target_sun_misc_Unsafe {
     }
 
     @Substitution(methodName = "shouldBeInitialized", hasReceiver = true)
-    public static boolean shouldBeInit(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObjectImpl clazz) {
+    public static boolean shouldBeInit(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObjectClass clazz) {
         Klass k = clazz.getMirrorKlass();
         return (k != null);
     }
@@ -569,7 +572,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void ensureClassInitialized(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObject clazz) {
-        ((StaticObjectImpl) clazz).getMirrorKlass().safeInitialize();
+        ((StaticObjectClass) clazz).getMirrorKlass().safeInitialize();
     }
 
     @Substitution(hasReceiver = true)
@@ -779,8 +782,8 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static @Host(Object.class) StaticObject allocateInstance(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObject clazz) { // throws
         // InstantiationException;
-        assert !((StaticObjectImpl) clazz).getMirrorKlass().isAbstract();
-        return InterpreterToVM.newObject(((StaticObjectImpl) clazz).getMirrorKlass());
+        assert !((StaticObjectClass) clazz).getMirrorKlass().isAbstract();
+        return InterpreterToVM.newObject(((StaticObjectClass) clazz).getMirrorKlass());
     }
 
     /**
@@ -893,7 +896,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void unpark(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject thread) {
-        Thread hostThread = (Thread) ((StaticObjectImpl) thread).getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
+        Thread hostThread = (Thread) ((StaticObjectImpl) thread).getHiddenField(HIDDEN_HOST_THREAD);
         U.unpark(hostThread);
     }
 
