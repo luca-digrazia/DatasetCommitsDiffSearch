@@ -41,22 +41,21 @@
 package org.graalvm.wasm;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.source.Source;
-import org.graalvm.wasm.exception.WasmValidationException;
-import org.graalvm.wasm.predefined.BuiltinModule;
+import org.graalvm.wasm.predefined.PredefinedModule;
 
 public final class WasmContext {
     private final Env env;
     private final WasmLanguage language;
-    private final MemoryRegistry memoryRegistry;
-    private final GlobalRegistry globals;
-    private final TableRegistry tableRegistry;
+    private final Memories memories;
+    private final Globals globals;
+    private final Tables tables;
     private final Linker linker;
     private Map<String, WasmModule> modules;
 
@@ -67,12 +66,12 @@ public final class WasmContext {
     public WasmContext(Env env, WasmLanguage language) {
         this.env = env;
         this.language = language;
-        this.globals = new GlobalRegistry();
-        this.tableRegistry = new TableRegistry();
-        this.memoryRegistry = new MemoryRegistry();
-        this.modules = new LinkedHashMap<>();
+        this.globals = new Globals();
+        this.tables = new Tables();
+        this.memories = new Memories();
+        this.modules = new HashMap<>();
         this.linker = new Linker(language);
-        initializeBuiltinModules();
+        initializePredefinedModules();
     }
 
     public CallTarget parse(Source source) {
@@ -88,16 +87,16 @@ public final class WasmContext {
         return language;
     }
 
-    public MemoryRegistry memories() {
-        return memoryRegistry;
+    public Memories memories() {
+        return memories;
     }
 
-    public GlobalRegistry globals() {
+    public Globals globals() {
         return globals;
     }
 
-    public TableRegistry tables() {
-        return tableRegistry;
+    public Tables tables() {
+        return tables;
     }
 
     public Linker linker() {
@@ -122,26 +121,20 @@ public final class WasmContext {
     }
 
     void registerModule(WasmModule module) {
-        if (modules.containsKey(module.name())) {
-            throw new RuntimeException("Context already contains a module named '" + module.name() + "'.");
-        }
         modules.put(module.name(), module);
     }
 
-    private void initializeBuiltinModules() {
-        final String extraModuleValue = WasmOptions.Builtins.getValue(env.getOptions());
+    private void initializePredefinedModules() {
+        final String extraModuleValue = WasmOptions.PredefinedModules.getValue(env.getOptions());
         if (extraModuleValue.equals("")) {
             return;
         }
         final String[] moduleSpecs = extraModuleValue.split(",");
         for (String moduleSpec : moduleSpecs) {
             final String[] parts = moduleSpec.split(":");
-            if (parts.length > 2) {
-                throw new WasmValidationException("Module specification '" + moduleSpec + "' is not valid.");
-            }
             final String name = parts[0];
-            final String key = parts.length == 2 ? parts[1] : parts[0];
-            final WasmModule module = BuiltinModule.createBuiltinModule(language, this, name, key);
+            final String key = parts[1];
+            final WasmModule module = PredefinedModule.createPredefined(language, this, name, key);
             modules.put(name, module);
         }
     }
