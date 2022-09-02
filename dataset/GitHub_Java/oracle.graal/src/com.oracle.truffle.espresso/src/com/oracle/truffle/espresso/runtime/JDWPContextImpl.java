@@ -2,6 +2,7 @@ package com.oracle.truffle.espresso.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.espresso.impl.ClassRegistries;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
@@ -20,6 +21,7 @@ import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Iterator;
 
 public final class JDWPContextImpl implements JDWPContext {
 
@@ -89,9 +91,9 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean isValidClassLoader(Object object) {
-        if (object instanceof StaticObject) {
-            StaticObject loader = (StaticObject) object;
+    public boolean isValidClassLoader(Object classLoader) {
+        if (classLoader instanceof StaticObject) {
+            StaticObject loader = (StaticObject) classLoader;
             return context.getRegistries().isClassLoader(loader);
         }
         return false;
@@ -177,6 +179,19 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
+    public byte getSpecificObjectTag(Object object) {
+        if (object instanceof StaticObject) {
+            if (((StaticObject) object).isArray()) {
+                return TagConstants.ARRAY;
+            }
+            else if (JAVA_LANG_STRING.equals(((StaticObject) object).getKlass().getType().toString())) {
+                return TagConstants.STRING;
+            }
+        }
+        return TagConstants.OBJECT;
+    }
+
+    @Override
     public byte getTag(Object object) {
         byte tag = TagConstants.OBJECT;
         if (object instanceof StaticObject) {
@@ -222,9 +237,9 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean isArray(Object object) {
-        if (object instanceof StaticObject) {
-            StaticObject staticObject = (StaticObject) object;
+    public boolean isArray(Object array) {
+        if (array instanceof StaticObject) {
+            StaticObject staticObject = (StaticObject) array;
             return staticObject.isArray();
         }
         return false;
@@ -237,8 +252,8 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public byte getTypeTag(Object array) {
-        StaticObject staticObject = (StaticObject) array;
+    public byte getTypeTag(Object object) {
+        StaticObject staticObject = (StaticObject) object;
         byte tag;
         if (staticObject.isArray()) {
             ArrayKlass arrayKlass = (ArrayKlass) staticObject.getKlass();
@@ -254,7 +269,7 @@ public final class JDWPContextImpl implements JDWPContext {
             tag = staticObject.getKlass().getTagConstant();
             // Object type, so check for String
             if (tag == TagConstants.OBJECT) {
-                if (JAVA_LANG_STRING.equals(((StaticObject) array).getKlass().getType().toString())) {
+                if (JAVA_LANG_STRING.equals(((StaticObject) object).getKlass().getType().toString())) {
                     tag = TagConstants.STRING;
                 }
             }
@@ -270,44 +285,27 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public void setStaticFieldValue(FieldRef field, Object value) {
-        field.setValue(((ObjectKlass) field.getDeclaringKlass()).tryInitializeAndGetStatics(), value);
+    public void setStaticFieldValue(FieldRef field, KlassRef klassRef, Object value) {
+        field.setValue(((ObjectKlass) klassRef).tryInitializeAndGetStatics(), value);
     }
 
     @Override
-    public Object getArrayValue(Object array, int index) {
+    public Object getArrayValue(Object array, int i) {
         StaticObject arrayRef = (StaticObject) array;
         Object value;
         if (arrayRef.getKlass().getComponentType().isPrimitive()) {
             // primitive array type needs wrapping
             Object boxedArray = getUnboxedArray(array);
-            value = Array.get(boxedArray, index);
+            value = Array.get(boxedArray, i);
         } else {
-            value = arrayRef.get(index);
+            value = arrayRef.get(i);
         }
         return value;
     }
 
     @Override
-    public void setArrayValue(Object array, int index, Object value) {
+    public void setArrayValue(Object array, int i, Object value) {
         StaticObject arrayRef = (StaticObject) array;
-        arrayRef.putObject((StaticObject) value, index, context.getMeta());
-    }
-
-    @Override
-    public Object toGuest(Object object) {
-        // be sure that current thread has set context
-        return context.getMeta().toGuestBoxed(object);
-    }
-
-    @Override
-    public Object getGuestException(Throwable exception) {
-        if (exception instanceof EspressoException) {
-            EspressoException ex = (EspressoException) exception;
-            return ex.getExceptionObject();
-        }
-        else {
-            throw new RuntimeException("unknown exception type: " + exception.getClass());
-        }
+        arrayRef.putObject((StaticObject) value, i, context.getMeta());
     }
 }

@@ -30,7 +30,7 @@ import java.net.Socket;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-public final class SocketConnection implements Runnable {
+public class SocketConnection implements Runnable {
     private Socket socket;
     private ServerSocket serverSocket;
     private boolean closed = false;
@@ -79,6 +79,7 @@ public final class SocketConnection implements Runnable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (IOException ex) {
+                // TODO(Gregersen) - we should add a retry mechanism or verification of communication
                 throw new RuntimeException("Failed sending packet to debugger instance", ex);
             } catch (ConnectionClosedException e) {
                 if (!Thread.currentThread().isInterrupted()) {

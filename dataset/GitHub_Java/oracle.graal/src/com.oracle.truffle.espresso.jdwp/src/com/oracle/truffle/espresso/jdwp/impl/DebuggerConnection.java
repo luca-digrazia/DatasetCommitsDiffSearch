@@ -219,9 +219,6 @@ public class DebuggerConnection implements JDWPCommands {
                             case JDWP.VirtualMachine.IDSIZES.ID:
                                 result = JDWP.VirtualMachine.IDSIZES.createReply(packet, context.getVirtualMachine());
                                 break;
-                            case JDWP.VirtualMachine.SUSPEND.ID:
-                                result = JDWP.VirtualMachine.SUSPEND.createReply(packet, controller);
-                                break;
                             case JDWP.VirtualMachine.RESUME.ID:
                                 result = JDWP.VirtualMachine.RESUME.createReply(packet, controller);
                                 break;

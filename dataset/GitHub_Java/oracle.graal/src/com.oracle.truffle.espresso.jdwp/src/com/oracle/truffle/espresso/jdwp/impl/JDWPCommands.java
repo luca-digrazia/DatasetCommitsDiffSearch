@@ -22,12 +22,10 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
-
 public interface JDWPCommands {
     void stepOver(Object thread, int requestId);
     void stepInto(Object thread, int requestId);
     void stepOut(Object thread, int requestId);
+
     void createLineBreakpointCommand(String slashClassName, int line, byte suspendPolicy, BreakpointInfo info);
-    void createExceptionBreakpoint(BreakpointInfo exceptionBreakpointInfo);
 }

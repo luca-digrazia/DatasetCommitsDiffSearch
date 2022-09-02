@@ -22,21 +22,18 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
-
 class DebuggerCommand {
 
     enum Kind {
         STEP_INTO,
         STEP_OVER,
         STEP_OUT,
-        SUBMIT_BREAKPOINT,
-        SUBMIT_EXCEPTION_BREAKPOINT
+        SUBMIT_BREAKPOINT
     }
 
     final Kind kind;
     private SourceLocation location;
-    private BreakpointInfo breakpointInfo;
+    private BreakpointInfo info;
     private final Object thread;
 
     DebuggerCommand(Kind kind, Object thread) {
@@ -57,10 +54,10 @@ class DebuggerCommand {
     }
 
     public void setBreakpointInfo(BreakpointInfo info) {
-        this.breakpointInfo = info;
+        this.info = info;
     }
 
-    public BreakpointInfo getBreakpointInfo() {
-        return breakpointInfo;
+    public BreakpointInfo getInfo() {
+        return info;
     }
 }
