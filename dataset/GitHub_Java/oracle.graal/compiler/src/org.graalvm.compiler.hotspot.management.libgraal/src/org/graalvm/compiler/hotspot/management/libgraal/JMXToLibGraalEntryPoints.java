@@ -24,16 +24,16 @@
  */
 package org.graalvm.compiler.hotspot.management.libgraal;
 
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.AttachThread;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.DetachThread;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.FinishRegistration;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.GetAttributes;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.GetMBeanInfo;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.GetObjectName;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.Invoke;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.PollRegistrations;
-import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.SetAttributes;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.FinishRegistration;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.GetAttributes;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.GetMBeanInfo;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.GetObjectName;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.Invoke;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.PollRegistrations;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.SetAttributes;
 
+import java.lang.reflect.Array;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,11 +49,14 @@ import javax.management.MBeanParameterInfo;
 import javax.management.ReflectionException;
 import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.CompositeType;
-import org.graalvm.compiler.serviceprovider.IsolateUtil;
-import org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id;
-import org.graalvm.libgraal.jni.ToLibGraalScope;
-import org.graalvm.libgraal.jni.JNI;
-import org.graalvm.libgraal.jni.JNIUtil;
+import javax.management.openmbean.OpenType;
+import javax.management.openmbean.SimpleType;
+import org.graalvm.compiler.hotspot.management.JMXToLibGraalCalls;
+import org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal;
+import org.graalvm.nativebridge.jni.JNIMethodScope;
+import org.graalvm.libgraal.jni.LibGraalUtil;
+import org.graalvm.nativebridge.jni.JNI;
+import org.graalvm.nativebridge.jni.JNIUtil;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
@@ -63,9 +66,24 @@ import org.graalvm.util.OptionsEncoder;
 import org.graalvm.word.WordFactory;
 
 /**
- * Entry points in SVM for calls from HotSpot.
+ * Entry points in libgraal for calls from HotSpot.
  */
 final class JMXToLibGraalEntryPoints {
+
+    private static final Map<Class<?>, OpenType<?>> PRIMITIVE_TO_OPENTYPE;
+    static {
+        PRIMITIVE_TO_OPENTYPE = new HashMap<>();
+        PRIMITIVE_TO_OPENTYPE.put(Void.class, SimpleType.VOID);
+        PRIMITIVE_TO_OPENTYPE.put(Boolean.class, SimpleType.BOOLEAN);
+        PRIMITIVE_TO_OPENTYPE.put(Byte.class, SimpleType.BYTE);
+        PRIMITIVE_TO_OPENTYPE.put(Character.class, SimpleType.CHARACTER);
+        PRIMITIVE_TO_OPENTYPE.put(Short.class, SimpleType.SHORT);
+        PRIMITIVE_TO_OPENTYPE.put(Integer.class, SimpleType.INTEGER);
+        PRIMITIVE_TO_OPENTYPE.put(Float.class, SimpleType.FLOAT);
+        PRIMITIVE_TO_OPENTYPE.put(Long.class, SimpleType.LONG);
+        PRIMITIVE_TO_OPENTYPE.put(Double.class, SimpleType.DOUBLE);
+        PRIMITIVE_TO_OPENTYPE.put(String.class, SimpleType.STRING);
+    }
 
     private JMXToLibGraalEntryPoints() {
     }
@@ -77,8 +95,8 @@ final class JMXToLibGraalEntryPoints {
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_JMXToLibGraalCalls_pollRegistrations")
     @SuppressWarnings({"try", "unused"})
     static JNI.JLongArray pollRegistrations(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId) {
-        ToLibGraalScope<Id> scope = new ToLibGraalScope<>(PollRegistrations, env);
-        try (ToLibGraalScope<Id> s = scope) {
+        JNIMethodScope scope = LibGraalUtil.openScope(JMXToLibGraalEntryPoints.class, PollRegistrations, env);
+        try (JNIMethodScope s = scope) {
             List<MBeanProxy<?>> registrations = MBeanProxy.drainRegistrations();
             JNI.JLongArray res = JNIUtil.NewLongArray(env, registrations.size());
             CLongPointer elems = JNIUtil.GetLongArrayElements(env, res, WordFactory.nullPointer());
@@ -102,10 +120,10 @@ final class JMXToLibGraalEntryPoints {
     @JMXToLibGraal(FinishRegistration)
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_JMXToLibGraalCalls_finishRegistration")
     @SuppressWarnings({"try", "unused"})
-    static void finishRegistration(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, JNI.JLongArray svmRegistrations) {
-        try (ToLibGraalScope<Id> s = new ToLibGraalScope<>(FinishRegistration, env)) {
-            long len = JNIUtil.GetArrayLength(env, svmRegistrations);
-            CLongPointer elems = JNIUtil.GetLongArrayElements(env, svmRegistrations, WordFactory.nullPointer());
+    static void finishRegistration(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, JNI.JLongArray handles) {
+        try (JNIMethodScope s = LibGraalUtil.openScope(JMXToLibGraalEntryPoints.class, FinishRegistration, env)) {
+            long len = JNIUtil.GetArrayLength(env, handles);
+            CLongPointer elems = JNIUtil.GetLongArrayElements(env, handles, WordFactory.nullPointer());
             try {
                 ObjectHandles globalHandles = ObjectHandles.getGlobal();
                 for (int i = 0; i < len; i++) {
@@ -113,7 +131,7 @@ final class JMXToLibGraalEntryPoints {
                     registration.finishRegistration();
                 }
             } finally {
-                JNIUtil.ReleaseLongArrayElements(env, svmRegistrations, elems, JNI.JArray.MODE_RELEASE);
+                JNIUtil.ReleaseLongArrayElements(env, handles, elems, JNI.JArray.MODE_RELEASE);
             }
         }
     }
@@ -124,16 +142,12 @@ final class JMXToLibGraalEntryPoints {
     @JMXToLibGraal(GetObjectName)
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_JMXToLibGraalCalls_getObjectName")
     @SuppressWarnings({"try", "unused"})
-    static JNI.JString getObjectName(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration) {
-        ToLibGraalScope<Id> scope = new ToLibGraalScope<>(GetObjectName, env);
-        try (ToLibGraalScope<Id> s = scope) {
+    static JNI.JString getObjectName(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long handle) {
+        JNIMethodScope scope = LibGraalUtil.openScope(JMXToLibGraalEntryPoints.class, GetObjectName, env);
+        try (JNIMethodScope s = scope) {
             ObjectHandles globalHandles = ObjectHandles.getGlobal();
-            MBeanProxy<?> registration = globalHandles.get(WordFactory.pointer(svmRegistration));
-            long isolateID = IsolateUtil.getIsolateID();
+            MBeanProxy<?> registration = globalHandles.get(WordFactory.pointer(handle));
             String name = registration.getName();
-            if (isolateID != 0L) {
-                name += '@' + isolateID;
-            }
             scope.setObjectResult(JNIUtil.createHSString(env, name));
         }
         return scope.getObjectResult();
@@ -145,11 +159,11 @@ final class JMXToLibGraalEntryPoints {
     @JMXToLibGraal(GetMBeanInfo)
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_JMXToLibGraalCalls_getMBeanInfo")
     @SuppressWarnings({"try", "unused"})
-    static JNI.JByteArray getMBeanInfo(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration) {
-        ToLibGraalScope<Id> scope = new ToLibGraalScope<>(GetMBeanInfo, env);
-        try (ToLibGraalScope<Id> s = scope) {
+    static JNI.JByteArray getMBeanInfo(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long handle) {
+        JNIMethodScope scope = LibGraalUtil.openScope(JMXToLibGraalEntryPoints.class, GetMBeanInfo, env);
+        try (JNIMethodScope s = scope) {
             ObjectHandles globalHandles = ObjectHandles.getGlobal();
-            MBeanProxy<?> registration = globalHandles.get(WordFactory.pointer(svmRegistration));
+            MBeanProxy<?> registration = globalHandles.get(WordFactory.pointer(handle));
             MBeanInfo info = registration.getBean().getMBeanInfo();
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("bean.class", info.getClassName());
@@ -204,16 +218,16 @@ final class JMXToLibGraalEntryPoints {
     @JMXToLibGraal(GetAttributes)
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_JMXToLibGraalCalls_getAttributes")
     @SuppressWarnings({"try", "unused"})
-    static JNI.JByteArray getAttributes(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration, JNI.JObjectArray requiredAttributes) {
-        ToLibGraalScope<Id> scope = new ToLibGraalScope<>(GetAttributes, env);
-        try (ToLibGraalScope<Id> s = scope) {
+    static JNI.JByteArray getAttributes(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long handle, JNI.JObjectArray requiredAttributes) {
+        JNIMethodScope scope = LibGraalUtil.openScope(JMXToLibGraalEntryPoints.class, GetAttributes, env);
+        try (JNIMethodScope s = scope) {
             int len = JNIUtil.GetArrayLength(env, requiredAttributes);
             String[] attrNames = new String[len];
             for (int i = 0; i < len; i++) {
                 JNI.JString el = (JNI.JString) JNIUtil.GetObjectArrayElement(env, requiredAttributes, i);
                 attrNames[i] = JNIUtil.createString(env, el);
             }
-            MBeanProxy<?> registration = ObjectHandles.getGlobal().get(WordFactory.pointer(svmRegistration));
+            MBeanProxy<?> registration = ObjectHandles.getGlobal().get(WordFactory.pointer(handle));
             AttributeList attributesList = registration.getBean().getAttributes(attrNames);
             scope.setObjectResult(attributeListToRaw(env, attributesList));
         }
@@ -226,15 +240,15 @@ final class JMXToLibGraalEntryPoints {
     @JMXToLibGraal(SetAttributes)
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_JMXToLibGraalCalls_setAttributes")
     @SuppressWarnings({"try", "unused"})
-    static JNI.JByteArray setAttributes(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration, JNI.JByteArray attributes) {
-        ToLibGraalScope<Id> scope = new ToLibGraalScope<>(SetAttributes, env);
-        try (ToLibGraalScope<Id> s = scope) {
+    static JNI.JByteArray setAttributes(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long handle, JNI.JByteArray attributes) {
+        JNIMethodScope scope = LibGraalUtil.openScope(JMXToLibGraalEntryPoints.class, SetAttributes, env);
+        try (JNIMethodScope s = scope) {
             Map<String, Object> map = rawToMap(env, attributes);
             AttributeList attributesList = new AttributeList();
             for (Map.Entry<String, Object> entry : map.entrySet()) {
                 attributesList.add(new Attribute(entry.getKey(), entry.getValue()));
             }
-            MBeanProxy<?> registration = ObjectHandles.getGlobal().get(WordFactory.pointer(svmRegistration));
+            MBeanProxy<?> registration = ObjectHandles.getGlobal().get(WordFactory.pointer(handle));
             attributesList = registration.getBean().setAttributes(attributesList);
             scope.setObjectResult(attributeListToRaw(env, attributesList));
         }
@@ -247,10 +261,10 @@ final class JMXToLibGraalEntryPoints {
     @JMXToLibGraal(Invoke)
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_JMXToLibGraalCalls_invoke")
     @SuppressWarnings({"try", "unused"})
-    static JNI.JByteArray invoke(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration, JNI.JString hsActionName,
+    static JNI.JByteArray invoke(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long handle, JNI.JString hsActionName,
                     JNI.JByteArray hsParams, JNI.JObjectArray hsSignature) {
-        ToLibGraalScope<Id> scope = new ToLibGraalScope<>(Invoke, env);
-        try (ToLibGraalScope<Id> s = scope) {
+        JNIMethodScope scope = LibGraalUtil.openScope(JMXToLibGraalEntryPoints.class, Invoke, env);
+        try (JNIMethodScope s = scope) {
             String actionName = JNIUtil.createString(env, hsActionName);
             int len = hsSignature.isNull() ? 0 : JNIUtil.GetArrayLength(env, hsSignature);
             String[] signature = new String[len];
@@ -259,7 +273,7 @@ final class JMXToLibGraalEntryPoints {
             }
             Map<String, Object> map = rawToMap(env, hsParams);
             Object[] params = map.values().toArray(new Object[map.size()]);
-            MBeanProxy<?> registration = ObjectHandles.getGlobal().get(WordFactory.pointer(svmRegistration));
+            MBeanProxy<?> registration = ObjectHandles.getGlobal().get(WordFactory.pointer(handle));
             try {
                 Object result = registration.getBean().invoke(actionName, params, signature);
                 AttributeList attributesList = new AttributeList();
@@ -324,6 +338,8 @@ final class JMXToLibGraalEntryPoints {
             return;
         } else if (value instanceof CompositeData) {
             putCompositeData(into, name, (CompositeData) value);
+        } else if (value.getClass().isArray()) {
+            putArray(into, name, (Object[]) value);
         } else {
             into.put(name, value);
         }
@@ -341,5 +357,34 @@ final class JMXToLibGraalEntryPoints {
             String name = prefix + '.' + key;
             putAttribute(into, name, value);
         }
+    }
+
+    /**
+     * Serialization of an array into a map.
+     */
+    private static void putArray(Map<String, Object> into, String scope, Object[] data) {
+        String prefix = scope + ".array";
+        OpenType<?> type = findOpenType(data);
+        into.put(prefix, type.getTypeName());
+        for (int i = 0; i < data.length; i++) {
+            Object value = Array.get(data, i);
+            String name = prefix + '.' + i;
+            putAttribute(into, name, value);
+        }
+    }
+
+    private static OpenType<?> findOpenType(Object[] data) {
+        Class<?> componentType = data.getClass().getComponentType();
+        OpenType<?> res = PRIMITIVE_TO_OPENTYPE.get(componentType);
+        // It's enough to support only arrays of simple open types.
+        // There is no use case for CompositeTypes yet.
+        if (res == null) {
+            throw new IllegalArgumentException("Unsupported type: " + componentType);
+        }
+        return res;
+    }
+
+    static {
+        LibGraalUtil.checkToLibGraalCalls(JMXToLibGraalEntryPoints.class, JMXToLibGraalCalls.class, JMXToLibGraal.class);
     }
 }

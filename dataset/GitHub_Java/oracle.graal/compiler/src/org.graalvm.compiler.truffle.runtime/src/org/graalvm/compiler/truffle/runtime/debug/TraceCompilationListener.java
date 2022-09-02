@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -86,14 +86,12 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
         GraalTruffleRuntimeListener.addASTSizeProperty(target, properties);
         properties.put("Tier", Integer.toString(tier)); // to avoid padding
         int callThreshold = tier == 1 ? target.engine.callThresholdInInterpreter : target.engine.callThresholdInFirstTier;
-        double scale = runtime.compilationThresholdScale();
-        properties.put("Calls/Thres", String.format("%7d/%5d", target.getCallCount(), (int) (scale * callThreshold)));
+        properties.put("Calls/Thres", String.format("%7d/%5d", target.getCallCount(), callThreshold));
         int callAndLoopThreshold = tier == 1 ? target.engine.callAndLoopThresholdInInterpreter : target.engine.callAndLoopThresholdInFirstTier;
-        properties.put("CallsAndLoop/Thres", String.format("%7d/%5d", target.getCallAndLoopCount(), (int) (scale * callAndLoopThreshold)));
+        properties.put("CallsAndLoop/Thres", String.format("%7d/%5d", target.getCallAndLoopCount(), callAndLoopThreshold));
         properties.put("Src", formatSourceSection(target.getRootNode().getSourceSection()));
         properties.put("QueueSize", runtime.getCompilationQueueSize());
         properties.put("Time", System.nanoTime() - startTime);
-        properties.put("Scale", scale);
         return properties;
     }
 

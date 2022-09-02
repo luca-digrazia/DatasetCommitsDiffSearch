@@ -24,31 +24,25 @@
  */
 package org.graalvm.compiler.truffle.compiler.hotspot.libgraal;
 
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.InliningData;
+import org.graalvm.nativebridge.jni.HSObject;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsCancelled;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsLastTier;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCompilationTaskGen.callInliningData;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCompilationTaskGen.callIsCancelled;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCompilationTaskGen.callIsLastTier;
 import static org.graalvm.nativebridge.jni.JNIMethodScope.env;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
-import org.graalvm.compiler.truffle.common.TruffleInliningData;
-import org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal;
-import org.graalvm.nativebridge.jni.HSObject;
-import org.graalvm.nativebridge.jni.JNI.JObject;
 import org.graalvm.nativebridge.jni.JNIMethodScope;
+import org.graalvm.nativebridge.jni.JNI.JObject;
+import org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal;
 
 /**
  * Proxy for a {@code Supplier<Boolean>} object in the HotSpot heap.
  */
 final class HSTruffleCompilationTask extends HSObject implements TruffleCompilationTask {
 
-    private final JNIMethodScope scope;
-
     HSTruffleCompilationTask(JNIMethodScope scope, JObject handle) {
         super(scope, handle);
-        this.scope = scope;
     }
 
     @TruffleFromLibGraal(IsCancelled)
@@ -61,11 +55,5 @@ final class HSTruffleCompilationTask extends HSObject implements TruffleCompilat
     @Override
     public boolean isLastTier() {
         return callIsLastTier(env(), getHandle());
-    }
-
-    @TruffleFromLibGraal(InliningData)
-    @Override
-    public TruffleInliningData inliningData() {
-        return new HSTruffleInliningPlan(scope, callInliningData(env(), getHandle()));
     }
 }

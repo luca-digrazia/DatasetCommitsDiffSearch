@@ -87,7 +87,7 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
-import org.graalvm.compiler.truffle.common.TruffleInliningData;
+import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal;
 import org.graalvm.libgraal.LibGraal;
@@ -138,13 +138,13 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
 
     @TruffleFromLibGraal(CreateInliningPlan)
     @Override
-    public TruffleInliningData createInliningPlan() {
+    public TruffleMetaAccessProvider createInliningPlan() {
         JNIMethodScope scope = JNIMethodScope.scopeOrNull();
         if (scope == null) {
             return null;
         }
         JObject hsInliningPlan = callCreateInliningPlan(scope.getEnv(), getHandle());
-        return new HSTruffleInliningData(scope, hsInliningPlan);
+        return new HSTruffleInliningPlan(scope, hsInliningPlan);
     }
 
     @TruffleFromLibGraal(AsCompilableTruffleAST)

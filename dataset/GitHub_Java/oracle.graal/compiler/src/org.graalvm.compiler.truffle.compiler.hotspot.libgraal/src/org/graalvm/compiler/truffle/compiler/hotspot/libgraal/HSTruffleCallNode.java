@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,31 +24,35 @@
  */
 package org.graalvm.compiler.truffle.compiler.hotspot.libgraal;
 
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetCallCount;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetCurrentCallTarget;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.IsInliningForced;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CallNodeHashCode;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetCallCount;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetCurrentCallTarget;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsInliningForced;
 
+import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCallNodeGen.callCallNodeHashCode;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCallNodeGen.callGetCallCount;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCallNodeGen.callGetCurrentCallTarget;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCallNodeGen.callIsInliningForced;
-
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HotSpotToSVMScope.env;
+import static org.graalvm.nativebridge.jni.JNIMethodScope.env;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
-import org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot;
-import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JObject;
+import org.graalvm.nativebridge.jni.HSObject;
+import org.graalvm.nativebridge.jni.JNIMethodScope;
+import org.graalvm.nativebridge.jni.JNI.JObject;
+import org.graalvm.nativebridge.jni.JNIUtil;
+import org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal;
 
 final class HSTruffleCallNode extends HSObject implements TruffleCallNode {
 
-    HSTruffleCallNode(HotSpotToSVMScope scope, JObject handle) {
+    HSTruffleCallNode(JNIMethodScope scope, JObject handle) {
         super(scope, handle);
     }
 
-    @SVMToHotSpot(GetCurrentCallTarget)
+    @TruffleFromLibGraal(GetCurrentCallTarget)
     @Override
     public CompilableTruffleAST getCurrentCallTarget() {
-        HotSpotToSVMScope scope = HotSpotToSVMScope.scope();
+        JNIMethodScope scope = JNIMethodScope.scope();
         JObject hsCompilable = callGetCurrentCallTarget(scope.getEnv(), getHandle());
         if (hsCompilable.isNull()) {
             return null;
@@ -57,15 +61,32 @@ final class HSTruffleCallNode extends HSObject implements TruffleCallNode {
         }
     }
 
-    @SVMToHotSpot(GetCallCount)
+    @TruffleFromLibGraal(GetCallCount)
     @Override
     public int getCallCount() {
         return callGetCallCount(env(), getHandle());
     }
 
-    @SVMToHotSpot(IsInliningForced)
+    @TruffleFromLibGraal(IsInliningForced)
     @Override
     public boolean isInliningForced() {
         return callIsInliningForced(env(), getHandle());
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }
+        if (obj == null || obj.getClass() != HSTruffleCallNode.class) {
+            return false;
+        }
+        return JNIUtil.IsSameObject(env(), getHandle(), ((HSTruffleCallNode) obj).getHandle());
+    }
+
+    @TruffleFromLibGraal(CallNodeHashCode)
+    @Override
+    public int hashCode() {
+        return callCallNodeHashCode(env(), getHandle());
     }
 }
