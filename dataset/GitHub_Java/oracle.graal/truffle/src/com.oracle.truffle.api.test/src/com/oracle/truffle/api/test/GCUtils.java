@@ -79,7 +79,7 @@ public final class GCUtils {
             collectibleObjects.add(new WeakReference<>(objectFactory.apply(i), queue));
             System.gc();
         }
-        gc(IsFreed.anyOf(collectibleObjects), true);
+        gc(IsFreed.anyOf(collectibleObjects));
         int refsCleared = 0;
         while (queue.poll() != null) {
             refsCleared++;
@@ -95,7 +95,7 @@ public final class GCUtils {
      * @param ref the reference
      */
     public static void assertGc(final String message, final Reference<?> ref) {
-        if (!gc(IsFreed.allOf(Collections.singleton(ref)), true)) {
+        if (!gc(IsFreed.allOf(Collections.singleton(ref)))) {
             Assert.fail(message);
         }
     }
@@ -107,12 +107,12 @@ public final class GCUtils {
      * @param ref the reference
      */
     public static void assertNotGc(final String message, final Reference<?> ref) {
-        if (gc(IsFreed.allOf(Collections.singleton(ref)), false)) {
+        if (gc(IsFreed.allOf(Collections.singleton(ref)))) {
             Assert.fail(message);
         }
     }
 
-    private static boolean gc(BooleanSupplier isFreed, boolean performAllocations) {
+    private static boolean gc(BooleanSupplier isFreed) {
         int blockSize = 100_000;
         final List<byte[]> blocks = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
@@ -127,13 +127,11 @@ public final class GCUtils {
                 System.runFinalization();
             } catch (OutOfMemoryError oom) {
             }
-            if (performAllocations) {
-                try {
-                    blocks.add(new byte[blockSize]);
-                    blockSize = (int) (blockSize * 1.3);
-                } catch (OutOfMemoryError oom) {
-                    blockSize >>>= 1;
-                }
+            try {
+                blocks.add(new byte[blockSize]);
+                blockSize = (int) (blockSize * 1.3);
+            } catch (OutOfMemoryError oom) {
+                blockSize >>>= 1;
             }
             if (i % 10 == 0) {
                 try {
