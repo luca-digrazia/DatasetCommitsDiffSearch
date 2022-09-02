@@ -37,6 +37,7 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.multithreading.LLVMPThreadStart;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -50,6 +51,8 @@ public final class LLVMPThreadContext {
     private final ConcurrentMap<Long, Object> threadReturnValueStorage;
     private final ConcurrentMap<Long, Thread> threadStorage;
     private boolean isCreateThreadAllowed;
+
+    private final ArrayList<LLVMPointer> onceStorage;
 
     private int pThreadKey;
     private final Object pThreadKeyLock;
@@ -65,6 +68,7 @@ public final class LLVMPThreadContext {
         // pthread storages
         this.threadReturnValueStorage = new ConcurrentHashMap<>();
         this.threadStorage = new ConcurrentHashMap<>();
+        this.onceStorage = new ArrayList<>();
         this.pThreadKey = 0;
         this.pThreadKeyLock = new Object();
         this.pThreadKeyStorage = new ConcurrentHashMap<>();
@@ -161,6 +165,18 @@ public final class LLVMPThreadContext {
     @TruffleBoundary
     public LLVMPointer getDestructor(int keyId) {
         return pThreadDestructorStorage.get(keyId);
+    }
+
+    public boolean shouldExecuteOnce(LLVMPointer onceControl) {
+        boolean shouldExecute = true;
+        synchronized (onceStorage) {
+            if (onceStorage.contains(onceControl)) {
+                shouldExecute = false;
+            } else {
+                onceStorage.add(onceControl);
+            }
+        }
+        return shouldExecute;
     }
 
     @TruffleBoundary
