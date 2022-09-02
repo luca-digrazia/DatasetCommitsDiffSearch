@@ -254,6 +254,7 @@ public final class RegexObject extends AbstractConstantKeysObject {
         }
     }
 
+    @ReportPolymorphism
     @ImportStatic(RegexObject.class)
     @GenerateUncached
     abstract static class InvokeCacheNode extends Node {
@@ -298,7 +299,6 @@ public final class RegexObject extends AbstractConstantKeysObject {
             return execNode.execute(receiver, expectByteArrayHostObjectNode.execute(input), fromIndex);
         }
 
-        @ReportPolymorphism.Megamorphic
         @Specialization(replaces = {"getStartEquals", "getEndEquals"})
         static Object invokeGeneric(String symbol, Object receiver, Object input, int fromIndex,
                         @Cached ExpectStringOrTruffleObjectNode expectStringOrTruffleObjectNode,
@@ -400,6 +400,7 @@ public final class RegexObject extends AbstractConstantKeysObject {
 
     }
 
+    @ReportPolymorphism
     @GenerateUncached
     abstract static class GetCompiledRegexNode extends Node {
 
@@ -413,13 +414,13 @@ public final class RegexObject extends AbstractConstantKeysObject {
             return cachedCompiledRegex;
         }
 
-        @ReportPolymorphism.Megamorphic
         @Specialization(replaces = "executeFixed")
         static Object executeVarying(RegexObject receiver) {
             return receiver.getCompiledRegexObject();
         }
     }
 
+    @ReportPolymorphism
     @ImportStatic(RegexObject.class)
     @GenerateUncached
     abstract static class ExecCompiledRegexNode extends Node {
@@ -434,7 +435,6 @@ public final class RegexObject extends AbstractConstantKeysObject {
             return directCallNode.call(input, fromIndex);
         }
 
-        @ReportPolymorphism.Megamorphic
         @Specialization(replaces = "executeTRegexFixed")
         static Object executeTRegexVarying(CompiledRegexObject receiver, Object input, int fromIndex,
                         @Cached IndirectCallNode indirectCallNode) {
