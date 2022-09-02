@@ -128,7 +128,8 @@ public final class ResourcesFeature implements Feature {
                 ModuleSupport.findResourcesInModules(name -> matches(patterns, name),
                                 (resName, content) -> registerResource(debugContext, resName, content));
             } catch (IOException ex) {
-                throw UserError.abort(ex, "Can not read resources from modules. This is possible due to incorrect module path or missing module visibility directives");
+                throw UserError.abort("Can not read resources from modules. This is possible due to incorrect module " +
+                                "path or missing module visibility directives", ex);
             }
         }
 
@@ -151,7 +152,7 @@ public final class ResourcesFeature implements Feature {
                     final File file = new File(url.toURI());
                     todo.add(file);
                 } catch (URISyntaxException | IllegalArgumentException e) {
-                    throw UserError.abort("Unable to handle imagecp element '%s'. Make sure that all imagecp entries are either directories or valid jar files.", url.toExternalForm());
+                    throw UserError.abort("Unable to handle imagecp element '" + url.toExternalForm() + "'. Make sure that all imagecp entries are either directories or valid jar files.");
                 }
             }
         }
@@ -164,7 +165,7 @@ public final class ResourcesFeature implements Feature {
                     scanJar(debugContext, element, patterns);
                 }
             } catch (IOException ex) {
-                throw UserError.abort("Unable to handle classpath element '%s'. Make sure that all classpath entries are either directories or valid jar files.", element);
+                throw UserError.abort("Unable to handle classpath element '" + element + "'. Make sure that all classpath entries are either directories or valid jar files.");
             }
         }
         newResources.clear();
@@ -190,7 +191,7 @@ public final class ResourcesFeature implements Feature {
         if (f.isDirectory()) {
             File[] files = f.listFiles();
             if (files == null) {
-                throw UserError.abort("Cannot scan directory %s", f);
+                throw UserError.abort("Cannot scan directory " + f);
             } else {
                 for (File ch : files) {
                     scanDirectory(debugContext, ch, relativePath.isEmpty() ? ch.getName() : relativePath + "/" + ch.getName(), patterns);
