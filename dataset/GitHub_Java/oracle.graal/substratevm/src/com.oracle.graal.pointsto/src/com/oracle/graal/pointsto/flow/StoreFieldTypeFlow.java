@@ -28,19 +28,29 @@ import org.graalvm.compiler.nodes.java.StoreFieldNode;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.flow.context.object.AnalysisObject;
+import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
 /**
  * Implements a field store operation type flow.
  */
-public abstract class StoreFieldTypeFlow extends AccessFieldTypeFlow<StoreFieldNode> {
+public abstract class StoreFieldTypeFlow extends TypeFlow<StoreFieldNode> {
 
-    protected StoreFieldTypeFlow(StoreFieldNode node) {
-        super(node);
+    /** The field that this flow stores into. */
+    protected final AnalysisField field;
+
+    public StoreFieldTypeFlow(StoreFieldNode node) {
+        super(node, null);
+        this.field = (AnalysisField) node.field();
     }
 
-    protected StoreFieldTypeFlow(StoreFieldTypeFlow original, MethodFlowsGraph methodFlows) {
+    public StoreFieldTypeFlow(StoreFieldTypeFlow original, MethodFlowsGraph methodFlows) {
         super(original, methodFlows);
+        this.field = original.field;
+    }
+
+    public AnalysisField field() {
+        return field;
     }
 
     public static class StoreStaticFieldTypeFlow extends StoreFieldTypeFlow {
@@ -75,6 +85,13 @@ public abstract class StoreFieldTypeFlow extends AccessFieldTypeFlow<StoreFieldN
         }
 
         @Override
+        public boolean addState(BigBang bb, TypeState add) {
+            /* Only a clone should be updated */
+            assert this.isClone();
+            return super.addState(bb, add);
+        }
+
+        @Override
         public String toString() {
             return "StoreStaticFieldTypeFlow<" + getState() + ">";
         }
@@ -96,7 +113,7 @@ public abstract class StoreFieldTypeFlow extends AccessFieldTypeFlow<StoreFieldN
         private final TypeFlow<?> valueFlow;
 
         /** The flow of the store operation receiver object. */
-        private TypeFlow<?> objectFlow;
+        private final TypeFlow<?> objectFlow;
 
         StoreInstanceFieldTypeFlow(StoreFieldNode node, TypeFlow<?> valueFlow, TypeFlow<?> objectFlow) {
             super(node);
@@ -116,8 +133,10 @@ public abstract class StoreFieldTypeFlow extends AccessFieldTypeFlow<StoreFieldN
         }
 
         @Override
-        public TypeFlow<?> receiver() {
-            return objectFlow;
+        public boolean addState(BigBang bb, TypeState add) {
+            /* Only a clone should be updated */
+            assert this.isClone();
+            return super.addState(bb, add);
         }
 
         @Override
@@ -143,6 +162,16 @@ public abstract class StoreFieldTypeFlow extends AccessFieldTypeFlow<StoreFieldN
                 /* Register the field flow as a use, if not already registered. */
                 this.addUse(bb, fieldFlow);
             }
+        }
+
+        @Override
+        public TypeFlow<?> receiver() {
+            return objectFlow;
+        }
+
+        /** Return the state of the receiver object. */
+        public TypeState getObjectState() {
+            return objectFlow.getState();
         }
 
         @Override

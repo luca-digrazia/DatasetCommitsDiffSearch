@@ -28,19 +28,29 @@ import org.graalvm.compiler.nodes.java.LoadFieldNode;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.flow.context.object.AnalysisObject;
+import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
 /**
  * Implements a field load operation type flow.
  */
-public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow<LoadFieldNode> {
+public abstract class LoadFieldTypeFlow extends TypeFlow<LoadFieldNode> {
 
-    protected LoadFieldTypeFlow(LoadFieldNode node) {
-        super(node);
+    /** The field that this flow loads from. */
+    protected final AnalysisField field;
+
+    public LoadFieldTypeFlow(LoadFieldNode node) {
+        super(node, null);
+        this.field = (AnalysisField) node.field();
     }
 
-    protected LoadFieldTypeFlow(MethodFlowsGraph methodFlows, LoadFieldTypeFlow original) {
+    public LoadFieldTypeFlow(MethodFlowsGraph methodFlows, LoadFieldTypeFlow original) {
         super(original, methodFlows);
+        this.field = original.field;
+    }
+
+    public AnalysisField field() {
+        return field;
     }
 
     public static class LoadStaticFieldTypeFlow extends LoadFieldTypeFlow {
@@ -74,6 +84,12 @@ public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow<LoadFieldNod
         }
 
         @Override
+        public boolean addState(BigBang bb, TypeState add) {
+            assert this.isClone();
+            return super.addState(bb, add);
+        }
+
+        @Override
         public String toString() {
             return "LoadStaticFieldTypeFlow<" + getState() + ">";
         }
@@ -86,11 +102,8 @@ public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow<LoadFieldNod
      */
     public static class LoadInstanceFieldTypeFlow extends LoadFieldTypeFlow {
 
-        /**
-         * The flow of the receiver object. The load flow is registered as an observer of the
-         * receiver object.
-         */
-        private TypeFlow<?> objectFlow;
+        /** The flow of the receiver object. */
+        private final TypeFlow<?> objectFlow;
 
         LoadInstanceFieldTypeFlow(LoadFieldNode node, TypeFlow<?> objectFlow) {
             super(node);
@@ -111,6 +124,18 @@ public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow<LoadFieldNod
         @Override
         public TypeFlow<?> receiver() {
             return objectFlow;
+        }
+
+        /** Return the state of the receiver object. */
+        public TypeState getObjectState() {
+            return objectFlow.getState();
+        }
+
+        @Override
+        public boolean addState(BigBang bb, TypeState add) {
+            /* Only a clone should be updated */
+            assert this.isClone();
+            return super.addState(bb, add);
         }
 
         @Override
