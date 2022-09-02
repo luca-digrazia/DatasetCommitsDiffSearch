@@ -543,7 +543,6 @@ public abstract class Launcher {
                 }
             }
             if (!engineOptions.isEmpty()) {
-                System.out.println();
                 printOptions(engineOptions, "Engine options:", 2);
             }
         }
