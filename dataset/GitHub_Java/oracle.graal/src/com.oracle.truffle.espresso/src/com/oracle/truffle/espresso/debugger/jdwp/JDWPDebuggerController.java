@@ -42,7 +42,6 @@ import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.debugger.BreakpointInfo;
 import com.oracle.truffle.espresso.debugger.SourceLocation;
 import com.oracle.truffle.espresso.debugger.SuspendStrategy;
-import com.oracle.truffle.espresso.debugger.VMEventListener;
 import com.oracle.truffle.espresso.debugger.VMEventListeners;
 import com.oracle.truffle.espresso.debugger.exception.NoSuchSourceLineException;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -134,7 +133,6 @@ public class JDWPDebuggerController {
     @CompilerDirectives.TruffleBoundary
     private void mapBrekpoint(Breakpoint bp, BreakpointInfo info) {
         breakpointInfos.put(bp, info);
-        info.setBreakpoint(bp);
     }
 
     public void resume() {
@@ -219,20 +217,17 @@ public class JDWPDebuggerController {
             JDWPCallFrame[] callFrames = createCallFrames(Ids.getIdAsLong(currentThread), event.getStackFrames());
             suspendedInfo = new SuspendedInfo(event, strategy, callFrames, currentThread);
 
-
-            boolean alreadySuspended = false;
             for (Breakpoint bp : event.getBreakpoints()) {
                 //System.out.println("BP at suspension point: " + bp.getLocationDescription());
                 // register the thread as suspended before sending the breakpoint hit event.
                 // The debugger will verify thread status as part of registering if a breakpoint is hit
-                if (strategy == SuspendStrategy.EVENT_THREAD && !alreadySuspended) {
-                    alreadySuspended = true;
+                if (strategy == SuspendStrategy.EVENT_THREAD) {
                     ThreadSuspension.suspendThread(currentThread);
                 }
                 VMEventListeners.getDefault().breakpointHit(breakpointInfos.get(bp), currentThread);
             }
             // now, suspend the current thread until resumed by e.g. a debugger command
-            suspend(strategy, callFrames[0], currentThread, alreadySuspended);
+            suspend(strategy, callFrames[0]);
         }
 
         private boolean checkExclusionFilters(SuspendedEvent event) {
@@ -355,7 +350,7 @@ public class JDWPDebuggerController {
             return null;
         }
 
-        private void suspend(byte strategy, JDWPCallFrame currentFrame, StaticObject thread, boolean alreadySuspended) {
+        private void suspend(byte strategy, JDWPCallFrame currentFrame) {
             switch(strategy) {
                 case SuspendStrategy.NONE:
                     // nothing to suspend
@@ -363,10 +358,6 @@ public class JDWPDebuggerController {
                 case SuspendStrategy.EVENT_THREAD:
                     synchronized (suspendLock) {
                         try {
-                            if (!alreadySuspended) {
-                                ThreadSuspension.suspendThread(thread);
-                            }
-
                             // if during stepping, send a step completed event back to the debugger
                             if (commandRequestId != -1) {
                                 VMEventListeners.getDefault().stepCompleted(commandRequestId, currentFrame);
