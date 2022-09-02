@@ -41,8 +41,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.impl.ClassStatusConstants;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -51,7 +49,7 @@ import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
-import com.oracle.truffle.espresso.nodes.EspressoMethodNode;
+import com.oracle.truffle.espresso.nodes.EspressoBaseNode;
 import com.oracle.truffle.espresso.nodes.MHInvokeBasicNode;
 import com.oracle.truffle.espresso.nodes.MHInvokeGenericNode;
 import com.oracle.truffle.espresso.nodes.MHLinkToNode;
@@ -63,7 +61,7 @@ import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.object.DebugCounter;
 
-public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRef {
+public abstract class Klass implements ModifiersProvider, ContextAccess {
 
     static final Comparator<Klass> COMPARATOR = new Comparator<Klass>() {
         @Override
@@ -99,8 +97,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     private final boolean isArray;
 
     @CompilationFinal private int hierarchyDepth = -1;
-
-    protected Object prepareThread;
 
     /**
      * A class or interface C is accessible to a class or interface D if and only if either of the
@@ -145,10 +141,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
     public final boolean isArray() {
         return isArray;
-    }
-
-    public boolean isInterface() {
-        return ModifiersProvider.super.isInterface();
     }
 
     public StaticObject mirror() {
@@ -274,10 +266,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      * Determines if this type is either the same as, or is a superclass or superinterface of, the
      * type represented by the specified parameter. This method is identical to
      * {@link Class#isAssignableFrom(Class)} in terms of the value return for this type.
-     *
+     * 
      * Fast check for Object types (as opposed to interface types) -> do not need to walk the entire
      * class hierarchy.
-     *
+     * 
      * Interface check is still slow, though.
      */
     public final boolean isAssignableFrom(Klass other) {
@@ -649,10 +641,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
                     MethodHandleIntrinsics.PolySigIntrinsics id,
                     Klass accessingKlass) {
         if (id == InvokeGeneric) {
-            return (methodName == Name.invoke ? getMeta().invoke : getMeta().invokeExact).findIntrinsic(signature, new Function<Method, EspressoMethodNode>() {
+            return (methodName == Name.invoke ? getMeta().invoke : getMeta().invokeExact).findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
                 // TODO(garcia) Create a whole new Node to handle MH invokes.
                 @Override
-                public EspressoMethodNode apply(Method method) {
+                public EspressoBaseNode apply(Method method) {
                     // TODO(garcia) true access checks
                     Klass callerKlass = accessingKlass == null ? getMeta().Object : accessingKlass;
                     StaticObject appendixBox = StaticObject.createArray(getMeta().Object_array, new Object[1]);
@@ -666,9 +658,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
                 }
             }, id);
         } else if (id == InvokeBasic) {
-            return getMeta().invokeBasic.findIntrinsic(signature, new Function<Method, EspressoMethodNode>() {
+            return getMeta().invokeBasic.findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
+
                 @Override
-                public EspressoMethodNode apply(Method method) {
+                public EspressoBaseNode apply(Method method) {
                     return new MHInvokeBasicNode(method);
                 }
             }, id);
@@ -691,9 +684,9 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     private static Method findLinkToIntrinsic(Method m, Symbol<Signature> signature, MethodHandleIntrinsics.PolySigIntrinsics id) {
-        return m.findIntrinsic(signature, new Function<Method, EspressoMethodNode>() {
+        return m.findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
             @Override
-            public EspressoMethodNode apply(Method method) {
+            public EspressoBaseNode apply(Method method) {
                 return MHLinkToNode.create(method, id);
             }
         }, id);
@@ -733,64 +726,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return name;
     }
 
-
     public boolean sameRuntimePackage(Klass other) {
         return this.getDefiningClassLoader() == other.getDefiningClassLoader() && this.getRuntimePackage().equals(other.getRuntimePackage());
     }
-
-
-    // region jdwp-specific
-
-    public String getNameAsString() {
-        return name.toString();
-    }
-
-    public String getTypeAsString() {
-        return type.toString();
-    }
-
-    @Override
-    public Klass[] getImplementedInterfaces() {
-        return getInterfaces();
-    }
-
-    @Override
-    public Object getPrepareThread() {
-        if (prepareThread == null) {
-            prepareThread = getContext().getMainThread();
-        }
-        return prepareThread;
-    }
-
-    @Override
-    public int getStatus() {
-        if (this instanceof ObjectKlass) {
-            ObjectKlass objectKlass = (ObjectKlass) this;
-            int state = objectKlass.getState();
-            switch (state) {
-                case ObjectKlass.LOADED:
-                    return ClassStatusConstants.VERIFIED;
-                case ObjectKlass.INITIALIZED:
-                case ObjectKlass.PREPARED:
-                case ObjectKlass.LINKED:
-                    return ClassStatusConstants.PREPARED;
-                default: return ClassStatusConstants.ERROR;
-            }
-        } else {
-            return ClassStatusConstants.INITIALIZED;
-        }
-    }
-
-    @Override
-    public KlassRef getSuperClass() {
-        return getSuperKlass();
-    }
-
-    @Override
-    public byte getTagConstant() {
-        return getJavaKind().toTagConstant();
-    }
-
-    // endregion jdwp-specific
-
 }
