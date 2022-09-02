@@ -38,7 +38,8 @@ import com.oracle.truffle.wasm.WasmVoidResult;
 import com.oracle.truffle.wasm.exception.WasmExecutionException;
 import com.oracle.truffle.wasm.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
-import com.oracle.truffle.wasm.predefined.testutil.SaveContextNode.ContextState;
+
+import static com.oracle.truffle.wasm.predefined.testutil.SaveContextNode.*;
 
 /**
  * Records the context state (memory and global variables) into a custom object.

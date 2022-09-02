@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.wasm;
 
-public final class ImportDescriptor {
+public class ImportDescriptor {
     public final String moduleName;
     public final String memberName;
 

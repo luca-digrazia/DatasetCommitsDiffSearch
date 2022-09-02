@@ -33,17 +33,9 @@ import static com.oracle.truffle.wasm.benchmark.WasmBenchmarkSuiteBase.Defaults.
 import static com.oracle.truffle.wasm.benchmark.WasmBenchmarkSuiteBase.Defaults.MEASUREMENT_ITERATIONS;
 import static com.oracle.truffle.wasm.benchmark.WasmBenchmarkSuiteBase.Defaults.WARMUP_ITERATIONS;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Properties;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import com.oracle.truffle.wasm.utils.SystemProperties;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
@@ -57,9 +49,8 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
 import com.oracle.truffle.wasm.utils.Assert;
-import com.oracle.truffle.wasm.utils.WasmBinaryTools;
 import com.oracle.truffle.wasm.utils.WasmInitialization;
-import com.oracle.truffle.wasm.utils.WasmResource;
+import com.oracle.truffle.wasm.utils.cases.WasmCase;
 
 @Warmup(iterations = WARMUP_ITERATIONS)
 @Measurement(iterations = MEASUREMENT_ITERATIONS)
@@ -72,151 +63,90 @@ public abstract class WasmBenchmarkSuiteBase {
     }
 
     public abstract static class WasmBenchmarkState {
-        private Value mainFunction;
+        private WasmCase benchmarkCase;
+
+        private Value benchmarkSetupOnce;
+        private Value benchmarkRun;
         private Value resetContext;
         private Value customInitializer;
         private WasmInitialization initialization;
+        private Value result;
+        /**
+         * Benchmarks must not be validated via their standard out, unlike tests.
+         */
+        private ByteArrayOutputStream dummyStdout = new ByteArrayOutputStream();
 
         @Setup(Level.Trial)
         public void setup() throws IOException, InterruptedException {
             final String wantedBenchmarkName = WasmBenchmarkOptions.BENCHMARK_NAME;
 
-            if (wantedBenchmarkName == null || wantedBenchmarkName.equals("")) {
+            if (wantedBenchmarkName == null || wantedBenchmarkName.trim().equals("")) {
                 Assert.fail("Please select a benchmark by setting -Dwasmbench.benchmarkName");
             }
 
-            WasmBenchCase benchCase = getBenchCase(bundleName(), WasmBenchmarkOptions.BENCHMARK_NAME);
+            benchmarkCase = WasmCase.collectFileCase("bench", benchmarkResource(), WasmBenchmarkOptions.BENCHMARK_NAME);
 
-            Assert.assertNotNull(String.format("Benchmark %s not found", bundleName()), benchCase);
+            Assert.assertNotNull(String.format("Benchmark %s.%s not found", benchmarkResource(), wantedBenchmarkName), benchmarkCase);
 
             Context.Builder contextBuilder = Context.newBuilder("wasm");
             contextBuilder.option("wasm.PredefinedModules", "testutil:testutil,env:emscripten");
 
-            byte[] binary = benchCase.createBinary();
+            byte[] binary = benchmarkCase.createBinary();
             Context context = contextBuilder.build();
             Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
 
             context.eval(source);
 
             Value wasmBindings = context.getBindings("wasm");
-            mainFunction = wasmBindings.getMember("_main");
+            benchmarkSetupOnce = wasmBindings.getMember("_benchmarkSetupOnce");
+            benchmarkRun = wasmBindings.getMember("_benchmarkRun");
             resetContext = wasmBindings.getMember(TestutilModule.Names.RESET_CONTEXT);
             customInitializer = wasmBindings.getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION);
-            initialization = benchCase.initialization();
+            initialization = benchmarkCase.initialization();
+
+            // Initialization is done only once, and before the module starts.
+            // It is the benchmark's job to ensure that it executes meaningful workloads
+            // that run correctly despite the fact that the VM state changed.
+            // I.e. benchmark workloads must assume that they are run multiple times.
+            if (initialization != null) {
+                customInitializer.execute(initialization);
+            }
+
+            if (benchmarkSetupOnce != null) {
+                benchmarkSetupOnce.execute();
+            }
         }
 
         @Setup(Level.Iteration)
         public void setupIteration() {
-            if (initialization != null) {
-                customInitializer.execute(initialization);
-            }
+            // Reset result.
+            result = null;
         }
 
         @TearDown(Level.Iteration)
         public void teardownIteration() {
-            // Reset context and zero out memory.
-            resetContext.execute(true);
+            // Validate result.
+            WasmCase.validateResult(benchmarkCase.data().resultValidator(), result, dummyStdout);
+
+            // Note: we deliberately not reset the context here.
+            // It would be slow, and the invariant we expect from the benchmarks
+            // is that they can handle VM-state side-effects.
+            // We may support benchmark-specific teardown actions in the future (at the invocation
+            // level).
         }
 
-        public Value mainFunction() {
-            return mainFunction;
+        @Setup(Level.Invocation)
+        public void setupInvocation() {
         }
 
-        protected abstract String bundleName();
-    }
-
-    private static WasmBenchCase getBenchCase(String benchmarkBundle, String wantedBenchmarkName) throws IOException {
-        Collection<WasmBenchCase> collectedCases = new ArrayList<>();
-
-        // Open the wasm_bench_index file of the bench bundle.
-        // The wasm_bench_index file contains the available benchmarks for that bundle.
-        InputStream index = WasmBenchmarkSuiteBase.class.getResourceAsStream(String.format("/bench/%s/wasm_test_index", benchmarkBundle));
-        Assert.assertNotNull("Could not find resource: wasm_test_index", index);
-        BufferedReader indexReader = new BufferedReader(new InputStreamReader(index));
-
-        Set<String> allBenchNames = indexReader.lines().filter(name -> !name.equals("") && !name.startsWith("#")).collect(Collectors.toSet());
-
-        if (!allBenchNames.contains(wantedBenchmarkName)) {
-            return null;
+        public Value benchmarkRun() {
+            return benchmarkRun;
         }
 
-        Object mainContent = WasmResource.getResourceAsTest(String.format("/bench/%s/%s", benchmarkBundle, wantedBenchmarkName), true);
-        String initContent = WasmResource.getResourceAsString(String.format("/bench/%s/%s.init", benchmarkBundle, wantedBenchmarkName), false);
-        String optsContent = WasmResource.getResourceAsString(String.format("/bench/%s/%s.opts", benchmarkBundle, wantedBenchmarkName), false);
-        WasmInitialization initializer = WasmInitialization.create(initContent);
-        Properties options = SystemProperties.createFromOptions(optsContent);
-
-        if (mainContent instanceof String) {
-            return benchCase(wantedBenchmarkName, (String) mainContent, initializer, options);
-        } else if (mainContent instanceof byte[]) {
-            return benchCase(wantedBenchmarkName, (byte[]) mainContent, initializer, options);
-        } else {
-            Assert.fail("Unknown content type: " + mainContent.getClass());
+        public void setResult(Value result) {
+            this.result = result;
         }
 
-        return null;
-    }
-
-    private static WasmStringBenchCase benchCase(String name, String program, WasmInitialization initialization, Properties options) {
-        return new WasmStringBenchCase(name, program, initialization, options);
-    }
-
-    private static WasmBinaryBenchCase benchCase(String name, byte[] program, WasmInitialization initialization, Properties options) {
-        return new WasmBinaryBenchCase(name, program, initialization, options);
-    }
-
-    private abstract static class WasmBenchCase {
-        private final String name;
-        private final WasmInitialization initialization;
-        private final Properties options;
-
-        WasmBenchCase(String name, WasmInitialization initialization, Properties options) {
-            this.name = name;
-            this.initialization = initialization;
-            this.options = options;
-        }
-
-        public abstract byte[] createBinary() throws IOException, InterruptedException;
-
-        public String name() {
-            return name;
-        }
-
-        public WasmInitialization initialization() {
-            return initialization;
-        }
-
-        public Properties options() {
-            return options;
-        }
-    }
-
-    private static class WasmStringBenchCase extends WasmBenchCase {
-        private final String program;
-
-        WasmStringBenchCase(String name, String program, WasmInitialization initialization, Properties options) {
-            super(name, initialization, options);
-            this.program = program;
-        }
-
-        @Override
-        public byte[] createBinary() throws IOException, InterruptedException {
-            return WasmBinaryTools.compileWat(program);
-        }
-    }
-
-    private static class WasmBinaryBenchCase extends WasmBenchCase {
-        private final byte[] binary;
-
-        WasmBinaryBenchCase(String name, byte[] binary, WasmInitialization initialization, Properties options) {
-            super(name, initialization, options);
-            this.binary = binary;
-        }
-
-
-        @Override
-        public byte[] createBinary() {
-            return binary;
-        }
+        protected abstract String benchmarkResource();
     }
 }

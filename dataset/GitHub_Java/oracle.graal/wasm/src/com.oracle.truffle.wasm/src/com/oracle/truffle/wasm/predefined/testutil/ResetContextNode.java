@@ -31,16 +31,16 @@ package com.oracle.truffle.wasm.predefined.testutil;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.WasmModule;
-import com.oracle.truffle.wasm.binary.WasmVoidResult;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
+import com.oracle.truffle.wasm.WasmCodeEntry;
+import com.oracle.truffle.wasm.WasmLanguage;
+import com.oracle.truffle.wasm.WasmModule;
+import com.oracle.truffle.wasm.WasmVoidResult;
+import com.oracle.truffle.wasm.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
 /**
- * Resets the memory and the globals of the modules in the context to the values specified
- * in the module's binary.
+ * Resets the memory and the globals of the modules in the context to the values specified in the
+ * module's binary.
  */
 public class ResetContextNode extends WasmPredefinedRootNode {
     public ResetContextNode(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
@@ -49,7 +49,8 @@ public class ResetContextNode extends WasmPredefinedRootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        resetModuleState();
+        boolean zeroMemory = (boolean) frame.getArguments()[0];
+        resetModuleState(zeroMemory);
         return WasmVoidResult.getInstance();
     }
 
@@ -59,9 +60,9 @@ public class ResetContextNode extends WasmPredefinedRootNode {
     }
 
     @CompilerDirectives.TruffleBoundary
-    private void resetModuleState() {
+    private void resetModuleState(boolean zeroMemory) {
         // TODO: Reset globals and the memory in all modules of the context.
         WasmModule module = contextReference().get().modules().get("test");
-        contextReference().get().linker().resetModuleState(module, module.data());
+        contextReference().get().linker().resetModuleState(module, module.data(), zeroMemory);
     }
 }

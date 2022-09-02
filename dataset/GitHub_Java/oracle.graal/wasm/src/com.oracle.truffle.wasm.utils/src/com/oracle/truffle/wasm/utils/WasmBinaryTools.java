@@ -54,17 +54,17 @@ public class WasmBinaryTools {
 
     private static byte[] wat2wasm(File input, File output) throws IOException, InterruptedException {
         Assert.assertNotNull(
-                format("The property must be set in order to be able to compile .wat to .wasm", SystemProperties.WAT_TO_WASM_EXECUTABLE_PROPERTY_NAME),
-                SystemProperties.WAT_TO_WASM_EXECUTABLE);
+                        format("The %s property must be set in order to be able to compile .wat to .wasm", SystemProperties.WAT_TO_WASM_EXECUTABLE_PROPERTY_NAME),
+                        SystemProperties.WAT_TO_WASM_EXECUTABLE);
         // execute the wat2wasm tool and wait for it to finish execution
         runExternalToolAndVerify(
-                "wat2wasm compilation failed",
-                new String[] {
-                        SystemProperties.WAT_TO_WASM_EXECUTABLE,
-                        input.getPath(),
-                        "-o",
-                        output.getPath(),
-                });
+                        "wat2wasm compilation failed",
+                        new String[]{
+                                        SystemProperties.WAT_TO_WASM_EXECUTABLE,
+                                        input.getPath(),
+                                        "-o",
+                                        output.getPath(),
+                        });
         // read the resulting binary, delete the temporary files and return
         return Files.readAllBytes(output.toPath());
     }
@@ -72,19 +72,20 @@ public class WasmBinaryTools {
     public static byte[] compileWat(File watFile) throws IOException, InterruptedException {
         File wasmFile = File.createTempFile("wasm-bin-", ".wasm");
         byte[] binary = wat2wasm(watFile, wasmFile);
-        Assert.assertTrue("compileWat: could not delete temp .wasm file", wasmFile.delete());
+        wasmFile.deleteOnExit();
         return binary;
     }
 
     public static byte[] compileWat(String program) throws IOException, InterruptedException {
-        // create two temporary files for the text and the binary, write the given program to the first one
+        // create two temporary files for the text and the binary, write the given program to the
+        // first one
         File watFile = File.createTempFile("wasm-text-", ".wat");
         File wasmFile = File.createTempFile("wasm-bin-", ".wasm");
         Files.write(watFile.toPath(), program.getBytes(StandardCharsets.UTF_8), StandardOpenOption.WRITE);
         // read the resulting binary, delete the temporary files and return
         byte[] binary = wat2wasm(watFile, wasmFile);
-        Assert.assertTrue("compileWat: could not delete temp .wat file", watFile.delete());
-        Assert.assertTrue("compileWat: could not delete temp .wasm file", wasmFile.delete());
+        watFile.deleteOnExit();
+        wasmFile.deleteOnExit();
         return binary;
     }
 }

@@ -139,6 +139,8 @@ public abstract class LoopNode extends Node {
      *
      * @param frame the current execution frame or null if the repeating node does not require a
      *            frame
+     * @return the loop exit status - this is useful for languages that need to return some
+     *         information when exiting out of a loop (e.g. WebAssembly).
      * @since 0.8 or earlier
      * @deprecated use {@link #execute(VirtualFrame)} instead
      */
@@ -153,7 +155,7 @@ public abstract class LoopNode extends Node {
      *
      * @param frame the current execution frame or null if the repeating node does not require a
      *            frame
-     * @return a value different than {@link RepeatingNode#DEFAULT_CONTINUE_LOOP_STATUS}, which can be used
+     * @return a value different than {@link RepeatingNode#CONTINUE_LOOP_STATUS}, which can be used
      *         in a language-specific way (for example, to encode structured jumps)
      * @since 19.3
      */
@@ -201,7 +203,7 @@ public abstract class LoopNode extends Node {
      */
     public static void reportLoopCount(Node source, int iterations) {
         if (CompilerDirectives.inInterpreter()) {
-            NodeAccessor.RUNTIME.onLoopCount(source, iterations);
+            NodeAccessor.ACCESSOR.onLoopCount(source, iterations);
         }
     }
 

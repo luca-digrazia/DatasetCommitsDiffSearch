@@ -52,10 +52,9 @@ import java.util.Map;
 // In particular, one thing that's missing:
 // - access exported tables and read them
 // - access exported memories and modify them
-@SuppressWarnings("static-method")
-public final class WasmModule implements TruffleObject {
-    private final String name;
-    private final SymbolTable symbolTable;
+public class WasmModule implements TruffleObject {
+    @CompilationFinal private final String name;
+    @CompilationFinal private final SymbolTable symbolTable;
     @CompilationFinal(dimensions = 1) private final byte[] data;
     private boolean isLinked;
 
@@ -131,7 +130,7 @@ public final class WasmModule implements TruffleObject {
 
     @ExportMessage
     @TruffleBoundary
-    boolean isMemberReadable(String member) {
+    final boolean isMemberReadable(String member) {
         try {
             return symbolTable.exportedFunctions().containsKey(member) || symbolTable.exportedGlobals().containsKey(member) ||
                             member.equals(symbolTable.exportedMemory());
@@ -141,8 +140,7 @@ public final class WasmModule implements TruffleObject {
     }
 
     @ExportMessage
-    @TruffleBoundary
-    boolean isMemberModifiable(String member) {
+    final boolean isMemberModifiable(String member) {
         final Integer index = symbolTable.exportedGlobals().get(member);
         if (index == null) {
             return false;
@@ -155,8 +153,7 @@ public final class WasmModule implements TruffleObject {
     }
 
     @ExportMessage
-    @TruffleBoundary
-    boolean isMemberInsertable(@SuppressWarnings("unused") String member) {
+    final boolean isMemberInsertable(String member) {
         return false;
     }
 
@@ -185,13 +182,13 @@ public final class WasmModule implements TruffleObject {
         return new ExportedMembers(symbolTable);
     }
 
-    public Global global(String globalName) {
-        final Integer index = symbolTable.exportedGlobals().get(globalName);
+    public Global global(String name) {
+        final Integer index = symbolTable.exportedGlobals().get(name);
         if (index != null) {
             return new Global(symbolTable, index);
         }
         for (Map.Entry<Integer, ImportDescriptor> entry : symbolTable.importedGlobals().entrySet()) {
-            if (entry.getValue().memberName.equals(globalName)) {
+            if (entry.getValue().memberName.equals(name)) {
                 return new Global(symbolTable, entry.getKey());
             }
         }

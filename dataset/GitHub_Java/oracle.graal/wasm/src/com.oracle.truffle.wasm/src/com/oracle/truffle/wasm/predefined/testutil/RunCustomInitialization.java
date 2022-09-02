@@ -64,7 +64,7 @@ public class RunCustomInitialization extends WasmPredefinedRootNode {
 
     @SuppressWarnings("unchecked")
     @CompilerDirectives.TruffleBoundary
-    private static void initializeModule(Object initialization) {
+    private void initializeModule(Object initialization) {
         if (initialization != null) {
             WasmContext context = WasmContext.getCurrent();
             ((Consumer<WasmContext>) initialization).accept(context);

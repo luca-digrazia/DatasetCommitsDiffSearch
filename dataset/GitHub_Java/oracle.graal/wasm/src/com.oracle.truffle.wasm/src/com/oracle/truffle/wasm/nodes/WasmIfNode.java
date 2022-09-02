@@ -30,6 +30,7 @@
 package com.oracle.truffle.wasm.nodes;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.wasm.WasmCodeEntry;
@@ -37,7 +38,8 @@ import com.oracle.truffle.wasm.WasmContext;
 import com.oracle.truffle.wasm.WasmModule;
 import com.oracle.truffle.wasm.constants.TargetOffset;
 
-public final class WasmIfNode extends WasmNode {
+public class WasmIfNode extends WasmNode {
+    private static final TruffleLogger logger = TruffleLogger.getLogger("wasm");
 
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final int initialStackPointer;
