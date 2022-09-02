@@ -29,7 +29,6 @@ import java.lang.invoke.MethodType;
 // Checkstyle: stop
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 // Checkstyle: resume
@@ -126,9 +125,6 @@ final class Target_java_lang_invoke_MethodHandle {
                             }
                         }
                     }
-                } catch (InvocationTargetException e) {
-                    /* Exceptions are thrown unchanged from method handles */
-                    throw e.getCause();
                 } finally {
                     executable.override = oldOverride;
                 }
