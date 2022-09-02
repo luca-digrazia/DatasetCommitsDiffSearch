@@ -14,9 +14,9 @@ public final class CheckCastNode extends QuickNode {
     private CastCache cache;
 
     private boolean executeCheckCast(Klass instanceKlass) {
-        CastCacheItem item = cache.getItem(instanceKlass);
+        CastCacheItem item = cache.get_item(instanceKlass);
         if (item == null) {
-            item = cache.addItem(instanceKlass);
+            item = cache.add_item(instanceKlass);
         }
         return item.answer();
     }
@@ -70,33 +70,33 @@ public final class CheckCastNode extends QuickNode {
         }
 
         @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
-        private CastCacheItem getItem(Klass item) {
+        private CastCacheItem get_item(Klass item) {
             int i = pos;
-            int locSize = this.size;
+            int size = this.size;
             do {
                 CastCacheItem tested = cache[i];
                 if (tested.cached == item) {
                     pos = i;
                     return tested;
                 }
-                i = (i == 0) ? locSize - 1 : i - 1;
+                i = (i == 0) ? size - 1 : i - 1;
             } while (i != pos);
             return null;
         }
 
-        private CastCacheItem addItem(Klass item) {
-            int newSize = size;
+        private CastCacheItem add_item(Klass item) {
+            int new_size = size;
             if (size < CACHE_SIZE) {
                 pos = size - 1;
-                newSize++;
+                new_size++;
             }
-            pos = (pos + 1) % newSize;
+            pos = (pos + 1) % new_size;
             Boolean answer = CheckCast(typeToCheck, item);
-            CastCacheItem newItem = new CastCacheItem(item, answer);
+            CastCacheItem new_item = new CastCacheItem(item, answer);
             // Needs to be atomic
-            cache[pos] = newItem;
-            size = newSize;
-            return newItem;
+            cache[pos] = new_item;
+            size = new_size;
+            return new_item;
         }
     }
 }
