@@ -243,92 +243,91 @@ public final class InterpreterToVM implements ContextAccess {
     // endregion
 
     public boolean getFieldBoolean(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Boolean && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
         return (boolean) ((StaticObjectImpl) obj).getField(field);
     }
 
     public int getFieldInt(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Int && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Int;
         return (int) ((StaticObjectImpl) obj).getField(field);
     }
 
     public long getFieldLong(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Long && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Long;
         return (long) ((StaticObjectImpl) obj).getField(field);
     }
 
     public byte getFieldByte(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Byte && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Byte;
         return (byte) ((StaticObjectImpl) obj).getField(field);
     }
 
     public short getFieldShort(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Short && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Short;
         return (short) ((StaticObjectImpl) obj).getField(field);
     }
 
     public float getFieldFloat(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Float && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Float;
         return (float) ((StaticObjectImpl) obj).getField(field);
     }
 
     public double getFieldDouble(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Double && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Double;
         return (double) ((StaticObjectImpl) obj).getField(field);
     }
 
     public StaticObject getFieldObject(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Object && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Object;
         return (StaticObject) ((StaticObjectImpl) obj).getField(field);
     }
 
     public char getFieldChar(StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Char && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Char;
         return (char) ((StaticObjectImpl) obj).getField(field);
     }
 
     public void setFieldBoolean(boolean value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Boolean && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Boolean;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldByte(byte value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Byte && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Byte;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldChar(char value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Char && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Char;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldShort(short value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Short && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Short;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldInt(int value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Int && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Int;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldLong(long value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Long && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Long;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldFloat(float value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Float && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Float;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldDouble(double value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Double && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Double;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
     public void setFieldObject(StaticObject value, StaticObject obj, Field field) {
-        assert field.getKind() == JavaKind.Object && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
+        assert field.getKind() == JavaKind.Object;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
