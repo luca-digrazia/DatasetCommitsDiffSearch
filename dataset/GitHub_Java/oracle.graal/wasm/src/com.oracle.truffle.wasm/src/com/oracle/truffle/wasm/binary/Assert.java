@@ -94,13 +94,7 @@ public class Assert {
         }
     }
 
-    public static void assertTrue(boolean condition, String message) throws BinaryReaderException {
-        if (!condition) {
-            fail(format("%s: condition is supposed to be true", message));
-        }
-    }
-
-    public static RuntimeException fail(String message) throws BinaryReaderException {
+    public static void fail(String message) throws BinaryReaderException {
         throw new BinaryReaderException(message);
     }
 
