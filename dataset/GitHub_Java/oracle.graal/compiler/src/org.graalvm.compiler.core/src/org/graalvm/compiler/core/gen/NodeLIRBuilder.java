@@ -48,7 +48,6 @@ import org.graalvm.compiler.core.match.ComplexMatchValue;
 import org.graalvm.compiler.core.match.MatchPattern;
 import org.graalvm.compiler.core.match.MatchRuleRegistry;
 import org.graalvm.compiler.core.match.MatchStatement;
-import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
@@ -419,7 +418,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
     @Override
     @SuppressWarnings("try")
     public void matchBlock(Block block, StructuredGraph graph, StructuredGraph.ScheduleResult schedule) {
-        try (DebugCloseable matchScope = gen.getMatchScope(block)) {
+        try (BlockScope blockScope = gen.getBlockScopeMatch(block)) {
             // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
             // of instructions
             matchComplexExpressions(block, schedule);

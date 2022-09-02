@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,13 +28,11 @@ import java.util.List;
 
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
-import org.graalvm.compiler.core.gen.NodeLIRBuilder;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
-import org.graalvm.compiler.lir.gen.LIRGenerator;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.lir.phases.LIRPhase;
 import org.graalvm.compiler.lir.ssa.SSAUtil;
@@ -48,13 +46,13 @@ import jdk.vm.ci.code.TargetDescription;
 public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGenerationContext> {
 
     public static final class LIRGenerationContext {
-        private final NodeLIRBuilder nodeLirBuilder;
+        private final NodeLIRBuilderTool nodeLirBuilder;
         private final LIRGeneratorTool lirGen;
         private final StructuredGraph graph;
         private final ScheduleResult schedule;
 
         public LIRGenerationContext(LIRGeneratorTool lirGen, NodeLIRBuilderTool nodeLirBuilder, StructuredGraph graph, ScheduleResult schedule) {
-            this.nodeLirBuilder = (NodeLIRBuilder) nodeLirBuilder;
+            this.nodeLirBuilder = nodeLirBuilder;
             this.lirGen = lirGen;
             this.graph = graph;
             this.schedule = schedule;
@@ -66,17 +64,17 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
 
     @Override
     protected final void run(TargetDescription target, LIRGenerationResult lirGenRes, LIRGenerationPhase.LIRGenerationContext context) {
-        NodeLIRBuilder nodeLirBuilder = context.nodeLirBuilder;
+        NodeLIRBuilderTool nodeLirBuilder = context.nodeLirBuilder;
         StructuredGraph graph = context.graph;
         ScheduleResult schedule = context.schedule;
         AbstractBlockBase<?>[] blocks = lirGenRes.getLIR().getControlFlowGraph().getBlocks();
         for (AbstractBlockBase<?> b : blocks) {
-            matchBlock(nodeLirBuilder, (Block) b, schedule);
+            matchBlock(nodeLirBuilder, (Block) b, graph, schedule);
         }
         for (AbstractBlockBase<?> b : blocks) {
             emitBlock(nodeLirBuilder, lirGenRes, (Block) b, graph, schedule.getBlockToNodesMap());
         }
-        ((LIRGenerator) context.lirGen).beforeRegisterAllocation();
+        context.lirGen.beforeRegisterAllocation();
         assert SSAUtil.verifySSAForm(lirGenRes.getLIR());
         nodeCount.add(graph.getDebug(), graph.getNodeCount());
     }
@@ -90,8 +88,8 @@ public class LIRGenerationPhase extends LIRPhase<LIRGenerationPhase.LIRGeneratio
         instructionCounter.add(debug, lir.getLIRforBlock(b).size());
     }
 
-    private static void matchBlock(NodeLIRBuilder nodeLirGen, Block b, ScheduleResult schedule) {
-        nodeLirGen.matchBlock(b, schedule);
+    private static void matchBlock(NodeLIRBuilderTool nodeLirGen, Block b, StructuredGraph graph, ScheduleResult schedule) {
+        nodeLirGen.matchBlock(b, graph, schedule);
     }
 
     private static boolean verifyPredecessors(LIRGenerationResult lirGenRes, Block block) {
