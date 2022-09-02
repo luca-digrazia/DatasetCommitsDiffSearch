@@ -22,59 +22,166 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
+import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
+
 import java.lang.ref.WeakReference;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-public class Ids {
+/**
+ * Class that keeps an ID representation of all entities when communicating with a debugger through
+ * JDWP. Each entity will be assigned a unique ID. Only weak references are kept for entities.
+ */
+public final class Ids<T> {
 
-    private static volatile long uniqueID = 1;
-    private WeakReference[] objects = new WeakReference[1];
+    private volatile long uniqueID = 1;
 
-    private final Object nullObject;
+    /**
+     * All entities stored while communicating with the debugger. The array will be expanded
+     * whenever an ID for a new entity is requested.
+     */
+    private WeakReference<T>[] objects;
 
-    public Ids(Object nullObject) {
-        getIdAsLong(nullObject);
+    /**
+     * A special object representing the null value. This object must be passed on by the
+     * implementing language.
+     */
+    private final T nullObject;
+
+    public static final Pattern ANON_INNER_CLASS_PATTERN = Pattern.compile(".*\\$\\d+.*");
+
+    private HashMap<String, Long> innerClassIDMap = new HashMap<>(16);
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public Ids(T nullObject) {
         this.nullObject = nullObject;
+        objects = new WeakReference[]{new WeakReference<>(nullObject)};
     }
 
-    public long getIdAsLong(Object object) {
+    /**
+     * Returns the unique ID representing the input object.
+     *
+     * @param object
+     * @return the ID of the object
+     */
+    public long getIdAsLong(T object) {
+        if (object == null) {
+            JDWPLogger.log("Null object when getting ID", JDWPLogger.LogLevel.IDS);
+            return 0;
+        }
         // lookup in cache
         for (int i = 1; i < objects.length; i++) {
             // really slow lookup path
-            Object obj = objects[i].get();
-            if (obj == object) {
-                //System.out.println("returning ID: " + i + " from cache for object: " + object);
+            if (objects[i].get() == object) {
+                JDWPLogger.log("ID cache hit for object: %s with ID: %d", JDWPLogger.LogLevel.IDS, object, i);
                 return i;
             }
         }
-        // cache miss
+        // check the anonymous inner class map
+        if (object instanceof KlassRef) {
+            KlassRef klass = (KlassRef) object;
+            Long id = innerClassIDMap.get(klass.getNameAsString());
+            if (id != null) {
+                // inject new klass under existing ID
+                objects[((int) (long) id)] = new WeakReference<>(object);
+                return id;
+            }
+        }
+
+        // cache miss, so generate a new ID
         return generateUniqueId(object);
     }
 
-    public Object fromId(int id) {
-        WeakReference<Object> ref = objects[id];
-        Object o = ref.get();
-        if (o == null) {
+    /**
+     * Returns the unique ID representing the input object or -1 if it's not registered.
+     *
+     * @param object
+     * @return the ID of the object
+     */
+    public long getId(Object object) {
+        // lookup in cache
+        for (int i = 1; i < objects.length; i++) {
+            // really slow lookup path
+            if (objects[i].get() == object) {
+                JDWPLogger.log("ID cache hit for object: %s with ID: %d", JDWPLogger.LogLevel.IDS, object, i);
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Returns the object that is stored under the input ID.
+     *
+     * @param id the ID assigned to a object by {@code getIdAsLong()}
+     * @return the object stored under the ID
+     */
+    public T fromId(int id) {
+        if (id == 0) {
+            JDWPLogger.log("Null object from ID: %d", JDWPLogger.LogLevel.IDS, id);
             return nullObject;
+        }
+        WeakReference<T> ref = objects[id];
+        T o = ref.get();
+        if (o == null) {
+            JDWPLogger.log("object with ID: %d was garbage collected", JDWPLogger.LogLevel.IDS, id);
+            return null;
         } else {
-            //System.out.println("getting object: " + o + " from ID: " + id);
+            JDWPLogger.log("returning object: %s for ID: %d", JDWPLogger.LogLevel.IDS, o, id);
             return o;
         }
     }
 
-    private synchronized long generateUniqueId(Object object) {
+    /*
+     * Generate a unique ID for a given object. Expand the underlying array and insert the object at
+     * the last index in the new array.
+     */
+    private synchronized long generateUniqueId(T object) {
         long id = uniqueID++;
-        assert objects.length == id - 1;
+        assert objects.length == id;
 
-        WeakReference<Object>[] expandedArray = new WeakReference[objects.length + 1];
-        System.arraycopy(objects, 1, expandedArray, 1, objects.length - 1);
+        WeakReference<T>[] expandedArray = Arrays.copyOf(objects, objects.length + 1);
         expandedArray[objects.length] = new WeakReference<>(object);
         objects = expandedArray;
-        //System.out.println("ID: " + id + " for object: " + object + " with class " + object.getClass());
-        if (object.getClass() == Thread.class) {
-            Thread.dumpStack();
+        JDWPLogger.log("Generating new ID: %d for object: %s", JDWPLogger.LogLevel.IDS, id, object);
+        if (object instanceof KlassRef) {
+            KlassRef klass = (KlassRef) object;
+            Matcher matcher = ANON_INNER_CLASS_PATTERN.matcher(klass.getNameAsString());
+            if (matcher.matches()) {
+                innerClassIDMap.put(klass.getNameAsString(), id);
+            }
         }
         return id;
     }
+
+    public void replaceObject(T original, T replacement) {
+        int id = (int) getIdAsLong(original);
+        objects[id] = new WeakReference<>(replacement);
+        JDWPLogger.log("Replaced ID: %d", JDWPLogger.LogLevel.IDS, id);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void updateId(KlassRef klass) {
+        // remove existing ID
+        removeId(klass);
+        Long theId = innerClassIDMap.get(klass.getNameAsString());
+        if (theId != null) {
+            // then inject klass under the new ID
+            objects[(int) (long) theId] = new WeakReference(klass);
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void removeId(KlassRef klass) {
+        int id = (int) getId(klass);
+        if (id > 0) {
+            objects[id] = new WeakReference<>(null);
+        }
+    }
+
+    public boolean checkRemoved(long refTypeId) {
+        return innerClassIDMap.containsValue(refTypeId);
+    }
 }
-
-
