@@ -47,7 +47,7 @@ final class AMD64HotSpotDeoptimizeWithExceptionCallerOp extends AMD64HotSpotEpil
 
     public static final LIRInstructionClass<AMD64HotSpotDeoptimizeWithExceptionCallerOp> TYPE = LIRInstructionClass.create(AMD64HotSpotDeoptimizeWithExceptionCallerOp.class);
     private final GraalHotSpotVMConfig config;
-    @Alive(OperandFlag.REG) private Value exception;
+    @Use(OperandFlag.REG) private Value exception;
     @Temp(OperandFlag.REG) private Value temp;
 
     protected AMD64HotSpotDeoptimizeWithExceptionCallerOp(GraalHotSpotVMConfig config, Value exception) {
@@ -67,9 +67,8 @@ final class AMD64HotSpotDeoptimizeWithExceptionCallerOp extends AMD64HotSpotEpil
         // Save exception oop in TLS
         masm.movq(new AMD64Address(AMD64.r15, config.threadExceptionOopOffset), exc);
         // Get return address and store it into TLS
-        Register returnPC = asRegister(temp);
-        masm.movq(returnPC, new AMD64Address(stackPointer, 0));
-        masm.movq(new AMD64Address(AMD64.r15, config.threadExceptionPcOffset), returnPC);
+        masm.movq(asRegister(temp), new AMD64Address(stackPointer, 0));
+        masm.movq(new AMD64Address(AMD64.r15, config.threadExceptionPcOffset), exc);
 
         // Remove return address.
         masm.addq(stackPointer, crb.target.arch.getReturnAddressSize());
