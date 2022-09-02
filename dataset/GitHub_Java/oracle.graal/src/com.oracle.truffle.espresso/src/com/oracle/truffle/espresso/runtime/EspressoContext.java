@@ -145,7 +145,6 @@ public final class EspressoContext {
     public final EspressoOptions.VerifyMode Verify;
     public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
     public final boolean IsolatedNamespace;
-    public final boolean Polyglot;
 
     // Debug option
     public final com.oracle.truffle.espresso.jdwp.api.JDWPOptions JDWPOptions;
@@ -220,11 +219,9 @@ public final class EspressoContext {
         this.EnableManagement = env.getOptions().get(EspressoOptions.EnableManagement);
         this.MultiThreaded = env.getOptions().get(EspressoOptions.MultiThreaded);
         this.SoftExit = env.getOptions().get(EspressoOptions.SoftExit);
-        this.Polyglot = env.getOptions().get(EspressoOptions.Polyglot);
 
         // Isolated (native) namespaces via dlmopen is only supported on Linux.
         this.IsolatedNamespace = env.getOptions().get(EspressoOptions.UseTruffleNFIIsolatedNamespace) && OS.getCurrent() == OS.Linux;
-
     }
 
     public ClassRegistries getRegistries() {
