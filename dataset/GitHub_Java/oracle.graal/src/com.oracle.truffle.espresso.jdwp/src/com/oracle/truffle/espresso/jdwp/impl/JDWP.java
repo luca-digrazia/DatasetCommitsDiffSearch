@@ -1299,7 +1299,7 @@ final class JDWP {
                 if (table != null) {
                     LineNumberTableRef.EntryRef[] entries = table.getEntries();
                     long start = method.isMethodNative() ? -1 : 0;
-                    long end = method.isMethodNative() ? -1 : method.getLastBCI();
+                    long end = method.isMethodNative() ? -1 : method.getEndBCI();
                     int lines = entries.length;
                     Line[] allLines = new Line[lines];
 

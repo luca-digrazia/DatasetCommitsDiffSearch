@@ -1218,7 +1218,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
 
         @Override
-        public long getLastBCI() {
+        public long getEndBCI() {
             int bci = 0;
             BytecodeStream bs = new BytecodeStream(getCodeAttribute().getCode());
             int end = bs.endBCI();
