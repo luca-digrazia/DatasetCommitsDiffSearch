@@ -69,7 +69,6 @@ import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.calc.AbsNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
@@ -94,7 +93,6 @@ import org.graalvm.compiler.nodes.debug.ControlFlowAnchorNode;
 import org.graalvm.compiler.nodes.debug.SideEffectNode;
 import org.graalvm.compiler.nodes.debug.SpillRegistersNode;
 import org.graalvm.compiler.nodes.extended.BoxNode;
-import org.graalvm.compiler.nodes.extended.BoxNode.TrustedBoxedValue;
 import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
 import org.graalvm.compiler.nodes.extended.ClassIsArrayNode;
@@ -1095,7 +1093,7 @@ public class StandardGraphBuilderPlugins {
                 FixedWithNextNode[] accessNodes = new FixedWithNextNode[]{objectAccess, memoryAccess};
 
                 LogicNode condition = graph.addOrUniqueWithInputs(IsNullNode.create(value));
-                b.add(new IfNode(condition, memoryAccess, objectAccess, 0.5, ProfileSource.UNKNOWN));
+                b.add(new IfNode(condition, memoryAccess, objectAccess, 0.5));
 
                 MergeNode merge = b.append(new MergeNode());
                 for (FixedWithNextNode node : accessNodes) {
@@ -1384,18 +1382,6 @@ public class StandardGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode a) {
                 b.addPush(JavaKind.Int, new SideEffectNode(a));
-                return true;
-            }
-        });
-        r.register1("trustedBox", Object.class, new InvocationPlugin() {
-            @Override
-            public boolean inlineOnly() {
-                return true;
-            }
-
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode a) {
-                b.addPush(JavaKind.Object, new TrustedBoxedValue(a));
                 return true;
             }
         });

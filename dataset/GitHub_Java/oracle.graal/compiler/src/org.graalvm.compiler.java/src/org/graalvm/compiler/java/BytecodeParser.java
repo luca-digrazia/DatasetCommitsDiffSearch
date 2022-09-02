@@ -1607,8 +1607,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected ValueNode genArrayLength(ValueNode x) {
-        ValueNode array = maybeEmitExplicitNullCheck(x);
-        return ArrayLengthNode.create(array, getConstantReflection());
+        return ArrayLengthNode.create(x, getConstantReflection());
     }
 
     protected void genStoreField(ValueNode receiver, ResolvedJavaField field, ValueNode value) {
@@ -5443,7 +5442,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private void genArrayLength() {
-        ValueNode array = frameState.pop(JavaKind.Object);
+        ValueNode array = maybeEmitExplicitNullCheck(frameState.pop(JavaKind.Object));
         frameState.push(JavaKind.Int, append(genArrayLength(array)));
     }
 
