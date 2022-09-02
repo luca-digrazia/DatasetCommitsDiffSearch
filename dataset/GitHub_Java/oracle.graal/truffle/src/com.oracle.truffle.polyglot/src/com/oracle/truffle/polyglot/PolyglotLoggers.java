@@ -42,17 +42,12 @@ package com.oracle.truffle.polyglot;
 
 import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -70,8 +65,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 
 final class PolyglotLoggers {
-
-    private static final Map<Path, SharedFileHandler> fileHandlers = new HashMap<>();
 
     private PolyglotLoggers() {
     }
@@ -108,12 +101,8 @@ final class PolyglotLoggers {
         return false;
     }
 
-    static Supplier<TruffleLogger> createEngineLoggerProvider(PolyglotEngineImpl engine) {
-        return new EngineLoggerProvider(engine);
-    }
-
-    static Supplier<TruffleLogger> createCompilerLoggerProvider(String defaultLogFile) {
-        return new CompilerLoggerProvider(defaultLogFile);
+    static Supplier<TruffleLogger> createCompilerLoggerProvider(PolyglotEngineImpl engine) {
+        return new CompilerLoggerProvider(engine);
     }
 
     /**
@@ -149,22 +138,6 @@ final class PolyglotLoggers {
      */
     static Handler createDefaultHandler(final OutputStream out) {
         return new PolyglotStreamHandler(out, false, true, true);
-    }
-
-    static Handler getFileHandler(String path) {
-        Path absolutePath = Paths.get(path).toAbsolutePath().normalize();
-        synchronized (fileHandlers) {
-            SharedFileHandler handler = fileHandlers.get(absolutePath);
-            if (handler == null) {
-                try {
-                    handler = new SharedFileHandler(absolutePath);
-                    fileHandlers.put(absolutePath, handler);
-                } catch (IOException ioe) {
-                    throw PolyglotEngineException.illegalArgument("The log file " + path + " is not writable. " + ioe.getMessage());
-                }
-            }
-            return handler.retain();
-        }
     }
 
     /**
@@ -414,7 +387,7 @@ final class PolyglotLoggers {
         }
     }
 
-    private static class PolyglotStreamHandler extends StreamHandler {
+    private static final class PolyglotStreamHandler extends StreamHandler {
 
         private final OutputStream sink;
         private final boolean closeStream;
@@ -507,20 +480,13 @@ final class PolyglotLoggers {
         }
     }
 
-    private static final class EngineLoggerProvider implements Supplier<TruffleLogger> {
+    private static final class CompilerLoggerProvider implements Supplier<TruffleLogger> {
 
         private final PolyglotEngineImpl engine;
-        private final String logFile;
         private volatile Object loggers;
 
-        EngineLoggerProvider(PolyglotEngineImpl engine) {
+        CompilerLoggerProvider(PolyglotEngineImpl engine) {
             this.engine = engine;
-            this.logFile = null;
-        }
-
-        CompilerLoggerProvider(String logFile) {
-            this.engine = null;
-            this.logFile = logFile;
         }
 
         @Override
@@ -537,12 +503,8 @@ final class PolyglotLoggers {
                             spi = LoggerCacheImpl.newEngineLoggerCache(useHandler, engine, false, Level.INFO);
                             levels = engine.logLevels;
                         } else {
-                            Handler useHandler;
-                            if (PolyglotEngineImpl.ALLOW_IO && logFile != null) {
-                                useHandler = getFileHandler(logFile);
-                            } else {
-                                useHandler = createDefaultHandler(System.err);
-                            }
+                            OutputStream logOut = EngineAccessor.RUNTIME.getConfiguredLogStream();
+                            Handler useHandler = logOut != null ? createStreamHandler(logOut, false, true) : createDefaultHandler(System.err);
                             spi = LoggerCacheImpl.newFallBackLoggerCache(useHandler);
                             levels = Collections.emptyMap();
                         }
@@ -556,7 +518,12 @@ final class PolyglotLoggers {
 
         private static Handler resolveHandler(Handler handler) {
             if (isDefaultHandler(handler)) {
-                return handler;
+                OutputStream logOut = EngineAccessor.RUNTIME.getConfiguredLogStream();
+                if (logOut != null) {
+                    return createStreamHandler(logOut, false, true);
+                } else {
+                    return handler;
+                }
             } else {
                 return new SafeHandler(handler);
             }
@@ -590,34 +557,5 @@ final class PolyglotLoggers {
         public void close() throws SecurityException {
             delegate.close();
         }
-    }
-
-    private static final class SharedFileHandler extends PolyglotStreamHandler {
-
-        private final Path path;
-        private int refCount;
-
-        SharedFileHandler(Path path) throws IOException {
-            super(new FileOutputStream(path.toFile(), true), true, true, false);
-            this.path = path;
-        }
-
-        SharedFileHandler retain() {
-            assert Thread.holdsLock(fileHandlers);
-            refCount++;
-            return this;
-        }
-
-        @Override
-        public void close() {
-            synchronized (fileHandlers) {
-                refCount--;
-                if (refCount == 0) {
-                    fileHandlers.remove(path);
-                    super.close();
-                }
-            }
-        }
-
     }
 }
