@@ -466,16 +466,6 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         try {
             List<String> cmd = new ArrayList<>();
             cmd.add("opt");
-
-            /*
-             * The x86 backend of LLVM has a bug which prevents the use of bitcode-level
-             * optimizations. This bug will be fixed in the LLVM 9.0.0 release.
-             */
-            if (!Platform.includedIn(Platform.AMD64.class)) {
-                cmd.add("-disable-inlining");
-                cmd.add("-O2");
-            }
-
             /*
              * Mem2reg has to be run before rewriting statepoints as it promotes allocas, which are
              * not supported for statepoints.
@@ -508,7 +498,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
     private void llvmCompile(DebugContext debug, String outputPath, String inputPath) {
         try {
             List<String> cmd = new ArrayList<>();
-            cmd.add((LLVMOptions.CustomLLC.hasBeenSet()) ? LLVMOptions.CustomLLC.getValue() : "llc");
+            cmd.add("llc");
             cmd.add("-relocation-model=pic");
             cmd.add("-march=" + TargetSpecific.get().getLLVMArchName());
             cmd.addAll(TargetSpecific.get().getLLCAdditionalOptions());
