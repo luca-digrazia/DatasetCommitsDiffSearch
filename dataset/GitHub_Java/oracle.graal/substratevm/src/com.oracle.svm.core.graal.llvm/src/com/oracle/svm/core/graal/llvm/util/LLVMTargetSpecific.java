@@ -24,17 +24,18 @@
  */
 package com.oracle.svm.core.graal.llvm.util;
 
-import com.oracle.svm.core.FrameAccess;
-import com.oracle.svm.core.annotate.AutomaticFeature;
+import java.util.Collections;
+import java.util.List;
+
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
-import java.util.Collections;
-import java.util.List;
-
-import static com.oracle.svm.core.SubstrateOptions.CompilerBackend;
+import com.oracle.svm.core.FrameAccess;
+import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.annotate.AutomaticFeature;
+import java.util.Arrays;
 
 /**
  * LLVM target-specific inline assembly snippets and information.
@@ -60,8 +61,8 @@ public interface LLVMTargetSpecific {
     String getLLVMArchName();
 
     /**
-     * Number of bytes separating two adjacent call frames. A call frame starts at the stack
-     * pointer and its size is as given by the LLVM stack map.
+     * Number of bytes separating two adjacent call frames. A call frame starts at the stack pointer
+     * and its size is as given by the LLVM stack map.
      */
     int getCallFrameSeparation();
 
@@ -105,7 +106,7 @@ class LLVMAMD64TargetSpecificFeature implements Feature {
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return CompilerBackend.getValue().equals("llvm");
+        return SubstrateOptions.useLLVMBackend();
     }
 
     @Override
@@ -171,7 +172,7 @@ class LLVMAArch64TargetSpecificFeature implements Feature {
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return CompilerBackend.getValue().equals("llvm");
+        return SubstrateOptions.useLLVMBackend();
     }
 
     @Override
@@ -221,7 +222,7 @@ class LLVMAArch64TargetSpecificFeature implements Feature {
 
             @Override
             public List<String> getLLCAdditionalOptions() {
-                return Collections.singletonList("--frame-pointer=all");
+                return Arrays.asList("--frame-pointer=all", "--aarch64-frame-record-on-top");
             }
 
             @Override
