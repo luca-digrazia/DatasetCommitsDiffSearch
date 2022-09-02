@@ -60,7 +60,6 @@ import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Clazz;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Method;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Struct;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.StructMember;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetIndexPointerNode;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetMemberPointerNode;
@@ -301,10 +300,6 @@ abstract class CommonPointerLibraries {
         }
     }
 
-    static LLVMFunction getLLVMFunction(LLVMContext context, Method method, Clazz clazz, String member) {
-        return context.getGlobalScope().getFunction(method.getLinkageName());
-    }
-
     static LLVMInteropType.Clazz asClazz(LLVMPointerImpl receiver) throws UnsupportedMessageException {
         LLVMInteropType type = receiver.getExportType();
         if (!(type instanceof LLVMInteropType.Clazz)) {
@@ -320,6 +315,35 @@ abstract class CommonPointerLibraries {
             newArguments[i + 1] = rawArgs[i];
         }
         return newArguments;
+    }
+
+    static LLVMFunction getLLVMFunction(LLVMContext context, Method method, LLVMInteropType.Clazz clazz, String member) throws UnknownIdentifierException {
+        if (method == null) {
+            // check if 'member' denotes a function pointer
+            StructMember structMember = clazz.findMember(member);
+            if (structMember != null) {
+                LLVMForeignGetMemberPointerNode llvmForeignGetMemberPointerNode = LLVMForeignGetMemberPointerNodeGen.getUncached();
+                LLVMForeignReadNode llvmForeignReadNode = LLVMForeignReadNodeGen.getUncached();
+
+                Object readMember = readMember(receiver, member, llvmForeignGetMemberPointerNode, llvmForeignReadNode);
+                if (readMember instanceof LLVMPointerImpl) {
+                    /*
+                     * function pointer: do not pass 'newArguments', but 'arguments' (no
+                     * 'self'/'this' object needed)
+                     */
+                    return execute((LLVMPointerImpl) readMember, arguments);
+                }
+            }
+            throw UnknownIdentifierException.create(member);
+        }
+        LLVMFunction llvmFunction = context.getGlobalScope().getFunction(method.getLinkageName());
+        if (llvmFunction == null) {
+            CompilerDirectives.transferToInterpreter();
+            final String clazzName = clazz.toString().startsWith("class ") ? clazz.toString().substring(6) : clazz.toString();
+            final String msg = String.format("No implementation of declared method %s::%s (%s) found", clazzName, method.getName(), method.getLinkageName());
+            throw new LLVMLinkerException(msg);
+        }
+        return llvmFunction;
     }
 
     /**
@@ -347,7 +371,7 @@ abstract class CommonPointerLibraries {
         }
         LLVMFunctionDescriptor fn = LLVMLanguage.getContext().createFunctionDescriptor(llvmFunction);
 
-        return InteropLibrary.getUncached().execute(fn, arguments);
+        return InteropLibrary.getUncached().execute(fn, newArguments);
     }
 
     @ExportMessage
