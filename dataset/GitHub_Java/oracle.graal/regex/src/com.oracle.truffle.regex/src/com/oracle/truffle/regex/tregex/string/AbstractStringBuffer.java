@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,38 +38,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex.tregex.matchers;
+package com.oracle.truffle.regex.tregex.string;
 
-/**
- * Abstract character matcher that allows matching behavior to be inverted with a constructor
- * parameter.
- */
-public abstract class InvertibleCharMatcher extends CharMatcher {
+import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
 
-    private final boolean invert;
+public interface AbstractStringBuffer {
 
-    /**
-     * Construct a new {@link InvertibleCharMatcher}.
-     *
-     * @param invert if this is set to true, the result of {@link #execute(int)} is always inverted.
-     */
-    protected InvertibleCharMatcher(boolean invert) {
-        this.invert = invert;
-    }
+    Encoding getEncoding();
 
-    protected boolean result(boolean result) {
-        return result != invert;
-    }
+    void append(int codepoint);
 
-    protected String modifiersToString() {
-        return invert ? "!" : "";
-    }
+    void appendOR(int c1, int c2);
 
-    static int highByte(int i) {
-        return i >> Byte.SIZE;
-    }
+    void appendXOR(int c1, int c2);
 
-    static int lowByte(int i) {
-        return i & 0xff;
-    }
+    void clear();
+
+    AbstractString materialize();
 }

@@ -196,11 +196,6 @@ public class RegexEngine extends AbstractConstantKeysObject {
             RegexValidator.validate(engine.argsToRegexSource(args, patternToStringNode, flagsToStringNode, encodingToStringNode));
             return true;
         }
-
-        @Override
-        public String toString() {
-            return "TRegexEngineValidateMethod";
-        }
     }
 
     private RegexSource argsToRegexSource(Object[] args, ToStringNode patternToStringNode, ToStringNode flagsToStringNode, ToStringNode encodingToStringNode)
@@ -218,10 +213,5 @@ public class RegexEngine extends AbstractConstantKeysObject {
             encoding = flags.indexOf('u') >= 0 && !options.isUTF16ExplodeAstralSymbols() ? Encodings.UTF_16 : Encodings.UTF_16_RAW;
         }
         return new RegexSource(pattern, flags, encoding);
-    }
-
-    @Override
-    public String toString() {
-        return "TRegexEngine";
     }
 }

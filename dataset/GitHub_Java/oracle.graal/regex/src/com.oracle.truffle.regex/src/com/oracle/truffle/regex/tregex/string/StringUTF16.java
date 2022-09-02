@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,38 +38,74 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex.tregex.matchers;
+package com.oracle.truffle.regex.tregex.string;
 
-/**
- * Abstract character matcher that allows matching behavior to be inverted with a constructor
- * parameter.
- */
-public abstract class InvertibleCharMatcher extends CharMatcher {
+public final class StringUTF16 implements AbstractString {
 
-    private final boolean invert;
+    private final String str;
 
-    /**
-     * Construct a new {@link InvertibleCharMatcher}.
-     *
-     * @param invert if this is set to true, the result of {@link #execute(int)} is always inverted.
-     */
-    protected InvertibleCharMatcher(boolean invert) {
-        this.invert = invert;
+    public StringUTF16(char[] str) {
+        this.str = new String(str);
     }
 
-    protected boolean result(boolean result) {
-        return result != invert;
+    public StringUTF16(String str) {
+        this.str = str;
     }
 
-    protected String modifiersToString() {
-        return invert ? "!" : "";
+    @Override
+    public int encodedLength() {
+        return str.length();
     }
 
-    static int highByte(int i) {
-        return i >> Byte.SIZE;
+    public char charAt(int i) {
+        return str.charAt(i);
     }
 
-    static int lowByte(int i) {
-        return i & 0xff;
+    @Override
+    public String toString() {
+        return str;
+    }
+
+    @Override
+    public Object content() {
+        return str;
+    }
+
+    @Override
+    public StringUTF16 substring(int start, int end) {
+        return new StringUTF16(str.substring(start, end));
+    }
+
+    @Override
+    public boolean regionMatches(int offset, AbstractString other, int ooffset, int encodedLength) {
+        return str.regionMatches(offset, ((StringUTF16) other).str, ooffset, encodedLength);
+    }
+
+    @Override
+    public AbstractStringIterator iterator() {
+        return new StringUTF16Iterator(str);
+    }
+
+    private static final class StringUTF16Iterator extends AbstractStringIterator {
+
+        private final String str;
+
+        private StringUTF16Iterator(String str) {
+            this.str = str;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return i < str.length();
+        }
+
+        @Override
+        public int nextInt() {
+            char c = str.charAt(i++);
+            if (Encodings.Encoding.UTF16.isHighSurrogate(c) && hasNext() && Encodings.Encoding.UTF16.isLowSurrogate(str.charAt(i))) {
+                return Character.toCodePoint(c, str.charAt(i++));
+            }
+            return c;
+        }
     }
 }

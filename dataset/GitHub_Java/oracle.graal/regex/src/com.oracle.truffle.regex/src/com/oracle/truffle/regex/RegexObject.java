@@ -67,7 +67,6 @@ import com.oracle.truffle.regex.runtime.nodes.ExpectByteArrayHostObjectNode;
 import com.oracle.truffle.regex.runtime.nodes.ExpectStringOrTruffleObjectNode;
 import com.oracle.truffle.regex.runtime.nodes.ToLongNode;
 import com.oracle.truffle.regex.tregex.parser.flavors.PythonFlags;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 import com.oracle.truffle.regex.util.TruffleNull;
 import com.oracle.truffle.regex.util.TruffleReadOnlyKeysArray;
 import com.oracle.truffle.regex.util.TruffleReadOnlyMap;
@@ -224,15 +223,13 @@ public final class RegexObject extends AbstractConstantKeysObject {
         return invokeCache.execute(member, getCompiledRegexNode.execute(this), input, (int) fromIndex);
     }
 
-    private static final String N_METHODS = "2";
-
     @GenerateUncached
     abstract static class IsInvocableCacheNode extends Node {
 
         abstract boolean execute(String symbol);
 
         @SuppressWarnings("unused")
-        @Specialization(guards = "symbol == cachedSymbol", limit = N_METHODS)
+        @Specialization(guards = "symbol == cachedSymbol", limit = "2")
         static boolean cacheIdentity(String symbol,
                         @Cached("symbol") String cachedSymbol,
                         @Cached("isInvocable(cachedSymbol)") boolean result) {
@@ -240,7 +237,7 @@ public final class RegexObject extends AbstractConstantKeysObject {
         }
 
         @SuppressWarnings("unused")
-        @Specialization(guards = "symbol.equals(cachedSymbol)", limit = N_METHODS, replaces = "cacheIdentity")
+        @Specialization(guards = "symbol.equals(cachedSymbol)", limit = "2", replaces = "cacheIdentity")
         static boolean cacheEquals(String symbol,
                         @Cached("symbol") String cachedSymbol,
                         @Cached("isInvocable(cachedSymbol)") boolean result) {
@@ -262,7 +259,7 @@ public final class RegexObject extends AbstractConstantKeysObject {
         abstract Object execute(String symbol, Object receiver, Object input, int fromIndex) throws UnsupportedMessageException, ArityException, UnsupportedTypeException, UnknownIdentifierException;
 
         @SuppressWarnings("unused")
-        @Specialization(guards = {"symbol == cachedSymbol", "cachedSymbol.equals(PROP_EXEC)"}, limit = N_METHODS)
+        @Specialization(guards = {"symbol == cachedSymbol", "cachedSymbol.equals(PROP_EXEC)"}, limit = "2")
         Object getStartIdentity(String symbol, Object receiver, Object input, int fromIndex,
                         @Cached("symbol") String cachedSymbol,
                         @Cached ExpectStringOrTruffleObjectNode expectStringOrTruffleObjectNode,
@@ -271,7 +268,7 @@ public final class RegexObject extends AbstractConstantKeysObject {
         }
 
         @SuppressWarnings("unused")
-        @Specialization(guards = {"symbol.equals(cachedSymbol)", "cachedSymbol.equals(PROP_EXEC)"}, limit = N_METHODS, replaces = "getStartIdentity")
+        @Specialization(guards = {"symbol.equals(cachedSymbol)", "cachedSymbol.equals(PROP_EXEC)"}, limit = "2", replaces = "getStartIdentity")
         Object getStartEquals(String symbol, Object receiver, Object input, int fromIndex,
                         @Cached("symbol") String cachedSymbol,
                         @Cached ExpectStringOrTruffleObjectNode expectStringOrTruffleObjectNode,
@@ -281,7 +278,7 @@ public final class RegexObject extends AbstractConstantKeysObject {
 
         // EXPERIMENTAL
         @SuppressWarnings("unused")
-        @Specialization(guards = {"symbol == cachedSymbol", "cachedSymbol.equals(PROP_EXEC_BYTES)"}, limit = N_METHODS)
+        @Specialization(guards = {"symbol == cachedSymbol", "cachedSymbol.equals(PROP_EXEC_BYTES)"}, limit = "2")
         Object getEndIdentity(String symbol, Object receiver, Object input, int fromIndex,
                         @Cached("symbol") String cachedSymbol,
                         @Cached ExpectByteArrayHostObjectNode expectByteArrayHostObjectNode,
@@ -291,7 +288,7 @@ public final class RegexObject extends AbstractConstantKeysObject {
 
         // EXPERIMENTAL
         @SuppressWarnings("unused")
-        @Specialization(guards = {"symbol.equals(cachedSymbol)", "cachedSymbol.equals(PROP_EXEC_BYTES)"}, limit = N_METHODS, replaces = "getEndIdentity")
+        @Specialization(guards = {"symbol.equals(cachedSymbol)", "cachedSymbol.equals(PROP_EXEC_BYTES)"}, limit = "2", replaces = "getEndIdentity")
         Object getEndEquals(String symbol, Object receiver, Object input, int fromIndex,
                         @Cached("symbol") String cachedSymbol,
                         @Cached ExpectByteArrayHostObjectNode expectByteArrayHostObjectNode,
@@ -448,7 +445,8 @@ public final class RegexObject extends AbstractConstantKeysObject {
             try {
                 return receivers.invokeMember(receiver, "exec", input, fromIndex);
             } catch (UnknownIdentifierException e) {
-                throw Exceptions.shouldNotReachHere("fallback compiled regex does not have an invocable \"exec\" method");
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new RuntimeException(e);
             }
         }
     }

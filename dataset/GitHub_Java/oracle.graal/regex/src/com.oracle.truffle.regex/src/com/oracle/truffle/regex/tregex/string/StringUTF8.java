@@ -42,11 +42,14 @@ package com.oracle.truffle.regex.tregex.string;
 
 import java.util.Arrays;
 
-public final class StringUTF32 implements AbstractString {
+import com.oracle.truffle.api.ArrayUtils;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
-    private final int[] str;
+public final class StringUTF8 implements AbstractString {
 
-    public StringUTF32(int[] str) {
+    @CompilationFinal(dimensions = 1) private final byte[] str;
+
+    public StringUTF8(byte[] str) {
         this.str = str;
     }
 
@@ -66,34 +69,25 @@ public final class StringUTF32 implements AbstractString {
     }
 
     @Override
-    public StringUTF32 substring(int start, int end) {
-        return new StringUTF32(Arrays.copyOfRange(str, start, end));
+    public StringUTF8 substring(int start, int end) {
+        return new StringUTF8(Arrays.copyOfRange(str, start, end));
     }
 
     @Override
     public boolean regionMatches(int offset, AbstractString other, int ooffset, int encodedLength) {
-        int[] o = ((StringUTF32) other).str;
-        if (offset + encodedLength > str.length || ooffset + encodedLength > o.length) {
-            return false;
-        }
-        for (int i = 0; i < encodedLength; i++) {
-            if (str[offset + i] != o[ooffset + i]) {
-                return false;
-            }
-        }
-        return true;
+        return ArrayUtils.regionEqualsWithOrMask(str, offset, ((StringUTF8) other).str, ooffset, encodedLength, null);
     }
 
     @Override
     public AbstractStringIterator iterator() {
-        return new StringUTF32Iterator(str);
+        return new StringUTF8Iterator(str);
     }
 
-    private static final class StringUTF32Iterator extends AbstractStringIterator {
+    private static final class StringUTF8Iterator extends AbstractStringIterator {
 
-        private final int[] str;
+        private final byte[] str;
 
-        private StringUTF32Iterator(int[] str) {
+        private StringUTF8Iterator(byte[] str) {
             this.str = str;
         }
 
@@ -104,7 +98,27 @@ public final class StringUTF32 implements AbstractString {
 
         @Override
         public int nextInt() {
-            return str[i++];
+            byte b = str[i++];
+            if (Byte.toUnsignedInt(b) < 0x80) {
+                return b;
+            }
+            int nBytes = Integer.numberOfLeadingZeros(~(b << 24));
+            int codepoint = b & (0xff >>> nBytes);
+            assert 1 < nBytes && nBytes < 5 : nBytes;
+            // Checkstyle: stop
+            switch (nBytes) {
+                case 4:
+                    assert hasNext() && (str[i] & 0xc0) == 0x80;
+                    codepoint = codepoint << 6 | (str[i++] & 0x3f);
+                case 3:
+                    assert hasNext() && (str[i] & 0xc0) == 0x80;
+                    codepoint = codepoint << 6 | (str[i++] & 0x3f);
+                default:
+                    assert hasNext() && (str[i] & 0xc0) == 0x80;
+                    codepoint = codepoint << 6 | (str[i++] & 0x3f);
+            }
+            // Checkstyle: resume
+            return codepoint;
         }
     }
 }

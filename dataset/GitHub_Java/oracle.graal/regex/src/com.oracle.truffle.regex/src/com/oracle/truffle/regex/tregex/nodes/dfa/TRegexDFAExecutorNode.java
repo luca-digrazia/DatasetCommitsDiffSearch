@@ -58,7 +58,6 @@ import com.oracle.truffle.regex.tregex.string.Encodings;
 
 public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
 
-    private static final int IP_TRANSITION_MARKER = 0x8000;
     public static final int NO_MATCH = -2;
     private final TRegexDFAExecutorProperties props;
     private final int maxNumberOfNFAStates;
@@ -269,7 +268,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                 }
             } else if (curState instanceof DFAStateNode) {
                 DFAStateNode state = (DFAStateNode) curState;
-                if (ip > IP_TRANSITION_MARKER) {
+                if (ip > 0x8000) {
                     /*
                      * execute DFA state transition
                      */
@@ -535,19 +534,12 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
         return matchers[i] != null && matchers[i].execute(c);
     }
 
-    /**
-     * Returns a new instruction pointer value that denotes transition {@code i} of {@code state}.
-     */
     private static int transitionMatch(DFAStateNode state, int i) {
-        return state.getId() | IP_TRANSITION_MARKER | (i << 16);
+        return state.getId() | 0x8000 | (i << 16);
     }
 
-    /**
-     * Returns a new instruction pointer value that denotes the
-     * {@link Matchers#getNoMatchSuccessor() no-match successor} of {@code state}.
-     */
     private static int transitionNoMatch(DFAStateNode state) {
-        return state.getId() | IP_TRANSITION_MARKER | (state.getMatchers().getNoMatchSuccessor() << 16);
+        return state.getId() | 0x8000 | (state.getMatchers().getNoMatchSuccessor() << 16);
     }
 
     private int execTransition(TRegexDFAExecutorLocals locals, DFAStateNode state, int i) {

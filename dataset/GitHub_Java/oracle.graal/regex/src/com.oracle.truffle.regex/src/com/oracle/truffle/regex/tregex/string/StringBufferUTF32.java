@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,38 +38,43 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex.tregex.matchers;
+package com.oracle.truffle.regex.tregex.string;
 
-/**
- * Abstract character matcher that allows matching behavior to be inverted with a constructor
- * parameter.
- */
-public abstract class InvertibleCharMatcher extends CharMatcher {
+import com.oracle.truffle.regex.tregex.buffer.IntArrayBuffer;
+import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
 
-    private final boolean invert;
+public final class StringBufferUTF32 extends IntArrayBuffer implements AbstractStringBuffer {
 
-    /**
-     * Construct a new {@link InvertibleCharMatcher}.
-     *
-     * @param invert if this is set to true, the result of {@link #execute(int)} is always inverted.
-     */
-    protected InvertibleCharMatcher(boolean invert) {
-        this.invert = invert;
+    public StringBufferUTF32() {
+        this(16);
     }
 
-    protected boolean result(boolean result) {
-        return result != invert;
+    public StringBufferUTF32(int capacity) {
+        super(capacity);
     }
 
-    protected String modifiersToString() {
-        return invert ? "!" : "";
+    @Override
+    public Encoding getEncoding() {
+        return Encodings.UTF_32;
     }
 
-    static int highByte(int i) {
-        return i >> Byte.SIZE;
+    @Override
+    public void append(int codepoint) {
+        add(codepoint);
     }
 
-    static int lowByte(int i) {
-        return i & 0xff;
+    @Override
+    public void appendOR(int c1, int c2) {
+        add(c1 | c2);
+    }
+
+    @Override
+    public void appendXOR(int c1, int c2) {
+        add(c1 ^ c2);
+    }
+
+    @Override
+    public StringUTF32 materialize() {
+        return new StringUTF32(toArray());
     }
 }

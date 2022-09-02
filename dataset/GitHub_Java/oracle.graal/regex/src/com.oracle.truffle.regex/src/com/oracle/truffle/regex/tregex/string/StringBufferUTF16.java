@@ -40,22 +40,22 @@
  */
 package com.oracle.truffle.regex.tregex.string;
 
-import com.oracle.truffle.regex.tregex.buffer.ByteArrayBuffer;
+import com.oracle.truffle.regex.tregex.buffer.CharArrayBuffer;
 import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
 
-public final class StringBufferUTF8 extends ByteArrayBuffer implements AbstractStringBuffer {
+public final class StringBufferUTF16 extends CharArrayBuffer implements AbstractStringBuffer {
 
-    public StringBufferUTF8() {
-        this(16);
+    public StringBufferUTF16() {
+        super();
     }
 
-    public StringBufferUTF8(int capacity) {
-        super(capacity);
+    public StringBufferUTF16(int initialCapacity) {
+        super(initialCapacity);
     }
 
     @Override
     public Encoding getEncoding() {
-        return Encodings.UTF_8;
+        return Encodings.UTF_16;
     }
 
     @Override
@@ -63,97 +63,48 @@ public final class StringBufferUTF8 extends ByteArrayBuffer implements AbstractS
         int n = getEncoding().getEncodedSize(codepoint);
         int newLength = length() + n;
         ensureCapacity(newLength);
-        setLength(newLength);
-        int i = newLength;
         if (n == 1) {
-            set(--i, (byte) codepoint);
-            return;
+            set(length(), (char) codepoint);
+        } else {
+            set(length(), Character.highSurrogate(codepoint));
+            set(length() + 1, Character.lowSurrogate(codepoint));
         }
-        int c = codepoint;
-        // Checkstyle: stop
-        switch (n) {
-            case 4:
-                set(--i, (byte) (0x80 | (c & 0x3f)));
-                c >>>= 6;
-            case 3:
-                set(--i, (byte) (0x80 | (c & 0x3f)));
-                c >>>= 6;
-            default:
-                set(--i, (byte) (0x80 | (c & 0x3f)));
-                c >>>= 6;
-                set(--i, (byte) ((0xf00 >>> n) | c));
-        }
-        // Checkstyle: resume
+        setLength(newLength);
     }
 
     @Override
-    public void appendOR(int cp1, int cp2) {
-        int n = getEncoding().getEncodedSize(cp1);
-        assert getEncoding().getEncodedSize(cp2) == n;
+    public void appendOR(int c1, int c2) {
+        int n = getEncoding().getEncodedSize(c1);
+        assert getEncoding().getEncodedSize(c2) == n;
         int newLength = length() + n;
         ensureCapacity(newLength);
-        setLength(newLength);
-        int i = newLength;
         if (n == 1) {
-            set(--i, (byte) (cp1 | cp2));
-            return;
+            set(length(), (char) (c1 | c2));
+        } else {
+            set(length(), (char) (Character.highSurrogate(c1) | Character.highSurrogate(c2)));
+            set(length() + 1, (char) (Character.lowSurrogate(c1) | Character.lowSurrogate(c2)));
         }
-        int c1 = cp1;
-        int c2 = cp2;
-        // Checkstyle: stop
-        switch (n) {
-            case 4:
-                set(--i, (byte) (0x80 | ((c1 | c2) & 0x3f)));
-                c1 >>>= 6;
-                c2 >>>= 6;
-            case 3:
-                set(--i, (byte) (0x80 | ((c1 | c2) & 0x3f)));
-                c1 >>>= 6;
-                c2 >>>= 6;
-            default:
-                set(--i, (byte) (0x80 | ((c1 | c2) & 0x3f)));
-                c1 >>>= 6;
-                c2 >>>= 6;
-                set(--i, (byte) ((0xf00 >>> n) | (c1 | c2)));
-        }
-        // Checkstyle: resume
+        setLength(newLength);
     }
 
     @Override
-    public void appendXOR(int cp1, int cp2) {
-        int n = getEncoding().getEncodedSize(cp1);
-        assert getEncoding().getEncodedSize(cp2) == n;
+    public void appendXOR(int c1, int c2) {
+        int n = getEncoding().getEncodedSize(c1);
+        assert getEncoding().getEncodedSize(c2) == n;
         int newLength = length() + n;
         ensureCapacity(newLength);
-        setLength(newLength);
-        int i = newLength;
         if (n == 1) {
-            set(--i, (byte) (cp1 ^ cp2));
-            return;
+            set(length(), (char) (c1 ^ c2));
+        } else {
+            set(length(), (char) (Character.highSurrogate(c1) ^ Character.highSurrogate(c2)));
+            set(length() + 1, (char) (Character.lowSurrogate(c1) ^ Character.lowSurrogate(c2)));
+            assert Integer.bitCount(get(length())) + Integer.bitCount(get(length() + 1)) == 1;
         }
-        int c1 = cp1;
-        int c2 = cp2;
-        // Checkstyle: stop
-        switch (n) {
-            case 4:
-                set(--i, (byte) ((c1 ^ c2) & 0x3f));
-                c1 >>>= 6;
-                c2 >>>= 6;
-            case 3:
-                set(--i, (byte) ((c1 ^ c2) & 0x3f));
-                c1 >>>= 6;
-                c2 >>>= 6;
-            default:
-                set(--i, (byte) ((c1 ^ c2) & 0x3f));
-                c1 >>>= 6;
-                c2 >>>= 6;
-                set(--i, (byte) (c1 ^ c2));
-        }
-        // Checkstyle: resume
+        setLength(newLength);
     }
 
     @Override
-    public StringUTF8 materialize() {
-        return new StringUTF8(toArray());
+    public StringUTF16 materialize() {
+        return new StringUTF16(toArray());
     }
 }

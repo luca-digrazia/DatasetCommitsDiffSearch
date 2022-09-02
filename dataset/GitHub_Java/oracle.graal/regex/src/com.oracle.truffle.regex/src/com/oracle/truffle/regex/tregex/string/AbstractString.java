@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,38 +38,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex.tregex.matchers;
+package com.oracle.truffle.regex.tregex.string;
 
-/**
- * Abstract character matcher that allows matching behavior to be inverted with a constructor
- * parameter.
- */
-public abstract class InvertibleCharMatcher extends CharMatcher {
+public interface AbstractString extends Iterable<Integer> {
 
-    private final boolean invert;
+    @Override
+    AbstractStringIterator iterator();
 
-    /**
-     * Construct a new {@link InvertibleCharMatcher}.
-     *
-     * @param invert if this is set to true, the result of {@link #execute(int)} is always inverted.
-     */
-    protected InvertibleCharMatcher(boolean invert) {
-        this.invert = invert;
-    }
+    int encodedLength();
 
-    protected boolean result(boolean result) {
-        return result != invert;
-    }
+    Object content();
 
-    protected String modifiersToString() {
-        return invert ? "!" : "";
-    }
+    AbstractString substring(int start, int end);
 
-    static int highByte(int i) {
-        return i >> Byte.SIZE;
-    }
+    boolean regionMatches(int offset, AbstractString other, int ooffset, int encodedLength);
 
-    static int lowByte(int i) {
-        return i & 0xff;
+    default String defaultToString() {
+        StringBufferUTF16 sb = new StringBufferUTF16(encodedLength() * 2);
+        for (int c : this) {
+            sb.append(c);
+        }
+        return sb.materialize().toString();
     }
 }
