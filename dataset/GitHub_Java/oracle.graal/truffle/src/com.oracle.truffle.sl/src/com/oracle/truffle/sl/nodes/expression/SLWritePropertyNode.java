@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -72,12 +72,12 @@ public abstract class SLWritePropertyNode extends SLExpressionNode {
 
     static final int LIBRARY_LIMIT = 3;
 
-    @Specialization(guards = "arrays.isArray(receiver)", limit = "LIBRARY_LIMIT")
-    protected Object write(Object receiver, Object index, Object value,
+    @Specialization(guards = "arrays.hasArrayElements(receiver)", limit = "LIBRARY_LIMIT")
+    protected Object writeArray(Object receiver, Object index, Object value,
                     @CachedLibrary("receiver") InteropLibrary arrays,
                     @CachedLibrary("index") InteropLibrary numbers) {
         try {
-            arrays.writeElement(receiver, numbers.asLong(index), value);
+            arrays.writeArrayElement(receiver, numbers.asLong(index), value);
         } catch (UnsupportedMessageException | UnsupportedTypeException | InvalidArrayIndexException e) {
             // read was not successful. In SL we only have basic support for errors.
             throw SLUndefinedNameException.undefinedProperty(this, index);
@@ -86,7 +86,7 @@ public abstract class SLWritePropertyNode extends SLExpressionNode {
     }
 
     @Specialization(limit = "LIBRARY_LIMIT")
-    protected Object write(Object receiver, Object name, Object value,
+    protected Object writeObject(Object receiver, Object name, Object value,
                     @CachedLibrary("receiver") InteropLibrary objectLibrary,
                     @Cached SLToMemberNode asMember) {
         try {
