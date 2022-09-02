@@ -197,9 +197,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend implements LIRGenera
                     masm.save(sp, scratch, sp);
                 }
             }
-            if (config.MARKID_FRAME_COMPLETE != -1) {
-                crb.recordMark(config.MARKID_FRAME_COMPLETE);
-            }
 
             if (ZapStackOnMethodEntry.getValue(crb.getOptions())) {
                 final int slotSize = 8;

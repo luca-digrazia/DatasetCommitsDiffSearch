@@ -61,18 +61,8 @@ public interface HotSpotLIRGenerator extends LIRGeneratorTool {
      */
     void emitTailcall(Value[] args, Value address);
 
-    /**
-     * Emits code that jumps to the deopt blob uncommon_trap entry point with {@code action} and
-     * {@code reason}.
-     */
     void emitDeoptimizeCaller(DeoptimizationAction action, DeoptimizationReason reason);
 
-    /**
-     * Emits code that jumps to the deopt blob unpack_with_exception entry point with
-     * {@code exception}.
-     *
-     * @param exception
-     */
     void emitDeoptimizeWithExceptionInCaller(Value exception);
 
     /**

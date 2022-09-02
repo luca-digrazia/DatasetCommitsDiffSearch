@@ -119,10 +119,9 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
     @Override
     protected void bangStackWithOffset(CompilationResultBuilder crb, int bangOffset) {
         AArch64MacroAssembler masm = (AArch64MacroAssembler) crb.asm;
-        boolean allowOverwrite = false;
         try (ScratchRegister sc = masm.getScratchRegister()) {
             Register scratch = sc.getRegister();
-            AArch64Address address = masm.makeAddress(sp, -bangOffset, scratch, 8, allowOverwrite);
+            AArch64Address address = masm.makeAddress(sp, -bangOffset, scratch, 8, /* allowOverwrite */false);
             masm.str(64, zr, address);
         }
     }

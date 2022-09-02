@@ -178,9 +178,6 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
                 }
                 assert frameMap.getRegisterConfig().getCalleeSaveRegisters() == null;
             }
-            if (config.MARKID_FRAME_COMPLETE != -1) {
-                crb.recordMark(config.MARKID_FRAME_COMPLETE);
-            }
         }
 
         @Override

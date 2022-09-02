@@ -401,8 +401,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
 
     @Override
     public void emitDeoptimizeWithExceptionInCaller(Value exception) {
-        Register thread = getProviders().getRegisters().getThreadRegister();
-        append(new AArch64HotSpotDeoptimizeWithExceptionCallerOp(config, exception, thread));
+
     }
 
     @Override

@@ -650,12 +650,10 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         if (address.getValueKind().getPlatformKind() == getLIRKindTool().getNarrowOopKind().getPlatformKind()) {
             CompressEncoding encoding = config.getOopEncoding();
             Value uncompressed;
-            int shift = encoding.getShift();
-            if (Scale.isScaleShiftSupported(shift)) {
+            if (encoding.getShift() <= 3) {
                 LIRKind wordKind = LIRKind.unknownReference(target().arch.getWordKind());
-                RegisterValue heapBase = getProviders().getRegisters().getHeapBaseRegister().asValue(wordKind);
-                Scale scale = Scale.fromShift(shift);
-                uncompressed = new AMD64AddressValue(wordKind, heapBase, asAllocatable(address), scale, 0);
+                uncompressed = new AMD64AddressValue(wordKind, getProviders().getRegisters().getHeapBaseRegister().asValue(wordKind), asAllocatable(address), Scale.fromInt(1 << encoding.getShift()),
+                                0);
             } else {
                 uncompressed = emitUncompress(address, encoding, false);
             }
