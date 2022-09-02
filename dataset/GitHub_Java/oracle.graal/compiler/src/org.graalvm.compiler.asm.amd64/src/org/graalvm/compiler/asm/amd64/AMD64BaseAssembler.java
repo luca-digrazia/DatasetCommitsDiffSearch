@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -212,10 +212,6 @@ public abstract class AMD64BaseAssembler extends Assembler {
 
     public static class OperandDataAnnotation extends CodeAnnotation {
         /**
-         * The position (bytes from the beginning of the method) of the annotated instruction.
-         */
-        public final int instructionPosition;
-        /**
          * The position (bytes from the beginning of the method) of the operand.
          */
         public final int operandPosition;
@@ -230,7 +226,8 @@ public abstract class AMD64BaseAssembler extends Assembler {
         public final int nextInstructionPosition;
 
         OperandDataAnnotation(int instructionPosition, int operandPosition, int operandSize, int nextInstructionPosition) {
-            this.instructionPosition = instructionPosition;
+            super(instructionPosition);
+
             this.operandPosition = operandPosition;
             this.operandSize = operandSize;
             this.nextInstructionPosition = nextInstructionPosition;
