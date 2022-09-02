@@ -1,15 +1,40 @@
+/*
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.truffle.tools.profiler.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.graalvm.polyglot.Source;
 import org.junit.Assert;
@@ -25,7 +50,7 @@ public class HeapMonitorTest extends AbstractProfilerTest {
     private HeapMonitor monitor;
 
     @Before
-    public void setupTracer() {
+    public void setupMonitor() {
         monitor = HeapMonitor.find(context.getEngine());
         assertNotNull(monitor);
     }
@@ -46,8 +71,11 @@ public class HeapMonitorTest extends AbstractProfilerTest {
         }
     }
 
-    final Source oneAllocationSource = makeSource("ROOT(" + "DEFINE(foo,ROOT(STATEMENT))," + "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," +
-                    "DEFINE(baz,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(bar)))))," + "ALLOCATION,CALL(baz),CALL(bar)" + ")");
+    final Source oneAllocationSource = makeSource("ROOT(" + //
+                    "DEFINE(foo,ROOT(STATEMENT))," + //
+                    "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo)))))," + //
+                    "DEFINE(baz,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(bar)))))," + //
+                    "ALLOCATION,CALL(baz),CALL(bar)" + ")");
 
     @Test
     public void testAllocations() {
@@ -86,11 +114,15 @@ public class HeapMonitorTest extends AbstractProfilerTest {
         ExecutorService executeInParallel = Executors.newFixedThreadPool(11);
         AtomicBoolean cancelled = new AtomicBoolean();
 
-        for (int i = 0; i < 10; i++) {
+        AtomicInteger allocations = new AtomicInteger();
+
+        int tasks = 10;
+        for (int i = 0; i < tasks; i++) {
             executeInParallel.submit(new Runnable() {
                 public void run() {
                     while (!cancelled.get()) {
                         eval(oneAllocationSource);
+                        allocations.incrementAndGet();
                         if (Thread.interrupted()) {
                             break;
                         }
@@ -100,9 +132,9 @@ public class HeapMonitorTest extends AbstractProfilerTest {
         }
 
         try {
-            Thread.sleep(50);
+            requireAllocations(allocations, 1000);
             monitor.setCollecting(true);
-            Thread.sleep(50);
+            requireAllocations(allocations, 1000);
             assertTrue(monitor.isCollecting());
             assertTrue(monitor.hasData());
             for (int i = 0; i < 10; i++) {
@@ -134,5 +166,12 @@ public class HeapMonitorTest extends AbstractProfilerTest {
         assertEquals(0, monitor.takeSummary().getAliveInstances());
         assertEquals(0, monitor.takeSummary().getAliveBytes());
 
+    }
+
+    private static void requireAllocations(AtomicInteger allocations, int number) throws InterruptedException {
+        allocations.set(0);
+        while (allocations.get() < number) {
+            Thread.sleep(5);
+        }
     }
 }
