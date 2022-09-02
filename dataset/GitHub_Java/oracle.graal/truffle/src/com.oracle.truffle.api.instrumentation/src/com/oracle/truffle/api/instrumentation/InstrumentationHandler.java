@@ -188,22 +188,12 @@ final class InstrumentationHandler {
                     Set<Class<?>> previousProvidedTags = visitor.providedTags;
                     SourceSection previousRootSourceSection = visitor.rootSourceSection;
                     int previousRootBits = visitor.rootBits;
-                    int previousComputingRootNodeBits = visitor.computingRootNodeBits;
-                    boolean previousFirstExecution = visitor.firstExecution;
-                    boolean previousVisitingRetiredNodes = visitor.visitingRetiredNodes;
-                    boolean previousVisitingMaterialized = visitor.visitingMaterialized;
-                    Set<Class<? extends Tag>> previousMaterializeTags = visitor.materializeTags;
                     visitRoot(root, root, visitor, false, true);
                     rootSources = visitor.getSources();
                     visitor.root = previousRoot;
                     visitor.providedTags = previousProvidedTags;
                     visitor.rootSourceSection = previousRootSourceSection;
                     visitor.rootBits = previousRootBits;
-                    visitor.computingRootNodeBits = previousComputingRootNodeBits;
-                    visitor.firstExecution = previousFirstExecution;
-                    visitor.visitingRetiredNodes = previousVisitingRetiredNodes;
-                    visitor.visitingMaterialized = previousVisitingMaterialized;
-                    visitor.materializeTags = previousMaterializeTags;
                 } else {
                     hasSourceBindings = false;
                     sources.clear();
@@ -330,21 +320,11 @@ final class InstrumentationHandler {
                             Set<Class<?>> previousProvidedTags = visitor.providedTags;
                             SourceSection previousRootSourceSection = visitor.rootSourceSection;
                             int previousRootBits = visitor.rootBits;
-                            int previousComputingRootNodeBits = visitor.computingRootNodeBits;
-                            boolean previousFirstExecution = visitor.firstExecution;
-                            boolean previousVisitingRetiredNodes = visitor.visitingRetiredNodes;
-                            boolean previousVisitingMaterialized = visitor.visitingMaterialized;
-                            Set<Class<? extends Tag>> previousMaterializeTags = visitor.materializeTags;
                             visitRoot(root, root, visitor, false, true);
                             visitor.root = previousRoot;
                             visitor.providedTags = previousProvidedTags;
                             visitor.rootSourceSection = previousRootSourceSection;
                             visitor.rootBits = previousRootBits;
-                            visitor.computingRootNodeBits = previousComputingRootNodeBits;
-                            visitor.firstExecution = previousFirstExecution;
-                            visitor.visitingRetiredNodes = previousVisitingRetiredNodes;
-                            visitor.visitingMaterialized = previousVisitingMaterialized;
-                            visitor.materializeTags = previousMaterializeTags;
                         }
                         rootSources = visitor.getSources();
                     }
@@ -687,26 +667,8 @@ final class InstrumentationHandler {
                                 if (sourceSection != null) {
                                     visitor.adoptSource(sourceSection.getSource());
                                 }
-                                RootNode previousRoot = visitor.root;
-                                Set<Class<?>> previousProvidedTags = visitor.providedTags;
-                                SourceSection previousRootSourceSection = visitor.rootSourceSection;
-                                int previousRootBits = visitor.rootBits;
-                                int previousComputingRootNodeBits = visitor.computingRootNodeBits;
-                                boolean previousFirstExecution = visitor.firstExecution;
-                                boolean previousVisitingRetiredNodes = visitor.visitingRetiredNodes;
-                                boolean previousVisitingMaterialized = visitor.visitingMaterialized;
-                                Set<Class<? extends Tag>> previousMaterializeTags = visitor.materializeTags;
                                 visitRoot(root, root, visitor, false, false);
                                 Source[] visitedSources = visitor.getSources();
-                                visitor.root = previousRoot;
-                                visitor.providedTags = previousProvidedTags;
-                                visitor.rootSourceSection = previousRootSourceSection;
-                                visitor.rootBits = previousRootBits;
-                                visitor.computingRootNodeBits = previousComputingRootNodeBits;
-                                visitor.firstExecution = previousFirstExecution;
-                                visitor.visitingRetiredNodes = previousVisitingRetiredNodes;
-                                visitor.visitingMaterialized = previousVisitingMaterialized;
-                                visitor.materializeTags = previousMaterializeTags;
                                 if (visitedSources != null) {
                                     for (Source source : visitedSources) {
                                         if (!sources.containsKey(source)) {
@@ -751,25 +713,7 @@ final class InstrumentationHandler {
                                 if (sourceSection != null) {
                                     visitor.adoptSource(sourceSection.getSource());
                                 }
-                                RootNode previousRoot = visitor.root;
-                                Set<Class<?>> previousProvidedTags = visitor.providedTags;
-                                SourceSection previousRootSourceSection = visitor.rootSourceSection;
-                                int previousRootBits = visitor.rootBits;
-                                int previousComputingRootNodeBits = visitor.computingRootNodeBits;
-                                boolean previousFirstExecution = visitor.firstExecution;
-                                boolean previousVisitingRetiredNodes = visitor.visitingRetiredNodes;
-                                boolean previousVisitingMaterialized = visitor.visitingMaterialized;
-                                Set<Class<? extends Tag>> previousMaterializeTags = visitor.materializeTags;
                                 visitRoot(root, root, visitor, false, false);
-                                visitor.root = previousRoot;
-                                visitor.providedTags = previousProvidedTags;
-                                visitor.rootSourceSection = previousRootSourceSection;
-                                visitor.rootBits = previousRootBits;
-                                visitor.computingRootNodeBits = previousComputingRootNodeBits;
-                                visitor.firstExecution = previousFirstExecution;
-                                visitor.visitingRetiredNodes = previousVisitingRetiredNodes;
-                                visitor.visitingMaterialized = previousVisitingMaterialized;
-                                visitor.materializeTags = previousMaterializeTags;
                                 Source[] visitedSources = visitor.getSources();
                                 if (visitedSources != null) {
                                     for (Source source : visitedSources) {
