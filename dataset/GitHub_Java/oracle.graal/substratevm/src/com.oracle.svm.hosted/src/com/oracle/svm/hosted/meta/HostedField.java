@@ -104,8 +104,8 @@ public class HostedField implements OriginalFieldProvider, SharedField, Comparab
         return wrapped.isAccessed();
     }
 
-    public boolean isRead() {
-        return wrapped.isRead();
+    public boolean isInImageHeap() {
+        return wrapped.isInImageHeap();
     }
 
     @Override
@@ -146,7 +146,7 @@ public class HostedField implements OriginalFieldProvider, SharedField, Comparab
         } else {
             wrappedReceiver = receiver;
         }
-        return universe.lookup(universe.getConstantReflectionProvider().readValue(metaAccess, wrapped, wrappedReceiver));
+        return universe.lookup(universe.getConstantReflectionProvider().readFieldValue(wrapped, wrappedReceiver));
     }
 
     public JavaConstant readStorageValue(JavaConstant receiver) {

@@ -30,20 +30,26 @@ import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecodeProvider;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
-import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.config.ConfigurationValues;
+import com.oracle.svm.core.graal.code.SubstrateBackend;
+import com.oracle.svm.core.graal.meta.SharedCodeCacheProvider;
 import com.oracle.svm.core.graal.meta.SubstrateReplacements;
+import com.oracle.svm.graal.isolated.IsolateAwareCodeCacheProvider;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.ameta.AnalysisConstantFieldProvider;
 import com.oracle.svm.hosted.ameta.AnalysisConstantReflectionProvider;
+import com.oracle.svm.hosted.c.NativeLibraries;
+import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
 import com.oracle.svm.hosted.code.SharedRuntimeConfigurationBuilder;
 import com.oracle.svm.hosted.code.SubstrateGraphMakerFactory;
 
+import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
@@ -53,25 +59,34 @@ public class SubstrateRuntimeConfigurationBuilder extends SharedRuntimeConfigura
     private final ConstantReflectionProvider originalReflectionProvider;
 
     public SubstrateRuntimeConfigurationBuilder(OptionValues options, SVMHost hostVM, AnalysisUniverse aUniverse, MetaAccessProvider metaAccess,
-                    ConstantReflectionProvider originalReflectionProvider, Function<Providers, Backend> backendProvider) {
-        super(options, hostVM, metaAccess, backendProvider);
+                    ConstantReflectionProvider originalReflectionProvider, Function<Providers, SubstrateBackend> backendProvider, NativeLibraries nativeLibraries,
+                    ClassInitializationSupport classInitializationSupport) {
+        super(options, hostVM, metaAccess, backendProvider, nativeLibraries, classInitializationSupport);
         this.aUniverse = aUniverse;
         this.originalReflectionProvider = originalReflectionProvider;
     }
 
     @Override
     protected ConstantReflectionProvider createConstantReflectionProvider(Providers p) {
-        return new AnalysisConstantReflectionProvider(hostVM, aUniverse, originalReflectionProvider);
+        return new AnalysisConstantReflectionProvider(aUniverse, originalReflectionProvider, classInitializationSupport);
     }
 
     @Override
     protected ConstantFieldProvider createConstantFieldProvider(Providers p) {
-        return new AnalysisConstantFieldProvider(aUniverse, p.getMetaAccess());
+        return new AnalysisConstantFieldProvider(aUniverse, p.getMetaAccess(), (AnalysisConstantReflectionProvider) p.getConstantReflection(), classInitializationSupport);
     }
 
     @Override
     protected Replacements createReplacements(Providers p, SnippetReflectionProvider snippetReflection) {
         BytecodeProvider bytecodeProvider = new ResolvedJavaMethodBytecodeProvider();
-        return new SubstrateReplacements(options, p, snippetReflection, bytecodeProvider, ConfigurationValues.getTarget(), new SubstrateGraphMakerFactory(wordTypes));
+        return new SubstrateReplacements(p, snippetReflection, bytecodeProvider, ConfigurationValues.getTarget(), wordTypes, new SubstrateGraphMakerFactory(wordTypes));
+    }
+
+    @Override
+    protected SharedCodeCacheProvider createCodeCacheProvider(RegisterConfig registerConfig) {
+        if (SubstrateOptions.supportCompileInIsolates()) {
+            return new IsolateAwareCodeCacheProvider(ConfigurationValues.getTarget(), registerConfig);
+        }
+        return new SubstrateCodeCacheProvider(ConfigurationValues.getTarget(), registerConfig);
     }
 }
