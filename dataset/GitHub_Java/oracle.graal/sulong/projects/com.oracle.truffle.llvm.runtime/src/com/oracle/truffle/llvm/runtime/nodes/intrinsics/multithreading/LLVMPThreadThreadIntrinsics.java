@@ -92,9 +92,9 @@ public final class LLVMPThreadThreadIntrinsics {
 
         @Specialization
         @TruffleBoundary
-        protected Object doIntrinsic(long threadID,
+        protected Object doIntrinsic(long threadId,
                         @CachedContext(LLVMLanguage.class) LLVMContext context) {
-            final Thread thread = context.getpThreadContext().getThread(threadID);
+            final Thread thread = context.getpThreadContext().getThread(threadId);
             if (thread != null) {
                 try {
                     thread.join();
@@ -104,11 +104,7 @@ public final class LLVMPThreadThreadIntrinsics {
                 }
             }
 
-            LLVMPThreadContext pthreadContext = context.getpThreadContext();
-            Object threadReturnValue = pthreadContext.getThreadReturnValue(threadID);
-            pthreadContext.clearThreadReturnValue(threadID);
-            pthreadContext.clearThreadID(threadID);
-            return threadReturnValue;
+            return context.getpThreadContext().getThreadReturnValue(threadId);
         }
     }
 
