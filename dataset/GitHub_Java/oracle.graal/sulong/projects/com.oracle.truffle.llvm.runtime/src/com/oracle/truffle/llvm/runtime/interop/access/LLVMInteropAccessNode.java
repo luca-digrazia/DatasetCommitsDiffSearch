@@ -40,9 +40,8 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Clazz;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropAccessNodeGen.MakeAccessLocationNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.StructMember;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Structured;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
 @GenerateUncached
@@ -78,16 +77,29 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
 
     @Specialization
     AccessLocation doClazz(LLVMInteropType.Clazz type, Object foreign, long offset,
-                    @Cached LLVMInteropAccessNode recursiveNode,
                     @Cached MakeAccessLocation makeAccessLocation) {
-        StructMember member = findMember(type, offset);
-        if (type.getSuperClasses().contains(member.type) &&
-                        member.name.contentEquals("super (" + ((Clazz) (member.type)).name + ")")) {
-            return recursiveNode.execute((Structured) member.type, foreign, offset - member.startOffset);
-        } else {
+        LLVMInteropType.Clazz classType = type;
+        StructMember member = findMember(classType, offset);
+        try {
             return makeAccessLocation.execute(foreign, member.name, member.type, offset - member.startOffset);
+        } catch (LLVMPolyglotException e) {
+            // normal way failed
+            if (member.name != null && member.name.startsWith("super (") && classType.getSuperclass() != null) {
+                /*
+                 * field not found in super class: assume flat class model and look in current
+                 * object (='foreign') with information of parent class
+                 */
+                for (StructMember s : classType.getSuperclass().members) {
+                    if (s.startOffset == offset) {
+                        MakeAccessLocation makeAccessLocation2 = MakeAccessLocationNodeGen.create();
+                        super.insert(makeAccessLocation2);
+                        return doClazz(classType.getSuperclass(), foreign, offset, makeAccessLocation2);
+                    }
+                }
+            }
+            // no other working solution found
+            throw e;
         }
-
     }
 
     @Specialization(guards = "checkMember(type, cachedMember, offset)")
@@ -111,17 +123,6 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
     static StructMember findMember(LLVMInteropType.Struct struct, long offset) {
         for (StructMember m : struct.members) {
             if (m.contains(offset)) {
-                return m;
-            }
-        }
-
-        CompilerDirectives.transferToInterpreter();
-        throw new IllegalStateException("invalid struct access");
-    }
-
-    static StructMember findMember(LLVMInteropType.Struct struct, String name) {
-        for (StructMember m : struct.members) {
-            if (m.name.contentEquals(name)) {
                 return m;
             }
         }
