@@ -266,7 +266,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                 System.arraycopy(src, srcPos, dest, destPos, length);
             }
         } catch (Exception e) {
-            throw getMeta().throwExFromHost(e);
+            throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
         }
     }
 
@@ -349,7 +349,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .wait is just forwarded from the guest.")
     public void JVM_MonitorWait(@Host(Object.class) StaticObject self, long timeout) {
         try {
@@ -393,14 +392,12 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @SuppressWarnings("unused")
     @VmImpl
-    @TruffleBoundary
     public static int AttachCurrentThread(long penvPtr, long argsPtr) {
         System.err.println("AttachCurrentThread!!! " + penvPtr + " " + Thread.currentThread());
         return JniEnv.JNI_OK;
     }
 
     @VmImpl
-    @TruffleBoundary
     public static int DetachCurrentThread() {
         System.err.println("DetachCurrentThread!!!" + Thread.currentThread());
         return JniEnv.JNI_OK;
@@ -600,7 +597,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     // region Library support
     @VmImpl
-    @TruffleBoundary
     public long JVM_LoadLibrary(String name) {
         try {
             TruffleObject lib = NativeLibrary.loadLibrary(Paths.get(name));
@@ -615,14 +611,12 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    @TruffleBoundary
     public static void JVM_UnloadLibrary(@SuppressWarnings("unused") long handle) {
         // TODO(peterssen): Do unload the library.
         System.err.println("JVM_UnloadLibrary called but library was not unloaded!");
     }
 
     @VmImpl
-    @TruffleBoundary
     public long JVM_FindLibraryEntry(long libHandle, String name) {
         if (libHandle == 0) {
             System.err.println("JVM_FindLibraryEntry from default/global namespace (0): " + name);
@@ -672,20 +666,17 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    @TruffleBoundary
     public static long JVM_TotalMemory() {
         // TODO(peterssen): What to report here?
         return Runtime.getRuntime().totalMemory();
     }
 
     @VmImpl
-    @TruffleBoundary
     public static long JVM_MaxMemory() {
         return Runtime.getRuntime().maxMemory();
     }
 
     @VmImpl
-    @TruffleBoundary
     public static void JVM_GC() {
         System.gc();
     }
@@ -704,7 +695,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     public @Host(Properties.class) StaticObject JVM_InitProperties(@Host(Properties.class) StaticObject properties) {
         Method setProperty = properties.getKlass().lookupMethod(Name.setProperty, Signature.Object_String_String);
 
@@ -744,7 +734,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         try {
             return Array.getLength(MetaUtil.unwrapArrayOrNull(array));
         } catch (IllegalArgumentException | NullPointerException e) {
-            throw getMeta().throwExFromHost(e);
+            throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
         }
     }
 
@@ -1060,7 +1050,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    @TruffleBoundary
     public static long JVM_FreeMemory() {
         return Runtime.getRuntime().freeMemory();
     }
@@ -1085,7 +1074,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    @TruffleBoundary
     public static int JVM_ActiveProcessorCount() {
         return Runtime.getRuntime().availableProcessors();
     }

@@ -83,9 +83,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
         final String returnType;
         final boolean hasReceiver;
 
-        public SubstitutorHelper(EspressoProcessor processor, ExecutableElement method, String targetClassName, String guestMethodName, List<String> guestTypeNames, String returnType,
-                        boolean hasReceiver) {
-            super(processor, method);
+        public SubstitutorHelper(String targetClassName, String guestMethodName, List<String> guestTypeNames, String returnType, boolean hasReceiver) {
             this.targetClassName = targetClassName;
             this.guestMethodName = guestMethodName;
             this.guestTypeNames = guestTypeNames;
@@ -98,7 +96,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
         return tabulation + clazz + " " + ARG_NAME + index + " = " + castTo(ARGS_NAME + "[" + index + "]", clazz) + ";\n";
     }
 
-    private static String extractInvocation(String className, String methodName, int nParameters, SubstitutionHelper helper) {
+    private static String extractInvocation(String className, String methodName, int nParameters, boolean hasMetaInjection, List<String> guestCalls) {
         StringBuilder str = new StringBuilder();
         str.append(className).append(".").append(methodName).append("(");
         boolean first = true;
@@ -106,7 +104,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
             first = checkFirst(str, first);
             str.append(ARG_NAME).append(i);
         }
-        first = appendInvocationMetaInformation(str, first, helper);
+        first = appendInvocationMetaInformation(str, guestCalls, hasMetaInjection, first);
         str.append(");\n");
         return str.toString();
     }
@@ -146,6 +144,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
                 String targetMethodName = method.getSimpleName().toString();
                 // Obtain the host types of the parameters
                 List<String> espressoTypes = getEspressoTypes((ExecutableElement) method);
+                List<String> guestCalls = getGuestCalls((ExecutableElement) method);
                 // Spawn the name of the Substitutor we will create.
                 String substitutorName = getSubstitutorClassName(className, targetMethodName, espressoTypes);
                 if (!classes.contains(substitutorName)) {
@@ -164,12 +163,14 @@ public class SubstitutionProcessor extends EspressoProcessor {
                     boolean hasReceiver = (boolean) hasReceiverValue.getValue();
                     // Obtain the fully qualified guest return type of the method.
                     String returnType = getReturnTypeFromHost((ExecutableElement) method);
-                    SubstitutorHelper helper = new SubstitutorHelper(this, (ExecutableElement) method, className, actualMethodName, guestTypes, returnType, hasReceiver);
+                    SubstitutorHelper helper = new SubstitutorHelper(className, actualMethodName, guestTypes, returnType, hasReceiver);
                     // Create the contents of the source file
                     String classFile = spawnSubstitutor(
                                     className,
                                     targetMethodName,
                                     espressoTypes,
+                                    guestCalls,
+                                    hasMetaInjection((ExecutableElement) method),
                                     helper);
                     commitSubstitution(substitutionAnnotation, substitutorName, classFile);
                 }
@@ -341,7 +342,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
     }
 
     @Override
-    String generateImports(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
+    String generateImports(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         if (parameterTypeName.contains("StaticObject")) {
             str.append(IMPORT_STATIC_OBJECT);
@@ -351,7 +352,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
     }
 
     @Override
-    String generateFactoryConstructorBody(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
+    String generateFactoryConstructorBody(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         SubstitutorHelper h = (SubstitutorHelper) helper;
         str.append(TAB_3).append("super(\n");
@@ -366,7 +367,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
     }
 
     @Override
-    String generateInvoke(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
+    String generateInvoke(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, SubstitutionHelper helper, boolean hasMetaInjection) {
         StringBuilder str = new StringBuilder();
         SubstitutorHelper h = (SubstitutorHelper) helper;
         str.append(TAB_1).append(PUBLIC_FINAL_OBJECT).append(INVOKE);
@@ -375,10 +376,10 @@ public class SubstitutionProcessor extends EspressoProcessor {
             str.append(extractArg(argIndex++, argType, TAB_2));
         }
         if (h.returnType.equals("V")) {
-            str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, helper));
+            str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, hasMetaInjection, guestCalls));
             str.append(TAB_2).append("return null;\n");
         } else {
-            str.append(TAB_2).append("return ").append(extractInvocation(className, targetMethodName, argIndex, helper));
+            str.append(TAB_2).append("return ").append(extractInvocation(className, targetMethodName, argIndex, hasMetaInjection, guestCalls));
         }
         str.append(TAB_1).append("}\n");
         str.append("}");

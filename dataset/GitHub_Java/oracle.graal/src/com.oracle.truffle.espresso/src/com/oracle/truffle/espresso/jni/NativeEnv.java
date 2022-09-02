@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.jni;
 
-import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -34,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -77,8 +77,8 @@ public abstract class NativeEnv {
         return directByteBuffer(address, Math.multiplyExact(capacity, kind.getByteCount()));
     }
 
-    private static final Constructor<? extends ByteBuffer> constructor;
-    private static final Field addressField;
+    private final static Constructor<? extends ByteBuffer> constructor;
+    private final static Field addressField;
 
     @SuppressWarnings("unchecked")
     private static Class<? extends ByteBuffer> getByteBufferClass(String className) {
@@ -102,6 +102,7 @@ public abstract class NativeEnv {
         }
     }
 
+    @CompilerDirectives.TruffleBoundary
     protected static ByteBuffer directByteBuffer(long address, long capacity) {
         ByteBuffer buffer = null;
         try {
@@ -113,6 +114,7 @@ public abstract class NativeEnv {
         return buffer;
     }
 
+    @CompilerDirectives.TruffleBoundary
     protected static long byteBufferAddress(ByteBuffer byteBuffer) {
         try {
             return (long) addressField.get(byteBuffer);
@@ -122,33 +124,22 @@ public abstract class NativeEnv {
     }
 
     protected static Object defaultValue(String returnType) {
-        if (returnType.equals("boolean")) {
+        if (returnType.equals("boolean"))
             return false;
-        }
-        if (returnType.equals("byte")) {
+        if (returnType.equals("byte"))
             return (byte) 0;
-        }
-        if (returnType.equals("char")) {
+        if (returnType.equals("char"))
             return (char) 0;
-        }
-        if (returnType.equals("short")) {
+        if (returnType.equals("short"))
             return (short) 0;
-        }
-        if (returnType.equals("int")) {
+        if (returnType.equals("int"))
             return 0;
-        }
-        if (returnType.equals("float")) {
+        if (returnType.equals("float"))
             return 0.0F;
-        }
-        if (returnType.equals("double")) {
+        if (returnType.equals("double"))
             return 0.0;
-        }
-        if (returnType.equals("long")) {
+        if (returnType.equals("long"))
             return 0L;
-        }
-        if (returnType.equals("StaticObject")) {
-            return 0L; // NULL handle
-        }
         return StaticObject.NULL;
     }
 
@@ -162,29 +153,6 @@ public abstract class NativeEnv {
             }
         }
         throw EspressoError.shouldNotReachHere("Cannot load library: " + name);
-    }
-
-
-    public static String fromUTF8Ptr(@Word long rawBytesPtr) {
-        if (rawBytesPtr == 0) {
-            return null;
-        }
-        ByteBuffer buf = directByteBuffer(rawBytesPtr, Integer.MAX_VALUE);
-
-        int utfLen = 0;
-        while (buf.get() != 0) {
-            utfLen++;
-        }
-
-        byte[] bytes = new byte[utfLen];
-        buf.clear();
-        buf.get(bytes);
-        try {
-            return Utf8.toJavaString(bytes);
-        } catch (IOException e) {
-            // return StaticObject.NULL;
-            throw EspressoError.shouldNotReachHere(e);
-        }
     }
 
 }

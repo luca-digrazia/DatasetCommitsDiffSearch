@@ -1481,7 +1481,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      * @return JNI_TRUE when there is a pending exception; otherwise, returns JNI_FALSE.
      */
     @JniImpl
-    @TruffleBoundary
     public boolean ExceptionCheck() {
         StaticObject ex = threadLocalPendingException.get();
         assert ex != StaticObject.NULL;
@@ -1534,7 +1533,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         return allocateDirect(Math.multiplyExact(capacity, kind.getByteCount()));
     }
 
-    @TruffleBoundary
     private ByteBuffer allocateDirect(int capacity) {
         ByteBuffer bb = ByteBuffer.allocateDirect(capacity) //
                         .order(ByteOrder.nativeOrder());
@@ -1622,7 +1620,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      *         exception is currently being thrown.
      */
     @JniImpl
-    @TruffleBoundary
     public StaticObject ExceptionOccurred() {
         StaticObject ex = threadLocalPendingException.get();
         if (ex == null) {
@@ -1704,7 +1701,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public int RegisterNative(@Host(Class.class) StaticObject clazz, String name, String signature, @NFIType("POINTER") TruffleObject closure) {
         assert name != null && signature != null;
         Symbol<Type> classType = clazz.getMirrorKlass().getType();
