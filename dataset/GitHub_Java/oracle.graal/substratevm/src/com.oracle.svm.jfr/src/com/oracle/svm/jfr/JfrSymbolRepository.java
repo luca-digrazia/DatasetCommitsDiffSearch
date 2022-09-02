@@ -64,13 +64,10 @@ public class JfrSymbolRepository implements JfrRepository {
         table1.teardown();
     }
 
-
-    @Uninterruptible(reason = "Called by uninterruptible code.")
     private JfrSymbolHashtable getTable() {
         return getTable(false);
     }
 
-    @Uninterruptible(reason = "Called by uninterruptible code.")
     private JfrSymbolHashtable getTable(boolean previousEpoch) {
         boolean epoch = previousEpoch ? JfrTraceIdEpoch.getInstance().previousEpoch() : JfrTraceIdEpoch.getInstance().currentEpoch();
         if (epoch) {
@@ -121,7 +118,6 @@ public class JfrSymbolRepository implements JfrRepository {
                 }
             }
         }
-
     }
 
     private void writeSymbol(JfrChunkWriter writer, JfrSymbol symbol) throws IOException {
