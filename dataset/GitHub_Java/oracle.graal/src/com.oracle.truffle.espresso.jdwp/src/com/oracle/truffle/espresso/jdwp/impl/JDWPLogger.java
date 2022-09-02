@@ -35,19 +35,18 @@ public class JDWPLogger {
         NONE
     }
 
-    private static boolean shouldLog(LogLevel level) {
+    public static boolean shouldLog(LogLevel level) {
         switch (level) {
             case NONE: return false;
-            case THREAD: return LEVEL == LogLevel.THREAD || LEVEL == LogLevel.ALL;
-            case PACKET: return LEVEL == LogLevel.PACKET || LEVEL == LogLevel.ALL;
-            case STEPPING: return LEVEL == LogLevel.STEPPING || LEVEL == LogLevel.ALL;
-            case IDS: return LEVEL == LogLevel.IDS || LEVEL == LogLevel.ALL;
+            case THREAD: return level == LogLevel.THREAD || level == LogLevel.ALL;
+            case PACKET: return level == LogLevel.PACKET || level == LogLevel.ALL;
+            case STEPPING: return level == LogLevel.STEPPING || level == LogLevel.ALL;
             case ALL:
-                return  LEVEL == LogLevel.ALL ||
-                        LEVEL == LogLevel.THREAD ||
-                        LEVEL == LogLevel.PACKET ||
-                        LEVEL == LogLevel.STEPPING ||
-                        LEVEL == LogLevel.IDS;
+                return  level == LogLevel.ALL ||
+                        level == LogLevel.THREAD ||
+                        level == LogLevel.PACKET ||
+                        level == LogLevel.STEPPING ||
+                        level == LogLevel.IDS;
             default: return false;
         }
     }

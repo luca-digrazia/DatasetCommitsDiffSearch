@@ -72,6 +72,8 @@ public class JDWPDebuggerController {
     private HashMap<Object, FieldBreakpointEvent> fieldBreakpointExpected = new HashMap<>();
 
     private Ids<Object> ids;
+    private Method suspendMethod;
+    private Method resumeMethod;
 
     // justification for this being a map is that lookups only happen when at a breakpoint
     private Map<Breakpoint, BreakpointInfo> breakpointInfos = new HashMap<>();
@@ -83,6 +85,9 @@ public class JDWPDebuggerController {
     public void initialize(TruffleLanguage.Env languageEnv, JDWPOptions jdwpOptions, JDWPContext context, boolean reconnect) {
         this.options = jdwpOptions;
         this.languageEnv = languageEnv;
+        if (!reconnect) {
+            instrument.init(context);
+        }
         this.ids = context.getIds();
 
         // setup the debugger session object early to make sure instrumentable nodes are materialized
@@ -91,8 +96,14 @@ public class JDWPDebuggerController {
         debuggerSession.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(true).build());
         debuggerSession.suspendNextExecution();
 
-        if (!reconnect) {
-            instrument.init(context);
+        try {
+            suspendMethod = DebuggerSession.class.getDeclaredMethod("suspend", Thread.class);
+            suspendMethod.setAccessible(true);
+
+            resumeMethod = DebuggerSession.class.getDeclaredMethod("resume", Thread.class);
+            resumeMethod.setAccessible(true);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException("Unable to obtain thread suspend method", e);
         }
     }
 
@@ -175,7 +186,7 @@ public class JDWPDebuggerController {
             // if so, we need to STEP_OUT to reach the caller
             // location
             JDWPCallFrame currentFrame = susp.getStackFrames()[0];
-            MethodRef method = (MethodRef) ids.fromId((int) currentFrame.getMethodId());
+            MethodRef method = (MethodRef) getContext().getIds().fromId((int) currentFrame.getMethodId());
             if (method.isLastLine(currentFrame.getCodeIndex())) {
                 susp.getEvent().prepareStepOut(STEP_CONFIG);// .prepareStepOver(STEP_CONFIG);
             } else {
@@ -227,9 +238,11 @@ public class JDWPDebuggerController {
 
             if (!isStepping(thread)) {
                 if (!sessionClosed) {
+                    // TODO(Gregersen) - call method directly when it becomes available
                     try {
                         JDWPLogger.log("calling underlying resume method for thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-                        debuggerSession.resume(getContext().getGuest2HostThread(thread));
+
+                        resumeMethod.invoke(debuggerSession, getContext().getGuest2HostThread(thread));
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to resume thread: " + getThreadName(thread), e);
                     }
@@ -278,9 +291,12 @@ public class JDWPDebuggerController {
         }
 
         try {
-            JDWPLogger.log("State: " + getContext().getGuest2HostThread(thread).getState(), JDWPLogger.LogLevel.THREAD);
             JDWPLogger.log("calling underlying suspend method for thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-            debuggerSession.suspend(getContext().getGuest2HostThread(thread));
+            Thread.State threadState = getContext().getGuest2HostThread(thread).getState();
+            JDWPLogger.log("State: " + threadState, JDWPLogger.LogLevel.THREAD);
+
+            // TODO(Gregersen) - call method directly when it becomes available
+            suspendMethod.invoke(debuggerSession, getContext().getGuest2HostThread(thread));
 
             boolean suspended = ThreadSuspension.getSuspensionCount(thread) != 0;
             JDWPLogger.log("suspend success: " + suspended, JDWPLogger.LogLevel.THREAD);
@@ -351,11 +367,11 @@ public class JDWPDebuggerController {
             }
 
             Object currentThread = getContext().getHost2GuestThread(Thread.currentThread());
-            JDWPLogger.log("Suspended at: " + event.getSourceSection().toString() + " in thread: " + getThreadName(currentThread), JDWPLogger.LogLevel.STEPPING);
+            JDWPLogger.log("Suspended at: " + event.getSourceSection().toString() + " in thread: " + getThreadName(currentThread), JDWPLogger.LogLevel.THREAD);
 
             if (commandRequestIds.get(currentThread) != null) {
                 if (checkExclusionFilters(event, currentThread)) {
-                    JDWPLogger.log("not suspending here: " + event.getSourceSection(), JDWPLogger.LogLevel.STEPPING);
+                    JDWPLogger.log("not suspending here: " + event.getSourceSection(), JDWPLogger.LogLevel.THREAD);
                     return;
                 }
             }
@@ -393,27 +409,26 @@ public class JDWPDebuggerController {
                     KlassRef klass = info.getKlass();
                     Throwable exception = getRawException(event.getException());
                     Object guestException = getContext().getGuestException(exception);
-                    JDWPLogger.log("checking exception breakpoint for exception: " + exception, JDWPLogger.LogLevel.STEPPING);
+
                     // TODO(Gregersen) - rewrite this when instanceof implementation in Truffle is completed
                     // Currently, the Truffle Debug API doesn't filter on type, so we end up here having to check
                     // also, the ignore count set on the breakpoint will not work properly due to this.
                     // we need to do a real type check here, since subclasses of the specified exception
                     // should also hit
                     if (klass == null || getContext().isInstanceOf(guestException, klass)) {
-                        JDWPLogger.log("Exception type matched the klass type: " + klass.getNameAsString(), JDWPLogger.LogLevel.STEPPING);
                         // check filters if we should not suspend
                         Pattern[] positivePatterns = info.getFilter().getIncludePatterns();
                         // verify include patterns
-                        if (positivePatterns == null || positivePatterns.length == 0 || matchLocation(positivePatterns, callFrames[0])) {
+                        if (positivePatterns == null || matchLocation(positivePatterns, callFrames[0])) {
                             // verify exclude patterns
                             Pattern[] negativePatterns = info.getFilter().getExcludePatterns();
-                            if (negativePatterns == null || negativePatterns.length == 0 || !matchLocation(negativePatterns, callFrames[0])) {
+                            if (negativePatterns == null || !matchLocation(negativePatterns, callFrames[0])) {
                                 hit = true;
                             }
                         }
                     }
                     if (hit) {
-                        JDWPLogger.log("Breakpoint hit in thread: " + getThreadName(currentThread), JDWPLogger.LogLevel.STEPPING);
+                        JDWPLogger.log("Breakpoint hit in thread: " + getThreadName(currentThread), JDWPLogger.LogLevel.THREAD);
 
                         jobs.add(new Callable<Void>() {
                             @Override
@@ -457,12 +472,11 @@ public class JDWPDebuggerController {
             suspend(callFrames[0], currentThread, suspendPolicy, jobs);
         }
 
-        private boolean matchLocation(Pattern[] patterns, JDWPCallFrame callFrame) {
-            KlassRef klass = (KlassRef) ids.fromId((int) callFrame.getClassId());
+        private boolean matchLocation(Pattern[] positivePatterns, JDWPCallFrame callFrame) {
+            KlassRef klass = (KlassRef) getContext().getIds().fromId((int) callFrame.getClassId());
 
-            for (Pattern pattern : patterns) {
-                JDWPLogger.log("Matching klass: " + klass.getNameAsString() + " against pattern: " + pattern.pattern(), JDWPLogger.LogLevel.STEPPING);
-                if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.')))
+            for (Pattern positivePattern : positivePatterns) {
+                if (positivePattern.pattern().matches(klass.getNameAsString().replace('/', '.')))
                     return true;
             }
             return false;
