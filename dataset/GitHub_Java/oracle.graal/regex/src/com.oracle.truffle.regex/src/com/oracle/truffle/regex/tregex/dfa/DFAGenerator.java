@@ -657,9 +657,7 @@ public final class DFAGenerator implements JsonConvertible {
                                 newTransitions.add(t);
                             }
                         }
-                        // GR-17760: newTransitions != null implies mergedTransition != null, but
-                        // the "Fortify" tool does not see that
-                        if (newTransitions != null && mergedTransition != null) {
+                        if (newTransitions != null) {
                             mergedTransition.setMatcherBuilder(CharSet.create(acc.get()));
                             s.setTransitions(newTransitions.toArray(new DFAStateTransitionBuilder[newTransitions.length()]));
                             Arrays.sort(s.getTransitions(), Comparator.comparing(TransitionBuilder::getMatcherBuilder));
