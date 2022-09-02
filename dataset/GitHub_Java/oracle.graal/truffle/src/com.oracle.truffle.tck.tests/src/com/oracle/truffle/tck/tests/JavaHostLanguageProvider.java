@@ -132,10 +132,6 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
                         export(context, new ValueSupplier<>(new Object())),
                         TypeDescriptor.intersection(TypeDescriptor.HOST_OBJECT, TypeDescriptor.OBJECT)).build());
         result.add(Snippet.newBuilder(
-                        "POJO",
-                        export(context, new ValueSupplier<>(new Complex(1, 2))),
-                        TypeDescriptor.intersection(TypeDescriptor.HOST_OBJECT, TypeDescriptor.OBJECT)).build());
-        result.add(Snippet.newBuilder(
                         "java.util.List<Integer>",
                         export(context, new ValueSupplier<>(new ArrayList<>(Arrays.asList(1, 2)))),
                         TypeDescriptor.intersection(TypeDescriptor.HOST_OBJECT, TypeDescriptor.OBJECT, TypeDescriptor.array(TypeDescriptor.NUMBER))).build());
@@ -149,11 +145,6 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
                         "java.util.function.Function<Object,Object>",
                         export(context, new ValueSupplier<>(func)),
                         TypeDescriptor.intersection(TypeDescriptor.HOST_OBJECT, TypeDescriptor.OBJECT, TypeDescriptor.executable(TypeDescriptor.ANY, false, TypeDescriptor.ANY))).build());
-        result.add(Snippet.newBuilder(
-                        "java.lang.Class<java.lang.Object>",
-                        export(context, new ValueSupplier<>(Object.class)),
-                        TypeDescriptor.intersection(TypeDescriptor.HOST_OBJECT, TypeDescriptor.OBJECT,
-                                        TypeDescriptor.instantiable(TypeDescriptor.intersection(TypeDescriptor.HOST_OBJECT, TypeDescriptor.OBJECT), false))).build());
         return Collections.unmodifiableCollection(result);
     }
 
@@ -363,20 +354,6 @@ public final class JavaHostLanguageProvider implements LanguageProvider {
             } else {
                 return EMPTY;
             }
-        }
-    }
-
-    public static final class Complex {
-        public double real;
-        public double imag;
-
-        Complex(double real, double imag) {
-            this.real = real;
-            this.imag = imag;
-        }
-
-        public double abs() {
-            return Math.sqrt(real * real + imag * imag);
         }
     }
 }
