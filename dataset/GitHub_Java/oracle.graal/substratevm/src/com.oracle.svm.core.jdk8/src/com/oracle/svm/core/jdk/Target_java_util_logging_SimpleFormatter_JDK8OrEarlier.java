@@ -26,21 +26,13 @@ package com.oracle.svm.core.jdk;
 
 //Checkstyle: allow reflection
 
-import java.util.logging.LogManager;
-
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.InjectAccessors;
 import com.oracle.svm.core.annotate.TargetClass;
 
-import jdk.internal.logger.SurrogateLogger;
+import sun.util.logging.LoggingSupport;
 
 class FormatAccessors {
-
-    // format string for printing the log record
-    private static String getLoggingProperty(String name) {
-        return LogManager.getLogManager().getProperty(name);
-    }
-
     private static String format = null;
 
     public static String getFormat() {
@@ -49,16 +41,15 @@ class FormatAccessors {
              * If multiple threads are doing the initialization at the same time it is not a problem
              * because they will all get to the same result in the end.
              */
-            format = SurrogateLogger.getSimpleFormat(FormatAccessors::getLoggingProperty);
-
+            format = LoggingSupport.getSimpleFormat();
         }
         return format;
     }
 }
 
-@TargetClass(value = java.util.logging.SimpleFormatter.class, onlyWith = JDK9OrLater.class)
-public final class Target_java_util_logging_SimpleFormatter_JDK9OrLater {
+@TargetClass(value = java.util.logging.SimpleFormatter.class, onlyWith = JDK8OrEarlier.class)
+public final class Target_java_util_logging_SimpleFormatter_JDK8OrEarlier {
 
     @Alias @InjectAccessors(FormatAccessors.class)//
-    private String format;
+    private static String format;
 }
