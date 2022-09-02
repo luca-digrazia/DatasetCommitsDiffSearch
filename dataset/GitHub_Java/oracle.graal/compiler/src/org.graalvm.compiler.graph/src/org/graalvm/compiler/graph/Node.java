@@ -818,17 +818,15 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
     private void replaceAtMatchingUsages(Node other, Predicate<Node> filter, Node toBeDeleted) {
         if (filter == null) {
-            throw fail("filter cannot be null");
+            fail("filter cannot be null");
         }
         checkReplaceWith(other);
         int i = 0;
-        int usageCount = this.getUsageCount();
-        while (i < usageCount) {
+        while (i < this.getUsageCount()) {
             Node usage = this.getUsageAt(i);
             if (filter.test(usage)) {
                 replaceAtUsage(other, toBeDeleted, usage);
                 this.movUsageFromEndTo(i);
-                usageCount--;
             } else {
                 ++i;
             }
@@ -850,35 +848,14 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         replaceAtMatchingUsages(other, usagePredicate, null);
     }
 
-    private void replaceAtUsagePos(Node other, Node usage, Position pos) {
-        pos.initialize(usage, other);
-        maybeNotifyInputChanged(usage);
-        if (other != null) {
-            other.addUsage(usage);
-        }
-    }
-
     public void replaceAtUsages(InputType type, Node other) {
         checkReplaceWith(other);
-        int i = 0;
-        int usageCount = this.getUsageCount();
-        if (usageCount == 0) {
-            return;
-        }
-        usages: while (i < usageCount) {
-            Node usage = this.getUsageAt(i);
+        for (Node usage : usages().snapshot()) {
             for (Position pos : usage.inputPositions()) {
                 if (pos.getInputType() == type && pos.get(usage) == this) {
-                    replaceAtUsagePos(other, usage, pos);
-                    this.movUsageFromEndTo(i);
-                    usageCount--;
-                    continue usages;
+                    pos.set(usage, other);
                 }
             }
-            i++;
-        }
-        if (hasNoUsages()) {
-            maybeNotifyZeroUsages(this);
         }
     }
 
