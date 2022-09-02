@@ -27,7 +27,6 @@ package com.oracle.svm.hosted.c.util;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
 import java.io.BufferedReader;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -79,25 +78,24 @@ public class FileUtils {
         }
     }
 
-    public static int executeCommand(String... args) throws IOException, InterruptedException {
+    public static Process executeCommand(String... args) throws IOException, InterruptedException {
         return executeCommand(Arrays.asList(args));
     }
 
-    @SuppressWarnings("try")
-    public static int executeCommand(List<String> args) throws IOException, InterruptedException {
+    public static Process executeCommand(List<String> args) throws IOException, InterruptedException {
         ProcessBuilder command = prepareCommand(args, null).redirectErrorStream(true);
 
         traceCommand(command);
 
         Process process = command.start();
-        try (Closeable ignored = process::destroy) {
 
-            try (InputStream inputStream = process.getInputStream()) {
-                traceCommandOutput(readAllLines(inputStream));
-            }
-
-            return process.waitFor();
+        try (InputStream inputStream = process.getInputStream()) {
+            traceCommandOutput(readAllLines(inputStream));
         }
+
+        process.waitFor();
+
+        return process;
     }
 
     public static ProcessBuilder prepareCommand(List<String> args, Path commandDir) throws IOException {

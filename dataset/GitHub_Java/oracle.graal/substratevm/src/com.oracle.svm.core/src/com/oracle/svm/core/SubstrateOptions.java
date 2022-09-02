@@ -253,11 +253,11 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> TraceVMOperations = new HostedOptionKey<>(false);
 
     @APIOption(name = "trace-class-initialization")//
-    @Option(help = "Comma-separated list of fully-qualified class names that class initialization is traced for.")//
+    @Option(help = "Comma-separated list of fully qualified class names that class initialization is traced for.")//
     public static final HostedOptionKey<String> TraceClassInitialization = new HostedOptionKey<>("");
 
     @APIOption(name = "trace-object-instantiation")//
-    @Option(help = "Comma-separated list of fully-qualified class names that object instantiation is traced for.")//
+    @Option(help = "Comma-separated list of fully qualified class names that object instantiation is traced for.")//
     public static final HostedOptionKey<String> TraceObjectInstantiation = new HostedOptionKey<>("");
 
     @Option(help = "Trace all native tool invocations as part of image building", type = User)//
@@ -392,7 +392,7 @@ public class SubstrateOptions {
     @Option(help = "Use callee saved registers to reduce spilling for low-frequency calls to stubs (if callee saved registers are supported by the architecture)")//
     public static final HostedOptionKey<Boolean> UseCalleeSavedRegisters = new HostedOptionKey<>(true);
 
-    @Option(help = "Report error if <typename>[:<UsageKind>{,<UsageKind>}] is discovered during analysis (valid values for UsageKind: InHeap, Allocated, Reachable).", type = OptionType.Debug)//
+    @Option(help = "Report error if <typename>[:<UsageKind>{,<UsageKind>}] is discovered during analysis (valid values for UsageKind: InHeap, Allocated, InTypeCheck).", type = OptionType.Debug)//
     public static final HostedOptionKey<String[]> ReportAnalysisForbiddenType = new HostedOptionKey<>(new String[0]);
 
     @Option(help = "Backend used by the compiler", type = OptionType.User)//

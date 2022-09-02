@@ -76,17 +76,23 @@ public class PolyglotNativeAPIFeature implements Feature {
                 // Checkstyle: resume
             } else {
                 List<String> command = Arrays.asList("install_name_tool", "-id", id, imagePath.toString());
+                Process installToolProcess = null;
                 try {
-                    int exitCode = FileUtils.executeCommand(command);
+                    installToolProcess = FileUtils.executeCommand(command);
+                    int exitCode = installToolProcess.exitValue();
                     if (exitCode != 0) {
                         // Checkstyle: stop This is Hosted-only code
-                        System.err.printf("Failed to set `id` install name. install_name_tool exited with code %d%n", exitCode);
+                        System.err.println(String.format("Failed to set `id` install name. install_name_tool exited with code %d", exitCode));
                         // Checkstyle: resume
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 } catch (InterruptedException e) {
                     throw new InterruptImageBuilding("Interrupted in call to: " + String.join(" ", command));
+                } finally {
+                    if (installToolProcess != null) {
+                        installToolProcess.destroy();
+                    }
                 }
             }
         }
