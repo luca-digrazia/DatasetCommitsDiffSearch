@@ -158,13 +158,6 @@ public class ContextInterruptParameterizedTest {
         }
         try {
             Source source = Source.newBuilder(InstrumentationTestLanguage.ID, code, "InfiniteLoop").build();
-            if (!multiContext && nThreads > 1) {
-                /*
-                 * Prevent multiple definition of the foo function in case of single-context and
-                 * multi-threading.
-                 */
-                contexts.get(0).parse(source);
-            }
             Source checkSource = Source.newBuilder(InstrumentationTestLanguage.ID, "CONSTANT(42)", "CheckAlive").build();
             List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < nThreads; i++) {
@@ -217,7 +210,14 @@ public class ContextInterruptParameterizedTest {
             }
             allCancelledLatch.countDown();
             for (Future<?> future : futures) {
-                future.get();
+                boolean finished = false;
+                do {
+                    try {
+                        future.get();
+                        finished = true;
+                    } catch (InterruptedException e) {
+                    }
+                } while (!finished);
             }
             executorService.shutdownNow();
             executorService.awaitTermination(100, TimeUnit.SECONDS);
