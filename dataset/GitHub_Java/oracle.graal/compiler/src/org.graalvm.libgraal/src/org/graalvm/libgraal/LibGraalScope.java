@@ -77,7 +77,7 @@ public final class LibGraalScope implements AutoCloseable {
         parent = currentScope.get();
         boolean top = false;
         if (parent == null) {
-            top = LibGraal.attachCurrentThread(runtime, false);
+            top = LibGraal.attachCurrentThread(runtime);
             isolateThread = LibGraal.getCurrentIsolateThread(LibGraal.isolate);
         } else {
             isolateThread = parent.isolateThread;
