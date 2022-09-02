@@ -1707,7 +1707,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         switch (Signatures.returnKind(getMethod().getParsedSignature())) {
             case Boolean :
                 // TODO: Use a node ?
-                return stackIntToBoolean(result);
+                return getJavaVersion().java9OrLater() ? (result & 1) != 0 : result != 0;
             case Byte    : return (byte) result;
             case Short   : return (short) result;
             case Char    : return (char) result;
@@ -1717,10 +1717,6 @@ public final class BytecodeNode extends EspressoMethodNode {
                 throw EspressoError.shouldNotReachHere("unexpected kind");
         }
         // @formatter:on
-    }
-
-    private boolean stackIntToBoolean(int result) {
-        return getJavaVersion().java9OrLater() ? (result & 1) != 0 : result != 0;
     }
 
     private static Object exitMethodAndReturnObject(Object result) {
@@ -1876,10 +1872,10 @@ public final class BytecodeNode extends EspressoMethodNode {
             // Otherwise, if the field is final, it must be declared in the current class, and
             // the instruction must occur in an instance initialization method (<init>) of the
             // current class. Otherwise, an IllegalAccessError is thrown.
-            if (field.isFinalFlagSet()) {
+            if (field.isFinalFlagSet() &&
+                            getJavaVersion().java9OrLater() && getMethod().isConstructor()) {
                 // Enforced in class files >= v53 (9).
-                if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass()) ||
-                                (getJavaVersion().java8OrEarlier() || !getMethod().isConstructor())) {
+                if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass())) {
                     CompilerDirectives.transferToInterpreter();
                     throw Meta.throwException(getMeta().java_lang_IllegalAccessError);
                 }
@@ -1894,10 +1890,10 @@ public final class BytecodeNode extends EspressoMethodNode {
             // Otherwise, if the field is final, it must be declared in the current class, and the
             // instruction must occur in the <clinit> method of the current class. Otherwise, an
             // IllegalAccessError is thrown.
-            if (field.isFinalFlagSet()) {
+            if (field.isFinalFlagSet() &&
+                            getJavaVersion().java9OrLater() && getMethod().isClassInitializer()) {
                 // Enforced in class files >= v53 (9).
-                if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass()) ||
-                                (getJavaVersion().java8OrEarlier() || !getMethod().isClassInitializer())) {
+                if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass())) {
                     CompilerDirectives.transferToInterpreter();
                     throw Meta.throwException(getMeta().java_lang_IllegalAccessError);
                 }
@@ -1912,7 +1908,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
         switch (field.getKind()) {
             case Boolean:
-                boolean booleanValue = stackIntToBoolean(peekInt(frame, top - 1));
+                boolean booleanValue = getJavaVersion().java9OrLater() ? (peekInt(frame, top - 1) & 1) != 0 : peekInt(frame, top - 1) != 0;
                 if (instrumentation != null) {
                     instrumentation.notifyFieldModification(frame, statementIndex, field, receiver, booleanValue);
                 }

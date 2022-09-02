@@ -2682,7 +2682,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     @SuppressWarnings("unused")
-    @TruffleBoundary
     public static long JVM_GetNanoTimeAdjustment(@Host(Class.class) StaticObject ignored, long offset) {
         Instant now = Instant.now();
         long secs = now.getEpochSecond();
