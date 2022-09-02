@@ -23,8 +23,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -45,18 +43,10 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
  */
 class InterfaceTables {
 
-    static private final Comparator<TableData> SORTER = new Comparator<TableData>() {
-        @Override
-        public int compare(TableData o1, TableData o2) {
-            return Integer.compare(o1.klass.getID(), o2.klass.getID());
-        }
-    };
-
     static private final Entry[][] EMPTY_ENTRY_DUAL_ARRAY = new Entry[0][];
     static private final Method[][] EMPTY_METHOD_DUAL_ARRAY = new Method[0][];
 
     private final ObjectKlass thisKlass;
-    private final String thisRuntimePackage;
     private final ObjectKlass superKlass;
     private final ObjectKlass[] superInterfaces;
     private final ArrayList<Entry[]> tmpTables = new ArrayList<>();
@@ -75,28 +65,9 @@ class InterfaceTables {
         Method[] mirandas;
 
         public CreationResult(Entry[][] tables, Klass[] klassTable, Method[] mirandas) {
-            TableData[] data = new TableData[klassTable.length];
-            for (int i = 0; i < data.length; i++) {
-                data[i] = new TableData(klassTable[i], tables[i]);
-            }
-            Arrays.sort(data, SORTER);
-            for (int i = 0; i < data.length; i++) {
-                tables[i] = data[i].table;
-                klassTable[i] = data[i].klass;
-            }
             this.tables = tables;
             this.klassTable = klassTable;
             this.mirandas = mirandas;
-        }
-    }
-
-    static class TableData {
-        Klass klass;
-        Entry[] table;
-
-        public TableData(Klass klass, Entry[] table) {
-            this.klass = klass;
-            this.table = table;
         }
     }
 
@@ -114,7 +85,6 @@ class InterfaceTables {
         this.thisKlass = thisKlass;
         this.superKlass = superKlass;
         this.superInterfaces = superInterfaces;
-        this.thisRuntimePackage = thisKlass.getRuntimePackage();
     }
 
     /**
@@ -295,7 +265,7 @@ class InterfaceTables {
     private Entry lookupLocation(Method im, Symbol<Name> mname, Symbol<Signature> sig) {
         Method m = null;
         if (superKlass != null) {
-            m = superKlass.lookupVirtualMethod(mname, sig, thisRuntimePackage);
+            m = superKlass.lookupVirtualMethodOverride(mname, sig);
         }
         if (m != null) {
             return new Entry(Location.SUPERVTABLE, m.getVTableIndex());
@@ -350,7 +320,7 @@ class InterfaceTables {
         } else if (k2.isAssignableFrom(k1)) {
             return m1;
         } else {
-            // JVM specs:
+            // Java specs:
             // Can *declare* ambiguous default method (in bytecodes only, javac wouldn't compile
             // it). (5.4.3.3.)
             //
