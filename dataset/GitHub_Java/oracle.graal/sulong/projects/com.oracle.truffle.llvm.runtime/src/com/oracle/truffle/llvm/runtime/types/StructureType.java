@@ -92,7 +92,6 @@ public final class StructureType extends AggregateType {
     }
 
     public void setElementType(int idx, Type type) {
-        verifyCycleFree(type);
         types[idx] = type;
     }
 
