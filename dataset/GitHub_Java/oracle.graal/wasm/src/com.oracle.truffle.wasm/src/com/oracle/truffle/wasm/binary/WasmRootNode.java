@@ -31,7 +31,6 @@ package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -42,20 +41,12 @@ import com.oracle.truffle.api.nodes.RootNode;
 @NodeInfo(language = "wasm", description = "The root node of all WebAssembly functions")
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
     @CompilationFinal private WasmCodeEntry codeEntry;
-    @CompilationFinal private ContextReference<WasmContext> rawContextReference;
     @Child private WasmBlockNode body;
 
     public WasmRootNode(TruffleLanguage<?> language, WasmCodeEntry codeEntry) {
         super(language);
         this.codeEntry = codeEntry;
         this.body = null;
-    }
-
-    private ContextReference<WasmContext> contextReference() {
-        if (rawContextReference == null) {
-            rawContextReference = lookupContextReference(WasmLanguage.class);
-        }
-        return rawContextReference;
     }
 
     public void setBody(WasmBlockNode body) {
@@ -73,12 +64,11 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
         /*
          * WebAssembly rules dictate that a function's locals must be initialized to zero before function invocation.
-         * For more information, check the specification:
-         * https://webassembly.github.io/spec/core/exec/instructions.html#function-calls
+         * For more information, check the specification: https://webassembly.github.io/spec/core/exec/instructions.html#function-calls
          */
         initializeLocals(frame);
 
-        body.execute(contextReference().get(), frame);
+        body.execute(lookupContextReference(WasmLanguage.class).get(), frame);
 
         long returnValue = pop(frame, 0);
         switch (body.returnTypeId()) {
