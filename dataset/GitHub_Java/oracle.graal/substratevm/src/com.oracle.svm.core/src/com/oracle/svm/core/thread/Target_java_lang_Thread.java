@@ -419,8 +419,6 @@ public final class Target_java_lang_Thread {
         Thread thread = JavaThreads.fromTarget(this);
         JavaThreads.interrupt(thread);
         JavaThreads.unpark(thread);
-        // Must be executed after setting interrupted to true, see
-        // HeapImpl.waitForReferencePendingList()
         JavaThreads.wakeUpVMConditionWaiters(thread);
     }
 
