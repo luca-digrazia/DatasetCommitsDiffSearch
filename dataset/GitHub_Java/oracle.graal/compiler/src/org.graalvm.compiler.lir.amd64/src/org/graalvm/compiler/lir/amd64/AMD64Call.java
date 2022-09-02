@@ -32,6 +32,7 @@ import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.STACK;
 import static org.graalvm.compiler.lir.LIRValueUtil.differentRegisters;
 
+import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.spi.ForeignCallLinkage;
@@ -104,8 +105,8 @@ public class AMD64Call {
             directCall(crb, masm, callTarget, null, true, state);
         }
 
-        public void emitCall(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            directCall(crb, masm, callTarget, null, true, state);
+        public int emitCall(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+            return directCall(crb, masm, callTarget, null, true, state);
         }
     }
 
@@ -194,48 +195,77 @@ public class AMD64Call {
         }
     }
 
-    public static void directCall(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget callTarget, Register scratch, boolean align, LIRFrameState info) {
-        int before;
+    public static int directCall(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget callTarget, Register scratch, boolean align, LIRFrameState info) {
+        if (align) {
+            emitAlignmentForDirectCall(crb, masm);
+        }
+        int before = masm.position();
+        int callPCOffset;
         if (scratch != null && !GeneratePIC.getValue(crb.getOptions())) {
-            assert !align;
             // offset might not fit a 32-bit immediate, generate an
             // indirect call with a 64-bit immediate
-            // This is an implicit contract between the backend and the jvmci code installer. The
-            // latter expects a mov instruction immediately preceding a call instruction. The jcc
-            // erratum padding should be inserted before the mov instruction.
-            before = masm.directCall(0L, scratch);
+            masm.movq(scratch, 0L);
+            callPCOffset = masm.position();
+            masm.call(scratch);
         } else {
-            before = masm.directCall(align, crb.target.arch.getMachineCodeCallDisplacementOffset(), crb.target.wordSize);
+            callPCOffset = masm.position();
+            masm.call();
         }
         int after = masm.position();
         crb.recordDirectCall(before, after, callTarget, info);
         crb.recordExceptionHandlers(after, info);
         masm.ensureUniquePC();
+        return callPCOffset;
     }
 
-    public static void directJmp(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget target, Register scratch) {
-        int before;
+    protected static void emitAlignmentForDirectCall(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        // make sure that the displacement word of the call ends up word aligned
+        int offset = masm.position();
+        offset += crb.target.arch.getMachineCodeCallDisplacementOffset();
+        int modulus = crb.target.wordSize;
+        if (offset % modulus != 0) {
+            masm.nop(modulus - offset % modulus);
+        }
+    }
+
+    public static int directJmp(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget target) {
+        return directJmp(crb, masm, target, null);
+    }
+
+    public static int directJmp(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget target, Register scratch) {
+        int before = masm.position();
+        int callPCOffset;
         if (scratch != null && !GeneratePIC.getValue(crb.getOptions())) {
             // offset might not fit a 32-bit immediate, generate an
             // indirect call with a 64-bit immediate
-            before = masm.directJmp(0L, scratch);
+            masm.movq(scratch, 0L);
+            callPCOffset = masm.position();
+            masm.jmp(scratch);
         } else {
-            before = masm.jmp(0, true);
+            callPCOffset = masm.position();
+            masm.jmp(0, true);
         }
-        recordDirectCall(crb, masm, target, before);
+        int after = masm.position();
+        crb.recordDirectCall(before, after, target, null);
+        masm.ensureUniquePC();
+        return callPCOffset;
     }
 
-    public static void recordDirectCall(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget target, int before) {
-        crb.recordDirectCall(before, masm.position(), target, null);
+    public static void directConditionalJmp(CompilationResultBuilder crb, AMD64MacroAssembler masm, InvokeTarget target, ConditionFlag cond) {
+        int before = masm.position();
+        masm.jcc(cond, 0, true);
+        int after = masm.position();
+        crb.recordDirectCall(before, after, target, null);
         masm.ensureUniquePC();
     }
 
-    public static void indirectCall(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
-        int before = masm.indirectCall(dst);
+    public static int indirectCall(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register dst, InvokeTarget callTarget, LIRFrameState info) {
+        int before = masm.position();
+        masm.call(dst);
         int after = masm.position();
         crb.recordIndirectCall(before, after, callTarget, info);
         crb.recordExceptionHandlers(after, info);
         masm.ensureUniquePC();
+        return before;
     }
-
 }
