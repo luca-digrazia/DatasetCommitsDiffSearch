@@ -160,15 +160,10 @@ final class Linker {
      * Search for Visual Studio link.exe Search Order is: VS2017+, VS2013, VS2015, VS2012.
      */
     private static String getWindowsLinkPath() throws Exception {
-        try {
-            Path vc141NewerLinker = getVC141AndNewerLinker();
-            if (vc141NewerLinker != null) {
-                return vc141NewerLinker.toString();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        Path vc141NewerLinker = getVC141AndNewerLinker();
+        if (vc141NewerLinker != null) {
+            return vc141NewerLinker.toString();
         }
-        
 
         String link = "\\VC\\bin\\amd64\\link.exe";
 
@@ -206,12 +201,9 @@ final class Linker {
             throw new InternalError("Could not read the ProgramFiles(x86) environment variable");
         }
         Path vswhere = Paths.get(programFilesX86 + "\\Microsoft Visual Studio\\Installer\\vswhere.exe");
-        if (!Files.exists(vswhere)) {
-            return null;
-        }
 
         ProcessBuilder processBuilder = new ProcessBuilder(vswhere.toString(), "-requires",
-                "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath", "-latest");
+                        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath");
         processBuilder.redirectOutput(ProcessBuilder.Redirect.PIPE);
         processBuilder.redirectError(ProcessBuilder.Redirect.PIPE);
         Process process = processBuilder.start();
