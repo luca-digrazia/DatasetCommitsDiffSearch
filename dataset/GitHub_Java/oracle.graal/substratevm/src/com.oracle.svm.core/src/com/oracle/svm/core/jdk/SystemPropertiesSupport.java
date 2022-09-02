@@ -35,7 +35,6 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.VM;
-import com.oracle.svm.core.config.ConfigurationValues;
 
 /**
  * This class maintains the system properties at run time.
@@ -98,7 +97,6 @@ public abstract class SystemPropertiesSupport {
         initializeProperty("java.endorsed.dirs", "");
         initializeProperty("java.ext.dirs", "");
         initializeProperty("java.library.path", "");
-        initializeProperty("sun.arch.data.model", Integer.toString(ConfigurationValues.getTarget().wordJavaKind.getBitCount()));
 
         String targetName = System.getProperty("svm.targetName");
         String targetArch = System.getProperty("svm.targetArch");
