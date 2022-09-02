@@ -382,7 +382,6 @@ final class PolyglotLimits {
             }
             if (limits.timeLimit != null) {
                 engine.noThreadTimingNeeded.invalidate();
-                engine.noPriorityChangeNeeded.invalidate();
                 long timeLimitMillis = limits.timeLimit.toMillis();
                 assert timeLimitMillis > 0; // needs to verified before
                 TimeLimitChecker task = new TimeLimitChecker(context, this);

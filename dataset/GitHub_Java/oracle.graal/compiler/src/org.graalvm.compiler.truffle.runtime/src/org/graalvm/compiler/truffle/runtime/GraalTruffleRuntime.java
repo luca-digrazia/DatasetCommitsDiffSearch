@@ -33,7 +33,6 @@ import java.io.CharArrayWriter;
 import java.io.PrintWriter;
 import java.lang.annotation.Annotation;
 import java.lang.invoke.MethodHandle;
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,7 +57,6 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 import org.graalvm.compiler.truffle.common.TruffleDebugJavaMethod;
 import org.graalvm.compiler.truffle.common.TruffleOutputGroup;
-import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue.Priority;
 import org.graalvm.compiler.truffle.runtime.debug.StatisticsListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceASTCompilationListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceCallTreeListener;
@@ -643,21 +641,21 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     public abstract SpeculationLog createSpeculationLog();
 
     @Override
-    public final RootCallTarget createCallTarget(RootNode rootNode) {
+    public RootCallTarget createCallTarget(RootNode rootNode) {
         CompilerAsserts.neverPartOfCompilation();
-        final OptimizedCallTarget newCallTarget = createClonedCallTarget(rootNode, null);
+        final RootCallTarget newCallTarget = createClonedCallTarget(rootNode, null);
         TruffleSplittingStrategy.newTargetCreated(newCallTarget);
         return newCallTarget;
     }
 
-    public final OptimizedCallTarget createClonedCallTarget(RootNode rootNode, OptimizedCallTarget source) {
+    public OptimizedCallTarget createClonedCallTarget(RootNode rootNode, OptimizedCallTarget source) {
         CompilerAsserts.neverPartOfCompilation();
         OptimizedCallTarget target = createOptimizedCallTarget(source, rootNode);
         tvmci.onLoad(target.getRootNode());
         return target;
     }
 
-    public final OptimizedCallTarget createOSRCallTarget(RootNode rootNode) {
+    public OptimizedCallTarget createOSRCallTarget(RootNode rootNode) {
         CompilerAsserts.neverPartOfCompilation();
         OptimizedCallTarget target = createOptimizedCallTarget(null, rootNode);
         tvmci.onLoad(target.getRootNode());
@@ -757,23 +755,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     @SuppressWarnings("try")
     public CancellableCompileTask submitForCompilation(OptimizedCallTarget optimizedCallTarget, boolean lastTierCompilation) {
-        Priority priority = lastTierCompilation ? Priority.LAST_TIER : Priority.FIRST_TIER;
-        return getCompileQueue().submitTask(priority, optimizedCallTarget, new BackgroundCompileQueue.Request() {
-            @Override
-            protected void execute(TruffleCompilationTask task, WeakReference<OptimizedCallTarget> targetRef) {
-                OptimizedCallTarget callTarget = targetRef.get();
-                if (callTarget != null) {
-                    try {
-                        if (!task.isCancelled()) {
-                            doCompile(targetRef.get(), task);
-                        }
-                    } finally {
-                        callTarget.resetCompilationTask();
-                    }
-                }
-            }
-        });
-
+        BackgroundCompileQueue queue = getCompileQueue();
+        return queue.submitCompilationRequest(this, optimizedCallTarget, lastTierCompilation);
     }
 
     @SuppressWarnings("all")
@@ -1087,5 +1070,4 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             throw handleAnnotationFailure(e, String.format("querying %s for presence of a %s annotation", type.toJavaName(), annotationClass.getName()));
         }
     }
-
 }

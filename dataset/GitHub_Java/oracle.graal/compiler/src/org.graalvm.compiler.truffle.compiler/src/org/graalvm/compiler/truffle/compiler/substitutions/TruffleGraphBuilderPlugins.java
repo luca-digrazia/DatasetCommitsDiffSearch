@@ -125,7 +125,7 @@ public class TruffleGraphBuilderPlugins {
 
     public static void registerOptimizedAssumptionPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, KnownTruffleTypes types) {
         ResolvedJavaType optimizedAssumptionType = TruffleCompilerRuntime.getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.OptimizedAssumption");
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(optimizedAssumptionType));
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(optimizedAssumptionType), null);
         InvocationPlugin plugin = new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
@@ -397,16 +397,7 @@ public class TruffleGraphBuilderPlugins {
         });
         r.register2("castArrayFixedLength", Object[].class, int.class, new InvocationPlugin() {
             @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver,
-                            ValueNode args, ValueNode length) {
-                if (canDelayIntrinsification) {
-                    return false;
-                }
-                if (args.isConstant()) {
-                    b.addPush(JavaKind.Object, args);
-                    return true;
-                }
-
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode args, ValueNode length) {
                 b.addPush(JavaKind.Object, new PiArrayNode(args, length, args.stamp(NodeView.DEFAULT)));
                 return true;
             }

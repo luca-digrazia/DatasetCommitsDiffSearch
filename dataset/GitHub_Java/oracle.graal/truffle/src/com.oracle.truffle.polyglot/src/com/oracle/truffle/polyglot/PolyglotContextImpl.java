@@ -79,7 +79,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor.CastUnsafe;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.polyglot.HostLanguage.HostContext;
 import com.oracle.truffle.polyglot.PolyglotEngineImpl.CancelExecution;
 
@@ -868,7 +867,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     @Override
     public void close(Context sourceContext, boolean cancelIfExecuting) {
         checkCreatorAccess(sourceContext, "closed");
-        boolean closeCompleted = closeImpl(cancelIfExecuting, cancelIfExecuting, true);
+        boolean closeCompleted = closeImpl(cancelIfExecuting, cancelIfExecuting);
         if (cancelIfExecuting) {
             engine.getCancelHandler().cancel(Arrays.asList(this));
         } else if (!closeCompleted) {
@@ -914,7 +913,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     void waitForClose() {
-        while (!closeImpl(false, true, true)) {
+        while (!closeImpl(false, true)) {
             try {
                 synchronized (this) {
                     wait(1000);
@@ -971,7 +970,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         }
     }
 
-    boolean closeImpl(boolean cancelIfExecuting, boolean waitForPolyglotThreads, boolean notifyInstruments) {
+    boolean closeImpl(boolean cancelIfExecuting, boolean waitForPolyglotThreads) {
         /*
          * As a first step we prepare for close by waiting for other threads to finish closing and
          * checking whether other threads are still executing. This block performs the following
@@ -1061,9 +1060,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             assert !closed;
             Object prev = engine.enter(this);
             try {
-                closeChildContexts(cancelIfExecuting, waitForPolyglotThreads, notifyInstruments);
+                closeChildContexts(cancelIfExecuting, waitForPolyglotThreads);
 
-                finalizeContext(notifyInstruments);
+                finalizeContext();
 
                 // finalization performed commit close -> no reinitialization allowed
 
@@ -1098,7 +1097,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
          */
         if (disposedContexts != null) {
             for (PolyglotLanguageContext context : disposedContexts) {
-                context.notifyDisposed(notifyInstruments);
+                context.notifyDisposed();
             }
         }
 
@@ -1107,16 +1106,14 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 synchronized (parent) {
                     parent.childContexts.remove(this);
                 }
-            } else if (notifyInstruments) {
+            } else {
                 engine.removeContext(this);
             }
 
-            if (notifyInstruments) {
-                for (Thread thread : remainingThreads) {
-                    EngineAccessor.INSTRUMENT.notifyThreadFinished(engine, truffleContext, thread);
-                }
-                EngineAccessor.INSTRUMENT.notifyContextClosed(engine, truffleContext);
+            for (Thread thread : remainingThreads) {
+                EngineAccessor.INSTRUMENT.notifyThreadFinished(engine, truffleContext, thread);
             }
+            EngineAccessor.INSTRUMENT.notifyContextClosed(engine, truffleContext);
             if (parent == null) {
                 if (!this.config.logLevels.isEmpty()) {
                     EngineAccessor.LANGUAGE.configureLoggers(this, null, getAllLoggers(engine));
@@ -1129,13 +1126,13 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         return true;
     }
 
-    private void closeChildContexts(boolean cancelIfExecuting, boolean waitForPolyglotThreads, boolean notifyInstruments) {
+    private void closeChildContexts(boolean cancelIfExecuting, boolean waitForPolyglotThreads) {
         PolyglotContextImpl[] childrenToClose;
         synchronized (this) {
             childrenToClose = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
         }
         for (PolyglotContextImpl childContext : childrenToClose) {
-            childContext.closeImpl(cancelIfExecuting, waitForPolyglotThreads, notifyInstruments);
+            childContext.closeImpl(cancelIfExecuting, waitForPolyglotThreads);
         }
     }
 
@@ -1163,7 +1160,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         }
     }
 
-    private void finalizeContext(boolean notifyInstruments) {
+    private void finalizeContext() {
         // we need to run finalization at least twice in case a finalization run has
         // initialized a new contexts
         boolean finalizationPerformed;
@@ -1175,7 +1172,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 PolyglotLanguageContext context = contexts[i];
                 if (context.isInitialized()) {
                     try {
-                        finalizationPerformed |= context.finalizeContext(notifyInstruments);
+                        finalizationPerformed |= context.finalizeContext();
                     } catch (Exception | Error ex) {
                         throw PolyglotImpl.wrapGuestException(context, ex);
                     }
@@ -1232,27 +1229,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     return false;
                 }
             }
-            replayInstrumentationEvents();
         } finally {
             engine.leave(prev, this);
         }
         return true;
-    }
-
-    private void replayInstrumentationEvents() {
-        notifyContextCreated();
-        for (PolyglotLanguageContext lc : contexts) {
-            LanguageInfo language = lc.language.info;
-            if (lc.eventsEnabled && lc.env != null) {
-                EngineAccessor.INSTRUMENT.notifyLanguageContextCreated(this, truffleContext, language);
-                if (lc.isInitialized()) {
-                    EngineAccessor.INSTRUMENT.notifyLanguageContextInitialized(this, truffleContext, language);
-                    if (lc.finalized) {
-                        EngineAccessor.INSTRUMENT.notifyLanguageContextFinalized(this, truffleContext, language);
-                    }
-                }
-            }
-        }
     }
 
     synchronized void checkSubProcessFinished() {
