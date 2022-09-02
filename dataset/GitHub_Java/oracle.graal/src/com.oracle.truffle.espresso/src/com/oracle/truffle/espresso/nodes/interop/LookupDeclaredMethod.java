@@ -59,14 +59,13 @@ public abstract class LookupDeclaredMethod extends Node {
     }
 
     @Specialization(replaces = "doCached")
-    @TruffleBoundary
     Method doGeneric(Klass klass, String key, boolean publicOnly, boolean isStatic, int arity) {
         Method result = null;
         String methodName;
         String signature = null;
         int colonIndex = key.indexOf(':');
         if (colonIndex >= 0) {
-            String[] split = key.split(":");
+            String[] split = split(key);
             if (split.length != 2) {
                 return null;
             }
@@ -88,5 +87,10 @@ public abstract class LookupDeclaredMethod extends Node {
             }
         }
         return result;
+    }
+
+    @TruffleBoundary
+    private static String[] split(String key) {
+        return key.split(":");
     }
 }

@@ -85,14 +85,13 @@ public abstract class LookupVirtualMethodNode extends Node {
     }
 
     @Specialization(replaces = "doCached")
-    @TruffleBoundary
     Method doGeneric(ObjectKlass klass, String key, int arity) {
         Method resolved = null;
         String methodName;
         String signature = null;
         int colonIndex = key.indexOf(':');
         if (colonIndex >= 0) {
-            String[] split = key.split(":");
+            String[] split = split(key);
             if (split.length != 2) {
                 return null;
             }
@@ -113,6 +112,11 @@ public abstract class LookupVirtualMethodNode extends Node {
             }
         }
         return resolved;
+    }
+
+    @TruffleBoundary
+    private static String[] split(String key) {
+        return key.split(":");
     }
 
     protected static ObjectKlass getJLObject(Meta meta) {
