@@ -60,16 +60,14 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
 
     private TruffleObject envLocalStorage = RawPointer.nullInstance();
 
-    public static final class JvmtiHandler {
+    public static final class JvmtiFactory {
         private final EspressoContext context;
         private final @Pointer TruffleObject initializeJvmtiContext;
         private final @Pointer TruffleObject disposeJvmtiContext;
 
         private final ArrayList<JVMTI> created = new ArrayList<>();
 
-        private JvmtiPhase phase;
-
-        public JvmtiHandler(EspressoContext context, TruffleObject mokapotLibrary) {
+        public JvmtiFactory(EspressoContext context, TruffleObject mokapotLibrary) {
             this.context = context;
             this.initializeJvmtiContext = context.getNativeAccess().lookupAndBindSymbol(mokapotLibrary,
                             "initializeJvmtiContext",
@@ -102,26 +100,6 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
                 created.remove(env);
             }
         }
-
-        public synchronized int getPhase() {
-            return phase.value();
-        }
-
-        public synchronized void enterPhase(JvmtiPhase jvmtiPhase) {
-            this.phase = jvmtiPhase;
-        }
-
-        public synchronized void postVmStart() {
-            enterPhase(JvmtiPhase.START);
-        }
-
-        public synchronized void postVmInit() {
-            enterPhase(JvmtiPhase.LIVE);
-        }
-
-        public synchronized void postVmDeath() {
-            enterPhase(JvmtiPhase.DEAD);
-        }
     }
 
     private JVMTI(EspressoContext context, TruffleObject initializeJvmtiContext, int version) {
@@ -143,7 +121,7 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
     private void dispose(TruffleObject disposeJvmtiContext) {
         if (jvmtiEnvPtr != null) {
             try {
-                getUncached().execute(disposeJvmtiContext, jvmtiEnvPtr, jvmtiVersion, RawPointer.nullInstance());
+                getUncached().execute(disposeJvmtiContext, jvmtiEnvPtr, jvmtiVersion);
                 this.jvmtiEnvPtr = null;
                 this.jvmtiVersion = 0;
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
@@ -205,12 +183,6 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
     @JvmtiImpl
     public int GetEnvironmentLocalStorage(@Pointer TruffleObject dataPtr) {
         NativeUtils.writeToPointerPointer(getUncached(), dataPtr, envLocalStorage);
-        return JVMTI_OK;
-    }
-
-    @JvmtiImpl
-    public int GetPhase(@Pointer TruffleObject phasePtr) {
-        NativeUtils.writeToIntPointer(getUncached(), phasePtr, getVM().getJvmti().getPhase());
         return JVMTI_OK;
     }
 
