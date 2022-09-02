@@ -71,7 +71,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         if (shouldApproveWithoutChecks(lazyValue(className), lazyClassNameOrNull(env, callerClass))) {
             return true;
         }
-        return className == null || typeAccessChecker.isClassAccessible(env, className);
+        return className == null || typeAccessChecker.getConfiguration().get(className) != null;
     }
 
     public boolean verifyLoadClass(JNIEnvironment env, JNIObjectHandle callerClass, String className) {
@@ -83,7 +83,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         if (accessAdvisor.shouldIgnoreLoadClass(lazyName, callerClassName)) {
             return true;
         }
-        return className == null || typeAccessChecker.isClassAccessible(env, className);
+        return className == null || typeAccessChecker.getConfiguration().get(className) != null;
     }
 
     public boolean verifyGetField(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle name, JNIObjectHandle result, JNIObjectHandle declaring, JNIObjectHandle callerClass) {
@@ -145,8 +145,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
             return array;
         }
 
-        WordPredicate<JNIObjectHandle> predicate = c -> typeAccessChecker.isClassAccessible(env, c);
-        return filterArray(env, array, elementClass, predicate);
+        return filterArray(env, array, elementClass, typeAccessChecker::isClassAccessible);
     }
 
     public JNIObjectHandle filterGetFields(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle array, boolean declaredOnly, JNIObjectHandle callerClass) {
