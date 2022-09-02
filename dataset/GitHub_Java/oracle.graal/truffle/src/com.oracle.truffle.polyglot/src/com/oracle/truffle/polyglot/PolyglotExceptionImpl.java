@@ -60,7 +60,6 @@ import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
-import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.TruffleException;
@@ -109,7 +108,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
         this.engine = engine;
         this.context = (languageContext != null) ? languageContext.context : null;
         this.exception = original;
-        this.guestFrames = TruffleStackTrace.getStackTrace(original);
+        this.guestFrames = TruffleStackTrace.getStacktrace(original);
 
         if (exception instanceof TruffleException) {
             TruffleException truffleException = (TruffleException) exception;
@@ -340,10 +339,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.o
     @Override
     public Value getGuestObject() {
         return guestObject;
-    }
-
-    FileSystem getFileSystem() {
-        return context == null ? null : context.config.fileSystem;
     }
 
     /**

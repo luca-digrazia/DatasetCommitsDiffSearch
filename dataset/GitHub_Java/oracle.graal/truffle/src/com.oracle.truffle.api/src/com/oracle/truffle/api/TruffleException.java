@@ -72,7 +72,7 @@ public interface TruffleException {
 
     /**
      * Returns a node indicating the location where this exception occurred in the AST. This method
-     * may return <code>null</code> to indicate that the location is not available.
+     * may <code>null</code> to indicate that the location is not available.
      *
      * @since 0.27
      */
@@ -139,6 +139,15 @@ public interface TruffleException {
      */
     default boolean isCancelled() {
         return false;
+    }
+
+    /**
+     * @since 0.27
+     * @deprecated in 0.27
+     */
+    @Deprecated
+    default boolean isTimeout() {
+        return isCancelled();
     }
 
     /**
