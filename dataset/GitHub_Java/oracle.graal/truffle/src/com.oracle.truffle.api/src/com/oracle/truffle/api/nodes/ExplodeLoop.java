@@ -127,11 +127,10 @@ public @interface ExplodeLoop {
          * Like {@link #FULL_UNROLL}, but in addition loop unrolling duplicates loop exits in every
          * iteration instead of merging them. Code after a loop exit is duplicated for every loop
          * exit and every loop iteration. For example, a loop with 4 iterations and 2 loop exits
-         * (exit1 and exit2, where exit1 is an early return inside a loop, such as
-         * {@link LoopExplosionKind untilReturnLoop()}) leads to 4 copies of the loop body and 4
-         * copies of exit1 and 1 copy of exit2. After each exit all code until a return is
-         * duplicated per iteration. Beware of break statements inside loops since they cause
-         * additional loop exits leading to code duplication along exit2.
+         * (exit1 and exit2, where exit1 is an early return inside a loop) leads to 4 copies of the
+         * loop body and 4 copies of exit1 and 1 copy of exit2. After each exit all code until a
+         * return is duplicated per iteration. Beware of break statements inside loops since they
+         * cause additional loop exits leading to code duplication along exit2.
          *
          * @since 20.0
          */
@@ -251,12 +250,10 @@ class Snippets {
     int untilReturnLoop() {
         for (int i = 0; i < 2; i++) {
             if (condition(i)) {
-                // exit1
-                return f(i);
+                return f(i); // exit1
             }
         }
-        // exit2
-        return fallback();
+        return fallback(); // exit2
     }
     // END: untilReturnLoop
 
