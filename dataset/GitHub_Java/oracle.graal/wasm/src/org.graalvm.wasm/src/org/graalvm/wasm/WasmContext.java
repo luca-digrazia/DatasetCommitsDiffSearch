@@ -139,14 +139,14 @@ public final class WasmContext {
         return "module-" + moduleNameCount++;
     }
 
-    public WasmModule readModule(byte[] data, ModuleLimits moduleLimits) {
-        return readModule(freshModuleName(), data, moduleLimits);
+    public WasmModule readModule(byte[] data) {
+        return readModule(freshModuleName(), data);
     }
 
-    public WasmModule readModule(String moduleName, byte[] data, ModuleLimits moduleLimits) {
+    public WasmModule readModule(String moduleName, byte[] data) {
         final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy = WasmOptions.StoreConstantsPolicy.getValue(this.environment().getOptions());
         final WasmModule module = new WasmModule(moduleName, data, storeConstantsPolicy);
-        final BinaryParser reader = new BinaryParser(language, module, moduleLimits);
+        final BinaryParser reader = new BinaryParser(language, module);
         reader.readModule();
         return module;
     }
