@@ -26,7 +26,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.Method;
@@ -44,7 +43,7 @@ public final class InvokeStaticNode extends QuickNode {
     @Child private DirectCallNode directCallNode;
 
     public InvokeStaticNode(Method method, int top, int curBCI) {
-        super(top, curBCI, Bytecodes.INVOKESTATIC);
+        super(top, curBCI);
         assert method.isStatic();
         this.method = method.getMethodVersion();
         this.callsDoPrivileged = method.getMeta().java_security_AccessController.equals(method.getDeclaringKlass()) &&
@@ -80,21 +79,8 @@ public final class InvokeStaticNode extends QuickNode {
         }
 
         Object result = directCallNode.call(args);
-        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, method.getMethod().getReturnKind());
-    }
-
-    @Override
-    public boolean producedForeignObject(VirtualFrame frame) {
-        return method.getMethod().getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
-    }
-
-    private int getResultAt() {
-        // no receiver
-        return top - Signatures.slotsForParameters(method.getMethod().getParsedSignature());
-    }
-
-    @Override
-    public boolean redefined() {
-        return method.getMethod().isRemovedByRedefition();
+        int resultAt = top - Signatures.slotsForParameters(method.getMethod().getParsedSignature()); // no
+        // receiver
+        return (resultAt - top) + root.putKind(frame, resultAt, result, method.getMethod().getReturnKind());
     }
 }

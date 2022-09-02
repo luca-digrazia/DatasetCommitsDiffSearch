@@ -37,7 +37,7 @@ import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -53,7 +53,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
 
     private static final DebugCounter NATIVE_METHOD_CALLS = DebugCounter.create("Native method calls");
 
-    public NativeMethodNode(TruffleObject boundNative, Method method, boolean isJni) {
+    public NativeMethodNode(TruffleObject boundNative, MethodVersion method, boolean isJni) {
         super(method);
         this.boundNative = boundNative;
         this.executeNative = InteropLibrary.getFactory().create(boundNative);
@@ -136,7 +136,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
     }
 
     protected Object processResult(JniEnv env, Object result) {
-        assert !InteropLibrary.getFactory().getUncached().isNull(env.getNativePointer());
+        assert env.getNativePointer() != 0;
 
         // JNI exception handling.
         maybeThrowAndClearPendingException(env);
