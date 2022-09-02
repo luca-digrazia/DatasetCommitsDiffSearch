@@ -33,7 +33,6 @@ import java.util.Queue;
 
 import org.graalvm.compiler.options.OptionType;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.driver.MacroOption.MacroOptionKind;
 
 class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
@@ -44,7 +43,7 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
 
     static final String helpText = NativeImage.getResource("/Help.txt");
     static final String helpExtraText = NativeImage.getResource("/HelpExtra.txt");
-    static final String noServerOption = SubstrateOptions.NO_SERVER;
+    static final String noServerOption = "--no-server";
     static final String verboseServerOption = "--verbose-server";
     static final String serverOptionPrefix = "--server-";
 
@@ -133,16 +132,11 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 return true;
             case "--expert-options":
                 args.poll();
-                nativeImage.setPrintFlagsOptionQuery(OptionType.User.name());
+                nativeImage.setQueryOption(OptionType.User.name());
                 return true;
             case "--expert-options-all":
                 args.poll();
-                nativeImage.setPrintFlagsOptionQuery("");
-                return true;
-            case "--expert-options-detail":
-                args.poll();
-                String optionNames = args.poll();
-                nativeImage.setPrintFlagsWithExtraHelpOptionQuery(optionNames);
+                nativeImage.setQueryOption("");
                 return true;
             case noServerOption:
             case verboseServerOption:
