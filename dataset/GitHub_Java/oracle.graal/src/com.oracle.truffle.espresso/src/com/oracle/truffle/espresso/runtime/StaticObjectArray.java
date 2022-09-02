@@ -22,13 +22,158 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import com.oracle.truffle.espresso.impl.Klass;
+import java.lang.reflect.Array;
 
-public final class StaticObjectArray extends StaticObjectWrapper<Object[]> {
-    public StaticObjectArray(Klass componentType, Object[] arr) {
-        super(componentType.getArrayClass(), arr);
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
+
+public final class StaticObjectArray extends StaticObject {
+
+    private final Object array;
+
+    public StaticObjectArray(Klass klass, Object array) {
+        super(klass);
+        assert klass.isArray();
+        assert array != null;
+        assert !(array instanceof StaticObject);
+        assert array.getClass().isArray();
+        this.array = array;
     }
-    public StaticObjectArray clone() {
-        return new StaticObjectArray(getKlass().getComponentType(), getWrapped().clone());
+
+    public static StaticObjectArray wrapPrimitiveArray(Object array) {
+        assert array != null;
+        assert array.getClass().isArray() && array.getClass().getComponentType().isPrimitive();
+        if (array instanceof boolean[]) {
+            return wrap((boolean[]) array);
+        }
+        if (array instanceof byte[]) {
+            return wrap((byte[]) array);
+        }
+        if (array instanceof char[]) {
+            return wrap((char[]) array);
+        }
+        if (array instanceof short[]) {
+            return wrap((short[]) array);
+        }
+        if (array instanceof int[]) {
+            return wrap((int[]) array);
+        }
+        if (array instanceof float[]) {
+            return wrap((float[]) array);
+        }
+        if (array instanceof double[]) {
+            return wrap((double[]) array);
+        }
+        if (array instanceof long[]) {
+            return wrap((long[]) array);
+        }
+        throw EspressoError.shouldNotReachHere("Not a primitive array " + array);
     }
+
+    @SuppressWarnings("unchecked")
+    public <T> T unwrap() {
+        return (T) array;
+    }
+
+    public <T> T get(int index) {
+        return this.<T[]> unwrap()[index];
+    }
+
+    public void put(int index, Object value) {
+        assert ((getKlass()).getComponentType().getType() == ((StaticObject) value).getKlass().getType());
+        ((Object[]) array)[index] = value;
+    }
+
+    public int length() {
+        return Array.getLength(array);
+    }
+
+    @Override
+    public ForeignAccess getForeignAccess() {
+        return StaticObjectArrayMessageResolutionForeign.ACCESS;
+    }
+
+    // region wrappers
+
+    public static StaticObjectArray wrap(StaticObject[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta.Object_array, array);
+    }
+
+    public static StaticObjectArray wrap(byte[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._byte_array, array);
+    }
+
+    public static StaticObjectArray wrap(boolean[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._boolean_array, array);
+    }
+
+    public static StaticObjectArray wrap(char[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._char_array, array);
+    }
+
+    public static StaticObjectArray wrap(short[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._short_array, array);
+    }
+
+    public static StaticObjectArray wrap(int[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._int_array, array);
+    }
+
+    public static StaticObjectArray wrap(float[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._float_array, array);
+    }
+
+    public static StaticObjectArray wrap(double[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._double_array, array);
+    }
+
+    public static StaticObjectArray wrap(long[] array) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        return new StaticObjectArray(meta._long_array, array);
+    }
+
+    private Object cloneWrapped() {
+        if (array instanceof boolean[]) {
+            return this.<boolean[]> unwrap().clone();
+        }
+        if (array instanceof byte[]) {
+            return this.<byte[]> unwrap().clone();
+        }
+        if (array instanceof char[]) {
+            return this.<char[]> unwrap().clone();
+        }
+        if (array instanceof short[]) {
+            return this.<short[]> unwrap().clone();
+        }
+        if (array instanceof int[]) {
+            return this.<int[]> unwrap().clone();
+        }
+        if (array instanceof float[]) {
+            return this.<float[]> unwrap().clone();
+        }
+        if (array instanceof double[]) {
+            return this.<double[]> unwrap().clone();
+        }
+        if (array instanceof long[]) {
+            return this.<long[]> unwrap().clone();
+        }
+        return this.<StaticObject[]> unwrap().clone();
+    }
+
+    public StaticObjectArray copy() {
+        return new StaticObjectArray(getKlass(), cloneWrapped());
+    }
+
+    // endregion
 }

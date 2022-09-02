@@ -38,14 +38,12 @@ public final class ClassRegistries {
 
     private final ClassRegistry bootClassRegistry;
     private final ConcurrentHashMap<StaticObject, ClassRegistry> registries;
-    private final LoadingConstraints constraints;
     private final EspressoContext context;
 
     public ClassRegistries(EspressoContext context) {
         this.context = context;
         this.registries = new ConcurrentHashMap<>();
         this.bootClassRegistry = new BootClassRegistry(context);
-        this.constraints = new LoadingConstraints(context);
     }
 
     @TruffleBoundary
@@ -101,6 +99,7 @@ public final class ClassRegistries {
                         });
 
         return registry.loadKlass(type);
+
     }
 
     @TruffleBoundary
@@ -137,19 +136,5 @@ public final class ClassRegistries {
 
     public final BootClassRegistry getBootClassRegistry() {
         return (BootClassRegistry) bootClassRegistry;
-    }
-
-    public final void checkLoadingConstraint(Symbol<Type> type, StaticObject loader1, StaticObject loader2) {
-        Symbol<Type> toCheck = context.getTypes().getElementalType(type);
-        if (!Types.isPrimitive(toCheck) && loader1 != loader2) {
-            constraints.checkConstraint(toCheck, loader1, loader2);
-        }
-    }
-
-    final void recordConstraint(Symbol<Type> type, Klass klass, StaticObject loader) {
-        assert !Types.isArray(type);
-        if (!Types.isPrimitive(type)) {
-            constraints.recordConstraint(type, klass, loader);
-        }
     }
 }

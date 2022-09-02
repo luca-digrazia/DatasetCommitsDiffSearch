@@ -56,7 +56,7 @@ public class MHInvokeGenericNode extends EspressoBaseNode {
             fullArgs = new Object[args.length + 1];
             int i = 0;
             fullArgs[i++] = self;
-            for (Object arg : args) { // Double copy of frame arguments. ->
+            for (Object arg : args) {
                 fullArgs[i++] = arg;
             }
         }

@@ -261,6 +261,9 @@ public final class Method implements ModifiersProvider, ContextAccess {
                         throw getMeta().throwEx(UnsatisfiedLinkError.class);
                     }
                 } else {
+                    if (!hasBytecodes()) {
+
+                    }
                     FrameDescriptor frameDescriptor = initFrameDescriptor(getMaxLocals() + getMaxStackSize());
                     EspressoRootNode rootNode = new EspressoRootNode(this, frameDescriptor, new BytecodeNode(this, frameDescriptor));
                     callTarget = Truffle.getRuntime().createCallTarget(rootNode);
@@ -382,6 +385,29 @@ public final class Method implements ModifiersProvider, ContextAccess {
         return getMeta().toHostBoxed(getCallTarget().call(filteredArgs));
     }
 
+    @TruffleBoundary
+    private Object[] fitVarargs(Object[] args) {
+        if (!isVarargs()) {
+            return args;
+        }
+        int pcount = Signatures.parameterCount(getParsedSignature(), false);
+        Object[] trueArgs = new Object[pcount];
+        int varargsPos = pcount - 1;
+        int argsLength = args.length;
+        int i;
+        for (i = 0; i < pcount; i++) {
+            if (i == varargsPos)
+                break;
+            trueArgs[i] = args[i];
+        }
+        Object[] leftoverArgs = new Object[argsLength - i];
+        for (int j = 0; j < leftoverArgs.length; j++) {
+            leftoverArgs[j] = args[i + j];
+        }
+        // trueArgs[varargsPos] = new StaticObjectArray(Type.Object, )
+        throw EspressoError.unimplemented();
+    }
+
     /**
      * Invokes a guest method without parameter/return type conversions. There's no parameter
      * casting, widening nor narrowing based on the method signature.
@@ -405,6 +431,10 @@ public final class Method implements ModifiersProvider, ContextAccess {
     }
 
     public final boolean isClassInitializer() {
+        // assert Signatures.returnKind(getParsedSignature()) == JavaKind.Void;
+        // assert isStatic();
+        // assert Signatures.parameterCount(getParsedSignature(), false) == 0;
+        // assert !Name.CLINIT.equals(getName()) || Signature._void.equals(getRawSignature());
         return Name.CLINIT.equals(getName());
     }
 
@@ -457,10 +487,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
         return target;
     }
 
-    // Polymorphic signature method 'creation'
-
-    Method findInvokeIntrinsic(Symbol<Signature> signature, Function<Method, EspressoBaseNode> baseNodeFactory) {
-        assert (this.getDeclaringKlass().getType() == Type.MethodHandle);
+    public Method findInvokeIntrinsic(Symbol<Signature> signature, Function<Method, EspressoBaseNode> baseNodeFactory) {
         Method method = intrinsicInvokes.get(signature);
         if (method != null) {
             return method;
@@ -472,8 +499,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
         return method;
     }
 
-    Method findLinkToIntrinsic(Symbol<Signature> signature, Function<Method, EspressoBaseNode> baseNodeFactory) {
-        assert (this.getDeclaringKlass().getType() == Type.MethodHandle);
+    public Method findLinkToIntrinsic(Symbol<Signature> signature, Function<Method, EspressoBaseNode> baseNodeFactory) {
         Method method = intrinsicLinkTo.get(signature);
         if (method != null) {
             return method;

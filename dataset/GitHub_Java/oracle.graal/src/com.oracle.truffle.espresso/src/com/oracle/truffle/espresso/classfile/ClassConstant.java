@@ -217,13 +217,6 @@ public interface ClassConstant extends PoolConstant {
         }
     }
 
-    /**
-     * Constant Pool patching inserts already resolved constants in the constant pool. However, at
-     * the time of patching, we do not have a Runtime CP. Therefore, we help the CP by inserting a
-     * Pre-Resolved constant.
-     *
-     * This is also used to Pre-resolve anonymous classes.
-     */
     final class PreResolved implements ClassConstant, Resolvable {
         private final Klass resolved;
 
