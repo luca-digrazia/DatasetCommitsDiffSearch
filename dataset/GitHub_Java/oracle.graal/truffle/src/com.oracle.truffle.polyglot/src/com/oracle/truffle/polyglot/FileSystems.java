@@ -92,7 +92,7 @@ final class FileSystems {
     }
 
     static FileSystem newDefaultFileSystem() {
-        return newFileSystem(findDefaultFileSystemProvider());
+        return FileSystems.newFileSystem(findDefaultFileSystemProvider());
     }
 
     static FileSystem newDefaultFileSystem(Path userDir) {
