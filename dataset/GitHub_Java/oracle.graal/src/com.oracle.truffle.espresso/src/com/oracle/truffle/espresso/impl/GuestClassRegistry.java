@@ -63,7 +63,7 @@ public final class GuestClassRegistry extends ClassRegistry {
 
     @SuppressWarnings("unused")
     @Override
-    public Klass loadKlass(Symbol<Type> type) {
+    public Klass loadKlass(Symbol<Type> type, Symbol<Type> instigator) {
         if (Types.isArray(type)) {
             Klass elemental = loadKlass(getTypes().getElementalType(type));
             if (elemental == null) {
