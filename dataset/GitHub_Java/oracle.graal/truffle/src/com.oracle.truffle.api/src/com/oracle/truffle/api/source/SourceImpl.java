@@ -223,8 +223,7 @@ final class SourceImpl extends Source {
             return hashCode;
         }
 
-        static int hashCodeImpl(Object content, String mimeType, String language, URL url, URI uri, String name, String path, boolean internal, boolean interactive,
-                        boolean cached, @SuppressWarnings("unused") boolean legacy) {
+        final int hashCodeImpl(Object content, String mimeType, String language, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy) {
             int result = 31 * 1 + ((content == null) ? 0 : content.hashCode());
             result = 31 * result + (interactive ? 1231 : 1237);
             result = 31 * result + (internal ? 1231 : 1237);
@@ -331,17 +330,14 @@ final class SourceImpl extends Source {
             }
         }
 
-        @Override
         String getPath() {
             return path;
         }
 
-        @Override
         URI getURI() {
             return uri;
         }
 
-        @Override
         URL getURL() {
             return url;
         }
@@ -419,8 +415,8 @@ final class SourceImpl extends Source {
         URL getURL() {
             if (url == INVALID) {
                 try {
-                    URI localUri = getURI();
-                    url = new URL(localUri.getScheme(), localUri.getHost(), localUri.getPort(), localUri.getRawPath());
+                    URI uri = getURI();
+                    url = new URL(uri.getScheme(), uri.getHost(), uri.getPort(), uri.getRawPath());
                 } catch (MalformedURLException e) {
                     // Never thrown
                     throw new AssertionError(e);
