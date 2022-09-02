@@ -97,7 +97,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
 
     private final AtomicReference<Object> parsedGraphCacheState = new AtomicReference<>(GRAPH_CACHE_UNPARSED);
     private static final Object GRAPH_CACHE_UNPARSED = "unparsed";
-    private static final Object GRAPH_CACHE_CLEARED = "cleared by cleanupAfterAnalysis";
 
     private StructuredGraph analyzedGraph;
 
@@ -182,10 +181,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
         typeFlow = null;
         invokedBy = null;
         implementationInvokedBy = null;
-        contextInsensitiveInvoke.set(null);
-        if (parsedGraphCacheState.get() instanceof AnalysisParsedGraph) {
-            parsedGraphCacheState.set(GRAPH_CACHE_CLEARED);
-        }
     }
 
     public void startTrackInvocations() {
@@ -648,9 +643,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
 
             } else if (curState instanceof Throwable) {
                 throw AnalysisError.shouldNotReachHere("parsing had failed in another thread", (Throwable) curState);
-
-            } else if (curState == GRAPH_CACHE_CLEARED) {
-                return null;
 
             } else {
                 throw AnalysisError.shouldNotReachHere("Unknown state: " + curState);
