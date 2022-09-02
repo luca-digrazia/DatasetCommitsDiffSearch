@@ -24,12 +24,9 @@
  */
 package com.oracle.svm.hosted.jdk;
 
-/* Checkstyle: allow reflection */
-import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.util.function.Consumer;
 
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -51,18 +48,16 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
     @Override
     public void duringSetup(DuringSetupAccess a) {
         rerunClassInit(a, "sun.nio.ch.IOUtil", "sun.nio.ch.ServerSocketChannelImpl", "sun.nio.ch.DatagramChannelImpl", "sun.nio.ch.FileChannelImpl", "sun.nio.ch.FileKey");
-        rerunClassInit(a, "java.nio.file.FileSystems");
         rerunClassInit(a, "java.nio.file.FileSystems$DefaultFileSystemHolder");
         rerunClassInit(a, "java.nio.file.Files$FileTypeDetectors");
         rerunClassInit(a, "sun.nio.ch.Net", "sun.nio.ch.SocketOptionRegistry$LazyInitialization");
         if (isPosix()) {
-            rerunClassInit(a, "sun.nio.fs.UnixNativeDispatcher", "sun.nio.ch.UnixAsynchronousServerSocketChannelImpl");
+            rerunClassInit(a, "sun.nio.fs.UnixNativeDispatcher");
             if (isLinux()) {
                 rerunClassInit(a, "sun.nio.ch.sctp.SctpChannelImpl");
             }
         } else if (isWindows()) {
-            rerunClassInit(a, "sun.nio.fs.WindowsNativeDispatcher", "sun.nio.fs.WindowsSecurity", "sun.nio.ch.Iocp",
-                            "sun.nio.ch.WindowsAsynchronousServerSocketChannelImpl", "sun.nio.ch.WindowsAsynchronousSocketChannelImpl");
+            rerunClassInit(a, "sun.nio.fs.WindowsNativeDispatcher", "sun.nio.fs.WindowsSecurity", "sun.nio.ch.Iocp");
         }
     }
 
@@ -76,19 +71,14 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
             JNIRuntimeAccess.register(constructor(a, "sun.nio.fs.WindowsException", int.class));
         }
 
-        /* Use the same lambda for registration to ensure it is called only once. */
-        Consumer<DuringAnalysisAccess> registerServerSocketChannelImplInitIDs = JNIRegistrationJavaNio::registerServerSocketChannelImplInitIDs;
-        a.registerReachabilityHandler(registerServerSocketChannelImplInitIDs, method(a, "sun.nio.ch.ServerSocketChannelImpl", "initIDs"));
-        if (isPosix()) {
-            a.registerReachabilityHandler(registerServerSocketChannelImplInitIDs, method(a, "sun.nio.ch.UnixAsynchronousServerSocketChannelImpl", "initIDs"));
-        }
+        a.registerReachabilityHandler(JNIRegistrationJavaNio::registerServerSocketChannelImplInitIDs, method(a, "sun.nio.ch.ServerSocketChannelImpl", "initIDs"));
         a.registerReachabilityHandler(JNIRegistrationJavaNio::registerDatagramChannelImplInitIDs, method(a, "sun.nio.ch.DatagramChannelImpl", "initIDs"));
         a.registerReachabilityHandler(JNIRegistrationJavaNio::registerFileChannelImplInitIDs, method(a, "sun.nio.ch.FileChannelImpl", "initIDs"));
         a.registerReachabilityHandler(JNIRegistrationJavaNio::registerFileKeyInitIDs, method(a, "sun.nio.ch.FileKey", "initIDs"));
 
         if (isPosix()) {
             a.registerReachabilityHandler(JNIRegistrationJavaNio::registerUnixNativeDispatcherInit, method(a, "sun.nio.fs.UnixNativeDispatcher", "init"));
-            a.registerReachabilityHandler(JNIRegistrationJavaNio::registerDefaultFileSystemProvider, getDefaultFileSystemProviderFactoryMethod(a));
+            a.registerReachabilityHandler(JNIRegistrationJavaNio::registerDefaultFileSystemProviderCreate, method(a, "sun.nio.fs.DefaultFileSystemProvider", "create"));
             if (isLinux()) {
                 a.registerReachabilityHandler(JNIRegistrationJavaNio::registerSctpChannelImplInitIDs, method(a, "sun.nio.ch.sctp.SctpChannelImpl", "initIDs"));
             }
@@ -101,36 +91,26 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
         a.registerReachabilityHandler(JNIRegistrationJavaNio::registerConnectionCreateInetSocketAddress, method(a, "com.sun.jndi.ldap.Connection", "createInetSocketAddress", String.class, int.class));
     }
 
-    private static void registerDefaultFileSystemProvider(DuringAnalysisAccess a) {
+    private static void registerDefaultFileSystemProviderCreate(@SuppressWarnings("unused") DuringAnalysisAccess a) {
         /*
          * The class instantiated on Posix systems depends on the OS, and instantiation is via
          * reflection. So we register exactly the class that is returned by the hosted invocation.
          */
         Object hostedDefaultProvider;
         try {
-            hostedDefaultProvider = getDefaultFileSystemProviderFactoryMethod(a).invoke(null);
-        } catch (Exception e) {
-            throw new InternalError(e);
-        }
-        RuntimeReflection.register(hostedDefaultProvider.getClass());
-        RuntimeReflection.register(ReflectionUtil.lookupConstructor(hostedDefaultProvider.getClass()));
-    }
-
-    private static Method getDefaultFileSystemProviderFactoryMethod(BeforeAnalysisAccess a) {
-        Method factoryMethod;
-        try {
-            factoryMethod = method(a, "sun.nio.fs.DefaultFileSystemProvider", "create");
+            hostedDefaultProvider = ReflectionUtil.lookupMethod(sun.nio.fs.DefaultFileSystemProvider.class, "create").invoke(null);
         } catch (ReflectionUtilError e) {
             try {
                 // JDK-8213406
-                factoryMethod = method(a, "sun.nio.fs.DefaultFileSystemProvider", "instance");
+                hostedDefaultProvider = ReflectionUtil.lookupMethod(sun.nio.fs.DefaultFileSystemProvider.class, "instance").invoke(null);
             } catch (Exception e2) {
                 throw new InternalError(e2);
             }
         } catch (Exception e) {
             throw new InternalError(e);
         }
-        return factoryMethod;
+        RuntimeReflection.register(hostedDefaultProvider.getClass());
+        RuntimeReflection.register(ReflectionUtil.lookupConstructor(hostedDefaultProvider.getClass()));
     }
 
     private static void registerServerSocketChannelImplInitIDs(DuringAnalysisAccess a) {
