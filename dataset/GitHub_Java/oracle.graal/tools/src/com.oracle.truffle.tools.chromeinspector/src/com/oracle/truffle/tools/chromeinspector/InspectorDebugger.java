@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -128,12 +128,12 @@ public final class InspectorDebugger extends DebuggerDomain {
             }
         });
         if (suspend) {
-            startSession();
+            doEnable();
             ds.suspendNextExecution();
         }
     }
 
-    private void startSession() {
+    private void doEnable() {
         Debugger tdbg = context.getEnv().lookup(context.getEnv().getInstruments().get("debugger"), Debugger.class);
         ds = tdbg.startSession(new SuspendedCallbackImpl(), SourceElement.ROOT, SourceElement.STATEMENT);
         ds.setSourcePath(context.getSourcePath());
@@ -144,26 +144,27 @@ public final class InspectorDebugger extends DebuggerDomain {
     }
 
     @Override
-    public void doEnable() {
+    public void enable() {
         if (ds == null) {
-            startSession();
+            doEnable();
         }
         slh.addLoadScriptListener(new LoadScriptListenerImpl());
     }
 
     @Override
-    public void doDisable() {
-        assert ds != null;
-        slh.setDebuggerSession(null);
-        ds.close();
-        ds = null;
-        context.releaseScriptsHandler();
-        slh = null;
-        bph = null;
-        synchronized (suspendLock) {
-            if (!running) {
-                running = true;
-                suspendLock.notifyAll();
+    public void disable() {
+        if (ds != null) {
+            slh.setDebuggerSession(null);
+            ds.close();
+            ds = null;
+            context.releaseScriptsHandler();
+            slh = null;
+            bph = null;
+            synchronized (suspendLock) {
+                if (!running) {
+                    running = true;
+                    suspendLock.notifyAll();
+                }
             }
         }
     }
@@ -221,34 +222,37 @@ public final class InspectorDebugger extends DebuggerDomain {
             int l1 = start.getLine();
             int c1 = start.getColumn();
             if (c1 <= 0) {
-                c1 = 1;
+                c1 = -1;
             }
             int l2;
             int c2;
             if (end != null) {
-                int lc = source.getLineCount();
-                if (end.getLine() > lc) {
-                    l2 = lc;
-                    c2 = source.getLineLength(l2);
-                } else {
-                    c2 = end.getColumn();
-                    if (c2 <= 1) {
-                        l2 = end.getLine() - 1;
-                        if (l2 <= 0) {
-                            l2 = 1;
-                        }
-                        c2 = source.getLineLength(l2);
+                if (source.hasCharacters()) {
+                    int lc = source.getLineCount();
+                    if (end.getLine() > lc) {
+                        l2 = lc;
                     } else {
                         l2 = end.getLine();
-                        c2 = c2 - 1;
                     }
+                } else {
+                    l2 = end.getLine();
+                }
+                c2 = end.getColumn();
+                if (c2 <= 0) {
+                    c2 = -1;
                 }
                 if (l1 > l2) {
                     l1 = l2;
                 }
             } else {
                 l2 = l1;
-                c2 = source.getLineLength(l2);
+                if (c1 == -1) {
+                    c2 = -1;
+                } else if (source.hasCharacters()) {
+                    c2 = source.getLineLength(l2);
+                } else {
+                    c2 = c1 + 1;
+                }
             }
             SourceSection range = source.createSection(l1, c1, l2, c2);
             Iterable<SourceSection> locations = SuspendableLocationFinder.findSuspendableLocations(range, restrictToFunction, ds, context.getEnv());
