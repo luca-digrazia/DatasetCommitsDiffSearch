@@ -535,7 +535,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
                 statistics.afterLowTier(compilable, graph);
             }
             if (listener != null) {
-                listener.onSuccess(compilable, inliningPlan, new GraphInfoImpl(graph), new CompilationResultInfoImpl(compilationResult), taskTier(task));
+                listener.onSuccess(compilable, inliningPlan, new GraphInfoImpl(graph), new CompilationResultInfoImpl(compilationResult), task.isFirstTier() ? 1 : 2);
             }
 
             // Partial evaluation and installation are included in
@@ -550,17 +550,10 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
             if (listener != null) {
                 BailoutException bailout = t instanceof BailoutException ? (BailoutException) t : null;
                 boolean permanentBailout = bailout != null ? bailout.isPermanent() : false;
-                listener.onFailure(compilable, t.toString(), bailout != null, permanentBailout, taskTier(task));
+                listener.onFailure(compilable, t.toString(), bailout != null, permanentBailout, task.isFirstTier() ? 1 : 2);
             }
             throw t;
         }
-    }
-
-    private static int taskTier(CancellableTruffleCompilationTask task) {
-        if (task != null) {
-            return task.isFirstTier() ? 1 : 2;
-        }
-        return 0;
     }
 
     /**
@@ -720,7 +713,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
         @Override
         protected DebugContext createRetryDebugContext(DebugContext initialDebug, OptionValues compilerOptions, PrintStream logStream) {
-            listener.onCompilationRetry(compilable, taskTier(task));
+            listener.onCompilationRetry(compilable, task.isFirstTier() ? 1 : 2);
             return createDebugContext(compilerOptions, compilationId, compilable, logStream);
         }
 
