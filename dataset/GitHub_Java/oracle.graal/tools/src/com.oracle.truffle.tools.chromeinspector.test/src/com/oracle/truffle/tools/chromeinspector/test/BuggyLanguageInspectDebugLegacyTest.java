@@ -84,7 +84,7 @@ public class BuggyLanguageInspectDebugLegacyTest {
             @Override
             protected Object findMetaObject(ProxyLanguage.LanguageContext context, Object value) {
                 throwBug(value);
-                return Objects.toString(value);
+                return super.findMetaObject(context, value);
             }
         }), new LanguageCallsVerifier());
     }
@@ -99,6 +99,23 @@ public class BuggyLanguageInspectDebugLegacyTest {
             MetaObj(int id, Consumer<Integer> throwBugCallback) {
                 this.id = id;
                 this.throwBugCallback = throwBugCallback;
+            }
+
+            @Override
+            protected boolean isMetaObject() {
+                return true;
+            }
+
+            @Override
+            protected String getMetaSimpleName() throws UnsupportedMessageException {
+                throwBugCallback.accept(id);
+                throw CompilerDirectives.shouldNotReachHere();
+            }
+
+            @Override
+            protected String getMetaQualifiedName() throws UnsupportedMessageException {
+                throwBugCallback.accept(id);
+                throw CompilerDirectives.shouldNotReachHere();
             }
 
             @Override
@@ -119,7 +136,7 @@ public class BuggyLanguageInspectDebugLegacyTest {
                 if (value instanceof Integer) {
                     return new MetaObj((Integer) value, id -> throwBug(id));
                 }
-                return Objects.toString(value);
+                return super.findMetaObject(context, value);
             }
 
         }), new LanguageCallsVerifier());
@@ -261,7 +278,9 @@ public class BuggyLanguageInspectDebugLegacyTest {
                         "{\"method\":\"Debugger.scriptParsed\",\"params\":{\"endLine\":" + endLine + ",\"scriptId\":\"1\",\"endColumn\":" + endColumn + ",\"startColumn\":0,\"startLine\":0,\"length\":" +
                                         source.getLength() + ",\"executionContextId\":" + id + ",\"url\":\"" + sourceURI + "\",\"hash\":\"" + hash + "\"}}\n"));
         skipConsoleMessages(tester);
-        assertPaused(prefix + "2", haveScope, haveScope ? 4 : 2, sourceURI, 1);
+        // When we have a buggy scope, getName fails as well because we ask for the root instance,
+        // which is a part of legacy scope.
+        assertPaused(haveScope ? prefix + "2" : "A TruffleException", haveScope, haveScope ? 4 : 2, sourceURI, 1);
         bugVerifier.verifyMessages(tester, 2);
         tester.sendMessage("{\"id\":100,\"method\":\"Debugger.resume\"}");
         assertTrue(tester.compareReceivedMessages(
@@ -309,14 +328,19 @@ public class BuggyLanguageInspectDebugLegacyTest {
         @Override
         public void verifyMessages(InspectorTester tester, int errNum) throws InterruptedException {
             int objectId = 3 * errNum - 2;
-            String description = (errNum == 2) ? "A TruffleException" : Integer.toString(errNum);
+            String exception;
+            if (errNum == 2) {
+                exception = "\"description\":\"TestTruffleException A TruffleException\",\"className\":\"TestTruffleException\",\"type\":\"object\",\"value\":\"A TruffleException\"";
+            } else {
+                exception = "\"description\":\"" + Integer.toString(errNum) + "\",\"type\":\"string\",\"value\":\"" + Integer.toString(errNum) + "\"";
+            }
             String errObject = "ErrorObject " + errNum;
             tester.sendMessage("{\"id\":7,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"" + objectId + "\"}}");
             skipConsoleMessages(tester);
             assertTrue(tester.compareReceivedMessages(
                             "{\"result\":{\"result\":[{\"isOwn\":true,\"enumerable\":true,\"name\":\"o\",\"value\":{\"description\":\"" + errObject + "\",\"className\":\"" + errObject + "\",\"type\":\"function\",\"objectId\":\"" + (3 * errNum) + "\"},\"configurable\":true,\"writable\":true}]," +
                                          "\"internalProperties\":[]," +
-                                         "\"exceptionDetails\":{\"exception\":{\"description\":\"" + description + "\",\"type\":\"string\",\"value\":\"" + description + "\"}," +
+                                         "\"exceptionDetails\":{\"exception\":{" + exception + "}," +
                                                                "\"exceptionId\":" + errNum + ",\"executionContextId\":1,\"text\":\"Uncaught\"," +
                                                                "\"stackTrace\":{\"callFrames\":[]}}},\"id\":7}\n"));
         }
@@ -333,7 +357,12 @@ public class BuggyLanguageInspectDebugLegacyTest {
         @Override
         public void verifyMessages(InspectorTester tester, int errNum) throws InterruptedException {
             int objectId = 3 * errNum - 2;
-            String description = (errNum == 2) ? "A TruffleException" : Integer.toString(errNum);
+            String exception;
+            if (errNum == 2) {
+                exception = "\"description\":\"TestTruffleException A TruffleException\",\"className\":\"TestTruffleException\",\"type\":\"object\",\"value\":\"A TruffleException\"";
+            } else {
+                exception = "\"description\":\"" + Integer.toString(errNum) + "\",\"type\":\"string\",\"value\":\"" + Integer.toString(errNum) + "\"";
+            }
             String errObject = "ErrorObject " + errNum + " " + errMessage;
             tester.sendMessage("{\"id\":7,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"" + objectId + "\"}}");
             assertTrue(tester.compareReceivedMessages(
@@ -345,7 +374,7 @@ public class BuggyLanguageInspectDebugLegacyTest {
             assertTrue(tester.compareReceivedMessages(
                             "{\"result\":{\"result\":[{\"isOwn\":true,\"enumerable\":true,\"name\":\"B\",\"value\":{\"description\":\"42\",\"type\":\"number\",\"value\":42},\"configurable\":true,\"writable\":true}]," +
                                          "\"internalProperties\":[]," +
-                                         "\"exceptionDetails\":{\"exception\":{\"description\":\"" + description + "\",\"type\":\"string\",\"value\":\"" + description + "\"}," +
+                                         "\"exceptionDetails\":{\"exception\":{" + exception + "}," +
                                                                "\"exceptionId\":" + errNum + ",\"executionContextId\":1,\"text\":\"Uncaught\"," +
                                                                "\"stackTrace\":{\"callFrames\":[]}}},\"id\":8}\n"));
         }
@@ -356,14 +385,19 @@ public class BuggyLanguageInspectDebugLegacyTest {
         @Override
         public void verifyMessages(InspectorTester tester, int errNum) throws InterruptedException {
             int objectId = 3 * errNum - 2;
-            String description = (errNum == 2) ? "A TruffleException" : Integer.toString(errNum);
+            String exception;
+            if (errNum == 2) {
+                exception = "\"description\":\"TestTruffleException A TruffleException\",\"className\":\"TestTruffleException\",\"type\":\"object\",\"value\":\"A TruffleException\"";
+            } else {
+                exception = "\"description\":\"" + Integer.toString(errNum) + "\",\"type\":\"string\",\"value\":\"" + Integer.toString(errNum) + "\"";
+            }
             String errObject = "ErrorObject " + errNum;
             tester.sendMessage("{\"id\":7,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"" + objectId + "\"}}");
             skipConsoleMessages(tester);
             assertTrue(tester.compareReceivedMessages(
                             "{\"result\":{\"result\":[{\"isOwn\":true,\"enumerable\":true,\"name\":\"o\",\"value\":{\"description\":\"" + errObject + "\",\"className\":\"" + errObject + "\",\"type\":\"function\",\"objectId\":\"" + (3 * errNum) + "\"},\"configurable\":true,\"writable\":true}]," +
                                          "\"internalProperties\":[]," +
-                                         "\"exceptionDetails\":{\"exception\":{\"description\":\"" + description + "\",\"type\":\"string\",\"value\":\"" + description + "\"}," +
+                                         "\"exceptionDetails\":{\"exception\":{" + exception + "}," +
                                                                "\"exceptionId\":" + errNum + ",\"executionContextId\":1,\"text\":\"Uncaught\"," +
                                                                "\"stackTrace\":{\"callFrames\":[]}}},\"id\":7}\n"));
         }
@@ -393,7 +427,12 @@ public class BuggyLanguageInspectDebugLegacyTest {
         @Override
         public void verifyMessages(InspectorTester tester, int errNum) throws InterruptedException {
             int objectId = 3 * errNum - 2;
-            String description = (errNum == 2) ? "A TruffleException" : Integer.toString(errNum);
+            String exception;
+            if (errNum == 2) {
+                exception = "\"description\":\"TestTruffleException A TruffleException\",\"className\":\"TestTruffleException\",\"type\":\"object\",\"value\":\"A TruffleException\"";
+            } else {
+                exception = "\"description\":\"" + Integer.toString(errNum) + "\",\"type\":\"string\",\"value\":\"" + Integer.toString(errNum) + "\"";
+            }
             String errObject = "ErrorObject " + errNum;
             tester.sendMessage("{\"id\":7,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"" + objectId + "\"}}");
             assertTrue(tester.compareReceivedMessages(
@@ -406,7 +445,7 @@ public class BuggyLanguageInspectDebugLegacyTest {
                             "{\"result\":{\"result\":[{\"isOwn\":true,\"enumerable\":true,\"name\":\"A\",\"value\":{\"description\":\"" + errNum + "\",\"type\":\"number\",\"value\":" + errNum + "},\"configurable\":true,\"writable\":true}," +
                                                      "{\"isOwn\":true,\"enumerable\":true,\"name\":\"B\",\"value\":{\"description\":\"42\",\"type\":\"number\",\"value\":42},\"configurable\":true,\"writable\":true}]," +
                                          "\"internalProperties\":[]," +
-                                         "\"exceptionDetails\":{\"exception\":{\"description\":\"" + description + "\",\"type\":\"string\",\"value\":\"" + description + "\"}," +
+                                         "\"exceptionDetails\":{\"exception\":{" + exception + "}," +
                                                                "\"exceptionId\":" + errNum + ",\"executionContextId\":1,\"text\":\"Uncaught\"," +
                                                                "\"stackTrace\":{\"callFrames\":[]}}},\"id\":8}\n"));
         }
