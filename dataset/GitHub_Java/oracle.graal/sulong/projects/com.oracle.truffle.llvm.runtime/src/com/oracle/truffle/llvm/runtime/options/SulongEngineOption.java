@@ -208,8 +208,4 @@ public final class SulongEngineOption {
         String[] userLibraries = "".equals(librariesOption) ? new String[0] : librariesOption.split(OPTION_ARRAY_SEPARATOR);
         return Arrays.asList(userLibraries);
     }
-
-    public static boolean shouldVerifyCompileUnitChecksums(TruffleLanguage.Env env) {
-        return env.getOptions().get(LL_DEBUG) && optionEnabled(env.getOptions().get(LL_DEBUG_VERBOSE));
-    }
 }

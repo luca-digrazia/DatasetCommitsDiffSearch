@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,55 +29,58 @@
  */
 package com.oracle.truffle.llvm.tests.debug;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.tests.options.TestOptions;
+import com.oracle.truffle.llvm.tests.Platform;
 import org.graalvm.polyglot.Context;
-import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-import com.oracle.truffle.llvm.tests.Platform;
-import com.oracle.truffle.llvm.tests.options.TestOptions;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.Set;
 
 @RunWith(Parameterized.class)
 public final class LLVMIRDebugTest extends LLVMDebugTestBase {
 
     private static final String CONFIGURATION = "O0.bc";
 
-    private static final Path BC_DIR_PATH = Paths.get(TestOptions.getTestDistribution("SULONG_EMBEDDED_TEST_SUITES"), "irdebug");
+    private static final Path BC_DIR_PATH = Paths.get(TestOptions.TEST_SUITE_PATH, "irdebug");
     private static final Path SRC_DIR_PATH = Paths.get(TestOptions.PROJECT_ROOT, "..", "tests", "com.oracle.truffle.llvm.tests.irdebug.native", "irdebug");
     private static final Path TRACE_DIR_PATH = Paths.get(TestOptions.PROJECT_ROOT, "..", "tests", "com.oracle.truffle.llvm.tests.irdebug.native", "trace");
 
     private static final String OPTION_LLDEBUG = "llvm.llDebug";
     private static final String OPTION_LLDEBUG_SOURCES = "llvm.llDebug.sources";
 
-    @BeforeClass
-    public static void checkLinuxAMD64() {
-        Assume.assumeTrue("Skipping linux/amd64 only test", Platform.isLinux() && Platform.isAMD64());
-    }
-
     @Parameters(name = "{0}")
     public static Collection<Object[]> getConfigurations() {
         try (Stream<Path> dirs = Files.walk(BC_DIR_PATH)) {
-            return dirs.filter(path -> path.endsWith(CONFIGURATION)).map(path -> new Object[]{getTestSource(path), CONFIGURATION}).collect(Collectors.toSet());
+            Set<String> blacklist = getBlacklist();
+            Collection<Object[]> testlist = dirs.filter(path -> path.endsWith(CONFIGURATION)).map(path -> new Object[]{getTestSource(path), CONFIGURATION}).collect(Collectors.toSet());
+            testlist.removeIf(t -> blacklist.contains(t[0]));
+            return testlist;
         } catch (IOException e) {
-            /*
-             * No tests found. To allow @BeforeClass assumptions to deal with this we return dummy
-             * data with `null` entry and fail in the constructor if we reach it.
-             */
-            return Collections.singletonList(new Object[]{null, CONFIGURATION});
+            throw new AssertionError("Error while finding tests!", e);
         }
+    }
+
+    protected static Set<String> getBlacklist() {
+        Set<String> filenameBlacklist = new HashSet<>();
+
+        if (Platform.isAArch64()) {
+            // Tests that fail.
+            filenameBlacklist.addAll(Arrays.asList("primitives.ll"));
+        }
+
+        return filenameBlacklist;
     }
 
     private static String getTestSource(Path path) {
@@ -90,7 +93,6 @@ public final class LLVMIRDebugTest extends LLVMDebugTestBase {
 
     public LLVMIRDebugTest(String testName, String configuration) {
         super(testName, configuration);
-        Assert.assertNotNull("Error while finding tests!", testName);
     }
 
     @Override
