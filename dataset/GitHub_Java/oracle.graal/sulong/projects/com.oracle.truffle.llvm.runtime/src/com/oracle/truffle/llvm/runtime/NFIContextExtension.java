@@ -66,10 +66,12 @@ public final class NFIContextExtension implements ContextExtension {
     // we use an EconomicMap because iteration order must match the insertion order
     private final EconomicMap<ExternalLibrary, TruffleObject> libraryHandles = EconomicMap.create();
     private final TruffleLanguage.Env env;
+    private final LLVMNativeFunctions nativeFunctions;
 
     public NFIContextExtension(Env env) {
         this.env = env;
         this.defaultLibrary = ExternalLibrary.external("NativeDefault", true);
+        this.nativeFunctions = new LLVMNativeFunctions(this);
     }
 
     @Override
@@ -112,6 +114,10 @@ public final class NFIContextExtension implements ContextExtension {
         }
     }
 
+    public LLVMNativeFunctions getNativeSulongFunctions() {
+        return nativeFunctions;
+    }
+
     @TruffleBoundary
     public TruffleObject createNativeWrapper(LLVMFunctionDescriptor descriptor) {
         TruffleObject wrapper = null;
@@ -139,15 +145,15 @@ public final class NFIContextExtension implements ContextExtension {
         }
         List<ExternalLibrary> libraries = context.getExternalLibraries(lib -> lib.isNative());
         for (ExternalLibrary l : libraries) {
-            addLibrary(l, context);
+            addLibrary(l);
         }
     }
 
-    private void addLibrary(ExternalLibrary lib, LLVMContext context) throws UnsatisfiedLinkError {
+    private void addLibrary(ExternalLibrary lib) throws UnsatisfiedLinkError {
         CompilerAsserts.neverPartOfCompilation();
-        if (!libraryHandles.containsKey(lib) && !handleSpecialLibraries(lib, context)) {
+        if (!libraryHandles.containsKey(lib) && !handleSpecialLibraries(lib)) {
             try {
-                libraryHandles.put(lib, loadLibrary(lib, context));
+                libraryHandles.put(lib, loadLibrary(lib));
             } catch (UnsatisfiedLinkError e) {
                 System.err.println(lib.toString() + " not found!\n" + e.getMessage());
                 throw e;
@@ -163,17 +169,14 @@ public final class NFIContextExtension implements ContextExtension {
         }
     }
 
-    private boolean handleSpecialLibraries(ExternalLibrary lib, LLVMContext context) {
+    private boolean handleSpecialLibraries(ExternalLibrary lib) {
         Path fileNamePath = lib.getPath().getFileName();
         if (fileNamePath == null) {
             throw new IllegalArgumentException("Filename path of " + lib.getPath() + " is null");
         }
         String fileName = fileNamePath.toString().trim();
-        if (fileName.startsWith("libc.") || fileName.startsWith("libSystem.")) {
-            // nothing to do, since libsulong.so already links against libc.so/libSystem.B.dylib
-            return true;
-        } else if (fileName.startsWith("libpolyglot-mock.")) {
-            // special mock library for polyglot intrinsics
+        if (fileName.startsWith("libc.")) {
+            // nothing to do, since libsulong.so already links against libc.so
             return true;
         } else if (fileName.startsWith("libsulong++.") || fileName.startsWith("libc++.")) {
             /*
@@ -183,17 +186,17 @@ public final class NFIContextExtension implements ContextExtension {
              */
             TruffleObject cxxlib;
             if (System.getProperty("os.name").toLowerCase().contains("mac")) {
-                cxxlib = loadLibrary("libc++.dylib", true, null, context);
+                cxxlib = loadLibrary("libc++.dylib", true, null);
             } else {
-                cxxlib = loadLibrary("libc++.so.1", true, null, context);
+                cxxlib = loadLibrary("libc++.so.1", true, null);
                 if (cxxlib == null) {
                     /*
                      * On Ubuntu, libc++ can not be dynamically loaded because of a missing
                      * dependeny on libgcc_s. Work around this by loading it manually first.
                      */
-                    TruffleObject libgcc = loadLibrary("libgcc_s.so.1", true, "RTLD_GLOBAL", context);
+                    TruffleObject libgcc = loadLibrary("libgcc_s.so.1", true, "RTLD_GLOBAL");
                     if (libgcc != null) {
-                        cxxlib = loadLibrary("libc++.so.1", true, null, context);
+                        cxxlib = loadLibrary("libc++.so.1", true, null);
                     }
                 }
             }
@@ -206,18 +209,13 @@ public final class NFIContextExtension implements ContextExtension {
         }
     }
 
-    private TruffleObject loadLibrary(ExternalLibrary lib, LLVMContext context) {
+    private TruffleObject loadLibrary(ExternalLibrary lib) {
         CompilerAsserts.neverPartOfCompilation();
         String libName = lib.getPath().toString();
-        return loadLibrary(libName, false, null, context, lib);
+        return loadLibrary(libName, false, null);
     }
 
-    private TruffleObject loadLibrary(String libName, boolean optional, String flags, LLVMContext context) {
-        return loadLibrary(libName, optional, flags, context, libName);
-    }
-
-    private TruffleObject loadLibrary(String libName, boolean optional, String flags, LLVMContext context, Object file) {
-        LibraryLocator.traceLoadNative(context, file);
+    private TruffleObject loadLibrary(String libName, boolean optional, String flags) {
         String loadExpression;
         if (flags == null) {
             loadExpression = String.format("load \"%s\"", libName);
