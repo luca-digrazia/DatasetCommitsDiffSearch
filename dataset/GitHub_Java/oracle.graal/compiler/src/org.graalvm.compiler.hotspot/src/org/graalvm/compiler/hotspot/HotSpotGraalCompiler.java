@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -176,8 +176,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler, Cancellable {
         HotSpotBackend backend = graalRuntime.getHostBackend();
         HotSpotProviders providers = backend.getProviders();
         final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
-        AllowAssumptions allowAssumptions = AllowAssumptions.ifTrue(OptAssumptions.getValue(options));
-        StructuredGraph graph = method.isNative() || isOSR ? null : providers.getReplacements().getIntrinsicGraph(method, compilationId, debug, allowAssumptions, this);
+        StructuredGraph graph = method.isNative() || isOSR ? null : providers.getReplacements().getIntrinsicGraph(method, compilationId, debug, this);
 
         if (graph == null) {
             SpeculationLog speculationLog = method.getSpeculationLog();
@@ -185,7 +184,7 @@ public class HotSpotGraalCompiler implements GraalJVMCICompiler, Cancellable {
                 speculationLog.collectFailedSpeculations();
             }
             // @formatter:off
-            graph = new StructuredGraph.Builder(options, debug, allowAssumptions).
+            graph = new StructuredGraph.Builder(options, debug, AllowAssumptions.ifTrue(OptAssumptions.getValue(options))).
                             method(method).
                             cancellable(this).
                             entryBCI(entryBCI).
