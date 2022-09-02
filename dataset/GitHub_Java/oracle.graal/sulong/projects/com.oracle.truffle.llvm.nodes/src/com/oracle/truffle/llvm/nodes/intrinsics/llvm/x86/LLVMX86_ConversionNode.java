@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
@@ -42,7 +41,7 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
 public abstract class LLVMX86_ConversionNode {
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
+    @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMX86_ConversionFloatToIntNode extends LLVMBuiltin { // implements
                                                                                         // cvtss2si
 
@@ -57,7 +56,7 @@ public abstract class LLVMX86_ConversionNode {
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
+    @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMX86_ConversionDoubleToIntNode extends LLVMBuiltin { // implements
                                                                                          // cvtsd2si
 
@@ -74,18 +73,20 @@ public abstract class LLVMX86_ConversionNode {
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
+    @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMX86_Pmovmskb128 extends LLVMBuiltin {
+
+        private static final int VECTOR_LENGTH = 16;
 
         @Specialization
         @ExplodeLoop
         protected int doIntrinsic(LLVMI8Vector vector) {
-            if (vector.getLength() != 16) {
+            if (vector.getLength() != VECTOR_LENGTH) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError("expected a <16 x i8> vector");
             }
             int result = 0;
-            for (int i = 0; i < vector.getLength(); i++) {
+            for (int i = 0; i < VECTOR_LENGTH; i++) {
                 int currentByte = vector.getValue(i);
                 int mostSignificantBit = (currentByte & 0xff) >> (Byte.SIZE - 1);
                 result |= mostSignificantBit << i;
@@ -95,7 +96,7 @@ public abstract class LLVMX86_ConversionNode {
         }
     }
 
-    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class)})
+    @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMX86_Movmskpd extends LLVMBuiltin {
 
         @Specialization
