@@ -24,6 +24,7 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.LineBreakpointInfo;
 
 import java.util.regex.Pattern;
 
@@ -85,16 +86,16 @@ public class RequestFilter {
         return false;
     }
 
-    public void addEventCount(int eventCount) {
-        this.count = eventCount;
+    public void addEventCount(int count) {
+        this.count = count;
     }
 
     public int getIgnoreCount() {
         return count;
     }
 
-    public void addThread(Object guestThread) {
-        this.thread = guestThread;
+    public void addThread(Object thread) {
+        this.thread = thread;
     }
 
     public Object getThread() {

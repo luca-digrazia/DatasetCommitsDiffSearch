@@ -24,7 +24,7 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import java.util.regex.Pattern;
 
-public final class ClassPrepareRequest {
+public class ClassPrepareRequest {
 
     private final RequestFilter filter;
 

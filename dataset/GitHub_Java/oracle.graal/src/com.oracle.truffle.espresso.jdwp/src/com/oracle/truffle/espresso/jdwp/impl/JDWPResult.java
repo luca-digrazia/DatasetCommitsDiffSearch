@@ -25,7 +25,7 @@ package com.oracle.truffle.espresso.jdwp.impl;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-public final class JDWPResult {
+public class JDWPResult {
 
     private final PacketStream reply;
     private final List<Callable<Void>> futures;
