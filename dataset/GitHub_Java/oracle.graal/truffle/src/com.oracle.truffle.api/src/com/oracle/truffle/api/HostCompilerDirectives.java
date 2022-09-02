@@ -46,40 +46,53 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Directives that influence the optimizations of the host compiler.
- * These operations affect how the Truffle interpreter is itself compiled.
+ * Directives that influence the optimizations of the host compiler. These operations affect how the
+ * Truffle interpreter is itself compiled.
  *
  * @since 21.0
  */
 public final class HostCompilerDirectives {
 
     /**
-     * Marks a method that is an implementation of a Truffle interpreter,
-     * and which should receive additional optimization budget.
+     * This object is a placeholder for the static methods that implement compiler directives, and
+     * cannot be constructed.
+     *
+     * @since 21.0
+     */
+    private HostCompilerDirectives() {
+    }
+
+    /**
+     * Marks a method that is an implementation of a Truffle interpreter, and which should receive
+     * additional optimization budget.
+     *
+     * This annotation is used to annotate the root method of a bytecode interpreter, and it hints
+     * the compiler to invest extra effort into optimizing such methods. Language implementers are
+     * advised to inspect the IR of the interpreter when using this.
+     *
+     * @see BytecodeInterpreterSwitchBoundary to control the boundaries of inlining
      *
      * @since 21.0
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
-    public @interface TruffleInterpreter {
+    public @interface BytecodeInterpreterSwitch {
     }
 
     /**
-     * Marks a method that is called from a Truffle interpreter,
-     * but is not called frequently and is not important for interpreter performance.
+     * Marks a method that is called from a Truffle interpreter, but is not called frequently and is
+     * not important for interpreter performance.
+     *
+     * This annotation is used to annotate methods that are called from a bytecode interpreter, but
+     * should generally not be inlined into the body of the bytecode interpreter. Language
+     * implementers are advised to inspect the IR of the interpreter when using this.
+     *
+     * @see BytecodeInterpreterSwitch to annotate the root method of a bytecode interpreter
      *
      * @since 21.0
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
-    public @interface TruffleInterpreterBoundary {
-    }
-
-    /**
-     * Consume a value, making sure the compiler doesn't optimize away the computation of this
-     * value, even if it is otherwise unused.
-     */
-    @SuppressWarnings("unused")
-    public static void consume(int value) {
+    public @interface BytecodeInterpreterSwitchBoundary {
     }
 }
