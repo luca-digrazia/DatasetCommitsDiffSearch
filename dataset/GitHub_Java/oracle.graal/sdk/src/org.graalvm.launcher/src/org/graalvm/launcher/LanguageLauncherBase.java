@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -59,14 +59,15 @@ import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.PolyglotException;
 
 /**
- * Base implementation for polyglot-aware languages a tools. Prints additional language-related help
- * items, prints installed engine's options.
+ * Base implementation for polyglot-aware languages and tools. Prints additional language-related
+ * help items, prints installed engine's options.
  */
 public abstract class LanguageLauncherBase extends Launcher {
     private static Engine tempEngine;
     private boolean seenPolyglot;
     private boolean helpTools;
     private boolean helpLanguages;
+    private VersionAction versionAction = VersionAction.None;
 
     final boolean isPolyglot() {
         return seenPolyglot;
@@ -76,7 +77,7 @@ public abstract class LanguageLauncherBase extends Launcher {
         seenPolyglot = polyglot;
     }
 
-    final void setupLogHandler(Context.Builder builder) {
+    final void setupContextBuilder(Context.Builder builder) {
         Path logFile = getLogFile();
         if (logFile != null) {
             try {
@@ -85,11 +86,17 @@ public abstract class LanguageLauncherBase extends Launcher {
                 throw abort(ioe);
             }
         }
+        if (System.err != getError()) {
+            builder.err(getError());
+        }
+        if (System.out != getOutput()) {
+            builder.out(getOutput());
+        }
     }
 
     static Engine getTempEngine() {
         if (tempEngine == null) {
-            tempEngine = Engine.create();
+            tempEngine = Engine.newBuilder().useSystemProperties(false).build();
         }
         return tempEngine;
     }
@@ -99,6 +106,21 @@ public abstract class LanguageLauncherBase extends Launcher {
             tempEngine.close();
             tempEngine = null;
         }
+    }
+
+    @Override
+    protected boolean runLauncherAction() {
+        switch (versionAction) {
+            case PrintAndExit:
+                printPolyglotVersions();
+                return true;
+            case PrintAndContinue:
+                printPolyglotVersions();
+                break;
+            case None:
+                break;
+        }
+        return super.runLauncherAction();
     }
 
     @Override
@@ -113,13 +135,27 @@ public abstract class LanguageLauncherBase extends Launcher {
             case "--polyglot":
                 seenPolyglot = true;
                 break;
+            case "--version:graalvm":
+                versionAction = VersionAction.PrintAndExit;
+                break;
+            case "--show-version:graalvm":
+                versionAction = VersionAction.PrintAndContinue;
+                break;
+            default:
+                return super.parseCommonOption(defaultOptionPrefix, polyglotOptions, experimentalOptions, arg);
         }
-        return super.parseCommonOption(defaultOptionPrefix, polyglotOptions, experimentalOptions, arg);
+        return true;
     }
 
     void handlePolyglotException(PolyglotException e) {
+        String message = null;
         if (e.getMessage() != null) {
-            System.err.println("ERROR: " + e.getMessage());
+            message = e.getMessage();
+        } else if (e.isInternalError()) {
+            message = "Unknown error";
+        }
+        if (message != null) {
+            System.err.println("ERROR: " + message);
         }
         if (e.isInternalError()) {
             e.printStackTrace();
@@ -134,6 +170,8 @@ public abstract class LanguageLauncherBase extends Launcher {
     @Override
     protected void printDefaultHelp(OptionCategory helpCategory) {
         super.printDefaultHelp(helpCategory);
+        launcherOption("--version:graalvm", "Print GraalVM version information and exit.");
+        launcherOption("--show-version:graalvm", "Print GraalVM version information and continue execution.");
         launcherOption("--help:languages", "Print options for all installed languages.");
         launcherOption("--help:tools", "Print options for all installed tools.");
         launcherOption("--help:expert", "Print additional options for experts.");
@@ -157,10 +195,12 @@ public abstract class LanguageLauncherBase extends Launcher {
      * Prints version information about all known {@linkplain Language languages} and
      * {@linkplain Instrument instruments} on {@linkplain System#out stdout}.
      */
-    @Override
-    protected void printVersion() {
+    protected void printPolyglotVersions() {
         Engine engine = getTempEngine();
-        println("GraalVM Polyglot Engine Version " + engine.getVersion());
+        String mode = isAOT() ? "Native" : "JVM";
+        println(engine.getImplementationName() + " " + mode + " Polyglot Engine Version " + engine.getVersion());
+        println("Java Version " + System.getProperty("java.version"));
+        println("Java VM Version " + System.getProperty("java.vm.version"));
         Path graalVMHome = Engine.findHome();
         if (graalVMHome != null) {
             println("GraalVM Home " + graalVMHome);
@@ -330,6 +370,8 @@ public abstract class LanguageLauncherBase extends Launcher {
     protected void collectArguments(Set<String> options) {
         options.add("--help:languages");
         options.add("--help:tools");
+        options.add("--version:graalvm");
+        options.add("--show-version:graalvm");
 
         Engine engine = getTempEngine();
         addOptions(engine.getOptions(), options);
