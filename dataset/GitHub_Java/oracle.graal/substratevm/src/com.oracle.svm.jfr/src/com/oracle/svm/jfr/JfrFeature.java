@@ -171,20 +171,17 @@ public class JfrFeature implements Feature {
                 throw new ArrayIndexOutOfBoundsException();
             }
         }
-        long traceId = 0;
         for (Package pkg : metadata.packages) {
             Target_java_lang_Package.setJfrID(pkg, idx);
-            JfrTraceId.assign(pkg, idx++, traceId++);
+            JfrTraceId.assign(pkg, idx++);
         }
-        traceId = 0;
         for (Module module : metadata.modules) {
             Target_java_lang_Module.setJfrID(module, idx);
-            JfrTraceId.assign(module, idx++, traceId++);
+            JfrTraceId.assign(module, idx++);
         }
-        traceId = 0;
         for (ClassLoader cl : metadata.classLoaders) {
             Target_java_lang_ClassLoader.setJfrID(cl, idx);
-            JfrTraceId.assign(cl, idx++, traceId++);
+            JfrTraceId.assign(cl, idx++);
         }
 
         // TODO: get the method count
