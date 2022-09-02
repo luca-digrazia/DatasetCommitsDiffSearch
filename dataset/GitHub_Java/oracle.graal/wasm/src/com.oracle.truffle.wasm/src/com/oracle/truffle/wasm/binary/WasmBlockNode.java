@@ -108,22 +108,22 @@ public class WasmBlockNode extends WasmNode {
     @CompilationFinal private final int startOffset;
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final int initialStackPointer;
-    @CompilationFinal private final int initialByteConstantOffset;
+    @CompilationFinal private final int initialConstantOffset;
     @CompilationFinal(dimensions = 1) WasmNode[] nestedControlTable;
 
-    public WasmBlockNode(WasmCodeEntry codeEntry, int startOffset, int byteLength, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int byteConstantLength) {
-        super(codeEntry, byteLength, byteConstantLength);
+    public WasmBlockNode(WasmCodeEntry codeEntry, int startOffset, int byteLength, byte returnTypeId, int initialStackPointer, int initialConstantOffset) {
+        super(codeEntry, byteLength);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
         this.initialStackPointer = initialStackPointer;
-        this.initialByteConstantOffset = initialByteConstantOffset;
+        this.initialConstantOffset = initialConstantOffset;
         this.nestedControlTable = null;
     }
 
     @ExplodeLoop
     public void execute(VirtualFrame frame) {
         int nestedControlOffset = 0;
-        int byteConstantOffset = initialByteConstantOffset;
+        int constantOffset = initialConstantOffset;
         int stackPointer = initialStackPointer;
         int offset = startOffset;
         while (offset < startOffset + byteLength()) {
@@ -141,17 +141,15 @@ public class WasmBlockNode extends WasmNode {
                     nestedControlOffset++;
                     offset += block.byteLength();
                     stackPointer += block.returnTypeLength();
-                    byteConstantOffset += block.byteConstantLength();
                     break;
                 }
                 case IF: {
-                    WasmNode ifNode = nestedControlTable[nestedControlOffset];
+                    WasmNode ifBlock = nestedControlTable[nestedControlOffset];
                     stackPointer--;
-                    ifNode.execute(frame);
+                    ifBlock.execute(frame);
                     nestedControlOffset++;
-                    offset += ifNode.byteLength();
-                    stackPointer += ifNode.returnTypeLength();
-                    byteConstantOffset += ifNode.byteConstantLength();
+                    offset += ifBlock.byteLength();
+                    stackPointer += ifBlock.returnTypeLength();
                     break;
                 }
                 case ELSE:
@@ -165,8 +163,8 @@ public class WasmBlockNode extends WasmNode {
                 }
                 case LOCAL_GET: {
                     int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
-                    byte constantLength = codeEntry().byteConstants()[byteConstantOffset];
-                    byteConstantOffset++;
+                    byte constantLength = codeEntry().byteConstants()[constantOffset];
+                    constantOffset++;
                     offset += constantLength;
                     byte type = codeEntry().localType(index);
                     switch (type) {
@@ -199,8 +197,8 @@ public class WasmBlockNode extends WasmNode {
                 }
                 case LOCAL_SET: {
                     int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
-                    byte constantLength = codeEntry().byteConstants()[byteConstantOffset];
-                    byteConstantOffset++;
+                    byte constantLength = codeEntry().byteConstants()[constantOffset];
+                    constantOffset++;
                     offset += constantLength;
                     byte type = codeEntry().localType(index);
                     switch (type) {
@@ -236,8 +234,8 @@ public class WasmBlockNode extends WasmNode {
                     break;
                 case I32_CONST: {
                     int value = BinaryStreamReader.peekSignedInt32(codeEntry().data(), offset, null);
-                    byte constantLength = codeEntry().byteConstants()[byteConstantOffset];
-                    byteConstantOffset++;
+                    byte constantLength = codeEntry().byteConstants()[constantOffset];
+                    constantOffset++;
                     offset += constantLength;
                     pushInt(frame, stackPointer, value);
                     stackPointer++;
@@ -245,8 +243,8 @@ public class WasmBlockNode extends WasmNode {
                 }
                 case I64_CONST: {
                     long value = BinaryStreamReader.peekSignedInt64(codeEntry().data(), offset, null);
-                    byte constantLength = codeEntry().byteConstants()[byteConstantOffset];
-                    byteConstantOffset++;
+                    byte constantLength = codeEntry().byteConstants()[constantOffset];
+                    constantOffset++;
                     offset += constantLength;
                     push(frame, stackPointer, value);
                     stackPointer++;
