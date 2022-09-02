@@ -42,6 +42,7 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import com.oracle.svm.hosted.NativeImageOptions;
 import org.graalvm.nativeimage.impl.ReflectionRegistry;
 
 import com.oracle.svm.core.configure.ConfigurationFiles;
@@ -53,7 +54,6 @@ import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.json.JSONParserException;
 import com.oracle.svm.hosted.ImageClassLoader;
-import com.oracle.svm.hosted.NativeImageOptions;
 
 public final class ConfigurationParserUtils {
 
@@ -68,26 +68,22 @@ public final class ConfigurationParserUtils {
      *
      * @param featureName name of the feature using the configuration (e.g., "JNI")
      * @param directoryFileName file name for searches via {@link ConfigurationFiles}.
-     * @return the total number of successfully parsed configuration files and resources.
      */
-    public static int parseAndRegisterConfigurations(ConfigurationParser parser, ImageClassLoader classLoader, String featureName,
+    public static void parseAndRegisterConfigurations(ConfigurationParser parser, ImageClassLoader classLoader, String featureName,
                     HostedOptionKey<String[]> configFilesOption, HostedOptionKey<String[]> configResourcesOption, String directoryFileName) {
-
-        int parsedCount = 0;
 
         Stream<Path> files = Stream.concat(OptionUtils.flatten(",", configFilesOption.getValue()).stream().map(Paths::get),
                         ConfigurationFiles.findConfigurationFiles(directoryFileName).stream());
-        parsedCount += files.map(Path::toAbsolutePath).mapToInt(path -> {
+        files.map(Path::toAbsolutePath).forEach(path -> {
             if (!Files.exists(path)) {
                 throw UserError.abort("The " + featureName + " configuration file \"" + path + "\" does not exist.");
             }
             try (Reader reader = new FileReader(path.toFile())) {
                 doParseAndRegister(parser, reader, featureName, path, configFilesOption);
-                return 1;
             } catch (IOException e) {
                 throw UserError.abort("Could not open " + path + ": " + e.getMessage());
             }
-        }).sum();
+        });
 
         Stream<URL> configResourcesFromOption = OptionUtils.flatten(",", configResourcesOption.getValue()).stream().flatMap(s -> {
             Enumeration<URL> urls;
@@ -111,20 +107,17 @@ public final class ConfigurationParserUtils {
             }, false);
         });
         Stream<URL> resources = Stream.concat(configResourcesFromOption, ConfigurationFiles.findConfigurationResources(directoryFileName, classLoader.getClassLoader()).stream());
-        parsedCount += resources.mapToInt(url -> {
+        resources.forEach(url -> {
             try {
                 URLConnection urlConnection = url.openConnection();
                 urlConnection.setUseCaches(false);
                 try (Reader reader = new InputStreamReader(urlConnection.getInputStream())) {
                     doParseAndRegister(parser, reader, featureName, url, configResourcesOption);
-                    return 1;
                 }
             } catch (IOException e) {
                 throw UserError.abort("Could not open " + url + ": " + e.getMessage());
             }
-        }).sum();
-
-        return parsedCount;
+        });
     }
 
     private static void doParseAndRegister(ConfigurationParser parser, Reader reader, String featureName, Object location, HostedOptionKey<String[]> option) {
