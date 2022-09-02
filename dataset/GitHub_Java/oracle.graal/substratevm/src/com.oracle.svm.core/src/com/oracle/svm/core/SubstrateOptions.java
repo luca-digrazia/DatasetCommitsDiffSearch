@@ -145,9 +145,6 @@ public class SubstrateOptions {
     @Option(help = "Print more information about the heap before and after each collection")//
     public static final RuntimeOptionKey<Boolean> VerboseGC = new RuntimeOptionKey<>(false);
 
-    @Option(help = "Verify the heap before and after each collection.")//
-    public static final HostedOptionKey<Boolean> VerifyHeap = new HostedOptionKey<>(false);
-
     @Option(help = "The minimum heap size at run-time, in bytes.", type = OptionType.User)//
     public static final RuntimeOptionKey<Long> MinHeapSize = new RuntimeOptionKey<Long>(0L) {
         @Override
@@ -339,9 +336,6 @@ public class SubstrateOptions {
     @Option(help = "Saves stack base pointer on the stack on method entry.")//
     public static final HostedOptionKey<Boolean> PreserveFramePointer = new HostedOptionKey<>(false);
 
-    @Option(help = "Use callee saved registers to reduce spilling for low-frequency calls to stubs (if callee saved registers are supported by the architecture)")//
-    public static final HostedOptionKey<Boolean> UseCalleeSavedRegisters = new HostedOptionKey<>(true);
-
     @Option(help = "Report error if <typename>[:<UsageKind>{,<UsageKind>}] is discovered during analysis (valid values for UsageKind: InHeap, Allocated, InTypeCheck).", type = OptionType.Debug)//
     public static final HostedOptionKey<String[]> ReportAnalysisForbiddenType = new HostedOptionKey<>(new String[0]);
 
@@ -405,5 +399,25 @@ public class SubstrateOptions {
     @Fold
     public static int codeAlignment() {
         return GraalOptions.LoopHeaderAlignment.getValue(HostedOptionValues.singleton());
+    }
+
+    @Fold
+    public static long hostedMinHeapSize() {
+        return MinHeapSize.getValue();
+    }
+
+    @Fold
+    public static long hostedMaxHeapSize() {
+        return MaxHeapSize.getValue();
+    }
+
+    @Fold
+    public static long hostedMaxNewSize() {
+        return MaxNewSize.getValue();
+    }
+
+    @Fold
+    public static long hostedStackSize() {
+        return StackSize.getValue();
     }
 }
