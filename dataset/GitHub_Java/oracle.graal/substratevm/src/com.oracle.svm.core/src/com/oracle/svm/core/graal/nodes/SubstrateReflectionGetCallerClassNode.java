@@ -24,11 +24,8 @@
  */
 package com.oracle.svm.core.graal.nodes;
 
-import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
-import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.replacements.nodes.ReflectionGetCallerClassNode;
 
 import com.oracle.svm.core.jdk.StackTraceUtils;
@@ -41,11 +38,8 @@ public final class SubstrateReflectionGetCallerClassNode extends ReflectionGetCa
 
     public static final NodeClass<SubstrateReflectionGetCallerClassNode> TYPE = NodeClass.create(SubstrateReflectionGetCallerClassNode.class);
 
-    private final MetaAccessProvider metaAccess;
-
-    public SubstrateReflectionGetCallerClassNode(MetaAccessProvider metaAccess, InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
-        super(TYPE, invokeKind, targetMethod, bci, returnStamp, arguments);
-        this.metaAccess = metaAccess;
+    public SubstrateReflectionGetCallerClassNode(MacroParams p) {
+        super(TYPE, p);
     }
 
     @Override
@@ -58,7 +52,7 @@ public final class SubstrateReflectionGetCallerClassNode extends ReflectionGetCa
     }
 
     @Override
-    protected boolean ignoredBySecurityStackWalk(ResolvedJavaMethod method) {
-        return !StackTraceUtils.shouldShowFrame(metaAccess, method, false, false);
+    protected boolean ignoredBySecurityStackWalk(MetaAccessProvider metaAccess, ResolvedJavaMethod method) {
+        return !StackTraceUtils.shouldShowFrame(metaAccess, method, true, false, false);
     }
 }
