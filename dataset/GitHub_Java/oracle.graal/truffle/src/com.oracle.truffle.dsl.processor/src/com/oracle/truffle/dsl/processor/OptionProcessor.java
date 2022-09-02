@@ -74,6 +74,16 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic.Kind;
 
+import org.graalvm.options.OptionCategory;
+import org.graalvm.options.OptionDescriptor;
+import org.graalvm.options.OptionDescriptors;
+import org.graalvm.options.OptionKey;
+import org.graalvm.options.OptionMap;
+import org.graalvm.options.OptionStability;
+
+import com.oracle.truffle.api.Option;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.dsl.processor.generator.GeneratorUtils;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
@@ -84,11 +94,12 @@ import com.oracle.truffle.dsl.processor.java.transform.FixWarningsVisitor;
 import com.oracle.truffle.dsl.processor.java.transform.GenerateOverrideVisitor;
 
 /**
- * Processes static fields annotated with Option. An OptionDescriptors implementation is generated
- * for each top level class containing at least one such field. The name of the generated class for
- * top level class {@code com.foo.Bar} is {@code com.foo.Bar_OptionDescriptors}.
+ * Processes static fields annotated with {@link Option}. An {@link OptionDescriptors}
+ * implementation is generated for each top level class containing at least one such field. The name
+ * of the generated class for top level class {@code com.foo.Bar} is
+ * {@code com.foo.Bar_OptionDescriptors}.
  */
-@SupportedAnnotationTypes({TruffleTypes.Option_Name, TruffleTypes.Option_Group_Name})
+@SupportedAnnotationTypes({"com.oracle.truffle.api.Option", "com.oracle.truffle.api.Option.Group"})
 public class OptionProcessor extends AbstractProcessor {
 
     @Override
@@ -103,11 +114,11 @@ public class OptionProcessor extends AbstractProcessor {
         if (roundEnv.processingOver()) {
             return true;
         }
-        ProcessorContext context = ProcessorContext.enter(processingEnv);
+        ProcessorContext context = new ProcessorContext(processingEnv, null);
+        ProcessorContext.setThreadLocalInstance(context);
         try {
-            TruffleTypes types = context.getTypes();
             Map<Element, OptionsInfo> map = new HashMap<>();
-            for (Element element : roundEnv.getElementsAnnotatedWith(ElementUtils.castTypeElement(types.Option))) {
+            for (Element element : roundEnv.getElementsAnnotatedWith(Option.class)) {
                 if (!processed.contains(element)) {
                     processed.add(element);
                     Element topElement = element.getEnclosingElement();
@@ -117,7 +128,7 @@ public class OptionProcessor extends AbstractProcessor {
                         options = new OptionsInfo(topElement);
                         map.put(topElement, options);
                     }
-                    AnnotationMirror mirror = ElementUtils.findAnnotationMirror(element.getAnnotationMirrors(), types.Option);
+                    AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, element.getAnnotationMirrors(), Option.class);
                     try {
                         processElement(element, mirror, options);
                     } catch (Throwable t) {
@@ -167,7 +178,7 @@ public class OptionProcessor extends AbstractProcessor {
                 }
             }
         } finally {
-            ProcessorContext.leave();
+            ProcessorContext.setThreadLocalInstance(null);
         }
 
         return true;
@@ -175,7 +186,6 @@ public class OptionProcessor extends AbstractProcessor {
 
     private boolean processElement(Element element, AnnotationMirror elementAnnotation, OptionsInfo info) {
         ProcessorContext context = ProcessorContext.getInstance();
-        TruffleTypes types = context.getTypes();
 
         if (!element.getModifiers().contains(Modifier.STATIC)) {
             error(element, elementAnnotation, "Option field must be static");
@@ -186,58 +196,56 @@ public class OptionProcessor extends AbstractProcessor {
             return false;
         }
 
-        List<String> groupPrefixStrings = null;
-
-        AnnotationMirror prefix = ElementUtils.findAnnotationMirror(info.type, types.Option_Group);
+        String[] groupPrefixStrings = null;
+        Option.Group prefix = info.type.getAnnotation(Option.Group.class);
 
         if (prefix != null) {
-            groupPrefixStrings = ElementUtils.getAnnotationValueList(String.class, prefix, "value");
+            groupPrefixStrings = prefix.value();
         } else {
-            TypeMirror erasedTruffleType = context.getEnvironment().getTypeUtils().erasure(types.TruffleLanguage);
+            TypeMirror erasedTruffleType = context.getEnvironment().getTypeUtils().erasure(context.getType(TruffleLanguage.class));
             if (context.getEnvironment().getTypeUtils().isAssignable(info.type.asType(), erasedTruffleType)) {
-                AnnotationMirror registration = ElementUtils.findAnnotationMirror(info.type, types.TruffleLanguage_Registration);
+                TruffleLanguage.Registration registration = info.type.getAnnotation(TruffleLanguage.Registration.class);
                 if (registration != null) {
-                    groupPrefixStrings = Arrays.asList(ElementUtils.getAnnotationValue(String.class, registration, "id"));
-                    if (groupPrefixStrings.get(0).isEmpty()) {
-                        error(element, elementAnnotation, "%s must specify an id such that Truffle options can infer their prefix.",
-                                        types.TruffleLanguage_Registration.asElement().getSimpleName().toString());
+                    groupPrefixStrings = new String[]{registration.id()};
+                    if (groupPrefixStrings[0].isEmpty()) {
+                        error(element, elementAnnotation, "%s must specify an id such that Truffle options can infer their prefix.", TruffleLanguage.Registration.class.getSimpleName());
                         return false;
                     }
                 }
 
-            } else if (context.getEnvironment().getTypeUtils().isAssignable(info.type.asType(), types.TruffleInstrument)) {
-                AnnotationMirror registration = ElementUtils.findAnnotationMirror(info.type, types.TruffleInstrument_Registration);
+            } else if (context.getEnvironment().getTypeUtils().isAssignable(info.type.asType(), context.getType(TruffleInstrument.class))) {
+                TruffleInstrument.Registration registration = info.type.getAnnotation(TruffleInstrument.Registration.class);
                 if (registration != null) {
-                    groupPrefixStrings = Arrays.asList(ElementUtils.getAnnotationValue(String.class, registration, "id"));
-                    if (groupPrefixStrings.get(0).isEmpty()) {
-                        error(element, elementAnnotation, "%s must specify an id such that Truffle options can infer their prefix.",
-                                        types.TruffleInstrument_Registration.asElement().getSimpleName().toString());
+                    groupPrefixStrings = new String[]{registration.id()};
+                    if (groupPrefixStrings[0].isEmpty()) {
+                        error(element, elementAnnotation, "%s must specify an id such that Truffle options can infer their prefix.", TruffleInstrument.Registration.class.getSimpleName());
                         return false;
                     }
                 }
             }
         }
 
-        if (groupPrefixStrings == null || groupPrefixStrings.isEmpty()) {
-            groupPrefixStrings = Arrays.asList("");
+        if (groupPrefixStrings == null || groupPrefixStrings.length == 0) {
+            groupPrefixStrings = new String[]{""};
         }
 
-        AnnotationMirror annotation = ElementUtils.findAnnotationMirror(element, types.Option);
+        Option annotation = element.getAnnotation(Option.class);
         assert annotation != null;
         assert element instanceof VariableElement;
         assert element.getKind() == ElementKind.FIELD;
         VariableElement field = (VariableElement) element;
         String fieldName = field.getSimpleName().toString();
 
-        Types typeUtils = processingEnv.getTypeUtils();
+        Types types = processingEnv.getTypeUtils();
 
         TypeMirror fieldType = field.asType();
         if (fieldType.getKind() != TypeKind.DECLARED) {
-            error(element, elementAnnotation, "Option field must be of type " + ElementUtils.getQualifiedName(types.OptionKey));
+            error(element, elementAnnotation, "Option field must be of type " + OptionKey.class.getName());
             return false;
         }
-        if (!typeUtils.isSubtype(fieldType, typeUtils.erasure(types.OptionKey))) {
-            error(element, elementAnnotation, "Option field type %s is not a subclass of %s", fieldType, types.OptionKey);
+        TypeMirror optionKeyType = ElementUtils.getTypeElement(processingEnv, OptionKey.class.getName()).asType();
+        if (!types.isSubtype(fieldType, types.erasure(optionKeyType))) {
+            error(element, elementAnnotation, "Option field type %s is not a subclass of %s", fieldType, optionKeyType);
             return false;
         }
 
@@ -251,13 +259,13 @@ public class OptionProcessor extends AbstractProcessor {
         }
 
         boolean optionMap = false;
-        TypeMirror optionMapType = types.OptionMap;
+        TypeMirror optionMapType = ElementUtils.getTypeElement(processingEnv, OptionMap.class.getName()).asType();
         List<? extends TypeMirror> typeArguments = ((DeclaredType) fieldType).getTypeArguments();
         if (typeArguments.size() == 1) {
-            optionMap = typeUtils.isSubtype(typeArguments.get(0), typeUtils.erasure(optionMapType));
+            optionMap = types.isSubtype(typeArguments.get(0), types.erasure(optionMapType));
         }
 
-        String help = ElementUtils.getAnnotationValue(String.class, annotation, "help");
+        String help = annotation.help();
         if (help.length() != 0) {
             char firstChar = help.charAt(0);
             if (!Character.isUpperCase(firstChar)) {
@@ -271,7 +279,7 @@ public class OptionProcessor extends AbstractProcessor {
         if (value == null) {
             optionName = fieldName;
         } else {
-            optionName = ElementUtils.getAnnotationValue(String.class, annotation, "name");
+            optionName = annotation.name();
         }
 
         // Applying this restriction to all options requires changes in some language
@@ -281,16 +289,14 @@ public class OptionProcessor extends AbstractProcessor {
             return false;
         }
 
-        boolean deprecated = ElementUtils.getAnnotationValue(Boolean.class, annotation, "deprecated");
+        boolean deprecated = annotation.deprecated();
 
-        VariableElement categoryElement = ElementUtils.getAnnotationValue(VariableElement.class, annotation, "category");
-        String category = categoryElement != null ? categoryElement.getSimpleName().toString() : null;
+        OptionCategory category = annotation.category();
         if (category == null) {
-            category = "INTERNAL";
+            category = OptionCategory.INTERNAL;
         }
 
-        VariableElement stabilityElement = ElementUtils.getAnnotationValue(VariableElement.class, annotation, "stability");
-        String stability = stabilityElement != null ? stabilityElement.getSimpleName().toString() : null;
+        OptionStability stability = annotation.stability();
 
         for (String group : groupPrefixStrings) {
             String name;
@@ -347,13 +353,12 @@ public class OptionProcessor extends AbstractProcessor {
     }
 
     private static CodeTypeElement generateDescriptors(ProcessorContext context, Element element, OptionsInfo model) {
-        TruffleTypes types = context.getTypes();
-        String optionsClassName = ElementUtils.getSimpleName(element.asType()) + types.OptionDescriptors.asElement().getSimpleName().toString();
+        String optionsClassName = ElementUtils.getSimpleName(element.asType()) + OptionDescriptors.class.getSimpleName();
         TypeElement sourceType = (TypeElement) model.type;
         PackageElement pack = context.getEnvironment().getElementUtils().getPackageOf(sourceType);
         Set<Modifier> typeModifiers = ElementUtils.modifiers(Modifier.FINAL);
         CodeTypeElement descriptors = new CodeTypeElement(typeModifiers, ElementKind.CLASS, pack, optionsClassName);
-        DeclaredType optionDescriptorsType = types.OptionDescriptors;
+        DeclaredType optionDescriptorsType = context.getDeclaredType(OptionDescriptors.class);
         descriptors.getImplements().add(optionDescriptorsType);
         GeneratorUtils.addGeneratedBy(context, descriptors, (TypeElement) element);
 
@@ -430,8 +435,7 @@ public class OptionProcessor extends AbstractProcessor {
 
     private static CodeTree createBuildOptionDescriptor(ProcessorContext context, OptionInfo info) {
         CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
-        TruffleTypes types = context.getTypes();
-        builder.startStaticCall(types.OptionDescriptor, "newBuilder");
+        builder.startStaticCall(context.getType(OptionDescriptor.class), "newBuilder");
         VariableElement var = info.field;
         builder.staticReference(var.getEnclosingElement().asType(), var.getSimpleName().toString());
         builder.doubleQuote(info.name);
@@ -442,8 +446,8 @@ public class OptionProcessor extends AbstractProcessor {
             builder.startCall("", "deprecated").string("false").end();
         }
         builder.startCall("", "help").doubleQuote(info.help).end();
-        builder.startCall("", "category").staticReference(types.OptionCategory, info.category).end();
-        builder.startCall("", "stability").staticReference(types.OptionStability, info.stability).end();
+        builder.startCall("", "category").staticReference(context.getType(OptionCategory.class), info.category.name()).end();
+        builder.startCall("", "stability").staticReference(context.getType(OptionStability.class), info.stability.name()).end();
 
         builder.startCall("", "build").end();
         return builder.build();
@@ -458,10 +462,10 @@ public class OptionProcessor extends AbstractProcessor {
         final boolean optionMap;
         final VariableElement field;
         final AnnotationMirror annotation;
-        final String category;
-        final String stability;
+        final OptionCategory category;
+        final OptionStability stability;
 
-        OptionInfo(String name, String help, VariableElement field, AnnotationMirror annotation, boolean deprecated, String category, String stability, boolean optionMap) {
+        OptionInfo(String name, String help, VariableElement field, AnnotationMirror annotation, boolean deprecated, OptionCategory category, OptionStability stability, boolean optionMap) {
             this.name = name;
             this.help = help;
             this.field = field;

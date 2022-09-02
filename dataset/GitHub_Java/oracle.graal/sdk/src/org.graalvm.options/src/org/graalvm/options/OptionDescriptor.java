@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -55,16 +55,14 @@ public final class OptionDescriptor {
     private final OptionCategory category;
     private final OptionStability stability;
     private final boolean deprecated;
-    private final String deprecationMessage;
 
-    OptionDescriptor(OptionKey<?> key, String name, String help, OptionCategory category, OptionStability stability, boolean deprecated, String deprecationMessage) {
+    OptionDescriptor(OptionKey<?> key, String name, String help, OptionCategory category, OptionStability stability, boolean deprecated) {
         this.key = key;
         this.name = name;
         this.help = help;
         this.category = category;
         this.stability = stability;
         this.deprecated = deprecated;
-        this.deprecationMessage = deprecationMessage;
     }
 
     /**
@@ -93,15 +91,6 @@ public final class OptionDescriptor {
      */
     public boolean isDeprecated() {
         return deprecated;
-    }
-
-    /**
-     * Returns the deprecation reason and the recommended fix.
-     *
-     * @since 20.1.0
-     */
-    public String getDeprecationMessage() {
-        return deprecationMessage;
     }
 
     /**
@@ -202,7 +191,7 @@ public final class OptionDescriptor {
         return EMPTY.new Builder(key, name);
     }
 
-    private static final OptionDescriptor EMPTY = new OptionDescriptor(null, null, null, null, null, false, null);
+    private static final OptionDescriptor EMPTY = new OptionDescriptor(null, null, null, null, null, false);
 
     /**
      * Represents an option descriptor builder.
@@ -214,7 +203,6 @@ public final class OptionDescriptor {
         private final OptionKey<?> key;
         private final String name;
         private boolean deprecated = false;
-        private String deprecationMessage = "";
         private OptionCategory category = OptionCategory.INTERNAL;
         private OptionStability stability = OptionStability.EXPERIMENTAL;
         private String help = "";
@@ -271,23 +259,12 @@ public final class OptionDescriptor {
         }
 
         /**
-         * Specifies a human-readable deprecation reason and the recommended fix.
-         *
-         * @since 20.1.0
-         */
-        public Builder deprecationMessage(@SuppressWarnings("hiding") String deprecationMessage) {
-            Objects.requireNonNull(deprecationMessage);
-            this.deprecationMessage = deprecationMessage;
-            return this;
-        }
-
-        /**
          * Builds and returns a new option descriptor.
          *
          * @since 19.0
          */
         public OptionDescriptor build() {
-            return new OptionDescriptor(key, name, help, category, stability, deprecated, deprecationMessage);
+            return new OptionDescriptor(key, name, help, category, stability, deprecated);
         }
     }
 
