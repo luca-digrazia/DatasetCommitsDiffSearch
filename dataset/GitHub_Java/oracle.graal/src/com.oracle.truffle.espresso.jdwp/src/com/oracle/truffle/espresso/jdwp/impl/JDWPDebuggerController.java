@@ -38,7 +38,13 @@ import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.jdwp.api.*;
+import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
+import com.oracle.truffle.espresso.jdwp.api.Ids;
+import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
+import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
+import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -70,11 +76,9 @@ public class JDWPDebuggerController {
     // justification for this being a map is that lookups only happen when at a breakpoint
     private Map<Breakpoint, BreakpointInfo> breakpointInfos = new HashMap<>();
     private JDWPContext context;
-    private JDWPVirtualMachine vm;
 
     public JDWPDebuggerController(JDWPInstrument instrument) {
         this.instrument = instrument;
-        this.vm = new JDWPVirtualMachineImpl();
     }
 
     public void initialize(TruffleLanguage.Env env, JDWPOptions jdwpOptions, JDWPContext jdwpContext, boolean reconnect) {
@@ -331,10 +335,6 @@ public class JDWPDebuggerController {
         fieldBreakpointExpected.put(Thread.currentThread(), event);
     }
 
-    public JDWPVirtualMachine getVirtualMachine() {
-        return vm;
-    }
-
     private class SuspendedCallbackImpl implements SuspendedCallback {
 
         public static final String DEBUG_VALUE_GET = "get";
@@ -532,10 +532,10 @@ public class JDWPDebuggerController {
                 }
 
                 RootNode root = findCurrentRoot(frame);
-                MethodRef method = getContext().getMethodFromRootNode(root);
+                KlassRef klass = getContext().getKlassFromRootNode(root);
 
-                if (method != null) {
-                    KlassRef klass = method.getDeclaringKlass();
+                if (klass != null) {
+                    MethodRef method = getContext().getMethodFromRootNode(root);
 
                     long klassId = ids.getIdAsLong(klass);
                     long methodId = ids.getIdAsLong(method);

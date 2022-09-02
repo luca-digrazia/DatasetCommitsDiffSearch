@@ -22,11 +22,12 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
+import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
 import java.util.regex.Pattern;
 
-public final class RequestFilter {
+public class RequestFilter {
 
     private final int requestId;
     private final byte eventKind;
@@ -125,10 +126,12 @@ public final class RequestFilter {
     }
 
     public void addThisFilterId(long thisId) {
+        System.out.println("setting this ID: " + thisId + " in " + this.hashCode());
         this.thisFilterId = thisId;
     }
 
     public long getThisFilterId() {
+        System.out.println("getting this ID: " + thisFilterId + " in " + this.hashCode());
         return thisFilterId;
     }
 }
