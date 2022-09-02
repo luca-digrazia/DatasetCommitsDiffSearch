@@ -27,6 +27,7 @@ package com.oracle.svm.core.genscavenge;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
 
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownObjectField;
 
@@ -41,14 +42,17 @@ public final class ImageHeapInfo {
     @UnknownObjectField(types = Object.class) public Object firstReadOnlyReferenceObject;
     @UnknownObjectField(types = Object.class) public Object lastReadOnlyReferenceObject;
 
-    @UnknownObjectField(types = Object.class) public Object firstReadOnlyRelocatableObject;
-    @UnknownObjectField(types = Object.class) public Object lastReadOnlyRelocatableObject;
-
     @UnknownObjectField(types = Object.class) public Object firstWritablePrimitiveObject;
     @UnknownObjectField(types = Object.class) public Object lastWritablePrimitiveObject;
 
     @UnknownObjectField(types = Object.class) public Object firstWritableReferenceObject;
     @UnknownObjectField(types = Object.class) public Object lastWritableReferenceObject;
+
+    @UnknownObjectField(types = Object.class) public Object firstReadOnlyObject;
+    @UnknownObjectField(types = Object.class) public Object lastReadOnlyObject;
+
+    @UnknownObjectField(types = Object.class) public Object firstWritableObject;
+    @UnknownObjectField(types = Object.class) public Object lastWritableObject;
 
     @UnknownObjectField(types = Object.class) public Object firstObject;
     @UnknownObjectField(types = Object.class) public Object lastObject;
@@ -58,26 +62,21 @@ public final class ImageHeapInfo {
 
     @SuppressWarnings("hiding")
     public void initialize(Object firstReadOnlyPrimitiveObject, Object lastReadOnlyPrimitiveObject, Object firstReadOnlyReferenceObject, Object lastReadOnlyReferenceObject,
-                    Object firstReadOnlyRelocatableObject, Object lastReadOnlyRelocatableObject, Object firstWritablePrimitiveObject, Object lastWritablePrimitiveObject,
-                    Object firstWritableReferenceObject, Object lastWritableReferenceObject) {
+                    Object firstWritablePrimitiveObject, Object lastWritablePrimitiveObject, Object firstWritableReferenceObject, Object lastWritableReferenceObject) {
         this.firstReadOnlyPrimitiveObject = firstReadOnlyPrimitiveObject;
         this.lastReadOnlyPrimitiveObject = lastReadOnlyPrimitiveObject;
         this.firstReadOnlyReferenceObject = firstReadOnlyReferenceObject;
         this.lastReadOnlyReferenceObject = lastReadOnlyReferenceObject;
-        this.firstReadOnlyRelocatableObject = firstReadOnlyRelocatableObject;
-        this.lastReadOnlyRelocatableObject = lastReadOnlyRelocatableObject;
         this.firstWritablePrimitiveObject = firstWritablePrimitiveObject;
         this.lastWritablePrimitiveObject = lastWritablePrimitiveObject;
         this.firstWritableReferenceObject = firstWritableReferenceObject;
         this.lastWritableReferenceObject = lastWritableReferenceObject;
 
         // Compute boundaries for checks considering partitions can be empty (first == last == null)
-        Object firstReadOnlyObject = (firstReadOnlyPrimitiveObject != null) ? firstReadOnlyPrimitiveObject
-                        : ((firstReadOnlyReferenceObject != null) ? firstReadOnlyReferenceObject : firstReadOnlyRelocatableObject);
-        Object lastReadOnlyObject = (lastReadOnlyRelocatableObject != null) ? lastReadOnlyRelocatableObject
-                        : ((lastReadOnlyReferenceObject != null) ? lastReadOnlyReferenceObject : lastReadOnlyPrimitiveObject);
-        Object firstWritableObject = (firstWritablePrimitiveObject != null) ? firstWritablePrimitiveObject : firstWritableReferenceObject;
-        Object lastWritableObject = (lastWritableReferenceObject != null) ? lastWritableReferenceObject : lastWritablePrimitiveObject;
+        this.firstReadOnlyObject = (firstReadOnlyPrimitiveObject != null) ? firstReadOnlyPrimitiveObject : firstReadOnlyReferenceObject;
+        this.lastReadOnlyObject = (lastReadOnlyReferenceObject != null) ? lastReadOnlyReferenceObject : lastReadOnlyPrimitiveObject;
+        this.firstWritableObject = (firstWritablePrimitiveObject != null) ? firstWritablePrimitiveObject : firstWritableReferenceObject;
+        this.lastWritableObject = (lastWritableReferenceObject != null) ? lastWritableReferenceObject : lastWritablePrimitiveObject;
         this.firstObject = (firstReadOnlyObject != null) ? firstReadOnlyObject : firstWritableObject;
         this.lastObject = (lastWritableObject != null) ? lastWritableObject : lastReadOnlyObject;
     }
@@ -109,12 +108,6 @@ public final class ImageHeapInfo {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInReadOnlyRelocatablePartition(Pointer ptr) {
-        assert ptr.isNonNull();
-        return Word.objectToUntrackedPointer(firstReadOnlyRelocatableObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastReadOnlyRelocatableObject));
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isInWritableReferencePartition(Pointer ptr) {
         assert ptr.isNonNull();
         return Word.objectToUntrackedPointer(firstWritableReferenceObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastWritableReferenceObject));
@@ -130,9 +123,15 @@ public final class ImageHeapInfo {
         boolean result;
         if (objectPointer.isNull()) {
             result = false;
-        } else {
+        } else if (SubstrateOptions.SpawnIsolates.getValue()) {
             result = objectPointer.aboveOrEqual(Word.objectToUntrackedPointer(firstObject)) && objectPointer.belowOrEqual(Word.objectToUntrackedPointer(lastObject));
+        } else {
+            result = objectPointer.aboveOrEqual(Word.objectToUntrackedPointer(firstReadOnlyObject)) &&
+                            objectPointer.belowOrEqual(Word.objectToUntrackedPointer(lastReadOnlyObject)) ||
+                            objectPointer.aboveOrEqual(Word.objectToUntrackedPointer(firstWritableObject)) &&
+                                            objectPointer.belowOrEqual(Word.objectToUntrackedPointer(lastWritableObject));
         }
+
         assert result == isInImageHeapSlow(objectPointer);
         return result;
     }
@@ -143,7 +142,6 @@ public final class ImageHeapInfo {
         if (objectPointer.isNonNull()) {
             result |= isInReadOnlyPrimitivePartition(objectPointer);
             result |= isInReadOnlyReferencePartition(objectPointer);
-            result |= isInReadOnlyRelocatablePartition(objectPointer);
             result |= isInWritablePrimitivePartition(objectPointer);
             result |= isInWritableReferencePartition(objectPointer);
         }

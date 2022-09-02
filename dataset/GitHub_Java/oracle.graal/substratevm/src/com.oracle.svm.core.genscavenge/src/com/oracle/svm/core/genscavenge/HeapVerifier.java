@@ -193,12 +193,12 @@ public final class HeapVerifier {
         return result;
     }
 
-    static void verifyDirtyCard(boolean inToSpace) {
+    void verifyDirtyCard(boolean inToSpace) {
         OldGeneration oldGen = HeapImpl.getHeapImpl().getOldGeneration();
         oldGen.verifyDirtyCards(inToSpace);
     }
 
-    static Log getTraceLog() {
+    Log getTraceLog() {
         return (HeapOptions.TraceHeapVerification.getValue() ? Log.log() : Log.noopLog());
     }
 
@@ -406,7 +406,7 @@ public final class HeapVerifier {
     }
 
     private static boolean slowlyFindPointerInUnusedSpace(Pointer p) {
-        return HeapImpl.getChunkProvider().slowlyFindPointer(p);
+        return HeapChunkProvider.get().slowlyFindPointer(p);
     }
 
     static boolean slowlyFindPointerInSpace(Space space, Pointer p) {

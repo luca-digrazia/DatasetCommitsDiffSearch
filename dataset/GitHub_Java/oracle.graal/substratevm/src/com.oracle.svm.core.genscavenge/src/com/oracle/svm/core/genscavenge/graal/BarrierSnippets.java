@@ -34,7 +34,6 @@ import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
-import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.FixedValueAnchorNode;
 import org.graalvm.compiler.nodes.gc.SerialArrayRangeWriteBarrier;
@@ -51,14 +50,14 @@ import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.Snippets;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.genscavenge.HeapOptions;
+import com.oracle.svm.core.genscavenge.AlignedHeapChunk;
+import com.oracle.svm.core.genscavenge.CardTable;
 import com.oracle.svm.core.genscavenge.ObjectHeaderImpl;
-import com.oracle.svm.core.genscavenge.remset.RememberedSet;
+import com.oracle.svm.core.genscavenge.UnalignedHeapChunk;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.graal.snippets.SubstrateTemplates;
 import com.oracle.svm.core.option.HostedOptionKey;
@@ -66,9 +65,6 @@ import com.oracle.svm.core.util.Counter;
 import com.oracle.svm.core.util.CounterFeature;
 
 public class BarrierSnippets extends SubstrateTemplates implements Snippets {
-    /** A LocationIdentity to distinguish card locations from other locations. */
-    public static final LocationIdentity CARD_REMEMBERED_SET_LOCATION = NamedLocationIdentity.mutable("CardRememberedSet");
-
     public static class Options {
         @Option(help = "Instrument write barriers with counters")//
         public static final HostedOptionKey<Boolean> CountWriteBarriers = new HostedOptionKey<>(false);
@@ -79,7 +75,7 @@ public class BarrierSnippets extends SubstrateTemplates implements Snippets {
         return ImageSingletons.lookup(BarrierSnippetCounters.class);
     }
 
-    public BarrierSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection) {
+    BarrierSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection) {
         super(options, factories, providers, snippetReflection);
     }
 
@@ -96,22 +92,22 @@ public class BarrierSnippets extends SubstrateTemplates implements Snippets {
 
         Object fixedObject = FixedValueAnchorNode.getObject(object);
         UnsignedWord objectHeader = ObjectHeaderImpl.readHeaderFromObject(fixedObject);
-        boolean needsBarrier = RememberedSet.get().hasRememberedSet(objectHeader);
+        boolean needsBarrier = ObjectHeaderImpl.hasRememberedSet(objectHeader);
         if (BranchProbabilityNode.probability(BranchProbabilityNode.FREQUENT_PROBABILITY, !needsBarrier)) {
             return;
         }
-        boolean aligned = ObjectHeaderImpl.isAlignedHeader(objectHeader);
+        boolean aligned = ObjectHeaderImpl.isAlignedHeaderUnsafe(objectHeader);
         if (BranchProbabilityNode.probability(BranchProbabilityNode.LIKELY_PROBABILITY, aligned)) {
             counters().postWriteBarrierAligned.inc();
-            RememberedSet.get().dirtyCardForAlignedObject(fixedObject, verifyOnly);
+            AlignedHeapChunk.dirtyCardForObject(fixedObject, verifyOnly);
             return;
         }
         counters().postWriteBarrierUnaligned.inc();
-        RememberedSet.get().dirtyCardForUnalignedObject(fixedObject, verifyOnly);
+        UnalignedHeapChunk.dirtyCardForObject(fixedObject, verifyOnly);
     }
 
     private class PostWriteBarrierLowering implements NodeLoweringProvider<WriteBarrier> {
-        private final SnippetInfo postWriteBarrierSnippet = snippet(BarrierSnippets.class, "postWriteBarrierSnippet", CARD_REMEMBERED_SET_LOCATION);
+        private final SnippetInfo postWriteBarrierSnippet = snippet(BarrierSnippets.class, "postWriteBarrierSnippet", CardTable.CARD_REMEMBERED_SET_LOCATION);
 
         @Override
         public void lower(WriteBarrier barrier, LoweringTool tool) {
@@ -160,7 +156,7 @@ class BarrierSnippetCounters {
 class BarrierSnippetCountersFeature implements Feature {
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.UseCardRememberedSetHeap.getValue() && HeapOptions.useRememberedSet();
+        return SubstrateOptions.UseCardRememberedSetHeap.getValue();
     }
 
     @Override

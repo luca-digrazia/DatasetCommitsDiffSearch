@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.core.genscavenge;
 
+import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
@@ -79,6 +80,11 @@ final class HeapChunkProvider {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     HeapChunkProvider() {
+    }
+
+    @Fold
+    static HeapChunkProvider get() {
+        return HeapImpl.getHeapImpl().chunkProvider;
     }
 
     @AlwaysInline("Remove all logging when noopLog is returned by this method")
@@ -254,7 +260,7 @@ final class HeapChunkProvider {
      * Release an UnalignedHeapChunk back to the operating system. They are never recycled to a free
      * list.
      */
-    static void consumeUnalignedChunk(UnalignedHeader chunk) {
+    void consumeUnalignedChunk(UnalignedHeader chunk) {
         UnsignedWord chunkSize = unalignedChunkSize(chunk);
         log().string("[HeapChunkProvider.consumeUnalignedChunk  chunk: ").hex(chunk).string("  chunkSize: ").hex(chunkSize).newline();
 
@@ -331,8 +337,8 @@ final class HeapChunkProvider {
         }
     }
 
-    long getFirstAllocationTime() {
-        return firstAllocationTime;
+    static long getFirstAllocationTime() {
+        return get().firstAllocationTime;
     }
 
     boolean slowlyFindPointer(Pointer p) {

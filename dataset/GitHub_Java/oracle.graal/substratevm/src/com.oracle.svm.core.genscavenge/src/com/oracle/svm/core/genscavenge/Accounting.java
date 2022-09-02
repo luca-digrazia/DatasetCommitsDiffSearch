@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.svm.core.genscavenge;
 
 import org.graalvm.nativeimage.Platform;
@@ -11,7 +35,7 @@ import com.oracle.svm.core.log.Log;
  * Accounting for {@link GCImpl}. Times are in nanoseconds. ChunkBytes refer to bytes reserved (but
  * maybe not occupied). ObjectBytes refer to bytes occupied by objects.
  */
-class Accounting {
+final class Accounting {
     /* State that is available to collection policies, etc. */
     private long incrementalCollectionCount = 0;
     private long incrementalCollectionTotalNanos = 0;
@@ -87,13 +111,13 @@ class Accounting {
     }
 
     void beforeCollection() {
-        final Log trace = Log.noopLog().string("[GCImpl.Accounting.beforeCollection:").newline();
+        Log trace = Log.noopLog().string("[GCImpl.Accounting.beforeCollection:").newline();
         /* Gather some space statistics. */
-        final HeapImpl heap = HeapImpl.getHeapImpl();
-        final YoungGeneration youngGen = heap.getYoungGeneration();
+        HeapImpl heap = HeapImpl.getHeapImpl();
+        YoungGeneration youngGen = heap.getYoungGeneration();
         youngChunkBytesBefore = youngGen.getChunkUsedBytes();
         /* This is called before the collection, so OldSpace is FromSpace. */
-        final Space oldSpace = heap.getOldGeneration().getFromSpace();
+        Space oldSpace = heap.getOldGeneration().getFromSpace();
         oldChunkBytesBefore = oldSpace.getChunkBytes();
         /* Objects are allocated in the young generation. */
         normalChunkBytes = normalChunkBytes.add(youngChunkBytesBefore);
@@ -107,7 +131,7 @@ class Accounting {
         trace.string("]").newline();
     }
 
-    void afterCollection(boolean completeCollection, GCImpl.Timer collectionTimer) {
+    void afterCollection(boolean completeCollection, Timer collectionTimer) {
         if (completeCollection) {
             afterCompleteCollection(collectionTimer);
         } else {
@@ -115,8 +139,8 @@ class Accounting {
         }
     }
 
-    private void afterIncrementalCollection(GCImpl.Timer collectionTimer) {
-        final Log trace = Log.noopLog().string("[GCImpl.Accounting.afterIncrementalCollection:");
+    private void afterIncrementalCollection(Timer collectionTimer) {
+        Log trace = Log.noopLog().string("[GCImpl.Accounting.afterIncrementalCollection:");
         /*
          * Aggregating collection information is needed because any given collection policy may not
          * be called for all collections, but may want to make decisions based on the aggregate
@@ -127,7 +151,7 @@ class Accounting {
         /* Incremental collections only promote. */
         lastCollectionPromotedChunkBytes = oldChunkBytesAfter.subtract(oldChunkBytesBefore);
         promotedTotalChunkBytes = promotedTotalChunkBytes.add(lastCollectionPromotedChunkBytes);
-        incrementalCollectionTotalNanos += collectionTimer.getCollectedNanos();
+        incrementalCollectionTotalNanos += collectionTimer.getMeasuredNanos();
         trace.string("  incrementalCollectionCount: ").signed(incrementalCollectionCount)
                         .string("  oldChunkBytesAfter: ").unsigned(oldChunkBytesAfter)
                         .string("  oldChunkBytesBefore: ").unsigned(oldChunkBytesBefore)
@@ -135,34 +159,34 @@ class Accounting {
         trace.string("]").newline();
     }
 
-    private void afterCompleteCollection(GCImpl.Timer collectionTimer) {
-        final Log trace = Log.noopLog().string("[GCImpl.Accounting.afterCompleteCollection:");
+    private void afterCompleteCollection(Timer collectionTimer) {
+        Log trace = Log.noopLog().string("[GCImpl.Accounting.afterCompleteCollection:");
         completeCollectionCount += 1;
         afterCollectionCommon();
         /* Complete collections only copy, and they copy everything. */
         copiedTotalChunkBytes = copiedTotalChunkBytes.add(oldChunkBytesAfter);
-        completeCollectionTotalNanos += collectionTimer.getCollectedNanos();
+        completeCollectionTotalNanos += collectionTimer.getMeasuredNanos();
         trace.string("  completeCollectionCount: ").signed(completeCollectionCount)
                         .string("  oldChunkBytesAfter: ").unsigned(oldChunkBytesAfter);
         trace.string("]").newline();
     }
 
     void afterCollectionCommon() {
-        final HeapImpl heap = HeapImpl.getHeapImpl();
+        HeapImpl heap = HeapImpl.getHeapImpl();
         // This is called after the collection, after the space flip, so OldSpace is FromSpace.
-        final YoungGeneration youngGen = heap.getYoungGeneration();
+        YoungGeneration youngGen = heap.getYoungGeneration();
         youngChunkBytesAfter = youngGen.getChunkUsedBytes();
-        final Space oldSpace = heap.getOldGeneration().getFromSpace();
+        Space oldSpace = heap.getOldGeneration().getFromSpace();
         oldChunkBytesAfter = oldSpace.getChunkBytes();
-        final UnsignedWord beforeChunkBytes = youngChunkBytesBefore.add(oldChunkBytesBefore);
-        final UnsignedWord afterChunkBytes = oldChunkBytesAfter.add(youngChunkBytesAfter);
-        final UnsignedWord collectedChunkBytes = beforeChunkBytes.subtract(afterChunkBytes);
+        UnsignedWord beforeChunkBytes = youngChunkBytesBefore.add(oldChunkBytesBefore);
+        UnsignedWord afterChunkBytes = oldChunkBytesAfter.add(youngChunkBytesAfter);
+        UnsignedWord collectedChunkBytes = beforeChunkBytes.subtract(afterChunkBytes);
         collectedTotalChunkBytes = collectedTotalChunkBytes.add(collectedChunkBytes);
         if (HeapOptions.PrintGCSummary.getValue()) {
             UnsignedWord youngObjectBytesAfter = youngGen.getObjectBytes();
             UnsignedWord oldObjectBytesAfter = oldSpace.getObjectBytes();
-            final UnsignedWord beforeObjectBytes = youngObjectBytesBefore.add(oldObjectBytesBefore);
-            final UnsignedWord collectedObjectBytes = beforeObjectBytes.subtract(oldObjectBytesAfter).subtract(youngObjectBytesAfter);
+            UnsignedWord beforeObjectBytes = youngObjectBytesBefore.add(oldObjectBytesBefore);
+            UnsignedWord collectedObjectBytes = beforeObjectBytes.subtract(oldObjectBytesAfter).subtract(youngObjectBytesAfter);
             collectedTotalObjectBytes = collectedTotalObjectBytes.add(collectedObjectBytes);
         }
     }
