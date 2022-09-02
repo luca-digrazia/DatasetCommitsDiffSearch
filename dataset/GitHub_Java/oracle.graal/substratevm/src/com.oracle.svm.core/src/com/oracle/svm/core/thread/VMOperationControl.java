@@ -311,9 +311,7 @@ public final class VMOperationControl {
          * - Thread A allocates an object while still holding the lock. The allocation would need
          * to execute a GC but the VM thread is blocked.
          */
-        VMOperationControl control = VMOperationControl.get();
-        OpInProgress opInProgress = control.getInProgress();
-        if (VMOperation.isInProgress(opInProgress) && !opInProgress.getOperation().isJavaSynchronizationAllowed()) {
+        if (VMOperation.isInProgress()) {
             Log.log().string(message).newline();
             VMError.shouldNotReachHere("Should not reach here: Not okay to block.");
         }
