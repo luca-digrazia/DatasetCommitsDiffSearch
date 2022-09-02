@@ -219,7 +219,6 @@ public abstract class Type {
         long res = x * y;
         long overflow = ExactMath.multiplyHighUnsigned(x, y);
         if (overflow != 0) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new TypeOverflowException("unsigned multiplication overflow");
         }
         return res;
@@ -236,7 +235,6 @@ public abstract class Type {
     public static long addUnsignedExact(long x, long y) throws TypeOverflowException {
         long res = x + y;
         if (Long.compareUnsigned(res, x) < 0) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new TypeOverflowException("unsigned addition overflow");
         }
         return res;
