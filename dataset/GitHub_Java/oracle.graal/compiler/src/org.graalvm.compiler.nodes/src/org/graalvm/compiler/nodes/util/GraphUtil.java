@@ -24,15 +24,14 @@
  */
 package org.graalvm.compiler.nodes.util;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Objects;
-import java.util.function.BiFunction;
-
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -43,7 +42,6 @@ import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph;
-import org.graalvm.compiler.graph.LinkedNodeStack;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeBitMap;
 import org.graalvm.compiler.graph.NodeSourcePosition;
@@ -97,14 +95,14 @@ import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.BiFunction;
 
 public class GraphUtil {
 
@@ -346,44 +344,33 @@ public class GraphUtil {
     }
 
     public static void killWithUnusedFloatingInputs(Node node, boolean mayKillGuard) {
-        LinkedNodeStack stack = null;
-        Node cur = node;
-        do {
-            assert checkKill(cur, mayKillGuard);
-            cur.markDeleted();
-            outer: for (Node in : cur.inputs()) {
-                if (in.isAlive()) {
-                    in.removeUsage(cur);
+        assert checkKill(node, mayKillGuard);
+        node.markDeleted();
+        outer: for (Node in : node.inputs()) {
+            if (in.isAlive()) {
+                in.removeUsage(node);
+                if (in.hasNoUsages()) {
+                    node.maybeNotifyZeroUsages(in);
+                }
+                if (isFloatingNode(in)) {
                     if (in.hasNoUsages()) {
-                        cur.maybeNotifyZeroUsages(in);
-                    }
-                    if (isFloatingNode(in)) {
-                        if (in.hasNoUsages()) {
-                            if (in instanceof GuardNode) {
-                                // Guard nodes are only killed if their anchor dies.
-                                continue outer;
-                            }
-                        } else if (in instanceof PhiNode) {
-                            if (!((PhiNode) in).isDegenerated()) {
-                                continue outer;
-                            }
-                            in.replaceAtUsages(null);
+                        if (in instanceof GuardNode) {
+                            // Guard nodes are only killed if their anchor dies.
                         } else {
-                            continue outer;
+                            killWithUnusedFloatingInputs(in);
                         }
-                        if (stack == null) {
-                            stack = new LinkedNodeStack();
+                    } else if (in instanceof PhiNode) {
+                        for (Node use : in.usages()) {
+                            if (use != in) {
+                                continue outer;
+                            }
                         }
-                        stack.push(in);
+                        in.replaceAtUsages(null);
+                        killWithUnusedFloatingInputs(in);
                     }
                 }
             }
-            if (stack == null || stack.isEmpty()) {
-                break;
-            } else {
-                cur = stack.pop();
-            }
-        } while (true);
+        }
     }
 
     /**

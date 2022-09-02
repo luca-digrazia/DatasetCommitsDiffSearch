@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,29 +24,27 @@
  */
 package org.graalvm.compiler.nodes;
 
-import static org.graalvm.compiler.nodeinfo.InputType.Condition;
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_0;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
-
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.TriState;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.IterableNodeType;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.nodes.spi.Canonicalizable;
-import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
+import org.graalvm.compiler.graph.spi.Canonicalizable;
+import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ProfileData.BranchProbabilityData;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.IntegerBelowNode;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
 import org.graalvm.compiler.options.OptionValues;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.TriState;
+import static org.graalvm.compiler.nodeinfo.InputType.Condition;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_0;
+import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
 
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public final class ShortCircuitOrNode extends LogicNode implements IterableNodeType, Canonicalizable.Binary<LogicNode> {
@@ -55,9 +53,9 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
     @Input(Condition) LogicNode y;
     protected boolean xNegated;
     protected boolean yNegated;
-    protected BranchProbabilityData shortCircuitProbability;
+    protected double shortCircuitProbability;
 
-    public ShortCircuitOrNode(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, BranchProbabilityData shortCircuitProbability) {
+    public ShortCircuitOrNode(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, double shortCircuitProbability) {
         super(TYPE);
         this.x = x;
         this.xNegated = xNegated;
@@ -66,7 +64,7 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
         this.shortCircuitProbability = shortCircuitProbability;
     }
 
-    public static LogicNode create(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, BranchProbabilityData shortCircuitProbability) {
+    public static LogicNode create(LogicNode x, boolean xNegated, LogicNode y, boolean yNegated, double shortCircuitProbability) {
         return new ShortCircuitOrNode(x, xNegated, y, yNegated, shortCircuitProbability);
     }
 
@@ -92,7 +90,7 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
      * Gets the probability that the {@link #getY() y} part of this binary node is <b>not</b>
      * evaluated. This is the probability that this operator will short-circuit its execution.
      */
-    public BranchProbabilityData getShortCircuitProbability() {
+    public double getShortCircuitProbability() {
         return shortCircuitProbability;
     }
 
@@ -233,8 +231,9 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
             if (!yNode.isXNegated()) {
                 LogicNode sym = simplifyComparison(forX, yNode.getX());
                 if (sym != null) {
-                    BranchProbabilityData combinedProfile = BranchProbabilityData.combineShortCircuitOr(getShortCircuitProbability(), yNode.getShortCircuitProbability());
-                    return new ShortCircuitOrNode(sym, isXNegated(), yNode.getY(), yNode.isYNegated(), combinedProfile);
+                    double p1 = getShortCircuitProbability();
+                    double p2 = yNode.getShortCircuitProbability();
+                    return new ShortCircuitOrNode(sym, isXNegated(), yNode.getY(), yNode.isYNegated(), p1 + (1 - p1) * p2);
                 }
             }
         }
@@ -402,12 +401,12 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
                 // (!( a || b) || a) => 1101 ( a ||!b)
                 boolean newInnerXNegated = inner.isXNegated();
                 boolean newInnerYNegated = inner.isYNegated();
-                BranchProbabilityData newProbability = inner.getShortCircuitProbability();
+                double newProbability = inner.getShortCircuitProbability();
                 if (matchIsInnerX) {
                     newInnerYNegated = !newInnerYNegated;
                 } else {
                     newInnerXNegated = !newInnerXNegated;
-                    newProbability = newProbability.negated();
+                    newProbability = 1.0 - newProbability;
                 }
                 // The expression can be transformed into a single or.
                 return new ShortCircuitOrNode(inner.getX(), newInnerXNegated, inner.getY(), newInnerYNegated, newProbability);

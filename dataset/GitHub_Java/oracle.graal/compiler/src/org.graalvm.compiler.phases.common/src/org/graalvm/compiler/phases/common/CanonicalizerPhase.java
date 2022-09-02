@@ -24,13 +24,8 @@
  */
 package org.graalvm.compiler.phases.common;
 
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.CFG_SIMPLIFICATION;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.FINAL_CANONICALIZATION;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.GVN;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.READ_CANONICALIZATION;
-
-import java.util.EnumSet;
-
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.Constant;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
@@ -59,7 +54,6 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.CoreProvidersDelegate;
@@ -68,8 +62,12 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.Phase;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Constant;
+import java.util.EnumSet;
+
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.CFG_SIMPLIFICATION;
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.FINAL_CANONICALIZATION;
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.GVN;
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.READ_CANONICALIZATION;
 
 public class CanonicalizerPhase extends BasePhase<CoreProviders> {
 
@@ -97,7 +95,6 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
     private static final CounterKey COUNTER_INFER_STAMP_CALLED = DebugContext.counter("InferStampCalled");
     private static final CounterKey COUNTER_STAMP_CHANGED = DebugContext.counter("StampChanged");
     private static final CounterKey COUNTER_SIMPLIFICATION_CONSIDERED_NODES = DebugContext.counter("SimplificationConsideredNodes");
-    private static final CounterKey COUNTER_CUSTOM_SIMPLIFICATION_CONSIDERED_NODES = DebugContext.counter("CustomSimplificationConsideredNodes");
     private static final CounterKey COUNTER_GLOBAL_VALUE_NUMBERING_HITS = DebugContext.counter("GlobalValueNumberingHits");
 
     private final EnumSet<CanonicalizerFeature> features;
@@ -264,7 +261,7 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
 
         @Override
         protected void run(StructuredGraph graph) {
-            if (graph.isAfterStage(StageFlag.FINAL_CANONICALIZATION)) {
+            if (graph.isAfterFinalCanonicalization()) {
                 GraalError.shouldNotReachHere("cannot run further canonicalizations after the final canonicalization");
             }
             this.debug = graph.getDebug();
@@ -282,7 +279,7 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
             tool = new Tool(graph.getAssumptions(), graph.getOptions());
             processWorkSet(graph);
             if (features.contains(FINAL_CANONICALIZATION)) {
-                graph.setAfterStage(StageFlag.FINAL_CANONICALIZATION);
+                graph.setAfterFinalCanonicalization();
             }
         }
 
@@ -418,27 +415,19 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
                     }
                 }
 
-                if (features.contains(CFG_SIMPLIFICATION)) {
+                if (features.contains(CFG_SIMPLIFICATION) && nodeClass.isSimplifiable()) {
+                    debug.log(DebugContext.VERBOSE_LEVEL, "Canonicalizer: simplifying %s", node);
+                    COUNTER_SIMPLIFICATION_CONSIDERED_NODES.increment(debug);
                     if (customSimplification != null) {
-                        debug.log(DebugContext.VERBOSE_LEVEL, "Canonicalizer: customSimplification simplifying %s", node);
-                        COUNTER_CUSTOM_SIMPLIFICATION_CONSIDERED_NODES.increment(debug);
-
                         customSimplification.simplify(node, tool);
-                        if (node.isDeleted()) {
-                            debug.log("Canonicalizer: customSimplification simplified %s", node);
-                            return true;
-                        }
                     }
-                    if (nodeClass.isSimplifiable()) {
-                        debug.log(DebugContext.VERBOSE_LEVEL, "Canonicalizer: simplifying %s", node);
-                        COUNTER_SIMPLIFICATION_CONSIDERED_NODES.increment(debug);
-
+                    if (node.isAlive()) {
                         node.simplify(tool);
                         if (node.isDeleted()) {
                             debug.log("Canonicalizer: simplified %s", node);
-                            return true;
                         }
                     }
+                    return node.isDeleted();
                 }
                 return false;
             } catch (Throwable throwable) {

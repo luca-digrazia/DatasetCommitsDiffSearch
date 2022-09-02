@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,8 @@
  */
 package org.graalvm.compiler.nodes;
 
-import static org.graalvm.compiler.nodeinfo.InputType.Guard;
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
-
-import java.util.List;
-
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.meta.Assumptions;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.debug.DebugCloseable;
@@ -38,8 +34,8 @@ import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.graph.Edges;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.nodes.spi.Canonicalizable;
-import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
+import org.graalvm.compiler.graph.spi.Canonicalizable;
+import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
@@ -54,8 +50,11 @@ import org.graalvm.compiler.nodes.spi.CoreProvidersDelegate;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.meta.Assumptions;
+import java.util.List;
+
+import static org.graalvm.compiler.nodeinfo.InputType.Guard;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
 
 /**
  * Graph decoder that simplifies nodes during decoding. The standard
