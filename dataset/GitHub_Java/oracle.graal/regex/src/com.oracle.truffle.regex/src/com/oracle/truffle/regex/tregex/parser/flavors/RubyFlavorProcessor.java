@@ -608,16 +608,17 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         while (!atEnd()) {
             switch (consumeChar()) {
                 case '\\':
-                    // skip control escape sequences, \\cX, \\C-X or \\M-X, which can be nested
-                    while (curChar() == 'c' || curChar() == 'C' || curChar() == 'M') {
-                        if (curChar() == 'c') {
-                            advance(1);
-                        } else {
-                            advance(2);
-                        }
-                    }
-                    // skip escaped char; if it includes a group name, skip that too
+                    // skip escaped char
                     switch (consumeChar()) {
+                        case 'c':
+                            // skip control character in \\c(
+                            advance();
+                            break;
+                        case 'C':
+                            // \\C-(
+                            advance(2);
+                            break;
+                        // TODO: Handle M-C
                         case 'k':
                         case 'g':
                             // skip contents of group name (which might contain syntax chars)
@@ -1199,22 +1200,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     c = silentCharacterEscape();
                 }
                 return c & 0x9f;
-            }
-            case 'M': {
-                if (atEnd()) {
-                    syntaxError("end pattern at meta");
-                }
-                if (!match("-")) {
-                    syntaxError("invalid meta-code syntax");
-                }
-                if (atEnd()) {
-                    syntaxError("end pattern at meta");
-                }
-                int c = consumeChar();
-                if (c == '\\') {
-                    c = silentCharacterEscape();
-                }
-                return (c & 0xff) | 0x80;
+                // TODO: Support also \M meta-control escapes.
             }
             case 'x': {
                 String code = getUpTo(2, RubyFlavorProcessor::isHexDigit);
