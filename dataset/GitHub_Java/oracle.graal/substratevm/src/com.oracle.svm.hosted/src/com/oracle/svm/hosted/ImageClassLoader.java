@@ -50,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -352,8 +351,8 @@ public final class ImageClassLoader {
         return false;
     }
 
-    public Enumeration<URL> findResourcesByName(String resource) throws IOException {
-        return classLoader.getResources(resource);
+    public URL findResourceByName(String resource) {
+        return classLoader.getResource(resource);
     }
 
     public InputStream findResourceAsStreamByName(String resource) {
