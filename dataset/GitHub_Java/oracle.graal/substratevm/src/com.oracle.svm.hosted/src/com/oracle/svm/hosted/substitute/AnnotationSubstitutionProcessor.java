@@ -96,12 +96,10 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
     private final Map<ResolvedJavaType, ResolvedJavaType> typeSubstitutions;
     private final Map<ResolvedJavaMethod, ResolvedJavaMethod> methodSubstitutions;
     private final Map<ResolvedJavaField, ResolvedJavaField> fieldSubstitutions;
-    private ClassInitializationSupport classInitializationSupport;
 
-    public AnnotationSubstitutionProcessor(ImageClassLoader imageClassLoader, MetaAccessProvider metaAccess, ClassInitializationSupport classInitializationSupport) {
+    public AnnotationSubstitutionProcessor(ImageClassLoader imageClassLoader, MetaAccessProvider metaAccess) {
         this.imageClassLoader = imageClassLoader;
         this.metaAccess = metaAccess;
-        this.classInitializationSupport = classInitializationSupport;
 
         deleteAnnotations = new HashMap<>();
         typeSubstitutions = new HashMap<>();
@@ -259,7 +257,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
          * The annotatedClass is never used directly, i.e., never wrapped in an AnalysisType. So we
          * need to ensure manually here that its static initializer runs.
          */
-        classInitializationSupport.forceInitializeHosted(annotatedClass);
+        ClassInitializationSupport.instance().forceInitializeHosted(annotatedClass);
 
         Delete deleteAnnotation = lookupAnnotation(annotatedClass, Delete.class);
         Substitute substituteAnnotation = lookupAnnotation(annotatedClass, Substitute.class);
