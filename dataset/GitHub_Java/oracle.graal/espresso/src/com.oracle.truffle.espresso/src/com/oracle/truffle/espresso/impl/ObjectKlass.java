@@ -163,11 +163,11 @@ public final class ObjectKlass extends Klass {
         System.arraycopy(skFieldTable, 0, fieldTable, 0, skFieldTable.length);
         localFieldTableIndex = skFieldTable.length;
         for (int i = 0; i < lkInstanceFields.length; i++) {
-            Field instanceField = new Field(this, lkInstanceFields[i]);
+            Field instanceField = new Field(this, lkInstanceFields[i], lkInstanceFields[i].isHidden());
             fieldTable[localFieldTableIndex + i] = instanceField;
         }
         for (int i = 0; i < lkStaticFields.length; i++) {
-            Field staticField = new Field(this, lkStaticFields[i]);
+            Field staticField = new Field(this, lkStaticFields[i], false);
             staticFieldTable[i] = staticField;
         }
 
@@ -1102,24 +1102,34 @@ public final class ObjectKlass extends Klass {
         for (int i = 0; i < superInterfaces.length; i++) {
             interfaces[i] = superInterfaces[i].getLinkedKlass();
         }
-        LinkedKlass linkedKlass = LinkedKlass.redefine(parserKlass, getSuperKlass().getLinkedKlass(), interfaces, getLinkedKlass());
+        LinkedKlass linkedKlass = LinkedKlass.create(getContext().getLanguage(), parserKlass, getSuperKlass().getLinkedKlass(), interfaces);
+        //LinkedKlass linkedKlass = LinkedKlass.redefine(parserKlass, getSuperKlass().getLinkedKlass(), interfaces, getLinkedKlass());
 
-        // fields
-        if (!change.getOuterFields().isEmpty()) {
-            LinkedField[] instanceFields = linkedKlass.getInstanceFields();
-            for (Field outerField : change.getOuterFields()) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-
-                // we know that the special field is always at the same index
+        // changed object type fields handling
+        if (!change.getChangedObjectTypeFields().isEmpty()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            for (Map.Entry<Field, ParserField> entry : change.getChangedObjectTypeFields().entrySet()) {
+                Field changedField = entry.getKey();
+                // we know that the changed field is always at the same index
                 for (int i = 0; i < fieldTable.length; i++) {
                     Field oldField = fieldTable[i];
-                    if (outerField == oldField) {
-                        for (LinkedField instanceField : instanceFields) {
-                            if (instanceField.getName().equals(outerField.getName())) {
+                    if (changedField == oldField) {
+                        // find the corresponding linked field
+                        LinkedField[] instanceFields = linkedKlass.getInstanceFields();
+                        LinkedField[] staticFields = linkedKlass.getStaticFields();
+                        LinkedField[] allFields = new LinkedField[instanceFields.length + staticFields.length];
+                        System.arraycopy(instanceFields, 0, allFields, 0, instanceFields.length);
+                        System.arraycopy(staticFields, 0, allFields, instanceFields.length, staticFields.length);
+
+                        for (LinkedField instanceField : allFields) {
+                            if (instanceField.getName() == changedField.getName()) {
                                 // replace with new field
-                                fieldTable[i] = new Field(this, instanceField);
+                                fieldTable[i] = new Field(this, instanceField, false);
+                                break;
                             }
                         }
+                        // done handling changed field type
+                        break;
                     }
                 }
             }
