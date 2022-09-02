@@ -34,7 +34,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.graalvm.compiler.options.Option;
-import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.svm.core.option.HostedOptionKey;
@@ -72,7 +71,6 @@ public class FallbackExecutor {
                 command.add(p);
             }
         }
-        command.add("-D" + ImageInfo.PROPERTY_IMAGE_KIND_KEY + "=fallback-" + ImageInfo.PROPERTY_IMAGE_KIND_VALUE_EXECUTABLE);
         Path fallbackImageDir = Paths.get(ProcessProperties.getExecutableName()).getParent();
         if (fallbackImageDir == null) {
             VMError.shouldNotReachHere();
@@ -96,17 +94,9 @@ public class FallbackExecutor {
         ProcessProperties.exec(javaExecutable, command.toArray(new String[0]));
     }
 
-    private static final Path buildTimeJavaHome = Paths.get(System.getProperty("java.home"));
-
     private static Path getJavaExecutable() {
         Path binJava = Paths.get("bin", OS.getCurrent() == OS.WINDOWS ? "java.exe" : "java");
-
-        Path javaCandidate = buildTimeJavaHome.resolve(binJava);
-        if (Files.isExecutable(javaCandidate)) {
-            return javaCandidate;
-        }
-
-        javaCandidate = Paths.get(".").resolve(binJava);
+        Path javaCandidate = Paths.get(".").resolve(binJava);
         if (Files.isExecutable(javaCandidate)) {
             return javaCandidate;
         }

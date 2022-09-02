@@ -73,7 +73,7 @@ import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.word.WordTypes;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.graal.pointsto.BigBang;
@@ -568,7 +568,7 @@ public final class GraalFeature implements Feature {
 
             if (implementationMethods.size() > 0) {
                 /* Sort to make printing order and method discovery order deterministic. */
-                implementationMethods.sort((m1, m2) -> m1.getQualifiedName().compareTo(m2.getQualifiedName()));
+                implementationMethods.sort((m1, m2) -> m1.format("%H.%n(%p)").compareTo(m2.format("%H.%n(%p)")));
 
                 String sourceReference = buildSourceReference(targetNode.invoke().stateAfter());
                 for (AnalysisMethod implementationMethod : implementationMethods) {

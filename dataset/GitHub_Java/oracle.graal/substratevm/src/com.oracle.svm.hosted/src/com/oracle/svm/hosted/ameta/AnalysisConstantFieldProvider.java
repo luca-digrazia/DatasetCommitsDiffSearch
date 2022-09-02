@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.hosted.ameta;
 
+import org.graalvm.compiler.core.common.spi.JavaConstantFieldProvider;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -32,22 +33,23 @@ import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
-import com.oracle.svm.hosted.meta.SharedConstantFieldProvider;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 @Platforms(Platform.HOSTED_ONLY.class)
-public class AnalysisConstantFieldProvider extends SharedConstantFieldProvider {
+public class AnalysisConstantFieldProvider extends JavaConstantFieldProvider {
     private final AnalysisUniverse universe;
     private final AnalysisConstantReflectionProvider constantReflection;
+    private final ClassInitializationSupport classInitializationSupport;
 
     public AnalysisConstantFieldProvider(AnalysisUniverse universe, MetaAccessProvider metaAccess, AnalysisConstantReflectionProvider constantReflection,
                     ClassInitializationSupport classInitializationSupport) {
-        super(metaAccess, classInitializationSupport);
+        super(metaAccess);
         this.universe = universe;
         this.constantReflection = constantReflection;
+        this.classInitializationSupport = classInitializationSupport;
     }
 
     @Override
@@ -68,5 +70,13 @@ public class AnalysisConstantFieldProvider extends SharedConstantFieldProvider {
         }
 
         return super.readConstantField(field, analysisTool);
+    }
+
+    @Override
+    protected boolean isFinalField(ResolvedJavaField field, ConstantFieldTool<?> tool) {
+        if (classInitializationSupport.shouldInitializeAtRuntime(field.getDeclaringClass())) {
+            return false;
+        }
+        return super.isFinalField(field, tool);
     }
 }

@@ -40,12 +40,7 @@
  */
 package org.graalvm.nativeimage;
 
-import static org.graalvm.nativeimage.hosted.ClassInitialization.MESSAGE;
-
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
-
-import sun.reflect.CallerSensitive;
-import sun.reflect.Reflection;
 
 /**
  * This class provides methods that can be called during native image building to configure class
@@ -75,11 +70,9 @@ import sun.reflect.Reflection;
  * initialized, which violates the class initialization specification.</li>
  * <ul>
  *
- * @deprecated Replaced by {@link org.graalvm.nativeimage.hosted.ClassInitialization}.
  * @since 1.0
  */
 @Platforms(Platform.HOSTED_ONLY.class)
-@Deprecated
 public final class RuntimeClassInitialization {
 
     /**
@@ -95,12 +88,8 @@ public final class RuntimeClassInitialization {
      *
      * @since 1.0
      */
-    @CallerSensitive
     public static void delayClassInitialization(Class<?>... classes) {
-        Class<?> callerClass = Reflection.getCallerClass();
-        for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).delay(aClass, MESSAGE + callerClass.getTypeName());
-        }
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).delayClassInitialization(classes);
     }
 
     /**
@@ -118,12 +107,8 @@ public final class RuntimeClassInitialization {
      *
      * @since 1.0
      */
-    @CallerSensitive
     public static void rerunClassInitialization(Class<?>... classes) {
-        Class<?> callerClass = Reflection.getCallerClass();
-        for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerun(aClass, MESSAGE + callerClass.getTypeName());
-        }
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunClassInitialization(classes);
     }
 
     /**
@@ -139,12 +124,8 @@ public final class RuntimeClassInitialization {
      *
      * @since 1.0
      */
-    @CallerSensitive
     public static void eagerClassInitialization(Class<?>... classes) {
-        Class<?> callerClass = Reflection.getCallerClass();
-        for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).eager(aClass, MESSAGE + callerClass.getTypeName());
-        }
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).eagerClassInitialization(classes);
     }
 
     private RuntimeClassInitialization() {

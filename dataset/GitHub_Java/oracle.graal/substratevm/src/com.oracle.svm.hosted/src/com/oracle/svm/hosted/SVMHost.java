@@ -40,7 +40,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
-import org.graalvm.nativeimage.hosted.Feature.DuringAnalysisAccess;
+import org.graalvm.nativeimage.Feature.DuringAnalysisAccess;
 import org.graalvm.nativeimage.c.function.RelocatedPointer;
 
 import com.oracle.graal.pointsto.api.HostVM;
@@ -191,7 +191,7 @@ public final class SVMHost implements HostVM {
     @Override
     public boolean isInitialized(AnalysisType type) {
         boolean shouldInitializeAtRuntime = classInitializationSupport.shouldInitializeAtRuntime(type);
-        assert shouldInitializeAtRuntime || type.getWrapped().isInitialized() : "Types that are not marked for runtime initializations must have been initialized: " + type;
+        assert shouldInitializeAtRuntime || type.getWrapped().isInitialized() : "Types that are not marked for runtime initializations must have been initialized";
 
         return !shouldInitializeAtRuntime;
     }
@@ -215,7 +215,7 @@ public final class SVMHost implements HostVM {
         } else if (type instanceof HostedType) {
             aType = ((HostedType) type).getWrapped();
         } else {
-            throw VMError.shouldNotReachHere("Found unsupported type: " + type);
+            throw VMError.shouldNotReachHere();
         }
         return typeToHub.get(aType);
     }
