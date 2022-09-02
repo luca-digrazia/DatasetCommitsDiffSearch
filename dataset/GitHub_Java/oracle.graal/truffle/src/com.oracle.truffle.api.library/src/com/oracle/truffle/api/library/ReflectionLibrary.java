@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,35 +40,135 @@
  */
 package com.oracle.truffle.api.library;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 
+/**
+ * The reflection library allows to send to and proxy messages of receivers. The reflection library
+ * may be used for any receiver object. If a sent message is not implemented by the target receiver
+ * then the default library export will be used, otherwise it is forwarded to the resolved exported
+ * message. If the reflection library is exported by a receiver directly then the reflection
+ * behavior can be customized. This allows, for example, to proxy all messages to a delegate
+ * instance.
+ *
+ * <h3>Sending Messages</h3>
+ *
+ * Messages can be sent to receivers by first {@link Message#resolve(Class, String) resolving} a
+ * target message. Then the message can be sent to a receiver that may implement that message. The
+ * message name and class may be resolved dynamically.
+ *
+ * <h4>Usage example</h4>
+ *
+ * <pre>
+ * String messageName = "isArray";
+ * Message message = Message.resolve(ArrayLibrary.class, messageName);
+ * Object receiver = 42;
+ * try {
+ *     ReflectionLibrary.getFactory().getUncached().send(receiver, message);
+ * } catch (Exception e) {
+ *     // handle error
+ * }
+ * </pre>
+ *
+ * <h3>Proxies</h3>
+ *
+ * It is possible to proxy library messages to a delegate object. To achieve that the reflection
+ * library can be exported by a receiver type.
+ *
+ * <h4>Usage example</h4>
+ *
+ * <pre>
+ * &#64;ExportLibrary(ReflectionLibrary.class)
+ * static class AgnosticWrapper {
+ *
+ *     final Object delegate;
+ *
+ *     AgnosticWrapper(Object delegate) {
+ *         this.delegate = delegate;
+ *     }
+ *
+ *     &#64;ExportMessage
+ *     final Object send(Message message, Object[] args,
+ *                     &#64;CachedLibrary("this.delegate") ReflectionLibrary reflection) throws Exception {
+ *         // do before
+ *         Object result = reflection.send(delegate, message, args);
+ *         // do after
+ *         return result;
+ *     }
+ * }
+ *
+ * </pre>
+ *
+ * @since 19.0
+ */
 @GenerateLibrary
 @DefaultExport(ReflectionLibraryDefault.class)
 public abstract class ReflectionLibrary extends Library {
 
+    /**
+     * Constructor for generated subclasses. Subclasses of this class are generated, do not extend
+     * this class directly.
+     *
+     * @since 19.0
+     */
     protected ReflectionLibrary() {
     }
 
+    /**
+     * Sends a given message to the target receiver with the provided arguments. The provided
+     * receiver and message must not be null. If the argument types don't match the expected message
+     * signature then an {@link IllegalArgumentException} will be thrown.
+     *
+     * @since 19.0
+     */
     @Abstract
-    public abstract Object send(Object receiver, Message message, Object... args) throws Exception;
-
-    public static LibraryFactory<ReflectionLibrary> resolve() {
-        return Lazy.RESOLVED_LIBRARY;
+    @SuppressWarnings("unused")
+    @TruffleBoundary
+    public Object send(Object receiver, Message message, Object... args) throws Exception {
+        throw new AbstractMethodError();
     }
 
-    /*
-     * This indirection is needed to avoid cyclic class initialization. The enclosing class needs to
-     * be loaded before ResolvedLibrary.resolve can be used.
-     */
-    static final class Lazy {
+    private static final LibraryFactory<ReflectionLibrary> FACTORY = LibraryFactory.resolve(ReflectionLibrary.class);
 
-        private Lazy() {
-            /* No instances */
+    /**
+     * Returns the library factory for {@link ReflectionLibrary}.
+     *
+     * @since 19.0
+     */
+    public static LibraryFactory<ReflectionLibrary> getFactory() {
+        return FACTORY;
+    }
+
+}
+
+@ExportLibrary(value = ReflectionLibrary.class, receiverType = Object.class)
+final class ReflectionLibraryDefault {
+
+    static final int LIMIT = 8;
+
+    @ExportMessage
+    static class Send {
+
+        @Specialization(guards = {"message == cachedMessage", "cachedLibrary.accepts(receiver)"}, limit = "LIMIT")
+        static Object doSendCached(Object receiver, @SuppressWarnings("unused") Message message, Object[] args,
+                        @Cached("message") Message cachedMessage,
+                        @Cached("createLibrary(message, receiver)") Library cachedLibrary) throws Exception {
+            return cachedMessage.getFactory().genericDispatch(cachedLibrary, receiver, cachedMessage, args, 0);
         }
 
-        static final LibraryFactory<ReflectionLibrary> RESOLVED_LIBRARY = LibraryFactory.resolve(ReflectionLibrary.class);
+        static Library createLibrary(Message message, Object receiver) {
+            return message.getFactory().create(receiver);
+        }
 
+        @Specialization(replaces = "doSendCached")
+        @TruffleBoundary
+        static Object doSendGeneric(Object receiver, Message message, Object[] args) throws Exception {
+            LibraryFactory<?> lib = message.getFactory();
+            return lib.genericDispatch(lib.getUncached(receiver), receiver, message, args, 0);
+        }
     }
 
 }
