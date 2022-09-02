@@ -55,7 +55,6 @@ import org.graalvm.compiler.replacements.SnippetTemplate.AbstractTemplates;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.gc.G1WriteBarrierSnippets;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
 import jdk.vm.ci.code.Register;
@@ -126,10 +125,13 @@ public final class HotSpotG1WriteBarrierSnippets extends G1WriteBarrierSnippets 
     }
 
     @Override
-    protected Word cardTableAddress(Pointer oop) {
-        Word cardTable = WordFactory.unsigned(GraalHotSpotVMConfigNode.cardTableAddress());
-        int cardTableShift = HotSpotReplacementsUtil.cardTableShift(INJECTED_VMCONFIG);
-        return cardTable.add(oop.unsignedShiftRight(cardTableShift));
+    protected Word cardTableAddress() {
+        return WordFactory.unsigned(GraalHotSpotVMConfigNode.cardTableAddress());
+    }
+
+    @Override
+    protected int cardTableShift() {
+        return HotSpotReplacementsUtil.cardTableShift(INJECTED_VMCONFIG);
     }
 
     @Override
