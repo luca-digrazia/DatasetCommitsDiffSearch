@@ -50,12 +50,6 @@ public final class ImageHeapInfo {
     @UnknownObjectField(types = Object.class) public Object firstWritableReferenceObject;
     @UnknownObjectField(types = Object.class) public Object lastWritableReferenceObject;
 
-    @UnknownObjectField(types = Object.class) public Object firstWritableHugeObject;
-    @UnknownObjectField(types = Object.class) public Object lastWritableHugeObject;
-
-    @UnknownObjectField(types = Object.class) public Object firstReadOnlyHugeObject;
-    @UnknownObjectField(types = Object.class) public Object lastReadOnlyHugeObject;
-
     @UnknownObjectField(types = Object.class) public Object firstObject;
     @UnknownObjectField(types = Object.class) public Object lastObject;
 
@@ -65,8 +59,7 @@ public final class ImageHeapInfo {
     @SuppressWarnings("hiding")
     public void initialize(Object firstReadOnlyPrimitiveObject, Object lastReadOnlyPrimitiveObject, Object firstReadOnlyReferenceObject, Object lastReadOnlyReferenceObject,
                     Object firstReadOnlyRelocatableObject, Object lastReadOnlyRelocatableObject, Object firstWritablePrimitiveObject, Object lastWritablePrimitiveObject,
-                    Object firstWritableReferenceObject, Object lastWritableReferenceObject, Object firstWritableHugeObject, Object lastWritableHugeObject,
-                    Object firstReadOnlyHugeObject, Object lastReadOnlyHugeObject) {
+                    Object firstWritableReferenceObject, Object lastWritableReferenceObject) {
         this.firstReadOnlyPrimitiveObject = firstReadOnlyPrimitiveObject;
         this.lastReadOnlyPrimitiveObject = lastReadOnlyPrimitiveObject;
         this.firstReadOnlyReferenceObject = firstReadOnlyReferenceObject;
@@ -77,10 +70,6 @@ public final class ImageHeapInfo {
         this.lastWritablePrimitiveObject = lastWritablePrimitiveObject;
         this.firstWritableReferenceObject = firstWritableReferenceObject;
         this.lastWritableReferenceObject = lastWritableReferenceObject;
-        this.firstWritableHugeObject = firstWritableHugeObject;
-        this.lastWritableHugeObject = lastWritableHugeObject;
-        this.firstReadOnlyHugeObject = firstReadOnlyHugeObject;
-        this.lastReadOnlyHugeObject = lastReadOnlyHugeObject;
 
         // Compute boundaries for checks considering partitions can be empty (first == last == null)
         Object firstReadOnlyObject = (firstReadOnlyPrimitiveObject != null) ? firstReadOnlyPrimitiveObject
@@ -89,12 +78,8 @@ public final class ImageHeapInfo {
                         : ((lastReadOnlyReferenceObject != null) ? lastReadOnlyReferenceObject : lastReadOnlyPrimitiveObject);
         Object firstWritableObject = (firstWritablePrimitiveObject != null) ? firstWritablePrimitiveObject : firstWritableReferenceObject;
         Object lastWritableObject = (lastWritableReferenceObject != null) ? lastWritableReferenceObject : lastWritablePrimitiveObject;
-        Object firstRegularObject = (firstReadOnlyObject != null) ? firstReadOnlyObject : firstWritableObject;
-        Object lastRegularObject = (lastWritableObject != null) ? lastWritableObject : lastReadOnlyObject;
-        Object firstHugeObject = (firstWritableHugeObject != null) ? firstWritableHugeObject : firstReadOnlyHugeObject;
-        Object lastHugeObject = (lastReadOnlyHugeObject != null) ? lastReadOnlyHugeObject : lastWritableHugeObject;
-        this.firstObject = (firstRegularObject != null) ? firstRegularObject : firstHugeObject;
-        this.lastObject = (lastHugeObject != null) ? lastHugeObject : lastRegularObject;
+        this.firstObject = (firstReadOnlyObject != null) ? firstReadOnlyObject : firstWritableObject;
+        this.lastObject = (lastWritableObject != null) ? lastWritableObject : lastReadOnlyObject;
     }
 
     /*
@@ -112,6 +97,12 @@ public final class ImageHeapInfo {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public boolean isInWritablePrimitivePartition(Pointer ptr) {
+        assert ptr.isNonNull();
+        return Word.objectToUntrackedPointer(firstWritablePrimitiveObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastWritablePrimitiveObject));
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isInReadOnlyReferencePartition(Pointer ptr) {
         assert ptr.isNonNull();
         return Word.objectToUntrackedPointer(firstReadOnlyReferenceObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastReadOnlyReferenceObject));
@@ -124,27 +115,9 @@ public final class ImageHeapInfo {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInWritablePrimitivePartition(Pointer ptr) {
-        assert ptr.isNonNull();
-        return Word.objectToUntrackedPointer(firstWritablePrimitiveObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastWritablePrimitiveObject));
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isInWritableReferencePartition(Pointer ptr) {
         assert ptr.isNonNull();
         return Word.objectToUntrackedPointer(firstWritableReferenceObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastWritableReferenceObject));
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInWritableHugePartition(Pointer ptr) {
-        assert ptr.isNonNull();
-        return Word.objectToUntrackedPointer(firstWritableHugeObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastWritableHugeObject));
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInReadOnlyHugePartition(Pointer ptr) {
-        assert ptr.isNonNull();
-        return Word.objectToUntrackedPointer(firstReadOnlyHugeObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastReadOnlyHugeObject));
     }
 
     /**
@@ -173,8 +146,6 @@ public final class ImageHeapInfo {
             result |= isInReadOnlyRelocatablePartition(objectPointer);
             result |= isInWritablePrimitivePartition(objectPointer);
             result |= isInWritableReferencePartition(objectPointer);
-            result |= isInWritableHugePartition(objectPointer);
-            result |= isInReadOnlyHugePartition(objectPointer);
         }
         return result;
     }
