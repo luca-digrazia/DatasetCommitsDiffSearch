@@ -374,7 +374,6 @@ public final class StaticObject implements TruffleObject {
     public Object getUnsafeField(int fieldIndex) {
         return UNSAFE.getObject(castExact(fields, Object[].class), getObjectFieldIndex(fieldIndex));
     }
-
     private void setUnsafeField(int index, Object value) {
         UNSAFE.putObject(fields, getObjectFieldIndex(index), value);
     }

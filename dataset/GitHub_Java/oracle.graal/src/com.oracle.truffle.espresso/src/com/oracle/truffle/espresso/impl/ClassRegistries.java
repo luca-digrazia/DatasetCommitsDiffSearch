@@ -92,7 +92,12 @@ public final class ClassRegistries {
         }
 
         ClassRegistry registry = getClassRegistry(classLoader);
-        assert registry != null;
+
+        // Unknown class loader; no class has been loaded with it.
+        if (registry == null) {
+            return null;
+        }
+
         return registry.findLoadedKlass(type);
     }
 
