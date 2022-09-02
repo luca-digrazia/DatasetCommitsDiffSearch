@@ -63,11 +63,6 @@ public final class LLVMScope implements TruffleObject {
     }
 
     @TruffleBoundary
-    public String getKey(int idx) {
-        return functionKeys.get(idx);
-    }
-
-    @TruffleBoundary
     public LLVMFunctionDescriptor getFunction(String name) {
         LLVMSymbol symbol = get(name);
         if (symbol != null && symbol.isFunction()) {
@@ -207,7 +202,7 @@ public final class LLVMScope implements TruffleObject {
         Object readArrayElement(long index,
                         @Cached BranchProfile exception) throws InvalidArrayIndexException {
             if (isArrayElementReadable(index)) {
-                return scope.getKey((int) index);
+                return scope.functionKeys.get((int) index);
             } else {
                 exception.enter();
                 throw InvalidArrayIndexException.create(index);
