@@ -54,6 +54,7 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.CGlobalData;
 import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
@@ -182,8 +183,14 @@ public class JavaMainWrapper {
     }
 
     @CEntryPoint
-    @CEntryPointOptions(prologue = EnterCreateIsolateWithCArgumentsPrologue.class, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @CEntryPointOptions(prologue = CEntryPointOptions.NoPrologue.class, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @Uninterruptible(reason = "Not yet in an isolate", calleeMustBe = false)
     public static int run(int paramArgc, CCharPointerPointer paramArgv) {
+        CArguments args = ARGUMENTS.get();
+        args.setArgc(paramArgc);
+        args.setArgv(paramArgv);
+
+        EnterCreateIsolatePrologue.enter();
         return runCore(paramArgc, paramArgv);
     }
 
@@ -312,16 +319,6 @@ public class JavaMainWrapper {
         @Override
         public Object apply(Object[] args) {
             return getCRuntimeArgument0();
-        }
-    }
-
-    private static class EnterCreateIsolateWithCArgumentsPrologue {
-        @SuppressWarnings("unused")
-        public static void enter(int paramArgc, CCharPointerPointer paramArgv) {
-            CArguments args = ARGUMENTS.get();
-            args.setArgc(paramArgc);
-            args.setArgv(paramArgv);
-            EnterCreateIsolatePrologue.enter();
         }
     }
 
