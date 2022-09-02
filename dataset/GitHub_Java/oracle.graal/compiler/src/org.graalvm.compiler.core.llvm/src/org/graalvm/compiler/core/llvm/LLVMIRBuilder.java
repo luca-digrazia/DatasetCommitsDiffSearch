@@ -739,7 +739,7 @@ public class LLVMIRBuilder {
         }
     }
 
-    public LLVMValueRef buildICmp(Condition cond, LLVMValueRef a, LLVMValueRef b) {
+    LLVMValueRef buildICmp(Condition cond, LLVMValueRef a, LLVMValueRef b) {
         return LLVM.LLVMBuildICmp(builder, getLLVMIntCond(cond), a, b, DEFAULT_INSTR_NAME);
     }
 

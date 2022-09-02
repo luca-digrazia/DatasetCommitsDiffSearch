@@ -31,8 +31,8 @@ import static org.graalvm.compiler.core.llvm.LLVMUtils.getVal;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.bytedeco.javacpp.LLVM;
 import org.bytedeco.javacpp.LLVM.LLVMContextRef;
-import org.bytedeco.javacpp.LLVM.LLVMTypeRef;
 import org.bytedeco.javacpp.LLVM.LLVMValueRef;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.llvm.LLVMGenerationResult;
@@ -92,14 +92,11 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
         if (isEntryPoint) {
             aliases.add(SubstrateUtil.mangleName(builder.getFunctionName()));
 
-            Object entryPointData = ((HostedMethod) method).getWrapped().getEntryPointData();
-            if (entryPointData instanceof CEntryPointData) {
-                CEntryPointData cEntryPointData = (CEntryPointData) entryPointData;
-                String entryPointSymbolName = cEntryPointData.getSymbolName();
-                assert !entryPointSymbolName.isEmpty();
-                if (cEntryPointData.getPublishAs() != CEntryPointOptions.Publish.NotPublished) {
-                    aliases.add(entryPointSymbolName);
-                }
+            CEntryPointData entryPointData = (CEntryPointData) ((HostedMethod) method).getWrapped().getEntryPointData();
+            String entryPointSymbolName = entryPointData.getSymbolName();
+            assert !entryPointSymbolName.isEmpty();
+            if (entryPointData.getPublishAs() != CEntryPointOptions.Publish.NotPublished) {
+                aliases.add(entryPointSymbolName);
             }
         }
 
@@ -188,11 +185,11 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     }
 
     @Override
-    protected LLVMTypeRef[] getLLVMFunctionArgTypes(ResolvedJavaMethod method, boolean forMainFunction) {
-        LLVMTypeRef[] parameterTypes = super.getLLVMFunctionArgTypes(method, forMainFunction);
-        LLVMTypeRef[] newParameterTypes = parameterTypes;
+    protected LLVM.LLVMTypeRef[] getLLVMFunctionArgTypes(ResolvedJavaMethod method, boolean forMainFunction) {
+        LLVM.LLVMTypeRef[] parameterTypes = super.getLLVMFunctionArgTypes(method, forMainFunction);
+        LLVM.LLVMTypeRef[] newParameterTypes = parameterTypes;
         if (!isEntryPoint(method) && registerStackSlots.length > 0) {
-            newParameterTypes = new LLVMTypeRef[registerStackSlots.length + parameterTypes.length];
+            newParameterTypes = new LLVM.LLVMTypeRef[registerStackSlots.length + parameterTypes.length];
             for (int i = 0; i < registerStackSlots.length; ++i) {
                 newParameterTypes[i] = canModifySpecialRegisters(method) ? builder.rawPointerType() : builder.longType();
             }
@@ -253,7 +250,7 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
 
     private LLVMValueRef getSpecialRegisterArgument(int index, ResolvedJavaMethod targetMethod) {
         LLVMValueRef specialRegisterArg;
-        if (targetMethod != null && canModifySpecialRegisters(targetMethod)) {
+        if (canModifySpecialRegisters(targetMethod)) {
             assert (isEntryPoint || canModifySpecialRegisters);
             specialRegisterArg = builder.buildBitcast(getSpecialRegisterPointer(index), builder.rawPointerType());
         } else if (isEntryPoint || canModifySpecialRegisters) {
@@ -269,7 +266,7 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     public LLVMValueRef[] getCallArguments(LLVMValueRef[] args, CallingConvention.Type callType, ResolvedJavaMethod targetMethod) {
         LLVMValueRef[] newArgs = args;
 
-        if (!((SubstrateCallingConventionType) callType).nativeABI && registerStackSlots.length > 0) {
+        if (targetMethod != null && !((SubstrateCallingConventionType) callType).nativeABI && registerStackSlots.length > 0) {
             newArgs = new LLVMValueRef[registerStackSlots.length + args.length];
             for (int i = 0; i < registerStackSlots.length; ++i) {
                 newArgs[i] = getSpecialRegisterArgument(i, targetMethod);
@@ -277,20 +274,6 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
             System.arraycopy(args, 0, newArgs, LLVMFeature.SPECIAL_REGISTER_COUNT, args.length);
         }
         return newArgs;
-    }
-
-    @Override
-    public LLVMTypeRef[] getUnknownCallArgumentTypes(LLVMTypeRef[] types, CallingConvention.Type callType) {
-        LLVMTypeRef[] newTypes = types;
-
-        if (!((SubstrateCallingConventionType) callType).nativeABI && registerStackSlots.length > 0) {
-            newTypes = new LLVMTypeRef[registerStackSlots.length + types.length];
-            for (int i = 0; i < registerStackSlots.length; ++i) {
-                newTypes[i] = builder.longType();
-            }
-            System.arraycopy(types, 0, newTypes, LLVMFeature.SPECIAL_REGISTER_COUNT, types.length);
-        }
-        return newTypes;
     }
 
     @Override
