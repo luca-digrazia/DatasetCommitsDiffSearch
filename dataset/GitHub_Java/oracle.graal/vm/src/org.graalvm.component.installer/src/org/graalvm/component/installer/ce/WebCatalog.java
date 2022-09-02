@@ -24,18 +24,13 @@
  */
 package org.graalvm.component.installer.ce;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.MalformedURLException;
 import java.net.NoRouteToHostException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
 import org.graalvm.component.installer.BundleConstants;
@@ -48,41 +43,29 @@ import org.graalvm.component.installer.model.ComponentStorage;
 import org.graalvm.component.installer.remote.FileDownloader;
 import org.graalvm.component.installer.remote.RemotePropertiesStorage;
 import org.graalvm.component.installer.SoftwareChannel;
-import org.graalvm.component.installer.SoftwareChannelSource;
 import org.graalvm.component.installer.model.ComponentInfo;
 
 public class WebCatalog implements SoftwareChannel {
     private final String urlString;
-    private final SoftwareChannelSource source;
 
     private URL catalogURL;
     private CommandInput input;
     private Feedback feedback;
     private ComponentRegistry local;
     private ComponentStorage storage;
-    private RuntimeException savedException;
 
-    public WebCatalog(String u, SoftwareChannelSource source) {
+    public WebCatalog(String u) {
         this.urlString = u;
-        this.source = source;
     }
 
-    protected static boolean acceptURLScheme(String scheme, String urlSpec) {
+    protected static boolean acceptURLScheme(String scheme) {
         switch (scheme) {
             case "http":    // NOI18N
             case "https":   // NOI18N
             case "ftp":     // NOI18N
             case "ftps":    // NOI18N
+            case "file":
                 return true;
-            case "file":    // NOI18N
-                // accept only regular files
-                try {
-                    Path p = new File(new URI(urlSpec)).toPath();
-                    return Files.isRegularFile(p) && Files.isReadable(p);
-                } catch (URISyntaxException ex) {
-                    // cannot be converted to file, bail out
-                    break;
-                }
         }
         return false;
     }
@@ -117,29 +100,21 @@ public class WebCatalog implements SoftwareChannel {
         Properties props = new Properties();
         // create the storage. If the init fails, but process will not terminate, the storage will
         // serve no components on the next call.
-        RemotePropertiesStorage newStorage = new RemotePropertiesStorage(feedback, local, props, sb.toString(), null, catalogURL);
+        storage = new RemotePropertiesStorage(feedback, local, props, sb.toString(), null, catalogURL);
 
         Properties loadProps = new Properties();
         FileDownloader dn;
         try {
-            // avoid duplicate (failed) downloads
-            if (savedException != null) {
-                throw savedException;
-            }
             catalogURL = new URL(urlString);
-            String l = source.getLabel();
-            dn = new FileDownloader(feedback.l10n(l == null || l.isEmpty() ? "REMOTE_CatalogLabel2" : "REMOTE_CatalogLabel", l), catalogURL, feedback);
+            dn = new FileDownloader(feedback.l10n("REMOTE_CatalogLabel"), catalogURL, feedback);
             dn.download();
         } catch (NoRouteToHostException | ConnectException ex) {
-            throw savedException = feedback.failure("REMOTE_ErrorDownloadCatalogProxy", ex, catalogURL, ex.getLocalizedMessage());
+            throw feedback.failure("REMOTE_ErrorDownloadCatalogProxy", ex, catalogURL, ex.getLocalizedMessage());
         } catch (FileNotFoundException ex) {
-            throw savedException = feedback.failure("REMOTE_ErrorDownloadCatalogNotFound", ex, catalogURL);
+            throw feedback.failure("REMOTE_ErrorDownloadCatalogNotFound", ex, catalogURL);
         } catch (IOException ex) {
-            throw savedException = feedback.failure("REMOTE_ErrorDownloadCatalog", ex, catalogURL, ex.getLocalizedMessage());
+            throw feedback.failure("REMOTE_ErrorDownloadCatalog", ex, catalogURL, ex.getLocalizedMessage());
         }
-        // download is successful; if the processing fails after download, next call will report an
-        // empty catalog.
-        this.storage = newStorage;
 
         StringBuilder oldGraalPref = new StringBuilder(BundleConstants.GRAAL_COMPONENT_ID);
         oldGraalPref.append('.');
@@ -185,7 +160,7 @@ public class WebCatalog implements SoftwareChannel {
             }
         }
         props.putAll(loadProps);
-        return newStorage;
+        return storage;
     }
 
     @Override
@@ -197,15 +172,14 @@ public class WebCatalog implements SoftwareChannel {
         private CommandInput input;
 
         @Override
-        public SoftwareChannel createChannel(SoftwareChannelSource src, CommandInput in, Feedback fb) {
-            String urlSpec = src.getLocationURL();
+        public SoftwareChannel createChannel(String urlSpec, CommandInput in, Feedback fb) {
             int schColon = urlSpec.indexOf(':'); // NOI18N
             if (schColon == -1) {
                 return null;
             }
             String scheme = urlSpec.toLowerCase().substring(0, schColon);
-            if (acceptURLScheme(scheme, urlSpec)) {
-                WebCatalog c = new WebCatalog(urlSpec, src);
+            if (acceptURLScheme(scheme)) {
+                WebCatalog c = new WebCatalog(urlSpec);
                 c.init(in, fb);
                 return c;
             }
