@@ -253,7 +253,7 @@ public abstract class LLVMCMathsIntrinsics {
 
         @Specialization
         protected float doIntrinsic(float value) {
-            return Math.round(value);
+            return (float) Math.round(value);
         }
 
         @Specialization
