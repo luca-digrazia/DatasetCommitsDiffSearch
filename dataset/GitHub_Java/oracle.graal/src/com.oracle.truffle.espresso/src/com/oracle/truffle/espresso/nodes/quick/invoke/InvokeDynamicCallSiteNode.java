@@ -43,7 +43,6 @@ public final class InvokeDynamicCallSiteNode extends QuickNode {
     private final Symbol<Type> returnType;
     private final JavaKind returnKind;
     @Child private DirectCallNode callNode;
-    final int resultAt;
 
     @CompilerDirectives.CompilationFinal(dimensions = 1) private Symbol<Type>[] parsedSignature;
 
@@ -55,8 +54,9 @@ public final class InvokeDynamicCallSiteNode extends QuickNode {
         this.returnType = Signatures.returnType(parsedSignature);
         this.returnKind = Signatures.returnKind(parsedSignature);
         this.hasAppendix = !StaticObject.isNull(appendix);
+        // target.getDeclaringKlass().safeInitialize();
         this.callNode = DirectCallNode.create(target.getCallTarget());
-        this.resultAt = top - Signatures.slotsForParameters(parsedSignature); // no receiver
+
     }
 
     @Override
@@ -71,7 +71,7 @@ public final class InvokeDynamicCallSiteNode extends QuickNode {
     }
 
     private int getResultAt() {
-        return resultAt;
+        return top - Signatures.slotsForParameters(parsedSignature); // no receiver
     }
 
     @Override

@@ -34,6 +34,7 @@ import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.nodes.OperandStack;
 import com.oracle.truffle.espresso.nodes.methodhandle.MHLinkToNode;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -139,7 +140,7 @@ public interface DynamicConstant extends PoolConstant {
     }
 
     interface Resolved extends DynamicConstant, Resolvable.ResolvedConstant {
-        void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node);
+        void putResolved(OperandStack stack, int top, BytecodeNode node);
 
         @Override
         default Symbol<Type> getTypeSymbol(ConstantPool pool) {
@@ -163,8 +164,8 @@ public interface DynamicConstant extends PoolConstant {
         }
 
         @Override
-        public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putObject(primitives, refs, top, resolved);
+        public void putResolved(OperandStack stack, int top, BytecodeNode node) {
+            BytecodeNode.putObject(stack, top, resolved);
         }
 
         @Override
@@ -186,8 +187,8 @@ public interface DynamicConstant extends PoolConstant {
         }
 
         @Override
-        public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putInt(primitives, refs, top, resolved);
+        public void putResolved(OperandStack stack, int top, BytecodeNode node) {
+            BytecodeNode.putInt(stack, top, resolved);
         }
 
         @Override
@@ -209,8 +210,8 @@ public interface DynamicConstant extends PoolConstant {
         }
 
         @Override
-        public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putLong(primitives, refs, top, resolved);
+        public void putResolved(OperandStack stack, int top, BytecodeNode node) {
+            BytecodeNode.putLong(stack, top, resolved);
         }
 
         @Override
@@ -232,8 +233,8 @@ public interface DynamicConstant extends PoolConstant {
         }
 
         @Override
-        public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putDouble(primitives, refs, top, resolved);
+        public void putResolved(OperandStack stack, int top, BytecodeNode node) {
+            BytecodeNode.putDouble(stack, top, resolved);
         }
 
         @Override
@@ -255,8 +256,8 @@ public interface DynamicConstant extends PoolConstant {
         }
 
         @Override
-        public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putFloat(primitives, refs, top, resolved);
+        public void putResolved(OperandStack stack, int top, BytecodeNode node) {
+            BytecodeNode.putFloat(stack, top, resolved);
         }
 
         @Override

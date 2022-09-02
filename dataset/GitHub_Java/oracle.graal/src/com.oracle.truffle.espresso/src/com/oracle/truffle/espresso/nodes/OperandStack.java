@@ -26,79 +26,79 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public final class OperandStack {
 
-    public final Object[] refs;
-    public final long[] primitives;
+    private final Object[] refs;
+    private final long[] primitives;
 
     public OperandStack(int maxStackSize) {
         this.refs = new Object[maxStackSize];
         this.primitives = new long[maxStackSize];
     }
 
-    public static int peekInt(long[] primitives, int slot) {
+    public int peekInt(int slot) {
         return (int) primitives[slot];
     }
 
-    public static int popInt(long[] primitives, int slot) {
-        int result = peekInt(primitives, slot);
+    public int popInt(int slot) {
+        int result = peekInt(slot);
         primitives[slot] = 0;
         return result;
     }
 
-    static void putRawObject(Object[] refs, int slot, Object value) {
+    void putRawObject(int slot, Object value) {
         refs[slot] = value;
     }
 
-    public static void putObject(Object[] refs, int slot, StaticObject value) {
+    public void putObject(int slot, StaticObject value) {
         assert value != null : "use putRawObject to store host nulls";
         refs[slot] = value;
     }
 
-    public static StaticObject popObject(Object[] refs, int slot) {
+    public StaticObject popObject(int slot) {
         // nulls-out the slot, use peekObject to read only
         Object result = refs[slot];
-        putRawObject(refs, slot, null);
+        putRawObject(slot, null);
         assert result instanceof StaticObject;
         return (StaticObject) result;
     }
 
-    public static long peekLong(long[] primitives, int slot) {
+    public long peekLong(int slot) {
         return primitives[slot];
     }
 
-    public static long popLong(long[] primitives, int slot) {
-        long result = peekLong(primitives, slot);
+    public long popLong(int slot) {
+        long result = peekLong(slot);
         primitives[slot] = 0;
         return result;
     }
 
-    public static StaticObject peekObject(Object[] refs, int slot) {
+    public StaticObject peekObject(int slot) {
         Object result = refs[slot];
         assert result instanceof StaticObject;
         return (StaticObject) result;
     }
 
-    static Object peekRawObject(Object[] refs, int slot) {
+    Object peekRawObject(int slot) {
         return refs[slot];
     }
 
-    public static void putLong(long[] primitives, int slot, long value) {
+    public void putLong(int slot, long value) {
         primitives[slot] = value;
-        assert peekLong(primitives, slot) == value;
+        assert peekLong(slot) == value;
     }
 
-    public static void putInt(long[] primitives, int slot, int value) {
+    public void putInt(int slot, int value) {
         primitives[slot] = value;
     }
 
     // endregion Stack operations
 
-    public static void dup1(long[] primitives, Object[] refs, int top) {
+    public void dup1(int top) {
         // value1 -> value1, value1
         primitives[top] = primitives[top - 1];
         refs[top] = refs[top - 1];
     }
 
-    public static void dupx1(long[] primitives, Object[] refs, int top) {
+    public void dupx1(int top) {
         // value2, value1 -> value1, value2, value1
         Object r1 = refs[top - 1];
         long p1 = primitives[top - 1];
@@ -116,7 +116,7 @@ public final class OperandStack {
         primitives[top] = p1;
     }
 
-    public static void dupx2(long[] primitives, Object[] refs, int top) {
+    public void dupx2(int top) {
         // value3, value2, value1 -> value1, value3, value2, value1
         Object r1 = refs[top - 1];
         long p1 = primitives[top - 1];
@@ -140,7 +140,7 @@ public final class OperandStack {
         primitives[top] = p1;
     }
 
-    public static void dup2(long[] primitives, Object[] refs, int top) {
+    public void dup2(int top) {
         // {value2, value1} -> {value2, value1}, {value2, value1}
         Object r1 = refs[top - 1];
         long p1 = primitives[top - 1];
@@ -152,7 +152,7 @@ public final class OperandStack {
         primitives[top + 1] = p1;
     }
 
-    public static void swapSingle(long[] primitives, Object[] refs, int top) {
+    public void swapSingle(int top) {
         // value2, value1 -> value1, value2
         Object r1 = refs[top - 1];
         long p1 = primitives[top - 1];
@@ -166,7 +166,7 @@ public final class OperandStack {
         primitives[top - 1] = p2;
     }
 
-    public static void dup2x1(long[] primitives, Object[] refs, int top) {
+    public void dup2x1(int top) {
         // value3, {value2, value1} -> {value2, value1}, value3, {value2, value1}
         Object r1 = refs[top - 1];
         long p1 = primitives[top - 1];
@@ -191,7 +191,7 @@ public final class OperandStack {
         primitives[top + 1] = p1;
     }
 
-    public static void dup2x2(long[] primitives, Object[] refs, int top) {
+    public void dup2x2(int top) {
         // {value4, value3}, {value2, value1} -> {value2, value1}, {value4, value3}, {value2,
         // value1}
         Object r1 = refs[top - 1];
@@ -222,7 +222,7 @@ public final class OperandStack {
         primitives[top + 1] = p1;
     }
 
-    public static void clear(long[] primitives, Object[] refs, int slot) {
+    public void clear(int slot) {
         primitives[slot] = 0;
         refs[slot] = null;
     }
