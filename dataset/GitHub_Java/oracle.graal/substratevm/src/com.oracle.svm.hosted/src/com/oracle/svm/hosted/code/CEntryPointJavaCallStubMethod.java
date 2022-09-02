@@ -27,6 +27,7 @@ package com.oracle.svm.hosted.code;
 import java.lang.annotation.Annotation;
 import java.util.List;
 
+import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
@@ -36,8 +37,10 @@ import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.c.BoxedRelocatedPointer;
 import com.oracle.svm.core.thread.VMThreads.StatusSupport;
+import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.phases.HostedGraphKit;
 
+import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -74,15 +77,18 @@ public class CEntryPointJavaCallStubMethod extends CCallStubMethod {
 
     @Override
     protected ValueNode createTargetAddressNode(HostedGraphKit kit, HostedProviders providers, List<ValueNode> arguments) {
-
-        /*
-         * We currently cannot handle {@link MethodPointer} as a constant in the code, so we use an
-         * indirection with a non-final field load from an object of BoxedRelocatedPointer.
-         */
-        BoxedRelocatedPointer box = new BoxedRelocatedPointer(target);
-        ConstantNode boxNode = kit.createObject(box);
-        LoadFieldNode node = kit.createLoadFieldNode(boxNode, BoxedRelocatedPointer.class, "pointer");
-        return kit.append(node);
+        try {
+            /*
+             * We currently cannot handle {@link MethodPointer} as a constant in the code, so we use
+             * an indirection with a non-final field load from an object of BoxedRelocatedPointer.
+             */
+            BoxedRelocatedPointer box = new BoxedRelocatedPointer(target);
+            ConstantNode boxNode = kit.createObject(box);
+            ResolvedJavaField field = providers.getMetaAccess().lookupJavaField(BoxedRelocatedPointer.class.getDeclaredField("pointer"));
+            return kit.append(LoadFieldNode.createOverrideStamp(StampPair.createSingle(kit.wordStamp((ResolvedJavaType) field.getType())), boxNode, field));
+        } catch (NoSuchFieldException e) {
+            throw VMError.shouldNotReachHere(e);
+        }
     }
 
     @Override

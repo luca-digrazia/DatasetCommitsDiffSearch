@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -544,7 +544,14 @@ public class GraphKit implements GraphBuilderTool {
     }
 
     public InvokeWithExceptionNode startInvokeWithException(MethodCallTargetNode callTarget, FrameStateBuilder frameStateBuilder, int invokeBci, int exceptionEdgeBci) {
-        ExceptionObjectNode exceptionObject = createExceptionObjectNode(frameStateBuilder, exceptionEdgeBci);
+        ExceptionObjectNode exceptionObject = add(new ExceptionObjectNode(getMetaAccess()));
+        if (frameStateBuilder != null) {
+            FrameStateBuilder exceptionState = frameStateBuilder.copy();
+            exceptionState.clearStack();
+            exceptionState.push(JavaKind.Object, exceptionObject);
+            exceptionState.setRethrowException(false);
+            exceptionObject.setStateAfter(exceptionState.create(exceptionEdgeBci, exceptionObject));
+        }
         InvokeWithExceptionNode invoke = append(new InvokeWithExceptionNode(callTarget, exceptionObject, invokeBci));
         AbstractBeginNode noExceptionEdge = graph.add(KillingBeginNode.create(LocationIdentity.any()));
         invoke.setNext(noExceptionEdge);
@@ -567,18 +574,6 @@ public class GraphKit implements GraphBuilderTool {
         pushStructure(s);
 
         return invoke;
-    }
-
-    protected ExceptionObjectNode createExceptionObjectNode(FrameStateBuilder frameStateBuilder, int exceptionEdgeBci) {
-        ExceptionObjectNode exceptionObject = add(new ExceptionObjectNode(getMetaAccess()));
-        if (frameStateBuilder != null) {
-            FrameStateBuilder exceptionState = frameStateBuilder.copy();
-            exceptionState.clearStack();
-            exceptionState.push(JavaKind.Object, exceptionObject);
-            exceptionState.setRethrowException(false);
-            exceptionObject.setStateAfter(exceptionState.create(exceptionEdgeBci, exceptionObject));
-        }
-        return exceptionObject;
     }
 
     private InvokeWithExceptionStructure saveLastInvokeWithExceptionNode() {
