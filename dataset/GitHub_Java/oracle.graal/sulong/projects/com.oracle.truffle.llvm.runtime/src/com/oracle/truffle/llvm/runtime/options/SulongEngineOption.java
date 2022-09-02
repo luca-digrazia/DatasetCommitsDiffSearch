@@ -84,8 +84,7 @@ public final class SulongEngineOption {
 
     @Option(name = "llvm.debugSysCalls",
             category = OptionCategory.INTERNAL,
-            help = "Turns syscall debugging on/off. " +
-                   "Set value to \'stdout\', \'stderr\' or \'file://<path to writable file>\' to enable.")
+            help = "Turns syscall debugging on/off. Can be \'stdout\' or \'stderr\'.")
     public static final OptionKey<String> DEBUG_SYSCALLS = new OptionKey<>(String.valueOf(false));
 
     @Option(name = "llvm.printNativeCallStats",
@@ -100,8 +99,7 @@ public final class SulongEngineOption {
 
     @Option(name = "llvm.debugLoader",
             category = OptionCategory.EXPERT,
-            help = "Turns dynamic loader debugging on/off. " +
-                   "Set value to \'stdout\', \'stderr\' or \'file://<path to writable file>\' to enable.")
+            help = "Turns dynamic loader debugging on/off. Can be \'stdout\' or \'stderr\'.")
     public static final OptionKey<String> LD_DEBUG = new OptionKey<>(String.valueOf(false));
 
     @Option(name = "llvm.optimizeFrameSlots",
@@ -190,10 +188,6 @@ public final class SulongEngineOption {
 
     public static boolean isTrue(String option) {
         return "true".equalsIgnoreCase(option) || "stdout".equalsIgnoreCase(option) || "stderr".equalsIgnoreCase(option);
-    }
-
-    public static boolean optionEnabled(String option) {
-        return !"".equalsIgnoreCase(option) && !"false".equalsIgnoreCase(option);
     }
 
     public static List<String> getPolyglotOptionSearchPaths(TruffleLanguage.Env env) {
