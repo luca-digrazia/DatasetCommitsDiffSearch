@@ -45,7 +45,7 @@ import org.graalvm.polyglot.Value;
 
 final class IdentityFunctionResultVerifier implements ResultVerifier {
 
-    static final ResultVerifier INSTANCE = new IdentityFunctionResultVerifier();
+    static ResultVerifier INSTANCE = new IdentityFunctionResultVerifier();
 
     private IdentityFunctionResultVerifier() {
     }

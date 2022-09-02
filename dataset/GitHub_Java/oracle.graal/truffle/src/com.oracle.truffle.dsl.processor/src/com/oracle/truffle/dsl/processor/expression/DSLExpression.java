@@ -80,7 +80,7 @@ public abstract class DSLExpression {
     }
 
     private static final class DSLErrorListener extends BaseErrorListener {
-        static final DSLErrorListener INSTANCE = new DSLErrorListener();
+        static DSLErrorListener INSTANCE = new DSLErrorListener();
 
         @Override
         public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
