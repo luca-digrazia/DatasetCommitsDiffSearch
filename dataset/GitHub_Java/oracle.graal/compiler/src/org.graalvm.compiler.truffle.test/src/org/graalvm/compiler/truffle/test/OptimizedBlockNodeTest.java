@@ -40,9 +40,13 @@ import java.util.concurrent.Callable;
 import org.graalvm.compiler.truffle.runtime.OptimizedBlockNode;
 import org.graalvm.compiler.truffle.runtime.OptimizedBlockNode.PartialBlocks;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -52,6 +56,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.test.CompileImmediatelyCheck;
 import com.oracle.truffle.api.nodes.BlockNode;
 import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
 import com.oracle.truffle.api.nodes.Node;
@@ -289,6 +294,8 @@ public class OptimizedBlockNodeTest {
         assertUnexpected(() -> block3.executeLong(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
         assertValid(target, partialBlocks);
     }
+
+    static boolean compileImmediatly;
 
     @Test
     public void testStartsWithCompilation() {
@@ -530,8 +537,12 @@ public class OptimizedBlockNodeTest {
         fail("expected unexpected result but no exception was thrown");
     }
 
+    private static TruffleRuntimeOptionsOverrideScope backgroundCompilation;
+
     @BeforeClass
     public static void beforeClass() {
+        backgroundCompilation = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleBackgroundCompilation, false);
+
         /*
          * Do some dummy compilation to make sure everything is resolved.
          */
@@ -539,6 +550,13 @@ public class OptimizedBlockNodeTest {
         OptimizedCallTarget target = createTest(block);
         target.call();
         target.compile(true);
+
+        compileImmediatly = CompileImmediatelyCheck.isCompileImmediately();
+    }
+
+    @AfterClass
+    public static void afterClass() {
+        backgroundCompilation.close();
     }
 
     private Context context;
@@ -556,7 +574,6 @@ public class OptimizedBlockNodeTest {
     private void setup(int blockCompilationSize) {
         clearContext();
         context = Context.newBuilder().allowAllAccess(true)//
-                        .option("engine.BackgroundCompilation", "false") //
                         .option("engine.PartialBlockCompilationSize", String.valueOf(blockCompilationSize))//
                         .option("engine.CompilationThreshold", String.valueOf(TEST_COMPILATION_THRESHOLD)).build();
         context.enter();

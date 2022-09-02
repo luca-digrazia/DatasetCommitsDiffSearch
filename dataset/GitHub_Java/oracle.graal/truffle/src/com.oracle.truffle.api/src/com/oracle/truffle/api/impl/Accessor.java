@@ -80,6 +80,7 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
@@ -192,8 +193,6 @@ public abstract class Accessor {
         public abstract boolean isTruffleObject(Object value);
 
         public abstract void checkInteropType(Object result);
-
-        public abstract boolean isExecutableObject(Object value);
 
         public abstract Object createDefaultNodeObject(Node node);
 
@@ -316,7 +315,7 @@ public abstract class Accessor {
 
         public abstract <T> T getOrCreateRuntimeData(Object sourceVM, Function<OptionValues, T> constructor);
 
-        public abstract Set<? extends Class<?>> getProvidedTags(LanguageInfo language);
+        public abstract Class<? extends TruffleLanguage<?>> getLanguageClass(LanguageInfo language);
 
         public abstract Object getPolyglotBindingsForLanguage(Object vmObject);
 
@@ -604,6 +603,7 @@ public abstract class Accessor {
         private static final Accessor.IOSupport IO;
         private static final Accessor.FrameSupport FRAMES;
         private static final Accessor.EngineSupport ENGINE;
+        private static final Accessor.DumpSupport DUMP;
 
         static {
             // Eager load all accessors so the above fields are all set and all methods are usable
@@ -615,6 +615,11 @@ public abstract class Accessor {
             IO = loadSupport("com.oracle.truffle.api.io.IOAccessor$IOSupportImpl");
             FRAMES = loadSupport("com.oracle.truffle.api.frame.FrameAccessor$FramesImpl");
             ENGINE = loadSupport("com.oracle.truffle.polyglot.EngineAccessor$EngineImpl");
+            if (TruffleOptions.TraceASTJSON) {
+                DUMP = loadSupport("com.oracle.truffle.api.utilities.JSONHelper.DumpAccessor$DumpImpl");
+            } else {
+                DUMP = null;
+            }
         }
 
         @SuppressWarnings("unchecked")
@@ -661,6 +666,10 @@ public abstract class Accessor {
 
     public final LanguageSupport languageSupport() {
         return Constants.LANGUAGE;
+    }
+
+    public final DumpSupport dumpSupport() {
+        return Constants.DUMP;
     }
 
     public final EngineSupport engineSupport() {
