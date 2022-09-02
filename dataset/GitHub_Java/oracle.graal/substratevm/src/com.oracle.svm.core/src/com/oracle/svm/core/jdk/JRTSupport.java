@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
@@ -48,10 +49,8 @@ import com.oracle.svm.core.util.VMError;
 
 /**
  * Support to access system Java modules and the <b>jrt://</b> file system.
- *
+ * 
  * <p>
- * <b>jrt://</b> can be used standalone, or to access system modules.
- *
  * <b>javac</b> and other tools that access the system modules, depend on the
  * <b>-Djava.home=/path/to/jdk</b> property to be set e.g. required by
  * <code>java.lang.module.ModuleFinder#ofSystem()</code>.
@@ -59,7 +58,7 @@ import com.oracle.svm.core.util.VMError;
 public final class JRTSupport {
 
     static class Options {
-        @Option(help = "Enable support for reading Java modules (jimage format) and the jrt:// file system.", type = OptionType.User) //
+        @Option(help = "Enable support for reading Java modules (jimage format) and the jrt:// file system. Requires java.home to be set at runtime.", type = OptionType.Expert) //
         public static final HostedOptionKey<Boolean> AllowJRTFileSystem = new HostedOptionKey<>(false);
     }
 
@@ -80,6 +79,15 @@ public final class JRTSupport {
 
 // region Enable jimage/jrtfs
 
+@TargetClass(className = "jdk.internal.jimage.ImageReader", innerClass = "SharedImageReader", onlyWith = {JDK11OrLater.class, JRTEnabled.class})
+final class Target_jdk_internal_jimage_ImageReader_SharedImageReader_JRTEnabled {
+    @Alias //
+    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClass = HashMap.class, isFinal = true) //
+    // Checkstyle: stop
+    static Map<Path, Target_jdk_internal_jimage_ImageReader_SharedImageReader_JRTEnabled> OPEN_FILES;
+    // Checkstyle: resume
+}
+
 @TargetClass(className = "jdk.internal.module.SystemModuleFinders", innerClass = "SystemImage", onlyWith = {JDK11OrLater.class, JRTEnabled.class})
 final class Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTEnabled {
 
@@ -89,14 +97,18 @@ final class Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTEnable
 
     @Substitute
     static Object reader() {
-        Target_jdk_internal_jimage_ImageReader_JRTEnabled reader = READER;
-        if (reader == null) {
+        Target_jdk_internal_jimage_ImageReader_JRTEnabled localRef = READER;
+        if (localRef == null) {
+            /* Checkstyle: allow synchronization. */
             synchronized (Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTEnabled.class) {
-                reader = Target_jdk_internal_jimage_ImageReaderFactory_JRTEnabled.getImageReader();
-                READER = reader;
+                localRef = READER;
+                if (localRef == null) {
+                    READER = localRef = Target_jdk_internal_jimage_ImageReaderFactory_JRTEnabled.getImageReader();
+                }
             }
+            /* Checkstyle: disallow synchronization. */
         }
-        return reader;
+        return localRef;
     }
 }
 
@@ -124,7 +136,6 @@ final class Target_jdk_internal_jimage_ImageReaderFactory_JRTEnabled {
  */
 @TargetClass(className = "jdk.internal.module.SystemModuleFinders", innerClass = "SystemImage", onlyWith = {JDK11OrLater.class, JRTDisabled.class})
 final class Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTDisabled {
-
     @Delete
     static native Object reader();
 }
@@ -132,9 +143,9 @@ final class Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTDisabl
 @TargetClass(className = "sun.net.www.protocol.jrt.Handler", onlyWith = {JDK11OrLater.class, JRTDisabled.class})
 final class Target_sun_net_www_protocol_jrt_Handler_JRTDisabled {
     @Substitute
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"unused", "static-method"})
     protected URLConnection openConnection(URL url) throws IOException {
-        throw VMError.unsupportedFeature("JavaRuntimeURLConnection not available. Explicitly enable JRT support with -H:+AllowJRTFilesystem .");
+        throw VMError.unsupportedFeature("JavaRuntimeURLConnection not available.");
     }
 }
 
