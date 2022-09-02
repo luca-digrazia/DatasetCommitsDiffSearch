@@ -49,8 +49,6 @@ import static com.oracle.truffle.wasm.binary.Instructions.I32_DIV_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_DIV_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_MUL;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_OR;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_S;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_XOR;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_CONST;
@@ -67,7 +65,6 @@ import static com.oracle.truffle.wasm.binary.Sections.MEMORY;
 import static com.oracle.truffle.wasm.binary.Sections.START;
 import static com.oracle.truffle.wasm.binary.Sections.TABLE;
 import static com.oracle.truffle.wasm.binary.Sections.TYPE;
-import static com.oracle.truffle.wasm.binary.ValueTypes.VOID_TYPE;
 
 /** Simple recursive-descend parser for the binary WebAssembly format.
  */
@@ -284,8 +281,6 @@ public class BinaryReader extends BinaryStreamReader {
                 case I32_MUL:
                 case I32_DIV_S:
                 case I32_DIV_U:
-                case I32_REM_S:
-                case I32_REM_U:
                 case I32_AND:
                 case I32_OR:
                 case I32_XOR:
@@ -338,7 +333,7 @@ public class BinaryReader extends BinaryStreamReader {
     public void readResultList(int funcTypeIdx) {
         byte b = read1();
         switch (b) {
-            case VOID_TYPE:  // special byte indicating empty return type (same as above)
+            case 0x40:  // special byte indicating empty return type (same as above)
                 break;
             case 0x00:  // empty vector
                 break;
