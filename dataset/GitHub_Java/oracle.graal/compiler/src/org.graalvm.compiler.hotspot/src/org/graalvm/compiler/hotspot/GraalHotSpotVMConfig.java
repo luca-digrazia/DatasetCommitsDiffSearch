@@ -253,7 +253,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     public final int stackShadowPages = getFlag("StackShadowPages", Integer.class);
     public final int stackReservedPages = getFlag("StackReservedPages", Integer.class, 0, JDK >= 9);
-    public final boolean useStackBanging = getFlag("UseStackBanging", Boolean.class, true, JDK < 17);
+    public final boolean useStackBanging = getFlag("UseStackBanging", Boolean.class);
     public final int stackBias = getConstant("STACK_BIAS", Integer.class, 0, JDK < 15);
     public final int vmPageSize = getFieldValue("CompilerToVM::Data::vm_page_size", Integer.class, "int");
 
@@ -490,6 +490,11 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
         return javaThreadAnchorOffset + getFieldOffset("JavaFrameAnchor::_last_Java_fp", Integer.class, "intptr_t*");
     }
 
+    public int threadJavaFrameAnchorFlagsOffset() {
+        assert osArch.equals("sparc");
+        return javaThreadAnchorOffset + getFieldOffset("JavaFrameAnchor::_flags", Integer.class, "int");
+    }
+
     public final int runtimeCallStackSize = getConstant("frame::arg_reg_save_area_bytes", Integer.class, 0, osArch.equals("amd64"));
     public final int frameInterpreterFrameSenderSpOffset = getConstant("frame::interpreter_frame_sender_sp_offset", Integer.class, 0, osArch.equals("amd64"));
     public final int frameInterpreterFrameLastSpOffset = getConstant("frame::interpreter_frame_last_sp_offset", Integer.class, 0, osArch.equals("amd64"));
@@ -513,7 +518,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int objectMonitorRecursions = getFieldOffset("ObjectMonitor::_recursions", Integer.class, "intptr_t", -1, gr21761);
     public final int objectMonitorCxq = getFieldOffset("ObjectMonitor::_cxq", Integer.class, "ObjectWaiter*", -1, jdk13Backport);
     public final int objectMonitorEntryList = getFieldOffset("ObjectMonitor::_EntryList", Integer.class, "ObjectWaiter*", -1, jdk13Backport);
-    public final int objectMonitorSucc = getFieldOffset("ObjectMonitor::_succ", Integer.class, JDK < 17 ? "Thread*" : "JavaThread*", -1, jdk13Backport);
+    public final int objectMonitorSucc = getFieldOffset("ObjectMonitor::_succ", Integer.class, "Thread*", -1, jdk13Backport);
 
     public final int markWordNoHashInPlace = getConstant(markWordField("no_hash_in_place"), Integer.class);
     public final int markWordNoLockInPlace = getConstant(markWordField("no_lock_in_place"), Integer.class);
