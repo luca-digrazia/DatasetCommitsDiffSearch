@@ -47,11 +47,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- *
  * Annotation used on active library receiver to specify the active libraries provided by this Java
  * class.
- *
- * @since 1.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
@@ -60,27 +57,20 @@ public @interface ExportLibrary {
 
     /***
      * The library exported.
-     *
-     * @since 1.0
      */
     Class<? extends Library> value();
 
     /**
      * Custom receiver type. -> all methods must be static.
      *
-     * @since 1.0
+     * @return
      */
     Class<?> receiverType() default Void.class;
 
-    /***
-     * @since 1.0
-     */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.TYPE})
     public @interface Repeat {
-        /***
-         * @since 1.0
-         */
+
         ExportLibrary[] value();
 
     }

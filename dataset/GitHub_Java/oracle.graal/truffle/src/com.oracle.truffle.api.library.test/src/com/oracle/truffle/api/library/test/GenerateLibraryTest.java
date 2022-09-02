@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,7 +47,7 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
@@ -57,7 +57,6 @@ import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.test.CachedLibraryTest.SimpleDispatchedNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
-import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @SuppressWarnings("unused")
@@ -70,10 +69,6 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         public String call(Object receiver) {
             return "default";
         }
-
-        public abstract void abstractMethod(Object receiver);
-
-        public abstract void abstractMethodWithFrame(Object receiver, VirtualFrame frame);
 
     }
 
@@ -91,40 +86,36 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         }
 
         @ExportMessage
-        void abstractMethod() {
-        }
-
-        @ExportMessage
-        void abstractMethodWithFrame(VirtualFrame frame) {
-        }
-
-        @ExportMessage
         boolean accepts(@Cached(value = "this") Sample cachedS) {
             // use identity caches to make it easier to overflow
             return this == cachedS;
         }
 
         @ExportMessage
-        static final String call(Sample s, @Cached(value = "0", uncached = "1") int cached) {
-            if (cached == 0) {
+        static final String call(Sample s) {
+            if (s.name != null) {
+                return s.name + "_uncached";
+            } else {
+                return "uncached";
+            }
+
+        }
+
+        @ExportMessage
+        static class Call {
+            @Specialization
+            static final String call(Sample s) {
                 if (s.name != null) {
                     return s.name + "_cached";
                 } else {
                     return "cached";
                 }
-            } else {
-                if (s.name != null) {
-                    return s.name + "_uncached";
-                } else {
-                    return "uncached";
-                }
             }
-
         }
-
     }
 
     private abstract static class InvalidLibrary extends Library {
+
     }
 
     @Test

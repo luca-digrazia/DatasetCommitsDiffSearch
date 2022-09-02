@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -56,7 +56,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @RunWith(Parameterized.class)
@@ -225,11 +224,9 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
     }
 
     @ExportLibrary(value = DefaultErrorLibrary3.class, receiverType = OtherClass.class)
-    @ExpectError({
-                    "The following message(s) of library DefaultErrorLibrary3 are abstract%",
-                    "Exported library DefaultErrorLibrary3 does not export any messages and therefore has no effect.%"
-    })
+    @ExpectError("The following message(s) of library DefaultErrorLibrary3 are abstract%")
     abstract static class AbstractDefault {
+
     }
 
     @GenerateLibrary
@@ -238,15 +235,10 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
         public abstract int abstractMethod(Object receiver);
 
-        public int m0(Object receiver) {
-            return 42;
-        }
-
     }
 
     @ExportLibrary(value = DefaultLibrary.class)
-    @ExpectError({"The following message(s) of library DefaultLibrary%",
-                    "Exported library DefaultLibrary does not export any messages and therefore has no effect.%"})
+    @ExpectError("The following message(s) of library DefaultLibrary%")
     static final class DefaultExportError1 {
 
     }

@@ -40,10 +40,6 @@
  */
 package com.oracle.truffle.api.interop;
 
-import static com.oracle.truffle.api.interop.NumberUtils.INT_MAX_SAFE_FLOAT;
-import static com.oracle.truffle.api.interop.NumberUtils.LONG_MAX_SAFE_DOUBLE;
-
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
@@ -71,65 +67,37 @@ final class DefaultLongExports {
 
     @ExportMessage
     static boolean fitsInFloat(Long receiver) {
-        return receiver >= -INT_MAX_SAFE_FLOAT && receiver <= INT_MAX_SAFE_FLOAT;
+        return NumberUtils.inSafeFloatRange(receiver);
     }
 
     @ExportMessage
     static boolean fitsInDouble(Long receiver) {
-        return receiver >= -LONG_MAX_SAFE_DOUBLE && receiver <= LONG_MAX_SAFE_DOUBLE;
+        return NumberUtils.inSafeDoubleRange(receiver);
     }
 
     @ExportMessage
     static byte asByte(Long receiver) throws UnsupportedMessageException {
-        long l = receiver;
-        byte b = (byte) l;
-        if (b == l) {
-            return b;
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.create();
+        return NumberUtils.asByte(receiver);
     }
 
     @ExportMessage
     static short asShort(Long receiver) throws UnsupportedMessageException {
-        long l = receiver;
-        short s = (short) l;
-        if (s == l) {
-            return s;
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.create();
+        return NumberUtils.asShort(receiver);
     }
 
     @ExportMessage
     static int asInt(Long receiver) throws UnsupportedMessageException {
-        long l = receiver;
-        int i = (int) l;
-        if (i == l) {
-            return i;
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.create();
+        return NumberUtils.asInt(receiver);
     }
 
     @ExportMessage
     static float asFloat(Long receiver) throws UnsupportedMessageException {
-        long l = receiver;
-        if (NumberUtils.inSafeFloatRange(l)) {
-            return l;
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.create();
+        return NumberUtils.asFloat(receiver);
     }
 
     @ExportMessage
     static double asDouble(Long receiver) throws UnsupportedMessageException {
-        long l = receiver;
-        if (NumberUtils.inSafeDoubleRange(l)) {
-            return l;
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.create();
+        return NumberUtils.asDouble(receiver);
     }
 
     @ExportMessage

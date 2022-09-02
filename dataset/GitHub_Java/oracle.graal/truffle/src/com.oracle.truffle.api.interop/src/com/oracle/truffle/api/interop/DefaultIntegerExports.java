@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,11 +41,8 @@
 package com.oracle.truffle.api.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.source.SourceSection;
 
 @ExportLibrary(value = InteropLibrary.class, receiverType = Integer.class)
 @SuppressWarnings("unused")
@@ -73,9 +70,7 @@ final class DefaultIntegerExports {
 
     @ExportMessage
     static boolean fitsInFloat(Integer receiver) {
-        int i = receiver;
-        float f = i;
-        return f == i;
+        return NumberUtils.inSafeFloatRange(receiver);
     }
 
     @ExportMessage
@@ -103,9 +98,8 @@ final class DefaultIntegerExports {
     @ExportMessage
     static float asFloat(Integer receiver) throws UnsupportedMessageException {
         int i = receiver;
-        float f = i;
-        if (f == i) {
-            return f;
+        if (NumberUtils.inSafeFloatRange(i)) {
+            return i;
         }
         CompilerDirectives.transferToInterpreter();
         throw UnsupportedMessageException.create();
@@ -141,45 +135,5 @@ final class DefaultIntegerExports {
     @ExportMessage
     static double asDouble(Integer receiver) {
         return receiver;
-    }
-
-    /*
-     * We export these messages explicitly because the legacy default is very costly. Remove with
-     * the complicated legacy implementation in InteropLibrary.
-     */
-    @ExportMessage
-    static boolean hasLanguage(Integer receiver) {
-        return false;
-    }
-
-    @ExportMessage
-    static Class<? extends TruffleLanguage<?>> getLanguage(Integer receiver) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    @ExportMessage
-    static boolean hasSourceLocation(Integer receiver) {
-        return false;
-    }
-
-    @ExportMessage
-    static SourceSection getSourceLocation(Integer receiver) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    @ExportMessage
-    static boolean hasMetaObject(Integer receiver) {
-        return false;
-    }
-
-    @ExportMessage
-    static Object getMetaObject(Integer receiver) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    @ExportMessage
-    @TruffleBoundary
-    static Object toDisplayString(Integer receiver, boolean allowSideEffects) {
-        return receiver.toString();
     }
 }
