@@ -25,7 +25,6 @@
 package org.graalvm.compiler.core.llvm;
 
 import static org.graalvm.compiler.core.llvm.LLVMIRBuilder.isObject;
-import static org.graalvm.compiler.core.llvm.LLVMIRBuilder.isVoidType;
 import static org.graalvm.compiler.core.llvm.LLVMIRBuilder.typeOf;
 import static org.graalvm.compiler.core.llvm.LLVMUtils.dumpTypes;
 import static org.graalvm.compiler.core.llvm.LLVMUtils.dumpValues;
@@ -179,7 +178,7 @@ public class LLVMGenerator implements LIRGeneratorTool {
         throw unimplemented();
     }
 
-    public LLVMValueRef getFunction(ResolvedJavaMethod method) {
+    LLVMValueRef getFunction(ResolvedJavaMethod method) {
         LLVMTypeRef functionType = getLLVMFunctionType(method);
         return builder.getFunction(getFunctionName(method), functionType);
     }
@@ -188,7 +187,7 @@ public class LLVMGenerator implements LIRGeneratorTool {
         return method.getName();
     }
 
-    LLVMTypeRef getLLVMFunctionReturnType(ResolvedJavaMethod method) {
+    private LLVMTypeRef getLLVMFunctionReturnType(ResolvedJavaMethod method) {
         ResolvedJavaType returnType = method.getSignature().getReturnType(null).resolve(null);
         return builder.getLLVMStackType(getTypeKind(returnType));
     }
@@ -338,6 +337,16 @@ public class LLVMGenerator implements LIRGeneratorTool {
     }
 
     @Override
+    public boolean canInlineConstant(Constant constant) {
+        return false;
+    }
+
+    @Override
+    public boolean mayEmbedConstantLoad(Constant constant) {
+        return false;
+    }
+
+    @Override
     public Value emitConstant(LIRKind kind, Constant constant) {
         LLVMValueRef value = emitLLVMConstant(((LLVMKind) kind.getPlatformKind()).get(), (JavaConstant) constant);
         return new LLVMConstant(value, constant);
@@ -452,7 +461,7 @@ public class LLVMGenerator implements LIRGeneratorTool {
         LLVMValueRef[] arguments = Arrays.stream(args).map(LLVMUtils::getVal).toArray(LLVMValueRef[]::new);
 
         LLVMValueRef call = builder.buildCall(callee, patchpointId, arguments);
-        return (isVoidType(getLLVMFunctionReturnType(targetMethod))) ? null : new LLVMVariable(call);
+        return new LLVMVariable(call);
     }
 
     protected ResolvedJavaMethod findForeignCallTarget(@SuppressWarnings("unused") ForeignCallDescriptor descriptor) {
