@@ -45,7 +45,6 @@ import com.oracle.truffle.api.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.api.staticobject.StaticProperty;
 import com.oracle.truffle.api.staticobject.StaticPropertyKind;
 import com.oracle.truffle.api.staticobject.StaticShape;
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.BeforeClass;
@@ -57,8 +56,6 @@ import org.junit.runner.RunWith;
 
 @RunWith(Theories.class)
 public class PropertyAccessTest extends StaticObjectModelTest {
-    @DataPoints //
-    public static TestEnvironment[] environments;
     @DataPoints //
     public static TestDescriptor[] descriptors;
 
@@ -94,8 +91,7 @@ public class PropertyAccessTest extends StaticObjectModelTest {
     }
 
     @BeforeClass
-    public static void setup() {
-        environments = new TestEnvironment[]{new TestEnvironment(true), new TestEnvironment(false)};
+    public static void init() {
         descriptors = new TestDescriptor[StaticPropertyKind.values().length];
 
         for (StaticPropertyKind kind : StaticPropertyKind.values()) {
@@ -179,16 +175,9 @@ public class PropertyAccessTest extends StaticObjectModelTest {
         }
     }
 
-    @AfterClass
-    public static void teardown() {
-        for (TestEnvironment env : environments) {
-            env.close();
-        }
-    }
-
     @Theory
-    public void correctAccessors(TestEnvironment te, TestDescriptor descriptor) {
-        StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
+    public void correctAccessors(TestDescriptor descriptor) {
+        StaticShape.Builder builder = StaticShape.newBuilder(testLanguage);
         StaticProperty property = new DefaultStaticProperty("property", descriptor.kind, false);
         builder.property(property);
         StaticShape<DefaultStaticObjectFactory> shape = builder.build();
@@ -204,10 +193,10 @@ public class PropertyAccessTest extends StaticObjectModelTest {
     }
 
     @Theory
-    public void wrongAccessors(TestEnvironment te, TestDescriptor expectedDescriptor, TestDescriptor actualDescriptor) {
+    public void wrongAccessors(TestDescriptor expectedDescriptor, TestDescriptor actualDescriptor) {
         Assume.assumeFalse(expectedDescriptor.equals(actualDescriptor));
 
-        StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
+        StaticShape.Builder builder = StaticShape.newBuilder(testLanguage);
         StaticProperty property = new DefaultStaticProperty("property", expectedDescriptor.kind, false);
         builder.property(property);
         StaticShape<DefaultStaticObjectFactory> shape = builder.build();
@@ -231,13 +220,13 @@ public class PropertyAccessTest extends StaticObjectModelTest {
 
     @Theory
     @SuppressWarnings("unused")
-    public void wrongShape(TestEnvironment te, TestDescriptor descriptor) {
-        StaticShape.Builder b1 = StaticShape.newBuilder(te.testLanguage);
+    public void wrongShape(TestDescriptor descriptor) {
+        StaticShape.Builder b1 = StaticShape.newBuilder(testLanguage);
         StaticProperty p1 = new DefaultStaticProperty("property", descriptor.kind, false);
         b1.property(p1);
         StaticShape<DefaultStaticObjectFactory> s1 = b1.build();
 
-        StaticShape.Builder b2 = StaticShape.newBuilder(te.testLanguage);
+        StaticShape.Builder b2 = StaticShape.newBuilder(testLanguage);
         StaticProperty p2 = new DefaultStaticProperty("property", descriptor.kind, false);
         b2.property(p2);
         StaticShape<DefaultStaticObjectFactory> s2 = b2.build();
@@ -247,7 +236,7 @@ public class PropertyAccessTest extends StaticObjectModelTest {
             descriptor.setter.set(p1, o2, descriptor.testValue);
             Assert.fail();
         } catch (IllegalArgumentException e) {
-            if (te.arrayBased) {
+            if (ARRAY_BASED_STORAGE) {
                 Assert.assertTrue(e.getMessage().startsWith("Incompatible shape on property access."));
             } else {
                 Assert.assertTrue(e.getMessage().matches("Object '.*' of class '.*' does not have the expected shape"));
@@ -255,10 +244,10 @@ public class PropertyAccessTest extends StaticObjectModelTest {
         }
     }
 
-    @Theory
+    @Test
     @SuppressWarnings("unused")
-    public void wrongObject(TestEnvironment te) {
-        StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
+    public void wrongObject() {
+        StaticShape.Builder builder = StaticShape.newBuilder(testLanguage);
         StaticProperty property = new DefaultStaticProperty("property", StaticPropertyKind.Int, false);
         builder.property(property);
         StaticShape<DefaultStaticObjectFactory> shape = builder.build();
@@ -271,10 +260,5 @@ public class PropertyAccessTest extends StaticObjectModelTest {
         } catch (IllegalArgumentException e) {
             Assert.assertTrue(e.getMessage().matches("Object '.*' of class '.*' does not have the expected shape"));
         }
-    }
-
-    @Test
-    public void dummy() {
-        // to make sure this file is recognized as a test
     }
 }
