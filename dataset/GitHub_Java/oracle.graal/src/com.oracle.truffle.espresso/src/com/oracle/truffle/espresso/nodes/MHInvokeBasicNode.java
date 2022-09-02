@@ -22,41 +22,17 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public abstract class MHInvokeBasicNode extends HandleIntrinsicNode {
+public final class MHInvokeBasicNode extends HandleIntrinsicNode {
 
     private final int form;
     private final int vmentry;
     private final int hiddenVmtarget;
-
-    static final int INLINE_CACHE_SIZE_LIMIT = 5;
-
-    protected abstract Object executeCall(Object[] args, Method target);
-
-    public static boolean canInline(Method target, Method cachedTarget) {
-        return target.identity() == cachedTarget.identity();
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "canInline(target, cachedTarget)")
-    Object executeCallDirect(Object[] args, Method target,
-                    @Cached("target") Method cachedTarget,
-                    @Cached("create(target.getCallTarget())") DirectCallNode directCallNode) {
-        return directCallNode.call(args);
-    }
-
-    @Specialization(replaces = "executeCallDirect")
-    Object executeCallIndirect(Object[] args, Method target,
-                    @Cached("create()") IndirectCallNode callNode) {
-        return callNode.call(target.getCallTarget(), args);
-    }
+    private @Child IndirectCallNode callNode;
 
     public MHInvokeBasicNode(Method method) {
         super(method);
@@ -64,6 +40,7 @@ public abstract class MHInvokeBasicNode extends HandleIntrinsicNode {
         this.form = meta.MethodHandle_form.getFieldIndex();
         this.vmentry = meta.LambdaForm_vmentry.getFieldIndex();
         this.hiddenVmtarget = meta.HIDDEN_VMTARGET.getFieldIndex();
+        this.callNode = IndirectCallNode.create();
     }
 
     @Override
@@ -72,6 +49,6 @@ public abstract class MHInvokeBasicNode extends HandleIntrinsicNode {
         StaticObject lform = (StaticObject) mh.getUnsafeField(form);
         StaticObject mname = (StaticObject) lform.getUnsafeField(vmentry);
         Method target = (Method) mname.getUnsafeField(hiddenVmtarget);
-        return executeCall(args, target);
+        return callNode.call(target.getCallTarget(), args);
     }
 }

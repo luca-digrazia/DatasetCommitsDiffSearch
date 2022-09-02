@@ -268,7 +268,7 @@ public final class ObjectKlass extends Klass {
                     if (getContext().isMainThreadCreated()) {
                         if (getContext().getJDWPListener() != null) {
                             prepareThread = getContext().getGuestThreadFromHost(Thread.currentThread());
-                            getContext().getJDWPListener().classPrepared(this, prepareThread, false);
+                            getContext().getJDWPListener().classPrepared(this, prepareThread);
                         }
                     }
                     if (getSuperKlass() != null) {
@@ -671,7 +671,7 @@ public final class ObjectKlass extends Klass {
             method = lookupMirandas(methodName, signature);
         }
         if (method == null && getType() == Type.MethodHandle) {
-            method = lookupPolysigMethod(methodName, signature, accessingKlass);
+            method = lookupPolysigMethod(methodName, signature);
         }
         if (method == null && getSuperKlass() != null) {
             method = getSuperKlass().lookupMethod(methodName, signature, accessingKlass);

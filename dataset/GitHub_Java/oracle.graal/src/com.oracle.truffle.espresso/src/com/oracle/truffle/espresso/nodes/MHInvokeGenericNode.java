@@ -31,12 +31,7 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-/**
- * Orchestrates the semantics of invoke and invoke exacts. Creating a call site for an invoke method
- * goes to java code to create an invoker method that implements type checking and the actual
- * invocation of the payload. This node is basically a bridge to the actual work.
- */
-public class MHInvokeGenericNode extends MethodHandleIntrinsicNode {
+public class MHInvokeGenericNode extends HandleIntrinsicNode {
     private final StaticObject appendix;
     @Child private DirectCallNode callNode;
 
@@ -44,12 +39,7 @@ public class MHInvokeGenericNode extends MethodHandleIntrinsicNode {
         super(method);
         this.appendix = appendix;
         Method target = (Method) memberName.getHiddenField(method.getMeta().HIDDEN_VMTARGET);
-        // Call the invoker java code spun for us.
-        if (getContext().SplitMethodHandles) {
-            this.callNode = DirectCallNode.create(target.forceSplit().getCallTarget());
-        } else {
-            this.callNode = DirectCallNode.create(target.getCallTarget());
-        }
+        this.callNode = DirectCallNode.create(target.getCallTarget());
     }
 
     @Override
@@ -63,7 +53,6 @@ public class MHInvokeGenericNode extends MethodHandleIntrinsicNode {
     public static MHInvokeGenericNode create(Klass accessingKlass, Method method, Symbol<Symbol.Name> methodName, Symbol<Symbol.Signature> signature, Meta meta) {
         Klass callerKlass = accessingKlass == null ? meta.Object : accessingKlass;
         StaticObject appendixBox = StaticObject.createArray(meta.Object_array, new Object[1]);
-        // Ask java code to spin an invoker for us.
         StaticObject memberName = (StaticObject) meta.MethodHandleNatives_linkMethod.invokeDirect(
                         null,
                         callerKlass.mirror(), (int) REF_invokeVirtual,

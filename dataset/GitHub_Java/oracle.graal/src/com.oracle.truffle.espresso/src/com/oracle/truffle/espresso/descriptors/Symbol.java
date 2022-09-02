@@ -219,6 +219,7 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> linkMethodHandleConstant = StaticSymbols.putName("linkMethodHandleConstant");
         public static final Symbol<Name> toMethodDescriptorString = StaticSymbols.putName("toMethodDescriptorString");
         public static final Symbol<Name> fromMethodDescriptorString = StaticSymbols.putName("fromMethodDescriptorString");
+        public static final Symbol<Name> fixMethodType = StaticSymbols.putName("fixMethodType");
         public static final Symbol<Name> getSignature = StaticSymbols.putName("getSignature");
         public static final Symbol<Name> signature = StaticSymbols.putName("signature");
         public static final Symbol<Name> getParameterTypes = StaticSymbols.putName("getParameterTypes");
@@ -288,7 +289,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> HIDDEN_IS_ALIVE = StaticSymbols.putName("0HIDDEN_IS_ALIVE");
         public static final Symbol<Name> HIDDEN_INTERRUPTED = StaticSymbols.putName("0HIDDEN_INTERRUPTED");
         public static final Symbol<Name> HIDDEN_DEATH = StaticSymbols.putName("0HIDDEN_DEATH");
-        public static final Symbol<Name> HIDDEN_DEATH_THROWABLE = StaticSymbols.putName("0HIDDEN_DEATH_THROWABLE");
         public static final Symbol<Name> HIDDEN_SUSPEND_LOCK = StaticSymbols.putName("0HIDDEN_SUSPEND_LOCK");
         public static final Symbol<Name> HIDDEN_PROTECTION_DOMAIN = StaticSymbols.putName("0HIDDEN_PROTECTION_DOMAIN");
         public static final Symbol<Name> HIDDEN_HOST_REFERENCE = StaticSymbols.putName("0HIDDEN_HOST_REFERENCE");
@@ -507,6 +507,7 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> linkMethod_signature = StaticSymbols.putSignature(Type.MemberName, Type.Class, Type._int, Type.Class, Type.String, Type.Object, Type.Object_array);
         public static final Symbol<Signature> linkMethodHandleConstant_signature = StaticSymbols.putSignature(Type.MethodHandle, Type.Class, Type._int, Type.Class, Type.String, Type.Object);
         public static final Symbol<Signature> linkCallSite_signature = StaticSymbols.putSignature(Type.MemberName, Type.Object, Type.Object, Type.Object, Type.Object, Type.Object, Type.Object_array);
+        public static final Symbol<Signature> fixMethodType_signature = StaticSymbols.putSignature(Type.MethodType, Type.Class, Type.Object);
         public static final Symbol<Signature> lookup_signature = StaticSymbols.putSignature(Type.Lookup);
 
         public static final Symbol<Signature> toThreadState = StaticSymbols.putSignature(Type.ThreadStateEnum, Type._int);

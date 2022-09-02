@@ -22,14 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import static com.oracle.truffle.espresso.nodes.LinkToInterfaceNode.interfaceLinker;
-import static com.oracle.truffle.espresso.nodes.LinkToSpecialNode.specialLinker;
-import static com.oracle.truffle.espresso.nodes.LinkToStaticNode.staticLinker;
-import static com.oracle.truffle.espresso.nodes.LinkToVirtualNode.virtualLinker;
-
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
@@ -44,50 +36,29 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class MHLinkToNode extends HandleIntrinsicNode {
     final int argCount;
     final MethodHandleIntrinsics.PolySigIntrinsics id;
-    private Linker linker;
+    @Child IndirectCallNode callNode;
     private final int hiddenVmtarget;
     private final boolean hasReceiver;
-
-    static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
     MHLinkToNode(Method method, MethodHandleIntrinsics.PolySigIntrinsics id) {
         super(method);
         this.id = id;
         this.argCount = Signatures.parameterCount(method.getParsedSignature(), false);
+        this.callNode = IndirectCallNode.create();
         this.hiddenVmtarget = method.getMeta().HIDDEN_VMTARGET.getFieldIndex();
         this.hasReceiver = id != MethodHandleIntrinsics.PolySigIntrinsics.LinkToStatic;
-        this.linker = findLinker(id);
         assert method.isStatic();
     }
 
     @Override
     public Object call(Object[] args) {
         assert (getMethod().isStatic());
-        Method target = linker.linkTo(getTarget(args), args);
+        Method target = getTarget(args);
         Object[] basicArgs = unbasic(args, target.getParsedSignature(), 0, argCount - 1, hasReceiver);
-        Object result = executeCall(basicArgs, target);
-        return rebasic(result, target.getReturnKind());
+        return rebasic(linkTo(target, basicArgs), target.getReturnKind());
     }
 
-    protected abstract Object executeCall(Object[] args, Method target);
-
-    public static boolean canInline(Method target, Method cachedTarget) {
-        return target.identity() == cachedTarget.identity();
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "canInline(target, cachedTarget)")
-    Object executeCallDirect(Object[] args, Method target,
-                    @Cached("target") Method cachedTarget,
-                    @Cached("create(target.getCallTarget())") DirectCallNode directCallNode) {
-        return directCallNode.call(args);
-    }
-
-    @Specialization(replaces = "executeCallDirect")
-    Object executeCallIndirect(Object[] args, Method target,
-                    @Cached("create()") IndirectCallNode callNode) {
-        return callNode.call(target.getCallTarget(), args);
-    }
+    protected abstract Object linkTo(Method target, Object[] args);
 
     @ExplodeLoop
     static Object[] unbasic(Object[] args, Symbol<Type>[] targetSig, int from, int length, boolean inclReceiver) {
@@ -119,16 +90,16 @@ public abstract class MHLinkToNode extends HandleIntrinsicNode {
         }
     }
 
-    public static Linker findLinker(MethodHandleIntrinsics.PolySigIntrinsics id) {
+    public static MHLinkToNode create(Method method, MethodHandleIntrinsics.PolySigIntrinsics id) {
         switch (id) {
             case LinkToVirtual:
-                return virtualLinker;
+                return new LinkToVirtualNode(method);
             case LinkToStatic:
-                return staticLinker;
+                return new LinkToStaticNode(method);
             case LinkToSpecial:
-                return specialLinker;
+                return new LinkToSpecialNode(method);
             case LinkToInterface:
-                return interfaceLinker;
+                return new LinkToInterfaceNode(method);
             default:
                 throw EspressoError.shouldNotReachHere("unrecognized linkTo intrinsic: " + id);
         }

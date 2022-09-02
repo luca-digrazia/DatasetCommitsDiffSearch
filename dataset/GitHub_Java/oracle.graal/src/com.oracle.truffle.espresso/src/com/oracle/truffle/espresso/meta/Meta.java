@@ -232,7 +232,6 @@ public final class Meta implements ContextAccess {
         HIDDEN_IS_ALIVE = Thread.lookupHiddenField(Name.HIDDEN_IS_ALIVE);
         HIDDEN_INTERRUPTED = Thread.lookupHiddenField(Name.HIDDEN_INTERRUPTED);
         HIDDEN_DEATH = Thread.lookupHiddenField(Name.HIDDEN_DEATH);
-        HIDDEN_DEATH_THROWABLE = Thread.lookupHiddenField(Name.HIDDEN_DEATH_THROWABLE);
         HIDDEN_SUSPEND_LOCK = Thread.lookupHiddenField(Name.HIDDEN_SUSPEND_LOCK);
         ThreadGroup = knownKlass(Type.ThreadGroup);
         ThreadGroup_remove = ThreadGroup.lookupDeclaredMethod(Name.remove, Signature.ThreadGroup_remove);
@@ -315,6 +314,7 @@ public final class Meta implements ContextAccess {
         MethodHandleNatives = knownKlass(Type.MethodHandleNatives);
         MethodHandleNatives_linkMethod = MethodHandleNatives.lookupDeclaredMethod(Name.linkMethod, Signature.linkMethod_signature);
         MethodHandleNatives_linkCallSite = MethodHandleNatives.lookupDeclaredMethod(Name.linkCallSite, Signature.linkCallSite_signature);
+        MethodHandleNatives_fixMethodType = MethodHandleNatives.lookupDeclaredMethod(Name.fixMethodType, Signature.fixMethodType_signature);
         MethodHandleNatives_linkMethodHandleConstant = MethodHandleNatives.lookupDeclaredMethod(Name.linkMethodHandleConstant, Signature.linkMethodHandleConstant_signature);
         MethodHandleNatives_findMethodHandleType = MethodHandleNatives.lookupDeclaredMethod(Name.findMethodHandleType, Signature.MethodType_cons);
 
@@ -528,7 +528,6 @@ public final class Meta implements ContextAccess {
     public final Field HIDDEN_IS_ALIVE;
     public final Field HIDDEN_INTERRUPTED;
     public final Field HIDDEN_DEATH;
-    public final Field HIDDEN_DEATH_THROWABLE;
     public final Field HIDDEN_SUSPEND_LOCK;
     public final Field Thread_group;
     public final Field Thread_name;
@@ -601,6 +600,7 @@ public final class Meta implements ContextAccess {
     public final Method MethodHandleNatives_linkMethodHandleConstant;
     public final Method MethodHandleNatives_findMethodHandleType;
     public final Method MethodHandleNatives_linkCallSite;
+    public final Method MethodHandleNatives_fixMethodType;
 
     // References
 
@@ -750,11 +750,6 @@ public final class Meta implements ContextAccess {
     public EspressoException throwEx(java.lang.Class<?> clazz) {
         assert Throwable.class.isAssignableFrom(clazz);
         throw new EspressoException(initEx(clazz));
-    }
-
-    @TruffleBoundary
-    public EspressoException throwEx(StaticObject throwable) {
-        throw new EspressoException(throwable);
     }
 
     @TruffleBoundary
