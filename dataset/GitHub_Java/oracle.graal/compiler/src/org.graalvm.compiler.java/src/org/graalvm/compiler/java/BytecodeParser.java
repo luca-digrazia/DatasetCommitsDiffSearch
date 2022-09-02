@@ -2434,6 +2434,7 @@ public class BytecodeParser implements GraphBuilderContext {
                     nodes.add(node);
                 }
             }
+            replaceeGraph.recordAssumptions(snippet);
             UnmodifiableEconomicMap<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacementsMap);
             if (scope != null) {
                 replaceeGraph.getInliningLog().addLog(duplicates, snippet.getInliningLog());
