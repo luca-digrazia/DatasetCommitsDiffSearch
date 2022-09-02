@@ -62,9 +62,6 @@ public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
     }
 
     @Override
-    public abstract LLVMPointer executeGeneric(VirtualFrame frame);
-
-    @Override
     public String toString() {
         return getShortString("symbol");
     }
@@ -86,13 +83,13 @@ public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
      * from the frame.
      */
     @Specialization(assumptions = "singleContextAssumption()")
-    public LLVMPointer accessSingleContext(
+    public Object accessSingleContext(
                     @CachedContext(LLVMLanguage.class) LLVMContext context) {
         return checkNull(context.getSymbol(symbol));
     }
 
     @Specialization
-    public LLVMPointer accessMultiContext(VirtualFrame frame) {
+    public Object accessMultiContext(VirtualFrame frame) {
         if (stackAccess == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             stackAccess = ((LLVMRootNode) getRootNode()).getStackAccess();

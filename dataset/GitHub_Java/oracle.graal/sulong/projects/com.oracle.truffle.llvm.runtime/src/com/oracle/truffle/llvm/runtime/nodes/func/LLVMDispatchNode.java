@@ -313,7 +313,8 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                     return toLLVMNode.executeWithTarget(ret);
                 }
             } catch (InteropException e) {
-                throw CompilerDirectives.shouldNotReachHere(e);
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(e);
             }
         }
 
