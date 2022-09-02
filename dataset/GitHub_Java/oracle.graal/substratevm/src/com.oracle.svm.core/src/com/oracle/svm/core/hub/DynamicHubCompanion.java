@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core.hub;
 
-import static com.oracle.svm.core.hub.DynamicHub.NO_CLASS_LOADER;
-
 import java.security.ProtectionDomain;
 
 import com.oracle.svm.core.util.VMError;
@@ -35,7 +33,7 @@ public final class DynamicHubCompanion {
     private final DynamicHub hub;
 
     private String packageName;
-    private Object classLoader = NO_CLASS_LOADER;
+    private ClassLoader classLoader;
     private ProtectionDomain protectionDomain;
 
     public DynamicHubCompanion(DynamicHub hub) {
@@ -50,17 +48,17 @@ public final class DynamicHubCompanion {
     }
 
     boolean hasClassLoader() {
-        return classLoader != NO_CLASS_LOADER;
+        return classLoader != null;
     }
 
     public ClassLoader getClassLoader() {
-        Object loader = classLoader;
-        VMError.guarantee(loader != NO_CLASS_LOADER);
-        return (ClassLoader) loader;
+        ClassLoader loader = classLoader;
+        VMError.guarantee(loader != null);
+        return loader;
     }
 
     public void setClassLoader(ClassLoader loader) {
-        VMError.guarantee(classLoader == NO_CLASS_LOADER && loader != NO_CLASS_LOADER);
+        VMError.guarantee(classLoader == null && loader != null);
         classLoader = loader;
     }
 

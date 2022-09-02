@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,35 +40,32 @@
  */
 package org.graalvm.nativeimage.hosted;
 
-import static org.graalvm.nativeimage.hosted.ClassInitialization.MESSAGE;
-
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
-import sun.reflect.CallerSensitive;
-import sun.reflect.Reflection;
-
 /**
- * This class provides methods that can be called during native image building to configure class
- * initialization behavior. By default, all classes that are seen as reachable for a native image
- * are initialized during image building, i.e., the class initialization method is executed during
- * image building and is not seen as a reachable method at runtime. But for some classes, it is
- * necessary to execute the class initialization method at runtime, e.g., when the class
- * initialization method loads shared libraries ({@code System.loadLibrary}), allocates native
- * memory ({@code ByteBuffer.allocateDirect}), or starts threads.
+ * This class provides methods that can be called during native-image building to configure class
+ * initialization behavior. By default, all JDK classes that are seen as reachable for a native
+ * image are initialized during image building, i.e. the class initialization method is executed
+ * during image building and is not seen as a reachable method at runtime. Application classes, on
+ * the other hand, are initialized during image building if they can be proven safe. Unsafe classes,
+ * e.g. ones that create threads, will be initialized at image run time.
+ *
+ * For classes that can't be proven safe, it is sometimes beneficial to ensure initialization during
+ * image building, and for some that are safe, it is still necessary to initialize at runtime (e.g.,
+ * the order of initializer execution matters).
  * <p>
  * This class provides two different registration methods: Classes registered via
- * {@link #delayClassInitialization} are not initialized at all during image generation, and only
+ * {@link #initializeAtRunTime} are not initialized at all during image generation, and only
  * initialized at runtime, i.e., the class initializer is executed once at runtime. Classes
- * registered via {@link RuntimeClassInitialization#rerunClassInitialization} are initialized during
- * image generation, and again initialized at runtime, i.e., the class initializer is executed
- * twice.
- * <p>
- * Registering a class automatically registers all subclasses too. It would violate the class
- * initialization specification to have an uninitialized class that has an initialized subclass.
- * <p>
+ * registered via {@link #initializeAtBuildTime} will be initialized during image building.
+ *
+ * It is also possible define initialization for whole packages with
+ * {@link #initializeAtRunTime(String[])} and {@link #initializeAtBuildTime(String[])}. The rules
+ * for packages can be further refined by using methods for individual classes.
+ *
  * Initializing classes at runtime comes with some costs and restrictions:
  * <ul>
  * <li>The class initialization status must be checked before a static field access, static method
@@ -78,7 +75,7 @@ import sun.reflect.Reflection;
  * initialized, which violates the class initialization specification.</li>
  * <ul>
  *
- * @since 1.0
+ * @since 19.0
  */
 @Platforms(Platform.HOSTED_ONLY.class)
 public final class RuntimeClassInitialization {
@@ -94,36 +91,12 @@ public final class RuntimeClassInitialization {
      * for class initialization. This can be done by, e.g., setting a breakpoint in the class
      * initializer or adding debug printing (print the stack trace) in the class initializer.
      *
-     * @since 1.0
+     * @since 19.0
      */
-    @CallerSensitive
-    public static void delayClassInitialization(Class<?>... classes) {
-        Class<?> callerClass = Reflection.getCallerClass();
+    public static void initializeAtRunTime(Class<?>... classes) {
+        StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
         for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).delay(aClass, MESSAGE + callerClass.getTypeName());
-        }
-    }
-
-    /**
-     * Registers the provided classes, and all of their subclasses, for class re-initialization at
-     * runtime. The classes are still initialized during image generation, i.e., the class
-     * initializers run twice.
-     * <p>
-     * Static fields of the registered classes start out with their default values at runtime, i.e.,
-     * values assigned by class initializers (or for any other reason) to static fields are not
-     * available at runtime.
-     * <p>
-     * It is up to the user to ensure that this behavior makes sense and does not lead to wrong
-     * application behavior.
-     *
-     *
-     * @since 1.0
-     */
-    @CallerSensitive
-    public static void rerunClassInitialization(Class<?>... classes) {
-        Class<?> callerClass = Reflection.getCallerClass();
-        for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerun(aClass, MESSAGE + callerClass.getTypeName());
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtRunTime(aClass, classReason(stacktrace, aClass.getSimpleName() + ".class"));
         }
     }
 
@@ -137,15 +110,61 @@ public final class RuntimeClassInitialization {
      * It is up to the user to ensure that this behavior makes sense and does not lead to wrong
      * application behavior.
      *
-     *
-     * @since 1.0
+     * @since 19.0
      */
-    @CallerSensitive
-    public static void eagerClassInitialization(Class<?>... classes) {
-        Class<?> callerClass = Reflection.getCallerClass();
+    public static void initializeAtBuildTime(Class<?>... classes) {
+        StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
         for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).eager(aClass, MESSAGE + callerClass.getTypeName());
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtBuildTime(aClass, classReason(stacktrace, aClass.getSimpleName() + ".class"));
         }
+    }
+
+    /**
+     * Registers all classes in provided packages, and all of their subclasses, for class
+     * initialization at runtime. The classes are not initialized automatically during image
+     * generation, and also must not be initialized manually by the user during image generation.
+     * <p>
+     * Unfortunately, classes are initialized for many reasons, and it is not possible to intercept
+     * class initialization and report an error at this time. If a registered class gets
+     * initialized, an error can be reported only later and the user must manually debug the reason
+     * for class initialization. This can be done by, e.g., setting a breakpoint in the class
+     * initializer or adding debug printing (print the stack trace) in the class initializer.
+     *
+     * @since 19.0
+     */
+    public static void initializeAtRunTime(String... packages) {
+        StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
+        for (String aPackage : packages) {
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtRunTime(aPackage, classReason(stacktrace, aPackage));
+        }
+    }
+
+    /**
+     * Registers all classes in provided packages as eagerly initialized during image-build time.
+     * <p>
+     * All static initializers of {@code classes} will be executed during image-build time and
+     * static fields that are assigned values will be available at runtime. {@code static final}
+     * fields will be considered as constant.
+     * <p>
+     * It is up to the user to ensure that this behavior makes sense and does not lead to wrong
+     * application behavior.
+     *
+     * @since 19.0
+     */
+    public static void initializeAtBuildTime(String... packages) {
+        StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
+        for (String aPackage : packages) {
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtBuildTime(aPackage, classReason(stacktrace, aPackage));
+        }
+    }
+
+    private static String getCaller(StackTraceElement[] stackTrace) {
+        StackTraceElement e = stackTrace[2];
+        return e.getClassName() + "." + e.getMethodName();
+    }
+
+    private static String classReason(StackTraceElement[] stacktrace, String simpleName) {
+        return "from feature " + getCaller(stacktrace) + " with '" + simpleName + "'";
     }
 
     private RuntimeClassInitialization() {

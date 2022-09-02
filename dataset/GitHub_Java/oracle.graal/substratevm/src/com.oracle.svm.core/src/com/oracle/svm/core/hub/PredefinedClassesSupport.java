@@ -136,7 +136,7 @@ public final class PredefinedClassesSupport {
             return;
         }
         DynamicHub hub = DynamicHub.fromClass(clazz);
-        if (!hub.isLoaded()) {
+        if (!hub.hasClassLoader()) {
             throwResolutionError(clazz.getName());
         }
         if (!isSameOrParent(clazz.getClassLoader(), classLoader)) { // common case: same loader
