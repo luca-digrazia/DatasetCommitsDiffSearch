@@ -90,7 +90,8 @@ public final class Target_java_lang_Class {
             Klass klass = context.getRegistries().loadKlass(context.getTypes().fromClassGetName(Meta.toHostString(name)), loader);
 
             if (klass == null) {
-                throw meta.throwExWithMessage(meta.ClassNotFoundException, name);
+                throw meta.throwExWithMessage(NoClassDefFoundError.class, Meta.toHostString(name));
+                // throw meta.throwExWithMessage(meta.ClassNotFoundException, name);
             }
 
             if (initialize) {
