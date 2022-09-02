@@ -163,7 +163,11 @@ abstract class SteppingStrategy {
         return new StepOver(session, config);
     }
 
-    static SteppingStrategy createUnwind(int depth, DebugValue returnValue) {
+    static SteppingStrategy createUnwind(int depth) {
+        return new Unwind(depth);
+    }
+
+    static SteppingStrategy createUnwind(int depth, Object returnValue) {
         return new Unwind(depth, returnValue);
     }
 
@@ -531,11 +535,15 @@ abstract class SteppingStrategy {
     static final class Unwind extends SteppingStrategy {
 
         private final int depth; // Negative depth
-        private final DebugValue returnValue;
+        private final Object returnValue;
         private int stackCounter;
         ThreadDeath unwind;
 
-        Unwind(int depth, DebugValue returnValue) {
+        Unwind(int depth) {
+            this(depth, null);
+        }
+
+        Unwind(int depth, Object returnValue) {
             this.depth = -depth;
             this.returnValue = returnValue;
         }
@@ -559,7 +567,7 @@ abstract class SteppingStrategy {
         @Override
         Object notifyOnUnwind() {
             if (depth == stackCounter) {
-                return returnValue != null ? returnValue.get() : ProbeNode.UNWIND_ACTION_REENTER;
+                return returnValue != null ? returnValue : ProbeNode.UNWIND_ACTION_REENTER;
             } else {
                 return null;
             }

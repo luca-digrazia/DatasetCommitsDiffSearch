@@ -281,19 +281,19 @@ public final class DebuggerController implements ContextsListener {
         SuspendedInfo susp = suspendedInfos.get(guestThread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             susp.getEvent().prepareUnwindFrame(frameToPop.getDebugStackFrame());
-            setCommandRequestId(guestThread, packetId, SuspendStrategy.EVENT_THREAD, true);
+            setCommandRequestId(guestThread, packetId, SuspendStrategy.NONE, true);
             resume(guestThread, false);
             return true;
         }
         return false;
     }
 
-    public boolean forceEarlyReturn(Object guestThread, CallFrame frameToPop, Object returnValue) {
+    public boolean forceEarlyReturn(Object guestThread, CallFrame frameToPop, Object returnValue, int packetId) {
         SuspendedInfo susp = suspendedInfos.get(guestThread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
-            // Truffle unwind will take us to exactly the right location in the caller method
             susp.getEvent().prepareUnwindFrame(frameToPop.getDebugStackFrame(), returnValue);
-            susp.setForceEarlyReturnInProgress();
+            setCommandRequestId(guestThread, packetId, SuspendStrategy.NONE, true);
+            resume(guestThread, false);
             return true;
         }
         return false;
@@ -333,14 +333,7 @@ public final class DebuggerController implements ContextsListener {
                         if (stepKind != null) {
                             switch (stepKind) {
                                 case STEP_INTO:
-                                    if (!suspendedInfo.isForceEarlyReturnInProgress()) {
-                                        // force early return doesn't trigger any events, so the debugger will send out
-                                        // a step command, to reach the next location, in this case the caller method
-                                        // after the return value has been obtained. Truffle handles this by Unwind
-                                        // and we will already reach the given location without performing the explicit
-                                        // step command, so we shouldn't prepare the event here.
-                                        suspendedInfo.getEvent().prepareStepInto(STEP_CONFIG);
-                                    }
+                                    suspendedInfo.getEvent().prepareStepInto(STEP_CONFIG);
                                     break;
                                 case STEP_OVER:
                                     suspendedInfo.getEvent().prepareStepOver(STEP_CONFIG);
