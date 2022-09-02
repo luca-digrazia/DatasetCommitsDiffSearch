@@ -52,13 +52,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-/**
- * Provides functionality for scanning constant objects.
- *
- * The scanning is done in parallel. The set of visited elements is a special datastructure whose
- * structure can be reused over multiple scanning iterations to save CPU resources. (For details
- * {@link ReusableSet}).
- */
+/** Provides functionality for scanning constant objects. */
 public abstract class ObjectScanner {
 
     protected final BigBang bb;
@@ -112,6 +106,14 @@ public abstract class ObjectScanner {
             }
         }
 
+        if (exec != null) {
+            try {
+                exec.complete();
+            } catch (InterruptedException e) {
+                throw AnalysisError.shouldNotReachHere(e);
+            }
+        }
+
         // scan the constant nodes
         Collection<AnalysisMethod> methods = bb.getUniverse().getMethods();
         if (methodComparator != null) {
@@ -136,6 +138,13 @@ public abstract class ObjectScanner {
                 } else {
                     scanMethod(method);
                 }
+            }
+        }
+        if (exec != null) {
+            try {
+                exec.complete();
+            } catch (InterruptedException e) {
+                throw AnalysisError.shouldNotReachHere(e);
             }
         }
 
@@ -381,17 +390,10 @@ public abstract class ObjectScanner {
         return result;
     }
 
-    /**
-     * Process all consequences for scanned fields. This is done in parallel. Buckets of fields are
-     * emitted into the {@code exec}, to mitigate the calling overhead.
-     *
-     * Processing fields can issue new fields to be scanned so we always add the check for workitems
-     * at the end of the worklist.
-     */
     protected void finish(CompletionExecutor exec) {
         if (exec != null) {
             // We add a task which checks for workitems in the worklist, we keep it adding as long
-            // there are more workitems available.
+            // there are more workitems available
             exec.execute(new CompletionExecutor.DebugContextRunnable() {
                 @Override
                 public void run(DebugContext ignored) {
@@ -473,11 +475,7 @@ public abstract class ObjectScanner {
      * block until release with the object is called.
      */
     public static final class ReusableSet {
-        /**
-         * The storage of atomic integers. During analysis the constant count for rather large
-         * programs such as the JS interpreter are 90k objects. Hence we use 64k as a good start.
-         */
-        private final IdentityHashMap<Object, AtomicInteger> store = new IdentityHashMap<>(65536);
+        private final IdentityHashMap<Object, AtomicInteger> store = new IdentityHashMap<>(50000);
         private int sequence = 0;
 
         public Object putAndAcquire(Object object) {
