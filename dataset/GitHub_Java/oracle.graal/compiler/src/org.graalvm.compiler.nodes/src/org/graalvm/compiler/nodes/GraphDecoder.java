@@ -202,6 +202,7 @@ public class GraphDecoder {
          * not {@link LoopExplosionKind#NONE}.
          */
         public final Node[] initialCreatedNodes;
+        public Node loopCreated;
 
         protected LoopScope(MethodScope methodScope) {
             this.methodScope = methodScope;
