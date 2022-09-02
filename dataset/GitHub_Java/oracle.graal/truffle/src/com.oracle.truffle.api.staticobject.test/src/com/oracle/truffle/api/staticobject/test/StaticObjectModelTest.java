@@ -79,7 +79,7 @@ class StaticObjectModelTest {
     }
 
     static class TestEnvironment {
-        private final boolean arrayBased;
+        final boolean arrayBased;
         final boolean relaxChecks;
         final TruffleLanguage<?> testLanguage;
         final Context context;
@@ -96,14 +96,6 @@ class StaticObjectModelTest {
             context.enter();
             testLanguage = TestLanguage.getCurrentContext().getLanguage();
             context.leave();
-        }
-
-        public boolean isArrayBased() {
-            return arrayBased;
-        }
-
-        public boolean isFieldBased() {
-            return !arrayBased;
         }
 
         public void close() {
