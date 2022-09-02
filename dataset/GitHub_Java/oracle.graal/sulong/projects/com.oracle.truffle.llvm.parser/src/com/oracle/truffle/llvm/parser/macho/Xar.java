@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,40 +31,33 @@ package com.oracle.truffle.llvm.parser.macho;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
-import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
+import com.oracle.truffle.llvm.parser.filereader.ObjectFileReader;
+import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import org.graalvm.polyglot.io.ByteSequence;
-import org.w3c.dom.Document;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+import org.xml.sax.Attributes;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXNotRecognizedException;
+import org.xml.sax.SAXNotSupportedException;
+import org.xml.sax.XMLReader;
+import org.xml.sax.helpers.DefaultHandler;
+
+import javax.xml.parsers.ParserConfigurationException;
 
 public final class Xar {
 
-    private static final long XAR_MAGIC = LLVMScanner.Magic.XAR_MAGIC.magic;
-
     private final XarHeader header;
-    private final XarTOC toc;
+    private final List<XarFile> files;
     private final ByteSequence heap;
 
-    public Xar(XarHeader header, XarTOC toc, ByteSequence heap) {
+    public Xar(XarHeader header, List<XarFile> files, ByteSequence heap) {
         this.header = header;
-        this.toc = toc;
+        this.files = files;
         this.heap = heap;
     }
 
@@ -72,39 +65,35 @@ public final class Xar {
         return header;
     }
 
-    public XarTOC getToc() {
-        return toc;
-    }
-
     public ByteSequence getHeap() {
         return heap;
     }
 
     public static Xar create(ByteSequence bytes) {
-        Reader data = new Reader(bytes, false);
+        ObjectFileReader data = new ObjectFileReader(bytes, false);
         // magic
         data.getInt();
 
         XarHeader header = XarHeader.create(data);
-        XarTOC toc = XarTOC.create(data, header);
+        List<XarFile> files = TocParser.parse(data, header);
         ByteSequence heap = data.slice();
 
-        return new Xar(header, toc, heap);
+        return new Xar(header, files, heap);
     }
 
     public ByteSequence extractBitcode() {
-        List<XarFile> files = getToc().getFiles();
         XarFile embeddedBitcode = null;
         for (XarFile file : files) {
             if (file.fileType.equals("LTO")) {
                 if (embeddedBitcode != null) {
-                    throw new RuntimeException("More than one Bitcode file in embedded archive!");
+                    throw new LLVMParserException("More than one Bitcode file in embedded archive!");
                 }
                 embeddedBitcode = file;
             }
         }
         if (embeddedBitcode == null) {
-            throw new RuntimeException("No Bitcode file in embedded archive!");
+            // No Bitcode file in embedded archive!
+            return null;
         }
         return heap.subSequence((int) embeddedBitcode.offset, (int) (embeddedBitcode.offset + embeddedBitcode.size));
     }
@@ -145,7 +134,7 @@ public final class Xar {
             return checksumAlgo;
         }
 
-        public static XarHeader create(Reader data) {
+        public static XarHeader create(ObjectFileReader data) {
             short size = data.getShort();
             short version = data.getShort();
             long tocComprSize = data.getLong();
@@ -156,92 +145,118 @@ public final class Xar {
         }
     }
 
-    public static final class XarFile {
-        private final String name;
+    private static final class XarFile {
+        @SuppressWarnings("unused") private final String name;
         private final String fileType;
         private final long offset;
         private final long size;
 
-        public XarFile(String name, String fileType, long offset, long size) {
+        XarFile(String name, String fileType, long offset, long size) {
             this.size = size;
             this.offset = offset;
             this.fileType = fileType;
             this.name = name;
         }
+    }
 
-        static XarFile create(Node node) {
-            String name = null;
-            String fileType = null;
-            long offset = -1;
-            long size = -1;
-            long length = -1;
+    private static final class XarFileBuilder {
+        private String name = null;
+        private String fileType = null;
+        private long offset = -1;
+        private long size = -1;
+        private long length = -1;
 
-            for (Node child = node.getChildNodes().item(0); child != null; child = child.getNextSibling()){
-                switch (child.getNodeName()) {
-                    case "name":
-                        name = child.getTextContent();
-                        break;
-                    case "file-type":
-                        fileType = child.getTextContent();
-                        break;
-                    case "data":
-                        for (Node dataNode = child.getChildNodes().item(0); dataNode != null; dataNode = dataNode.getNextSibling()) {
-                            switch (dataNode.getNodeName()) {
-                                case "offset":
-                                    offset = Long.parseUnsignedLong(dataNode.getTextContent());
-                                    break;
-                                case "length":
-                                    length = Long.parseUnsignedLong(dataNode.getTextContent());
-                                    break;
-                                case "size":
-                                    size = Long.parseUnsignedLong(dataNode.getTextContent());
-                                    break;
-                            }
-                        }
-                        break;
-                }
-            }
+        private XarFile create() {
             if (name == null) {
-                throw new RuntimeException("Missing name tag!");
+                throw new LLVMParserException("Missing name tag!");
             }
             if (fileType == null) {
-                throw new RuntimeException("Missing file-type tag!");
+                throw new LLVMParserException("Missing file-type tag!");
             }
             if (size < 0) {
-                throw new RuntimeException("Missing size tag!");
+                throw new LLVMParserException("Missing size tag!");
             }
             if (length < 0) {
-                throw new RuntimeException("Missing length tag!");
+                throw new LLVMParserException("Missing length tag!");
             }
             if (length != size) {
-                throw new RuntimeException("Length does not match size. (compressed files not supported)");
+                throw new LLVMParserException("Length does not match size. (compressed files not supported)");
             }
             return new XarFile(name, fileType, offset, size);
         }
     }
 
-    public static final class XarTOC {
+    private static final class TocParser extends DefaultHandler {
+        private XarFileBuilder fileBuilder = null;
+        private String lastTag;
+        private List<XarFile> files = new ArrayList<>();
 
-        private final Document tableOfContents;
-
-        private XarTOC(Document toc) {
-            this.tableOfContents = toc;
-        }
-
-        public Document getTableOfContents() {
-            return tableOfContents;
-        }
-
-        public List<XarFile> getFiles() {
-            NodeList files = tableOfContents.getElementsByTagName("file");
-            List<XarFile> xarFiles = new ArrayList<>();
-            for (int i = 0; i < files.getLength(); i++) {
-                xarFiles.add(XarFile.create(files.item(i)));
+        @Override
+        public void startElement(String namespaceURI, String localName, String qName, Attributes atts) throws SAXException {
+            if (qName.equals("file")) {
+                if (fileBuilder != null) {
+                    throw new LLVMParserException("Only flat xar archives are supported!");
+                }
+                fileBuilder = new XarFileBuilder();
+            } else if (fileBuilder != null) {
+                lastTag = qName;
             }
-            return xarFiles;
         }
 
-        public static XarTOC create(Reader data, XarHeader header) {
+        @Override
+        public void characters(char[] ch, int start, int length) throws SAXException {
+            if (fileBuilder != null && lastTag != null) {
+                switch (lastTag) {
+                    case "name":
+                        fileBuilder.name = new String(ch, start, length);
+                        break;
+                    case "file-type":
+                        fileBuilder.fileType = new String(ch, start, length);
+                        break;
+                    case "offset":
+                        fileBuilder.offset = Long.parseUnsignedLong(new String(ch, start, length));
+                        break;
+                    case "length":
+                        fileBuilder.length = Long.parseUnsignedLong(new String(ch, start, length));
+                        break;
+                    case "size":
+                        fileBuilder.size = Long.parseUnsignedLong(new String(ch, start, length));
+                        break;
+                }
+            }
+        }
+
+        @Override
+        public void endElement(String namespaceURI, String localName, String qName) throws SAXException {
+            if (qName.equals("file")) {
+                if (fileBuilder != null) {
+                    files.add(fileBuilder.create());
+                }
+                fileBuilder = null;
+            }
+            lastTag = null;
+        }
+
+        // uses fully qualified name to prevent mx to add "require java.xml" when compiling on JDK9
+        private static final javax.xml.parsers.SAXParserFactory PARSER_FACTORY;
+
+        static {
+            PARSER_FACTORY = javax.xml.parsers.SAXParserFactory.newInstance();
+            try {
+                PARSER_FACTORY.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+                PARSER_FACTORY.setFeature("http://xml.org/sax/features/external-general-entities", false);
+                PARSER_FACTORY.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+                PARSER_FACTORY.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+                PARSER_FACTORY.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+                PARSER_FACTORY.setXIncludeAware(false);
+                PARSER_FACTORY.setNamespaceAware(false);
+            } catch (ParserConfigurationException | SAXNotRecognizedException | SAXNotSupportedException e) {
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+
+        private static List<XarFile> parse(ObjectFileReader data, XarHeader header) {
             int comprSize = (int) header.getTocComprSize();
             int uncomprSize = (int) header.getTocUncomprSize();
 
@@ -255,30 +270,19 @@ public final class Xar {
             try {
                 decompresser.inflate(uncompressedData);
             } catch (DataFormatException e) {
-                throw new RuntimeException("DataFormatException when decompressing xar table of contents!");
+                throw new LLVMParserException("DataFormatException when decompressing xar table of contents!");
             }
             decompresser.end();
 
             try {
-                Document xmlTOC = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new ByteArrayInputStream(uncompressedData));
-                return new XarTOC(xmlTOC);
-            } catch (SAXException | IOException | ParserConfigurationException e1) {
-                throw new RuntimeException("Could not parse xar table of contents xml!");
+                XMLReader xmlReader = PARSER_FACTORY.newSAXParser().getXMLReader();
+                TocParser parser = new TocParser();
+                xmlReader.setContentHandler(parser);
+                xmlReader.parse(new InputSource(new ByteArrayInputStream(uncompressedData)));
+                return parser.files;
+            } catch (SAXException | IOException | javax.xml.parsers.ParserConfigurationException e1) {
+                throw new LLVMParserException("Could not parse xar table of contents xml!");
             }
-
         }
-    }
-
-    public static void printDocument(Document doc, OutputStream out) throws IOException, TransformerException {
-        TransformerFactory tf = TransformerFactory.newInstance();
-        Transformer transformer = tf.newTransformer();
-        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
-        transformer.setOutputProperty(OutputKeys.METHOD, "xml");
-        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-        transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
-        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
-
-        transformer.transform(new DOMSource(doc),
-                        new StreamResult(new OutputStreamWriter(out, "UTF-8")));
     }
 }
