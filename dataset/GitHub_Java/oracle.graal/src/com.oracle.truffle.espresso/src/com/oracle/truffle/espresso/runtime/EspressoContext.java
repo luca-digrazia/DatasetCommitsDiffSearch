@@ -268,11 +268,6 @@ public final class EspressoContext {
 
         initVmProperties();
 
-        if (getJavaVersion() >= 9) {
-            registries.initJavaBaseModule();
-            registries.getBootClassRegistry().initUnnamedModule(StaticObject.NULL);
-        }
-
         // Spawn JNI first, then the VM.
         this.vm = VM.create(getJNI()); // Mokapot is loaded
 

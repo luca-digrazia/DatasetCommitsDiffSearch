@@ -33,7 +33,6 @@ import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_2;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_4;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_6;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_8;
-import static com.oracle.truffle.espresso.meta.EspressoError.cat;
 import static com.oracle.truffle.espresso.runtime.Classpath.JAVA_BASE;
 import static com.oracle.truffle.espresso.runtime.EspressoContext.DEFAULT_STACK_SIZE;
 
@@ -223,7 +222,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         /* verifyLibrary = */ loadLibraryInternal(bootLibraryPath, "verify", false);
         TruffleObject libJava = loadLibraryInternal(bootLibraryPath, "java");
 
-        if (getContext().getJavaVersion() >= 9) {
+        if (getContext().getJavaVersion() > 8) {
             return libJava;
         }
 
@@ -278,7 +277,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
             getPackageAt = NativeLibrary.lookupAndBind(mokapotLibrary,
                             "getPackageAt",
-                            "(pointer, sint32): pointer");
+                            "(env, pointer, sint32): pointer");
 
             this.vmPtr = (TruffleObject) getUncached().execute(initializeMokapotContext, jniEnv.getNativePointer(), lookupVmImplCallback);
             assert getUncached().isPointer(this.vmPtr);
@@ -323,10 +322,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     private static final int JVM_CALLER_DEPTH = -1;
-
-    public static int jvmCallerDepth() {
-        return JVM_CALLER_DEPTH;
-    }
 
     public static final int LOOKUP_VM_IMPL_PARAMETER_COUNT = 1;
 
@@ -2364,7 +2359,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     public void JVM_AddModuleExportsToAll(@Host(typeName = "Ljava/lang/Module") StaticObject from_module, @Pointer TruffleObject pkgName,
                     @InjectProfile SubstitutionProfiler profiler) {
-        ModulesHelperVM.addModuleExports(from_module, pkgName, StaticObject.NULL, getMeta(), getUncached(), profiler);
+        ModulesHelperVM.addModuleExports(from_module, pkgName, null, getMeta(), getUncached(), profiler);
     }
 
     @VmImpl
@@ -2378,8 +2373,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
     }
 
-    private static final String MODULES = "modules";
-
     @VmImpl
     @JniImpl
     public void JVM_DefineModule(@Host(typeName = "Ljava/lang/Module") StaticObject module,
@@ -2389,98 +2382,77 @@ public final class VM extends NativeEnv implements ContextAccess {
                     @Pointer TruffleObject pkgs,
                     int num_package,
                     @InjectProfile SubstitutionProfiler profiler) {
+        // Arguments check
         if (StaticObject.isNull(module)) {
-            profiler.profile(0);
             throw getMeta().throwNullPointerException();
         }
         if (num_package < 0) {
-            profiler.profile(1);
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "num_package must be >= 0");
+            throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
         }
         if (getUncached().isNull(pkgs) && num_package > 0) {
-            profiler.profile(2);
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "num_packages must be 0 if packages is null");
+            throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
         }
         if (!getMeta().java_lang_Module.isAssignableFrom(module.getKlass())) {
-            profiler.profile(3);
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "module is not an instance of java.lang.Module");
+            throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
         }
 
         StaticObject guestName = module.getField(getMeta().java_lang_Module_name);
         if (StaticObject.isNull(guestName)) {
-            profiler.profile(4);
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "modue name cannot be null");
+            throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
         }
-
         String hostName = Meta.toHostString(guestName);
         if (hostName.equals(JAVA_BASE)) {
-            profiler.profile(5);
-            defineJavaBaseModule(module, pkgs, num_package, profiler);
+            defineJavaBaseModule(module, pkgs, num_package);
             return;
         }
-        profiler.profile(6);
-        defineModule(module, hostName, is_open, pkgs, num_package, profiler);
+        defineModule(module, hostName, is_open, pkgs, num_package);
     }
 
-    private void defineModule(StaticObject module,
-                    String moduleName,
-                    boolean is_open,
-                    TruffleObject pkgs,
-                    int num_package,
-                    SubstitutionProfiler profiler) {
+    private static final String MODULES = "modules";
+
+    private void defineModule(StaticObject module, String moduleName, boolean is_open, TruffleObject pkgs, int num_package) {
         StaticObject loader = module.getField(getMeta().java_lang_Module_loader);
         if (loader != nonReflectionClassLoader(loader)) {
-            profiler.profile(15);
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "Class loader is an invalid delegating class loader");
+            throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
         }
-
-        // Prepare variables
         ClassRegistry registry = getRegistries().getClassRegistry(loader);
         assert registry != null;
         PackageTable packageTable = registry.packages();
         ModuleTable moduleTable = registry.modules();
         assert moduleTable != null && packageTable != null;
-        boolean loaderIsBootOrPlatform = StaticObject.isNull(loader) || getMeta().jdk_internal_ClassLoaders_PlatformClassLoader.isAssignableFrom(loader.getKlass());
+        boolean loaderIsBootOrPlatform = StaticObject.isNull(loader) && !getMeta().jdk_internal_ClassLoaders_PlatformClassLoader.isAssignableFrom(loader.getKlass());
 
         ArrayList<Symbol<Name>> pkgSymbols = new ArrayList<>();
-        String[] packages = extractNativePackages(pkgs, num_package, profiler);
+        String[] packages = extractNativePackages(pkgs, num_package);
         synchronized (packageTable.getLock()) {
             for (String str : packages) {
                 // Extract the package symbols. Also checks for duplicates.
                 if (!loaderIsBootOrPlatform && str.startsWith("java/")) {
                     // Only modules defined to either the boot or platform class loader, can define
                     // a "java/" package.
-                    profiler.profile(14);
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException,
-                                    cat("Class loader (", loader.getKlass().getType(), ") tried to define prohibited package name: ", str));
+                    throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
                 }
                 Symbol<Name> symbol = getNames().getOrCreate(str);
                 if (packageTable.lookup(symbol) != null) {
-                    profiler.profile(13);
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException,
-                                    cat("Package ", str, " is already defined."));
+                    throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
                 }
                 pkgSymbols.add(symbol);
             }
             Symbol<Name> moduleSymbol = getNames().getOrCreate(moduleName);
             // Try define module
-            ModuleEntry moduleEntry = moduleTable.createAndAddEntry(moduleSymbol, registry, is_open, module);
+            ModuleEntry moduleEntry = moduleTable.createAndAddEntry(moduleSymbol, registry, module);
             if (moduleEntry == null) {
                 // Module already defined
-                profiler.profile(12);
-                throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException,
-                                cat("Module ", moduleName, " is already defined"));
+                throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
             }
             // Register packages
-            for (Symbol<Name> pkgSymbol : pkgSymbols) {
-                PackageEntry pkgEntry = packageTable.createAndAddEntry(pkgSymbol, moduleEntry);
-                assert pkgEntry != null; // should have been checked before
+            for (Symbol<Name> p : pkgSymbols) {
+                PackageEntry pkgEntry = packageTable.createAndAddEntry(p, moduleEntry);
             }
             // Link guest module to its host representation
             module.setField(getMeta().HIDDEN_MODULE_ENTRY, moduleEntry);
         }
         if (StaticObject.isNull(loader) && getContext().getVmProperties().bootClassPathType().isExplodedModule()) {
-            profiler.profile(11);
             // If we have an exploded build, and the module is defined to the bootloader, prepend a
             // class path entry for this module.
             Path path = getContext().getVmProperties().javaHome().resolve(MODULES).resolve(moduleName);
@@ -2492,15 +2464,13 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
     }
 
-    private String[] extractNativePackages(TruffleObject pkgs, int numPackages, SubstitutionProfiler profiler) {
+    private String[] extractNativePackages(TruffleObject pkgs, int numPackages) {
         String[] packages = new String[numPackages];
         try {
             for (int i = 0; i < numPackages; i++) {
                 String pkg = interopPointerToString((TruffleObject) getUncached().execute(getPackageAt, pkgs, i));
                 if (!Validation.validBinaryName(pkg)) {
-                    profiler.profile(7);
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException,
-                                    cat("Invalid package name: ", pkg));
+                    throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
                 }
                 packages[i] = pkg;
             }
@@ -2510,19 +2480,16 @@ public final class VM extends NativeEnv implements ContextAccess {
         return packages;
     }
 
-    private void defineJavaBaseModule(StaticObject module, TruffleObject pkgs, int numPackages, SubstitutionProfiler profiler) {
-        String[] packages = extractNativePackages(pkgs, numPackages, profiler);
+    private void defineJavaBaseModule(StaticObject module, TruffleObject pkgs, int numPackages) {
+        String[] packages = extractNativePackages(pkgs, numPackages);
         StaticObject loader = module.getField(getMeta().java_lang_Module_loader);
         if (!StaticObject.isNull(loader)) {
-            profiler.profile(10);
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException,
-                            "Class loader must be the bootclass loader");
+            throw Meta.throwException(getMeta().java_lang_IllegalArgumentException);
         }
         PackageTable pkgTable = getRegistries().getBootClassRegistry().packages();
         ModuleEntry javaBaseEntry = getRegistries().getJavaBaseModule();
         synchronized (pkgTable.getLock()) {
             if (getRegistries().javaBaseDefined()) {
-                profiler.profile(9);
                 throw Meta.throwException(getMeta().java_lang_InternalError);
             }
             for (String pkg : packages) {
@@ -2558,20 +2525,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     // endregion Modules
-
-    // region java11
-
-    @VmImpl
-    @JniImpl
-    public StaticObject JVM_GetAndClearReferencePendingList() {
-        return StaticObject.NULL;
-    }
-
-    @VmImpl
-    @JniImpl
-    public void JVM_WaitForReferencePendingList() {
-        return;
-    }
 
     // Checkstyle: resume method name check
 }

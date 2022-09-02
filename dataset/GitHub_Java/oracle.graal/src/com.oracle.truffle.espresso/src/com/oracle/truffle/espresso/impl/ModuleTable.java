@@ -42,13 +42,12 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
         return new ModuleEntry(name, registry);
     }
 
-    public ModuleEntry createAndAddEntry(Symbol<Name> name, ClassRegistry registry, boolean isOpen, StaticObject module) {
+    public ModuleEntry createAndAddEntry(Symbol<Name> name, ClassRegistry registry, StaticObject module) {
         ModuleEntry moduleEntry = createAndAddEntry(name, registry);
         if (moduleEntry == null) {
             return null;
         }
         moduleEntry.setModule(module);
-        moduleEntry.isOpen = isOpen;
         return moduleEntry;
     }
 
@@ -76,7 +75,7 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
         }
 
         private final ClassRegistry registry;
-        private StaticObject module = StaticObject.NULL;
+        private StaticObject module;
         private boolean canReadAllUnnamed = false;
         private boolean isOpen = false;
 

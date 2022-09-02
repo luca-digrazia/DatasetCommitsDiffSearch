@@ -59,9 +59,6 @@ public final class ClassRegistries {
         this.context = context;
         this.bootClassRegistry = new BootClassRegistry(context);
         this.constraints = new LoadingConstraints(context);
-    }
-
-    public void initJavaBaseModule() {
         this.javaBaseModule = bootClassRegistry.modules().createAndAddEntry(Symbol.Name.java_base, bootClassRegistry);
     }
 
@@ -106,7 +103,7 @@ public final class ClassRegistries {
     }
 
     public boolean javaBaseDefined() {
-        return javaBaseModule != null && javaBaseModule.module() != null;
+        return javaBaseModule != null && !StaticObject.isNull(javaBaseModule.module());
     }
 
     @TruffleBoundary

@@ -23,7 +23,7 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -33,45 +33,21 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
 
     protected abstract T createEntry(Symbol<Name> name, K data);
 
-    private final HashMap<Symbol<Name>, T> entries = new HashMap<>();
+    private final ArrayList<T> entries = new ArrayList<>();
 
-    public abstract static class NamedEntry {
-        protected NamedEntry(Symbol<Name> name) {
-            this.name = name;
-        }
-
-        protected final Symbol<Name> name;
-
-        Symbol<Name> getName() {
-            return name;
-        }
-
-        @Override
-        public int hashCode() {
-            return name.hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof NamedEntry) {
-                return ((NamedEntry) obj).getName().equals(this.getName());
-            }
-            return false;
-        }
+    public interface NamedEntry {
+        Symbol<Name> getName();
     }
 
-    /**
-     * Lookups the EntryTable for the given name. Returns the corresponding entry if it exists, null
-     * otherwise.
-     */
     public T lookup(Symbol<Name> name) {
-        return entries.get(name);
+        for (T entry : entries) {
+            if (entry.getName().equals(name)) {
+                return entry;
+            }
+        }
+        return null;
     }
 
-    /**
-     * Lookups the EntryTable for the given name. If an entry is found, returns it. Else, an entry
-     * is created and added into the table. This entry is then returned.
-     */
     public T lookupOrCreate(Symbol<Name> name, K data) {
         T entry = lookup(name);
         if (entry != null) {
@@ -86,10 +62,6 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
         }
     }
 
-    /**
-     * Created and adds an entry in the table. If an entry already exists, this is a nop, and
-     * returns null
-     */
     public T createAndAddEntry(Symbol<Name> name, K data) {
         synchronized (getLock()) {
             if (lookup(name) != null) {
@@ -99,9 +71,9 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
         }
     }
 
-    private T addEntry(Symbol<Name> name, K data) {
-        T entry = createEntry(name, data);
-        entries.put(name, entry);
+    private T addEntry(Symbol<Name> pkg, K data) {
+        T entry = createEntry(pkg, data);
+        entries.add(entry);
         return entry;
     }
 
