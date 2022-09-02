@@ -805,7 +805,10 @@ public final class MethodVerifier implements ContextAccess {
         }
     }
 
-    private static class WorkingQueue {
+    // TODO(garcia) implement instruction stack to visit, to avoid stack overflows from recursively
+    // finding fixed points.
+
+    private class WorkingQueue {
         QueueElement first;
         QueueElement last;
 
@@ -831,6 +834,10 @@ public final class MethodVerifier implements ContextAccess {
             } else {
                 // if we are here, we already failed to merge.
                 replace(current, elem);
+                /*
+                 * StackFrame newFrame = mergeFrames(stack, locals, current.frame); if (newFrame !=
+                 * current.frame) { replace(current, new QueueElement(BCI, newFrame)); }
+                 */
             }
         }
 
@@ -908,7 +915,7 @@ public final class MethodVerifier implements ContextAccess {
         Stack stack = new Stack(maxStack);
         Locals locals = new Locals(this);
         startVerify(0, stack, locals);
-        do {
+        while (!queue.isEmpty()) {
             while (!queue.isEmpty()) {
                 QueueElement toVerify = queue.pop();
                 calledConstructor = toVerify.constructorCalled;
@@ -918,7 +925,7 @@ public final class MethodVerifier implements ContextAccess {
             }
             // Performs verification of reachable handlers
             verifyExceptionHandlers();
-        } while (!queue.isEmpty());
+        }
 
         // Verifies that each bytecode is reachable by control flow.
         verifyReachability();
