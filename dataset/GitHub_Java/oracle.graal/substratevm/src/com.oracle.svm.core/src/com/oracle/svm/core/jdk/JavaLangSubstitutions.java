@@ -200,7 +200,7 @@ final class Target_java_lang_Throwable {
     @Substitute
     @NeverInline("Starting a stack walk in the caller frame")
     private Object fillInStackTrace() {
-        stackTrace = StackTraceUtils.getStackTrace(true, KnownIntrinsics.readCallerStackPointer());
+        stackTrace = StackTraceUtils.getStackTrace(true, KnownIntrinsics.readCallerStackPointer(), KnownIntrinsics.readReturnAddress());
         return this;
     }
 
@@ -544,26 +544,6 @@ final class Target_java_lang_Compiler {
         throw new IllegalArgumentException("Argument to java.lang.Compiler.command(Object) must be an Object[] " +
                         "with the first element being a String providing the name of the SVM command to run " +
                         "and subsequent elements being the arguments to the command");
-    }
-
-    @SuppressWarnings({"unused"})
-    @Substitute
-    static boolean compileClass(Class<?> clazz) {
-        return false;
-    }
-
-    @SuppressWarnings({"unused"})
-    @Substitute
-    static boolean compileClasses(String string) {
-        return false;
-    }
-
-    @Substitute
-    static void enable() {
-    }
-
-    @Substitute
-    static void disable() {
     }
 }
 
