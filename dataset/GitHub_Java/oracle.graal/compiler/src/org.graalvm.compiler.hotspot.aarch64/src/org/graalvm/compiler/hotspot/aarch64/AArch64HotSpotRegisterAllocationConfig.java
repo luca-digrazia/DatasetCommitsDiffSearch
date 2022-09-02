@@ -48,6 +48,7 @@ import static jdk.vm.ci.aarch64.AArch64.r28;
 import static jdk.vm.ci.aarch64.AArch64.r29;
 import static jdk.vm.ci.aarch64.AArch64.r3;
 import static jdk.vm.ci.aarch64.AArch64.r30;
+import static jdk.vm.ci.aarch64.AArch64.r31;
 import static jdk.vm.ci.aarch64.AArch64.r4;
 import static jdk.vm.ci.aarch64.AArch64.r5;
 import static jdk.vm.ci.aarch64.AArch64.r6;
@@ -113,7 +114,7 @@ public class AArch64HotSpotRegisterAllocationConfig extends RegisterAllocationCo
         r0,  r1,  r2,  r3,  r4,  r5,  r6,  r7,
         r8,  r9,  r10, r11, r12, r13, r14, r15,
         r16, r17, r18, r19, r20, r21, r22, r23,
-        r24, r25, r26, /*r27,*/ r28, r29, r30, /*sp,*/ /*zr,*/
+        r24, r25, r26, /* r27, */ r28, r29, r30, r31,
 
         v0,  v1,  v2,  v3,  v4,  v5,  v6,  v7,
         v8,  v9,  v10, v11, v12, v13, v14, v15,
@@ -122,11 +123,8 @@ public class AArch64HotSpotRegisterAllocationConfig extends RegisterAllocationCo
     };
     // @formatter:on
 
-    private final boolean preserveFramePointer;
-
-    public AArch64HotSpotRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo, boolean preserveFramePointer) {
+    public AArch64HotSpotRegisterAllocationConfig(RegisterConfig registerConfig, String[] allocationRestrictedTo) {
         super(registerConfig, allocationRestrictedTo);
-        this.preserveFramePointer = preserveFramePointer;
     }
 
     @Override
@@ -134,9 +132,6 @@ public class AArch64HotSpotRegisterAllocationConfig extends RegisterAllocationCo
         BitSet regMap = new BitSet(registerConfig.getAllocatableRegisters().size());
         for (Register reg : registers) {
             regMap.set(reg.number);
-        }
-        if (preserveFramePointer) {
-            regMap.clear(r29.number);
         }
 
         ArrayList<Register> allocatableRegisters = new ArrayList<>(registers.size());
