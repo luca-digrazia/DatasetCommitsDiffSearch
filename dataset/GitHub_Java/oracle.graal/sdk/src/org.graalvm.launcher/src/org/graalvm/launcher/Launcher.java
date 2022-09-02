@@ -1089,12 +1089,6 @@ public abstract class Launcher {
 
     private static final String CLASSPATH = System.getProperty("org.graalvm.launcher.classpath");
 
-    @SuppressWarnings("unused")
-    @Deprecated
-    protected final void maybeNativeExec(List<String> args, boolean isPolyglotLauncher, Map<String, String> polyglotOptions) {
-        maybeNativeExec(args, args, isPolyglotLauncher);
-    }
-
     /**
      * Possibly re-executes the launcher when JVM or polyglot mode is requested; call only if
      * {@link #isAOT()} is true. If the result is to run native, then it applies VM options on the
@@ -1179,7 +1173,7 @@ public abstract class Launcher {
                 applicationArgs.add(0, "--polyglot");
             }
             assert !isStandalone();
-            executeJVM(nativeAccess == null ? System.getProperty("java.class.path") : nativeAccess.getClasspath(jvmArgs), jvmArgs, applicationArgs, Collections.emptyMap());
+            executeJVM(nativeAccess == null ? System.getProperty("java.class.path") : nativeAccess.getClasspath(jvmArgs), jvmArgs, applicationArgs);
         } else {
             assert vmType == VMType.Native;
 
@@ -1197,15 +1191,9 @@ public abstract class Launcher {
                 if (isStandalone()) {
                     throw abort("--polyglot option is only supported when this launcher is part of a GraalVM.");
                 }
-                executePolyglot(applicationArgs, Collections.emptyMap(), !isDefaultVMType);
+                executePolyglot(applicationArgs, !isDefaultVMType);
             }
         }
-    }
-
-    @SuppressWarnings("unused")
-    @Deprecated
-    protected void executeJVM(String classpath, List<String> jvmArgs, List<String> remainingArgs, Map<String, String> polyglotOptions) {
-        executeJVM(classpath, jvmArgs, remainingArgs);
     }
 
     /**
@@ -1218,12 +1206,6 @@ public abstract class Launcher {
      */
     protected void executeJVM(String classpath, List<String> jvmArgs, List<String> remainingArgs) {
         nativeAccess.execJVM(classpath, jvmArgs, remainingArgs);
-    }
-
-    @SuppressWarnings("unused")
-    @Deprecated
-    protected void executePolyglot(List<String> mainArgs, Map<String, String> polyglotOptions, boolean forceNative) {
-        executePolyglot(mainArgs, forceNative);
     }
 
     /**
