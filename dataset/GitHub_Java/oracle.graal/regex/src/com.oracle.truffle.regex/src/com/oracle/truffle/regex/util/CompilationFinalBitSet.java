@@ -40,6 +40,10 @@
  */
 package com.oracle.truffle.regex.util;
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.regex.tregex.util.DebugUtil;
+
 import java.util.Arrays;
 import java.util.PrimitiveIterator;
 import java.util.Spliterator;
@@ -47,44 +51,31 @@ import java.util.Spliterators;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-
 /**
  * Immutable Bit Set implementation, with a lot of code shamelessly ripped from
  * {@link java.util.BitSet}.
  */
 public class CompilationFinalBitSet implements Iterable<Integer> {
 
-    private static final CompilationFinalBitSet[] STATIC_INSTANCES = new CompilationFinalBitSet[16];
-
-    static {
-        for (int i = 0; i < STATIC_INSTANCES.length; i++) {
-            STATIC_INSTANCES[i] = new CompilationFinalBitSet(new long[]{i});
-        }
-    }
+    private static final int BYTE_RANGE = 256;
+    private static final CompilationFinalBitSet EMPTY_INSTANCE = new CompilationFinalBitSet(1);
 
     private static int wordIndex(int i) {
         return i >> 6;
     }
 
     public static CompilationFinalBitSet valueOf(int... values) {
-        assert values.length > 0;
-        CompilationFinalBitSet bs = new CompilationFinalBitSet(values[values.length - 1]);
+        CompilationFinalBitSet bs = new CompilationFinalBitSet(BYTE_RANGE);
         for (int v : values) {
             bs.set(v);
         }
         return bs;
     }
 
-    public static long[] createBitSetArray(int nbits) {
-        return new long[wordIndex(nbits - 1) + 1];
-    }
-
     @CompilationFinal(dimensions = 1) private long[] words;
 
     public CompilationFinalBitSet(int nbits) {
-        this.words = createBitSetArray(nbits);
+        this.words = new long[wordIndex(nbits - 1) + 1];
     }
 
     public CompilationFinalBitSet(long[] words) {
@@ -96,27 +87,7 @@ public class CompilationFinalBitSet implements Iterable<Integer> {
     }
 
     public static CompilationFinalBitSet getEmptyInstance() {
-        return STATIC_INSTANCES[0];
-    }
-
-    public static CompilationFinalBitSet getStaticInstance(int i) {
-        return STATIC_INSTANCES[i];
-    }
-
-    public static int getNumberOfStaticInstances() {
-        return STATIC_INSTANCES.length;
-    }
-
-    public int getStaticCacheKey() {
-        for (int i = 1; i < words.length; i++) {
-            if (words[i] != 0) {
-                return -1;
-            }
-        }
-        if (words.length == 0) {
-            return 0;
-        }
-        return 0 <= words[0] && words[0] < STATIC_INSTANCES.length ? (int) words[0] : -1;
+        return EMPTY_INSTANCE;
     }
 
     public CompilationFinalBitSet copy() {
@@ -240,32 +211,7 @@ public class CompilationFinalBitSet implements Iterable<Integer> {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj == this) {
-            return true;
-        }
-        if (!(obj instanceof CompilationFinalBitSet)) {
-            return false;
-        }
-        CompilationFinalBitSet o = (CompilationFinalBitSet) obj;
-        if (words.length == o.words.length) {
-            return Arrays.equals(words, o.words);
-        }
-        for (int i = 0; i < Math.min(words.length, o.words.length); i++) {
-            if (words[i] != o.words[i]) {
-                return false;
-            }
-        }
-        for (int i = words.length; i < o.words.length; i++) {
-            if (words[i] != 0) {
-                return false;
-            }
-        }
-        for (int i = o.words.length; i < words.length; i++) {
-            if (o.words[i] != 0) {
-                return false;
-            }
-        }
-        return true;
+        return obj == this || (obj instanceof CompilationFinalBitSet && Arrays.equals(words, ((CompilationFinalBitSet) obj).words));
     }
 
     @Override
@@ -349,32 +295,24 @@ public class CompilationFinalBitSet implements Iterable<Integer> {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("[ ");
-        int last = -2;
-        int rangeBegin = -2;
-        for (int b : this) {
-            if (b != last + 1) {
-                appendRange(sb, rangeBegin, last);
-                rangeBegin = b;
-            }
-            last = b;
-        }
-        appendRange(sb, rangeBegin, last);
-        sb.append(']');
-        return sb.toString();
-    }
-
-    @TruffleBoundary
-    private static void appendRange(StringBuilder sb, int rangeBegin, int last) {
-        if (rangeBegin >= 0 && rangeBegin < last) {
-            sb.append(String.format("%02x", rangeBegin));
-            if (rangeBegin + 1 < last) {
-                sb.append("-");
-            } else {
+        int b = 0;
+        while (b < BYTE_RANGE) {
+            if (get(b)) {
+                sb.append(DebugUtil.charToString(b));
+                int seq = 0;
+                while (b + 1 < BYTE_RANGE && get(b + 1)) {
+                    b++;
+                    seq++;
+                }
+                if (seq > 0) { // ABC -> [A-C]
+                    sb.append('-');
+                    sb.append(DebugUtil.charToString(b));
+                }
                 sb.append(" ");
             }
+            b++;
         }
-        if (last >= 0) {
-            sb.append(String.format("%02x ", last));
-        }
+        sb.append(']');
+        return sb.toString();
     }
 }
