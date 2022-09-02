@@ -598,7 +598,7 @@ public class BasicNodeFactory implements NodeFactory {
             case I64:
                 return LLVMI64RMWNodeFactory.LLVMI64RMWXchgNodeGen.create(pointerNode, valueNode);
             default:
-                throw new AssertionError("unsupported for atomicrmw xchg: " + type);
+                throw new AssertionError(type);
         }
     }
 
@@ -616,7 +616,7 @@ public class BasicNodeFactory implements NodeFactory {
             case I64:
                 return LLVMI64RMWNodeFactory.LLVMI64RMWAddNodeGen.create(pointerNode, valueNode);
             default:
-                throw new AssertionError("unsupported add atomicrmw xchg: " + type);
+                throw new AssertionError(type);
         }
     }
 
@@ -634,7 +634,7 @@ public class BasicNodeFactory implements NodeFactory {
             case I64:
                 return LLVMI64RMWNodeFactory.LLVMI64RMWSubNodeGen.create(pointerNode, valueNode);
             default:
-                throw new AssertionError("unsupported sub atomicrmw xchg: " + type);
+                throw new AssertionError(type);
         }
     }
 
@@ -652,7 +652,7 @@ public class BasicNodeFactory implements NodeFactory {
             case I64:
                 return LLVMI64RMWNodeFactory.LLVMI64RMWAndNodeGen.create(pointerNode, valueNode);
             default:
-                throw new AssertionError("unsupported for atomicrmw and: " + type);
+                throw new AssertionError(type);
         }
     }
 
@@ -670,7 +670,7 @@ public class BasicNodeFactory implements NodeFactory {
             case I64:
                 return LLVMI64RMWNodeFactory.LLVMI64RMWNandNodeGen.create(pointerNode, valueNode);
             default:
-                throw new AssertionError("unsupported for atomicrmw nand: " + type);
+                throw new AssertionError(type);
         }
     }
 
@@ -688,7 +688,7 @@ public class BasicNodeFactory implements NodeFactory {
             case I64:
                 return LLVMI64RMWNodeFactory.LLVMI64RMWOrNodeGen.create(pointerNode, valueNode);
             default:
-                throw new AssertionError("unsupported for atomicrmw or: " + type);
+                throw new AssertionError(type);
         }
     }
 
@@ -706,7 +706,7 @@ public class BasicNodeFactory implements NodeFactory {
             case I64:
                 return LLVMI64RMWNodeFactory.LLVMI64RMWXorNodeGen.create(pointerNode, valueNode);
             default:
-                throw new AssertionError("unsupported for atomicrmw xor: " + type);
+                throw new AssertionError(type);
         }
     }
 

@@ -135,12 +135,12 @@ public abstract class ConstantPool {
 
     static VerifyError verifyError(String message) {
         CompilerDirectives.transferToInterpreter();
-        throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(VerifyError.class, message);
+        throw new VerifyError(message);
     }
 
     static ClassFormatError classFormatError(String message) {
         CompilerDirectives.transferToInterpreter();
-        throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ClassFormatError.class, message);
+        throw new ClassFormatError(message);
     }
 
     /**

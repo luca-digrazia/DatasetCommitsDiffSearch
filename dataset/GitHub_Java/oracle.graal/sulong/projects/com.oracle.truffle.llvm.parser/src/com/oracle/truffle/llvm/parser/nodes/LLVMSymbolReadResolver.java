@@ -68,7 +68,6 @@ import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -95,7 +94,6 @@ public final class LLVMSymbolReadResolver {
     private final NodeFactory nodeFactory;
     private final FrameDescriptor frame;
     private final GetStackSpaceFactory getStackSpaceFactory;
-    private final DataLayout dataLayout;
 
     private final InternalVisitor visitor = new InternalVisitor();
     private LLVMExpressionNode resolvedNode = null;
@@ -165,7 +163,7 @@ public final class LLVMSymbolReadResolver {
 
             @Override
             public void visit(ArrayType type) {
-                final int arraySize = type.getSize(dataLayout);
+                final int arraySize = context.getByteSize(type);
                 if (arraySize == 0) {
                     resolvedNode = null;
                 } else {
@@ -176,7 +174,7 @@ public final class LLVMSymbolReadResolver {
 
             @Override
             public void visit(StructureType structureType) {
-                final int structSize = structureType.getSize(dataLayout);
+                final int structSize = context.getByteSize(structureType);
                 if (structSize == 0) {
                     final LLVMNativePointer minusOneNode = LLVMNativePointer.create(-1);
                     resolvedNode = nodeFactory.createLiteral(minusOneNode, new PointerType(structureType));
@@ -427,13 +425,12 @@ public final class LLVMSymbolReadResolver {
         }
     }
 
-    public LLVMSymbolReadResolver(LLVMParserRuntime runtime, FrameDescriptor frame, GetStackSpaceFactory getStackSpaceFactory, DataLayout dataLayout) {
+    public LLVMSymbolReadResolver(LLVMParserRuntime runtime, FrameDescriptor frame, GetStackSpaceFactory getStackSpaceFactory) {
         this.runtime = runtime;
         this.context = runtime.getContext();
         this.nodeFactory = context.getLanguage().getNodeFactory();
         this.frame = frame;
         this.getStackSpaceFactory = getStackSpaceFactory;
-        this.dataLayout = dataLayout;
     }
 
     public static Integer evaluateIntegerConstant(SymbolImpl constant) {
@@ -477,14 +474,14 @@ public final class LLVMSymbolReadResolver {
                     throw new LLVMParserException("Indices on structs must be constant integers!");
                 }
                 AggregateType aggregate = (AggregateType) currentType;
-                final long indexedTypeLength = aggregate.getOffsetOf(1, dataLayout);
+                final long indexedTypeLength = context.getIndexOffset(1, aggregate);
                 currentType = aggregate.getElementType(1);
                 final LLVMExpressionNode indexNode = resolve(indexSymbol);
                 currentAddress = nodeFactory.createTypedElementPointer(currentAddress, indexNode, indexedTypeLength, currentType);
             } else {
                 // the index is a constant integer
                 AggregateType aggregate = (AggregateType) currentType;
-                final long addressOffset = aggregate.getOffsetOf(indexInteger, dataLayout);
+                final long addressOffset = context.getIndexOffset(indexInteger, aggregate);
                 currentType = aggregate.getElementType(indexInteger);
 
                 // creating a pointer inserts type information, this needs to happen for the address

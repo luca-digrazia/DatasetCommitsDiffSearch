@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -56,11 +56,16 @@ import com.oracle.truffle.llvm.parser.metadata.MDSubprogram;
 import com.oracle.truffle.llvm.parser.metadata.MDVoidNode;
 import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.metadata.MetadataVisitor;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation.LazySourceSection;
-
+import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import java.io.IOException;
+
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -102,54 +107,129 @@ final class DIScopeBuilder {
         }
     }
 
-    private TruffleFile[] getSourceFiles(MDFile file) {
-        if (sourceFileCache.containsKey(file)) {
-            return sourceFileCache.get(file);
+    private static final String RELPATH_PREFIX = "truffle-relpath://";
+    private static final String RELPATH_PROPERTY_SEPARATOR = "//";
+
+    private TruffleFile resolveAsTruffleRelativePath(String name) {
+        if (!name.startsWith(RELPATH_PREFIX)) {
+            return null;
         }
 
-        final Env env = LLVMLanguage.getContext().getEnv();
-        String name = MDString.getIfInstance(file.getFile());
-        TruffleFile[] sourceFiles;
+        final int propertyEndIndex = name.indexOf(RELPATH_PROPERTY_SEPARATOR, RELPATH_PREFIX.length());
+        if (propertyEndIndex == -1) {
+            throw new LLVMParserException(String.format("Invalid Source Path: \"%s\"", name));
+        }
 
+        final String property = name.substring(RELPATH_PREFIX.length(), propertyEndIndex);
+        if (property.isEmpty()) {
+            throw new LLVMParserException(String.format("Invalid Property: \"%s\" from \"%s\"", property, name));
+        }
+
+        final String pathPrefix = System.getProperty(property);
+        if (pathPrefix == null) {
+            throw new LLVMParserException(String.format("Property not found: \"%s\" from \"%s\"", property, name));
+        }
+
+        final int pathStartIndex = propertyEndIndex + RELPATH_PROPERTY_SEPARATOR.length();
+        if (pathStartIndex >= name.length()) {
+            throw new LLVMParserException(String.format("Invalid Source Path: \"%s\"", name));
+        }
+
+        final String relativePath = name.substring(pathStartIndex);
+        try {
+            return context.getEnv().getInternalTruffleFile(pathPrefix).resolve(relativePath);
+        } catch (InvalidPathException ex) {
+            throw new LLVMParserException(ex.getMessage());
+        }
+    }
+
+    private TruffleFile resolveWithSourcePath(String name, MDBaseNode directoryNode) {
         if (STDIN_FILENAME.equals(name)) {
             // stdin must not be resolved against the provided directory
-            sourceFiles = null;
-        } else {
-            TruffleFile simple = env.getInternalTruffleFile(name);
-            if (simple.isAbsolute()) {
-                sourceFiles = new TruffleFile[]{simple};
-            } else {
-                String directoryName = MDString.getIfInstance(file.getDirectory());
-                if (directoryName != null) {
-                    TruffleFile qualifiedFile = env.getInternalTruffleFile(directoryName + env.getFileNameSeparator() + name);
-                    // provide two options if we have a directory in the debug info
-                    sourceFiles = new TruffleFile[]{qualifiedFile, simple};
-                } else {
-                    sourceFiles = new TruffleFile[]{simple};
-                }
-            }
-            // do not check for "exists" here, expensive operation
+            return null;
         }
 
-        sourceFileCache.put(file, sourceFiles);
-        return sourceFiles;
+        Path path;
+        try {
+            path = Paths.get(name);
+        } catch (InvalidPathException ipe) {
+            return null;
+        }
+
+        Env env = context.getEnv();
+
+        if (path.isAbsolute()) {
+            return env.getInternalTruffleFile(path.toUri());
+        }
+
+        // relative path: search for source file
+        String[] sourcePathList = env.getOptions().get(SulongEngineOption.SOURCE_PATH).split(SulongEngineOption.OPTION_ARRAY_SEPARATOR);
+
+        // search in llvm.sourcePath
+        for (String sourcePath : sourcePathList) {
+            try {
+                Path absPath = Paths.get(sourcePath, name);
+                TruffleFile file = env.getInternalTruffleFile(absPath.toUri());
+                if (file.exists()) {
+                    return file;
+                }
+            } catch (InvalidPathException | SecurityException ex) {
+                // can not or not allowed to access source file
+                // ignore, try next entry in search path
+            }
+        }
+
+        // try path from bitcode file
+        final String directory = MDString.getIfInstance(directoryNode);
+        if (directory != null) {
+            try {
+                Path absPath = Paths.get(directory, name);
+                TruffleFile file = env.getInternalTruffleFile(absPath.toUri());
+                if (file.exists()) {
+                    return file;
+                }
+            } catch (InvalidPathException | SecurityException ex) {
+                // can not or not allowed to access source file
+                // ignore, return relative path
+            }
+        }
+
+        // fallback to relative path
+        return env.getInternalTruffleFile(name);
+    }
+
+    private TruffleFile getSourceFile(MDFile file) {
+        if (sourceFiles.containsKey(file)) {
+            return sourceFiles.get(file);
+        }
+
+        String name = MDString.getIfInstance(file.getFile());
+        TruffleFile sourceFile = resolveAsTruffleRelativePath(name);
+
+        if (sourceFile == null) {
+            sourceFile = resolveWithSourcePath(name, file.getDirectory());
+        }
+
+        sourceFiles.put(file, sourceFile);
+        return sourceFile;
     }
 
     private final HashMap<MDBaseNode, LLVMSourceLocation> globalCache;
     private final HashMap<MDBaseNode, LLVMSourceLocation> localCache;
-    // can contain multiple options, the first existing one should be chosen
-    private final HashMap<MDFile, TruffleFile[]> sourceFileCache;
+    private final HashMap<MDFile, TruffleFile> sourceFiles;
     private final HashMap<String, Source> sources;
     private final MetadataValueList metadata;
     private final FileExtractor fileExtractor;
+    private final LLVMContext context;
 
-    DIScopeBuilder(MetadataValueList metadata) {
+    DIScopeBuilder(MetadataValueList metadata, LLVMContext context) {
         this.metadata = metadata;
         this.fileExtractor = new FileExtractor();
         this.globalCache = new HashMap<>();
         this.localCache = new HashMap<>();
-        this.sourceFileCache = new HashMap<>();
+        this.sourceFiles = new HashMap<>();
         this.sources = new HashMap<>();
+        this.context = context;
     }
 
     private static boolean isLocalScope(LLVMSourceLocation location) {
@@ -192,15 +272,15 @@ final class DIScopeBuilder {
 
     private static final class LazySourceSectionImpl extends LazySourceSection {
 
-        private final TruffleFile[] sourceFiles;
+        private final TruffleFile sourceFile;
         private final String path;
         private final int line;
         private final int column;
         private final HashMap<String, Source> sources;
 
-        LazySourceSectionImpl(HashMap<String, Source> sources, TruffleFile[] sourceFiles, String path, int line, int column) {
+        LazySourceSectionImpl(HashMap<String, Source> sources, TruffleFile sourceFile, String path, int line, int column) {
             this.sources = sources;
-            this.sourceFiles = sourceFiles;
+            this.sourceFile = sourceFile;
             this.path = path;
             this.line = line;
             this.column = column;
@@ -208,7 +288,7 @@ final class DIScopeBuilder {
 
         @Override
         public SourceSection get() {
-            Source source = asSource(sources, sourceFiles, path);
+            Source source = asSource(sources, sourceFile, path);
             if (source == null) {
                 return null;
             }
@@ -460,11 +540,11 @@ final class DIScopeBuilder {
             return null;
         }
 
-        TruffleFile[] sourceFiles = getSourceFiles(file);
-        return new LazySourceSectionImpl(sources, sourceFiles, relPath, (int) startLine, (int) startCol);
+        TruffleFile sourceFile = getSourceFile(file);
+        return new LazySourceSectionImpl(sources, sourceFile, relPath, (int) startLine, (int) startCol);
     }
 
-    private static Source asSource(Map<String, Source> sources, TruffleFile[] sourceFiles, String path) {
+    private static Source asSource(Map<String, Source> sources, TruffleFile sourceFile, String path) {
         if (sources.containsKey(path)) {
             return sources.get(path);
         } else if (path == null) {
@@ -473,20 +553,8 @@ final class DIScopeBuilder {
 
         String mimeType = getMimeType(path);
         Source source = null;
-        if (sourceFiles != null && sourceFiles.length > 0) {
-            // take the first existing file if multiple options exist
-            TruffleFile file = sourceFiles[sourceFiles.length - 1];
-            for (int i = 0; i < sourceFiles.length - 1; i++) {
-                try {
-                    if (sourceFiles[i].exists()) {
-                        file = sourceFiles[i];
-                        break;
-                    }
-                } catch (SecurityException e) {
-                    // treat "inaccessible" like "not existing"
-                }
-            }
-            SourceBuilder builder = Source.newBuilder("llvm", file).mimeType(mimeType);
+        if (sourceFile != null) {
+            SourceBuilder builder = Source.newBuilder("llvm", sourceFile).mimeType(mimeType);
             try {
                 source = builder.build();
             } catch (IOException | SecurityException ex) {
