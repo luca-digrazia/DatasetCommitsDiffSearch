@@ -24,30 +24,11 @@
  */
 package org.graalvm.compiler.truffle.compiler;
 
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilationExceptionsAreFatal;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InlineAcrossTruffleBoundary;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Inlining;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InliningExpansionBudget;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InliningInliningBudget;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InliningPolicy;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InliningRecursionDepth;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InstrumentFilter;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InstrumentationTableSize;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.IterativePartialEscape;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.LanguageAgnosticInlining;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumInlineNodeCount;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumGraalNodeCount;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PerformanceWarningsAreFatal;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PrintExpansionHistogram;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceInlining;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceInliningDetails;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TracePerformanceWarnings;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceStackTraceLimit;
+import static org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions.TruffleCompilationExceptionsAreFatal;
+import static org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions.TrufflePerformanceWarningsAreFatal;
 
 import java.util.Map;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
@@ -55,10 +36,6 @@ import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.SharedTruffleOptions;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
-import org.graalvm.compiler.truffle.options.OptionValuesImpl;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
-import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionDescriptors;
 
 import jdk.vm.ci.common.NativeImageReinitialize;
 
@@ -152,30 +129,15 @@ public final class TruffleCompilerOptions {
     }
 
     /**
-     * Uses the --engine option if set, otherwise falls back on the -Dgraal option.
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T getPolyglotOptionValue(org.graalvm.options.OptionValues options, org.graalvm.options.OptionKey<T> optionKey) {
-        if (options != null && options.hasBeenSet(optionKey)) {
-            return options.get(optionKey);
-        }
-        OptionKey<T> compilerOptionKey = (OptionKey<T>) POLYGLOT_TO_COMPILER.get(optionKey);
-        if (compilerOptionKey != null) {
-            return getValue(compilerOptionKey);
-        }
-        return optionKey.getDefaultValue();
-    }
-
-    /**
      * Determines whether an exception during a Truffle compilation should result in calling
      * {@link System#exit(int)}.
      */
-    public static boolean areTruffleCompilationExceptionsFatal(org.graalvm.options.OptionValues options) {
+    public static boolean areTruffleCompilationExceptionsFatal() {
         /*
          * This is duplicated in TruffleRuntimeOptions#areTruffleCompilationExceptionsFatal.
          */
-        boolean compilationExceptionsAreFatal = getPolyglotOptionValue(options, CompilationExceptionsAreFatal);
-        boolean performanceWarningsAreFatal = getPolyglotOptionValue(options, PerformanceWarningsAreFatal);
+        boolean compilationExceptionsAreFatal = TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreFatal);
+        boolean performanceWarningsAreFatal = TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal);
         return compilationExceptionsAreFatal || performanceWarningsAreFatal;
     }
 
@@ -257,49 +219,5 @@ public final class TruffleCompilerOptions {
      */
     public static <T> T getValue(OptionKey<T> key) {
         return key.getValue(getOptions());
-    }
-
-    public static org.graalvm.options.OptionValues getOptionsForCompiler(Map<String, Object> options) {
-        EconomicMap<org.graalvm.options.OptionKey<?>, Object> parsedOptions = EconomicMap.create(Equivalence.IDENTITY);
-        OptionDescriptors descriptors = PolyglotCompilerOptions.getDescriptors();
-        for (Map.Entry<String, Object> e : options.entrySet()) {
-            final OptionDescriptor descriptor = descriptors.get(e.getKey());
-            final org.graalvm.options.OptionKey<?> k = descriptor != null ? descriptor.getKey() : null;
-            if (k != null) {
-                Object value = e.getValue();
-                if (value.getClass() == String.class) {
-                    value = descriptor.getKey().getType().convert((String) e.getValue());
-                }
-                parsedOptions.put(k, value);
-            }
-        }
-        return new OptionValuesImpl(descriptors, parsedOptions);
-    }
-
-    // Support for mapping PolyglotCompilerOptions to legacy TruffleCompilerOptions.
-    private static final EconomicMap<org.graalvm.options.OptionKey<?>, OptionKey<?>> POLYGLOT_TO_COMPILER = initializePolyglotToGraalMapping();
-
-    private static EconomicMap<org.graalvm.options.OptionKey<?>, OptionKey<?>> initializePolyglotToGraalMapping() {
-        EconomicMap<org.graalvm.options.OptionKey<?>, OptionKey<?>> result = EconomicMap.create(Equivalence.IDENTITY);
-        result.put(InlineAcrossTruffleBoundary, TruffleInlineAcrossTruffleBoundary);
-        result.put(TracePerformanceWarnings, TraceTrufflePerformanceWarnings);
-        result.put(PrintExpansionHistogram, PrintTruffleExpansionHistogram);
-        result.put(IterativePartialEscape, TruffleIterativePartialEscape);
-        result.put(InstrumentFilter, TruffleInstrumentFilter);
-        result.put(InstrumentationTableSize, TruffleInstrumentationTableSize);
-        result.put(MaximumGraalNodeCount, TruffleMaximumGraalNodeCount);
-        result.put(MaximumInlineNodeCount, TruffleMaximumInlineNodeCount);
-        result.put(TraceInliningDetails, TraceTruffleInliningDetails);
-        result.put(InliningPolicy, TruffleInliningPolicy);
-        result.put(InliningExpansionBudget, TruffleInliningExpansionBudget);
-        result.put(InliningInliningBudget, TruffleInliningInliningBudget);
-        result.put(CompilationExceptionsAreFatal, SharedTruffleCompilerOptions.TruffleCompilationExceptionsAreFatal);
-        result.put(PerformanceWarningsAreFatal, SharedTruffleCompilerOptions.TrufflePerformanceWarningsAreFatal);
-        result.put(TraceInlining, SharedTruffleCompilerOptions.TraceTruffleInlining);
-        result.put(TraceStackTraceLimit, SharedTruffleCompilerOptions.TraceTruffleStackTraceLimit);
-        result.put(Inlining, SharedTruffleCompilerOptions.TruffleFunctionInlining);
-        result.put(InliningRecursionDepth, SharedTruffleCompilerOptions.TruffleMaximumRecursiveInlining);
-        result.put(LanguageAgnosticInlining, SharedTruffleCompilerOptions.TruffleLanguageAgnosticInlining);
-        return result;
     }
 }
