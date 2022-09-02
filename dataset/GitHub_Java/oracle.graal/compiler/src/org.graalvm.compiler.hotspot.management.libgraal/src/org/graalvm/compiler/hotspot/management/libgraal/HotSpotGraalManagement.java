@@ -34,7 +34,6 @@ import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalManagementRegistration;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntime;
 import org.graalvm.compiler.hotspot.management.HotSpotGraalRuntimeMBean;
-import org.graalvm.nativeimage.CurrentIsolate;
 
 /**
  * Dynamically registers a {@link HotSpotGraalRuntimeMBean}s created in SVM heap into
@@ -66,11 +65,11 @@ public final class HotSpotGraalManagement extends MBeanProxy<HotSpotGraalRuntime
                 throw new IllegalArgumentException("Cannot initialize a second management object for runtime " + runtime.getName());
             }
             try {
-                String beanName = String.format("org.graalvm.compiler.hotspot:type=%s_%x", runtime.getName().replace(':', '_'), CurrentIsolate.getIsolate().rawValue());
+                String beanName = "org.graalvm.compiler.hotspot:type=" + runtime.getName().replace(':', '_');
                 ObjectName objectName = new ObjectName(beanName);
                 mbean = new HotSpotGraalRuntimeMBean(objectName, runtime);
                 initialize(mbean, beanName, objectName);
-                enqueueForRegistrationAndNotify(this);
+                enqueueForRegistration(this);
             } catch (MalformedObjectNameException err) {
                 err.printStackTrace(TTY.out);
             }
