@@ -77,7 +77,6 @@ public class SubstrateType extends NodeClass implements SharedType {
 
     @UnknownPrimitiveField private int instanceOfFromTypeID;
     @UnknownPrimitiveField private int instanceOfNumTypeIDs;
-
     @UnknownObjectField(types = {DynamicHub.class}) protected DynamicHub uniqueConcreteImplementation;
 
     public SubstrateType(JavaKind kind, DynamicHub hub) {
@@ -110,14 +109,9 @@ public class SubstrateType extends NodeClass implements SharedType {
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public void setLegacyTypeCheckData(int instanceOfFromTypeID, int instanceOfNumTypeIDs, DynamicHub uniqueConcreteImplementation) {
+    public void setTypeCheckData(int instanceOfFromTypeID, int instanceOfNumTypeIDs, DynamicHub uniqueConcreteImplementation) {
         this.instanceOfFromTypeID = instanceOfFromTypeID;
         this.instanceOfNumTypeIDs = instanceOfNumTypeIDs;
-        this.uniqueConcreteImplementation = uniqueConcreteImplementation;
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void setTypeCheckData(DynamicHub uniqueConcreteImplementation) {
         this.uniqueConcreteImplementation = uniqueConcreteImplementation;
     }
 

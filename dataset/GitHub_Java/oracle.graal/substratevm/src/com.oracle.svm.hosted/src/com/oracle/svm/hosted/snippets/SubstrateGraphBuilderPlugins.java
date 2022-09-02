@@ -105,7 +105,6 @@ import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionStoreNode;
 import com.oracle.graal.pointsto.nodes.ConvertUnknownValueNode;
 import com.oracle.svm.core.FrameAccess;
-import com.oracle.svm.core.RuntimeAssertionsSupport;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.classinitialization.EnsureClassInitializedNode;
@@ -116,8 +115,9 @@ import com.oracle.svm.core.graal.jdk.SubstrateObjectCloneNode;
 import com.oracle.svm.core.graal.nodes.DeoptEntryNode;
 import com.oracle.svm.core.graal.nodes.FarReturnNode;
 import com.oracle.svm.core.graal.nodes.ReadCallerStackPointerNode;
-import com.oracle.svm.core.graal.nodes.ReadReservedRegister;
+import com.oracle.svm.core.graal.nodes.ReadHeapBaseFixedNode;
 import com.oracle.svm.core.graal.nodes.ReadReturnAddressNode;
+import com.oracle.svm.core.graal.nodes.ReadStackPointerNode;
 import com.oracle.svm.core.graal.nodes.SubstrateCompressionNode;
 import com.oracle.svm.core.graal.nodes.SubstrateNarrowOopStamp;
 import com.oracle.svm.core.graal.nodes.SubstrateReflectionGetCallerClassNode;
@@ -708,7 +708,7 @@ public class SubstrateGraphBuilderPlugins {
         r.register0("heapBase", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Object, ReadReservedRegister.createReadHeapBaseNode(b.getGraph()));
+                b.addPush(JavaKind.Object, new ReadHeapBaseFixedNode());
                 return true;
             }
         });
@@ -738,7 +738,7 @@ public class SubstrateGraphBuilderPlugins {
         r.register0("readStackPointer", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Object, ReadReservedRegister.createReadStackPointerNode(b.getGraph()));
+                b.addPush(JavaKind.Object, new ReadStackPointerNode());
                 return true;
             }
         });
@@ -913,16 +913,16 @@ public class SubstrateGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 JavaConstant constantReceiver = receiver.get().asJavaConstant();
                 if (constantReceiver != null && constantReceiver.isNonNull()) {
-                    Object clazzOrHub = snippetReflection.asObject(Object.class, constantReceiver);
-                    boolean desiredAssertionStatus;
-                    if (clazzOrHub instanceof Class) {
-                        desiredAssertionStatus = RuntimeAssertionsSupport.singleton().desiredAssertionStatus((Class<?>) clazzOrHub);
-                    } else if (clazzOrHub instanceof DynamicHub) {
-                        desiredAssertionStatus = ((DynamicHub) clazzOrHub).desiredAssertionStatus();
+                    Object clazz = snippetReflection.asObject(Object.class, constantReceiver);
+                    String className;
+                    if (clazz instanceof Class) {
+                        className = ((Class<?>) clazz).getName();
+                    } else if (clazz instanceof DynamicHub) {
+                        className = ((DynamicHub) clazz).getName();
                     } else {
-                        throw VMError.shouldNotReachHere("Unexpected class object: " + clazzOrHub);
+                        throw VMError.shouldNotReachHere("Unexpected class object: " + clazz);
                     }
-                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(!desiredAssertionStatus));
+                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(!SubstrateOptions.getRuntimeAssertionsForClass(className)));
                     return true;
                 }
                 return false;
@@ -1114,6 +1114,6 @@ public class SubstrateGraphBuilderPlugins {
             parameterName = String.valueOf(parameterIndex);
         }
 
-        throw UserError.abort("%s: parameter %s of call to %s in %s", message, parameterName, targetMethod, b.getMethod().asStackTraceElement(b.bci()));
+        throw UserError.abort(message + ": parameter " + parameterName + " of call to " + targetMethod.format("%H.%n(%p)") + " in " + b.getMethod().asStackTraceElement(b.bci()));
     }
 }

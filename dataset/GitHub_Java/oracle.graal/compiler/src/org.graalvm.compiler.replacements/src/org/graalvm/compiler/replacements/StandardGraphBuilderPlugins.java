@@ -32,7 +32,6 @@ import static jdk.vm.ci.code.MemoryBarriers.LOAD_LOAD;
 import static jdk.vm.ci.code.MemoryBarriers.LOAD_STORE;
 import static jdk.vm.ci.code.MemoryBarriers.STORE_LOAD;
 import static jdk.vm.ci.code.MemoryBarriers.STORE_STORE;
-import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.nodes.NamedLocationIdentity.OFF_HEAP_LOCATION;
 
 import java.lang.reflect.Array;
@@ -183,9 +182,7 @@ public class StandardGraphBuilderPlugins {
         }
         registerArrayPlugins(plugins, replacements);
         registerUnsafePlugins(plugins, replacements, explicitUnsafeNullChecks);
-        if (!IS_IN_NATIVE_IMAGE) {
-            registerEdgesPlugins(metaAccess, plugins);
-        }
+        registerEdgesPlugins(metaAccess, plugins);
         registerGraalDirectivesPlugins(plugins);
         registerBoxingPlugins(plugins);
         registerJMHBlackholePlugins(plugins, replacements);
@@ -1276,19 +1273,6 @@ public class StandardGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(true));
-                return true;
-            }
-        });
-
-        r.register0("inIntrinsic", new InvocationPlugin() {
-            @Override
-            public boolean inlineOnly() {
-                return true;
-            }
-
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(b.parsingIntrinsic()));
                 return true;
             }
         });
