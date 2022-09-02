@@ -41,7 +41,6 @@ import com.oracle.svm.core.deopt.SubstrateInstalledCode;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.log.StringBuilderLog;
 import com.oracle.svm.core.option.RuntimeOptionKey;
-import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.util.Counter;
 import com.oracle.svm.core.util.RingBuffer;
@@ -143,7 +142,7 @@ public class RuntimeCodeInfo {
     }
 
     public void addMethod(CodeInfo info) {
-        JavaVMOperation.enqueueBlockingSafepoint("AddMethod", () -> {
+        VMOperation.enqueueBlockingSafepoint("AddMethod", () -> {
             InstalledCodeObserverSupport.activateObservers(RuntimeMethodInfoAccess.getCodeObserverHandles(info));
             long num = logMethodOperation(info, INFO_ADD);
             addMethodOperation(info);
