@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,23 +26,35 @@ package org.graalvm.compiler.debug;
 
 import java.io.Closeable;
 
-public interface DebugDumpHandler extends Closeable {
-
-    void dump(Object object, String message);
+/**
+ * Interface implemented by classes that provide an external visualization of selected object types
+ * such as compiler graphs and nodes. The format and client required to consume the visualizations
+ * is determined by the implementation. For example, a dumper may convert a compiler node to a human
+ * readable string and print it to the console. A more sophisticated dumper may serialize a compiler
+ * graph and send it over the network to a tool (e.g., https://github.com/graalvm/visualizer) that
+ * can display graphs.
+ */
+public interface DebugDumpHandler extends Closeable, DebugHandler {
 
     /**
-     * Add arbitrary capability for use by the handler.
+     * If the type of {@code object} is supported by this dumper, then a representation of
+     * {@code object} is sent to some consumer in a format determined by this object.
      *
-     * @param capability
+     * @param object the object to be dumped
+     * @param debug the debug context requesting the dump
+     * @param forced true if called from {@link DebugContext#forceDump(Object, String, Object...)}
+     * @param format a format string specifying a title that describes the context of the dump
+     *            (e.g., the compiler phase in which request is made)
+     * @param arguments arguments referenced by the format specifiers in {@code format}
      */
-    default void addCapability(Object capability) {
-    }
+    void dump(Object object, DebugContext debug, boolean forced, String format, Object... arguments);
 
     /**
      * Flushes and releases resources managed by this dump handler. A subsequent call to
-     * {@link #dump(Object, String)} will create and open new resources. That is, this method can be
-     * used to reset the handler.
+     * {@link #dump} will create and open new resources. That is, this method can be used to reset
+     * the handler.
      */
     @Override
-    void close();
+    default void close() {
+    }
 }

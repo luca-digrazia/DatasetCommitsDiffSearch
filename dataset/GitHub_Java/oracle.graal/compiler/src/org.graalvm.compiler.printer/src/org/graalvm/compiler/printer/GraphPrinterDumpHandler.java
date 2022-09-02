@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,10 +24,9 @@
  */
 package org.graalvm.compiler.printer;
 
-import static org.graalvm.compiler.debug.GraalDebugConfig.asJavaMethod;
+import static org.graalvm.compiler.debug.DebugConfig.asJavaMethod;
 
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,32 +37,37 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugDumpHandler;
 import org.graalvm.compiler.debug.DebugDumpScope;
 import org.graalvm.compiler.debug.DebugOptions;
+import org.graalvm.compiler.debug.DebugOptions.PrintGraphTarget;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.contract.NodeCostUtil;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 
 import jdk.vm.ci.meta.JavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.services.Services;
 
 //JaCoCo Exclude
 
 /**
- * Observes compilation events and uses {@link IdealGraphPrinter} to generate a graph representation
- * that can be inspected with the Graph Visualizer.
+ * Observes compilation events and uses {@link BinaryGraphPrinter} to generate a graph
+ * representation that can be inspected with the Graph Visualizer.
  */
-public class GraphPrinterDumpHandler implements DebugDumpHandler {
+public final class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     private static final int FAILURE_LIMIT = 8;
     private final GraphPrinterSupplier printerSupplier;
     protected GraphPrinter printer;
     private List<String> previousInlineContext;
+    private CompilationIdentifier previousCompilationID = CompilationIdentifier.INVALID_COMPILATION_ID;
     private int[] dumpIds = {};
     private int failuresCount;
     private Map<Graph, List<String>> inlineContextMap;
@@ -70,7 +76,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     @FunctionalInterface
     public interface GraphPrinterSupplier {
-        GraphPrinter get(Graph graph) throws IOException;
+        GraphPrinter get(DebugContext ctx, Graph graph) throws IOException;
     }
 
     /**
@@ -82,11 +88,19 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
     public GraphPrinterDumpHandler(GraphPrinterSupplier printerSupplier) {
         this.printerSupplier = printerSupplier;
         /* Add the JVM and Java arguments to the graph properties to help identify it. */
-        this.jvmArguments = String.join(" ", ManagementFactory.getRuntimeMXBean().getInputArguments());
-        this.sunJavaCommand = System.getProperty("sun.java.command");
+        this.jvmArguments = jvmArguments();
+        this.sunJavaCommand = Services.getSavedProperties().get("sun.java.command");
     }
 
-    private void ensureInitialized(Graph graph) {
+    private static String jvmArguments() {
+        List<String> inputArguments = GraalServices.getInputArguments();
+        if (inputArguments != null) {
+            return String.join(" ", inputArguments);
+        }
+        return "unknown";
+    }
+
+    private void ensureInitialized(DebugContext ctx, Graph graph) {
         if (printer == null) {
             if (failuresCount >= FAILURE_LIMIT) {
                 return;
@@ -95,7 +109,7 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             inlineContextMap = new WeakHashMap<>();
             DebugContext debug = graph.getDebug();
             try {
-                printer = printerSupplier.get(graph);
+                printer = printerSupplier.get(ctx, graph);
             } catch (IOException e) {
                 handleException(debug, e);
             }
@@ -104,19 +118,19 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     private int nextDumpId() {
         int depth = previousInlineContext.size();
-        if (dumpIds.length < depth) {
-            dumpIds = Arrays.copyOf(dumpIds, depth);
+        if (dumpIds.length < depth + 1) {
+            dumpIds = Arrays.copyOf(dumpIds, depth + 1);
         }
-        return dumpIds[depth - 1]++;
+        return dumpIds[depth]++;
     }
 
     @Override
     @SuppressWarnings("try")
-    public void dump(DebugContext debug, Object object, final String format, Object... arguments) {
+    public void dump(Object object, DebugContext debug, boolean forced, final String format, Object... arguments) {
         OptionValues options = debug.getOptions();
-        if (object instanceof Graph && DebugOptions.PrintGraph.getValue(options)) {
+        if (object instanceof Graph && DebugOptions.PrintGraph.getValue(options) != PrintGraphTarget.Disable) {
             final Graph graph = (Graph) object;
-            ensureInitialized(graph);
+            ensureInitialized(debug, graph);
             if (printer == null) {
                 return;
             }
@@ -124,36 +138,42 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             // Get all current JavaMethod instances in the context.
             List<String> inlineContext = getInlineContext(graph);
 
-            if (inlineContext != previousInlineContext) {
+            if (graph instanceof StructuredGraph) {
+                CompilationIdentifier compilationID = ((StructuredGraph) graph).compilationId();
+                // If the graph to be dumped is with an invalid compilation id, it is likely derived
+                // from inlining.
+                if (compilationID != CompilationIdentifier.INVALID_COMPILATION_ID) {
+                    if (previousCompilationID != CompilationIdentifier.INVALID_COMPILATION_ID && !compilationID.equals(previousCompilationID)) {
+                        // Compilation ID does not match, close existing scopes.
+                        for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= 0; --inlineDepth) {
+                            closeScope(debug, inlineDepth);
+                        }
+                        previousInlineContext = new ArrayList<>();
+                    }
+                    previousCompilationID = compilationID;
+                }
+            }
+
+            if (!inlineContext.equals(previousInlineContext)) {
                 Map<Object, Object> properties = new HashMap<>();
                 properties.put("graph", graph.toString());
                 addCompilationId(properties, graph);
-                if (inlineContext.equals(previousInlineContext)) {
-                    /*
-                     * two different graphs have the same inline context, so make sure they appear
-                     * in different folders by closing and reopening the top scope.
-                     */
-                    int inlineDepth = previousInlineContext.size() - 1;
-                    closeScope(debug, inlineDepth);
-                    openScope(debug, inlineContext.get(inlineDepth), inlineDepth, properties);
-                } else {
-                    // Check for method scopes that must be closed since the previous dump.
-                    for (int i = 0; i < previousInlineContext.size(); ++i) {
-                        if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                            for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
-                                closeScope(debug, inlineDepth);
-                            }
-                            break;
+                // Check for method scopes that must be closed since the previous dump.
+                for (int i = 0; i < previousInlineContext.size(); ++i) {
+                    if (i >= inlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                        for (int inlineDepth = previousInlineContext.size() - 1; inlineDepth >= i; --inlineDepth) {
+                            closeScope(debug, inlineDepth);
                         }
+                        break;
                     }
-                    // Check for method scopes that must be opened since the previous dump.
-                    for (int i = 0; i < inlineContext.size(); ++i) {
-                        if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
-                            for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
-                                openScope(debug, inlineContext.get(inlineDepth), inlineDepth, inlineDepth == inlineContext.size() - 1 ? properties : null);
-                            }
-                            break;
+                }
+                // Check for method scopes that must be opened since the previous dump.
+                for (int i = 0; i < inlineContext.size(); ++i) {
+                    if (i >= previousInlineContext.size() || !inlineContext.get(i).equals(previousInlineContext.get(i))) {
+                        for (int inlineDepth = i; inlineDepth < inlineContext.size(); ++inlineDepth) {
+                            openScope(debug, inlineContext.get(inlineDepth), inlineDepth, inlineDepth == inlineContext.size() - 1 ? properties : null);
                         }
+                        break;
                     }
                 }
             }
@@ -161,19 +181,21 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             // Save inline context for next dump.
             previousInlineContext = inlineContext;
 
+            // Capture before creating the sandbox
+            String currentScopeName = debug.getCurrentScopeName();
             try (DebugContext.Scope s = debug.sandbox("PrintingGraph", null)) {
                 // Finally, output the graph.
                 Map<Object, Object> properties = new HashMap<>();
-                properties.put("graph", graph.toString());
-                properties.put("scope", debug.getCurrentScopeName());
+                properties.put("scope", currentScopeName);
+                graph.getDebugProperties(properties);
                 if (graph instanceof StructuredGraph) {
-                    properties.put("compilationIdentifier", ((StructuredGraph) graph).compilationId());
                     try {
                         int size = NodeCostUtil.computeGraphSize((StructuredGraph) graph);
                         properties.put("node-cost graph size", size);
                     } catch (Throwable t) {
                         properties.put("node-cost-exception", t.getMessage());
                     }
+                    properties.put("StageFlags", ((StructuredGraph) graph).getStageFlags());
                 }
                 printer.print(debug, graph, properties, nextDumpId(), format, arguments);
             } catch (IOException e) {
@@ -197,11 +219,9 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
             failuresCount++;
         }
         printer = null;
+        e.printStackTrace(TTY.out);
         if (failuresCount > FAILURE_LIMIT) {
-            e.printStackTrace(TTY.out);
-            TTY.println("Too many failures with dumping.  Disabling dump in thread " + Thread.currentThread());
-        } else {
-            TTY.println(e.getMessage());
+            TTY.println("Too many failures with dumping. Disabling dump in thread " + Thread.currentThread());
         }
     }
 
@@ -237,7 +257,14 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                     lastMethodOrGraph = o;
                 }
             }
-
+            // Truffle compilations don't have a standard inline context.
+            // Since TruffleDebugJavaMethod specifies the declaring class for truffle compilations
+            // as "LTruffleGraal" we identify truffle compilations as starting with "TruffleGraal"
+            if (result.size() == 2 && result.get(1).startsWith("TruffleGraal")) {
+                String name = result.get(1).replace("TruffleGraal.", "TruffleIR::");
+                result.clear();
+                result.add(name);
+            }
             if (result.isEmpty()) {
                 result.add(graph.toString());
                 graphSeen = true;

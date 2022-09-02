@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,19 +26,20 @@ package org.graalvm.compiler.debug;
 
 import static java.util.FormattableFlags.LEFT_JUSTIFY;
 import static java.util.FormattableFlags.UPPERCASE;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Count;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Counters;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Dump;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.DumpOnError;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.DumpOnPhaseChange;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.ListMetrics;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Log;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.MemUseTrackers;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.MethodFilter;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Time;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Timers;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.TrackMemUse;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Verify;
+import static org.graalvm.compiler.debug.DebugOptions.Count;
+import static org.graalvm.compiler.debug.DebugOptions.Counters;
+import static org.graalvm.compiler.debug.DebugOptions.DisableIntercept;
+import static org.graalvm.compiler.debug.DebugOptions.Dump;
+import static org.graalvm.compiler.debug.DebugOptions.DumpOnError;
+import static org.graalvm.compiler.debug.DebugOptions.DumpOnPhaseChange;
+import static org.graalvm.compiler.debug.DebugOptions.DumpPath;
+import static org.graalvm.compiler.debug.DebugOptions.ListMetrics;
+import static org.graalvm.compiler.debug.DebugOptions.Log;
+import static org.graalvm.compiler.debug.DebugOptions.MemUseTrackers;
+import static org.graalvm.compiler.debug.DebugOptions.ShowDumpFiles;
+import static org.graalvm.compiler.debug.DebugOptions.Time;
+import static org.graalvm.compiler.debug.DebugOptions.Timers;
+import static org.graalvm.compiler.debug.DebugOptions.TrackMemUse;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -51,19 +54,24 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Formatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 
-import org.graalvm.compiler.debug.GraalDebugConfig.Options;
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.collections.Pair;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
-import org.graalvm.util.Pair;
+import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.graphio.GraphOutput;
 
+import jdk.vm.ci.common.NativeImageReinitialize;
 import jdk.vm.ci.meta.JavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * A facility for logging and dumping as well as a container for values associated with
@@ -77,11 +85,9 @@ import jdk.vm.ci.meta.JavaMethod;
  */
 public final class DebugContext implements AutoCloseable {
 
-    public static final Description NO_DESCRIPTION = null;
+    public static final Description NO_DESCRIPTION = new Description(null, "NO_DESCRIPTION");
     public static final GlobalMetrics NO_GLOBAL_METRIC_VALUES = null;
-    public static final Iterable<DebugConfigCustomizer> NO_CONFIG_CUSTOMIZERS = Collections.emptyList();
-
-    public static final PrintStream DEFAULT_LOG_STREAM = TTY.out;
+    public static final Iterable<DebugHandlersFactory> NO_CONFIG_CUSTOMIZERS = Collections.emptyList();
 
     /**
      * Contains the immutable parts of a debug context. This separation allows the immutable parts
@@ -95,7 +101,7 @@ public final class DebugContext implements AutoCloseable {
      */
     boolean metricsEnabled;
 
-    DebugConfig currentConfig;
+    DebugConfigImpl currentConfig;
     ScopeImpl currentScope;
     CloseableCounter currentTimer;
     CloseableCounter currentMemUseTracker;
@@ -103,15 +109,62 @@ public final class DebugContext implements AutoCloseable {
     Throwable lastExceptionThrown;
 
     /**
+     * Lazily initialized IGV channel used for {@linkplain #buildOutput dumping a graph} associated
+     * with this context.
+     */
+    private IgvDumpChannel igvChannel;
+
+    /**
+     * An existing object for graph dumping whose IGV channel and other internals can be shared with
+     * newly {@linkplain #buildOutput created} graph dumping objects.
+     */
+    private GraphOutput<?, ?> prototypeOutput;
+
+    /**
      * Stores the {@link MetricKey} values.
      */
     private long[] metricValues;
+
+    public static PrintStream getDefaultLogStream() {
+        return TTY.out;
+    }
 
     /**
      * Determines if dynamic scopes are enabled.
      */
     public boolean areScopesEnabled() {
         return immutable.scopesEnabled;
+    }
+
+    /**
+     * Gets an object for describing a graph and sending it to IGV.
+     */
+    public <G, N, M> GraphOutput<G, M> buildOutput(GraphOutput.Builder<G, N, M> builder) throws IOException {
+        if (prototypeOutput != null) {
+            return builder.build(prototypeOutput);
+        } else {
+            if (igvChannel == null) {
+                igvChannel = new IgvDumpChannel(() -> getDumpPath(".bgv", false), immutable.options);
+            }
+            builder.attr(GraphOutput.ATTR_VM_ID, GraalServices.getExecutionID());
+            final GraphOutput<G, M> output = builder.build(igvChannel);
+            prototypeOutput = output;
+            return output;
+        }
+    }
+
+    /**
+     * Adds version properties to the provided map. The version properties are read at a start of
+     * the JVM from a JVM specific location. Each property identifiers a commit of a certain
+     * component in the system. The properties added to the {@code properties} map are prefixed with
+     * {@code "version."} prefix.
+     *
+     * @param properties map to add the version properties to or {@code null}
+     * @return {@code properties} with version properties added or an unmodifiable map containing
+     *         the version properties if {@code properties == null}
+     */
+    public static Map<Object, Object> addVersionProperties(Map<Object, Object> properties) {
+        return Versions.VERSIONS.withVersions(properties);
     }
 
     /**
@@ -201,16 +254,24 @@ public final class DebugContext implements AutoCloseable {
 
         private Immutable(OptionValues options) {
             this.options = options;
+            String timeValue = Time.getValue(options);
+            String trackMemUseValue = TrackMemUse.getValue(options);
             this.unscopedCounters = parseUnscopedMetricSpec(Counters.getValue(options), "".equals(Count.getValue(options)), false);
-            this.unscopedTimers = parseUnscopedMetricSpec(Timers.getValue(options), "".equals(Time.getValue(options)), true);
-            this.unscopedMemUseTrackers = parseUnscopedMetricSpec(MemUseTrackers.getValue(options), "".equals(TrackMemUse.getValue(options)), true);
+            this.unscopedTimers = parseUnscopedMetricSpec(Timers.getValue(options), "".equals(timeValue), true);
+            this.unscopedMemUseTrackers = parseUnscopedMetricSpec(MemUseTrackers.getValue(options), "".equals(trackMemUseValue), true);
+
+            if (unscopedMemUseTrackers != null || trackMemUseValue != null) {
+                if (!GraalServices.isThreadAllocatedMemorySupported()) {
+                    TTY.println("WARNING: Missing VM support for MemUseTrackers and TrackMemUse options so all reported memory usage will be 0");
+                }
+            }
 
             this.scopesEnabled = DumpOnError.getValue(options) ||
                             Dump.getValue(options) != null ||
                             Log.getValue(options) != null ||
-                            isNotEmpty(Options.Count, options) ||
-                            isNotEmpty(Options.Time, options) ||
-                            isNotEmpty(Options.TrackMemUse, options) ||
+                            isNotEmpty(DebugOptions.Count, options) ||
+                            isNotEmpty(DebugOptions.Time, options) ||
+                            isNotEmpty(DebugOptions.TrackMemUse, options) ||
                             DumpOnPhaseChange.getValue(options) != null;
             this.listMetrics = ListMetrics.getValue(options);
         }
@@ -271,9 +332,19 @@ public final class DebugContext implements AutoCloseable {
     }
 
     /**
-     * Shared object used to represent a disabled debug context.
+     * Singleton used to represent a disabled debug context.
      */
-    public static final DebugContext DISABLED = new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, new Immutable(), NO_CONFIG_CUSTOMIZERS);
+    private static final DebugContext DISABLED = new DebugContext(NO_DESCRIPTION, null, NO_GLOBAL_METRIC_VALUES, getDefaultLogStream(), new Immutable(), NO_CONFIG_CUSTOMIZERS);
+
+    /**
+     * Create a DebugContext with debugging disabled.
+     */
+    public static DebugContext disabled(OptionValues options) {
+        if (options == null || options.getMap().isEmpty()) {
+            return DISABLED;
+        }
+        return new DebugContext(NO_DESCRIPTION, null, NO_GLOBAL_METRIC_VALUES, getDefaultLogStream(), Immutable.create(options), NO_CONFIG_CUSTOMIZERS);
+    }
 
     /**
      * Gets the debug context for the current thread. This should only be used when there is no
@@ -307,9 +378,25 @@ public final class DebugContext implements AutoCloseable {
             this.compilable = compilable;
             this.identifier = identifier;
         }
+
+        @Override
+        public String toString() {
+            String compilableName = compilable instanceof JavaMethod ? ((JavaMethod) compilable).format("%H.%n(%p)%R") : String.valueOf(compilable);
+            return identifier + ":" + compilableName;
+        }
+
+        final String getLabel() {
+            if (compilable instanceof JavaMethod) {
+                JavaMethod method = (JavaMethod) compilable;
+                return method.format("%h.%n(%p)%r");
+            }
+            return String.valueOf(compilable);
+        }
     }
 
     private final Description description;
+
+    private final CompilationListener compilationListener;
 
     /**
      * Gets a description of the computation associated with this debug context.
@@ -318,6 +405,89 @@ public final class DebugContext implements AutoCloseable {
      */
     public Description getDescription() {
         return description;
+    }
+
+    /**
+     * Determines if {@link #enterCompilerPhase} and {@link #notifyInlining} do anything.
+     *
+     * @return {@code true} if there is a listener for compiler phase and inlining events attached
+     *         to this object, {@code false} otherwise
+     */
+    public boolean hasCompilationListener() {
+        return compilationListener != null;
+    }
+
+    private int compilerPhaseNesting = 0;
+
+    /**
+     * Scope for a compiler phase event.
+     */
+    public interface CompilerPhaseScope extends AutoCloseable {
+        /**
+         * Notifies the listener that the phase has ended.
+         */
+        @Override
+        void close();
+    }
+
+    /**
+     * Notifies this object that the compiler is entering a phase.
+     *
+     * It is recommended to use this method in a try-with-resource statement.
+     *
+     * @param phaseName name of the phase being entered
+     * @return {@code null} if {@link #hasCompilationListener()} returns {@code false} otherwise an
+     *         object whose {@link CompilerPhaseScope#close()} method must be called when the phase
+     *         ends
+     */
+    public CompilerPhaseScope enterCompilerPhase(CharSequence phaseName) {
+        if (compilationListener != null) {
+            return enterCompilerPhase(() -> phaseName);
+        }
+        return null;
+    }
+
+    /**
+     * Notifies this object that the compiler is entering a phase.
+     *
+     * It is recommended to use this method in a try-with-resource statement.
+     *
+     * @param phaseName name of the phase being entered
+     * @return {@code null} if {@link #hasCompilationListener()} returns {@code false} otherwise an
+     *         object whose {@link CompilerPhaseScope#close()} method must be called when the phase
+     *         ends
+     */
+    public CompilerPhaseScope enterCompilerPhase(Supplier<CharSequence> phaseName) {
+        CompilationListener l = compilationListener;
+        if (l != null) {
+            CompilerPhaseScope scope = l.enterPhase(phaseName.get(), compilerPhaseNesting++);
+            return new CompilerPhaseScope() {
+
+                @Override
+                public void close() {
+                    --compilerPhaseNesting;
+                    scope.close();
+                }
+            };
+        }
+        return null;
+    }
+
+    /**
+     * Notifies this object when the compiler considers inlining {@code callee} into {@code caller}.
+     * A call to this method should be guarded with {@link #hasCompilationListener()} if
+     * {@code message} is not a string literal or pre-computed value
+     *
+     * @param caller caller method
+     * @param callee callee method considered for inlining into {@code caller}
+     * @param succeeded true if {@code callee} was inlined into {@code caller}
+     * @param message extra information about inlining decision
+     * @param bci byte code index of call site
+     */
+    public void notifyInlining(ResolvedJavaMethod caller, ResolvedJavaMethod callee, boolean succeeded, CharSequence message, int bci) {
+        if (compilationListener != null) {
+            compilationListener.notifyInlining(caller, callee, succeeded, message, bci);
+        }
     }
 
     /**
@@ -330,54 +500,125 @@ public final class DebugContext implements AutoCloseable {
     }
 
     /**
-     * Creates a {@link DebugContext} based on a given set of option values and {@code customizer}.
+     * Object used to create a {@link DebugContext}.
      */
-    public static DebugContext create(OptionValues options, DebugConfigCustomizer customizer) {
-        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), Collections.singletonList(customizer));
+    public static class Builder {
+        private final OptionValues options;
+        private Description description = NO_DESCRIPTION;
+        private CompilationListener compilationListener;
+        private GlobalMetrics globalMetrics = NO_GLOBAL_METRIC_VALUES;
+        private PrintStream logStream = getDefaultLogStream();
+        private final Iterable<DebugHandlersFactory> factories;
+
+        /**
+         * Builder for a {@link DebugContext} based on {@code options} and
+         * {@link DebugHandlersFactory#LOADER}.
+         */
+        public Builder(OptionValues options) {
+            this.options = options;
+            this.factories = DebugHandlersFactory.LOADER;
+        }
+
+        /**
+         * Builder for a {@link DebugContext} based on {@code options} and {@code factories}. The
+         * {@link DebugHandlersFactory#LOADER} value can be used for the latter.
+         */
+        public Builder(OptionValues options, Iterable<DebugHandlersFactory> factories) {
+            this.options = options;
+            this.factories = factories;
+        }
+
+        /**
+         * Builder for a {@link DebugContext} based {@code options} and {@code factory}. The latter
+         * can be null in which case {@link DebugContext#NO_CONFIG_CUSTOMIZERS} is used.
+         */
+        public Builder(OptionValues options, DebugHandlersFactory factory) {
+            this.options = options;
+            this.factories = factory == null ? NO_CONFIG_CUSTOMIZERS : Collections.singletonList(factory);
+        }
+
+        /**
+         * Sets the description for the debug context. The default is for a context to have no
+         * description.
+         */
+        public Builder description(Description desc) {
+            this.description = desc;
+            return this;
+        }
+
+        /**
+         * Sets the compilation listener for the debug context. The default is for a context to have
+         * no compilation listener.
+         */
+        public Builder compilationListener(CompilationListener listener) {
+            this.compilationListener = listener;
+            return this;
+        }
+
+        public Builder globalMetrics(GlobalMetrics metrics) {
+            this.globalMetrics = metrics;
+            return this;
+        }
+
+        public Builder logStream(PrintStream stream) {
+            this.logStream = stream;
+            return this;
+        }
+
+        public DebugContext build() {
+            return new DebugContext(description,
+                            compilationListener,
+                            globalMetrics,
+                            logStream,
+                            Immutable.create(options),
+                            factories);
+        }
     }
 
-    /**
-     * Creates a {@link DebugContext} based on a given set of option values an object providing
-     * {@code customizer}s via an iterator. The {@link DebugConfigCustomizer#LOADER} can be used for
-     * the latter.
-     */
-    public static DebugContext create(OptionValues options, Iterable<DebugConfigCustomizer> customizers) {
-        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), customizers);
-    }
-
-    /**
-     * Creates a {@link DebugContext}.
-     */
-    public static DebugContext create(OptionValues options, Description description, GlobalMetrics globalMetrics, PrintStream logStream, Iterable<DebugConfigCustomizer> customizers) {
-        return new DebugContext(description, globalMetrics, logStream, Immutable.create(options), customizers);
-    }
-
-    private DebugContext(Description description, GlobalMetrics globalMetrics, PrintStream logStream, Immutable immutable, Iterable<DebugConfigCustomizer> customizers) {
+    private DebugContext(Description description,
+                    CompilationListener compilationListener,
+                    GlobalMetrics globalMetrics,
+                    PrintStream logStream,
+                    Immutable immutable,
+                    Iterable<DebugHandlersFactory> factories) {
         this.immutable = immutable;
         this.description = description;
         this.globalMetrics = globalMetrics;
+        this.compilationListener = compilationListener;
         if (immutable.scopesEnabled) {
             OptionValues options = immutable.options;
             List<DebugDumpHandler> dumpHandlers = new ArrayList<>();
             List<DebugVerifyHandler> verifyHandlers = new ArrayList<>();
-            for (DebugConfigCustomizer customizer : customizers) {
-                customizer.addDumpHandlersTo(options, dumpHandlers);
-                customizer.addVerifyHandlersTo(options, verifyHandlers);
+            for (DebugHandlersFactory factory : factories) {
+                for (DebugHandler handler : factory.createHandlers(options)) {
+                    if (handler instanceof DebugDumpHandler) {
+                        dumpHandlers.add((DebugDumpHandler) handler);
+                    } else {
+                        assert handler instanceof DebugVerifyHandler;
+                        verifyHandlers.add((DebugVerifyHandler) handler);
+                    }
+                }
             }
-            currentConfig = new GraalDebugConfig(
-                            options,
-                            Log.getValue(options),
-                            Count.getValue(options),
-                            TrackMemUse.getValue(options),
-                            Time.getValue(options),
-                            Dump.getValue(options),
-                            Verify.getValue(options),
-                            MethodFilter.getValue(options),
-                            logStream, dumpHandlers, verifyHandlers);
-            currentScope = new ScopeImpl(this, Thread.currentThread());
+            currentConfig = new DebugConfigImpl(options, logStream, dumpHandlers, verifyHandlers);
+            currentScope = new ScopeImpl(this, Thread.currentThread(), DisableIntercept.getValue(options));
+            currentScope.updateFlags(currentConfig);
             metricsEnabled = true;
         } else {
             metricsEnabled = immutable.hasUnscopedMetrics() || immutable.listMetrics;
+        }
+    }
+
+    public Path getDumpPath(String extension, boolean createMissingDirectory) {
+        try {
+            String id = description == null ? null : description.identifier;
+            String label = description == null ? null : description.getLabel();
+            Path result = PathUtilities.createUnique(immutable.options, DumpPath, id, label, extension, createMissingDirectory);
+            if (ShowDumpFiles.getValue(immutable.options)) {
+                TTY.println("Dumping debug output to %s", result.toAbsolutePath().toString());
+            }
+            return result;
+        } catch (IOException ex) {
+            throw rethrowSilently(RuntimeException.class, ex);
         }
     }
 
@@ -564,7 +805,15 @@ public final class DebugContext implements AutoCloseable {
         }
     }
 
-    private final Invariants invariants = Assertions.ENABLED ? new Invariants() : null;
+    /**
+     * Arbitrary threads cannot be in the image so null out {@code DebugContext.invariants} which
+     * holds onto a thread and is only used for assertions.
+     */
+    @NativeImageReinitialize private final Invariants invariants = Assertions.assertionsEnabled() ? new Invariants() : null;
+
+    static StackTraceElement[] getStackTrace(Thread thread) {
+        return thread.getStackTrace();
+    }
 
     /**
      * Utility for enforcing {@link DebugContext} invariants via assertions.
@@ -575,7 +824,7 @@ public final class DebugContext implements AutoCloseable {
 
         Invariants() {
             thread = Thread.currentThread();
-            origin = thread.getStackTrace();
+            origin = getStackTrace(thread);
         }
 
         boolean checkNoConcurrentAccess() {
@@ -666,6 +915,19 @@ public final class DebugContext implements AutoCloseable {
     }
 
     /**
+     * Create an unnamed scope that appends some context to the current scope.
+     *
+     * @param context an object to be appended to the {@linkplain #context() current} debug context
+     */
+    public DebugContext.Scope withContext(Object context) throws Throwable {
+        if (currentScope != null) {
+            return enterScope("", null, context);
+        } else {
+            return null;
+        }
+    }
+
+    /**
      * Creates and enters a new debug scope which will be disjoint from the current debug scope.
      * <p>
      * It is recommended to use the try-with-resource statement for managing entering and leaving
@@ -697,10 +959,25 @@ public final class DebugContext implements AutoCloseable {
         }
     }
 
+    /**
+     * Determines if scopes are enabled and this context is in a non-top-level scope.
+     */
+    public boolean inNestedScope() {
+        if (immutable.scopesEnabled) {
+            if (currentScope == null) {
+                // In an active DisabledScope
+                return true;
+            }
+            return !currentScope.isTopLevel();
+        } else {
+            return false;
+        }
+    }
+
     class DisabledScope implements DebugContext.Scope {
         final boolean savedMetricsEnabled;
         final ScopeImpl savedScope;
-        final DebugConfig savedConfig;
+        final DebugConfigImpl savedConfig;
 
         DisabledScope() {
             this.savedMetricsEnabled = metricsEnabled;
@@ -748,7 +1025,7 @@ public final class DebugContext implements AutoCloseable {
             for (Object obj : context()) {
                 context.add(obj);
             }
-            GraalDebugConfig config = new GraalDebugConfig(new OptionValues(currentConfig.getOptions(), Options.Log, ":1000"));
+            DebugConfigImpl config = new DebugConfigImpl(new OptionValues(currentConfig.getOptions(), DebugOptions.Log, ":1000"));
             return sandbox("forceLog", config, context.toArray());
         }
         return null;
@@ -1049,7 +1326,7 @@ public final class DebugContext implements AutoCloseable {
      * force a graph dump from IDEs that support invoking a Java method while at a breakpoint.
      */
     public void forceDump(Object object, String format, Object... args) {
-        DebugConfig config = getConfig();
+        DebugConfig config = currentConfig;
         Collection<DebugDumpHandler> dumpHandlers;
         boolean closeAfterDump;
         if (config != null) {
@@ -1058,13 +1335,17 @@ public final class DebugContext implements AutoCloseable {
         } else {
             OptionValues options = getOptions();
             dumpHandlers = new ArrayList<>();
-            for (DebugConfigCustomizer customizer : DebugConfigCustomizer.LOADER) {
-                customizer.addDumpHandlersTo(options, dumpHandlers);
+            for (DebugHandlersFactory factory : DebugHandlersFactory.LOADER) {
+                for (DebugHandler handler : factory.createHandlers(options)) {
+                    if (handler instanceof DebugDumpHandler) {
+                        dumpHandlers.add((DebugDumpHandler) handler);
+                    }
+                }
             }
             closeAfterDump = true;
         }
         for (DebugDumpHandler dumpHandler : dumpHandlers) {
-            dumpHandler.dump(this, object, format, args);
+            dumpHandler.dump(object, this, true, format, args);
             if (closeAfterDump) {
                 dumpHandler.close();
             }
@@ -1671,13 +1952,6 @@ public final class DebugContext implements AutoCloseable {
     }
 
     /**
-     * Creates an object for counting value frequencies.
-     */
-    public static DebugHistogram createHistogram(String name) {
-        return new DebugHistogramImpl(name);
-    }
-
-    /**
      * Creates a {@linkplain TimerKey timer}.
      * <p>
      * A disabled timer has virtually no overhead.
@@ -1726,23 +2000,46 @@ public final class DebugContext implements AutoCloseable {
     }
 
     /**
+     * Gets the name to use for a class based on whether it appears to be an obfuscated name. The
+     * heuristic for an obfuscated name is that it is less than 6 characters in length and consists
+     * only of lower case letters.
+     */
+    private static String getBaseName(Class<?> c) {
+        String simpleName = c.getSimpleName();
+        if (simpleName.length() < 6) {
+            for (int i = 0; i < simpleName.length(); i++) {
+                if (!Character.isLowerCase(simpleName.charAt(0))) {
+                    return simpleName;
+                }
+            }
+            // Looks like an obfuscated simple class name so use qualified class name
+            return c.getName();
+        }
+        return simpleName;
+    }
+
+    /**
      * There are paths where construction of formatted class names are common and the code below is
      * surprisingly expensive, so compute it once and cache it.
      */
     private static final ClassValue<String> formattedClassName = new ClassValue<String>() {
         @Override
         protected String computeValue(Class<?> c) {
-            final String simpleName = c.getSimpleName();
+            String baseName = getBaseName(c);
+            if (Character.isLowerCase(baseName.charAt(0))) {
+                // Looks like an obfuscated simple class name so use qualified class name
+                baseName = c.getName();
+            }
             Class<?> enclosingClass = c.getEnclosingClass();
             if (enclosingClass != null) {
                 String prefix = "";
                 while (enclosingClass != null) {
-                    prefix = enclosingClass.getSimpleName() + "_" + prefix;
+                    prefix = getBaseName(enclosingClass) + "_" + prefix;
                     enclosingClass = enclosingClass.getEnclosingClass();
                 }
-                return prefix + simpleName;
+                return prefix + baseName;
             } else {
-                return simpleName;
+                return baseName;
             }
         }
     };
@@ -1855,9 +2152,19 @@ public final class DebugContext implements AutoCloseable {
         if (description != null) {
             printMetrics(description);
         }
-        if (metricsEnabled && globalMetrics != null && metricValues != null) {
+        if (metricsEnabled && metricValues != null && globalMetrics != null) {
             globalMetrics.add(this);
         }
+        metricValues = null;
+        if (igvChannel != null) {
+            try {
+                igvChannel.realClose();
+                igvChannel = null;
+            } catch (IOException ex) {
+                // ignore.
+            }
+        }
+        prototypeOutput = null;
     }
 
     public void closeDumpHandlers(boolean ignoreErrors) {
@@ -1885,13 +2192,13 @@ public final class DebugContext implements AutoCloseable {
 
     /**
      * Prints metric values in this object to the file (if any) specified by
-     * {@link Options#MetricsFile}.
+     * {@link DebugOptions#MetricsFile}.
      */
     public void printMetrics(Description desc) {
         if (metricValues == null) {
             return;
         }
-        String metricsFile = Options.MetricsFile.getValue(getOptions());
+        String metricsFile = DebugOptions.MetricsFile.getValue(getOptions());
         if (metricsFile != null) {
             // Use identity to distinguish methods that have been redefined
             // or loaded by different class loaders.
@@ -1939,11 +2246,10 @@ public final class DebugContext implements AutoCloseable {
                 }
             }
         }
-
     }
 
     /**
-     * Lock to serialize writes to {@link Options#MetricsFile}.
+     * Lock to serialize writes to {@link DebugOptions#MetricsFile}.
      */
     private static final Object PRINT_METRICS_LOCK = new Object();
 
@@ -2013,5 +2319,22 @@ public final class DebugContext implements AutoCloseable {
             out.printf("%-" + String.valueOf(maxKeyWidth) + "s = %20s%n", e.getKey(), e.getValue());
         }
         out.println();
+    }
+
+    public Map<MetricKey, Long> getMetricsSnapshot() {
+        Map<MetricKey, Long> res = new HashMap<>();
+        for (MetricKey key : KeyRegistry.getKeys()) {
+            int index = ((AbstractKey) key).getIndex();
+            if (index < metricValues.length && metricValues[index] != 0) {
+                long value = metricValues[index];
+                res.put(key, value);
+            }
+        }
+        return res;
+    }
+
+    @SuppressWarnings({"unused", "unchecked"})
+    private static <E extends Exception> E rethrowSilently(Class<E> type, Throwable ex) throws E {
+        throw (E) ex;
     }
 }

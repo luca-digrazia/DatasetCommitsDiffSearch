@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ package org.graalvm.compiler.printer;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,29 +58,25 @@ public class BciBlockMappingDumpHandler implements DebugDumpHandler {
     private int nextId;
 
     @Override
-    public void dump(DebugContext debug, Object object, String format, Object... arguments) {
+    public void dump(Object object, DebugContext debug, boolean forced, String format, Object... arguments) {
         OptionValues options = debug.getOptions();
         if (object instanceof BciBlockMapping && DebugOptions.PrintGraph.getValue(options) != PrintGraphTarget.Disable) {
             try {
                 if (structure == null) {
                     structure = new BlockMappingStructure();
                 }
-                dump(debug, (BciBlockMapping) object, format, structure, nextId++, arguments);
+                int id = nextId++;
+                Builder<BciBlockMapping, BciBlock, ResolvedJavaMethod> builder = GraphOutput.newBuilder(structure).elements(ELEMENTS).types(TYPES);
+                GraphOutput<BciBlockMapping, ResolvedJavaMethod> output = debug.buildOutput(builder);
+                Map<Object, Object> properties = new HashMap<>();
+                properties.put("hasJsrBytecodes", ((BciBlockMapping) object).hasJsrBytecodes);
+                // ideally this should collaborate with the graph printer to open/close groups
+                output.print((BciBlockMapping) object, properties, id, format, arguments);
+                output.close();
             } catch (IOException e) {
                 throw new RuntimeException("Failed to dump block mapping", e);
             }
         }
-    }
-
-    private static void dump(DebugContext debug, BciBlockMapping mapping, String format, BlockMappingStructure struct, int id, Object... arguments) throws IOException {
-        Builder<BciBlockMapping, BciBlock, ResolvedJavaMethod> builder = GraphOutput.newBuilder(struct).elements(ELEMENTS).types(TYPES).protocolVersion(6, 1);
-        GraphOutput<BciBlockMapping, ResolvedJavaMethod> output = debug.buildOutput(builder);
-        //output.beginGroup(mapping, "BCI Block Mapping", "BlockMap", mapping.code.getMethod(), 0, DebugContext.addVersionProperties(null));
-        Map<Object, Object> properties = new HashMap<>();
-        properties.put("hasJsrBytecodes", mapping.hasJsrBytecodes);
-        output.print(mapping, properties, id, format, arguments);
-        //output.endGroup();
-        output.close();
     }
 
     static class BciBlockClass {
@@ -233,50 +228,35 @@ public class BciBlockMappingDumpHandler implements DebugDumpHandler {
 
         @Override
         public String edgeName(BlockEdges port, int index) {
-            switch (index) {
-                case 0:
-                    return "successors";
-                case 1:
-                    if (port.block.getJsrSuccessor() != null) {
-                        return "jsr successor";
-                    }
-                    // fall through
-                case 2:
-                    return "ret successor";
+            if (index == 0) {
+                return "successors";
+            } else if (index == 1 && port.block.getJsrSuccessor() != null) {
+                return "jsr successor";
             }
-            throw GraalError.shouldNotReachHere(Integer.toString(index));
+            GraalError.guarantee(index <= 2, Integer.toString(index));
+            return "ret successor";
         }
 
         @Override
         public Object edgeType(BlockEdges port, int index) {
-            switch (index) {
-                case 0:
-                    return EdgeType.Successor;
-                case 1:
-                    if (port.block.getJsrSuccessor() != null) {
-                        return EdgeType.JsrSuccessor;
-                    }
-                    // fall through
-                case 2:
-                    return EdgeType.RetSuccessor;
+            if (index == 0) {
+                return EdgeType.Successor;
+            } else if (index == 1 && port.block.getJsrSuccessor() != null) {
+                return EdgeType.JsrSuccessor;
             }
-            throw GraalError.shouldNotReachHere(Integer.toString(index));
+            GraalError.guarantee(index <= 2, Integer.toString(index));
+            return EdgeType.RetSuccessor;
         }
 
         @Override
         public Collection<? extends BciBlock> edgeNodes(BciBlockMapping graph, BciBlock node, BlockEdges port, int index) {
-            switch (index) {
-                case 0:
-                    return node.getSuccessors();
-                case 1:
-                    if (port.block.getJsrSuccessor() != null) {
-                        return Collections.singletonList(node.getJsrSuccessor());
-                    }
-                    // fall through
-                case 2:
-                    return Collections.singletonList(node.getRetSuccessor());
+            if (index == 0) {
+                return node.getSuccessors();
+            } else if (index == 1 && port.block.getJsrSuccessor() != null) {
+                return Collections.singletonList(node.getJsrSuccessor());
             }
-            throw GraalError.shouldNotReachHere(Integer.toString(index));
+            GraalError.guarantee(index <= 2, Integer.toString(index));
+            return Collections.singletonList(node.getRetSuccessor());
         }
     }
 

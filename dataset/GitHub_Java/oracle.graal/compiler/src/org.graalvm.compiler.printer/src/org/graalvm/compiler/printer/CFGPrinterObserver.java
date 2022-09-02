@@ -158,11 +158,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
                 return;
             }
         }
-        dumpSandboxed(debug, object, message);
-    }
 
-    public void dumpSandboxed(DebugContext debug, Object object, String message) {
-        OptionValues options = debug.getOptions();
         if (cfgPrinter == null) {
             try {
                 Path dumpFile = debug.getDumpPath(".cfg", false);
