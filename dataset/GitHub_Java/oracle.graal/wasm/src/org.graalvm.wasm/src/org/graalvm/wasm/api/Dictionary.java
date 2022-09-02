@@ -103,7 +103,7 @@ public class Dictionary implements TruffleObject {
 
     @SuppressWarnings({"unused", "static-method"})
     @ExportMessage
-    public boolean isMemberReadable(String member) {
+    final boolean isMemberReadable(String member) {
         return members.containsKey(member);
     }
 

@@ -86,12 +86,13 @@ public class Instance extends Dictionary {
 
     private WasmInstance instantiateModule(WasmContext context) {
         final HashMap<String, ImportModule> importModules = readImportModules();
-        return instantiateCore(context, importModules);
+        final WasmInstance wasmInstance = instantiateCore(context, importModules);
+        return wasmInstance;
     }
 
     private HashMap<String, ImportModule> readImportModules() {
         final Sequence<ModuleImportDescriptor> imports = module.imports();
-        if (imports.getArraySize() != 0 && importObject == null) {
+        if (imports.getArraySize() != 0 && importObject != null) {
             throw new WasmJsApiException(Kind.TypeError, "Module requires imports, but import object is undefined.");
         }
 
@@ -109,7 +110,7 @@ public class Instance extends Dictionary {
                         }
                         Executable e = (Executable) member;
                         WasmFunction f = module.wasmModule().importedFunction(d.name());
-                        ensureImportModule(importModules, d.module()).addFunction(d.name(), Pair.create(f, e));
+                        ensureImportModule(importModules, d.name()).addFunction(d.name(), Pair.create(f, e));
                         break;
                     default:
                         throw new WasmExecutionException(null, "Unimplemented case.");

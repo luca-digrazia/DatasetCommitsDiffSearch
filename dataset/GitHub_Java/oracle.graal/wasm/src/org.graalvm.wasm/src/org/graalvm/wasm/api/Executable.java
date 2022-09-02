@@ -40,7 +40,6 @@
  */
 package org.graalvm.wasm.api;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -56,7 +55,6 @@ public class Executable implements TruffleObject {
         this.function = function;
     }
 
-    @TruffleBoundary
     public Object executeFunction(Object[] arguments) {
         return function.apply(arguments);
     }
