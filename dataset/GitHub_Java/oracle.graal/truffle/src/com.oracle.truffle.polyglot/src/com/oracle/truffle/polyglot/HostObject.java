@@ -450,7 +450,7 @@ final class HostObject implements TruffleObject {
                         @Shared("isArray") @Cached IsArrayNode isArray,
                         @Cached ArraySet arraySet,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
+            if (index < 0 || Integer.MAX_VALUE < index) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -481,7 +481,7 @@ final class HostObject implements TruffleObject {
                         @Shared("isList") @Cached IsListNode isList,
                         @Shared("toHost") @Cached ToHostNode toHostNode,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
+            if (index < 0 || Integer.MAX_VALUE < index) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -548,7 +548,7 @@ final class HostObject implements TruffleObject {
         static void doList(HostObject receiver, long index,
                         @Shared("isList") @Cached IsListNode isList,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
+            if (index < 0 || Integer.MAX_VALUE < index) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -588,7 +588,7 @@ final class HostObject implements TruffleObject {
                         @Shared("isArray") @Cached IsArrayNode isArray,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
+            if (index < 0 || Integer.MAX_VALUE < index) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -610,7 +610,7 @@ final class HostObject implements TruffleObject {
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             try {
-                if (index > Integer.MAX_VALUE) {
+                if (index < 0 || Integer.MAX_VALUE < index) {
                     error.enter();
                     throw InvalidArrayIndexException.create(index);
                 }
@@ -1095,18 +1095,19 @@ final class HostObject implements TruffleObject {
     @SuppressWarnings("static-method")
     @ExportMessage
     boolean hasMetaObject() {
-        return !isNull();
+        return true;
     }
 
     @ExportMessage
     Object getMetaObject() throws UnsupportedMessageException {
-        if (hasMetaObject()) {
-            Object javaObject = this.obj;
-            Class<?> javaType = javaObject.getClass();
-            return HostObject.forClass(javaType, languageContext);
+        Object javaObject = this.obj;
+        Class<?> javaType;
+        if (javaObject == null) {
+            javaType = Void.class;
         } else {
-            throw UnsupportedMessageException.create();
+            javaType = javaObject.getClass();
         }
+        return HostObject.forClass(javaType, languageContext);
     }
 
     @SuppressWarnings("static-method")
@@ -1144,7 +1145,7 @@ final class HostObject implements TruffleObject {
             if (HostObject.isInstance(other)) {
                 HostObject otherHost = ((HostObject) other);
                 if (otherHost.isNull()) {
-                    return false;
+                    return c == Void.class;
                 } else {
                     return c.isInstance(otherHost.obj);
                 }
