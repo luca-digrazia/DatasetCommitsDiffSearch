@@ -25,17 +25,25 @@
 package com.oracle.svm.core.jdk;
 
 /* Checkstyle: allow reflection */
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
 
-import com.oracle.svm.core.util.VMError;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.hosted.Feature.AfterAnalysisAccess;
+import org.graalvm.nativeimage.hosted.Feature.DuringAnalysisAccess;
 import org.graalvm.nativeimage.hosted.Feature.FeatureAccess;
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
+import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ReflectionUtil;
 
 /**
@@ -72,6 +80,11 @@ public class JNIRegistrationUtil {
         return classByName;
     }
 
+    protected static Optional<Class<?>> optionalClazz(FeatureAccess access, String className) {
+        Class<?> classByName = access.findClassByName(className);
+        return Optional.ofNullable(classByName);
+    }
+
     protected static Method method(FeatureAccess access, String className, String methodName, Class<?>... parameterTypes) {
         return ReflectionUtil.lookupMethod(clazz(access, className), methodName, parameterTypes);
     }
@@ -94,5 +107,16 @@ public class JNIRegistrationUtil {
             JNIRuntimeAccess.register(clazz(access, exceptionClassName));
             JNIRuntimeAccess.register(constructor(access, exceptionClassName, String.class));
         }
+    }
+
+    private static Set<Consumer<DuringAnalysisAccess>> runOnceCallbacks = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    /** Intended to be used from within a callback to ensure that it is run only once. */
+    protected static boolean isRunOnce(Consumer<DuringAnalysisAccess> callback) {
+        return !runOnceCallbacks.add(callback);
+    }
+
+    public void afterAnalysis(@SuppressWarnings("unused") AfterAnalysisAccess access) {
+        runOnceCallbacks.clear();
     }
 }

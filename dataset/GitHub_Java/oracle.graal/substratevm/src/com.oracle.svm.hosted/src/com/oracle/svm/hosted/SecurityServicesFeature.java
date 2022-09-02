@@ -95,7 +95,6 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        RuntimeClassInitializationSupport rci = ImageSingletons.lookup(RuntimeClassInitializationSupport.class);
         /*
          * The SecureRandom implementations open the /dev/random and /dev/urandom files which are
          * used as sources for entropy. These files are opened in the static initializers. That's
@@ -103,12 +102,12 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
          * initializers execution to runtime because the SecureRandom classes are needed by the
          * native image generator too, e.g., by Files.createTempDirectory().
          */
-        rci.rerunInitialization(NativePRNG.class, "for substitutions");
-        rci.rerunInitialization(NativePRNG.Blocking.class, "for substitutions");
-        rci.rerunInitialization(NativePRNG.NonBlocking.class, "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(NativePRNG.class, "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(NativePRNG.Blocking.class, "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(NativePRNG.NonBlocking.class, "for substitutions");
 
-        rci.rerunInitialization(clazz(access, "sun.security.provider.SeedGenerator"), "for substitutions");
-        rci.rerunInitialization(clazz(access, "sun.security.provider.SecureRandom$SeederHolder"), "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.SeedGenerator"), "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.SecureRandom$SeederHolder"), "for substitutions");
 
         if (JavaVersionUtil.JAVA_SPEC >= 11) {
             /*
@@ -116,25 +115,25 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
              * seeder field that needs to be re-initialized at run time because it captures the
              * result of SeedGenerator.getSystemEntropy().
              */
-            rci.rerunInitialization(clazz(access, "sun.security.provider.AbstractDrbg$SeederHolder"), "for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.AbstractDrbg$SeederHolder"), "for substitutions");
         }
 
         if (JavaVersionUtil.JAVA_SPEC > 8) {
-            rci.rerunInitialization(clazz(access, "sun.security.provider.FileInputStreamPool"), "for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.FileInputStreamPool"), "for substitutions");
         }
 
         /* java.util.UUID$Holder has a static final SecureRandom field. */
-        rci.rerunInitialization(clazz(access, "java.util.UUID$Holder"), "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "java.util.UUID$Holder"), "for substitutions");
 
         /*
          * The classes bellow have a static final SecureRandom field. Note that if the classes are
          * not found as reachable by the analysis registering them form class initialization rerun
          * doesn't have any effect.
          */
-        rci.rerunInitialization(clazz(access, "sun.security.jca.JCAUtil$CachedSecureRandomHolder"), "for substitutions");
-        rci.rerunInitialization(clazz(access, "com.sun.crypto.provider.SunJCE$SecureRandomHolder"), "for substitutions");
-        rci.rerunInitialization(clazz(access, "sun.security.krb5.Confounder"), "for substitutions");
-        rci.rerunInitialization(javax.net.ssl.SSLContext.class, "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.jca.JCAUtil$CachedSecureRandomHolder"), "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "com.sun.crypto.provider.SunJCE$SecureRandomHolder"), "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.krb5.Confounder"), "for substitutions");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(javax.net.ssl.SSLContext.class, "for substitutions");
 
         /*
          * When SSLContextImpl$DefaultManagersHolder sets-up the TrustManager in its initializer it
@@ -142,7 +141,8 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
          * properties from the build machine. Re-runing its initialization at run time is required
          * to use the run time provided values.
          */
-        rci.rerunInitialization(clazz(access, "sun.security.ssl.SSLContextImpl$DefaultManagersHolder"), "for reading properties at run time");
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.ssl.SSLContextImpl$DefaultManagersHolder"),
+                        "for reading properties at run time");
 
         /*
          * SSL debug logging enabled by javax.net.debug system property is setup during the class
@@ -156,8 +156,10 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
         optionalClazz(access, "sun.security.ssl.Debug").ifPresent(c -> rci.rerunInitialization(c, "for reading properties at run time"));
         optionalClazz(access, "sun.security.ssl.SSLLogger").ifPresent(c -> rci.rerunInitialization(c, "for reading properties at run time"));
 
-        /* Prepare SunEC native library access. */
-        prepareSunEC();
+        if (SubstrateOptions.EnableAllSecurityServices.getValue()) {
+            /* Prepare SunEC native library access. */
+            prepareSunEC();
+        }
     }
 
     private static void prepareSunEC() {
@@ -254,16 +256,18 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
     private static void linkSunEC(DuringAnalysisAccess duringAnalysisAccess) {
         FeatureImpl.DuringAnalysisAccessImpl a = (FeatureImpl.DuringAnalysisAccessImpl) duringAnalysisAccess;
         NativeLibraries nativeLibraries = a.getNativeLibraries();
-        /* We statically link sunec thus we classify it as builtIn library */
-        PlatformNativeLibrarySupport.singleton();
-        NativeLibrarySupport.singleton().preregisterUninitializedBuiltinLibrary("sunec");
-        /* and ensure native calls to sun_security_ec* will be resolved as builtIn. */
-        PlatformNativeLibrarySupport.singleton().addBuiltinPkgNativePrefix("sun_security_ec");
+        if (nativeLibraries.getStaticLibraryPath("sunec") != null) {
+            /* We statically link sunec thus we classify it as builtIn library */
+            PlatformNativeLibrarySupport.singleton();
+            NativeLibrarySupport.singleton().preregisterUninitializedBuiltinLibrary("sunec");
+            /* and ensure native calls to sun_security_ec* will be resolved as builtIn. */
+            PlatformNativeLibrarySupport.singleton().addBuiltinPkgNativePrefix("sun_security_ec");
 
-        nativeLibraries.addStaticJniLibrary("sunec");
-        if (isPosix()) {
-            /* Library sunec depends on stdc++ */
-            nativeLibraries.addDynamicNonJniLibrary("stdc++");
+            nativeLibraries.addStaticJniLibrary("sunec");
+            if (isPosix()) {
+                /* Library sunec depends on stdc++ */
+                nativeLibraries.addDynamicNonJniLibrary("stdc++");
+            }
         }
     }
 
@@ -271,11 +275,13 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
         JNIRuntimeAccess.register(fields(duringAnalysisAccess, "com.sun.security.auth.module.UnixSystem", "username", "uid", "gid", "groups"));
 
         NativeLibraries nativeLibraries = ((FeatureImpl.DuringAnalysisAccessImpl) duringAnalysisAccess).getNativeLibraries();
-        /* We can statically link jaas, thus we classify it as builtIn library */
-        NativeLibrarySupport.singleton().preregisterUninitializedBuiltinLibrary(JavaVersionUtil.JAVA_SPEC >= 11 ? "jaas" : "jaas_unix");
-        /* Resolve calls to com_sun_security_auth_module_UnixSystem* as builtIn. */
-        PlatformNativeLibrarySupport.singleton().addBuiltinPkgNativePrefix("com_sun_security_auth_module_UnixSystem");
-        nativeLibraries.addStaticJniLibrary("jaas");
+        if (nativeLibraries.getStaticLibraryPath("jaas") != null) {
+            /* We can statically link jaas, thus we classify it as builtIn library */
+            NativeLibrarySupport.singleton().preregisterUninitializedBuiltinLibrary(JavaVersionUtil.JAVA_SPEC >= 11 ? "jaas" : "jaas_unix");
+            /* Resolve calls to com_sun_security_auth_module_UnixSystem* as builtIn. */
+            PlatformNativeLibrarySupport.singleton().addBuiltinPkgNativePrefix("com_sun_security_auth_module_UnixSystem");
+            nativeLibraries.addStaticJniLibrary("jaas");
+        }
     }
 
     /**
