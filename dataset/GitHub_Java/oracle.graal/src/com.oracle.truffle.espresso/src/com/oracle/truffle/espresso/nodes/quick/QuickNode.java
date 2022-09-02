@@ -28,7 +28,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoInstrumentableQuickNode;
-import com.oracle.truffle.espresso.nodes.OperandStack;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public abstract class QuickNode extends EspressoInstrumentableQuickNode {
@@ -55,13 +54,13 @@ public abstract class QuickNode extends EspressoInstrumentableQuickNode {
     }
 
     @Override
-    public abstract int execute(VirtualFrame frame, OperandStack stack);
+    public abstract int execute(VirtualFrame frame);
 
     public boolean removedByRedefintion() {
         return false;
     }
 
-    public abstract boolean producedForeignObject(OperandStack stack);
+    public abstract boolean producedForeignObject(VirtualFrame frame);
 
     protected final StaticObject nullCheck(StaticObject value) {
         if (StaticObject.isNull(value)) {
