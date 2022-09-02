@@ -29,11 +29,10 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 
 public abstract class BinaryStreamReader {
-    @CompilationFinal(dimensions = 1) protected byte[] data;
+    protected byte[] data;
     protected int offset;
     private byte[] bytesConsumed;
 
@@ -250,9 +249,8 @@ public abstract class BinaryStreamReader {
     public static byte peekBlockType(byte[] data, int offset) {
         byte type = peek1(data, offset);
         switch (type) {
-            case 0x00:
-            case ValueTypes.VOID_TYPE:
-                return ValueTypes.VOID_TYPE;
+            case 0x40:
+                return type;
             default:
                 return peekValueType(data, offset);
         }
@@ -267,10 +265,10 @@ public abstract class BinaryStreamReader {
     public static byte peekValueType(byte[] data, int offset) {
         byte b = peek1(data, offset);
         switch (b) {
-            case ValueTypes.I32_TYPE:
-            case ValueTypes.I64_TYPE:
-            case ValueTypes.F32_TYPE:
-            case ValueTypes.F64_TYPE:
+            case 0x7F:  // i32
+            case 0x7E:  // i64
+            case 0x7D:  // f32
+            case 0x7C:  // f64
                 break;
             default:
                 Assert.fail(String.format("Invalid value type: 0x%02X", b));
