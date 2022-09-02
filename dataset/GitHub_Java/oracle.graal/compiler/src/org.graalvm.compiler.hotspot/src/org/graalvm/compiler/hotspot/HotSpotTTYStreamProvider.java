@@ -150,17 +150,17 @@ public class HotSpotTTYStreamProvider implements TTYStreamProvider {
         public Locker(Pointer lock, Random rand, long unlockValue) {
             this.unlockValue = unlockValue;
             this.lock = lock;
-            int sleepLimit = INITIAL_SLEEP;
+            int sleep_limit = INITIAL_SLEEP;
             while (true) {
                 long value = lock.readLong(0);
                 if (value == LOCKED) {
                     try {
                         // Randomize sleep time to mitigate waiting threads
                         // performing in lock-step with each other.
-                        int sleep = rand.nextInt(sleepLimit);
+                        int sleep = rand.nextInt(sleep_limit);
                         Thread.sleep(sleep);
                         // Exponential back-off up to MAX_SLEEP ms
-                        sleepLimit = Math.min(MAX_SLEEP, sleepLimit * 2);
+                        sleep_limit = Math.min(MAX_SLEEP, sleep_limit * 2);
                     } catch (InterruptedException e) {
                     }
                     continue;
@@ -192,7 +192,7 @@ public class HotSpotTTYStreamProvider implements TTYStreamProvider {
          * Creates a global output stream for writing the file denoted by {@code name} where each
          * operation is serialized on {@code lock}.
          */
-        ProcessSynchronizedOutputStream(Pointer lock, String name) {
+        public ProcessSynchronizedOutputStream(Pointer lock, String name) {
             this.lock = lock;
             this.name = name;
             this.rand = new Random();
