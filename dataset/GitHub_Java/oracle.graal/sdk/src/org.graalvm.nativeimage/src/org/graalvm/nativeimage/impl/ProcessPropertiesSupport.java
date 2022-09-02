@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,6 @@
  */
 package org.graalvm.nativeimage.impl;
 
-import java.nio.file.Path;
-
 import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 
 public interface ProcessPropertiesSupport {
@@ -64,19 +62,4 @@ public interface ProcessPropertiesSupport {
     boolean isAlive(long processID);
 
     int waitForProcessExit(long processID);
-
-    void exec(Path executable, String[] args);
-
-    default int getArgumentVectorBlockSize() {
-        throw new UnsupportedOperationException();
-    }
-
-    default String getArgumentVectorProgramName() {
-        throw new UnsupportedOperationException();
-    }
-
-    @SuppressWarnings("unused")
-    default boolean setArgumentVectorProgramName(String name) {
-        throw new UnsupportedOperationException();
-    }
 }
