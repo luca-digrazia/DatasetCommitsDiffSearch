@@ -43,8 +43,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObject.StaticObjectFactory;
-import com.oracle.truffle.espresso.staticobject.ClassLoaderCache;
-import com.oracle.truffle.espresso.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticPropertyKind;
 import com.oracle.truffle.espresso.staticobject.StaticShape;
@@ -56,7 +54,7 @@ public final class ArrayKlass extends Klass {
     private final Klass elementalType;
     private final int dimension;
 
-    private static final StaticProperty ARRAY_PROPERTY = new DefaultStaticProperty("array", StaticPropertyKind.Object, true);
+    private static final StaticProperty ARRAY_PROPERTY = new StaticProperty(StaticPropertyKind.Object);
     // This field should be static final, but until we move the static object model we cannot have a
     // SubstrateVM feature which will allow us to set the right field offsets at image build time.
     @CompilationFinal //
@@ -80,17 +78,17 @@ public final class ArrayKlass extends Klass {
         return ARRAY_PROPERTY;
     }
 
-    public static StaticShape<StaticObjectFactory> getArrayShape(ClassLoaderCache clc) {
+    public static StaticShape<StaticObjectFactory> getArrayShape() {
         if (arrayShape == null) {
-            initializeArrayShape(clc);
+            initializeArrayShape();
         }
         return arrayShape;
     }
 
     @TruffleBoundary
-    private static synchronized void initializeArrayShape(ClassLoaderCache clc) {
+    private static synchronized void initializeArrayShape() {
         if (arrayShape == null) {
-            arrayShape = StaticShape.newBuilder(clc).property(ARRAY_PROPERTY).build(StaticObject.class, StaticObjectFactory.class);
+            arrayShape = StaticShape.newBuilder().property(ARRAY_PROPERTY, "array", true).build(StaticObject.class, StaticObjectFactory.class);
         }
     }
 

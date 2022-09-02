@@ -49,6 +49,8 @@ abstract class ShapeGenerator<T> {
 
     protected final Class<?> generatedStorageClass;
     protected final Class<? extends T> generatedFactoryClass;
+    protected final Collection<ExtendedProperty> extendedProperties;
+    protected final StaticShape<T> parentShape;
 
     static {
         String value = System.getProperty("java.specification.version");
@@ -67,16 +69,23 @@ abstract class ShapeGenerator<T> {
         }
     }
 
-    ShapeGenerator(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass) {
+    ShapeGenerator(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass, Collection<ExtendedProperty> extendedProperties, StaticShape<T> parentShape) {
         this.generatedStorageClass = generatedStorageClass;
         this.generatedFactoryClass = generatedFactoryClass;
+        this.extendedProperties = extendedProperties;
+        this.parentShape = parentShape;
     }
 
-    abstract StaticShape<T> generateShape(StaticShape<T> parentShape, Collection<ExtendedProperty> extendedProperties);
+    abstract StaticShape<T> generateShape();
 
     @SuppressWarnings("unchecked")
-    static <T> ShapeGenerator<T> getShapeGenerator(Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
-        return ArrayBasedShapeGenerator.getShapeGenerator(storageSuperClass, storageFactoryInterface);
+    static <T> ShapeGenerator<T> getShapeGenerator(StaticShape<T> parentShape, Collection<ExtendedProperty> extendedProperties) {
+        return ArrayBasedShapeGenerator.getShapeGenerator(parentShape, extendedProperties);
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> ShapeGenerator<T> getShapeGenerator(Class<?> storageSuperClass, Class<T> storageFactoryInterface, Collection<ExtendedProperty> extendedProperties) {
+        return ArrayBasedShapeGenerator.getShapeGenerator(storageSuperClass, storageFactoryInterface, extendedProperties);
     }
 
     static String generateStorageName() {

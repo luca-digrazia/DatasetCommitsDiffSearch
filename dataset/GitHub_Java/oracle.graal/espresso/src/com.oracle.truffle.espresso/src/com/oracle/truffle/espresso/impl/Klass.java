@@ -29,8 +29,6 @@ import static com.oracle.truffle.espresso.vm.InterpreterToVM.instanceOf;
 import java.util.Comparator;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.espresso.staticobject.ClassLoaderCache;
-import com.oracle.truffle.espresso.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticPropertyKind;
 import com.oracle.truffle.espresso.staticobject.StaticShape;
@@ -472,7 +470,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     static final DebugCounter KLASS_LOOKUP_DECLARED_METHOD_COUNT = DebugCounter.create("Klass.lookupDeclaredMethod call count");
     static final DebugCounter KLASS_LOOKUP_DECLARED_FIELD_COUNT = DebugCounter.create("Klass.lookupDeclaredField call count");
 
-    private static final StaticProperty FOREIGN_PROPERTY = new DefaultStaticProperty("foreignObject", StaticPropertyKind.Object, true);
+    private static final StaticProperty FOREIGN_PROPERTY = new StaticProperty(StaticPropertyKind.Object);
     // This field should be static final, but until we move the static object model we cannot have a
     // SubstrateVM feature which will allow us to set the right field offsets at image build time.
     @CompilationFinal //
@@ -615,17 +613,17 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return FOREIGN_PROPERTY;
     }
 
-    public static StaticShape<StaticObjectFactory> getForeignShape(ClassLoaderCache clc) {
+    public static StaticShape<StaticObjectFactory> getForeignShape() {
         if (foreignShape == null) {
-            initializeForeignShape(clc);
+            initializeForeignShape();
         }
         return foreignShape;
     }
 
     @TruffleBoundary
-    private static synchronized void initializeForeignShape(ClassLoaderCache clc) {
+    private static synchronized void initializeForeignShape() {
         if (foreignShape == null) {
-            foreignShape = StaticShape.newBuilder(clc).property(FOREIGN_PROPERTY).build(StaticObject.class, StaticObjectFactory.class);
+            foreignShape = StaticShape.newBuilder().property(FOREIGN_PROPERTY, "foreignObject", true).build(StaticObject.class, StaticObjectFactory.class);
         }
     }
 
