@@ -82,7 +82,7 @@ public class Driver {
         }
     }
 
-    private static final boolean hasJreDir = System.getProperty("java.specification.version").startsWith("1.");
+    private static boolean hasJreDir = System.getProperty("java.specification.version").startsWith("1.");
 
     private static Path getRuntimeDir() {
         Path runtimeDir = HomeFinder.getInstance().getHomeFolder();
@@ -111,6 +111,12 @@ public class Driver {
     }
 
     public Path getSulongHome() {
+        // TODO (GR-18389): Unify system properties and HomeFinder
+        String property = System.getProperty("llvm.home");
+        if (property != null) {
+            return Paths.get(property);
+        }
+
         final Path sulongHome = HomeFinder.getInstance().getLanguageHomes().get("llvm");
         if (sulongHome != null) {
             return sulongHome;
