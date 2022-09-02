@@ -27,13 +27,13 @@ import java.security.AccessControlContext;
 import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 
-import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -46,39 +46,11 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
  */
 @EspressoSubstitutions
 public final class Target_java_security_AccessController {
+
     @Substitution
     public static @Host(Object.class) StaticObject doPrivileged(@Host(PrivilegedAction.class) StaticObject action) {
-        EspressoContext context = EspressoLanguage.getCurrentContext(); // action.getKlass().getContext();
         Method run = action.getKlass().lookupMethod(Name.run, Signature.Object);
         return (StaticObject) run.invokeDirect(action);
-    }
-
-    @Substitution(methodName = "doPrivileged")
-    public static @Host(Object.class) StaticObject doPrivileged_PrivilegedExceptionAction(@Host(PrivilegedExceptionAction.class) StaticObject action) {
-        return doPrivileged_PrivilegedExceptionAction_AccessControlContext(action, StaticObject.NULL);
-    }
-
-    @Substitution
-    public static @Host(AccessControlContext.class) StaticObject getStackAccessControlContext() {
-        return StaticObject.NULL;
-    }
-
-    @Substitution(methodName = "doPrivileged")
-    public static @Host(Object.class) StaticObject doPrivileged_PrivilegedExceptionAction_AccessControlContext(
-                    @Host(PrivilegedExceptionAction.class) StaticObject action,
-                    @SuppressWarnings("unused") @Host(AccessControlContext.class) StaticObject context) {
-        try {
-            return doPrivileged(action);
-        } catch (EspressoException e) {
-            Meta meta = action.getKlass().getMeta();
-            // Wrap exception in PrivilegedActionException.
-            StaticObject wrapper = meta.PrivilegedActionException.allocateInstance();
-            meta.PrivilegedActionException_init_Exception.invokeDirect(wrapper, e.getException());
-            throw new EspressoException(wrapper);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw EspressoError.shouldNotReachHere(e);
-        }
     }
 
     @Substitution(methodName = "doPrivileged")
@@ -87,4 +59,45 @@ public final class Target_java_security_AccessController {
                     @SuppressWarnings("unused") @Host(AccessControlContext.class) StaticObject context) {
         return doPrivileged(action);
     }
+
+    @Substitution(methodName = "doPrivileged")
+    public static @Host(Object.class) StaticObject doPrivileged_PrivilegedExceptionAction(@Host(PrivilegedExceptionAction.class) StaticObject action,
+                    @GuestCall DirectCallNode PrivilegedActionException_init_Exception) {
+        return doPrivileged_PrivilegedExceptionAction_AccessControlContext(action, StaticObject.NULL, PrivilegedActionException_init_Exception);
+    }
+
+    @Substitution(methodName = "doPrivileged")
+    public static @Host(Object.class) StaticObject doPrivileged_PrivilegedExceptionAction_AccessControlContext(
+                    @Host(PrivilegedExceptionAction.class) StaticObject action,
+                    @SuppressWarnings("unused") @Host(AccessControlContext.class) StaticObject context,
+                    @GuestCall DirectCallNode PrivilegedActionException_init_Exception) {
+        Method run = null;
+        try {
+            run = action.getKlass().lookupMethod(Name.run, Signature.Object);
+            return (StaticObject) run.invokeDirect(action);
+        } catch (EspressoException e) {
+            Meta meta = action.getKlass().getMeta();
+            // Wrap exception in PrivilegedActionException if it is a declared exception.
+            if (run == null) {
+                throw e;
+            }
+            if (meta.Exception.isAssignableFrom(e.getException().getKlass()) &&
+                            !meta.RuntimeException.isAssignableFrom(e.getException().getKlass())) {
+                StaticObject wrapper = meta.PrivilegedActionException.allocateInstance();
+                PrivilegedActionException_init_Exception.call(wrapper, e.getException());
+                throw new EspressoException(wrapper);
+            }
+            throw e;
+
+        } catch (Exception e) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere(e);
+        }
+    }
+
+    @Substitution
+    public static @Host(AccessControlContext.class) StaticObject getStackAccessControlContext() {
+        return StaticObject.NULL;
+    }
+
 }

@@ -113,9 +113,7 @@ public class VMImplProcessor extends IntrinsicsProcessor {
                                 className,
                                 targetMethodName,
                                 espressoTypes,
-                                guestCalls,
-                                hasMetaInjection(VMmethod),
-                                h);
+                                guestCalls, h);
                 commitSubstitution(VMmethod, substitutorName, classFile);
             }
         }
@@ -141,7 +139,7 @@ public class VMImplProcessor extends IntrinsicsProcessor {
     }
 
     @Override
-    String generateImports(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection, SubstitutionHelper helper) {
+    String generateImports(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         VMHelper h = (VMHelper) helper;
         str.append(IMPORT_VM);
@@ -159,7 +157,7 @@ public class VMImplProcessor extends IntrinsicsProcessor {
     }
 
     @Override
-    String generateFactoryConstructorBody(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection, SubstitutionHelper helper) {
+    String generateFactoryConstructorBody(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         VMHelper h = (VMHelper) helper;
         str.append(TAB_3).append("super(\n");
@@ -174,7 +172,7 @@ public class VMImplProcessor extends IntrinsicsProcessor {
     }
 
     @Override
-    String generateInvoke(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, SubstitutionHelper helper, boolean hasMetaInjection) {
+    String generateInvoke(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         VMHelper h = (VMHelper) helper;
         str.append(TAB_1).append(PUBLIC_FINAL_OBJECT).append(INVOKE);
@@ -185,18 +183,18 @@ public class VMImplProcessor extends IntrinsicsProcessor {
         }
         switch (h.returnType) {
             case "char":
-                str.append(TAB_2).append("return ").append("(short) ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls, hasMetaInjection));
+                str.append(TAB_2).append("return ").append("(short) ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls));
                 break;
             case "boolean":
-                str.append(TAB_2).append("boolean b = ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls, hasMetaInjection));
+                str.append(TAB_2).append("boolean b = ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls));
                 str.append(TAB_2).append("return b ? (byte) 1 : (byte) 0;\n");
                 break;
             case "void":
-                str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls, hasMetaInjection));
+                str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls));
                 str.append(TAB_2).append("return ").append(STATIC_OBJECT_NULL).append(";\n");
                 break;
             default:
-                str.append(TAB_2).append("return ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls, hasMetaInjection));
+                str.append(TAB_2).append("return ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, guestCalls));
         }
         str.append(TAB_1).append("}\n");
         str.append("}");

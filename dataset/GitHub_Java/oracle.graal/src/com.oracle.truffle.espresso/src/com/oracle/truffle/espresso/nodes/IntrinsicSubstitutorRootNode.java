@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,19 +25,32 @@ package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.substitutions.Substitutor;
 
-public class IntrinsicSubstitutorRootNode extends EspressoMethodNode {
+public class IntrinsicSubstitutorRootNode extends EspressoBaseNode {
     private final Substitutor substitution;
 
-    public IntrinsicSubstitutorRootNode(Substitutor sub, Method method) {
+    public IntrinsicSubstitutorRootNode(Substitutor.Factory factory, Method method) {
         super(method);
-        this.substitution = sub;
+        this.substitution = factory.create(method.getMeta());
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
-        return substitution.invoke(frame.getArguments());
-    }
+    public Object invokeNaked(VirtualFrame frame) {
+        try {
+            return substitution.invoke(frame.getArguments());
+        } catch (EspressoError e) {
+            // Unnest Espresso Errors
+            Throwable inner = e;
+            EspressoError outer = (EspressoError) inner;
+            inner = inner.getCause();
+            while (inner instanceof EspressoError) {
+                outer = (EspressoError) inner;
+                inner = inner.getCause();
+            }
 
+            throw outer;
+        }
+    }
 }

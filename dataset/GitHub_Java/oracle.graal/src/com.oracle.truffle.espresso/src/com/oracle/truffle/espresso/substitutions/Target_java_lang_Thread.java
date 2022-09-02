@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.substitutions;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -96,8 +97,8 @@ public final class Target_java_lang_Thread {
     // TODO(peterssen): Remove single thread shim, support real threads.
 
     @Substitution
-    public static @Host(Thread.class) StaticObject currentThread(@InjectMeta Meta meta) {
-        return meta.getContext().getHost2Guest(Thread.currentThread());
+    public static @Host(Thread.class) StaticObject currentThread() {
+        return EspressoLanguage.getCurrentContext().getHost2Guest(Thread.currentThread());
     }
 
     @SuppressWarnings("unused")
@@ -168,7 +169,7 @@ public final class Target_java_lang_Thread {
                     @GuestCall DirectCallNode toThreadState) {
         Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
         // If hostThread is null, start hasn't been called yet -> NEW state.
-        return (StaticObject) toThreadState.call(hostThread == null ? State.NEW.value : stateToInt(hostThread.getState()));
+        return (StaticObject) toThreadState.call(null, hostThread == null ? State.NEW.value : stateToInt(hostThread.getState()));
     }
 
     @SuppressWarnings("unused")
@@ -192,8 +193,9 @@ public final class Target_java_lang_Thread {
     }
 
     @Substitution
-    public static boolean holdsLock(@Host(Object.class) StaticObject object, @InjectMeta Meta meta) {
+    public static boolean holdsLock(@Host(Object.class) StaticObject object) {
         if (StaticObject.isNull(object)) {
+            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
             throw meta.throwEx(meta.NullPointerException);
         }
         return Thread.holdsLock(object);
@@ -201,10 +203,11 @@ public final class Target_java_lang_Thread {
 
     @TruffleBoundary
     @Substitution
-    public static void sleep(long millis, @InjectMeta Meta meta) {
+    public static void sleep(long millis) {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException | IllegalArgumentException e) {
+            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
             throw meta.throwExWithMessage(e.getClass(), e.getMessage());
         }
     }

@@ -1,40 +1,46 @@
-package com.oracle.truffle.espresso.jni;
+package com.oracle.truffle.espresso.vm;
 
 import com.oracle.truffle.espresso.meta.Meta;
 
-public abstract class JniSubstitutor {
+public abstract class VMSubstitutor {
 
     public abstract static class Factory {
-        public abstract JniSubstitutor create(Meta meta);
+        public abstract VMSubstitutor create(Meta meta);
 
         private final String methodName;
         private final String jniNativeSignature;
         private final int parameterCount;
         private final String returnType;
+        private final boolean isJni;
 
-        public Factory(String methodName, String jniNativeSignature, int parameterCount, String returnType) {
+        Factory(String methodName, String jniNativeSignature, int parameterCount, String returnType, boolean isJni) {
             this.methodName = methodName;
             this.jniNativeSignature = jniNativeSignature;
             this.parameterCount = parameterCount;
             this.returnType = returnType;
+            this.isJni = isJni;
         }
 
-        public final String methodName() {
+        public String methodName() {
             return methodName;
         }
 
-        public final String jniNativeSignature() {
+        public String jniNativeSignature() {
             return jniNativeSignature;
         }
 
-        public final int getParameterCount() {
+        public int parameterCount() {
             return parameterCount;
         }
 
-        public final String returnType() {
+        public String returnType() {
             return returnType;
+        }
+
+        public boolean isJni() {
+            return isJni;
         }
     }
 
-    public abstract Object invoke(JniEnv env, Object[] args);
+    public abstract Object invoke(VM vm, Object[] args);
 }
