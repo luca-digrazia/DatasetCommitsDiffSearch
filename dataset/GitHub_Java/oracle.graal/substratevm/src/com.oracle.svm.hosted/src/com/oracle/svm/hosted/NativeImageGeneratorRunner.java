@@ -182,7 +182,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     @SuppressWarnings("try")
-    private int buildImage(String[] arguments, String[] classpath, NativeImageClassLoader classLoader) {
+    private int buildImage(String[] arguments, String[] classpath, ClassLoader classLoader) {
         if (!verifyValidJavaVersionAndPlatform()) {
             return 1;
         }
@@ -423,7 +423,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     @Override
-    public int build(String[] args, String[] classpath, NativeImageClassLoader imageClassLoader) {
+    public int build(String[] args, String[] classpath, ClassLoader imageClassLoader) {
         return buildImage(args, classpath, imageClassLoader);
     }
 
