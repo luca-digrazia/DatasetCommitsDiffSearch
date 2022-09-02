@@ -121,6 +121,8 @@ public final class Target_sun_misc_Unsafe {
 
         ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, classLoader, hostKlass);
 
+        klass.unsafeSetVerified();
+
         klass.getConstantPool().setKlassAt(thisKlassIndex, klass);
 
         return klass;
@@ -226,6 +228,7 @@ public final class Target_sun_misc_Unsafe {
         byte[] buf = guestBuf.unwrap();
         byte[] bytes = Arrays.copyOfRange(buf, offset, len);
         Klass klass = self.getKlass().getMeta().getRegistries().defineKlass(self.getKlass().getTypes().fromClassGetName(Meta.toHostString(name)), bytes, loader);
+        klass.unsafeSetVerified();
         return klass.mirror();
     }
 
