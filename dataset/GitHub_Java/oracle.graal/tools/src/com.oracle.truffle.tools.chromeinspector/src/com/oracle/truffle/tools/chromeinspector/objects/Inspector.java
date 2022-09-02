@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,6 @@ import java.util.function.Supplier;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
@@ -58,14 +57,12 @@ public final class Inspector extends AbstractInspectorObject {
     private final InspectorServerConnection.Open open;
     private final Console console;
     private final SessionClass sessionType;
-    private final UndefinedProvider undefinedProvider;
 
-    public Inspector(TruffleInstrument.Env env, InspectorServerConnection connection, InspectorServerConnection.Open open, Supplier<InspectorExecutionContext> contextSupplier) {
-        this.undefinedProvider = new UndefinedProvider(env);
+    public Inspector(InspectorServerConnection connection, InspectorServerConnection.Open open, Supplier<InspectorExecutionContext> contextSupplier) {
         this.connection = connection;
         this.open = open;
-        this.console = new Console(connection, undefinedProvider);
-        this.sessionType = new SessionClass(contextSupplier, undefinedProvider);
+        this.console = new Console(connection);
+        this.sessionType = new SessionClass(contextSupplier);
     }
 
     public static boolean isInstance(TruffleObject obj) {
@@ -128,7 +125,7 @@ public final class Inspector extends AbstractInspectorObject {
     }
 
     @TruffleBoundary
-    private Object methodClose() {
+    private TruffleObject methodClose() {
         if (connection != null) {
             try {
                 connection.close();
@@ -137,11 +134,11 @@ public final class Inspector extends AbstractInspectorObject {
             }
             connection = null;
         }
-        return undefinedProvider.get();
+        return NullObject.INSTANCE;
     }
 
     @TruffleBoundary
-    private Object methodOpen(Object[] arguments) {
+    private TruffleObject methodOpen(Object[] arguments) {
         int port = -1;
         String host = null;
         boolean wait = false;
@@ -168,14 +165,14 @@ public final class Inspector extends AbstractInspectorObject {
             connection = newConnection;
             console.setConnection(newConnection);
         }
-        return undefinedProvider.get();
+        return NullObject.INSTANCE;
     }
 
     private Object methodUrl() {
         if (connection != null) {
             return connection.getURL();
         } else {
-            return undefinedProvider.get();
+            return NullObject.INSTANCE;
         }
     }
 

@@ -57,6 +57,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 
 import org.graalvm.options.OptionCategory;
@@ -227,7 +228,7 @@ public abstract class TruffleLanguage<C> {
 
     // get and isFinal are frequent operations -> cache the engine access call
     @CompilationFinal private LanguageInfo languageInfo;
-    @CompilationFinal private ContextReference<Object> reference;
+    @CompilationFinal private ContextReference<C> reference;
     @CompilationFinal private Object vmObject; // PolyglotLanguageInstance
 
     /**
@@ -1187,12 +1188,11 @@ public abstract class TruffleLanguage<C> {
      *
      * @since 0.25
      */
-    @SuppressWarnings("unchecked")
     public final ContextReference<C> getContextReference() {
         if (reference == null) {
             throw new IllegalStateException("TruffleLanguage instance is not initialized. Cannot get the current context reference.");
         }
-        return (ContextReference<C>) reference;
+        return reference;
     }
 
     CallTarget parse(Source source, String... argumentNames) {
@@ -1228,14 +1228,14 @@ public abstract class TruffleLanguage<C> {
 
     /**
      * Returns the current language instance for the current {@link Thread thread}. If a {@link Node
-     * node} is accessible then {@link Node#lookupLanguageReference(Class)} should be used instead.
+     * node} is accessible then {@link Node#getContextSupplier(Class)} should be used instead.
      * Throws an {@link IllegalStateException} if the language is not yet initialized or not
      * executing on this thread. If invoked on the fast-path then <code>languageClass</code> must be
      * a compilation final value.
      *
      * @param <T> the language type
      * @param languageClass the exact language class needs to be provided for the lookup.
-     * @see Node#lookupLanguageReference(Class)
+     * @see Node#getLanguageSupplier(Class)
      * @see com.oracle.truffle.api.dsl.CachedLanguage
      * @since 0.27
      */
@@ -1245,7 +1245,7 @@ public abstract class TruffleLanguage<C> {
 
     /**
      * Returns the current language context entered on the current thread. If a {@link Node node} is
-     * accessible then {@link Node#lookupContextReference(Class)} should be used instead. An
+     * accessible then {@link Node#getLanguageSupplier(Class)} should be used instead. An
      * {@link IllegalStateException} is thrown if the language is not yet initialized or not
      * executing on this thread. If invoked on the fast-path then <code>languageClass</code> must be
      * a compilation final value.
@@ -1253,7 +1253,7 @@ public abstract class TruffleLanguage<C> {
      * @param <C> the context type
      * @param <T> the language type
      * @param languageClass the exact language class needs to be provided for the lookup.
-     * @see Node#lookupContextReference(Class)
+     * @see Node#getContextSupplier(Class)
      * @see com.oracle.truffle.api.dsl.CachedContext
      * @since 0.27
      */
@@ -2186,74 +2186,39 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * Represents a reference to the language to be stored in an AST. A reference can be accessed
-     * using {@link Node#lookupLanguageReference(Class)} and the current language can be accessed
-     * using the {@link LanguageReference#get()} method of the returned reference.
-     * <p>
-     * The current language might vary between {@link RootNode#execute(VirtualFrame) executions} if
-     * the reference is used with interoperability APIs in the AST of a foreign language.
-     *
-     * @since 0.25
-     */
-    @SuppressWarnings("rawtypes")
-    public abstract static class LanguageReference<L extends TruffleLanguage> {
-
-        /**
-         * Constructors for subclasses.
-         *
-         * @since 1.0
-         */
-        protected LanguageReference() {
-        }
-
-        /**
-         * Returns the current language of the current execution context. If a context is accessed
-         * during {@link TruffleLanguage#createContext(Env) context creation} or in the language
-         * class constructor an {@link IllegalStateException} is thrown. This methods is designed to
-         * be called safely from compiled code paths.
-         * <p>
-         * The current language might vary between {@link RootNode#execute(VirtualFrame) executions}
-         * if the reference is used with interoperability APIs in the AST of a foreign language.
-         *
-         * @since 0.25
-         */
-        public abstract L get();
-
-    }
-
-    /**
      * Represents a reference to the current context to be stored in an AST. A reference can be
-     * accessed using {@link Node#lookupContextReference(Class)} and the current context can be
+     * created using {@link TruffleLanguage#getContextReference()} and the current context can be
      * accessed using the {@link ContextReference#get()} method of the returned reference.
      * <p>
-     * The current context might vary between {@link RootNode#execute(VirtualFrame) executions} if
-     * resources or code is shared between multiple contexts.
+     * Please note that the current context might vary between {@link RootNode#execute(VirtualFrame)
+     * executions} if resources or code is shared between multiple contexts.
      *
      * @since 0.25
      */
-    public abstract static class ContextReference<C> {
+    public static final class ContextReference<C> {
 
-        /**
-         * Constructors for subclasses.
-         *
-         * @since 1.0
-         */
-        protected ContextReference() {
+        private final Supplier<Object> supplier;
+
+        private ContextReference(Object languageShared) {
+            this.supplier = AccessAPI.engineAccess().getCurrentContextSupplier(languageShared);
         }
 
         /**
-         * Returns the current language context of the current execution context. If a context is
-         * accessed during {@link TruffleLanguage#createContext(Env) context creation} or in the
-         * language class constructor an {@link IllegalStateException} is thrown. This methods is
-         * designed to be called safely from compiled code paths.
+         * Returns the current context associated with the language this reference was created with.
+         * If a context is accessed during {@link TruffleLanguage#createContext(Env) context
+         * creation} or in the language class constructor an {@link IllegalStateException} is
+         * thrown. This methods is designed to be called safely from compiled code paths.
          * <p>
-         * The current context might vary between {@link RootNode#execute(VirtualFrame) executions}
-         * if resources or code is shared between multiple contexts.
+         * Please note that the current context might vary between
+         * {@link RootNode#execute(VirtualFrame) executions} if resources or code is shared between
+         * multiple contexts.
          *
          * @since 0.25
          */
         @SuppressWarnings("unchecked")
-        public abstract C get();
+        public C get() {
+            return (C) supplier.get();
+        }
     }
 
     /**
@@ -2419,7 +2384,7 @@ public abstract class TruffleLanguage<C> {
         @Override
         public void initializeLanguage(TruffleLanguage<?> impl, LanguageInfo language, Object languageVmObject, Object languageInstanceVMObject) {
             impl.languageInfo = language;
-            impl.reference = AccessAPI.engineAccess().getCurrentContextSupplier(languageVmObject);
+            impl.reference = new ContextReference<>(languageVmObject);
             impl.vmObject = languageInstanceVMObject;
         }
 
