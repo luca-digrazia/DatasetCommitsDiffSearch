@@ -36,9 +36,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 
@@ -525,13 +523,11 @@ public class CompilationResult {
      * @param target the being called
      * @param debugInfo the debug info for the call
      * @param direct specifies if this is a {@linkplain Call#direct direct} call
-     * @return created call object
      */
-    public Call recordCall(int codePos, int size, InvokeTarget target, DebugInfo debugInfo, boolean direct) {
+    public void recordCall(int codePos, int size, InvokeTarget target, DebugInfo debugInfo, boolean direct) {
         checkOpen();
         final Call call = new Call(target, codePos, size, direct, debugInfo);
         addInfopoint(call);
-        return call;
     }
 
     /**
@@ -754,7 +750,6 @@ public class CompilationResult {
         if (annotations != null) {
             annotations.clear();
         }
-        callToMark.clear();
     }
 
     public void clearInfopoints() {
@@ -811,17 +806,5 @@ public class CompilationResult {
                 sites.set(i, replacement.apply(site));
             }
         }
-    }
-
-    private final EconomicMap<Call, Mark> callToMark = EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
-
-    public void recordCallContext(Mark mark, Call call) {
-        if (call != null) {
-            callToMark.put(call, mark);
-        }
-    }
-
-    public Mark getAssociatedMark(Call call) {
-        return callToMark.get(call);
     }
 }

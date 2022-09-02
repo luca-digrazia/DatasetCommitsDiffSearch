@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,10 +25,12 @@
 package com.oracle.svm.graal.meta;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.graalvm.compiler.code.CompilationResult;
@@ -96,7 +98,7 @@ public class RuntimeCodeInstaller {
         new RuntimeCodeInstaller(method, compilation, testTrampolineJumps).doInstall(installedCode);
     }
 
-    protected final SharedRuntimeMethod method;
+    private final SharedRuntimeMethod method;
     private final int tier;
     private final boolean testTrampolineJumps;
     private SubstrateCompilationResult compilation;
@@ -105,7 +107,16 @@ public class RuntimeCodeInstaller {
     private int codeSize;
     private int constantsOffset;
     private InstalledCodeObserver[] codeObservers;
-    protected byte[] compiledBytes;
+    private byte[] compiledBytes;
+
+    /**
+     * The size for trampoline jumps: jmp [rip+offset]
+     * <p>
+     * Trampoline jumps are added immediately after the method code, where each jump needs 6 bytes.
+     * The jump instructions reference the 8-byte destination addresses, which are allocated after
+     * the jumps.
+     */
+    private static final int TRAMPOLINE_JUMP_SIZE = 6;
 
     protected RuntimeCodeInstaller(SharedRuntimeMethod method, CompilationResult compilation, boolean testTrampolineJumps) {
         this.method = method;
@@ -136,9 +147,13 @@ public class RuntimeCodeInstaller {
             code = allocateCodeMemory(tmpMemorySize);
 
             /*
-             * Check if there are some direct calls where the PC displacement is out of the target's
+             * Check if we there are some direct calls where the PC displacement is out of the 32
              * bit range. It should be a rare case, but we need to handle it. In such a case we
              * insert trampoline jumps after the code.
+             *
+             * This could be even improved by using "call [rip+offset]" instructions. But it's not
+             * trivial because these instructions need one byte more than the original PC relative
+             * calls.
              */
             Set<Long> directTargets = new HashSet<>();
             boolean needTrampolineJumps = testTrampolineJumps;
@@ -147,7 +162,7 @@ public class RuntimeCodeInstaller {
                     Call call = (Call) infopoint;
                     long targetAddress = getTargetCodeAddress(call);
                     long pcDisplacement = targetAddress - (code.rawValue() + call.pcOffset);
-                    if (!platformHelper().targetWithinPCDisplacement(pcDisplacement)) {
+                    if (pcDisplacement != (int) pcDisplacement) {
                         needTrampolineJumps = true;
                     }
                     directTargets.add(targetAddress);
@@ -163,8 +178,8 @@ public class RuntimeCodeInstaller {
                  */
                 releaseCodeMemory(code, tmpMemorySize);
 
-                // Add space for the actual trampoline jump instructions
-                tmpConstantsOffset = NumUtil.roundUp(codeSize + directTargets.size() * platformHelper().getTrampolineCallSize(), 8);
+                // Add space for the actual trampoline jump instructions: jmp [rip+offset]
+                tmpConstantsOffset = NumUtil.roundUp(codeSize + directTargets.size() * TRAMPOLINE_JUMP_SIZE, 8);
                 // Add space for the target addresses
                 // (which are referenced from the jump instructions)
                 tmpConstantsOffset = NumUtil.roundUp(tmpConstantsOffset + directTargets.size() * 8, compilation.getDataSection().getSectionAlignment());
@@ -240,7 +255,7 @@ public class RuntimeCodeInstaller {
         Map<Integer, NativeImagePatcher> patches = new HashMap<>();
         for (CodeAnnotation codeAnnotation : compilation.getCodeAnnotations()) {
             if (codeAnnotation instanceof NativeImagePatcher) {
-                patches.put(codeAnnotation.position, (NativeImagePatcher) codeAnnotation);
+                patches.put(codeAnnotation.getPosition(), (NativeImagePatcher) codeAnnotation);
             }
         }
         patchData(patches, objectConstants);
@@ -291,7 +306,6 @@ public class RuntimeCodeInstaller {
                      * it immediately. So all metadata must be registered at this point.
                      */
                     CodePointer codeStart = CodeInfoAccess.getCodeStart(codeInfo);
-                    platformHelper().performCodeSynchronization(codeInfo);
                     installedCode.setAddress(codeStart.rawValue(), method);
                 } catch (Throwable e) {
                     errorBox[0] = e;
@@ -306,7 +320,7 @@ public class RuntimeCodeInstaller {
     }
 
     @SuppressWarnings({"unchecked"})
-    protected static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
+    private static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
         throw (E) ex;
     }
 
@@ -324,7 +338,7 @@ public class RuntimeCodeInstaller {
         codeInfoEncoder.addMethod(method, compilation, 0);
         codeInfoEncoder.encodeAllAndInstall(runtimeMethodInfo, adjuster);
 
-        assert !adjuster.isFinished() || CodeInfoEncoder.verifyMethod(method, compilation, 0, runtimeMethodInfo);
+        assert !adjuster.isFinished() || CodeInfoEncoder.verifyMethod(compilation, 0, runtimeMethodInfo);
         assert !adjuster.isFinished() || codeInfoEncoder.verifyFrameInfo(runtimeMethodInfo);
 
         DeoptimizationSourcePositionEncoder sourcePositionEncoder = new DeoptimizationSourcePositionEncoder();
@@ -348,7 +362,8 @@ public class RuntimeCodeInstaller {
 
     private int patchCalls(Map<Integer, NativeImagePatcher> patches) {
         /*
-         * Patch the direct call instructions.
+         * Patch the direct call instructions. TODO: This is highly x64 specific. Should be
+         * rewritten to generic backends.
          */
         Map<Long, Integer> directTargets = new HashMap<>();
         int currentPos = codeSize;
@@ -357,7 +372,7 @@ public class RuntimeCodeInstaller {
                 Call call = (Call) infopoint;
                 long targetAddress = getTargetCodeAddress(call);
                 long pcDisplacement = targetAddress - (code.rawValue() + call.pcOffset);
-                if (!platformHelper().targetWithinPCDisplacement(pcDisplacement) || testTrampolineJumps) {
+                if (pcDisplacement != (int) pcDisplacement || testTrampolineJumps) {
                     /*
                      * In case a trampoline jump is needed we just "call" the trampoline jump at the
                      * end of the code.
@@ -367,24 +382,38 @@ public class RuntimeCodeInstaller {
                     if (trampolineOffset == null) {
                         trampolineOffset = currentPos;
                         directTargets.put(destAddr, trampolineOffset);
-                        currentPos += platformHelper().getTrampolineCallSize();
+                        currentPos += TRAMPOLINE_JUMP_SIZE;
                     }
                     pcDisplacement = trampolineOffset - call.pcOffset;
                 }
-                assert platformHelper().targetWithinPCDisplacement(pcDisplacement) : "target not within pc displacement";
+                assert pcDisplacement == (int) pcDisplacement;
 
                 // Patch a PC-relative call.
                 patches.get(call.pcOffset).patchCode((int) pcDisplacement, compiledBytes);
             }
         }
         if (directTargets.size() > 0) {
-            currentPos = platformHelper().insertTrampolineCalls(compiledBytes, currentPos, directTargets);
+            /*
+             * Insert trampoline jumps. Note that this is only a fail-safe, because usually the code
+             * should be within a 32-bit address range.
+             */
+            currentPos = NumUtil.roundUp(currentPos, 8);
+            ByteOrder byteOrder = ConfigurationValues.getTarget().arch.getByteOrder();
+            assert byteOrder == ByteOrder.LITTLE_ENDIAN : "Code below assumes little-endian byte order";
+            ByteBuffer codeBuffer = ByteBuffer.wrap(compiledBytes).order(byteOrder);
+            for (Entry<Long, Integer> entry : directTargets.entrySet()) {
+                long targetAddress = entry.getKey();
+                int trampolineOffset = entry.getValue();
+                // Write the "jmp [rip+offset]" instruction
+                codeBuffer.put(trampolineOffset + 0, (byte) 0xff);
+                codeBuffer.put(trampolineOffset + 1, (byte) 0x25);
+                codeBuffer.putInt(trampolineOffset + 2, currentPos - (trampolineOffset + TRAMPOLINE_JUMP_SIZE));
+                // Write the target address
+                codeBuffer.putLong(currentPos, targetAddress);
+                currentPos += 8;
+            }
         }
         return currentPos;
-    }
-
-    protected static RuntimeCodeInstallerPlatformHelper platformHelper() {
-        return ImageSingletons.lookup(RuntimeCodeInstallerPlatformHelper.class);
     }
 
     private static long getTargetCodeAddress(Call callInfo) {
@@ -414,23 +443,5 @@ public class RuntimeCodeInstaller {
 
     protected void releaseCodeMemory(Pointer start, long size) {
         RuntimeCodeInfoAccess.releaseCodeMemory((CodePointer) start, WordFactory.unsigned(size));
-    }
-
-    /**
-     * Methods which are platform specific.
-     */
-    public interface RuntimeCodeInstallerPlatformHelper {
-        boolean targetWithinPCDisplacement(long pcDisplacement);
-
-        int getTrampolineCallSize();
-
-        int insertTrampolineCalls(byte[] compiledBytes, int currentPos, Map<Long, Integer> directTargets);
-
-        /**
-         * Method to enable platforms to perform any needed operations before code becomes visible.
-         *
-         * @param codeInfo the new code to be installed
-         */
-        void performCodeSynchronization(CodeInfo codeInfo);
     }
 }

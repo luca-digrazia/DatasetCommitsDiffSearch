@@ -213,8 +213,9 @@ public class LIRNativeImageCodeCache extends NativeImageCodeCache {
     }
 
     @Override
-    public Path[] getCCInputFiles(Path tempDirectory, String imageName) {
-        return new Path[]{tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix())};
+    public String[] getCCInputFiles(Path tempDirectory, String imageName) {
+        String relocatableFileName = tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()).toString();
+        return new String[]{relocatableFileName};
     }
 
     @Override
