@@ -47,19 +47,6 @@ import com.oracle.truffle.api.impl.HomeFinder;
 
 public final class DefaultHomeFinder extends HomeFinder {
 
-    private static int getJavaSpecificationVersion() {
-        String value = System.getProperty("java.specification.version");
-        if (value.startsWith("1.")) {
-            value = value.substring(2);
-        }
-        return Integer.parseInt(value);
-    }
-
-    /**
-     * The integer value corresponding to the value of the {@code java.specification.version} system
-     * property after any leading {@code "1."} has been stripped.
-     */
-    private static final int JAVA_SPEC = getJavaSpecificationVersion();
     private static final boolean STATIC_VERBOSE = Boolean.getBoolean("com.oracle.graalvm.locator.verbose");
 
     private static final Path FORCE_GRAAL_HOME;
@@ -90,7 +77,6 @@ public final class DefaultHomeFinder extends HomeFinder {
 
         // Save relative paths from the launcher's directory to other language homes of the form:
         // org.graalvm.launcher.relative.LANGUAGE_ID.home
-        // Meant to be only used for standalones, not for regular GraalVM.
         for (Object property : System.getProperties().keySet()) {
             if (property instanceof String) {
                 String name = ((String) property);
@@ -143,7 +129,7 @@ public final class DefaultHomeFinder extends HomeFinder {
                 System.err.println("LANGUAGE_HOME_RELATIVE_PATH: " + LANGUAGE_HOME_RELATIVE_PATH);
                 System.err.println("GRAAL_HOME_RELATIVE_PATH: " + GRAAL_HOME_RELATIVE_PATH);
                 for (Entry<String, Path> entry : LANGUAGE_RELATIVE_HOMES.entrySet()) {
-                    System.err.println("relative home of " + entry.getKey() + " from the launcher's directory: " + entry.getValue());
+                    System.err.println("relative home of " + entry.getKey() + " from the launcher language home: " + entry.getValue());
                 }
             }
             if (FORCE_GRAAL_HOME != null) {
@@ -180,17 +166,11 @@ public final class DefaultHomeFinder extends HomeFinder {
                     if (!Files.exists(javaHome)) {
                         throw new AssertionError("Java home is not reachable.");
                     }
-                    if (JAVA_SPEC <= 8) {
-                        Path jre = javaHome.resolve("jre");
-                        if (Files.exists(jre)) {
-                            res = javaHome;
-                        } else {
-                            assert javaHome.endsWith("jre") : javaHome;
-                            res = javaHome.getParent();
-                        }
-                    } else {
-                        assert Files.exists(javaHome.resolve(Paths.get("lib", "modules"))) : "Missing jimage in java.home: " + javaHome;
+                    Path jre = javaHome.resolve("jre");
+                    if (Files.exists(jre)) {
                         res = javaHome;
+                    } else {
+                        res = javaHome.getParent();
                     }
                     if (isVerbose()) {
                         System.err.println("GraalVM home found by java.home property as: " + res);
@@ -252,8 +232,7 @@ public final class DefaultHomeFinder extends HomeFinder {
             if (home == null) {
                 res = launcherLang != null ? Collections.unmodifiableMap(collectStandaloneHomes(launcherLang)) : Collections.emptyMap();
             } else {
-                Path languages = JAVA_SPEC <= 8 ? Paths.get("jre", "languages") : Paths.get("languages");
-                res = Collections.unmodifiableMap(collectHomes(home.resolve(languages)));
+                res = Collections.unmodifiableMap(collectHomes(home.resolve(Paths.get("jre", "languages"))));
             }
             if (!ImageInfo.inImageBuildtimeCode()) {
                 languageHomes = res;
@@ -270,8 +249,7 @@ public final class DefaultHomeFinder extends HomeFinder {
             if (home == null) {
                 res = Collections.emptyMap();
             } else {
-                Path tools = JAVA_SPEC <= 8 ? Paths.get("jre", "tools") : Paths.get("tools");
-                res = Collections.unmodifiableMap(collectHomes(home.resolve(tools)));
+                res = Collections.unmodifiableMap(collectHomes(home.resolve(Paths.get("jre", "tools"))));
             }
             if (!ImageInfo.inImageBuildtimeCode()) {
                 toolHomes = res;
@@ -286,19 +264,11 @@ public final class DefaultHomeFinder extends HomeFinder {
             try (DirectoryStream<Path> dirContent = Files.newDirectoryStream(folder, new DirectoryStream.Filter<Path>() {
                 @Override
                 public boolean accept(Path entry) throws IOException {
-                    Path fileName = entry.getFileName();
-                    if (fileName == null) {
-                        return false;
-                    } else {
-                        return !fileName.toString().startsWith(".");
-                    }
+                    return !entry.getFileName().toString().startsWith(".");
                 }
             })) {
                 for (Path home : dirContent) {
-                    Path filename = home.getFileName();
-                    if (filename != null) {
-                        res.put(filename.toString(), home);
-                    }
+                    res.put(home.getFileName().toString(), home);
                 }
             } catch (IOException ioe) {
                 throw new RuntimeException(ioe);
@@ -397,10 +367,7 @@ public final class DefaultHomeFinder extends HomeFinder {
     private static Path getGraalVMHomeFromLanguageHome(Path languageHome) {
         // jre/<languages_or_tools>/<comp_id>
         Path languagesOrTools = languageHome.getParent();
-        if (languagesOrTools == null) {
-            return null;
-        }
-        String languagesOrToolsString = getFileName(languagesOrTools);
+        String languagesOrToolsString = languagesOrTools != null ? getFileName(languagesOrTools) : null;
         if (!"languages".equals(languagesOrToolsString) && !"tools".equals(languagesOrToolsString)) {
             return null;
         }
@@ -414,7 +381,7 @@ public final class DefaultHomeFinder extends HomeFinder {
         } else {
             home = jreOrJdk;
         }
-        return home != null && (isJreHome(home) || isJdkHome(home)) ? home : null;
+        return isJreHome(home) || isJdkHome(home) ? home : null;
     }
 
     /**
@@ -425,7 +392,7 @@ public final class DefaultHomeFinder extends HomeFinder {
      */
     private static Path getGraalVmHomeFallBack(Path executable) {
         Path bin = executable.getParent();
-        if (bin == null || !"bin".equals(getFileName(bin))) {
+        if (!"bin".equals(getFileName(bin))) {
             return null;
         }
         Path jreOrJdk = bin.getParent();
@@ -503,8 +470,7 @@ public final class DefaultHomeFinder extends HomeFinder {
             if (result == null) {
                 return null;
             }
-            Path filename = result.getFileName();
-            if (filename == null || !filename.equals(p.getFileName())) {
+            if (!result.getFileName().equals(p.getFileName())) {
                 return null;
             }
             result = result.getParent();
