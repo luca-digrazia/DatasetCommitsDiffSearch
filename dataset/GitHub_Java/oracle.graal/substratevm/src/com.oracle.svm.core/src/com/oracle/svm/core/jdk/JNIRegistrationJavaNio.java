@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core.jdk;
 
-/* Checkstyle: allow reflection */
-import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -81,7 +79,7 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
 
         if (isPosix()) {
             a.registerReachabilityHandler(JNIRegistrationJavaNio::registerUnixNativeDispatcherInit, method(a, "sun.nio.fs.UnixNativeDispatcher", "init"));
-            a.registerReachabilityHandler(JNIRegistrationJavaNio::registerDefaultFileSystemProvider, getDefaultFileSystemProviderFactoryMethod(a));
+            a.registerReachabilityHandler(JNIRegistrationJavaNio::registerDefaultFileSystemProviderCreate, method(a, "sun.nio.fs.DefaultFileSystemProvider", "create"));
             if (isLinux()) {
                 a.registerReachabilityHandler(JNIRegistrationJavaNio::registerSctpChannelImplInitIDs, method(a, "sun.nio.ch.sctp.SctpChannelImpl", "initIDs"));
             }
@@ -94,36 +92,26 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
         a.registerReachabilityHandler(JNIRegistrationJavaNio::registerConnectionCreateInetSocketAddress, method(a, "com.sun.jndi.ldap.Connection", "createInetSocketAddress", String.class, int.class));
     }
 
-    private static void registerDefaultFileSystemProvider(DuringAnalysisAccess a) {
+    private static void registerDefaultFileSystemProviderCreate(@SuppressWarnings("unused") DuringAnalysisAccess a) {
         /*
          * The class instantiated on Posix systems depends on the OS, and instantiation is via
          * reflection. So we register exactly the class that is returned by the hosted invocation.
          */
         Object hostedDefaultProvider;
         try {
-            hostedDefaultProvider = getDefaultFileSystemProviderFactoryMethod(a).invoke(null);
-        } catch (Exception e) {
-            throw new InternalError(e);
-        }
-        RuntimeReflection.register(hostedDefaultProvider.getClass());
-        RuntimeReflection.register(ReflectionUtil.lookupConstructor(hostedDefaultProvider.getClass()));
-    }
-
-    private static Method getDefaultFileSystemProviderFactoryMethod(BeforeAnalysisAccess a) {
-        Method factoryMethod;
-        try {
-            factoryMethod = method(a, "sun.nio.fs.DefaultFileSystemProvider", "create");
+            hostedDefaultProvider = ReflectionUtil.lookupMethod(sun.nio.fs.DefaultFileSystemProvider.class, "create").invoke(null);
         } catch (ReflectionUtilError e) {
             try {
                 // JDK-8213406
-                factoryMethod = method(a, "sun.nio.fs.DefaultFileSystemProvider", "instance");
+                hostedDefaultProvider = ReflectionUtil.lookupMethod(sun.nio.fs.DefaultFileSystemProvider.class, "instance").invoke(null);
             } catch (Exception e2) {
                 throw new InternalError(e2);
             }
         } catch (Exception e) {
             throw new InternalError(e);
         }
-        return factoryMethod;
+        RuntimeReflection.register(hostedDefaultProvider.getClass());
+        RuntimeReflection.register(ReflectionUtil.lookupConstructor(hostedDefaultProvider.getClass()));
     }
 
     private static void registerServerSocketChannelImplInitIDs(DuringAnalysisAccess a) {
