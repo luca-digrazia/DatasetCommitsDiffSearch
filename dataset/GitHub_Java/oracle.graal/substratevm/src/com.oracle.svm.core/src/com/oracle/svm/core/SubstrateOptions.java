@@ -28,10 +28,12 @@ import static org.graalvm.compiler.core.common.SpeculativeExecutionAttacksMitiga
 import static org.graalvm.compiler.core.common.SpeculativeExecutionAttacksMitigations.Options.MitigateSpeculativeExecutionAttacks;
 import static org.graalvm.compiler.options.OptionType.User;
 
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.function.Predicate;
 
 import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.options.Option;
@@ -116,13 +118,14 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> IncludeNodeSourcePositions = new HostedOptionKey<>(false);
 
     @Option(help = "Search path for C libraries passed to the linker (list of comma-separated directories)")//
-    public static final HostedOptionKey<String[]> CLibraryPath = new HostedOptionKey<>(null);
+    public static final HostedOptionKey<String[]> CLibraryPath = new HostedOptionKey<>(new String[]{
+                    Paths.get("clibraries/" + OS.getCurrent().asPackageName() + "-" + SubstrateUtil.getArchitectureName()).toAbsolutePath().toString()});
 
     @Option(help = "Path passed to the linker as the -rpath (list of comma-separated directories)")//
     public static final HostedOptionKey<String[]> LinkerRPath = new HostedOptionKey<>(null);
 
     @Option(help = "Directory of the image file to be generated", type = OptionType.User)//
-    public static final HostedOptionKey<String> Path = new HostedOptionKey<>(null);
+    public static final HostedOptionKey<String> Path = new HostedOptionKey<>(Paths.get(".").toAbsolutePath().normalize().resolve("svmbuild").toString());
 
     @APIOption(name = "-ea", customHelp = "enable assertions in the generated image")//
     @APIOption(name = "-da", kind = APIOption.APIOptionKind.Negated, customHelp = "disable assertions in the generated image")//
@@ -199,16 +202,24 @@ public class SubstrateOptions {
     @Option(help = "Use only a writable native image heap.")//
     public static final HostedOptionKey<Boolean> UseOnlyWritableBootImageHeap = new HostedOptionKey<>(false);
 
-    @Option(help = "Support multiple isolates. ")//
+    @Option(help = "Support multiple isolates.") //
     public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<Boolean>(null) {
         @Override
+        public Boolean getValueOrDefault(UnmodifiableEconomicMap<OptionKey<?>, Object> values) {
+            if (!values.containsKey(this)) {
+                /*
+                 * With the LLVM backend, isolate support has a significant performance cost, so we
+                 * disable it unless it is explicitly enabled.
+                 */
+                return !useLLVMBackend();
+            }
+            return (Boolean) values.get(this);
+        }
+
+        @Override
         public Boolean getValue(OptionValues values) {
-            Boolean value = super.getValue(values);
-            /*
-             * Spawning isolates results in a significant performance hit, so we disable them on the
-             * LLVM backend unless they were explicitly requested.
-             */
-            return (value != null) ? value : !useLLVMBackend();
+            assert checkDescriptorExists();
+            return getValueOrDefault(values.getMap());
         }
     };
 
@@ -416,9 +427,6 @@ public class SubstrateOptions {
 
     @Option(help = "file:doc-files/UseMuslCHelp.txt", type = OptionType.Expert)//
     public static final HostedOptionKey<String> UseMuslC = new HostedOptionKey<>(null);
-
-    @Option(help = "When set to true, the image generator verifies that the image heap does not contain a home directory as a substring", type = User)//
-    public static final HostedOptionKey<Boolean> DetectUserDirectoriesInImageHeap = new HostedOptionKey<>(false);
 
     /**
      * The alignment for AOT and JIT compiled methods. The value is constant folded during image
