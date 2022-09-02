@@ -164,7 +164,7 @@ public class JfrTypeRepository implements JfrRepository {
     }
 
     private void visitPackage(TypeInfo typeInfo, Package pkg, Module module) {
-        if (pkg != null && !"".equals(pkg.getName()) && typeInfo.addPackage(pkg, module)) {
+        if (pkg != null && typeInfo.addPackage(pkg, module)) {
             visitModule(typeInfo, module);
         }
     }
@@ -176,8 +176,7 @@ public class JfrTypeRepository implements JfrRepository {
     }
 
     private void visitClassLoader(TypeInfo typeInfo, ClassLoader classLoader) {
-        // Note: null class-loader is ok, we serialize it as "bootstrap" class-loader.
-        if (typeInfo.addClassLoader(classLoader) && classLoader != null) {
+        if (classLoader != null && typeInfo.addClassLoader(classLoader)) {
             visitClass(typeInfo, classLoader.getClass());
         }
     }
@@ -245,8 +244,8 @@ public class JfrTypeRepository implements JfrRepository {
         JfrSymbolRepository symbolRepo = SubstrateJVM.getSymbolRepository();
         writer.writeCompressedLong(id);
         writer.writeCompressedLong(symbolRepo.getSymbolId(module.getName(), true));
-        writer.writeCompressedLong(0); // Version? E.g. "11.0.10-internal"
-        writer.writeCompressedLong(0); // Location? E.g. "jrt:/java.base"
+        writer.writeCompressedLong(0); // Version?
+        writer.writeCompressedLong(0); // Location?
         writer.writeCompressedLong(typeInfo.getClassLoaderId(module.getClassLoader()));
     }
 
@@ -268,12 +267,7 @@ public class JfrTypeRepository implements JfrRepository {
     private void writeClassLoader(JfrChunkWriter writer, ClassLoader cl, long id) throws IOException {
         JfrSymbolRepository symbolRepo = SubstrateJVM.getSymbolRepository();
         writer.writeCompressedLong(id);
-        if (cl == null) {
-            writer.writeCompressedLong(0);
-            writer.writeCompressedLong(symbolRepo.getSymbolId("bootstrap", true));
-        } else {
-            writer.writeCompressedLong(JfrTraceId.getTraceId(cl.getClass()));
-            writer.writeCompressedLong(symbolRepo.getSymbolId(cl.getName(), true));
-        }
+        writer.writeCompressedLong(JfrTraceId.getTraceId(cl.getClass()));
+        writer.writeCompressedLong(symbolRepo.getSymbolId(cl.getName(), true));
     }
 }
