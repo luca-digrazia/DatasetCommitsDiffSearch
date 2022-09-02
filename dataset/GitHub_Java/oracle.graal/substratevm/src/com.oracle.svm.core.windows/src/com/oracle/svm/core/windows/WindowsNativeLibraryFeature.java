@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,22 +24,30 @@
  */
 package com.oracle.svm.core.windows;
 
-import org.graalvm.nativeimage.Feature;
+import java.io.FileDescriptor;
+
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
-import org.graalvm.word.Pointer;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.jdk.JNIPlatformNativeLibrarySupport;
+import com.oracle.svm.core.jdk.Jvm;
+import com.oracle.svm.core.jdk.NativeLibrarySupport;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
-
-import com.oracle.svm.core.windows.headers.WinBase;
-import com.oracle.svm.core.windows.headers.Jvm;
+import com.oracle.svm.core.log.Log;
+import com.oracle.svm.core.windows.headers.FileAPI;
+import com.oracle.svm.core.windows.headers.LibLoaderAPI;
+import com.oracle.svm.core.windows.headers.WinBase.HMODULE;
+import com.oracle.svm.core.windows.headers.WinSock;
 
 @AutomaticFeature
 @Platforms(Platform.WINDOWS.class)
@@ -50,46 +58,7 @@ class WindowsNativeLibraryFeature implements Feature {
     }
 }
 
-class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
-    static final String[] builtInLibraries = {
-                    "java",
-                    "nio",
-                    "net",
-                    "zip"
-    };
-
-    static final String[] builtInPkgNatives = {
-                    "Java_com_sun_demo_jvmti_hprof",
-                    "Java_com_sun_java_util_jar_pack",
-                    "Java_com_sun_net_ssl",
-                    "Java_com_sun_nio_file",
-                    "Java_com_sun_security_cert_internal_x509",
-                    "Java_java_io",
-                    "Java_java_lang",
-                    "Java_java_math",
-                    "Java_java_net",
-                    "Java_java_nio",
-                    "Java_java_security",
-                    "Java_java_text",
-                    "Java_java_time",
-                    "Java_java_util",
-                    "Java_javax_net",
-                    "Java_javax_script",
-                    "Java_javax_security",
-                    "Java_jdk",
-                    "Java_sun_invoke",
-                    "Java_sun_launcher",
-                    "Java_sun_misc",
-                    "Java_sun_net",
-                    "Java_sun_nio",
-                    "Java_sun_reflect",
-                    "Java_sun_security",
-                    "Java_sun_text",
-                    "Java_sun_util",
-
-                    /* SVM Specific packages */
-                    "Java_com_oracle_svm_core_jdk"
-    };
+class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
 
     static void initialize() {
         ImageSingletons.add(PlatformNativeLibrarySupport.class, new WindowsNativeLibrarySupport());
@@ -97,16 +66,40 @@ class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
 
     @Override
     public boolean initializeBuiltinLibraries() {
-        if (!WindowsJavaNetSubstitutions.initIDs()) {
-            return false;
-        }
-        if (!WindowsJavaIOSubstitutions.initIDs()) {
-            return false;
-        }
-        if (!WindowsJavaNIOSubstitutions.initIDs()) {
+        try {
+            loadJavaLibrary();
+            loadZipLibrary();
+            loadNetLibrary();
+        } catch (UnsatisfiedLinkError e) {
+            Log.log().string("System.loadLibrary failed, " + e).newline();
             return false;
         }
         return true;
+    }
+
+    @Override
+    protected void loadJavaLibrary() {
+        super.loadJavaLibrary();
+        Target_java_io_WinNTFileSystem.initIDs();
+
+        /* Initialize the handles of standard FileDescriptors. */
+        WindowsUtils.setHandle(FileDescriptor.in, FileAPI.GetStdHandle(FileAPI.STD_INPUT_HANDLE()));
+        WindowsUtils.setHandle(FileDescriptor.out, FileAPI.GetStdHandle(FileAPI.STD_OUTPUT_HANDLE()));
+        WindowsUtils.setHandle(FileDescriptor.err, FileAPI.GetStdHandle(FileAPI.STD_ERROR_HANDLE()));
+    }
+
+    protected void loadNetLibrary() {
+        if (isFirstIsolate()) {
+            WinSock.init();
+            System.loadLibrary("net");
+            /*
+             * NOTE: because the native OnLoad code probes java.net.preferIPv4Stack and stores its
+             * value in process-wide shared native state, the property's value in the first launched
+             * isolate applies to all subsequently launched isolates.
+             */
+        } else {
+            NativeLibrarySupport.singleton().registerInitializedBuiltinLibrary("net");
+        }
     }
 
     @Override
@@ -117,45 +110,19 @@ class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
     @Override
     public PointerBase findBuiltinSymbol(String name) {
         try (CCharPointerHolder symbol = CTypeConversion.toCString(name)) {
-            Pointer builtinHandle = WinBase.GetModuleHandleA(WordFactory.nullPointer());
-            return WinBase.GetProcAddress(builtinHandle, symbol.get());
+            HMODULE builtinHandle = LibLoaderAPI.GetModuleHandleA(WordFactory.nullPointer());
+            return LibLoaderAPI.GetProcAddress(builtinHandle, symbol.get());
         }
-    }
-
-    @Override
-    public boolean isBuiltinLibrary(String name) {
-        for (String str : builtInLibraries) {
-            if (name.equals(str)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @Override
-    public boolean isBuiltinPkgNative(String name) {
-        // Do a quick check first
-        if (name.startsWith("Java_")) {
-            for (String str : builtInPkgNatives) {
-                if (name.startsWith(str)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     class WindowsNativeLibrary implements NativeLibrary {
 
         private final String canonicalIdentifier;
         private final boolean builtin;
-        private Pointer dlhandle = WordFactory.nullPointer();
+        private HMODULE dlhandle;
+        private boolean loaded = false;
 
         WindowsNativeLibrary(String canonicalIdentifier, boolean builtin) {
-            // Make sure the jvm.lib is available for linking
-            // Need a better place to put this.
-            Jvm.initialize();
-
             this.canonicalIdentifier = canonicalIdentifier;
             this.builtin = builtin;
         }
@@ -171,34 +138,53 @@ class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
         }
 
         @Override
-        public void load() {
-            if (!builtin) {
-                assert dlhandle.isNull();
-                String dllPath = canonicalIdentifier;
-                CCharPointerHolder dllpathPin = CTypeConversion.toCString(dllPath);
-                CCharPointer dllPathPtr = dllpathPin.get();
+        public boolean load() {
+            assert !loaded;
+            loaded = doLoad();
+            return loaded;
+        }
+
+        private boolean doLoad() {
+            // Make sure the jvm.lib is available for linking
+            // Need a better place to put this.
+            Jvm.initialize();
+
+            if (builtin) {
+                return true;
+            }
+            assert dlhandle.isNull();
+            try (CCharPointerHolder dllPathPin = CTypeConversion.toCString(canonicalIdentifier)) {
+                CCharPointer dllPathPtr = dllPathPin.get();
                 /*
                  * WinBase.SetDllDirectoryA(dllpathPtr); CCharPointerHolder pathPin =
                  * CTypeConversion.toCString(path); CCharPointer pathPtr = pathPin.get();
                  */
-                dlhandle = WinBase.LoadLibraryA(dllPathPtr);
-                if (this.dlhandle.isNull()) {
-                    throw new UnsatisfiedLinkError(dllPath + ": " + WinBase.GetLastError());
-                }
+                dlhandle = LibLoaderAPI.LoadLibraryA(dllPathPtr);
             }
+            return dlhandle.isNonNull();
+        }
+
+        @Override
+        public boolean isLoaded() {
+            return loaded;
         }
 
         @Override
         public PointerBase findSymbol(String name) {
             if (builtin) {
-                PointerBase addr = findBuiltinSymbol(name);
-                return (addr);
+                return findBuiltinSymbol(name);
             }
             assert dlhandle.isNonNull();
             try (CCharPointerHolder symbol = CTypeConversion.toCString(name)) {
-                PointerBase addr = WinBase.GetProcAddress(dlhandle, symbol.get());
-                return (addr);
+                return LibLoaderAPI.GetProcAddress(dlhandle, symbol.get());
             }
         }
     }
+}
+
+@TargetClass(className = "java.io.WinNTFileSystem")
+@Platforms(Platform.WINDOWS.class)
+final class Target_java_io_WinNTFileSystem {
+    @Alias
+    static native void initIDs();
 }

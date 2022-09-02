@@ -24,25 +24,25 @@
  */
 package com.oracle.svm.truffle.nfi.windows;
 
+import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.word.PointerBase;
+import org.graalvm.word.WordFactory;
+
+import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.windows.WindowsUtils;
 import com.oracle.svm.core.windows.headers.LibC;
-import com.oracle.svm.core.windows.headers.WinBase;
+import com.oracle.svm.core.windows.headers.LibLoaderAPI;
+import com.oracle.svm.core.windows.headers.WinBase.HMODULE;
 import com.oracle.svm.truffle.nfi.Target_com_oracle_truffle_nfi_impl_NFIUnsatisfiedLinkError;
-import com.oracle.truffle.api.CompilerDirectives;
-import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-
-import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.truffle.nfi.TruffleNFISupport;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.word.Pointer;
-import org.graalvm.word.PointerBase;
-import org.graalvm.word.WordFactory;
+import com.oracle.truffle.api.CompilerDirectives;
 
 @AutomaticFeature
 @Platforms(Platform.WINDOWS.class)
@@ -77,37 +77,37 @@ final class WindowsTruffleNFISupport extends TruffleNFISupport {
          * WinBase.SetDllDirectoryA(dllpathPtr); CCharPointerHolder pathPin =
          * CTypeConversion.toCString(path); CCharPointer pathPtr = pathPin.get();
          */
-        Pointer dlhandle = WinBase.LoadLibraryA(dllPathPtr);
+        HMODULE dlhandle = LibLoaderAPI.LoadLibraryA(dllPathPtr);
         if (dlhandle.isNull()) {
             CompilerDirectives.transferToInterpreter();
-            throw new UnsatisfiedLinkError(WindowsUtils.lastErrorString(dllPath));
+            throw KnownIntrinsics.convertUnknownValue(new Target_com_oracle_truffle_nfi_impl_NFIUnsatisfiedLinkError(WindowsUtils.lastErrorString(dllPath)), RuntimeException.class);
         }
         return dlhandle.rawValue();
     }
 
     @Override
     protected void freeLibraryImpl(long library) {
-        WinBase.FreeLibrary(WordFactory.pointer(library));
+        LibLoaderAPI.FreeLibrary(WordFactory.pointer(library));
     }
 
     @Override
     protected long lookupImpl(long nativeContext, long library, String name) {
         // clear previous error
-        //        Dlfcn.dlerror();
-        PlatformNativeLibrarySupport nativeLibraraySupport = PlatformNativeLibrarySupport.singleton();
+        // Dlfcn.dlerror();
+        PlatformNativeLibrarySupport nativeLibrarySupport = PlatformNativeLibrarySupport.singleton();
 
         PointerBase ret;
         if (library == 0) {
-            ret = nativeLibraraySupport.findBuiltinSymbol(name);
+            ret = nativeLibrarySupport.findBuiltinSymbol(name);
         } else {
             try (CTypeConversion.CCharPointerHolder symbol = CTypeConversion.toCString(name)) {
-                ret = WinBase.GetProcAddress(WordFactory.pointer(library), symbol.get());
+                ret = LibLoaderAPI.GetProcAddress(WordFactory.pointer(library), symbol.get());
             }
         }
 
         if (ret.isNull()) {
             CompilerDirectives.transferToInterpreter();
-            throw KnownIntrinsics.convertUnknownValue(new Target_com_oracle_truffle_nfi_impl_NFIUnsatisfiedLinkError(WindowsUtils.lastErrorString(name)), UnsatisfiedLinkError.class);
+            throw KnownIntrinsics.convertUnknownValue(new Target_com_oracle_truffle_nfi_impl_NFIUnsatisfiedLinkError(WindowsUtils.lastErrorString(name)), RuntimeException.class);
         }
         return ret.rawValue();
     }
