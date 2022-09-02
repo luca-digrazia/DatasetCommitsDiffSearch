@@ -32,11 +32,9 @@ package com.oracle.truffle.llvm.runtime.nodes.memory;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
@@ -53,8 +51,7 @@ public abstract class NativeMemSetNode extends LLVMMemSetNode {
 
     @Specialization
     protected void memset(LLVMNativePointer address, byte value, long length,
-                    @CachedLanguage LLVMLanguage language) {
-        LLVMMemory memory = language.getCapability(LLVMMemory.class);
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         if (inJava) {
             if (length <= MAX_JAVA_LEN) {
                 long current = address.asNative();
@@ -155,7 +152,7 @@ public abstract class NativeMemSetNode extends LLVMMemSetNode {
     protected void memset(LLVMManagedPointer object, byte value, long length,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess,
                     @SuppressWarnings("unused") @CachedLibrary("object.getObject()") LLVMManagedWriteLibrary nativeWrite,
-                    @CachedLanguage LLVMLanguage language) {
-        memset(globalAccess.executeWithTarget(object), value, length, language);
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        memset(globalAccess.executeWithTarget(object), value, length, memory);
     }
 }
