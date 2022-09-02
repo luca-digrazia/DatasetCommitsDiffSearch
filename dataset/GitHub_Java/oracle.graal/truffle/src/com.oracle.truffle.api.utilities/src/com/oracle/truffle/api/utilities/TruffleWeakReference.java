@@ -87,7 +87,7 @@ import com.oracle.truffle.api.CompilerDirectives;
  *     Object execute(Object arg) {
  *         if (reference == null) {
  *             CompilerDirectives.transferToInterpreterAndInvalidate();
- *             reference = new TruffleWeakReference<>(arg);
+ *             reference = new TruffleWeakReference(arg);
  *         }
  *         return reference.get();
  *     }
