@@ -261,11 +261,7 @@ public class DefaultLoopPolicies implements LoopPolicies {
     }
 
     @Override
-    public UnswitchingDecision shouldUnswitch(LoopEx loop, List<ControlSplitNode> controlSplits) {
-        if (loop.loopBegin().unswitches() >= LoopMaxUnswitch.getValue(loop.loopBegin().graph().getOptions())) {
-            return UnswitchingDecision.NO;
-        }
-
+    public boolean shouldUnswitch(LoopEx loop, List<ControlSplitNode> controlSplits) {
         int phis = 0;
         StructuredGraph graph = loop.loopBegin().graph();
         DebugContext debug = graph.getDebug();
@@ -305,9 +301,9 @@ public class DefaultLoopPolicies implements LoopPolicies {
                         loopFrequency, phis, actualDiff <= maxDiff);
         if (actualDiff <= maxDiff) {
             // check whether we're allowed to unswitch this loop
-            return loop.canDuplicateLoop() ? UnswitchingDecision.YES : UnswitchingDecision.NO;
+            return loop.canDuplicateLoop();
         } else {
-            return UnswitchingDecision.NO;
+            return false;
         }
     }
 }
