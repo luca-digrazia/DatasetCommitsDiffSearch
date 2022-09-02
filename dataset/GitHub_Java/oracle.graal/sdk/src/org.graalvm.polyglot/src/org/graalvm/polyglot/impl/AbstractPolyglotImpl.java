@@ -40,6 +40,7 @@
  */
 package org.graalvm.polyglot.impl;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -58,10 +59,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.logging.Handler;
 
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
@@ -79,6 +79,7 @@ import org.graalvm.polyglot.io.ByteSequence;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
 import org.graalvm.polyglot.management.ExecutionEvent;
+import org.graalvm.polyglot.management.ExecutionListener;
 
 @SuppressWarnings("unused")
 public abstract class AbstractPolyglotImpl {
@@ -141,7 +142,7 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract StackFrame newPolyglotStackTraceElement(PolyglotException e, AbstractStackFrameImpl impl);
 
-        public abstract <T> T connectHostAccess(Class<T> impl, HostAccess conf, Function<BiFunction<HostAccess, AccessibleObject, Boolean>, T> factory);
+        public abstract boolean allowAccess(HostAccess conf, AccessibleObject member);
     }
 
     // shared SPI

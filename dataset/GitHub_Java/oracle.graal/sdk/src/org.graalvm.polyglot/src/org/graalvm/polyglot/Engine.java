@@ -508,7 +508,8 @@ public final class Engine implements AutoCloseable {
             }
             return loadedImpl.buildEngine(out, err, in, options, 0, null,
                             false, 0, useSystemProperties, allowExperimentalOptions, boundEngine, messageTransport, customLogHandler,
-                            hostAccess);
+                            hostAccess
+            );
         }
 
     }
