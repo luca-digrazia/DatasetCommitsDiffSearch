@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
@@ -40,8 +39,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
-
-import java.lang.reflect.InvocationTargetException;
 
 @NodeInfo(language = "wasm", description = "The root node of all WebAssembly functions")
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
@@ -70,12 +67,6 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        // We want to ensure that linking always precedes the running of the WebAssembly code.
-        // This linking should be as late as possible, because a WebAssembly context should
-        // be able to parse multiple modules before the code gets run.
-        final WasmContext context = contextReference().get();
-        context.linker().tryLink();
-
         /*
          * WebAssembly structure dictates that a function's arguments are provided to the function
          * as local variables, followed by any additional local variables that the function declares.
@@ -92,12 +83,9 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
         logger.finest(() -> this + " EXECUTE");
 
-        body.execute(context, frame);
+        body.execute(contextReference().get(), frame);
 
         long returnValue = pop(frame, 0);
-        if (getCallTarget().toString().contains("wasm-function:6") && returnValue == 0x44c) {
-            System.err.println("culprit");
-        }
         switch (body.returnTypeId()) {
             case 0x00:
             case ValueTypes.VOID_TYPE:

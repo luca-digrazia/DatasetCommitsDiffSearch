@@ -229,8 +229,6 @@ import com.oracle.truffle.wasm.binary.constants.ExportIdentifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
 import com.oracle.truffle.wasm.binary.constants.ImportIdentifier;
-import com.oracle.truffle.wasm.binary.exception.WasmException;
-import com.oracle.truffle.wasm.binary.exception.WasmLinkerException;
 import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.collection.ByteArrayList;
 
@@ -398,8 +396,17 @@ public class BinaryReader extends BinaryStreamReader {
                     // See GlobalModifier.
                     byte mutability = read1();
                     int index = module.symbolTable().maxGlobalIndex() + 1;
-                    final GlobalResolution resolution = context.linker().tryResolveGlobal(module, moduleName, memberName, type, mutability);
-                    module.symbolTable().importGlobal(language.getContextReference().get(), moduleName, memberName, index, type, mutability, resolution);
+                    GlobalResolution resolution = UNRESOLVED_IMPORT;
+                    // Check that the imported module is available.
+                    if (context.modules().containsKey(moduleName)) {
+                        // Check that the imported global is resolved in the imported module.
+                        final WasmModule importedModule = context.modules().get(moduleName);
+                        int exportedGlobalIndex = importedModule.symbolTable().exportedGlobals().get(memberName);
+                        if (importedModule.symbolTable().globalResolution(exportedGlobalIndex).isResolved()) {
+                            resolution = IMPORTED;
+                        }
+                    }
+                    module.symbolTable().importGlobal(language, moduleName, memberName, index, type, mutability, resolution);
                     break;
                 }
                 default: {
@@ -735,24 +742,21 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 }
                 case GLOBAL_GET: {
-                    int index = readLocalIndex(bytesConsumed);
-                    state.saveNumericLiteral(index);
+                    int globalIndex = readLocalIndex(bytesConsumed);
+                    state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertIntLessOrEqual(index, module.symbolTable().maxGlobalIndex(),
+                    Assert.assertIntLessOrEqual(globalIndex, module.symbolTable().maxGlobalIndex(),
                                     "Invalid global index for global.get.");
                     state.push();
                     break;
                 }
                 case GLOBAL_SET: {
-                    int index = readLocalIndex(bytesConsumed);
-                    state.saveNumericLiteral(index);
+                    int globalIndex = readLocalIndex(bytesConsumed);
+                    state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertIntLessOrEqual(index, module.symbolTable().maxGlobalIndex(),
+                    Assert.assertIntLessOrEqual(globalIndex, module.symbolTable().maxGlobalIndex(),
                                     "Invalid global index for global.set.");
-                    // Assert that the global is mutable.
-                    Assert.assertTrue(module.symbolTable().globalMutability(index) == GlobalModifier.MUTABLE,
-                            "Immutable globals cannot be set: " + index);
                     // Assert there is a value on the top of the stack.
                     Assert.assertIntGreater(state.stackSize(), 0, "global.set requires at least one element in the stack");
                     state.pop();
@@ -1111,12 +1115,11 @@ public class BinaryReader extends BinaryStreamReader {
                 case I32_CONST:
                     offset = readSignedInt32();
                     break;
-                case GLOBAL_GET:
                     // TODO: Implement the GLOBAL_GET case for the elements.
-                    int index = readGlobalIndex();
-                    throw new WasmException("GLOBAL_GET in element section not implemented.");
-                    // offset = module.globals().getAsInt(index);
-                    // break;
+                // case GLOBAL_GET:
+                //     int index = readGlobalIndex();
+                //     offset = module.globals().getAsInt(index);
+                //     break;
                 default:
                     Assert.fail(String.format("Invalid instruction for table offset expression: 0x%02X", instruction));
             }
@@ -1146,7 +1149,7 @@ public class BinaryReader extends BinaryStreamReader {
             switch (exportType) {
                 case ExportIdentifier.FUNCTION: {
                     int functionIndex = readFunctionIndex();
-                    module.symbolTable().exportFunction(exportName, functionIndex);
+                    module.symbolTable().markFunctionAsExported(exportName, functionIndex);
                     break;
                 }
                 case ExportIdentifier.TABLE: {
@@ -1160,8 +1163,8 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 }
                 case ExportIdentifier.GLOBAL: {
-                    int index = readGlobalIndex();
-                    module.symbolTable().exportGlobal(exportName, index);
+                    int globalIndex = readGlobalIndex();
+                    // TODO: Store the export information somewhere (e.g. in the symbol table).
                     break;
                 }
                 default: {
@@ -1172,7 +1175,7 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void readGlobalSection() {
-        final Globals globals = language.getContextReference().get().globals();
+        final WasmGlobals globals = language.getContextReference().get().globals();
         int numGlobals = readVectorLength();
         for (int i = 0; i != numGlobals; i++) {
             byte type = readValueType();
@@ -1226,7 +1229,7 @@ public class BinaryReader extends BinaryStreamReader {
             }
             instruction = read1();
             Assert.assertByteEqual(instruction, (byte) END, "Global initialization must end with END.");
-            final int address = module.symbolTable().declareGlobal(language.getContextReference().get(), i, type, mut, resolution);
+            final int address = module.symbolTable().declareGlobal(language, i, type, mut, resolution);
             if (resolution.isResolved()) {
                 globals.storeLong(address, value);
             } else {
@@ -1255,12 +1258,11 @@ public class BinaryReader extends BinaryStreamReader {
                     case I32_CONST:
                         offset = readSignedInt32();
                         break;
-                    case GLOBAL_GET:
-                        int index = readGlobalIndex();
                         // TODO: Implement GLOBAL_GET case for data sections (and add tests).
-                        throw new WasmException("GLOBAL_GET in data section not implemented.");
-                        // offset = module.globals().getAsInt(index);
-                        // break;
+                    // case GLOBAL_GET:
+                    //     int index = readGlobalIndex();
+                    //     offset = module.globals().getAsInt(index);
+                    //     break;
                     case END:
                         break;
                     default:

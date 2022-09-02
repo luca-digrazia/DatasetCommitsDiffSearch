@@ -33,12 +33,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
-import com.oracle.truffle.wasm.binary.memory.WasmMemoryException;
 import com.oracle.truffle.wasm.collection.ByteArrayList;
 import com.oracle.truffle.wasm.collection.LongArrayList;
 
@@ -47,7 +45,6 @@ public class SymbolTable {
     private static final int INITIAL_OFFSET_SIZE = 128;
     private static final int INITIAL_FUNCTION_TYPES_SIZE = 128;
     private static final int INITIAL_GLOBALS_SIZE = 128;
-    private static final int GLOBAL_EXPORT_BIT = 1 << 24;
 
     @CompilationFinal private WasmModule module;
 
@@ -104,7 +101,7 @@ public class SymbolTable {
      * An index i denotes the i-th global in this module.
      * The value at the index i denotes the address of the global
      * in the memory space for all the globals from all the modules
-     * (see {@link Globals}).
+     * (see {@link WasmGlobals}).
      *
      * This separation of global indices is done because the index spaces
      * of the globals are module-specific, and the globals can be imported
@@ -131,30 +128,22 @@ public class SymbolTable {
      * whose value this global should be initialized with
      * (assuming that this global was declared with a {@code GLOBAL_GET} expression).
      */
-    @CompilationFinal private final LongArrayList unresolvedGlobals;
+    @CompilationFinal private LongArrayList unresolvedGlobals;
 
     /**
      * A mapping between the indices of the imported globals and their import specifiers.
      */
-    @CompilationFinal private final HashMap<Integer, ImportSpecifier> importedGlobals;
+    @CompilationFinal private HashMap<Integer, ImportSpecifier> importedGlobals;
 
     /**
      * A mapping between the names and the indices of the exported globals.
      */
-    @CompilationFinal private final Map<String, Integer> exportedGlobals;
+    @CompilationFinal private LinkedHashMap<String, Integer> exportedGlobals;
 
     /**
      * The greatest index of a global in the module.
      */
     @CompilationFinal private int maxGlobalIndex;
-
-    /**
-     * The index of the table from the global table space, which this module is using.
-     *
-     * In the current WebAssembly specification, a module can use at most one table.
-     * A negative index value denotes that the module is not using a table.
-     */
-    @CompilationFinal private int tableIndex;
 
     public SymbolTable(WasmModule module) {
         this.module = module;
@@ -173,7 +162,6 @@ public class SymbolTable {
         this.importedGlobals = new HashMap<>();
         this.exportedGlobals = new LinkedHashMap<>();
         this.maxGlobalIndex = -1;
-        this.tableIndex = -1;
     }
 
     private static int[] reallocate(int[] array, int currentSize, int newLength) {
@@ -273,7 +261,7 @@ public class SymbolTable {
 
     public WasmFunction declareExportedFunction(int typeIndex, String exportedName) {
         final WasmFunction function = declareFunction(typeIndex);
-        exportFunction(exportedName, function.index());
+        markFunctionAsExported(exportedName, function.index());
         return function;
     }
 
@@ -344,11 +332,11 @@ public class SymbolTable {
         return types;
     }
 
-    public void exportFunction(String exportName, int functionIndex) {
+    public void markFunctionAsExported(String exportName, int functionIndex) {
         exportedFunctions.put(exportName, functions[functionIndex]);
     }
 
-    public Map<String, WasmFunction> exportedFunctions() {
+    public LinkedHashMap<String, WasmFunction> exportedFunctions() {
         return exportedFunctions;
     }
 
@@ -373,12 +361,12 @@ public class SymbolTable {
         }
     }
 
-    private int allocateGlobal(WasmContext context, int index, int valueType, int mutability, GlobalResolution resolution) {
+    private int allocateGlobal(WasmLanguage language, int index, int valueType, int mutability, GlobalResolution resolution) {
         assert (valueType & 0xff) == valueType;
         assert (mutability & 0xff) == mutability;
         ensureGlobalsCapacity(index);
         maxGlobalIndex = Math.max(maxGlobalIndex, index);
-        final Globals globals = context.globals();
+        final WasmGlobals globals = language.getContextReference().get().globals();
         final int address = globals.allocateGlobal();
         globalAddresses[index] = address;
         int globalType = (resolution.ordinal() << 16) | ((mutability << 8) | valueType);
@@ -386,14 +374,14 @@ public class SymbolTable {
         return address;
     }
 
-    public int declareGlobal(WasmContext context, int index, int valueType, int mutability, GlobalResolution resolution) {
+    public int declareGlobal(WasmLanguage language, int index, int valueType, int mutability, GlobalResolution resolution) {
         assert !resolution.isImported();
-        return allocateGlobal(context, index, valueType, mutability, resolution);
+        return allocateGlobal(language, index, valueType, mutability, resolution);
     }
 
-    public int importGlobal(WasmContext context, String moduleName, String globalName, int index, int valueType, int mutability, GlobalResolution resolution) {
+    public int importGlobal(WasmLanguage language, String moduleName, String globalName, int index, int valueType, int mutability, GlobalResolution resolution) {
         assert resolution.isImported();
-        final int address = allocateGlobal(context, index, valueType, mutability, resolution);
+        final int address = allocateGlobal(language, index, valueType, mutability, resolution);
         importedGlobals.put(index, new ImportSpecifier(moduleName, globalName));
         return address;
     }
@@ -404,11 +392,6 @@ public class SymbolTable {
 
     public int globalAddress(int index) {
         return globalAddresses[index];
-    }
-
-    public boolean globalExported(int index) {
-        final int exportStatus = globalTypes[index] & GLOBAL_EXPORT_BIT;
-        return exportStatus != 0;
     }
 
     public GlobalResolution globalResolution(int index) {
@@ -452,31 +435,7 @@ public class SymbolTable {
         }
     }
 
-    public Map<String, Integer> exportedGlobals() {
+    public LinkedHashMap<String, Integer> exportedGlobals() {
         return exportedGlobals;
-    }
-
-    private String nameOfExportedGlobal(int index) {
-        for (Map.Entry<String, Integer> entry : exportedGlobals.entrySet()) {
-            if (entry.getValue() == index) {
-                return entry.getKey();
-            }
-        }
-        return null;
-    }
-
-    public void exportGlobal(String name, int index) {
-        if (globalExported(index)) {
-            throw new WasmMemoryException("Global " + index + " already exported under the name: " + nameOfExportedGlobal(index));
-        }
-        globalTypes[index] |= GLOBAL_EXPORT_BIT;
-        // TODO: Invoke Linker to link together any modules with pending unresolved globals.
-        exportedGlobals.put(name, index);
-    }
-
-    public int declareExportedGlobal(WasmContext context, String name, int index, int valueType, int mutability, GlobalResolution resolution) {
-        int address = declareGlobal(context, index, valueType, mutability, resolution);
-        exportGlobal(name, index);
-        return address;
     }
 }

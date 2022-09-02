@@ -33,7 +33,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
 
-// TODO: Remove this, as it's just an unnecessary indirection, and space overhead.
 public class WasmLoopNode extends WasmNode {
     @Child private LoopNode loopNode;
 

@@ -36,9 +36,8 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.wasm.binary.exception.WasmExecutionException;
 
 public abstract class WasmNode extends Node implements WasmNodeInterface {
-    // TODO: We should not cache the module in the nodes, only the symbol table.
-    @CompilationFinal private final WasmModule wasmModule;
-    @CompilationFinal private final WasmCodeEntry codeEntry;
+    @CompilationFinal private WasmModule wasmModule;
+    @CompilationFinal private WasmCodeEntry codeEntry;
 
     /**
      * The length (in bytes) of the control structure in the instructions stream,
@@ -90,18 +89,14 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
         throw new WasmExecutionException(this, message);
     }
 
-    protected static final int typeLength(int typeId) {
-        switch (typeId) {
+    public int returnTypeLength() {
+        switch (returnTypeId()) {
             case 0x00:
             case 0x40:
                 return 0;
             default:
                 return 1;
         }
-    }
-
-    int returnTypeLength() {
-        return typeLength(returnTypeId());
     }
 
     @Override

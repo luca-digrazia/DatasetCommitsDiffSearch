@@ -29,20 +29,17 @@
  */
 package com.oracle.truffle.wasm.predefined;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.wasm.binary.WasmContext;
 import com.oracle.truffle.wasm.binary.WasmFunction;
 import com.oracle.truffle.wasm.binary.WasmLanguage;
 import com.oracle.truffle.wasm.binary.WasmModule;
-import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
 import com.oracle.truffle.wasm.binary.exception.WasmException;
 import com.oracle.truffle.wasm.predefined.emscripten.EmscriptenModule;
-import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public abstract class PredefinedModule {
     private static final Map<String, PredefinedModule> predefinedModules = new HashMap<>();
@@ -50,18 +47,17 @@ public abstract class PredefinedModule {
     static {
         final Map<String, PredefinedModule> pm = predefinedModules;
         pm.put("emscripten", new EmscriptenModule());
-        pm.put("testutil", new TestutilModule());
     }
 
-    public static WasmModule createPredefined(WasmLanguage language, WasmContext context, String name, String predefinedModuleName) {
+    public static WasmModule createPredefined(WasmLanguage language, String name, String predefinedModuleName) {
         final PredefinedModule predefinedModule = predefinedModules.get(predefinedModuleName);
         if (predefinedModule == null) {
             throw new WasmException("Unknown predefined module: " + predefinedModuleName);
         }
-        return predefinedModule.createModule(language, context, name);
+        return predefinedModule.createModule(language, name);
     }
 
-    protected abstract WasmModule createModule(WasmLanguage language, WasmContext context, String name);
+    protected abstract WasmModule createModule(WasmLanguage language, String name);
 
     protected WasmFunction defineFunction(WasmModule module, String name, byte[] paramTypes, byte[] retTypes, RootNode rootNode) {
         // We could check if the same function type had already been allocated,
@@ -72,13 +68,6 @@ public abstract class PredefinedModule {
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         function.setCallTarget(callTarget);
         return function;
-    }
-
-    protected int defineGlobal(WasmContext context, WasmModule module, String name, int valueType, int mutability, long value) {
-        int index = module.symbolTable().maxGlobalIndex() + 1;
-        int address = module.symbolTable().declareExportedGlobal(context, name, index, valueType, mutability, GlobalResolution.DECLARED);
-        context.globals().storeLong(address, value);
-        return index;
     }
 
     protected byte[] types(byte... args) {
