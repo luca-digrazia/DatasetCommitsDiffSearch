@@ -180,7 +180,6 @@ public class ValueAssert {
                                 assertClassMembers(value, (Class<?>) hostObject, true);
                             } else {
                                 assertClassMembers(value, Class.class, false);
-                                assertTrue(value.hasMember("static"));
                             }
                         } else {
                             assertClassMembers(value, hostObject.getClass(), false);
