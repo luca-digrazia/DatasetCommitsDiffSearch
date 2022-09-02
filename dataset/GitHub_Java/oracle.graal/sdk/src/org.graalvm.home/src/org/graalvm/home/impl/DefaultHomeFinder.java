@@ -156,7 +156,9 @@ public final class DefaultHomeFinder extends HomeFinder {
         }
 
         if (FORCE_GRAAL_HOME != null) {
-            verbose("GraalVM home forced to: ", FORCE_GRAAL_HOME);
+            if (isVerbose()) {
+                System.err.println("GraalVM home forced to: " + FORCE_GRAAL_HOME);
+            }
             return FORCE_GRAAL_HOME;
         }
 
@@ -164,11 +166,15 @@ public final class DefaultHomeFinder extends HomeFinder {
         if (ImageInfo.inImageCode()) {
             final String graalvmHomeValue = System.getProperty("org.graalvm.home");
             if (graalvmHomeValue != null) {
-                verbose("GraalVM home already set to: ", graalvmHomeValue);
+                if (isVerbose()) {
+                    System.err.println("GraalVM home already set to: " + graalvmHomeValue);
+                }
                 home = Paths.get(graalvmHomeValue);
             } else {
                 home = getGraalVmHomeNative();
-                verbose("Found GraalVM home: ", home);
+                if (isVerbose()) {
+                    System.err.println("Found GraalVM home: " + home);
+                }
                 if (home == null) {
                     return null;
                 }
@@ -205,8 +211,9 @@ public final class DefaultHomeFinder extends HomeFinder {
                     throw new AssertionError("Missing jimage in java.home: " + javaHome);
                 }
             }
-
-            verbose("GraalVM home found by java.home property as: ", home);
+            if (isVerbose()) {
+                System.err.println("GraalVM home found by java.home property as: " + home);
+            }
             return home;
         }
     }
@@ -327,7 +334,9 @@ public final class DefaultHomeFinder extends HomeFinder {
                 Path langHome = launcherDir.resolve(entry.getValue()).normalize();
                 String langId = entry.getKey();
                 res.put(langId, langHome);
-                verbose("Resolved the ", langId, " home as ", langHome);
+                if (isVerbose()) {
+                    System.err.println("Resolved the " + langId + " home as " + langHome);
+                }
             }
         }
 
@@ -341,7 +350,9 @@ public final class DefaultHomeFinder extends HomeFinder {
         if (executable != null) {
             Path result = getGraalVmHomeFromRelativeLauncherPath(executable);
             if (result != null) {
-                verbose("GraalVM home found by executable as: ", result);
+                if (isVerbose()) {
+                    System.err.println("GraalVM home found by executable as: " + result);
+                }
                 return result;
             }
         }
@@ -353,7 +364,9 @@ public final class DefaultHomeFinder extends HomeFinder {
                 result = getGraalVmHomeLibPolyglotFallBack(objectFile);
             }
             if (result != null) {
-                verbose("GraalVM home found by object file as: ", result);
+                if (isVerbose()) {
+                    System.err.println("GraalVM home found by object file as: " + result);
+                }
                 return result;
             }
         }
@@ -451,16 +464,6 @@ public final class DefaultHomeFinder extends HomeFinder {
                 verbose = res;
             }
             return res;
-        }
-    }
-
-    private void verbose(Object... args) {
-        if (isVerbose()) {
-            StringBuilder builder = new StringBuilder();
-            for (Object arg : args) {
-                builder.append(arg);
-            }
-            System.err.println(builder.toString());
         }
     }
 }
