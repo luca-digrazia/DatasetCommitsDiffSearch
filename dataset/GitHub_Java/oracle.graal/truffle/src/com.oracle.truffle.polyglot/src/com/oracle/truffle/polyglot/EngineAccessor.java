@@ -111,8 +111,13 @@ final class EngineAccessor extends Accessor {
     }
 
     @Override
-    protected void initializeProfile(CallTarget target, Class<?>[] argumentTypes) {
-        super.initializeProfile(target, argumentTypes);
+    public EngineSupport engineSupport() {
+        return new EngineImpl();
+    }
+
+    @Override
+    protected void initializeProfile(CallTarget target, Class<?>[] argmentTypes) {
+        super.initializeProfile(target, argmentTypes);
     }
 
     @Override

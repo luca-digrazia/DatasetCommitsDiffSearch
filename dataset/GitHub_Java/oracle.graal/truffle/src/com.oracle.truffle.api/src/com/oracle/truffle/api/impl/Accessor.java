@@ -44,7 +44,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.Charset;
@@ -592,29 +592,29 @@ public abstract class Accessor {
 
         static {
             // Eager load all accessors so the above fields are all set and all methods are usable
-            LANGUAGE = loadSupport("com.oracle.truffle.api.LanguageAccessor$LanguageImpl");
-            NODES = loadSupport("com.oracle.truffle.api.nodes.NodeAccessor$AccessNodes");
-            INSTRUMENT = loadSupport("com.oracle.truffle.api.instrumentation.InstrumentAccessor$InstrumentImpl");
-            SOURCE = loadSupport("com.oracle.truffle.api.source.SourceAccessor$SourceSupportImpl");
-            INTEROP = loadSupport("com.oracle.truffle.api.interop.InteropAccessor$InteropImpl");
-            IO = loadSupport("com.oracle.truffle.api.io.IOAccessor$IOSupportImpl");
-            FRAMES = loadSupport("com.oracle.truffle.api.frame.FrameAccessor$FramesImpl");
-            ENGINE = loadSupport("com.oracle.truffle.polyglot.EngineAccessor$EngineImpl");
+            LANGUAGE = loadAccessor("com.oracle.truffle.api.LanguageAccessor").languageSupport();
+            NODES = loadAccessor("com.oracle.truffle.api.nodes.NodeAccessor").nodeSupport();
+            INSTRUMENT = loadAccessor("com.oracle.truffle.api.instrumentation.InstrumentAccessor").instrumentSupport();
+            SOURCE = loadAccessor("com.oracle.truffle.api.source.SourceAccessor").sourceSupport();
+            INTEROP = loadAccessor("com.oracle.truffle.api.interop.InteropAccessor").interopSupport();
+            IO = loadAccessor("com.oracle.truffle.api.io.IOAccessor").ioSupport();
+            FRAMES = loadAccessor("com.oracle.truffle.api.frame.FrameAccessor").framesSupport();
+            ENGINE = loadAccessor("com.oracle.truffle.polyglot.EngineAccessor").engineSupport();
             if (TruffleOptions.TraceASTJSON) {
-                DUMP = loadSupport("com.oracle.truffle.api.utilities.JSONHelper.DumpAccessor$DumpImpl");
+                DUMP = loadAccessor("com.oracle.truffle.api.utilities.JSONHelper.DumpAccessor").dumpSupport();
             } else {
                 DUMP = null;
             }
         }
 
-        @SuppressWarnings("unchecked")
-        private static <T> T loadSupport(String className) {
+        private static Accessor loadAccessor(String className) {
             try {
-                Class<T> klass = (Class<T>) Class.forName(className, true, Accessor.class.getClassLoader());
-                Constructor<T> constructor = klass.getDeclaredConstructor();
-                constructor.setAccessible(true);
-                return constructor.newInstance();
-            } catch (ReflectiveOperationException e) {
+                Class<?> klass = Class.forName(className, true, Accessor.class.getClassLoader());
+                Field field = klass.getDeclaredField("ACCESSOR");
+                field.setAccessible(true);
+                Object accessor = field.get(null);
+                return (Accessor) accessor;
+            } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException e) {
                 throw new IllegalStateException(e);
             }
         }
@@ -645,39 +645,39 @@ public abstract class Accessor {
         }
     }
 
-    public final NodeSupport nodeSupport() {
+    public NodeSupport nodeSupport() {
         return Constants.NODES;
     }
 
-    public final LanguageSupport languageSupport() {
+    public LanguageSupport languageSupport() {
         return Constants.LANGUAGE;
     }
 
-    public final DumpSupport dumpSupport() {
+    public DumpSupport dumpSupport() {
         return Constants.DUMP;
     }
 
-    public final EngineSupport engineSupport() {
+    public EngineSupport engineSupport() {
         return Constants.ENGINE;
     }
 
-    public final InstrumentSupport instrumentSupport() {
+    public InstrumentSupport instrumentSupport() {
         return Constants.INSTRUMENT;
     }
 
-    public final InteropSupport interopSupport() {
+    public InteropSupport interopSupport() {
         return Constants.INTEROP;
     }
 
-    public final SourceSupport sourceSupport() {
+    public SourceSupport sourceSupport() {
         return Constants.SOURCE;
     }
 
-    public final FrameSupport framesSupport() {
+    public FrameSupport framesSupport() {
         return Constants.FRAMES;
     }
 
-    public final IOSupport ioSupport() {
+    public Accessor.IOSupport ioSupport() {
         return Constants.IO;
     }
 
@@ -738,8 +738,8 @@ public abstract class Accessor {
         return SUPPORT.isGuestCallStackFrame(element);
     }
 
-    protected void initializeProfile(CallTarget target, Class<?>[] argumentTypes) {
-        SUPPORT.initializeProfile(target, argumentTypes);
+    protected void initializeProfile(CallTarget target, Class<?>[] argmentTypes) {
+        SUPPORT.initializeProfile(target, argmentTypes);
     }
 
     protected void onLoopCount(Node source, int iterations) {

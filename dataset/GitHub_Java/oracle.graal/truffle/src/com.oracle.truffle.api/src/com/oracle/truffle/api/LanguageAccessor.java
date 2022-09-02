@@ -97,6 +97,11 @@ final class LanguageAccessor extends Accessor {
         return ACCESSOR.ioSupport();
     }
 
+    @Override
+    public LanguageSupport languageSupport() {
+        return new LanguageImpl();
+    }
+
     static final class LanguageImpl extends LanguageSupport {
 
         @Override
