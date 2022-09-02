@@ -37,7 +37,6 @@ import java.util.List;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.c.libc.LibCBase;
 import com.oracle.svm.core.util.InterruptImageBuilding;
@@ -161,7 +160,8 @@ public class CAnnotationProcessor {
         if (Platform.includedIn(Platform.LINUX.class)) {
             options.addAll(LibCBase.singleton().getAdditionalQueryCodeCompilerOptions());
         }
-        compilerInvoker.compileAndParseError(SubstrateOptions.StrictQueryCodeCompilation.getValue(), options, queryFile, binary, this::reportCompilerError, nativeLibs.debug);
+        boolean forceEnable = !Boolean.getBoolean("remove me before merge");
+        compilerInvoker.compileAndParseError(SubstrateUtil.assertionsEnabled() || forceEnable, options, queryFile, binary, this::reportCompilerError, nativeLibs.debug);
         return binary;
     }
 
