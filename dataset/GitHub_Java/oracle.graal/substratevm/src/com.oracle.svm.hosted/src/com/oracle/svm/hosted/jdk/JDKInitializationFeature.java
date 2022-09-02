@@ -124,7 +124,6 @@ public class JDKInitializationFeature implements Feature {
         classInitSupport.rerunInitialization("com.sun.jndi.dns.DnsClient", "Contains Random references, therefore can't be included in the image heap.");
         classInitSupport.rerunInitialization("sun.net.www.protocol.http.DigestAuthentication$Parameters", "Contains Random references, therefore can't be included in the image heap.");
         classInitSupport.rerunInitialization("sun.security.krb5.KrbServiceLocator", "Contains Random references, therefore can't be included in the image heap.");
-        classInitSupport.rerunInitialization("com.sun.jndi.ldap.ServiceLocator", "Contains Random references, therefore can't be included in the image heap.");
         if (Platform.includedIn(Platform.WINDOWS.class)) {
             classInitSupport.rerunInitialization("sun.nio.ch.PipeImpl", "Contains SecureRandom reference, therefore can't be included in the image heap.");
         }
@@ -133,7 +132,5 @@ public class JDKInitializationFeature implements Feature {
         // values properly. Otherwise the numbers generated will be fixed for each generated image.
         classInitSupport.rerunInitialization("java.lang.Math$RandomNumberGeneratorHolder", "Must not be initialized at build time in the final image.");
         classInitSupport.rerunInitialization("java.lang.StrictMath$RandomNumberGeneratorHolder", "Must not be initialized at build time in the final image.");
-
-        classInitSupport.rerunInitialization("jdk.internal.misc.InnocuousThread", "Contains a thread group INNOCUOUSTHREADGROUP.");
     }
 }
