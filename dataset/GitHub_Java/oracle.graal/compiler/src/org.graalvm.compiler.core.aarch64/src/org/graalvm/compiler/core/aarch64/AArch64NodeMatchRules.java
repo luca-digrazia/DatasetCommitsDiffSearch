@@ -32,16 +32,12 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.Value;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.compiler.asm.aarch64.AArch64Assembler.ExtendType;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.CanonicalCondition;
-import org.graalvm.compiler.core.common.calc.FloatConvert;
 import org.graalvm.compiler.core.gen.NodeMatchRules;
 import org.graalvm.compiler.core.match.ComplexMatchResult;
 import org.graalvm.compiler.core.match.MatchRule;
-import org.graalvm.compiler.core.match.MatchableNode;
-import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LabelRef;
 import org.graalvm.compiler.lir.Variable;
@@ -58,7 +54,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.AndNode;
 import org.graalvm.compiler.nodes.calc.BinaryNode;
-import org.graalvm.compiler.nodes.calc.FloatConvertNode;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
 import org.graalvm.compiler.nodes.calc.LeftShiftNode;
 import org.graalvm.compiler.nodes.calc.MulNode;
@@ -71,10 +66,8 @@ import org.graalvm.compiler.nodes.calc.SubNode;
 import org.graalvm.compiler.nodes.calc.UnaryNode;
 import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.calc.XorNode;
-import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.memory.Access;
 
-@MatchableNode(nodeClass = AArch64PointerAddNode.class, inputs = {"base", "offset"})
 public class AArch64NodeMatchRules extends NodeMatchRules {
     private static final EconomicMap<Class<? extends BinaryNode>, AArch64ArithmeticOp> binaryOpMap;
     private static final EconomicMap<Class<? extends BinaryNode>, AArch64BitFieldOp.BitFieldOpCode> bitFieldOpMap;
@@ -115,22 +108,6 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
 
     protected AArch64Kind getMemoryKind(Access access) {
         return (AArch64Kind) gen.getLIRKind(access.asNode().stamp(NodeView.DEFAULT)).getPlatformKind();
-    }
-
-    private static ExtendType getZeroExtendType(int fromBits) {
-        switch (fromBits) {
-            case Byte.SIZE:
-                return ExtendType.UXTB;
-            case Short.SIZE:
-                return ExtendType.UXTH;
-            case Integer.SIZE:
-                return ExtendType.UXTW;
-            case Long.SIZE:
-                return ExtendType.UXTX;
-            default:
-                GraalError.shouldNotReachHere("extended from " + fromBits + "bits is not supported!");
-                return null;
-        }
     }
 
     private AllocatableValue moveSp(AllocatableValue value) {
@@ -186,46 +163,6 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
         return narrow.getInputBits() == 64 && narrow.getResultBits() == 32;
     }
 
-    @MatchRule("(AArch64PointerAdd=addP base ZeroExtend)")
-    @MatchRule("(AArch64PointerAdd=addP base (LeftShift ZeroExtend Constant))")
-    public ComplexMatchResult extendedPointerAddShift(AArch64PointerAddNode addP) {
-        ValueNode offset = addP.getOffset();
-        ZeroExtendNode zeroExtend;
-        int shiftNum;
-        if (offset instanceof ZeroExtendNode) {
-            zeroExtend = (ZeroExtendNode) offset;
-            shiftNum = 0;
-        } else {
-            LeftShiftNode shift = (LeftShiftNode) offset;
-            zeroExtend = (ZeroExtendNode) shift.getX();
-            shiftNum = shift.getY().asJavaConstant().asInt();
-        }
-
-        int fromBits = zeroExtend.getInputBits();
-        int toBits = zeroExtend.getResultBits();
-        if (toBits != 64) {
-            return null;
-        }
-        assert fromBits <= toBits;
-        ExtendType extendType = getZeroExtendType(fromBits);
-
-        if (shiftNum >= 0 && shiftNum <= 4) {
-            ValueNode base = addP.getBase();
-            return builder -> {
-                AllocatableValue x = gen.asAllocatable(operand(base));
-                AllocatableValue y = gen.asAllocatable(operand(zeroExtend.getValue()));
-                AllocatableValue baseReference = LIRKind.derivedBaseFromValue(x);
-                LIRKind kind = LIRKind.combineDerived(gen.getLIRKind(addP.stamp(NodeView.DEFAULT)),
-                                baseReference, null);
-                Variable result = gen.newVariable(kind);
-                gen.append(new AArch64ArithmeticOp.ExtendedAddShiftOp(result, x, moveSp(y),
-                                extendType, shiftNum));
-                return result;
-            };
-        }
-        return null;
-    }
-
     @MatchRule("(And (UnsignedRightShift=shift a Constant=b) Constant=c)")
     @MatchRule("(LeftShift=shift (And a Constant=c) Constant=b)")
     public ComplexMatchResult unsignedBitField(BinaryNode shift, ValueNode a, ConstantNode b, ConstantNode c) {
@@ -258,6 +195,60 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
             return null;
         }
         return emitBitField(op, a, distance, width);
+    }
+
+    @MatchRule("(Or=op (LeftShift=x src Constant=shiftAmt1) (UnsignedRightShift src Constant=shiftAmt2))")
+    @MatchRule("(Or=op (UnsignedRightShift=x src Constant=shiftAmt1) (LeftShift src Constant=shiftAmt2))")
+    @MatchRule("(Add=op (LeftShift=x src Constant=shiftAmt1) (UnsignedRightShift src Constant=shiftAmt2))")
+    @MatchRule("(Add=op (UnsignedRightShift=x src Constant=shiftAmt1) (LeftShift src Constant=shiftAmt2))")
+    public ComplexMatchResult rotationConstant(ValueNode op, ValueNode x, ValueNode src, ConstantNode shiftAmt1, ConstantNode shiftAmt2) {
+        assert src.getStackKind().isNumericInteger();
+        assert shiftAmt1.getStackKind().getBitCount() == 32;
+        assert shiftAmt2.getStackKind().getBitCount() == 32;
+
+        int shift1 = shiftAmt1.asJavaConstant().asInt();
+        int shift2 = shiftAmt2.asJavaConstant().asInt();
+        if (op instanceof AddNode && (0 == shift1 || 0 == shift2)) {
+            return null;
+        }
+        if ((0 == shift1 + shift2) || (src.getStackKind().getBitCount() == shift1 + shift2)) {
+            return builder -> {
+                Value a = operand(src);
+                Value b = x instanceof LeftShiftNode ? operand(shiftAmt2) : operand(shiftAmt1);
+                return getArithmeticLIRGenerator().emitBinary(LIRKind.combine(a, b), AArch64ArithmeticOp.ROR, false, a, b);
+            };
+        }
+        return null;
+    }
+
+    @MatchRule("(Or (LeftShift=x src shiftAmount) (UnsignedRightShift src (Sub=y Constant shiftAmount)))")
+    @MatchRule("(Or (UnsignedRightShift=x src shiftAmount) (LeftShift src (Sub=y Constant shiftAmount)))")
+    @MatchRule("(Or (LeftShift=x src (Negate shiftAmount)) (UnsignedRightShift src (Add=y Constant shiftAmount)))")
+    @MatchRule("(Or (UnsignedRightShift=x src (Negate shiftAmount)) (LeftShift src (Add=y Constant shiftAmount)))")
+    @MatchRule("(Or (LeftShift=x src shiftAmount) (UnsignedRightShift src (Negate=y shiftAmount)))")
+    @MatchRule("(Or (UnsignedRightShift=x src shiftAmount) (LeftShift src (Negate=y shiftAmount)))")
+    public ComplexMatchResult rotationExpander(ValueNode src, ValueNode shiftAmount, ValueNode x, ValueNode y) {
+        assert src.getStackKind().isNumericInteger();
+        assert shiftAmount.getStackKind().getBitCount() == 32;
+
+        if (y instanceof SubNode || y instanceof AddNode) {
+            BinaryNode binary = (BinaryNode) y;
+            ConstantNode delta = (ConstantNode) (binary.getX() instanceof ConstantNode ? binary.getX() : binary.getY());
+            if (delta.asJavaConstant().asInt() != src.getStackKind().getBitCount()) {
+                return null;
+            }
+        }
+
+        return builder -> {
+            Value a = operand(src);
+            Value b;
+            if (y instanceof AddNode) {
+                b = x instanceof LeftShiftNode ? operand(shiftAmount) : getArithmeticLIRGenerator().emitNegate(operand(shiftAmount));
+            } else {
+                b = x instanceof LeftShiftNode ? getArithmeticLIRGenerator().emitNegate(operand(shiftAmount)) : operand(shiftAmount);
+            }
+            return getArithmeticLIRGenerator().emitBinary(LIRKind.combine(a, b), AArch64ArithmeticOp.RORV, false, a, b);
+        };
     }
 
     @MatchRule("(Add=binary a (LeftShift=shift b Constant))")
@@ -444,16 +435,6 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
         if (y.isJavaConstant() && (0 == y.asJavaConstant().asLong()) && lessNode.condition().equals(CanonicalCondition.LT)) {
             return emitBitTestAndBranch(root.falseSuccessor(), root.trueSuccessor(), x,
                             1.0 - root.getTrueSuccessorProbability(), xKind.getBitCount() - 1);
-        }
-        return null;
-    }
-
-    @MatchRule("(FloatConvert=a (Sqrt (FloatConvert=b c)))")
-    public ComplexMatchResult floatSqrt(FloatConvertNode a, FloatConvertNode b, ValueNode c) {
-        if (c.getStackKind().isNumericFloat() && a.getStackKind().isNumericFloat()) {
-            if (a.getFloatConvert() == FloatConvert.D2F && b.getFloatConvert() == FloatConvert.F2D) {
-                return builder -> getArithmeticLIRGenerator().emitMathSqrt(operand(c));
-            }
         }
         return null;
     }

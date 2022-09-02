@@ -33,6 +33,7 @@ import java.util.function.Predicate;
 public class AArch64RotationTest extends AArch64MatchRuleTest {
 
     private static final Predicate<LIRInstruction> ROR_PRED = op -> op.name().equals("ROR");
+    private static final Predicate<LIRInstruction> RORV_PRED = op -> op.name().equals("RORV");
     private static final Predicate<LIRInstruction> NEG_PRED = op -> op.name().equals("NEG");
     private static final int CONST = 10;
 
@@ -72,7 +73,7 @@ public class AArch64RotationTest extends AArch64MatchRuleTest {
             for (int shift = 0; shift <= Integer.SIZE; shift++) {
                 for (int value : intInput) {
                     test(name, value, shift);
-                    checkLIR(name, ROR_PRED, 1);
+                    checkLIR(name, RORV_PRED, 1);
                 }
             }
         }
@@ -82,7 +83,7 @@ public class AArch64RotationTest extends AArch64MatchRuleTest {
             for (int shift = 0; shift <= Long.SIZE; shift++) {
                 for (long value : longInput) {
                     test(name, value, shift);
-                    checkLIR(name, ROR_PRED, 1);
+                    checkLIR(name, RORV_PRED, 1);
                 }
             }
         }
@@ -120,7 +121,7 @@ public class AArch64RotationTest extends AArch64MatchRuleTest {
             for (int shift = 0; shift <= Integer.SIZE; shift++) {
                 for (int value : intInput) {
                     test(name, value, shift);
-                    checkLIR(name, ROR_PRED, 1);
+                    checkLIR(name, RORV_PRED, 1);
                     checkLIR(name, NEG_PRED, 1);
                 }
             }
@@ -131,7 +132,7 @@ public class AArch64RotationTest extends AArch64MatchRuleTest {
             for (int shift = 0; shift <= Long.SIZE; shift++) {
                 for (long value : longInput) {
                     test(name, value, shift);
-                    checkLIR(name, ROR_PRED, 1);
+                    checkLIR(name, RORV_PRED, 1);
                     checkLIR(name, NEG_PRED, 1);
                 }
             }
