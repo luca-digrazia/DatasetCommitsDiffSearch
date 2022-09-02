@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,17 +24,17 @@
  */
 package com.oracle.truffle.regex.tregex.nodesplitter;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.Set;
-
 import com.oracle.truffle.regex.tregex.automaton.IndexedState;
 import com.oracle.truffle.regex.tregex.automaton.StateIndex;
 import com.oracle.truffle.regex.tregex.automaton.StateSet;
-import com.oracle.truffle.regex.tregex.automaton.StateSetBackingSetFactory;
+import com.oracle.truffle.regex.tregex.automaton.StateSetBackingSortedArray;
 import com.oracle.truffle.regex.tregex.dfa.DFAGenerator;
-import com.oracle.truffle.regex.tregex.nodes.dfa.DFAAbstractStateNode;
-import com.oracle.truffle.regex.tregex.nodes.dfa.DFAInitialStateNode;
+import com.oracle.truffle.regex.tregex.nodes.DFAAbstractStateNode;
+import com.oracle.truffle.regex.tregex.nodes.DFAInitialStateNode;
+
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Set;
 
 /**
  * Abstract graph node wrapper with lots of extra fields used by the dominator tree algorithm in
@@ -64,7 +64,7 @@ final class GraphNode implements Comparable<GraphNode>, IndexedState {
     GraphNode(DFANodeSplit graph, DFAAbstractStateNode dfaNode, short[] successorSet) {
         this.dfaNode = dfaNode;
         this.successorSet = successorSet;
-        predecessorSet = new StateSet<>(graph, StateSetBackingSetFactory.SORTED_ARRAY);
+        predecessorSet = new StateSet<>(graph, new StateSetBackingSortedArray());
         backEdges = new StateSet<>(graph);
         domChildren = NO_DOM_CHILDREN;
     }

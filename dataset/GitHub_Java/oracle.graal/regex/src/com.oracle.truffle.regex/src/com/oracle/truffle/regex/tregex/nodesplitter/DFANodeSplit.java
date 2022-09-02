@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,21 @@
  */
 package com.oracle.truffle.regex.tregex.nodesplitter;
 
+import com.oracle.truffle.regex.tregex.TRegexOptions;
+import com.oracle.truffle.regex.tregex.automaton.StateIndex;
+import com.oracle.truffle.regex.tregex.automaton.StateSet;
+import com.oracle.truffle.regex.tregex.automaton.StateSetBackingSortedArray;
+import com.oracle.truffle.regex.tregex.buffer.ShortArrayBuffer;
+import com.oracle.truffle.regex.tregex.dfa.DFAGenerator;
+import com.oracle.truffle.regex.tregex.nodes.DFAAbstractStateNode;
+import com.oracle.truffle.regex.tregex.nodes.DFAInitialStateNode;
+import com.oracle.truffle.regex.util.CompilationFinalBitSet;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Set;
-
-import com.oracle.truffle.regex.tregex.TRegexOptions;
-import com.oracle.truffle.regex.tregex.automaton.StateIndex;
-import com.oracle.truffle.regex.tregex.automaton.StateSet;
-import com.oracle.truffle.regex.tregex.automaton.StateSetBackingSetFactory;
-import com.oracle.truffle.regex.tregex.buffer.ShortArrayBuffer;
-import com.oracle.truffle.regex.tregex.dfa.DFAGenerator;
-import com.oracle.truffle.regex.tregex.nodes.dfa.DFAAbstractStateNode;
-import com.oracle.truffle.regex.tregex.nodes.dfa.DFAInitialStateNode;
-import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 /**
  * Implementation of a node splitting algorithm presented by Sebastian Unger and Frank Mueller in
@@ -230,7 +230,7 @@ public final class DFANodeSplit implements StateIndex<GraphNode> {
     }
 
     private void handleScc(GraphNode topNode, Set<GraphNode> scc) throws DFANodeSplitBailoutException {
-        StateSet<GraphNode> msed = new StateSet<>(this, StateSetBackingSetFactory.SORTED_ARRAY);
+        StateSet<GraphNode> msed = new StateSet<>(this, new StateSetBackingSortedArray());
         for (GraphNode n : scc) {
             if (n.getDomTreeDepth() == topNode.getDomTreeDepth() + 1) {
                 n.setWeightAndHeaders(this, n, scc);
