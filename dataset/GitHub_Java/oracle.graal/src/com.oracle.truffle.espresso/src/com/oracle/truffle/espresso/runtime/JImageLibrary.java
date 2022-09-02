@@ -24,7 +24,7 @@
 package com.oracle.truffle.espresso.runtime;
 
 import static com.oracle.truffle.espresso.jni.NativeLibrary.lookupAndBind;
-import static com.oracle.truffle.espresso.runtime.Classpath.JAVA_BASE;
+import static com.oracle.truffle.espresso.runtime.ModulesReaderHelper.JAVA_BASE;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -40,10 +40,7 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.ContextAccess;
-import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
 import com.oracle.truffle.espresso.jni.NativeEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -75,8 +72,6 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
     private final TruffleObject encodedJavaBase;
     // Cache the version sting.
     private final TruffleObject encodedVersion;
-    // Cache the empty string
-    private final TruffleObject encodedEmptyString;
 
     // Function pointers
 
@@ -123,29 +118,35 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
 
             this.encodedJavaBase = getNativeString(JAVA_BASE);
             this.encodedVersion = getNativeString(VERSION_STRING);
-            this.encodedEmptyString = getNativeString("");
         } catch (UnknownIdentifierException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
     }
 
-    public TruffleObject open(String name) {
+    public TruffleObject init(String name) {
         ByteBuffer error = allocateDirect(1, JavaKind.Int);
-        return (TruffleObject) execute(open, getNativeString(name), byteBufferPointer(error));
+        TruffleObject jimage = (TruffleObject) execute(open, getNativeString(name), byteBufferPointer(error));
+        EspressoError.guarantee(!InteropLibrary.getFactory().getUncached().isNull(jimage), "Failed to load modules image");
+        return jimage;
     }
 
     public void close(TruffleObject jimage) {
         execute(close, jimage);
     }
 
-    public byte[] getClassBytes(TruffleObject jimage, String name) {
-        // Prepare calls
+    public byte[] getClassBytes(TruffleObject jimage, String moduleName, String name) {
+        // Prepare the call
         ByteBuffer sizeBuffer = allocateDirect(1, JavaKind.Long);
-        TruffleObject namePtr = getNativeString(name);
         TruffleObject sizePtr = byteBufferPointer(sizeBuffer);
+        TruffleObject moduleNamePtr = JAVA_BASE.equals(moduleName)
+                        ? encodedJavaBase
+                        : getNativeString(moduleName);
+        TruffleObject namePtr = getNativeString(name);
 
-        long location = findLocation(jimage, namePtr, sizePtr, name);
+        // Do the call
+        long location = (long) execute(findResource, jimage, moduleNamePtr, encodedVersion, namePtr, sizePtr);
         if (location == 0) {
+            // Not found.
             return null;
         }
 
@@ -159,47 +160,8 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
         return result;
     }
 
-    private long findLocation(TruffleObject jimage, TruffleObject namePtr, TruffleObject sizePtr, String name) {
-        long location = (long) execute(findResource, jimage, encodedEmptyString, encodedVersion, namePtr, sizePtr);
-        if (location != 0) {
-            // Not found.
-            return location;
-        }
-
-        String pkg = packageFromName(name);
-        if (pkg == null) {
-            return 0;
-        }
-
-        if (!getContext().modulesInitialized()) {
-            return (long) execute(findResource, jimage, encodedJavaBase, encodedVersion, namePtr, sizePtr);
-        } else {
-            Symbol<Name> pkgSymbol = getNames().lookup(pkg);
-            if (pkgSymbol == null) {
-                return 0;
-            }
-            PackageEntry pkgEntry = getRegistries().getBootClassRegistry().packages().lookup(pkgSymbol);
-            if (pkgEntry == null) {
-                return 0;
-            }
-            String moduleName = pkgEntry.module().getName().toString();
-            TruffleObject moduleNamePtr = JAVA_BASE.equals(moduleName)
-                            ? encodedJavaBase
-                            : getNativeString(moduleName);
-            return (long) execute(findResource, jimage, moduleNamePtr, encodedVersion, namePtr, sizePtr);
-        }
-    }
-
-    private String packageToModule(TruffleObject jimage, String pkg) {
-        return interopPointerToString((TruffleObject) execute(packageToModule, jimage, getNativeString(pkg)));
-    }
-
-    private static String packageFromName(String name) {
-        int lastSlash = name.lastIndexOf('/');
-        if (lastSlash == -1) {
-            return null;
-        }
-        return name.substring(0, lastSlash);
+    public String packageToModule(TruffleObject jimage, String packageName) {
+        return interopPointerToString((TruffleObject) execute(packageToModule, jimage, getNativeString(packageName)));
     }
 
     private static Object execute(Object target, Object... args) {
@@ -221,7 +183,6 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
             ByteBuffer bb = allocateDirect(length);
             encoder.reset();
             CoderResult result = encoder.encode(CharBuffer.wrap(name), bb, true);
-
             if (result.isOverflow()) {
                 // Not enough space in the buffer
                 length <<= 1;
