@@ -167,9 +167,8 @@ public final class LLVMContext {
             functionDescriptors.put(pointer, desc);
         }
 
-        synchronized LLVMFunctionDescriptor create(String name, FunctionType type, LLVMFunctionDescriptor.Function function, ExternalLibrary library) {
-            int functionId = currentFunctionIndex++;
-            return new LLVMFunctionDescriptor(LLVMContext.this, name, type, functionId, function, library);
+        synchronized LLVMFunctionDescriptor create(String name, FunctionType type) {
+            return LLVMFunctionDescriptor.createDescriptor(LLVMContext.this, name, type, currentFunctionIndex++);
         }
     }
 
@@ -596,8 +595,8 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public LLVMFunctionDescriptor createFunctionDescriptor(String name, FunctionType type, LLVMFunctionDescriptor.Function function, ExternalLibrary library) {
-        return functionPointerRegistry.create(name, type, function, library);
+    public LLVMFunctionDescriptor createFunctionDescriptor(String name, FunctionType type) {
+        return functionPointerRegistry.create(name, type);
     }
 
     @TruffleBoundary
