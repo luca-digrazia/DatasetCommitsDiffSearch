@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,18 @@
  */
 package com.oracle.truffle.espresso.bytecode;
 
+import java.io.PrintStream;
+import java.util.Arrays;
+
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.InvokeDynamicConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.MethodRefConstant;
+import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.meta.EspressoError;
 
 /**
  * A utility class that makes iterating over bytecodes and reading operands simpler and less error
@@ -31,29 +42,17 @@ import com.oracle.truffle.api.CompilerDirectives;
  */
 public final class BytecodeStream {
 
-    //@CompilerDirectives.CompilationFinal(dimensions = 1)
+    @CompilationFinal(dimensions = 1) //
     private final byte[] code;
-
-    private int opcode;
-    private int curBCI;
-    private int nextBCI;
 
     /**
      * Creates a new {@code BytecodeStream} for the specified bytecode.
      *
      * @param code the array of bytes that contains the bytecode
      */
-    public BytecodeStream(byte[] code) {
+    public BytecodeStream(final byte[] code) {
         assert code != null;
         this.code = code;
-        setBCI(0);
-    }
-
-    /**
-     * Advances to the next bytecode.
-     */
-    public void next() {
-        setBCI(nextBCI);
     }
 
     /**
@@ -61,17 +60,12 @@ public final class BytecodeStream {
      *
      * @return the next bytecode index
      */
-    public int nextBCI() {
-        return nextBCI;
-    }
-
-    /**
-     * Gets the current bytecode index.
-     *
-     * @return the current bytecode index
-     */
-    public int currentBCI() {
-        return curBCI;
+    public int nextBCI(int curBCI) {
+        if (curBCI < code.length) {
+            return curBCI + lengthOf(curBCI);
+        } else {
+            return curBCI;
+        }
     }
 
     /**
@@ -89,7 +83,8 @@ public final class BytecodeStream {
      *
      * @return the current opcode; {@link Bytecodes#END} if at or beyond the end of the code
      */
-    public int currentBC() {
+    public int currentBC(int curBCI) {
+        int opcode = opcode(curBCI);
         if (opcode == Bytecodes.WIDE) {
             return Bytes.beU1(code, curBCI + 1);
         } else {
@@ -103,9 +98,9 @@ public final class BytecodeStream {
      *
      * @return the index of the local variable
      */
-    public int readLocalIndex() {
+    public int readLocalIndex(int curBCI) {
         // read local variable index for load/store
-        if (opcode == Bytecodes.WIDE) {
+        if (opcode(curBCI) == Bytecodes.WIDE) {
             return Bytes.beU2(code, curBCI + 2);
         }
         return Bytes.beU1(code, curBCI + 1);
@@ -116,9 +111,9 @@ public final class BytecodeStream {
      *
      * @return the delta for the {@code IINC}
      */
-    public int readIncrement() {
+    public int readIncrement(int curBCI) {
         // read the delta for the iinc bytecode
-        if (opcode == Bytecodes.WIDE) {
+        if (opcode(curBCI) == Bytecodes.WIDE) {
             return Bytes.beS2(code, curBCI + 4);
         }
         return Bytes.beS1(code, curBCI + 2);
@@ -129,8 +124,9 @@ public final class BytecodeStream {
      *
      * @return the destination bytecode index
      */
-    public int readBranchDest() {
+    public int readBranchDest(int curBCI) {
         // reads the destination for a branch bytecode
+        int opcode = opcode(curBCI);
         if (opcode == Bytecodes.GOTO_W || opcode == Bytecodes.JSR_W) {
             return curBCI + Bytes.beS4(code, curBCI + 1);
         } else {
@@ -164,8 +160,8 @@ public final class BytecodeStream {
      *
      * @return the constant pool index
      */
-    public char readCPI() {
-        if (opcode == Bytecodes.LDC) {
+    public char readCPI(int curBCI) {
+        if (opcode(curBCI) == Bytecodes.LDC) {
             return (char) Bytes.beU1(code, curBCI + 1);
         }
         return (char) Bytes.beU2(code, curBCI + 1);
@@ -176,8 +172,8 @@ public final class BytecodeStream {
      *
      * @return the constant pool index
      */
-    public int readCPI4() {
-        assert opcode == Bytecodes.INVOKEDYNAMIC;
+    public int readCPI4(int curBCI) {
+        assert opcode(curBCI) == Bytecodes.INVOKEDYNAMIC;
         return Bytes.beS4(code, curBCI + 1);
     }
 
@@ -186,7 +182,7 @@ public final class BytecodeStream {
      *
      * @return the byte
      */
-    public byte readByte() {
+    public byte readByte(int curBCI) {
         return code[curBCI + 1];
     }
 
@@ -195,41 +191,31 @@ public final class BytecodeStream {
      *
      * @return the short value
      */
-    public short readShort() {
+    public short readShort(int curBCI) {
         return (short) Bytes.beS2(code, curBCI + 1);
     }
 
-    /**
-     * Sets the bytecode index to the specified value. If {@code bci} is beyond the end of the
-     * array, {@link #currentBC} will return {@link Bytecodes#END} and other methods may throw
-     * {@link ArrayIndexOutOfBoundsException}.
-     *
-     * @param bci the new bytecode index
-     */
-    public void setBCI(int bci) {
-        curBCI = bci;
+    public int opcode(int curBCI) {
         if (curBCI < code.length) {
-            opcode = Bytes.beU1(code, bci);
-            assert opcode < Bytecodes.BREAKPOINT : "illegal bytecode";
-            nextBCI = bci + lengthOf();
+            // opcode validity is performed at verification time.
+            return Bytes.beU1(code, curBCI);
         } else {
-            opcode = Bytecodes.END;
-            nextBCI = curBCI;
+            return Bytecodes.END;
         }
     }
 
     /**
      * Gets the length of the current bytecode.
      */
-    private int lengthOf() {
-        int length = Bytecodes.lengthOf(opcode);
+    private int lengthOf(int curBCI) {
+        int length = Bytecodes.lengthOf(opcode(curBCI));
         if (length == 0) {
-            switch (opcode) {
+            switch (opcode(curBCI)) {
                 case Bytecodes.TABLESWITCH: {
-                    return new BytecodeTableSwitch(this, curBCI).size();
+                    return BytecodeTableSwitch.INSTANCE.size(this, curBCI);
                 }
                 case Bytecodes.LOOKUPSWITCH: {
-                    return new BytecodeLookupSwitch(this, curBCI).size();
+                    return BytecodeLookupSwitch.INSTANCE.size(this, curBCI);
                 }
                 case Bytecodes.WIDE: {
                     int opc = Bytes.beU1(code, curBCI + 1);
@@ -242,9 +228,110 @@ public final class BytecodeStream {
                     }
                 }
                 default:
-                    throw new Error("unknown variable-length bytecode: " + opcode);
+                    // Should rather be CompilerAsserts.neverPartOfCompilation() but this is
+                    // reachable in SVM.
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw error(opcode(curBCI));
             }
         }
         return length;
+    }
+
+    @TruffleBoundary
+    private static EspressoError error(int opcode) {
+        throw EspressoError.shouldNotReachHere("unknown variable-length bytecode: " + opcode);
+    }
+
+    public void printBytecode(Klass klass, PrintStream out) {
+        try {
+            ConstantPool pool = klass.getConstantPool();
+            int bci = 0;
+            int nextBCI = 0;
+            StringBuilder str = new StringBuilder();
+            while (nextBCI < endBCI()) {
+                str.setLength(0);
+                bci = nextBCI;
+                int opcode = currentBC(bci);
+                str.append(bci).append(": ").append(Bytecodes.nameOf(opcode)).append(" ");
+                nextBCI = nextBCI(bci);
+                if (Bytecodes.isBranch(opcode)) {
+                    // {bci}: {branch bytecode} {target}
+                    str.append(readBranchDest(bci));
+                } else if (opcode == Bytecodes.NEW) {
+                    // {bci}: new {class name}
+                    int cpi = readCPI(bci);
+                    ClassConstant cc = (ClassConstant) pool.at(cpi);
+                    str.append(cc.getName(pool));
+                } else if (opcode == Bytecodes.INVOKEDYNAMIC) {
+                    // {bci}: #{bootstrap method index} -> {name}:{signature}
+                    int cpi = readCPI(bci);
+                    InvokeDynamicConstant idc = (InvokeDynamicConstant) pool.at(cpi);
+                    str.append("#").append(idc.getBootstrapMethodAttrIndex()).append(" -> ").append(idc.getName(pool)).append(":").append(idc.getSignature(pool));
+                } else if (Bytecodes.isInvoke(opcode)) {
+                    // {bci}: invoke{} {class}.{method name}:{method signature}
+                    int cpi = readCPI(bci);
+                    MethodRefConstant mrc = (MethodRefConstant) pool.at(cpi);
+                    str.append(mrc.getHolderKlassName(pool)).append(".").append(mrc.getName(pool)).append(":").append(mrc.getDescriptor(pool));
+                } else if (opcode == Bytecodes.TABLESWITCH) {
+                    // @formatter:off
+                    // checkstyle: stop
+
+                    // {bci}: tableswitch
+                    //      {key1}: {target1}
+                    //      ...
+                    //      {keyN}: {targetN}
+
+                    // @formatter:on
+                    // Checkstyle: resume
+                    str.append('\n');
+                    BytecodeTableSwitch helper = BytecodeTableSwitch.INSTANCE;
+                    int low = helper.lowKey(this, bci);
+                    int high = helper.highKey(this, bci);
+                    for (int i = low; i != high + 1; i++) {
+                        str.append('\t').append(i).append(": ").append(helper.targetAt(this, bci, i)).append('\n');
+                    }
+                    str.append("\tdefault: ").append(helper.defaultTarget(this, bci));
+                } else if (opcode == Bytecodes.LOOKUPSWITCH) {
+                    // @formatter:off
+                    // checkstyle: stop
+
+                    // {bci}: lookupswitch
+                    //      {key1}: {target1}
+                    //      ...
+                    //      {keyN}: {targetN}
+
+                    // @formatter:on
+                    // Checkstyle: resume
+                    str.append('\n');
+                    BytecodeLookupSwitch helper = BytecodeLookupSwitch.INSTANCE;
+                    int low = 0;
+                    int high = helper.numberOfCases(this, bci) - 1;
+                    for (int i = low; i <= high; i++) {
+                        str.append('\t').append(helper.keyAt(this, bci, i)).append(": ").append(helper.targetAt(this, bci, i));
+                    }
+                    str.append("\tdefault: ").append(helper.defaultTarget(this, bci));
+                } else if (opcode == Bytecodes.IINC) {
+                    str.append(" ").append(readLocalIndex(bci)).append(" ").append(readIncrement(bci));
+                } else {
+                    // {bci}: {opcode} {corresponding value}
+                    if (nextBCI - bci == 2) {
+                        str.append(readUByte(bci + 1));
+                    }
+                    if (nextBCI - bci == 3) {
+                        str.append(readShort(bci));
+                    }
+                    if (nextBCI - bci == 5) {
+                        str.append(readInt(bci + 1));
+                    }
+                }
+                out.println(str.toString());
+            }
+        } catch (Throwable e) {
+            throw EspressoError.unexpected("Exception thrown during bytecode printing, aborting...", e);
+        }
+    }
+
+    public void printRawBytecode(PrintStream out) {
+        out.println(Arrays.toString(code));
     }
 }
