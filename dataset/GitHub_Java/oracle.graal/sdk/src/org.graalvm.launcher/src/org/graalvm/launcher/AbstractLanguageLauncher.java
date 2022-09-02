@@ -167,7 +167,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
 
     @Override
     protected void printVersion() {
-        printVersion(getTempEngine());
+        printVersion(Engine.create());
     }
 
     protected void printVersion(Engine engine) {
@@ -182,7 +182,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
             if (languageName == null || languageName.length() == 0) {
                 languageName = languageId;
             }
-            languageImplementationName = languageName;
+            languageImplementationName = "Graal " + languageName;
         }
         String engineImplementationName = engine.getImplementationName();
         if (isAOT()) {
@@ -190,13 +190,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
         } else {
             engineImplementationName += " JVM";
         }
-        String languageVersion = language.getVersion();
-        if (languageVersion.equals(engine.getVersion())) {
-            languageVersion = "";
-        } else {
-            languageVersion += " ";
-        }
-        System.out.println(String.format("%s %s(%s %s)", languageImplementationName, languageVersion, engineImplementationName, engine.getVersion()));
+        System.out.println(String.format("%s %s (%s %s)", languageImplementationName, language.getVersion(), engineImplementationName, engine.getVersion()));
     }
 
     protected void runVersionAction(VersionAction action, Engine engine) {
