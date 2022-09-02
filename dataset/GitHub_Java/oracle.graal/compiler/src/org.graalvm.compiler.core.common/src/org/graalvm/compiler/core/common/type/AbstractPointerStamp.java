@@ -112,14 +112,14 @@ public abstract class AbstractPointerStamp extends Stamp {
         return pointer.asAlwaysNull();
     }
 
-    public AbstractPointerStamp asNonNull() {
+    public Stamp asNonNull() {
         if (isEmpty()) {
             return this;
         }
         return copyWith(true, false);
     }
 
-    public AbstractPointerStamp asMaybeNull() {
+    public Stamp asMaybeNull() {
         if (isEmpty()) {
             return this;
         }
