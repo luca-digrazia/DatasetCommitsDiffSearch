@@ -40,18 +40,19 @@
  */
 package com.oracle.truffle.regex.tregex.parser.ast;
 
-import java.util.Collections;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.charset.CharSet;
-import com.oracle.truffle.regex.tregex.automaton.StateSet;
 import com.oracle.truffle.regex.tregex.buffer.CharArrayBuffer;
+import com.oracle.truffle.regex.tregex.nfa.ASTNodeSet;
 import com.oracle.truffle.regex.tregex.parser.RegexParser;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonObject;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
+
+import java.util.Collections;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
  * A {@link Term} that matches characters belonging to a specified set of characters.
@@ -71,7 +72,7 @@ public class CharacterClass extends Term {
 
     private CharSet charSet;
     // look-behind groups which might match the same character as this CharacterClass node
-    private StateSet<LookBehindAssertion> lookBehindEntries;
+    private ASTNodeSet<Group> lookBehindEntries;
 
     /**
      * Creates a new {@link CharacterClass} node which matches the set of characters specified by
@@ -120,9 +121,9 @@ public class CharacterClass extends Term {
         setFlag(FLAG_CHARACTER_CLASS_WAS_SINGLE_CHAR, value);
     }
 
-    public void addLookBehindEntry(RegexAST ast, LookBehindAssertion lookBehindEntry) {
+    public void addLookBehindEntry(RegexAST ast, Group lookBehindEntry) {
         if (lookBehindEntries == null) {
-            lookBehindEntries = StateSet.create(ast.getLookBehinds());
+            lookBehindEntries = new ASTNodeSet<>(ast);
         }
         lookBehindEntries.add(lookBehindEntry);
     }
@@ -136,7 +137,7 @@ public class CharacterClass extends Term {
      * character as this node. Note that the set contains the {@link Group} bodies of the
      * {@link LookBehindAssertion} nodes, not the {@link LookBehindAssertion} nodes themselves.
      */
-    public Set<LookBehindAssertion> getLookBehindEntries() {
+    public Set<Group> getLookBehindEntries() {
         if (lookBehindEntries == null) {
             return Collections.emptySet();
         }

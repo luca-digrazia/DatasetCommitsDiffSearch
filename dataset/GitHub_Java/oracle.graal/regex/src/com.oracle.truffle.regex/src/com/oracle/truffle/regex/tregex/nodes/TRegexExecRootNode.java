@@ -199,7 +199,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         return regexProfile;
     }
 
-    private synchronized void switchToLazyDFA() {
+    private void switchToLazyDFA() {
         compileLazyDFA();
         if (lazyDFANode != LAZY_DFA_BAILED_OUT) {
             runnerNode = insert(lazyDFANode);
