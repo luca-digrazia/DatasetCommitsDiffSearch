@@ -62,6 +62,7 @@ import com.oracle.svm.core.heap.ReferenceHandlerThreadFeature;
 import com.oracle.svm.core.jdk.StackTraceUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
+import com.oracle.svm.core.jdk.management.ManagementSupport;
 import com.oracle.svm.core.locks.VMMutex;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.monitor.MonitorSupport;
@@ -202,7 +203,6 @@ public abstract class JavaThreads {
 
         Target_java_lang_Thread javaThread = SubstrateUtil.cast(currentThread.get(thread), Target_java_lang_Thread.class);
         javaThread.exit();
-        ThreadListenerSupport.get().afterThreadExit(CurrentIsolate.getCurrentThread(), currentThread.get(thread));
     }
 
     /**
@@ -300,7 +300,6 @@ public abstract class JavaThreads {
     public static void assignJavaThread(Thread thread, boolean manuallyStarted) {
         VMError.guarantee(currentThread.get() == null, "overwriting existing java.lang.Thread");
         currentThread.set(thread);
-        ThreadListenerSupport.get().beforeThreadStart(CurrentIsolate.getCurrentThread(), thread);
 
         /* If the thread was manually started, finish initializing it. */
         if (manuallyStarted) {
@@ -319,7 +318,6 @@ public abstract class JavaThreads {
     public void initializeIsolate() {
         /* The thread that creates the isolate is considered the "main" thread. */
         currentThread.set(mainThread);
-        ThreadListenerSupport.get().beforeThreadStart(CurrentIsolate.getCurrentThread(), mainThread);
     }
 
     /**
@@ -505,7 +503,9 @@ public abstract class JavaThreads {
         ObjectHandles.getGlobal().destroy(threadHandle);
 
         singleton().unattachedStartedThreads.decrementAndGet();
+
         singleton().beforeThreadRun(thread);
+        ManagementSupport.getSingleton().noteThreadStart(thread);
 
         try {
             if (VMThreads.isTearingDown()) {
@@ -517,10 +517,12 @@ public abstract class JavaThreads {
             }
 
             thread.run();
+
         } catch (Throwable ex) {
             dispatchUncaughtException(thread, ex);
         } finally {
             exit(thread);
+            ManagementSupport.getSingleton().noteThreadFinish(thread);
         }
     }
 

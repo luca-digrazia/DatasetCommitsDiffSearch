@@ -478,7 +478,6 @@ public final class GCImpl implements GC {
             } finally {
                 referenceObjectsTimer.close();
             }
-
             trace.string("  Release spaces: ");
             Timer releaseSpacesTimer = timers.releaseSpaces.open();
             try {
@@ -488,7 +487,6 @@ public final class GCImpl implements GC {
             } finally {
                 releaseSpacesTimer.close();
             }
-
             trace.string("  Swap spaces: ");
             swapSpaces();
             trace.string("]").newline();
