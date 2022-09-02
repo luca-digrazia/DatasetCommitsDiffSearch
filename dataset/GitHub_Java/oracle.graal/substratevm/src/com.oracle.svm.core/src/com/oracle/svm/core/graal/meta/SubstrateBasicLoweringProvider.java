@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,6 +39,7 @@ import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.DeadEndNode;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
@@ -58,6 +59,7 @@ import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
+import org.graalvm.compiler.replacements.IsArraySnippets;
 import org.graalvm.compiler.replacements.SnippetCounter.Group;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
 import org.graalvm.nativeimage.Platform;
@@ -68,14 +70,17 @@ import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.graal.nodes.FloatingWordCastNode;
 import com.oracle.svm.core.graal.nodes.SubstrateCompressionNode;
+import com.oracle.svm.core.graal.nodes.LoweredDeadEndNode;
 import com.oracle.svm.core.graal.nodes.SubstrateFieldLocationIdentity;
 import com.oracle.svm.core.graal.nodes.SubstrateNarrowOopStamp;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.hub.DynamicHub;
+import com.oracle.svm.core.identityhashcode.IdentityHashCodeSupport;
 import com.oracle.svm.core.meta.SharedField;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
+import com.oracle.svm.core.snippets.SubstrateIsArraySnippets;
 
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
@@ -108,6 +113,8 @@ public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLowering
     public void setConfiguration(RuntimeConfiguration runtimeConfig, OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers,
                     SnippetReflectionProvider snippetReflection) {
         this.runtimeConfig = runtimeConfig;
+        this.identityHashCodeSnippets = IdentityHashCodeSupport.createSnippetTemplates(options, factories, providers, target);
+        this.isArraySnippets = new IsArraySnippets.Templates(new SubstrateIsArraySnippets(), options, factories, providers, target);
         initialize(options, factories, Group.NullFactory, providers, snippetReflection);
     }
 
@@ -128,6 +135,8 @@ public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLowering
     public void lower(Node n, LoweringTool tool) {
         if (n instanceof AssertionNode) {
             lowerAssertionNode((AssertionNode) n);
+        } else if (n instanceof DeadEndNode) {
+            lowerDeadEnd((DeadEndNode) n);
         } else {
             super.lower(n, tool);
         }
@@ -155,7 +164,7 @@ public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLowering
     }
 
     @Override
-    protected ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor) {
+    protected ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, boolean isKnownObjectArray, FixedNode anchor) {
         ConstantNode componentHubOffset = ConstantNode.forIntegerKind(target.wordJavaKind, runtimeConfig.getComponentHubOffset(), graph);
         AddressNode componentHubAddress = graph.unique(new OffsetAddressNode(arrayHub, componentHubOffset));
         FloatingReadNode componentHubRef = graph.unique(new FloatingReadNode(componentHubAddress, NamedLocationIdentity.FINAL_LOCATION, null, hubStamp, null, BarrierType.NONE));
@@ -213,6 +222,10 @@ public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLowering
         n.graph().removeFixed(n);
     }
 
+    protected void lowerDeadEnd(DeadEndNode deadEnd) {
+        deadEnd.replaceAndDelete(deadEnd.graph().add(new LoweredDeadEndNode()));
+    }
+
     @Override
     protected Stamp loadCompressedStamp(ObjectStamp stamp) {
         return SubstrateNarrowOopStamp.compressed(stamp, ReferenceAccess.singleton().getCompressEncoding());
@@ -221,5 +234,9 @@ public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLowering
     @Override
     protected ValueNode newCompressionNode(CompressionOp op, ValueNode value) {
         return new SubstrateCompressionNode(op, value, ReferenceAccess.singleton().getCompressEncoding());
+    }
+
+    public boolean targetingLLVM() {
+        return false;
     }
 }
