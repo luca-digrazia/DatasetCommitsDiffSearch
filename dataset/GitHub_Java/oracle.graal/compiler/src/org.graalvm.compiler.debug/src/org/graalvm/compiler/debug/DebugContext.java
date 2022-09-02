@@ -239,6 +239,12 @@ public final class DebugContext implements AutoCloseable {
             this.unscopedTimers = parseUnscopedMetricSpec(Timers.getValue(options), "".equals(timeValue), true);
             this.unscopedMemUseTrackers = parseUnscopedMetricSpec(MemUseTrackers.getValue(options), "".equals(trackMemUseValue), true);
 
+            if (unscopedTimers != null || timeValue != null) {
+                if (!GraalServices.isCurrentThreadCpuTimeSupported()) {
+                    throw new IllegalArgumentException("Time and Timers options require VM support for querying CPU time");
+                }
+            }
+
             if (unscopedMemUseTrackers != null || trackMemUseValue != null) {
                 if (!GraalServices.isThreadAllocatedMemorySupported()) {
                     throw new IllegalArgumentException("MemUseTrackers and TrackMemUse options require VM support for querying thread allocated memory");
@@ -801,9 +807,8 @@ public final class DebugContext implements AutoCloseable {
                 return true;
             }
             return !currentScope.isTopLevel();
-        } else {
-            return false;
         }
+        return immutable.scopesEnabled && currentScope == null;
     }
 
     class DisabledScope implements DebugContext.Scope {
