@@ -43,7 +43,6 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
-import com.oracle.truffle.tools.chromeinspector.instrument.Token;
 import org.graalvm.polyglot.io.MessageEndpoint;
 import com.oracle.truffle.api.TruffleOptions;
 
@@ -195,12 +194,12 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
     }
 
     @Override
-    public void consoleAPICall(Token token, String type, Object text) {
+    public void consoleAPICall(String wsspath, String type, Object text) {
         iss.consoleAPICall(type, text);
     }
 
     @Override
-    public void close(Token token) {
+    public void close(String wsspath) {
         close();
     }
 
