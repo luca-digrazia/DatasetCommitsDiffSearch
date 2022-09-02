@@ -172,7 +172,7 @@ public final class LLVMContext {
 
     LLVMContext(LLVMLanguage language, Env env, String languageHome) {
         this.language = language;
-        this.libsulongDatalayout = null;
+        this.libsulongDatalayout = new DataLayout();
         this.env = env;
         this.initialized = false;
         this.cleanupNecessary = false;
@@ -346,12 +346,7 @@ public final class LLVMContext {
     }
 
     public void addLibsulongDataLayout(DataLayout layout) {
-        // This should be called by Runner#parseDefaultLibraries.
-        if (libsulongDatalayout == null) {
-            this.libsulongDatalayout = this.libsulongDatalayout.merge(layout);
-        } else {
-            throw new IllegalStateException("The default datalayout cannot be overrwitten.");
-        }
+        this.libsulongDatalayout = this.libsulongDatalayout.merge(layout);
     }
 
     public DataLayout getLibsulongDataLayout() {
