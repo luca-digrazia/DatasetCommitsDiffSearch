@@ -196,9 +196,6 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         } else {
             System.out.println("Time spent in Espresso: " + (totalTime) + "ms");
         }
-
-        context.prepareDispose();
-
         // Shutdown.shutdown creates a Cleaner thread. At this point, Polyglot doesn't allow new
         // threads. We must perform shutdown before then, after main has finished.
         context.interruptActiveThreads();
