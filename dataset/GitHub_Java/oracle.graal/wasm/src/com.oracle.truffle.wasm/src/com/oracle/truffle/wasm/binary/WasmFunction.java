@@ -30,7 +30,6 @@
 package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -38,30 +37,24 @@ import com.oracle.truffle.api.library.ExportMessage;
 
 @ExportLibrary(InteropLibrary.class)
 public class WasmFunction implements TruffleObject {
-    private final SymbolTable symbolTable;
+    private SymbolTable symbolTable;
     private WasmCodeEntry codeEntry;
-    private final String name;
-    private final int typeIndex;
+    private int typeIndex;
     private RootCallTarget callTarget;
 
-    public WasmFunction(SymbolTable symbolTable, WasmLanguage language, int functionIndex, int typeIndex) {
+    public WasmFunction(SymbolTable symbolTable, int typeIndex) {
         this.symbolTable = symbolTable;
         this.codeEntry = null;
-        this.name = String.valueOf(functionIndex);
         this.typeIndex = typeIndex;
-        this.callTarget = Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootCallNode(language));
+        this.callTarget = null;
     }
 
     public int numArguments() {
-        return symbolTable.getFunctionTypeNumArguments(typeIndex);
+        return symbolTable.getFunctionNumArguments(typeIndex);
     }
 
     public byte returnType() {
-        return symbolTable.getFunctionTypeReturnType(typeIndex);
-    }
-
-    public int returnTypeLength() {
-        return symbolTable.getFunctionTypeReturnTypeLength(typeIndex);
+        return symbolTable.getFunctionReturnType(typeIndex);
     }
 
     void setCallTarget(RootCallTarget callTarget) {
@@ -70,11 +63,6 @@ public class WasmFunction implements TruffleObject {
 
     public RootCallTarget getCallTarget() {
         return callTarget;
-    }
-
-    @Override
-    public String toString() {
-        return name;
     }
 
     @ExportMessage
@@ -93,9 +81,5 @@ public class WasmFunction implements TruffleObject {
 
     public void setCodeEntry(WasmCodeEntry codeEntry) {
         this.codeEntry = codeEntry;
-    }
-
-    public int typeIndex() {
-        return typeIndex;
     }
 }
