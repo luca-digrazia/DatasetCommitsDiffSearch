@@ -190,7 +190,7 @@ public abstract class LLVMForeignCallNode extends RootNode {
     }
 
     @CompilationFinal private ContextReference<LLVMContext> ctxRef;
-    protected final LLVMInteropType.Structured returnBaseType;
+    private final LLVMInteropType.Structured returnBaseType;
 
     @Child LLVMGetStackFromThreadNode getStack;
     @Child DirectCallNode callNode;
