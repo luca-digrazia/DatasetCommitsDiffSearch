@@ -1778,7 +1778,7 @@ public final class Value {
     }
 
     /**
-     * Creates a new iterator that allows read each element of a sequence.
+     * Returns the iterator.
      *
      * @throws UnsupportedOperationException if the value does not provide {@link #hasIterator()
      *             iterator}.

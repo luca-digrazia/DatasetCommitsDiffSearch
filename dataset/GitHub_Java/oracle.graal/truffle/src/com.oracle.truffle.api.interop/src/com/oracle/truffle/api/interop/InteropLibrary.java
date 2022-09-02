@@ -1890,21 +1890,12 @@ public abstract class InteropLibrary extends Library {
     }
 
     /**
-     * Returns {@code true} if the receiver is an iterator which has more elements, else
-     * {@code false}.
+     * Returns {@code true} if the receiver is an iterator which has more elements.
      * <p>
      * An implementation of an iterator delegating to guest language iterator which does not support
      * {@code hasNext} looks like:
      * 
      * <pre>
-     * interface GuestLanguageIterator {
-     *
-     *     final class Stop extends Exception {
-     *     }
-     *
-     *     Object next() throws Stop;
-     * }
-     *
      * &#64;ExportLibrary(InteropLibrary.class)
      * final class InteropIterator implements TruffleObject {
      *
@@ -1924,15 +1915,15 @@ public abstract class InteropLibrary extends Library {
      *
      *     &#64;ExportMessage
      *     boolean hasIteratorNextElement() {
-     *         fetchNext();
+     *         init();
      *         return next != STOP;
      *     }
      *
      *     &#64;ExportMessage
      *     Object getIteratorNextElement() throws StopIterationException {
-     *         fetchNext();
+     *         init();
      *         Object res = next;
-     *         if (res == STOP) {
+     *         if (res == null) {
      *             throw StopIterationException.create();
      *         } else {
      *             next = null;
@@ -1940,17 +1931,24 @@ public abstract class InteropLibrary extends Library {
      *         return res;
      *     }
      *
-     *     private void fetchNext() {
+     *     private void init() {
      *         if (next == null) {
+     *             next = STOP;
      *             try {
      *                 next = iterator.next();
-     *             } catch (GuestLanguageIterator.Stop stop) {
-     *                 next = STOP;
+     *             } catch (GuestLanguageStopIterationException stop) {
+     *                 // Pass with next set to STOP
      *             }
      *         }
      *     }
      * }
      * </pre>
+     * <p>
+     * The guest language {@code ForEachNode} should prefer the {@code hasIteratorNextElement}
+     * control flow to the {@link StopIterationException} control flow as it may be more efficient.
+     * The guest language {@code NextNode} should rather directly use the
+     * {@link #getIteratorNextElement(Object)} without calling the {@code hasIteratorNextElement}
+     * and propagate the {@link StopIterationException}.
      *
      * @throws UnsupportedMessageException if and only if {@link #isIterator(Object)} returns
      *             {@code false} for the same receiver.
