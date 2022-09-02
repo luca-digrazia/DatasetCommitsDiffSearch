@@ -83,7 +83,6 @@ import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.jdk.Package_jdk_internal_reflect;
 import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.jdk.Target_java_lang_Module;
-import com.oracle.svm.core.jdk.Target_jdk_internal_reflect_Reflection;
 import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.util.LazyFinalReference;
 import com.oracle.svm.core.util.VMError;
@@ -101,12 +100,12 @@ import sun.security.util.SecurityConstants;
 public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, java.lang.reflect.Type, GenericDeclaration, Serializable,
                 Target_java_lang_invoke_TypeDescriptor_OfField<DynamicHub>, Target_java_lang_constant_Constable {
 
-    /** Marker that a value must be obtained from the companion object. */
-    private static final Object FROM_COMPANION = new Object();
-
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
+
+    /* Value copied from java.lang.Class. */
+    private static final int SYNTHETIC = 0x00001000;
 
     @Platforms(Platform.HOSTED_ONLY.class) //
     private final Class<?> hostedJavaClass;
@@ -292,7 +291,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     /**
      * Classloader used for loading this class during image-build time.
      */
-    private final Object classLoader;
+    private final ClassLoader classLoader;
 
     /**
      * Array containing this type's type check id information. During a type check, a requested
@@ -329,7 +328,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      * not annotated with @RecomputeFieldValue. Their name must not match a field in the original
      * class, i.e., allPermDomain.
      */
-    static final LazyFinalReference<java.security.ProtectionDomain> allPermDomainReference = new LazyFinalReference<>(() -> {
+    private static final LazyFinalReference<java.security.ProtectionDomain> allPermDomainReference = new LazyFinalReference<>(() -> {
         java.security.Permissions perms = new java.security.Permissions();
         perms.add(SecurityConstants.ALL_PERMISSION);
         CodeSource cs;
@@ -348,7 +347,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     public static final LazyFinalReference<Target_java_lang_Module> singleModuleReference = new LazyFinalReference<>(Target_java_lang_Module::new);
 
-    private final LazyFinalReference<DynamicHubCompanion> companion = new LazyFinalReference<>(() -> new DynamicHubCompanion(this));
+    /**
+     * Final fields in subsituted classes are treated as implicitly RecomputeFieldValue even when
+     * not annotated with @RecomputeFieldValue. Their name must not match a field in the original
+     * class, i.e., packageName.
+     */
+    private final LazyFinalReference<String> packageNameReference = new LazyFinalReference<>(this::computePackageName);
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public DynamicHub(Class<?> hostedJavaClass, String name, HubType hubType, ReferenceType referenceType, Object isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub,
@@ -363,7 +367,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         this.componentType = componentHub;
         this.sourceFileName = sourceFileName;
         this.modifiers = modifiers;
-        this.classLoader = PredefinedClassesSupport.isPredefined(hostedJavaClass) ? FROM_COMPANION : classLoader;
+        this.classLoader = classLoader;
         setFlag(IS_HIDDED_FLAG_BIT, isHidden);
         setFlag(IS_RECORD_FLAG_BIT, isRecord);
         this.nestHost = nestHost;
@@ -754,14 +758,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private ClassLoader getClassLoader0() {
-        if (classLoader == FROM_COMPANION) {
-            return companion.get().getClassLoader();
-        }
-        return (ClassLoader) classLoader;
-    }
-
-    void setClassLoaderAtRuntime(ClassLoader loader) {
-        companion.get().setClassLoader(loader);
+        return classLoader;
     }
 
     @KeepOriginal
@@ -1298,25 +1295,21 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute
-    public static Class<?> forName(String className) throws ClassNotFoundException {
-        Class<?> caller = Target_jdk_internal_reflect_Reflection.getCallerClass();
-        return forName(className, true, caller.getClassLoader());
+    private static Class<?> forName(String className) throws ClassNotFoundException {
+        return ClassForNameSupport.forName(className, true);
     }
 
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
-    public static Class<?> forName(@SuppressWarnings("unused") Target_java_lang_Module module, String className) throws ClassNotFoundException {
-        /*
-         * The module system is not supported for now, therefore the module parameter is ignored and
-         * we use the class loader of the caller class instead of the module's loader.
-         */
-        Class<?> caller = Target_jdk_internal_reflect_Reflection.getCallerClass();
-        return ClassForNameSupport.forNameOrNull(className, false, caller.getClassLoader());
+    @SuppressWarnings({"unused"})
+    public static Class<?> forName(Target_java_lang_Module module, String className) {
+        /* The module system is not supported for now, therefore the module parameter is ignored. */
+        return ClassForNameSupport.forNameOrNull(className, false);
     }
 
     @Substitute
-    public static Class<?> forName(String name, boolean initialize, ClassLoader loader) throws ClassNotFoundException {
-        return ClassForNameSupport.forName(name, initialize, loader);
+    private static Class<?> forName(String name, @SuppressWarnings("unused") boolean initialize, @SuppressWarnings("unused") ClassLoader loader) throws ClassNotFoundException {
+        return ClassForNameSupport.forName(name, initialize);
     }
 
     @KeepOriginal
@@ -1325,13 +1318,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class)
     public String getPackageName() {
-        if (SubstrateUtil.HOSTED) { // avoid eager initialization in image heap
-            return computePackageName();
-        }
-        return companion.get().getPackageName();
+        return packageNameReference.get();
     }
 
-    String computePackageName() {
+    private String computePackageName() {
         String pn = null;
         DynamicHub me = this;
         while (me.hubIsArray()) {
@@ -1366,11 +1356,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     public ProtectionDomain getProtectionDomain() {
-        return companion.get().getProtectionDomain();
-    }
-
-    void setProtectionDomainAtRuntime(ProtectionDomain protectionDomain) {
-        companion.get().setProtectionDomain(protectionDomain);
+        return allPermDomainReference.get();
     }
 
     @Substitute
