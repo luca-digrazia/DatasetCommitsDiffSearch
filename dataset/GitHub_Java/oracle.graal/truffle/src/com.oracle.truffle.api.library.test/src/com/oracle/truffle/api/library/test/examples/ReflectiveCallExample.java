@@ -66,13 +66,13 @@ public class ReflectiveCallExample {
 
     @GenerateLibrary
     @SuppressWarnings("unused")
-    abstract static class UnknownLibrary extends Library {
+    abstract static class ReflectiveCallTestLibrary extends Library {
         public String message(Object receiver) {
             return "result";
         }
     }
 
-    @ExportLibrary(UnknownLibrary.class)
+    @ExportLibrary(ReflectiveCallTestLibrary.class)
     static final class UnknownObject {
 
         @ExportMessage
@@ -83,13 +83,13 @@ public class ReflectiveCallExample {
 
     @Test
     public void runExample() throws Exception {
-        ReflectionLibrary reflection = ReflectionLibrary.resolve().getUncached();
+        ReflectionLibrary reflection = ReflectionLibrary.getFactory().getUncached();
 
         Object value = new UnknownObject();
 
         // reflective lookup of the message.
         // might be a good idea to cache in a singleton.
-        Message targetMessage = Message.resolve("com.oracle.truffle.api.library.test.examples.ReflectiveCallExample$UnknownLibrary", "message");
+        Message targetMessage = Message.resolve("com.oracle.truffle.api.library.test.examples.ReflectiveCallExample$ReflectiveCallTestLibrary", "message");
 
         assertEquals("result", reflection.send(value, targetMessage));
     }

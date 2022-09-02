@@ -489,7 +489,7 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
                 ElementUtils.setVisibility(cachedExecute.getModifiers(), Modifier.PRIVATE);
             } else {
                 if (libraryExports.needsRewrites()) {
-                    injectCachedAssertions(export.getExportsLibrary().getLibrary(), cachedExecute);
+                    injectCachedAssertions(cachedExecute);
                 }
             }
         }
@@ -711,15 +711,10 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
 
     }
 
-    static void injectCachedAssertions(LibraryData libraryData, CodeExecutableElement cachedExecute) {
+    static void injectCachedAssertions(CodeExecutableElement cachedExecute) {
         CodeTree body = cachedExecute.getBodyTree();
         CodeTreeBuilder builder = cachedExecute.createBuilder();
-        ExecutableElement element = ElementUtils.findExecutableElement((DeclaredType) libraryData.getTemplateType().asType(), "assertAdopted");
-        if (element != null) {
-            builder.startAssert().string("assertAdopted()").end();
-        } else {
-            builder.startAssert().string("getRootNode() != null : ").doubleQuote("Invalid libray usage. Cached library must be adopted by a RootNode before it is executed.").end();
-        }
+        builder.startAssert().string("getRootNode() != null : ").doubleQuote("Invalid libray usage. Cached library must be adopted by a RootNode before it is executed.").end();
         builder.tree(body);
     }
 
