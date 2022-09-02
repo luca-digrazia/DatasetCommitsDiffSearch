@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -85,8 +84,6 @@ import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_ref_Reference;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
-
-import sun.misc.SignalHandler;
 
 public final class EspressoContext {
 
@@ -164,7 +161,6 @@ public final class EspressoContext {
     public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
     public final boolean Polyglot;
     public final boolean ExitHost;
-    public final boolean EnableSignals;
     private final String multiThreadingDisabled;
     public final boolean NativeAccessAllowed;
 
@@ -199,7 +195,6 @@ public final class EspressoContext {
     // endregion ThreadDeprecated
 
     @CompilationFinal private TruffleObject topBindings;
-    private final WeakHashMap<StaticObject, SignalHandler> hostSignalHandlers = new WeakHashMap<>();
 
     public TruffleLogger getLogger() {
         return logger;
@@ -243,7 +238,6 @@ public final class EspressoContext {
         this.InlineMethodHandle = JDWPOptions == null && env.getOptions().get(EspressoOptions.InlineMethodHandle);
         this.SplitMethodHandles = JDWPOptions == null && env.getOptions().get(EspressoOptions.SplitMethodHandles);
         this.Verify = env.getOptions().get(EspressoOptions.Verify);
-        this.EnableSignals = env.getOptions().get(EspressoOptions.EnableSignals);
         this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
         this.livenessAnalysisMode = env.getOptions().get(EspressoOptions.LivenessAnalysis);
         this.EnableManagement = env.getOptions().get(EspressoOptions.EnableManagement);
@@ -523,8 +517,8 @@ public final class EspressoContext {
             meta.HIDDEN_FRAMES.setHiddenObject(outOfMemoryErrorInstance, VM.StackTrace.EMPTY_STACK_TRACE);
             meta.java_lang_Throwable_backtrace.setObject(outOfMemoryErrorInstance, outOfMemoryErrorInstance);
 
-            this.stackOverflow = EspressoException.wrap(stackOverflowErrorInstance, meta);
-            this.outOfMemory = EspressoException.wrap(outOfMemoryErrorInstance, meta);
+            this.stackOverflow = EspressoException.wrap(stackOverflowErrorInstance);
+            this.outOfMemory = EspressoException.wrap(outOfMemoryErrorInstance);
             meta.java_lang_StackOverflowError.lookupDeclaredMethod(Name._init_, Signature._void_String).invokeDirect(stackOverflowErrorInstance, meta.toGuestString("VM StackOverFlow"));
             meta.java_lang_OutOfMemoryError.lookupDeclaredMethod(Name._init_, Signature._void_String).invokeDirect(outOfMemoryErrorInstance, meta.toGuestString("VM OutOfMemory"));
 
@@ -865,8 +859,5 @@ public final class EspressoContext {
         return topBindings;
     }
 
-    public WeakHashMap<StaticObject, SignalHandler> getHostSignalHandlers() {
-        return hostSignalHandlers;
-    }
     // endregion DebugAccess
 }

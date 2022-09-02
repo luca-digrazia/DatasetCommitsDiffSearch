@@ -209,6 +209,9 @@ class EspressoShutdownHandler implements ContextAccess {
 
     private void teardown(boolean killThreads) {
         assert isClosing();
+
+        getVM().getJvmti().postVmDeath();
+
         getContext().prepareDispose();
         getContext().invalidateNoThreadStop("Killing the VM");
         Thread initiatingThread = Thread.currentThread();
@@ -244,16 +247,10 @@ class EspressoShutdownHandler implements ContextAccess {
             }
         }
 
-        Thread hostToGuestReferenceDrainThread = referenceDrainer.referenceDrain();
-        if (getContext().MultiThreaded) {
-            hostToGuestReferenceDrainThread.interrupt();
-            try {
-                hostToGuestReferenceDrainThread.join();
-            } catch (InterruptedException e) {
-                // ignore
-            }
-        } else {
-            assert hostToGuestReferenceDrainThread == null || !hostToGuestReferenceDrainThread.isAlive();
+        try {
+            referenceDrainer.joinReferenceDrain();
+        } catch (InterruptedException e) {
+            // ignore
         }
 
         context.getTimers().report(context.getLogger());
