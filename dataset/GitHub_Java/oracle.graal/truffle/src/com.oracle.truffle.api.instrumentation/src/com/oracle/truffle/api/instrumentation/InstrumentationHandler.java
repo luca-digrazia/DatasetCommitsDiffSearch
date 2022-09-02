@@ -990,45 +990,39 @@ final class InstrumentationHandler {
             trace("BEGIN: Visit root %s for %s%n", root.toString(), visitor);
         }
 
-        visitor.preVisit(root, firstExecution);
+        Lock lock = InstrumentAccessor.nodesAccess().getLock(node);
+        lock.lock();
         try {
-            Lock lock = InstrumentAccessor.nodesAccess().getLock(node);
-            lock.lock();
-            try {
-                visitor.rootBits = RootNodeBits.get(root);
-
-                if (visitor.shouldVisit() || forceRootBitComputation) {
-                    if (TRACE) {
-                        trace("BEGIN: Traverse root %s for %s%n", root.toString(), visitor);
-                    }
-                    visitor.setExecutedRootNodeBit = setExecutedRootNodeBit;
-                    if (forceRootBitComputation) {
-                        visitor.computingRootNodeBits = RootNodeBits.isUninitialized(visitor.rootBits) ? RootNodeBits.getAll() : visitor.rootBits;
-                    } else if (RootNodeBits.isUninitialized(visitor.rootBits)) {
-                        visitor.computingRootNodeBits = RootNodeBits.getAll();
-                    }
-
-                    visitor.visit(node);
-
-                    if (!RootNodeBits.isUninitialized(visitor.computingRootNodeBits)) {
-                        RootNodeBits.set(visitor.root, visitor.computingRootNodeBits);
-                        visitor.rootBits = visitor.computingRootNodeBits;
-                    }
-                    if (TRACE) {
-                        trace("END: Traverse root %s for %s%n", root.toString(), visitor);
-                    }
+            visitor.preVisit(root, firstExecution);
+            if (visitor.shouldVisit() || forceRootBitComputation) {
+                if (TRACE) {
+                    trace("BEGIN: Traverse root %s for %s%n", root.toString(), visitor);
+                }
+                visitor.setExecutedRootNodeBit = setExecutedRootNodeBit;
+                if (forceRootBitComputation) {
+                    visitor.computingRootNodeBits = RootNodeBits.isUninitialized(visitor.rootBits) ? RootNodeBits.getAll() : visitor.rootBits;
+                } else if (RootNodeBits.isUninitialized(visitor.rootBits)) {
+                    visitor.computingRootNodeBits = RootNodeBits.getAll();
                 }
 
-                if (setExecutedRootNodeBit && RootNodeBits.wasNotExecuted(visitor.rootBits)) {
-                    visitor.rootBits = RootNodeBits.setExecuted(visitor.rootBits);
-                    RootNodeBits.set(root, visitor.rootBits);
+                visitor.visit(node);
+
+                if (!RootNodeBits.isUninitialized(visitor.computingRootNodeBits)) {
+                    RootNodeBits.set(visitor.root, visitor.computingRootNodeBits);
+                    visitor.rootBits = visitor.computingRootNodeBits;
                 }
-                visitor.onVisitSuccessWithinASTLock();
-            } finally {
-                lock.unlock();
+                if (TRACE) {
+                    trace("END: Traverse root %s for %s%n", root.toString(), visitor);
+                }
             }
-        } finally {
+
+            if (setExecutedRootNodeBit && RootNodeBits.wasNotExecuted(visitor.rootBits)) {
+                visitor.rootBits = RootNodeBits.setExecuted(visitor.rootBits);
+                RootNodeBits.set(root, visitor.rootBits);
+            }
             visitor.postVisit();
+        } finally {
+            lock.unlock();
         }
 
         if (TRACE) {
@@ -1213,9 +1207,6 @@ final class InstrumentationHandler {
 
         protected void postVisit() {
         }
-
-        protected void onVisitSuccessWithinASTLock() {
-        }
     }
 
     private class InsertWrapperOperation extends VisitOperation {
@@ -1263,7 +1254,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void onVisitSuccessWithinASTLock() {
+        protected void postVisit() {
             for (EventBinding.Source<?> binding : bindingsAtPreVisitTime) {
                 binding.disposed = true;
             }
@@ -1310,7 +1301,7 @@ final class InstrumentationHandler {
                 for (EventBinding.Source<?> binding : bindings) {
                     bindingsAtPreVisitTime.add(binding);
                 }
-                if (bindingsAtPreVisitTime.isEmpty() && !bindings.isEmpty()) {
+                if (bindingsAtPreVisitTime.isEmpty()) {
                     bindings.clear();
                     sources.clear();
                     sourcesList.clear();
@@ -1855,6 +1846,7 @@ final class InstrumentationHandler {
             this.root = r;
             this.providedTags = getProvidedTags(r);
             this.rootSourceSection = r.getSourceSection();
+            this.rootBits = RootNodeBits.get(r);
 
             for (VisitOperation operation : operations) {
                 operation.preVisit(rootSourceSection);
@@ -1887,12 +1879,6 @@ final class InstrumentationHandler {
         void postVisit() {
             for (VisitOperation operation : operations) {
                 operation.postVisit();
-            }
-        }
-
-        void onVisitSuccessWithinASTLock() {
-            for (VisitOperation operation : operations) {
-                operation.onVisitSuccessWithinASTLock();
             }
         }
 

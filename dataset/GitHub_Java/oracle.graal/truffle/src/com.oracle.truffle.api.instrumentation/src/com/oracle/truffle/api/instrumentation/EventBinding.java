@@ -73,14 +73,10 @@ public class EventBinding<T> {
     private final AbstractInstrumenter instrumenter;
     private final T element;
 
-    volatile boolean disposing;
     /* language bindings needs special treatment. */
-    private volatile boolean disposed;
+    volatile boolean disposed;
 
     EventBinding(AbstractInstrumenter instrumenter, T element) {
-        if (element == null) {
-            throw new NullPointerException();
-        }
         this.instrumenter = instrumenter;
         this.element = element;
     }
@@ -112,14 +108,9 @@ public class EventBinding<T> {
     public synchronized void dispose() {
         CompilerAsserts.neverPartOfCompilation();
         if (!disposed) {
-            disposing = true;
             instrumenter.disposeBinding(this);
             disposed = true;
         }
-    }
-
-    synchronized void setDisposingBulk() {
-        this.disposing = true;
     }
 
     synchronized void disposeBulk() {
