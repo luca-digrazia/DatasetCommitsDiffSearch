@@ -81,6 +81,7 @@ import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.jdk.Package_jdk_internal_reflect;
 import com.oracle.svm.core.jdk.Resources;
+import com.oracle.svm.core.jdk.Target_java_lang_ClassLoader;
 import com.oracle.svm.core.jdk.Target_java_lang_Module;
 import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.util.LazyFinalReference;
@@ -250,7 +251,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     /**
      * Classloader used for loading this class during image-build time.
      */
-    private final ClassLoader classLoader;
+    private final Target_java_lang_ClassLoader classloader;
 
     /**
      * Bits used for instance-of checks. A bit is set for each type, which an object with this HUB
@@ -269,6 +270,18 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     private GenericInfo genericInfo;
     private AnnotatedSuperInfo annotatedSuperInfo;
+
+    /**
+     * Field used for module information access at run-time
+     * The run time type of this field is {@link java.lang.Module}
+     * but can be casted to {@link Target_java_lang_Module}
+     */
+    private Object module;
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void setModule(Object module) {
+        this.module = module;
+    }
 
     /**
      * Final fields in subsituted classes are treated as implicitly RecomputeFieldValue even when
@@ -303,7 +316,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public DynamicHub(String name, boolean isLocalClass, boolean isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName, int modifiers,
-                    ClassLoader classLoader) {
+                    Target_java_lang_ClassLoader classLoader) {
         this.name = name;
         this.isLocalClass = isLocalClass;
         this.isAnonymousClass = isAnonymousClass;
@@ -311,7 +324,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         this.componentHub = componentHub;
         this.sourceFileName = sourceFileName;
         this.modifiers = modifiers;
-        this.classLoader = classLoader;
+        this.classloader = classLoader;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -668,7 +681,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private ClassLoader getClassLoader0() {
-        return classLoader;
+        return SubstrateUtil.cast(classloader, ClassLoader.class);
     }
 
     @KeepOriginal
@@ -924,6 +937,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
         return annotation;
     }
+
 
     /**
      * This class stores similar information as the non-public class java.lang.Class.ReflectionData.
@@ -1251,7 +1265,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class)
     public Target_java_lang_Module getModule() {
-        return singleModuleReference.get();
+        return (Target_java_lang_Module) module;
     }
 
     @Substitute //
