@@ -754,6 +754,11 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                                         duplicateId, className1, className2));
     }
 
+    /*
+     * Do not call this when exception wrapping is done in one of the callees. It is expected to be
+     * thrown directly to the embedder. Save to call this from within a language as the engine is
+     * never closed there.
+     */
     void checkState() {
         if (closed) {
             throw PolyglotEngineException.illegalState("Engine is already closed.");
@@ -932,7 +937,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         PolyglotLanguage foundLanguage = getLanguage(languageClass, true);
         PolyglotLanguageContext context = foundLanguage.getCurrentLanguageContext();
         if (!context.isCreated()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerDirectives.transferToInterpreter();
             throw PolyglotEngineException.illegalState(String.format("A context for language %s was not yet created.", languageClass.getName()));
         }
         return context.getLanguageInstance();
@@ -1084,10 +1089,10 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     List<OptionDescriptors> allDescriptors = new ArrayList<>();
                     allDescriptors.add(engineOptions);
                     for (PolyglotLanguage language : idToLanguage.values()) {
-                        allDescriptors.add(language.getOptionsInternal());
+                        allDescriptors.add(language.getOptions());
                     }
                     for (PolyglotInstrument instrument : idToInstrument.values()) {
-                        allDescriptors.add(instrument.getOptionsInternal());
+                        allDescriptors.add(instrument.getOptions());
                     }
                     allOptions = OptionDescriptors.createUnion(allDescriptors.toArray(new OptionDescriptors[0]));
                 }
@@ -1574,7 +1579,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         if (needsEnter(context)) {
             return enter(context);
         }
-        assert PolyglotContextImpl.currentNotEntered() != null;
+        assert PolyglotContextImpl.requireContext() != null;
         return NO_ENTER;
     }
 
@@ -1613,8 +1618,8 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, info.getThread() == Thread.currentThread())) {
             info.leave(this);
         } else {
-            if (singleThreadPerContext.isValid() && singleContext.isValid()) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (singleThreadPerContext.isValid()) {
+                CompilerDirectives.transferToInterpreter();
             }
             polyglotContext.leaveThreadChanged();
         }
