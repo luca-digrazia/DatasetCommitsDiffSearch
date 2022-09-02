@@ -146,10 +146,6 @@ public final class CEntryPointData {
         this.publishAs = publishAs;
     }
 
-    public CEntryPointData copyWithPublishAs(Publish customPublishAs) {
-        return new CEntryPointData(symbolNameSupplier, providedName, documentation, builtin, prologue, epilogue, exceptionHandler, customPublishAs);
-    }
-
     public String getSymbolName() {
         if (symbolName == null) {
             symbolName = symbolNameSupplier.get();
