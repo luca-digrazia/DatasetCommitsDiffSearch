@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -53,6 +53,7 @@ import org.junit.BeforeClass;
 public abstract class RegexTestBase {
 
     private static Context context;
+    private Value engine;
 
     @BeforeClass
     public static void setUp() {
@@ -71,8 +72,15 @@ public abstract class RegexTestBase {
 
     abstract String getEngineOptions();
 
+    Value getEngine() {
+        if (engine == null) {
+            engine = context.eval(TRegexTestDummyLanguage.ID, "").execute("RegressionTestMode=true" + (getEngineOptions().isEmpty() ? "" : ",") + getEngineOptions());
+        }
+        return engine;
+    }
+
     Value compileRegex(String pattern, String flags) {
-        return context.eval("regexDummyLang", "RegressionTestMode=true" + (getEngineOptions().isEmpty() ? "" : "," + getEngineOptions()) + '/' + pattern + '/' + flags);
+        return getEngine().execute(pattern, flags);
     }
 
     Value execRegex(Value compiledRegex, Object input, int fromIndex) {

@@ -40,111 +40,63 @@
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.parser.Token.Quantifier;
 
 public final class QuantifierGuard {
 
-    public enum Kind {
-        enter,
-        enterInc,
-        loop,
-        loopInc,
-        exit,
-        exitReset,
-        enterZeroWidth,
-        exitZeroWidth,
-        enterEmptyMatch,
-        exitEmptyMatch
-    }
-
     public static final QuantifierGuard[] NO_GUARDS = {};
 
-    private final Kind kind;
-    private final Quantifier quantifier;
+    public enum Kind {
+        enter,
+        exit,
+        enterZeroWidth,
+        exitZeroWidth
+    }
 
-    private QuantifierGuard(Kind kind, Quantifier quantifier) {
+    private final Kind kind;
+    private final int quantifierIndex;
+    private final int threshold;
+
+    private QuantifierGuard(Kind kind, int quantifierIndex, int threshold) {
         this.kind = kind;
-        this.quantifier = quantifier;
+        this.quantifierIndex = quantifierIndex;
+        this.threshold = threshold;
+        assert quantifierIndex >= 0;
+    }
+
+    public static QuantifierGuard create(Quantifier quantifier, boolean enter) {
+        return enter ? createEnter(quantifier) : createExit(quantifier);
     }
 
     public static QuantifierGuard createEnter(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.enter, quantifier);
-    }
-
-    public static QuantifierGuard createEnterInc(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.enterInc, quantifier);
-    }
-
-    public static QuantifierGuard createLoop(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.loop, quantifier);
-    }
-
-    public static QuantifierGuard createLoopInc(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.loopInc, quantifier);
+        return new QuantifierGuard(Kind.enter, quantifier.getIndex(), quantifier.getMax());
     }
 
     public static QuantifierGuard createExit(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.exit, quantifier);
+        return new QuantifierGuard(Kind.exit, quantifier.getIndex(), quantifier.getMin());
     }
 
-    public static QuantifierGuard createClear(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.exitReset, quantifier);
+    public static QuantifierGuard createZeroWidth(Quantifier quantifier, boolean enter) {
+        return enter ? createEnterZeroWidth(quantifier) : createExitZeroWidth(quantifier);
     }
 
     public static QuantifierGuard createEnterZeroWidth(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.enterZeroWidth, quantifier);
+        return new QuantifierGuard(Kind.enterZeroWidth, quantifier.getZeroWidthIndex(), -1);
     }
 
     public static QuantifierGuard createExitZeroWidth(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.exitZeroWidth, quantifier);
-    }
-
-    public static QuantifierGuard createEnterEmptyMatch(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.enterEmptyMatch, quantifier);
-    }
-
-    public static QuantifierGuard createExitEmptyMatch(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.exitEmptyMatch, quantifier);
+        return new QuantifierGuard(Kind.exitZeroWidth, quantifier.getZeroWidthIndex(), -1);
     }
 
     public Kind getKind() {
         return kind;
     }
 
-    public Kind getKindReverse() {
-        switch (kind) {
-            case enter:
-            case enterInc:
-                return quantifier.getMin() > 0 ? Kind.exit : Kind.exitReset;
-            case loop:
-            case loopInc:
-                return kind;
-            case exit:
-            case exitReset:
-                return quantifier.isInfiniteLoop() ? Kind.enterInc : Kind.enter;
-            case enterZeroWidth:
-                return Kind.exitZeroWidth;
-            case exitZeroWidth:
-                return Kind.enterZeroWidth;
-            case enterEmptyMatch:
-                return Kind.exitEmptyMatch;
-            case exitEmptyMatch:
-                return Kind.enterEmptyMatch;
-            default:
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException();
-        }
+    public int getQuantifierIndex() {
+        return quantifierIndex;
     }
 
-    public Quantifier getQuantifier() {
-        return quantifier;
-    }
-
-    @TruffleBoundary
-    @Override
-    public String toString() {
-        return kind + " " + quantifier;
+    public int getThreshold() {
+        return threshold;
     }
 }

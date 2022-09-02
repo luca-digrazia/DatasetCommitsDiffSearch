@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.regex.tregex.parser;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.regex.charset.CodePointSet;
@@ -169,8 +168,8 @@ public class Token implements JsonConvertible {
         private final int min;
         private final int max;
         private final boolean greedy;
-        @CompilationFinal private short index = -1;
-        @CompilationFinal private short zeroWidthIndex = -1;
+        private short index = -1;
+        private short zeroWidthIndex = -1;
 
         public Quantifier(int min, int max, boolean greedy) {
             super(Kind.quantifier);

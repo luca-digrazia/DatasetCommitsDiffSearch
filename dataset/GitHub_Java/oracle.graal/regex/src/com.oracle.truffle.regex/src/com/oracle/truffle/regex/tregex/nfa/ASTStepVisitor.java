@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -142,7 +142,7 @@ public final class ASTStepVisitor extends NFATraversalRegexASTVisitor {
     @Override
     protected void visit(RegexASTNode target) {
         ASTSuccessor successor = new ASTSuccessor();
-        ASTTransition transition = new ASTTransition(ast.getLanguage());
+        ASTTransition transition = new ASTTransition();
         transition.setGroupBoundaries(getGroupBoundaries());
         if (dollarsOnPath()) {
             assert target instanceof MatchFound;
@@ -155,7 +155,7 @@ public final class ASTStepVisitor extends NFATraversalRegexASTVisitor {
                     for (LookBehindAssertion lb : charClass.getLookBehindEntries()) {
                         final ASTStep lbAstStep = new ASTStep(lb.getGroup());
                         assert lb.getGroup().isLiteral();
-                        lbAstStep.addSuccessor(new ASTSuccessor(new ASTTransition(ast.getLanguage(), lb.getGroup().getFirstAlternative().getFirstTerm())));
+                        lbAstStep.addSuccessor(new ASTSuccessor(new ASTTransition(lb.getGroup().getFirstAlternative().getFirstTerm())));
                         newLookBehinds.add(lbAstStep);
                     }
                     successor.setLookBehinds(newLookBehinds);
