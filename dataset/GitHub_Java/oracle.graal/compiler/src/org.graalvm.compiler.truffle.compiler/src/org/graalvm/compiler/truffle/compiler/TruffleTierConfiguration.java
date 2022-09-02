@@ -48,7 +48,7 @@ public final class TruffleTierConfiguration {
         this.providers = providers;
         this.suites = suites;
         this.lirSuites = lirSuites;
-        TruffleCompilerPhases.register(providers, suites);
+        TruffleCompilerPhases.register(suites);
         this.suites.setImmutable();
     }
 

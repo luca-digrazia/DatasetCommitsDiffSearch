@@ -26,13 +26,10 @@ package org.graalvm.compiler.truffle.compiler.nodes;
 
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_4;
 
-import java.util.Objects;
-
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.DeoptimizingFixedWithNextNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 
@@ -41,16 +38,8 @@ public final class TruffleSafepointNode extends DeoptimizingFixedWithNextNode im
 
     public static final NodeClass<TruffleSafepointNode> TYPE = NodeClass.create(TruffleSafepointNode.class);
 
-    @Input private ConstantNode location;
-
-    public TruffleSafepointNode(ConstantNode location) {
+    public TruffleSafepointNode() {
         super(TYPE, StampFactory.forVoid());
-        Objects.requireNonNull(location);
-        this.location = location;
-    }
-
-    public ConstantNode location() {
-        return location;
     }
 
     @Override

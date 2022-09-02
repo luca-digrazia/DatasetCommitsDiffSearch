@@ -102,7 +102,6 @@ import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameSetNode;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PerformanceWarningKind;
 import org.graalvm.word.LocationIdentity;
 
-import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -129,24 +128,6 @@ public class TruffleGraphBuilderPlugins {
         registerOptimizedCallTargetPlugins(plugins, metaAccess, canDelayIntrinsification, types);
         registerFrameWithoutBoxingPlugins(plugins, metaAccess, canDelayIntrinsification, providers.getConstantReflection(), types);
         registerMemorySegmentProxyPlugins(plugins, metaAccess);
-        registerTruffleSafepointPlugins(plugins, metaAccess, canDelayIntrinsification);
-    }
-
-    private static void registerTruffleSafepointPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification) {
-        final ResolvedJavaType truffleSafepoint = getRuntime().resolveType(metaAccess, "com.oracle.truffle.api.TruffleSafepoint");
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(truffleSafepoint));
-        r.register1("poll", com.oracle.truffle.api.nodes.Node.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
-                if (arg.isConstant()) {
-                    return true;
-                } else if (canDelayIntrinsification) {
-                    return false;
-                } else {
-                    throw failPEConstant(b, arg);
-                }
-            }
-        });
     }
 
     private static void registerObjectsPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
@@ -413,6 +394,17 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
+
+        // TODO uncomment this to remove safepoints from graphs disappear
+// r.register0("safepoint", new InvocationPlugin() {
+// @Override
+// public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+// /*
+// * Compiled code on does not need safepoints they are inserted in an extra phase.
+// */
+// return true;
+// }
+// });
     }
 
     public static void registerCompilerAssertsPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification) {
@@ -825,22 +817,6 @@ public class TruffleGraphBuilderPlugins {
         }
     }
 
-    static BailoutException failPEConstant(GraphBuilderContext b, ValueNode value) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(value);
-        if (value instanceof ValuePhiNode) {
-            ValuePhiNode valuePhi = (ValuePhiNode) value;
-            sb.append(" (");
-            for (Node n : valuePhi.inputs()) {
-                sb.append(n);
-                sb.append("; ");
-            }
-            sb.append(")");
-        }
-        value.getDebug().dump(DebugContext.VERBOSE_LEVEL, value.graph(), "Graph before bailout at node %s", sb);
-        throw b.bailout("Partial evaluation did not reduce value to a constant, is a regular compiler node: " + sb);
-    }
-
     private static final class PEConstantPlugin implements InvocationPlugin {
         private final boolean canDelayIntrinsification;
 
@@ -860,10 +836,21 @@ public class TruffleGraphBuilderPlugins {
             } else if (canDelayIntrinsification) {
                 return false;
             } else {
-                throw failPEConstant(b, value);
+                StringBuilder sb = new StringBuilder();
+                sb.append(curValue);
+                if (curValue instanceof ValuePhiNode) {
+                    ValuePhiNode valuePhi = (ValuePhiNode) curValue;
+                    sb.append(" (");
+                    for (Node n : valuePhi.inputs()) {
+                        sb.append(n);
+                        sb.append("; ");
+                    }
+                    sb.append(")");
+                }
+                value.getDebug().dump(DebugContext.VERBOSE_LEVEL, value.graph(), "Graph before bailout at node %s", sb);
+                throw b.bailout("Partial evaluation did not reduce value to a constant, is a regular compiler node: " + sb);
             }
         }
-
     }
 
     public static void registerMemorySegmentProxyPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {

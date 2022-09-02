@@ -26,15 +26,15 @@ package org.graalvm.compiler.truffle.runtime.hotspot;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.impl.ThreadLocalHandshake;
-import com.oracle.truffle.api.nodes.Node;
 
 final class HotSpotThreadLocalHandshake extends ThreadLocalHandshake {
 
     private static final sun.misc.Unsafe UNSAFE = AbstractHotSpotTruffleRuntime.UNSAFE;
-    static final HotSpotThreadLocalHandshake INSTANCE = new HotSpotThreadLocalHandshake();
-    private static final ThreadLocal<TruffleSafepointImpl> STATE = ThreadLocal.withInitial(() -> INSTANCE.getThreadState(Thread.currentThread()));
 
+    static final HotSpotThreadLocalHandshake INSTANCE = new HotSpotThreadLocalHandshake();
     private static final int PENDING_OFFSET = AbstractHotSpotTruffleRuntime.getRuntime().getThreadLocalPendingHandshakeOffset();
+    private static final int DISABLED_OFFSET = AbstractHotSpotTruffleRuntime.getRuntime().getThreadLocalDisabledHandshakeOffset();
+
     private static final long THREAD_EETOP_OFFSET;
     static {
         try {
@@ -45,30 +45,19 @@ final class HotSpotThreadLocalHandshake extends ThreadLocalHandshake {
     }
 
     @Override
-    public void poll(Node enclosingNode) {
+    public void poll() {
         long eetop = UNSAFE.getLong(Thread.currentThread(), THREAD_EETOP_OFFSET);
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.SLOWPATH_PROBABILITY,
                         UNSAFE.getInt(null, eetop + PENDING_OFFSET) != 0)) {
-            processHandshake(enclosingNode);
+            if (UNSAFE.getInt(null, eetop + DISABLED_OFFSET) == 0) {
+                processHandshake();
+            }
         }
-    }
-
-    static void doHandshake() {
-        INSTANCE.processHandshake(null);
-    }
-
-    static void doPoll() {
-        INSTANCE.poll(null);
     }
 
     @Override
     protected void setPending(Thread t) {
         setVolatile(t, PENDING_OFFSET, 1);
-    }
-
-    @Override
-    public TruffleSafepointImpl getCurrent() {
-        return STATE.get();
     }
 
     @Override
@@ -83,6 +72,14 @@ final class HotSpotThreadLocalHandshake extends ThreadLocalHandshake {
             prev = UNSAFE.getIntVolatile(null, eetop + offset);
         } while (!UNSAFE.compareAndSwapInt(null, eetop + offset, prev, value));
         return prev;
+    }
+
+    @Override
+    public boolean setDisabled(boolean value) {
+        long eetop = UNSAFE.getLong(Thread.currentThread(), THREAD_EETOP_OFFSET);
+        int prev = UNSAFE.getInt(null, eetop + DISABLED_OFFSET);
+        UNSAFE.putInt(null, eetop + DISABLED_OFFSET, value ? 1 : 0);
+        return prev != 0;
     }
 
 }

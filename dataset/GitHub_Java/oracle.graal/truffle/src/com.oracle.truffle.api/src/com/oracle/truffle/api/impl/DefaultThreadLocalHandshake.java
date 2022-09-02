@@ -40,45 +40,69 @@
  */
 package com.oracle.truffle.api.impl;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import com.oracle.truffle.api.nodes.Node;
 
 final class DefaultThreadLocalHandshake extends ThreadLocalHandshake {
 
     static final DefaultThreadLocalHandshake INSTANCE = new DefaultThreadLocalHandshake();
-    private static final ThreadLocal<TruffleSafepointImpl> STATE = ThreadLocal.withInitial(() -> INSTANCE.getThreadState(Thread.currentThread()));
+    private static final ThreadLocal<Boolean> DISABLED = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private static final ConcurrentHashMap<Thread, Boolean> PENDING = new ConcurrentHashMap<>();
 
-    /*
-     * Number of active pending threads. Allows to check the active threads more efficiently.
-     */
     private static final AtomicInteger PENDING_COUNT = new AtomicInteger();
+    private static final AtomicInteger DISABLED_COUNT = new AtomicInteger();
 
     private DefaultThreadLocalHandshake() {
     }
 
     @Override
-    public void poll(Node enclosingNode) {
+    public void poll() {
         int count = PENDING_COUNT.get();
-        assert count >= 0 : "inconsistent pending state";
+        assert count >= 0 : "inconsistent pending state " + count;
         if (count > 0) {
-            INSTANCE.processHandshake(enclosingNode);
+            pollSlowPath(count);
+        }
+    }
+
+    private void pollSlowPath(int count) {
+        int disabledCount = DISABLED_COUNT.get();
+        assert disabledCount >= 0 : "inconsistent disabled state " + count;
+        if (disabledCount > 0 && DISABLED.get()) {
+            return;
+        }
+        if (PENDING.get(Thread.currentThread()) != null) {
+            processHandshake();
         }
     }
 
     @Override
-    public TruffleSafepointImpl getCurrent() {
-        return STATE.get();
-    }
-
-    @Override
     protected void setPending(Thread t) {
-        PENDING_COUNT.incrementAndGet();
+        PENDING.compute(t, (k, p) -> {
+            if (p == null) {
+                PENDING_COUNT.incrementAndGet();
+            }
+            return Boolean.TRUE;
+        });
     }
 
     @Override
     protected void clearPending() {
-        PENDING_COUNT.decrementAndGet();
+        PENDING.compute(Thread.currentThread(), (k, p) -> {
+            if (p != null) {
+                PENDING_COUNT.decrementAndGet();
+            }
+            return null;
+        });
+    }
+
+    @Override
+    public boolean setDisabled(boolean value) {
+        boolean b = DISABLED.get();
+        if (b != value) {
+            DISABLED_COUNT.addAndGet(value ? 1 : -1);
+            DISABLED.set(value);
+        }
+        return b;
     }
 
 }

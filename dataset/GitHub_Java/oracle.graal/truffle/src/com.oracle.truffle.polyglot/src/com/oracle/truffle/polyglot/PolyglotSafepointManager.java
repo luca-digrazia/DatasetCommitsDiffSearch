@@ -63,7 +63,7 @@ final class PolyglotSafepointManager {
     private static final TruffleLogger LOGGER = TruffleLogger.getLogger("engine");
 
     @SuppressWarnings("unchecked")
-    private static <T extends Throwable> void sneakyThrow(Throwable ex) throws T {
+    private static <T extends Throwable> T sneakyThrow(Throwable ex) throws T {
         throw (T) ex;
     }
 
@@ -169,7 +169,6 @@ final class PolyglotSafepointManager {
             this.context = context;
         }
 
-        @Override
         public void run() {
             Object prev = context.engine.enterIfNeeded(context);
             try {
@@ -255,7 +254,7 @@ final class PolyglotSafepointManager {
                 }
             }
             if (currentEx != null) {
-                sneakyThrow(currentEx);
+                throw sneakyThrow(currentEx);
             }
         }
     }

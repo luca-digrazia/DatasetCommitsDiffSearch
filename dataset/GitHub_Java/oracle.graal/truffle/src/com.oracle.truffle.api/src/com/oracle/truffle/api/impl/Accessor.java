@@ -80,7 +80,6 @@ import com.oracle.truffle.api.ContextLocal;
 import com.oracle.truffle.api.ContextThreadLocal;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.ThreadLocalAccess;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleFile;
@@ -550,7 +549,7 @@ public abstract class Accessor {
 
         public abstract long calculateContextHeapSize(Object polyglotContext, long stopAtBytes, AtomicBoolean cancelled);
 
-        public abstract Future<Void> runThreadLocal(Object polyglotLanguageContext, Thread[] threads, Consumer<ThreadLocalAccess> action, boolean async);
+        public abstract Future<Void> runThreadLocal(Object polyglotLanguageContext, Thread[] threads, Consumer<Thread> action, boolean async);
     }
 
     public abstract static class LanguageSupport extends Support {
