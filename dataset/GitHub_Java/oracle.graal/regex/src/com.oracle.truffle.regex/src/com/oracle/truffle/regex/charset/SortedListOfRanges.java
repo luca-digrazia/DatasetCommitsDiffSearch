@@ -42,10 +42,11 @@ package com.oracle.truffle.regex.charset;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.chardata.CharacterSet;
+import com.oracle.truffle.regex.tregex.util.DebugUtil;
 
 /**
  * A storage-agnostic implementation of a sorted list of disjoint integer ranges with inclusive
- * lower and upper bounds. Holds the invariant {@link #rangesAreSortedNonAdjacentAndDisjoint()}.
+ * lower and upper bounds. Holds the invariant {@link #rangesAreSortedAndDisjoint()}.
  */
 public interface SortedListOfRanges extends CharacterSet {
 
@@ -109,7 +110,7 @@ public interface SortedListOfRanges extends CharacterSet {
         if (isEmpty()) {
             return 1;
         }
-        return (getMin() == getMinValue() ? 0 : 1) + size() - (getMax() == getMaxValue() ? 1 : 0);
+        return (getLo(0) == getMinValue() ? 0 : 1) + size() - (getHi(size() - 1) == getMaxValue() ? 1 : 0);
     }
 
     /**
@@ -126,24 +127,6 @@ public interface SortedListOfRanges extends CharacterSet {
     default int getMax() {
         assert !isEmpty();
         return getHi(size() - 1);
-    }
-
-    /**
-     * Returns the largest value contained in the inverse of this set. Must not be called on empty
-     * or full sets.
-     */
-    default int inverseGetMin() {
-        assert !isEmpty() && !matchesEverything();
-        return getMin() == getMinValue() ? getHi(0) + 1 : getMinValue();
-    }
-
-    /**
-     * Returns the largest value contained in the inverse of this set. Must not be called on empty
-     * or full sets.
-     */
-    default int inverseGetMax() {
-        assert !isEmpty() && !matchesEverything();
-        return getMax() == getMaxValue() ? getLo(size() - 1) - 1 : getMaxValue();
     }
 
     /**
@@ -435,28 +418,12 @@ public interface SortedListOfRanges extends CharacterSet {
      * Returns {@code true} if this list is sorted and all of its ranges are disjoint and
      * non-adjacent. This property must hold at all times.
      */
-    default boolean rangesAreSortedNonAdjacentAndDisjoint() {
-        if (size() > 0 && getLo(0) > getHi(0)) {
-            return false;
-        }
-        for (int i = 1; i < size(); i++) {
-            if (getLo(i) > getHi(i) || (!leftOf(i - 1, this, i)) || intersects(i - 1, this, i) || adjacent(i - 1, this, i)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Returns {@code true} if this list is sorted and all of its ranges are disjoint. This property
-     * must hold at all times.
-     */
     default boolean rangesAreSortedAndDisjoint() {
         if (size() > 0 && getLo(0) > getHi(0)) {
             return false;
         }
         for (int i = 1; i < size(); i++) {
-            if (getLo(i) > getHi(i) || (!leftOf(i - 1, this, i)) || intersects(i - 1, this, i)) {
+            if (getLo(i) > getHi(i) || (!leftOf(i - 1, this, i)) || intersects(i - 1, this, i) || adjacent(i - 1, this, i)) {
                 return false;
             }
         }
@@ -487,12 +454,7 @@ public interface SortedListOfRanges extends CharacterSet {
      * Returns {@code true} if this list contains all values of {@code o}.
      */
     default boolean contains(SortedListOfRanges o) {
-        if (o.matchesNothing()) {
-            return true;
-        }
-        if (matchesNothing()) {
-            return o.matchesNothing();
-        }
+        assert !matchesNothing() && !o.matchesNothing();
         int ia = 0;
         int ib = 0;
         while (true) {
@@ -633,62 +595,27 @@ public interface SortedListOfRanges extends CharacterSet {
     }
 
     /**
-     * Returns {@code true} iff this set contains {@link #getMinValue()} and {@link #getMaxValue()}.
-     */
-    default boolean matchesMinAndMax() {
-        return matchesSomething() && getMin() == getMinValue() && getMax() == getMaxValue();
-    }
-
-    /**
-     * Returns {@code true} iff this code point set contains exactly two characters whose binary
-     * representation differs in one bit only.
+     * Returns {@code true} if this list consists of two values whose binary representations differ
+     * in only a single bit.
      */
     default boolean matches2CharsWith1BitDifference() {
-        if (matchesNothing() || size() > 2 || !valueCountEquals(2)) {
+        if (matchesNothing() || size() > 2 || valueCount() != 2) {
             return false;
         }
-        return Integer.bitCount(getMin() ^ getMax()) == 1;
+        int c1 = getLo(0);
+        int c2 = size() == 1 ? getHi(0) : getLo(1);
+        return Integer.bitCount(c1 ^ c2) == 1;
     }
 
     /**
      * Returns the total number of values contained in this list.
      */
     default int valueCount() {
-        int count = 0;
+        int charSize = 0;
         for (int i = 0; i < size(); i++) {
-            count += size(i);
+            charSize += size(i);
         }
-        return count;
-    }
-
-    /**
-     * Returns {@code true} iff the total number of values contained in this list is equal to
-     * {@code cmp}.
-     */
-    default boolean valueCountEquals(int cmp) {
-        int count = 0;
-        for (int i = 0; i < size(); i++) {
-            count += size(i);
-            if (count > cmp) {
-                return false;
-            }
-        }
-        return count == cmp;
-    }
-
-    /**
-     * Returns {@code true} iff the total number of values contained in this list is less or equal
-     * to {@code cmp}.
-     */
-    default boolean valueCountMax(int cmp) {
-        int count = 0;
-        for (int i = 0; i < size(); i++) {
-            count += size(i);
-            if (count > cmp) {
-                return false;
-            }
-        }
-        return count <= cmp;
+        return charSize;
     }
 
     /**
@@ -750,9 +677,9 @@ public interface SortedListOfRanges extends CharacterSet {
             return "[]";
         }
         if (matchesSingleChar()) {
-            return Range.toString(getLo(0), getHi(0));
+            return rangeToString(getLo(0), getHi(0));
         }
-        if (matchesMinAndMax()) {
+        if (getLo(0) == getMinValue() || getHi(size() - 1) == getMaxValue()) {
             return "[^" + inverseRangesToString() + "]";
         } else {
             return "[" + rangesToString() + "]";
@@ -760,10 +687,18 @@ public interface SortedListOfRanges extends CharacterSet {
     }
 
     @TruffleBoundary
+    static String rangeToString(int lo, int hi) {
+        if (lo == hi) {
+            return DebugUtil.charToString(lo);
+        }
+        return DebugUtil.charToString(lo) + "-" + DebugUtil.charToString(hi);
+    }
+
+    @TruffleBoundary
     default String rangesToString() {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < size(); i++) {
-            sb.append(Range.toString(getLo(i), getHi(i)));
+            sb.append(rangeToString(getLo(i), getHi(i)));
         }
         return sb.toString();
     }
@@ -772,17 +707,17 @@ public interface SortedListOfRanges extends CharacterSet {
     default String inverseRangesToString() {
         StringBuilder sb = new StringBuilder();
         if (matchesNothing()) {
-            sb.append(Range.toString(getMinValue(), getMaxValue()));
+            sb.append(rangeToString(getMinValue(), getMaxValue()));
             return sb.toString();
         }
         if (getLo(0) > getMinValue()) {
-            sb.append(Range.toString(getMinValue(), getLo(0) - 1));
+            sb.append(rangeToString(getMinValue(), getLo(0) - 1));
         }
         for (int ia = 1; ia < size(); ia++) {
-            sb.append(Range.toString(getHi(ia - 1) + 1, getLo(ia) - 1));
+            sb.append(rangeToString(getHi(ia - 1) + 1, getLo(ia) - 1));
         }
         if (getHi(size() - 1) < getMaxValue()) {
-            sb.append(Range.toString(getHi(size() - 1) + 1, getMaxValue()));
+            sb.append(rangeToString(getHi(size() - 1) + 1, getMaxValue()));
         }
         return sb.toString();
     }

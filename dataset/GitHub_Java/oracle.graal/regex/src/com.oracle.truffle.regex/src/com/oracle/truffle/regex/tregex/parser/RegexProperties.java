@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,154 +40,162 @@
  */
 package com.oracle.truffle.regex.tregex.parser;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.tregex.parser.ast.CharacterClass;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
 public class RegexProperties implements JsonConvertible {
 
-    private static final int FLAG_ALTERNATIONS = 1;
-    private static final int FLAG_CAPTURE_GROUPS = 1 << 1;
-    private static final int FLAG_CHAR_CLASSES = 1 << 2;
-    private static final int FLAG_LONE_SURROGATES = 1 << 3;
-    private static final int FLAG_QUANTIFIERS = 1 << 4;
-    private static final int FLAG_LOOK_AHEAD_ASSERTIONS = 1 << 5;
-    private static final int FLAG_NEGATIVE_LOOK_AHEAD_ASSERTIONS = 1 << 6;
-    private static final int FLAG_LOOK_BEHIND_ASSERTIONS = 1 << 7;
-    private static final int FLAG_NON_LITERAL_LOOK_BEHIND_ASSERTIONS = 1 << 8;
-    private static final int FLAG_NEGATIVE_LOOK_BEHIND_ASSERTIONS = 1 << 9;
-    private static final int FLAG_LARGE_COUNTED_REPETITIONS = 1 << 10;
-    private static final int FLAG_CHAR_CLASSES_CAN_BE_MATCHED_WITH_MASK = 1 << 11;
-    private static final int FLAG_FIXED_CODEPOINT_WIDTH = 1 << 12;
-
-    private int flags = FLAG_CHAR_CLASSES_CAN_BE_MATCHED_WITH_MASK | FLAG_FIXED_CODEPOINT_WIDTH;
+    private boolean alternations = false;
+    private boolean backReferences = false;
+    private boolean captureGroups = false;
+    private boolean charClasses = false;
+    private boolean loneSurrogates = false;
+    private boolean quantifiers = false;
+    private boolean lookAheadAssertions = false;
+    private boolean complexLookAheadAssertions = false;
+    private boolean negativeLookAheadAssertions = false;
+    private boolean lookBehindAssertions = false;
+    private boolean nonLiteralLookBehindAssertions = false;
+    private boolean complexLookBehindAssertions = false;
+    private boolean negativeLookBehindAssertions = false;
+    private boolean largeCountedRepetitions = false;
+    private boolean charClassesCanBeMatchedWithMask = true;
     private int innerLiteralStart = -1;
     private int innerLiteralEnd = -1;
 
-    protected boolean getFlag(int flag) {
-        return (flags & flag) != 0;
-    }
-
-    private void setFlag(int flag) {
-        flags |= flag;
-    }
-
-    private void clearFlag(int flag) {
-        flags &= ~flag;
-    }
-
     public boolean hasAlternations() {
-        return getFlag(FLAG_ALTERNATIONS);
+        return alternations;
     }
 
     public void setAlternations() {
-        setFlag(FLAG_ALTERNATIONS);
+        alternations = true;
+    }
+
+    public boolean hasBackReferences() {
+        return backReferences;
+    }
+
+    public void setBackReferences() {
+        backReferences = true;
     }
 
     public boolean hasCaptureGroups() {
-        return getFlag(FLAG_CAPTURE_GROUPS);
+        return captureGroups;
     }
 
     public void setCaptureGroups() {
-        setFlag(FLAG_CAPTURE_GROUPS);
+        captureGroups = true;
     }
 
     public boolean hasCharClasses() {
-        return getFlag(FLAG_CHAR_CLASSES);
+        return charClasses;
     }
 
     public void setCharClasses() {
-        setFlag(FLAG_CHAR_CLASSES);
+        charClasses = true;
     }
 
     public boolean hasLoneSurrogates() {
-        return getFlag(FLAG_LONE_SURROGATES);
+        return loneSurrogates;
     }
 
     public void setLoneSurrogates() {
-        setFlag(FLAG_LONE_SURROGATES);
+        loneSurrogates = true;
     }
 
     public boolean hasQuantifiers() {
-        return getFlag(FLAG_QUANTIFIERS);
+        return quantifiers;
     }
 
     public void setQuantifiers() {
-        setFlag(FLAG_QUANTIFIERS);
+        quantifiers = true;
     }
 
     public boolean hasLookAroundAssertions() {
-        return getFlag(FLAG_LOOK_AHEAD_ASSERTIONS | FLAG_LOOK_BEHIND_ASSERTIONS | FLAG_NEGATIVE_LOOK_AHEAD_ASSERTIONS | FLAG_NEGATIVE_LOOK_BEHIND_ASSERTIONS);
+        return hasLookAheadAssertions() || hasLookBehindAssertions();
     }
 
     public boolean hasLookAheadAssertions() {
-        return getFlag(FLAG_LOOK_AHEAD_ASSERTIONS);
+        return lookAheadAssertions;
     }
 
     public void setLookAheadAssertions() {
-        setFlag(FLAG_LOOK_AHEAD_ASSERTIONS);
+        lookAheadAssertions = true;
+    }
+
+    public boolean hasComplexLookAheadAssertions() {
+        return complexLookAheadAssertions;
+    }
+
+    public void setComplexLookAheadAssertions() {
+        complexLookAheadAssertions = true;
     }
 
     public boolean hasNegativeLookAheadAssertions() {
-        return getFlag(FLAG_NEGATIVE_LOOK_AHEAD_ASSERTIONS);
+        return negativeLookAheadAssertions;
     }
 
     public void setNegativeLookAheadAssertions() {
-        setFlag(FLAG_NEGATIVE_LOOK_AHEAD_ASSERTIONS);
+        negativeLookAheadAssertions = true;
+    }
+
+    public void setNegativeLookAheadAssertions(boolean negativeLookAheadAssertions) {
+        this.negativeLookAheadAssertions = negativeLookAheadAssertions;
     }
 
     public boolean hasLookBehindAssertions() {
-        return getFlag(FLAG_LOOK_BEHIND_ASSERTIONS);
+        return lookBehindAssertions;
     }
 
     public void setLookBehindAssertions() {
-        setFlag(FLAG_LOOK_BEHIND_ASSERTIONS);
+        lookBehindAssertions = true;
     }
 
     public boolean hasNonLiteralLookBehindAssertions() {
-        return getFlag(FLAG_NON_LITERAL_LOOK_BEHIND_ASSERTIONS);
+        return nonLiteralLookBehindAssertions;
     }
 
     public void setNonLiteralLookBehindAssertions() {
-        setFlag(FLAG_NON_LITERAL_LOOK_BEHIND_ASSERTIONS);
+        nonLiteralLookBehindAssertions = true;
+    }
+
+    public boolean hasComplexLookBehindAssertions() {
+        return complexLookBehindAssertions;
+    }
+
+    public void setComplexLookBehindAssertions() {
+        complexLookBehindAssertions = true;
     }
 
     public boolean hasNegativeLookBehindAssertions() {
-        return getFlag(FLAG_NEGATIVE_LOOK_BEHIND_ASSERTIONS);
+        return negativeLookBehindAssertions;
     }
 
     public void setNegativeLookBehindAssertions() {
-        setFlag(FLAG_NEGATIVE_LOOK_BEHIND_ASSERTIONS);
+        negativeLookBehindAssertions = true;
+    }
+
+    public void setNegativeLookBehindAssertions(boolean negativeLookBehindAssertions) {
+        this.negativeLookBehindAssertions = negativeLookBehindAssertions;
     }
 
     public boolean hasLargeCountedRepetitions() {
-        return getFlag(FLAG_LARGE_COUNTED_REPETITIONS);
+        return largeCountedRepetitions;
     }
 
     public void setLargeCountedRepetitions() {
-        setFlag(FLAG_LARGE_COUNTED_REPETITIONS);
+        largeCountedRepetitions = true;
     }
 
     public boolean charClassesCanBeMatchedWithMask() {
-        return getFlag(FLAG_CHAR_CLASSES_CAN_BE_MATCHED_WITH_MASK);
+        return charClassesCanBeMatchedWithMask;
     }
 
     public void unsetCharClassesCanBeMatchedWithMask() {
-        clearFlag(FLAG_CHAR_CLASSES_CAN_BE_MATCHED_WITH_MASK);
-    }
-
-    /**
-     * Returns {@code true} iff no {@link CharacterClass} node in the expression may match a
-     * variable amount of array slots in an encoded string.
-     */
-    public boolean isFixedCodePointWidth() {
-        return getFlag(FLAG_FIXED_CODEPOINT_WIDTH);
-    }
-
-    public void unsetFixedCodePointWidth() {
-        clearFlag(FLAG_FIXED_CODEPOINT_WIDTH);
+        charClassesCanBeMatchedWithMask = false;
     }
 
     public void setInnerLiteral(int start, int end) {
@@ -210,14 +218,17 @@ public class RegexProperties implements JsonConvertible {
     @TruffleBoundary
     @Override
     public JsonValue toJson() {
-        return Json.obj(Json.prop("alternations", hasAlternations()),
-                        Json.prop("charClasses", hasCharClasses()),
-                        Json.prop("captureGroups", hasCaptureGroups()),
-                        Json.prop("lookAheadAssertions", hasLookAheadAssertions()),
-                        Json.prop("negativeLookAheadAssertions", hasNegativeLookAheadAssertions()),
-                        Json.prop("lookBehindAssertions", hasLookBehindAssertions()),
-                        Json.prop("nonLiteralLookBehindAssertions", hasNonLiteralLookBehindAssertions()),
-                        Json.prop("negativeLookBehindAssertions", hasNegativeLookBehindAssertions()),
-                        Json.prop("largeCountedRepetitions", hasLargeCountedRepetitions()));
+        return Json.obj(Json.prop("alternations", alternations),
+                        Json.prop("backReferences", backReferences),
+                        Json.prop("charClasses", charClasses),
+                        Json.prop("captureGroups", captureGroups),
+                        Json.prop("lookAheadAssertions", lookAheadAssertions),
+                        Json.prop("complexLookAheadAssertions", complexLookAheadAssertions),
+                        Json.prop("negativeLookAheadAssertions", negativeLookAheadAssertions),
+                        Json.prop("lookBehindAssertions", lookBehindAssertions),
+                        Json.prop("nonLiteralLookBehindAssertions", nonLiteralLookBehindAssertions),
+                        Json.prop("complexLookBehindAssertions", complexLookBehindAssertions),
+                        Json.prop("negativeLookBehindAssertions", negativeLookBehindAssertions),
+                        Json.prop("largeCountedRepetitions", largeCountedRepetitions));
     }
 }
