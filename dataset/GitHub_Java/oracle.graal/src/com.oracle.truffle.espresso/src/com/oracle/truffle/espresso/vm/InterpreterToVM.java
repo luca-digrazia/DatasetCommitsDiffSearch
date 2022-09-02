@@ -45,10 +45,11 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoLock;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
+
+import sun.misc.Unsafe;
 
 public final class InterpreterToVM implements ContextAccess {
 
@@ -62,6 +63,8 @@ public final class InterpreterToVM implements ContextAccess {
     public EspressoContext getContext() {
         return context;
     }
+
+    private static final Unsafe UNSAFE = UnsafeAccess.get();
 
     // region Get (array) operations
 
@@ -187,27 +190,27 @@ public final class InterpreterToVM implements ContextAccess {
 
     // region Monitor enter/exit
 
+    @SuppressWarnings({"deprecation"})
     @TruffleBoundary
     public static void monitorEnter(@Host(Object.class) StaticObject obj) {
-        final EspressoLock lock = obj.getLock();
-        if (!lock.tryLock()) {
+        if (!UNSAFE.tryMonitorEnter(obj)) {
             Meta meta = obj.getKlass().getMeta();
             StaticObject thread = meta.getContext().getCurrentThread();
             Target_java_lang_Thread.fromRunnable(thread, meta, Target_java_lang_Thread.State.BLOCKED);
-            lock.lock();
+            UNSAFE.monitorEnter(obj);
             Target_java_lang_Thread.toRunnable(thread, meta, Target_java_lang_Thread.State.RUNNABLE);
         }
     }
 
+    @SuppressWarnings({"deprecation"})
     @TruffleBoundary
     public static void monitorExit(@Host(Object.class) StaticObject obj) {
-        final EspressoLock lock = obj.getLock();
-        if (!lock.isHeldByCurrentThread()) {
+        if (!Thread.holdsLock(obj)) {
             // No owner checks in SVM. This is a safeguard against unbalanced monitor accesses until
             // Espresso has its own monitor handling.
             throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalMonitorStateException.class);
         }
-        lock.unlock();
+        UNSAFE.monitorExit(obj);
     }
     // endregion
 
