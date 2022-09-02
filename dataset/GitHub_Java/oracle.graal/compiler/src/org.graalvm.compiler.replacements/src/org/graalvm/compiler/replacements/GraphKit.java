@@ -24,9 +24,7 @@
  */
 package org.graalvm.compiler.replacements;
 
-import static jdk.vm.ci.code.BytecodeFrame.UNKNOWN_BCI;
 import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
-import static org.graalvm.compiler.nodes.CallTargetNode.InvokeKind.Static;
 import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
 import java.lang.reflect.Method;
@@ -63,7 +61,6 @@ import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.NodeView;
-import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -293,10 +290,6 @@ public class GraphKit implements GraphBuilderTool {
             }
             return invoke;
         }
-    }
-
-    public InvokeNode createIntrinsicInvoke(ResolvedJavaMethod method, ValueNode... args) {
-        return createInvoke(method, Static, null, UNKNOWN_BCI, args);
     }
 
     @SuppressWarnings("try")
@@ -610,18 +603,14 @@ public class GraphKit implements GraphBuilderTool {
 
     protected ExceptionObjectNode createExceptionObjectNode(FrameStateBuilder frameStateBuilder, int exceptionEdgeBci) {
         ExceptionObjectNode exceptionObject = add(new ExceptionObjectNode(getMetaAccess()));
-        setStateAfterException(frameStateBuilder, exceptionEdgeBci, exceptionObject);
-        return exceptionObject;
-    }
-
-    protected void setStateAfterException(FrameStateBuilder frameStateBuilder, int exceptionEdgeBci, StateSplit exceptionObject) {
         if (frameStateBuilder != null) {
             FrameStateBuilder exceptionState = frameStateBuilder.copy();
             exceptionState.clearStack();
-            exceptionState.push(JavaKind.Object, exceptionObject.asNode());
+            exceptionState.push(JavaKind.Object, exceptionObject);
             exceptionState.setRethrowException(true);
             exceptionObject.setStateAfter(exceptionState.create(exceptionEdgeBci, exceptionObject));
         }
+        return exceptionObject;
     }
 
     private InvokeWithExceptionStructure saveLastInvokeWithExceptionNode() {
