@@ -24,15 +24,12 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.debug.Breakpoint;
+import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
 import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
-import com.oracle.truffle.espresso.jdwp.api.JDWPCallFrame;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.JDWPFieldBreakpoint;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.StableBoolean;
-import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -167,10 +164,10 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @CompilerDirectives.TruffleBoundary
     private boolean checkFieldModificationSlowPath(FieldRef field, Object receiver, Object value) {
-        for (JDWPFieldBreakpoint info : field.getFieldBreakpointInfos()) {
+        for (FieldBreakpointInfo info : field.getFieldBreakpointInfos()) {
             if (info.isModificationBreakpoint()) {
                 // OK, tell the Debug API to suspend the thread now
-                debuggerController.prepareFieldBreakpoint(new FieldBreakpointEvent((FieldBreakpointInfo) info, receiver, value));
+                debuggerController.prepareFieldBreakpoint(new FieldBreakpointEvent(info, receiver, value));
                 debuggerController.suspend(context.getHost2GuestThread(Thread.currentThread()));
                 return true;
             }
@@ -197,10 +194,10 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @CompilerDirectives.TruffleBoundary
     private boolean checkFieldAccessSlowPath(FieldRef field, Object receiver) {
-        for (JDWPFieldBreakpoint info : field.getFieldBreakpointInfos()) {
+        for (FieldBreakpointInfo info : field.getFieldBreakpointInfos()) {
             if (info.isAccessBreakpoint()) {
                 // OK, tell the Debug API to suspend the thread now
-                debuggerController.prepareFieldBreakpoint(new FieldBreakpointEvent((FieldBreakpointInfo) info, receiver));
+                debuggerController.prepareFieldBreakpoint(new FieldBreakpointEvent(info, receiver));
                 debuggerController.suspend(context.getHost2GuestThread(Thread.currentThread()));
                 return true;
             }
@@ -280,7 +277,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(info.getClassId());
         stream.writeLong(info.getMethodId());
         stream.writeLong(info.getBci());
-        JDWPLogger.log("Sending breakpoint hit event in thread: %s with suspension policy: %d", JDWPLogger.LogLevel.STEPPING, context.getThreadName(currentThread), info.getSuspendPolicy());
+        JDWPLogger.log("Sending breakpoint hit event in thread: " + context.getThreadName(currentThread) + " with suspension policy: " + info.getSuspendPolicy(), JDWPLogger.LogLevel.STEPPING);
         connection.queuePacket(stream);
     }
 
@@ -404,7 +401,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeByte(RequestedJDWPEvents.THREAD_START);
         stream.writeInt(threadStartedRequestId);
         stream.writeLong(ids.getIdAsLong(thread));
-        JDWPLogger.log("sending thread started event for thread: %s", JDWPLogger.LogLevel.THREAD, context.getThreadName(thread));
+        JDWPLogger.log("sending thread started event for thread: " + context.getThreadName(thread), JDWPLogger.LogLevel.THREAD);
         connection.queuePacket(stream);
     }
 
