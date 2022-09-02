@@ -67,8 +67,6 @@ import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.SourceFilter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExecutableNode;
@@ -162,7 +160,6 @@ public class Breakpoint {
         static final Kind[] VALUES = values();
     }
 
-    private static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
     private static final Breakpoint BUILDER_INSTANCE = new Breakpoint();
 
     private final SuspendAnchor suspendAnchor;
@@ -1389,14 +1386,11 @@ public class Breakpoint {
             } finally {
                 suspensionEnabledNode.execute(true, sessions);
             }
-            if (INTEROP.isBoolean(result)) {
-                try {
-                    return INTEROP.asBoolean(result);
-                } catch (UnsupportedMessageException e) {
-                }
+            if (!(result instanceof Boolean)) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalArgumentException("Unsupported return type " + result + " in condition.");
             }
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalArgumentException("Unsupported return type " + result + " in condition.");
+            return (Boolean) result;
         }
 
         private void initializeConditional(MaterializedFrame frame) {
