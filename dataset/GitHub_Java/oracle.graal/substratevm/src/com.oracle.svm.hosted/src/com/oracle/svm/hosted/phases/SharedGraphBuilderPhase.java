@@ -175,16 +175,12 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
             handleUnresolvedMethod(javaMethod);
         }
 
-        private boolean allowIncompleteClasspath() {
-            return this.graphBuilderConfig.allowIncompleteClasspath(NativeImageOptions.AllowIncompleteClasspath.getValue());
-        }
-
         private void handleUnresolvedType(JavaType type) {
             /*
              * If --allow-incomplete-classpath is set defer the error reporting to runtime,
              * otherwise report the error during image building.
              */
-            if (allowIncompleteClasspath()) {
+            if (this.graphBuilderConfig.allowIncompleteClasspath(NativeImageOptions.AllowIncompleteClasspath.getValue())) {
                 ExceptionSynthesizer.throwNoClassDefFoundError(this, type.toJavaName());
             } else {
                 reportUnresolvedElement("type", type.toJavaName());
@@ -201,7 +197,7 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
                  * If --allow-incomplete-classpath is set defer the error reporting to runtime,
                  * otherwise report the error during image building.
                  */
-                if (allowIncompleteClasspath()) {
+                if (NativeImageOptions.AllowIncompleteClasspath.getValue()) {
                     ExceptionSynthesizer.throwNoSuchFieldError(this, field.format("%H.%n"));
                 } else {
                     reportUnresolvedElement("field", field.format("%H.%n"));
@@ -219,7 +215,7 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
                  * If --allow-incomplete-classpath is set defer the error reporting to runtime,
                  * otherwise report the error during image building.
                  */
-                if (allowIncompleteClasspath()) {
+                if (NativeImageOptions.AllowIncompleteClasspath.getValue()) {
                     ExceptionSynthesizer.throwNoSuchMethodError(this, javaMethod.format("%H.%n(%P)"));
                 } else {
                     reportUnresolvedElement("method", javaMethod.format("%H.%n(%P)"));
