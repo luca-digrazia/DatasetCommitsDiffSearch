@@ -54,7 +54,8 @@ public class SulongSuite extends BaseSuiteHarness {
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
         Path suitesPath = new File(TestOptions.TEST_SUITE_PATH).toPath();
-        return FixtureUtils.getFixtureObjects(SulongSuite.class, suitesPath, SulongSuite::isReference);
+        Set<String> blacklist = getBlacklist();
+        return getData(suitesPath, blacklist);
     }
 
     protected static Set<String> getBlacklist() {

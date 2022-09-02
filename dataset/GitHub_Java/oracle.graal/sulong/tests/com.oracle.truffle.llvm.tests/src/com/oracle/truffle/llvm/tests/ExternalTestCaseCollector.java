@@ -44,14 +44,8 @@ import java.util.stream.Stream;
 
 import com.oracle.truffle.llvm.tests.options.TestOptions;
 
-/**
- * Test case collector for external test suites.
- */
 public abstract class ExternalTestCaseCollector {
 
-    /**
-     * @return see {@link TestCaseCollector#collectTestCases}
-     */
     public static Collection<Object[]> collectTestCases(Path configPath, Path suiteDir, Path sourceDir) throws AssertionError {
         String testDiscoveryPath = TestOptions.TEST_DISCOVERY_PATH;
         if (testDiscoveryPath == null) {
@@ -80,7 +74,7 @@ public abstract class ExternalTestCaseCollector {
         // rel --> abs
         Map<Path, Path> tests = getWhiteListTestFolders(configPath, suiteDir);
         // abs
-        Set<Path> availableSourceFiles = CommonTestUtils.getFiles(sourceDir);
+        Set<Path> availableSourceFiles = BaseTestHarness.getFiles(sourceDir);
         // abs
         Set<Path> compiledTests = collectTestCases(testDiscoveryPath);
 
@@ -103,7 +97,7 @@ public abstract class ExternalTestCaseCollector {
 
     private static Set<Path> collectTestCases(String testDiscoveryPath) throws AssertionError {
         try (Stream<Path> files = Files.walk(Paths.get(testDiscoveryPath))) {
-            return files.filter(CommonTestUtils.isExecutable).map(f -> f.getParent()).collect(Collectors.toSet());
+            return files.filter(BaseTestHarness.isExecutable).map(f -> f.getParent()).collect(Collectors.toSet());
         } catch (IOException e) {
             throw new AssertionError("Test cases not found", e);
         }
@@ -134,7 +128,7 @@ public abstract class ExternalTestCaseCollector {
             }
         };
         try (Stream<Path> files = Files.walk(configDir)) {
-            return files.filter(CommonTestUtils.isIncludeFile).flatMap(f -> {
+            return files.filter(BaseTestHarness.isIncludeFile).flatMap(f -> {
                 try {
                     return Files.lines(f).filter(file -> file.length() > 0);
                 } catch (IOException e) {
