@@ -290,7 +290,7 @@ public abstract class BinaryStreamParser {
         return length;
     }
 
-    public static boolean mustPoolLeb128(byte[] data, int offset, WasmOptions.ConstantsPolicy storeConstantsInPool) {
+    public static boolean mustPoolLeb128(byte[] data, int offset, WasmOptions.StoreConstantsPolicyEnum storeConstantsInPool) {
         switch (storeConstantsInPool) {
             case ALL:
                 return true;

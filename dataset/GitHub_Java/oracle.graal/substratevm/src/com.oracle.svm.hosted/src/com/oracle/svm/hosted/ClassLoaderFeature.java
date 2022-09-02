@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,43 +24,41 @@
  */
 package com.oracle.svm.hosted;
 
-import java.util.Map;
-
-import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.jdk.JavaLangSubstitutions.ClassLoaderSupport;
-import com.oracle.svm.core.jdk.Target_java_lang_ClassLoader;
 
 @AutomaticFeature
 public class ClassLoaderFeature implements Feature {
-    @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
-        ImageSingletons.add(ClassLoaderSupport.class, new ClassLoaderSupport());
+
+    private static final NativeImageSystemClassLoader nativeImageSystemClassLoader = NativeImageSystemClassLoader.singleton();
+
+    public static ClassLoader getRuntimeClassLoader(ClassLoader original) {
+        if (needsReplacement(original)) {
+            return nativeImageSystemClassLoader.defaultSystemClassLoader;
+        }
+        return original;
     }
 
-    private void createClassLoaders(ClassLoader classLoader) {
-        Map<ClassLoader, Target_java_lang_ClassLoader> classLoaders = ImageSingletons.lookup(ClassLoaderSupport.class).classloaders;
-        if (!classLoaders.containsKey(classLoader)) {
-            ClassLoader parent = classLoader.getParent();
-            if (parent != null) {
-                createClassLoaders(parent);
-                classLoaders.put(classLoader, new Target_java_lang_ClassLoader(classLoaders.get(parent)));
-            } else {
-                classLoaders.put(classLoader, new Target_java_lang_ClassLoader());
-            }
+    private static boolean needsReplacement(ClassLoader loader) {
+        if (loader == nativeImageSystemClassLoader) {
+            return true;
         }
+        if (nativeImageSystemClassLoader.isNativeImageClassLoader(loader)) {
+            return true;
+        }
+        return false;
+    }
+
+    private Object runtimeClassLoaderObjectReplacer(Object replaceCandidate) {
+        if (replaceCandidate instanceof ClassLoader) {
+            return getRuntimeClassLoader((ClassLoader) replaceCandidate);
+        }
+        return replaceCandidate;
     }
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        access.registerObjectReplacer(object -> {
-            if (object instanceof ClassLoader) {
-                createClassLoaders((ClassLoader) object);
-                return ImageSingletons.lookup(ClassLoaderSupport.class).classloaders.get(object);
-            }
-            return object;
-        });
+        access.registerObjectReplacer(this::runtimeClassLoaderObjectReplacer);
     }
 }

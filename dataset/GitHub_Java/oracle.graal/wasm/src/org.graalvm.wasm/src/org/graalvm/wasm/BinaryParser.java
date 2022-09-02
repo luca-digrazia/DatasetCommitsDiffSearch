@@ -211,9 +211,10 @@ public class BinaryParser extends BinaryStreamParser {
 
     private void readCustomSection(int size) {
         int nextSectionOffset = offset + size;
-        String name = readName();
+        readName();
         int dataLength = Math.max(0, nextSectionOffset - offset);
-        module.allocateCustomSection(name, offset, dataLength);
+        // TODO: We skip the custom section for now, but we should see what we could typically pick
+        // up here.
         offset += dataLength;
     }
 
@@ -358,9 +359,11 @@ public class BinaryParser extends BinaryStreamParser {
         final byte returnTypeId = function.returnType();
         final int returnTypeLength = function.returnTypeLength();
         ExecutionState state = new ExecutionState();
-        WasmBlockNode bodyBlock = readBlockBody(instance, rootNode.codeEntry(), state, returnTypeId, false);
+        state.pushStackState(0);
+        WasmBlockNode bodyBlock = readBlockBody(instance, rootNode.codeEntry(), state, returnTypeId, returnTypeId);
+        state.popStackState();
         Assert.assertIntEqual(state.stackSize(), returnTypeLength,
-                        "Stack size must match the return type length at the function end", Failure.RETURN_SIZE_MISMATCH);
+                        "Stack size must match the return type length at the function end", Failure.RETURN_STACK_SIZE_MISMATCH);
         rootNode.setBody(bodyBlock);
 
         /* Push a frame slot to the frame descriptor for every local. */
@@ -405,9 +408,18 @@ public class BinaryParser extends BinaryStreamParser {
         codeEntry.setLocalTypes(allLocalTypes);
     }
 
+    @SuppressWarnings("unused")
+    private static void checkValidStateOnBlockExit(byte returnTypeId, ExecutionState state, int initialStackSize) {
+        if (returnTypeId == WasmType.VOID_TYPE) {
+            Assert.assertIntEqual(state.stackSize(), initialStackSize, "Void function left values in the stack", Failure.UNSPECIFIED_MALFORMED);
+        } else {
+            Assert.assertIntEqual(state.stackSize(), initialStackSize + 1, "Function left more than 1 values left in stack", Failure.UNSPECIFIED_MALFORMED);
+        }
+    }
+
     private WasmBlockNode readBlock(WasmInstance instance, WasmCodeEntry codeEntry, ExecutionState state) {
         byte blockTypeId = readBlockType();
-        return readBlockBody(instance, codeEntry, state, blockTypeId, false);
+        return readBlockBody(instance, codeEntry, state, blockTypeId, blockTypeId);
     }
 
     private LoopNode readLoop(WasmInstance instance, WasmCodeEntry codeEntry, ExecutionState state) {
@@ -415,7 +427,7 @@ public class BinaryParser extends BinaryStreamParser {
         return readLoop(instance, codeEntry, state, blockTypeId);
     }
 
-    private WasmBlockNode readBlockBody(WasmInstance instance, WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId, boolean isLoopBody) {
+    private WasmBlockNode readBlockBody(WasmInstance instance, WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId, byte continuationTypeId) {
         ArrayList<Node> children = new ArrayList<>();
         int startStackSize = state.stackSize();
         int startOffset = offset();
@@ -424,10 +436,12 @@ public class BinaryParser extends BinaryStreamParser {
         int startLongConstantOffset = state.longConstantOffset();
         int startBranchTableOffset = state.branchTableOffset();
         int startProfileCount = state.profileCount();
-        final WasmBlockNode currentBlock = new WasmBlockNode(instance, codeEntry, startOffset, returnTypeId, startStackSize, startByteConstantOffset, startIntConstantOffset, startLongConstantOffset,
-                        startBranchTableOffset, startProfileCount);
+        final WasmBlockNode currentBlock = new WasmBlockNode(instance, codeEntry, startOffset, returnTypeId, continuationTypeId, startStackSize,
+                        startByteConstantOffset, startIntConstantOffset, startLongConstantOffset, startBranchTableOffset, startProfileCount);
 
-        state.startBlock(currentBlock, isLoopBody);
+        // Push the type length of the current block's continuation.
+        // Used when branching out of nested blocks (br and br_if instructions).
+        state.pushContinuationReturnLength(currentBlock.continuationTypeLength());
 
         int opcode;
         do {
@@ -441,16 +455,25 @@ public class BinaryParser extends BinaryStreamParser {
                 case Instructions.BLOCK: {
                     // Store the reachability of the current block, to restore it later.
                     boolean reachable = state.isReachable();
+                    // Save the current block's stack pointer, in case we branch out of
+                    // the nested block (continuation stack pointer).
+                    int stackSize = state.stackSize();
+                    state.pushStackState(stackSize);
                     WasmBlockNode nestedBlock = readBlock(instance, codeEntry, state);
                     children.add(nestedBlock);
+                    state.popStackState();
                     state.setReachable(reachable);
                     break;
                 }
                 case Instructions.LOOP: {
                     // Store the reachability of the current block, to restore it later.
                     boolean reachable = state.isReachable();
+                    // Save the current block's stack pointer, in case we branch out of
+                    // the nested block (continuation stack pointer).
+                    state.pushStackState(state.stackSize());
                     LoopNode loopBlock = readLoop(instance, codeEntry, state);
                     children.add(loopBlock);
+                    state.popStackState();
                     state.setReachable(reachable);
                     break;
                 }
@@ -459,73 +482,91 @@ public class BinaryParser extends BinaryStreamParser {
                     state.pop();
                     // Store the reachability of the current block, to restore it later.
                     boolean reachable = state.isReachable();
+                    // Save the current block's stack pointer, in case we branch out of
+                    // the nested block (continuation stack pointer).
+                    // For the if block, we save the stack size reduced by 1, because of the
+                    // condition value that will be popped before executing the if statement.
+                    state.pushStackState(state.stackSize());
                     WasmIfNode ifNode = readIf(instance, codeEntry, state);
                     children.add(ifNode);
+                    state.popStackState();
                     state.setReachable(reachable);
                     break;
                 }
                 case Instructions.ELSE:
                     // We handle the else instruction in the same way as the end instruction.
                 case Instructions.END:
-                    // If the end instruction is reachable, then we check that the correct number of
-                    // operands are stored on the stack. Otherwise then the stack size must be
-                    // adjusted to match the stack size at the continuation point.
-                    if (state.isReachable()) {
-                        Assert.assertIntEqual(state.stackSize() - startStackSize, currentBlock.returnLength(), "Wrong number of values left on the stack at the end of block",
-                                        Failure.RETURN_SIZE_MISMATCH);
-                    } else {
-                        state.setStackSize(state.getStackSize(0) + currentBlock.returnLength());
+                    // If the end instruction is not reachable, then the stack size must be adjusted
+                    // to match the stack size at the continuation point.
+                    if (!state.isReachable()) {
+                        state.setStackSize(state.getStackState(0) + state.getContinuationReturnLength(0));
                     }
+                    // After the end instruction, the semantics of Wasm stack size require
+                    // that we consider the code again reachable.
+                    state.setReachable(true);
                     break;
                 case Instructions.BR: {
+                    // TODO: restore check
+                    // This check was here to validate the stack size before branching and make sure
+                    // that the block that is currently executing produced as many values as it
+                    // was meant to before branching.
+                    // We now have to postpone this check, as the target of a branch instruction may
+                    // be more than one levels up, so the amount of values it should leave in
+                    // the stack depends on the branch target.
+                    // Assert.assertEquals(state.stackSize() - startStackSize,
+                    // currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     final int unwindLevel = readTargetOffset(state);
-                    final int targetStackSize = state.getStackSize(unwindLevel);
+                    final int targetStackSize = state.getStackState(unwindLevel);
                     state.useIntConstant(targetStackSize);
-                    final int continuationReturnLength = state.getContinuationLength(unwindLevel);
+                    final int continuationReturnLength = state.getContinuationReturnLength(unwindLevel);
                     state.useIntConstant(continuationReturnLength);
-                    state.assertStackSizeGreaterOrEqual(continuationReturnLength);
                     // This instruction is stack-polymorphic.
                     state.setReachable(false);
                     break;
                 }
                 case Instructions.BR_IF: {
-                    state.pop(); // condition
+                    state.pop();  // The branch condition.
+                    // TODO: restore check
+                    // This check was here to validate the stack size before branching and make sure
+                    // that the block that is currently executing produced as many values as it
+                    // was meant to before branching.
+                    // We now have to postpone this check, as the target of a branch instruction may
+                    // be more than one levels up, so the amount of values it should leave in the
+                    // stack depends on the branch target.
+                    // Assert.assertEquals(state.stackSize() - startStackSize,
+                    // currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     final int unwindLevel = readTargetOffset(state);
-                    final int targetStackSize = state.getStackSize(unwindLevel);
-                    state.useIntConstant(targetStackSize);
-                    final int continuationReturnLength = state.getContinuationLength(unwindLevel);
-                    state.useIntConstant(continuationReturnLength);
-                    state.assertStackSizeGreaterOrEqual(continuationReturnLength);
+                    state.useIntConstant(state.getStackState(unwindLevel));
+                    state.useIntConstant(state.getContinuationReturnLength(unwindLevel));
                     state.incrementProfileCount();
                     break;
                 }
                 case Instructions.BR_TABLE: {
-                    state.pop(); // index
-                    final int numLabels = readVectorLength();
+                    state.pop();
+                    int numLabels = readVectorLength();
                     // We need to save three tables here, to maintain the mapping target -> state
                     // mapping:
                     // - the length of the return type
                     // - a table containing the branch targets for the instruction
                     // - a table containing the stack state for each corresponding branch target
                     // We encode this in a single array.
-                    final int[] branchTable = new int[2 * (numLabels + 1) + 1];
-                    int continuationReturnLength = -1;
+                    int[] branchTable = new int[2 * (numLabels + 1) + 1];
+                    int returnLength = -1;
                     // The BR_TABLE instruction behaves like a 'switch' statement.
                     // There is one extra label for the 'default' case.
                     for (int i = 0; i != numLabels + 1; ++i) {
                         final int unwindLevel = readTargetOffset();
                         branchTable[1 + 2 * i + 0] = unwindLevel;
-                        branchTable[1 + 2 * i + 1] = state.getStackSize(unwindLevel);
-                        final int targetContinuationLength = state.getContinuationLength(unwindLevel);
-                        if (continuationReturnLength == -1) {
-                            continuationReturnLength = targetContinuationLength;
-                            state.assertStackSizeGreaterOrEqual(continuationReturnLength);
+                        branchTable[1 + 2 * i + 1] = state.getStackState(unwindLevel);
+                        final int blockReturnLength = state.getContinuationReturnLength(unwindLevel);
+                        if (returnLength == -1) {
+                            returnLength = blockReturnLength;
                         } else {
-                            Assert.assertIntEqual(continuationReturnLength, targetContinuationLength,
-                                            "All target blocks in br.table must have the same return type length.", Failure.TABLE_TARGET_MISMATCH);
+                            Assert.assertIntEqual(returnLength, blockReturnLength,
+                                            "All target blocks in br.table must have the same return type length.", Failure.UNSPECIFIED_MALFORMED);
                         }
                     }
-                    branchTable[0] = continuationReturnLength;
+                    branchTable[0] = returnLength;
                     // The offset to the branch table.
                     state.saveBranchTable(branchTable);
                     // This instruction is stack-polymorphic.
@@ -537,7 +578,7 @@ public class BinaryParser extends BinaryStreamParser {
                     for (int i = 0; i < codeEntry.function().returnTypeLength(); i++) {
                         state.pop();
                     }
-                    state.useIntConstant(state.depth());
+                    state.useIntConstant(state.stackStateCount());
                     state.useIntConstant(state.getRootBlockReturnLength());
                     // This instruction is stack-polymorphic.
                     state.setReachable(false);
@@ -597,6 +638,8 @@ public class BinaryParser extends BinaryStreamParser {
                     int localIndex = readLocalIndex(state);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.set", Failure.UNSPECIFIED_MALFORMED);
+                    // Assert there is a value on the top of the stack.
+                    Assert.assertIntGreater(state.stackSize(), 0, "local.set requires at least one element in the stack", Failure.UNSPECIFIED_MALFORMED);
                     state.pop();
                     break;
                 }
@@ -604,8 +647,8 @@ public class BinaryParser extends BinaryStreamParser {
                     int localIndex = readLocalIndex(state);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee", Failure.UNSPECIFIED_MALFORMED);
-                    state.pop();
-                    state.push();
+                    // Assert there is a value on the top of the stack.
+                    Assert.assertIntGreater(state.stackSize(), 0, "local.tee requires at least one element in the stack", Failure.UNSPECIFIED_MALFORMED);
                     break;
                 }
                 case Instructions.GLOBAL_GET: {
@@ -623,6 +666,8 @@ public class BinaryParser extends BinaryStreamParser {
                     // Assert that the global is mutable.
                     Assert.assertTrue(module.symbolTable().globalMutability(index) == GlobalModifier.MUTABLE,
                                     "Immutable globals cannot be set: " + index, Failure.UNSPECIFIED_MALFORMED);
+                    // Assert there is a value on the top of the stack.
+                    Assert.assertIntGreater(state.stackSize(), 0, "global.set requires at least one element in the stack", Failure.UNSPECIFIED_MALFORMED);
                     state.pop();
                     break;
                 }
@@ -648,6 +693,7 @@ public class BinaryParser extends BinaryStreamParser {
                     }
                     readUnsignedInt32(); // align
                     readUnsignedInt32(state); // load offset
+                    Assert.assertIntGreater(state.stackSize(), 0, String.format("load instruction 0x%02X requires at least one element in the stack", opcode), Failure.UNSPECIFIED_MALFORMED);
                     state.pop();   // Base address.
                     state.push();  // Loaded value.
                     break;
@@ -669,6 +715,7 @@ public class BinaryParser extends BinaryStreamParser {
                     }
                     readUnsignedInt32(); // align
                     readUnsignedInt32(state); // store offset
+                    Assert.assertIntGreater(state.stackSize(), 1, String.format("store instruction 0x%02X requires at least two elements in the stack", opcode), Failure.UNSPECIFIED_MALFORMED);
                     state.pop();  // Value to store.
                     state.pop();  // Base address.
                     break;
@@ -891,8 +938,13 @@ public class BinaryParser extends BinaryStreamParser {
                         offset() - startOffset, state.byteConstantOffset() - startByteConstantOffset,
                         state.intConstantOffset() - startIntConstantOffset, state.longConstantOffset() - startLongConstantOffset,
                         state.branchTableOffset() - startBranchTableOffset, state.profileCount() - startProfileCount);
+        // TODO: Restore this check, when we fix the case where the block contains a return
+        // instruction.
+        // checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
 
-        state.endBlock();
+        // Pop the current block return length in the return lengths stack.
+        // Used when branching out of nested blocks (br and br_if instructions).
+        state.popContinuationReturnLength();
 
         return currentBlock;
     }
@@ -905,9 +957,8 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private LoopNode readLoop(WasmInstance instance, WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId) {
-        final int initialStackPointer = state.stackSize();
-
-        WasmBlockNode loopBlock = readBlockBody(instance, codeEntry, state, returnTypeId, true);
+        int initialStackPointer = state.stackSize();
+        WasmBlockNode loopBlock = readBlockBody(instance, codeEntry, state, returnTypeId, WasmType.VOID_TYPE);
 
         // TODO: Hack to correctly set the stack pointer for abstract interpretation.
         // If a block has branch instructions that target "shallower" blocks which return no value,
@@ -927,7 +978,7 @@ public class BinaryParser extends BinaryStreamParser {
 
         // Read true branch.
         int startOffset = offset();
-        WasmBlockNode trueBranchBlock = readBlockBody(instance, codeEntry, state, blockTypeId, false);
+        WasmBlockNode trueBranchBlock = readBlockBody(instance, codeEntry, state, blockTypeId, blockTypeId);
 
         // If a block has branch instructions that target "shallower" blocks which return no value,
         // then it can leave no values in the stack, which is invalid for our abstract
@@ -939,7 +990,7 @@ public class BinaryParser extends BinaryStreamParser {
         // Read false branch, if it exists.
         WasmNode falseBranchBlock = null;
         if (peek1(-1) == Instructions.ELSE) {
-            falseBranchBlock = readBlockBody(instance, codeEntry, state, blockTypeId, false);
+            falseBranchBlock = readBlockBody(instance, codeEntry, state, blockTypeId, blockTypeId);
         } else if (blockTypeId != WasmType.VOID_TYPE) {
             Assert.fail("An if statement without an else branch block cannot return values.", Failure.UNSPECIFIED_MALFORMED);
         }

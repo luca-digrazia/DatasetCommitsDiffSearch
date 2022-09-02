@@ -149,7 +149,7 @@ public class Linker {
         final Map<FunctionType, Integer> equivalenceClasses = new HashMap<>();
         int nextEquivalenceClass = SymbolTable.FIRST_EQUIVALENCE_CLASS;
         for (WasmInstance instance : instances.values()) {
-            if (instance.isLinkInProgress() && !instance.module().isParsed()) {
+            if (instance.isLinkInProgress()) {
                 final SymbolTable symtab = instance.symbolTable();
                 for (int index = 0; index < symtab.typeCount(); index++) {
                     FunctionType type = symtab.typeAt(index);
@@ -206,6 +206,7 @@ public class Linker {
         final Sym[] dependencies = new Sym[]{new ExportGlobalSym(importedModuleName, importedGlobalName)};
         resolutionDag.resolveLater(importGlobalSym, dependencies, resolveAction);
         resolutionDag.resolveLater(new InitializeGlobalSym(instance.name(), globalIndex), new Sym[]{importGlobalSym}, () -> {
+            instance.symbolTable().initializeGlobal(globalIndex);
         });
     }
 
@@ -216,6 +217,7 @@ public class Linker {
     }
 
     void resolveGlobalInitialization(WasmInstance instance, int globalIndex) {
+        instance.symbolTable().initializeGlobal(globalIndex);
         final Sym[] dependencies = ResolutionDag.NO_DEPENDENCIES;
         resolutionDag.resolveLater(new InitializeGlobalSym(instance.name(), globalIndex), dependencies, NO_RESOLVE_ACTION);
     }
@@ -226,6 +228,7 @@ public class Linker {
             final long sourceValue = context.globals().loadAsLong(sourceAddress);
             final int address = instance.globalAddress(globalIndex);
             context.globals().storeLong(address, sourceValue);
+            instance.symbolTable().initializeGlobal(globalIndex);
         };
         final Sym[] dependencies = new Sym[]{new InitializeGlobalSym(instance.name(), sourceGlobalIndex)};
         resolutionDag.resolveLater(new InitializeGlobalSym(instance.name(), globalIndex), dependencies, resolveAction);

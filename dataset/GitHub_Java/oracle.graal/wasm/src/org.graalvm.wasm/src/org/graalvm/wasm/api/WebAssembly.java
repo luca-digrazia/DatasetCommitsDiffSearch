@@ -45,11 +45,10 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.WasmFunction;
-import org.graalvm.wasm.WasmFunctionInstance;
-import org.graalvm.wasm.WasmType;
+import org.graalvm.wasm.WasmTable;
 import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.exception.WasmJsApiException;
+import org.graalvm.wasm.memory.UnsafeWasmMemory;
 
 public class WebAssembly extends Dictionary {
     private final WasmContext currentContext;
@@ -68,8 +67,6 @@ public class WebAssembly extends Dictionary {
         module.addMember("imports", new Executable(args -> moduleImports(args)));
         module.addMember("customSections", new Executable(args -> moduleCustomSections(args)));
         addMember("Module", module);
-
-        addMember("func_type", new Executable(args -> funcType(args)));
     }
 
     private Object instantiate(Object[] args) {
@@ -186,13 +183,13 @@ public class WebAssembly extends Dictionary {
     }
 
     private static Object createMemory(Object[] args) {
-        final int[] limits = toSizeLimits(args);
-        return Memory.create(limits[0], limits[1]);
+        int[] limits = toSizeLimits(args);
+        return new Memory(new UnsafeWasmMemory(limits[0], limits[1]));
     }
 
     private static Object createTable(Object[] args) {
-        final int[] limits = toSizeLimits(args);
-        return Table.create(limits[0], limits[1]);
+        int[] limits = toSizeLimits(args);
+        return new Table(new WasmTable(limits[0], limits[1]));
     }
 
     private static Object createGlobal(Object[] args) {
@@ -254,35 +251,6 @@ public class WebAssembly extends Dictionary {
     private static Object moduleCustomSections(Object[] args) {
         checkArgumentCount(args, 2);
         return toModule(args).customSections(args[1]);
-    }
-
-    private static Object funcType(Object[] args) {
-        checkArgumentCount(args, 1);
-        if (args[0] instanceof WasmFunctionInstance) {
-            WasmFunction fn = ((WasmFunctionInstance) args[0]).function();
-            return functionTypeToString(fn);
-        } else {
-            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "First argument must be wasm function");
-        }
-    }
-
-    public static String functionTypeToString(WasmFunction f) {
-        StringBuilder typeInfo = new StringBuilder();
-
-        typeInfo.append(f.index());
-
-        typeInfo.append('(');
-        int argumentCount = f.numArguments();
-        for (int i = 0; i < argumentCount; i++) {
-            typeInfo.append(ValueType.fromByteValue(f.argumentTypeAt(i)));
-        }
-        typeInfo.append(')');
-
-        byte returnType = f.returnType();
-        if (returnType != WasmType.VOID_TYPE) {
-            typeInfo.append(ValueType.fromByteValue(f.returnType()));
-        }
-        return typeInfo.toString();
     }
 
 }

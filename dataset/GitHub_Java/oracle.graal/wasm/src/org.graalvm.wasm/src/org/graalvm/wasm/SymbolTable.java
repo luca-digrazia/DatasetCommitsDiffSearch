@@ -275,11 +275,6 @@ public abstract class SymbolTable {
      */
     @CompilationFinal private String exportedMemory;
 
-    /**
-     * List of all custom sections.
-     */
-    private final List<WasmCustomSection> customSections;
-
     SymbolTable() {
         this.typeData = new int[INITIAL_DATA_SIZE];
         this.typeOffsets = new int[INITIAL_TYPE_SIZE];
@@ -302,7 +297,6 @@ public abstract class SymbolTable {
         this.memory = null;
         this.importedMemoryDescriptor = null;
         this.exportedMemory = null;
-        this.customSections = new ArrayList<>();
     }
 
     private void checkNotParsed() {
@@ -845,13 +839,4 @@ public abstract class SymbolTable {
     public String exportedMemory() {
         return exportedMemory;
     }
-
-    void allocateCustomSection(String name, int offset, int length) {
-        customSections.add(new WasmCustomSection(name, offset, length));
-    }
-
-    public List<WasmCustomSection> customSections() {
-        return customSections;
-    }
-
 }
