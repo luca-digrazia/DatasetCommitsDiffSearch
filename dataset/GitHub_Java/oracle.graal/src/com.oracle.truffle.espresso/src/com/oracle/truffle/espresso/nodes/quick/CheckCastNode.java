@@ -23,25 +23,46 @@
 package com.oracle.truffle.espresso.nodes.quick;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.OperandStack;
-import com.oracle.truffle.espresso.nodes.helper.TypeCheckNode;
-import com.oracle.truffle.espresso.nodes.helper.TypeCheckNodeGen;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public class CheckCastNode extends QuickNode {
+public abstract class CheckCastNode extends QuickNode {
 
     final Klass typeToCheck;
-    @Child TypeCheckNode typeCheckNode;
 
-    public CheckCastNode(Klass typeToCheck, int top, int callerBCI) {
+    static final int INLINE_CACHE_SIZE_LIMIT = 5;
+
+    protected abstract boolean executeCheckCast(Klass instanceKlass);
+
+    CheckCastNode(Klass typeToCheck, int top, int callerBCI) {
         super(top, callerBCI);
         assert !typeToCheck.isPrimitive();
         this.typeToCheck = typeToCheck;
-        this.typeCheckNode = TypeCheckNodeGen.create(typeToCheck.getContext());
+    }
+
+    @SuppressWarnings("unused")
+    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "instanceKlass == cachedKlass")
+    boolean checkCastCached(Klass instanceKlass,
+                    @Cached("instanceKlass") Klass cachedKlass,
+                    @Cached("checkCast(typeToCheck, cachedKlass)") boolean cachedAnswer) {
+        return cachedAnswer;
+    }
+
+    @Specialization(replaces = "checkCastCached")
+    boolean checkCastSlow(Klass instanceKlass) {
+        // Brute checkcast, walk the whole klass hierarchy.
+        return checkCast(typeToCheck, instanceKlass);
+    }
+
+    @TruffleBoundary
+    static boolean checkCast(Klass typeToCheck, Klass instanceKlass) {
+        return typeToCheck.isAssignableFrom(instanceKlass);
     }
 
     @Override
@@ -50,16 +71,15 @@ public class CheckCastNode extends QuickNode {
     }
 
     @Override
-    public final int execute(VirtualFrame frame, final OperandStack stack) {
-        BytecodeNode root = getBytecodesNode();
-        StaticObject receiver = stack.peekObject(top - 1);
-        if (StaticObject.isNull(receiver) || typeCheckNode.executeTypeCheck(typeToCheck, receiver.getKlass())) {
+    public final int execute(VirtualFrame frame, OperandStack stack) {
+        StaticObject receiver = BytecodeNode.peekObject(stack, top - 1);
+        if (StaticObject.isNull(receiver) || executeCheckCast(receiver.getKlass())) {
             return 0;
         }
         enterExceptionProfile();
         Meta meta = typeToCheck.getMeta();
         throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException,
-                        getExceptionMessage(root, receiver));
+                        getExceptionMessage(getBytecodesNode(), receiver));
     }
 
     @TruffleBoundary
