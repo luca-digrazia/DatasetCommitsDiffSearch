@@ -139,7 +139,7 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
 
     private static Value findMain(WasmContext wasmContext) {
         for (final WasmInstance instance : wasmContext.moduleInstances().values()) {
-            final WasmFunctionInstance function = instance.getEntryPoint();
+            final WasmFunctionInstance function = instance.getMainFunction();
             if (function != null) {
                 return Value.asValue(function);
             }
