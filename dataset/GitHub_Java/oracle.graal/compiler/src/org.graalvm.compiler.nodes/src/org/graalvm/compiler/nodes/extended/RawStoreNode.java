@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -72,18 +72,18 @@ public class RawStoreNode extends UnsafeAccessNode implements StateSplit, Lowera
     }
 
     public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier, FrameState stateAfter,
-                    boolean forceLocation) {
-        this(object, offset, value, accessKind, locationIdentity, needsBarrier, false, stateAfter, forceLocation);
+                    boolean forceAnyLocation) {
+        this(object, offset, value, accessKind, locationIdentity, needsBarrier, false, stateAfter, forceAnyLocation);
     }
 
     public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier, boolean isVolatile, FrameState stateAfter,
-                    boolean forceLocation) {
-        this(TYPE, object, offset, value, accessKind, locationIdentity, needsBarrier, isVolatile, stateAfter, forceLocation);
+                    boolean forceAnyLocation) {
+        this(TYPE, object, offset, value, accessKind, locationIdentity, needsBarrier, isVolatile, stateAfter, forceAnyLocation);
     }
 
     protected RawStoreNode(NodeClass<? extends RawStoreNode> c, ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier,
-                    boolean isVolatile, FrameState stateAfter, boolean forceLocation) {
-        super(c, StampFactory.forVoid(), object, offset, accessKind, locationIdentity, forceLocation);
+                    boolean isVolatile, FrameState stateAfter, boolean forceAnyLocation) {
+        super(c, StampFactory.forVoid(), object, offset, accessKind, locationIdentity, forceAnyLocation);
         this.value = value;
         this.needsBarrier = needsBarrier;
         this.stateAfter = stateAfter;
@@ -154,7 +154,7 @@ public class RawStoreNode extends UnsafeAccessNode implements StateSplit, Lowera
 
     @Override
     protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity, boolean volatileAccess) {
-        return new RawStoreNode(object(), location, value, accessKind(), identity, needsBarrier, volatileAccess, stateAfter(), isLocationForced());
+        return new RawStoreNode(object(), location, value, accessKind(), identity, needsBarrier, volatileAccess, stateAfter(), isAnyLocationForced());
     }
 
     public FrameState getState() {
