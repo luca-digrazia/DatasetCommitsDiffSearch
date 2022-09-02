@@ -40,13 +40,14 @@
  */
 package com.oracle.truffle.object;
 
+import com.oracle.truffle.api.object.Layout;
+import com.oracle.truffle.api.object.Layout.Builder;
 import com.oracle.truffle.api.object.LayoutFactory;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.Property;
 
-@SuppressWarnings("deprecation")
 public class CoreLayoutFactory implements LayoutFactory {
-    public com.oracle.truffle.api.object.Layout createLayout(com.oracle.truffle.api.object.Layout.Builder layoutBuilder) {
+    public Layout createLayout(Builder layoutBuilder) {
         return DefaultLayout.createCoreLayout(layoutBuilder);
     }
 
