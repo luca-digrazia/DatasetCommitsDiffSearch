@@ -25,7 +25,6 @@
 package org.graalvm.compiler.hotspot.management;
 
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -56,7 +55,6 @@ import javax.management.MalformedObjectNameException;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectName;
 import javax.management.ReflectionException;
-import javax.management.openmbean.ArrayType;
 import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.CompositeDataSupport;
 import javax.management.openmbean.CompositeType;
@@ -79,7 +77,6 @@ import org.graalvm.util.OptionsEncoder;
 public class LibGraalMBean implements DynamicMBean {
 
     private static final String COMPOSITE_TAG = ".composite";
-    private static final String ARRAY_TAG = ".array";
     private static final Map<Class<?>, OpenType<?>> PRIMITIVE_TO_OPENTYPE;
     static {
         PRIMITIVE_TO_OPENTYPE = new HashMap<>();
@@ -178,17 +175,14 @@ public class LibGraalMBean implements DynamicMBean {
             Map.Entry<String, Object> e = it.next();
             String attrName = e.getKey();
             Object attrValue = e.getValue();
-            try {
-                if (isComposite(attrName)) {
+            if (isComposite(attrName)) {
+                try {
                     attrValue = readComposite(attrName, (String) attrValue, it);
-                    attrName = attrName(attrName, COMPOSITE_TAG);
-                } else if (isArray(attrName)) {
-                    attrValue = readArray(attrName, (String) attrValue, it);
-                    attrName = attrName(attrName, ARRAY_TAG);
+                } catch (OpenDataException ex) {
+                    attrValue = null;
+                    TTY.printf("WARNING: Cannot read composite attribute %s due to %s", attrName, ex.getMessage());
                 }
-            } catch (OpenDataException ex) {
-                attrValue = null;
-                TTY.printf("WARNING: Cannot read attribute %s due to %s", attrName, ex.getMessage());
+                attrName = compositeAttrName(attrName);
             }
             res.add(new Attribute(attrName, attrValue));
         }
@@ -203,17 +197,10 @@ public class LibGraalMBean implements DynamicMBean {
     }
 
     /**
-     * Removes the tag from attribute name.
+     * Removes the composite tag from attribute name.
      */
-    private static String attrName(String name, String tag) {
-        return name.substring(0, name.length() - tag.length());
-    }
-
-    /**
-     * Check if the serialized attribute is an array.
-     */
-    private static boolean isArray(String name) {
-        return name.endsWith(ARRAY_TAG);
+    private static String compositeAttrName(String name) {
+        return name.substring(0, name.length() - COMPOSITE_TAG.length());
     }
 
     /**
@@ -234,10 +221,7 @@ public class LibGraalMBean implements DynamicMBean {
             Object attrValue = e.getValue();
             if (isComposite(attrName)) {
                 attrValue = readComposite(attrName, (String) attrValue, it);
-                attrName = attrName(attrName, COMPOSITE_TAG);
-            } else if (isArray(attrName)) {
-                attrValue = readArray(attrName, (String) attrValue, it);
-                attrName = attrName(attrName, ARRAY_TAG);
+                attrName = compositeAttrName(attrName);
             }
             attrName = attrName.substring(prefix.length());
             attrNames.add(attrName);
@@ -249,41 +233,12 @@ public class LibGraalMBean implements DynamicMBean {
         return new CompositeDataSupport(type, attrNamesArray, attrValues.toArray(new Object[attrValues.size()]));
     }
 
-    private static Object[] readArray(String scope, String typeName, PushBackIterator<Map.Entry<String, Object>> it) throws OpenDataException {
-        String prefix = scope + '.';
-        List<Object> elements = new ArrayList<>();
-        while (it.hasNext()) {
-            Map.Entry<String, Object> e = it.next();
-            String attrName = e.getKey();
-            if (!attrName.startsWith(prefix)) {
-                it.pushBack(e);
-                break;
-            }
-            Object attrValue = e.getValue();
-            elements.add(attrValue);
-        }
-        Class<?> componentType = null;
-        for (Map.Entry<Class<?>, OpenType<?>> e : PRIMITIVE_TO_OPENTYPE.entrySet()) {
-            if (e.getValue().getTypeName().equals(typeName)) {
-                componentType = e.getKey();
-                break;
-            }
-        }
-        if (componentType == null) {
-            throw new OpenDataException("Only arrays of simple open types are suppored.");
-        }
-        return elements.toArray((Object[]) Array.newInstance(componentType, elements.size()));
-    }
-
     /**
      * Returns an {@link OpenType} representing given value.
      */
-    private static OpenType<?> getOpenType(Object value) throws OpenDataException {
+    private static OpenType<?> getOpenType(Object value) {
         if (value instanceof CompositeData) {
             return ((CompositeData) value).getCompositeType();
-        }
-        if (value != null && value.getClass().isArray()) {
-            return ArrayType.getArrayType(PRIMITIVE_TO_OPENTYPE.get(value.getClass().getComponentType()));
         }
         Class<?> clz = value == null ? String.class : value.getClass();
         OpenType<?> openType = PRIMITIVE_TO_OPENTYPE.get(clz);
@@ -599,8 +554,8 @@ public class LibGraalMBean implements DynamicMBean {
     @Platforms(Platform.HOSTED_ONLY.class)
     public static final class Factory extends Thread {
 
-        private static final String DOMAIN_GRAALVM_HOTSPOT = "org.graalvm.compiler.hotspot";
-        private static final String TYPE_LIBGRAAL = "Libgraal";
+        private static final String DOMAIN_JAVA_LANG = Object.class.getPackage().getName();
+        private static final String TYPE_MEMORY_POOL = "MemoryPool";
         private static final String ATTR_TYPE = "type";
         private static final int POLL_INTERVAL_MS = 2000;
 
@@ -676,7 +631,7 @@ public class LibGraalMBean implements DynamicMBean {
             for (String objectId : objectIds) {
                 try {
                     ObjectName objectName = new ObjectName(objectId);
-                    if (aggregatedMemoryPoolBean != null && isLibGraalMBean(objectName)) {
+                    if (aggregatedMemoryPoolBean != null && parseMemoryPoolObjectName(objectName) != null) {
                         aggregatedMemoryPoolBean.removeDelegate(objectName);
                     }
                     if (mBeanServer.isRegistered(objectName)) {
@@ -746,10 +701,13 @@ public class LibGraalMBean implements DynamicMBean {
                             String name = JMXToLibGraalCalls.getObjectName(isolateThread, handle);
                             try {
                                 ObjectName objectName = new ObjectName(name);
-                                if (isLibGraalMBean(objectName)) {
+                                Hashtable<String, String> props = parseMemoryPoolObjectName(objectName);
+                                if (props != null) {
                                     if (aggregatedMemoryPoolBean == null) {
-                                        aggregatedMemoryPoolBean = new AggregatedMemoryPoolBean(bean, objectName);
-                                        platformMBeanServer.registerMBean(aggregatedMemoryPoolBean, aggregatedMemoryPoolBean.getObjectName());
+                                        props.remove("isolate");
+                                        ObjectName aggregatedMemoryPoolObjectName = new ObjectName(DOMAIN_JAVA_LANG, props);
+                                        aggregatedMemoryPoolBean = new AggregatedMemoryPoolBean(aggregatedMemoryPoolObjectName, bean, objectName);
+                                        platformMBeanServer.registerMBean(aggregatedMemoryPoolBean, aggregatedMemoryPoolObjectName);
                                     } else {
                                         aggregatedMemoryPoolBean.addDelegate(bean, objectName);
                                     }
@@ -766,11 +724,16 @@ public class LibGraalMBean implements DynamicMBean {
         }
 
         /**
-         * Tests if the given object name represents a libgraal MBean.
+         * Parses MemoryPool {@link ObjectName} to a properties map. If the given {@link ObjectName}
+         * does not represent a MemoryPool Bean it returns {@code null}.
          */
-        private static boolean isLibGraalMBean(ObjectName objectName) {
+        private static Hashtable<String, String> parseMemoryPoolObjectName(ObjectName objectName) {
             Hashtable<String, String> props = objectName.getKeyPropertyList();
-            return DOMAIN_GRAALVM_HOTSPOT.equals(objectName.getDomain()) && TYPE_LIBGRAAL.equals(props.get(ATTR_TYPE));
+            if (DOMAIN_JAVA_LANG.equals(objectName.getDomain()) && TYPE_MEMORY_POOL.equals(props.get(ATTR_TYPE))) {
+                return props;
+            } else {
+                return null;
+            }
         }
     }
 }
