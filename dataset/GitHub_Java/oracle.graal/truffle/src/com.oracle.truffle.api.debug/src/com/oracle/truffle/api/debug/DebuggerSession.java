@@ -294,7 +294,7 @@ public final class DebuggerSession implements Closeable {
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
-            throw DebugException.create(this, ex, info);
+            throw new DebugException(this, ex, info, null, true, null);
         }
     }
 
@@ -1423,7 +1423,7 @@ public final class DebuggerSession implements Closeable {
             inEvalInContext.set(Boolean.TRUE);
             return evalInContext(ev, node, frame, code);
         } catch (KillException kex) {
-            throw DebugException.create(ev.getSession(), "Evaluation was killed.");
+            throw new DebugException(ev.getSession(), "Evaluation was killed.", null, true, null);
         } catch (IllegalStateException ex) {
             throw ex;
         } catch (Throwable ex) {
@@ -1432,7 +1432,7 @@ public final class DebuggerSession implements Closeable {
             if (root != null) {
                 language = root.getLanguageInfo();
             }
-            throw DebugException.create(ev.getSession(), ex, language);
+            throw new DebugException(ev.getSession(), ex, language, null, true, null);
         } finally {
             inEvalInContext.remove();
         }
