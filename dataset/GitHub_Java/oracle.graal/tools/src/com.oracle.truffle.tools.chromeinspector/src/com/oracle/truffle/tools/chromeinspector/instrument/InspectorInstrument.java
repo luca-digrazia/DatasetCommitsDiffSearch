@@ -150,7 +150,7 @@ public final class InspectorInstrument extends TruffleInstrument {
             }
         }
         if (jarFile != null) {
-            StringBuilder ssp = new StringBuilder("file://").append(jarFile.toPath().toUri().getPath());
+            StringBuilder ssp = new StringBuilder("file://").append(jarFile.getAbsolutePath());
             if (index < path.length()) {
                 if (path.charAt(index) != '!') {
                     ssp.append('!');
@@ -275,7 +275,10 @@ public final class InspectorInstrument extends TruffleInstrument {
             connectionWatcher.waitForClose();
         }
         if (server != null) {
-            server.doFinalize();
+            try {
+                server.close();
+            } catch (IOException ioex) {
+            }
         }
     }
 
@@ -534,17 +537,6 @@ public final class InspectorInstrument extends TruffleInstrument {
         public void close() throws IOException {
             if (wss != null) {
                 wss.close(token);
-                wss = null;
-            }
-        }
-
-        void doFinalize() {
-            if (wss != null) {
-                try {
-                    wss.close(token);
-                } catch (IOException ioex) {
-                }
-                wss.dispose();
                 wss = null;
             }
         }

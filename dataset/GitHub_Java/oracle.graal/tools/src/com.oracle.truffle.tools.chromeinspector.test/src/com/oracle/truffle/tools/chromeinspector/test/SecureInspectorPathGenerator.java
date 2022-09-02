@@ -24,11 +24,12 @@
  */
 package com.oracle.truffle.tools.chromeinspector.test;
 
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
+ * This class contains just static methods for for providing random token in tests.
+ *
  * Even during testing, we need securely generated unpredictable path. Without that, an attacker
  * could connect to the debugger via a webpage using WebSocket, because same-origin policy is not
  * applied to WebSockets. As debuggers are quite privileged, this could lead even to remote code
@@ -38,6 +39,12 @@ public class SecureInspectorPathGenerator {
 
     private static final String TOKEN = generateSecureToken();
 
+    /**
+     * Returns a token. Repeated calls within a single run return the same value within a single JVM
+     * instance. However, the value is not related to values returned in other JVM instances.
+     *
+     * @return cryptographically secure constant token
+     */
     public static String getToken() {
         return TOKEN;
     }
@@ -53,14 +60,10 @@ public class SecureInspectorPathGenerator {
     }
 
     private static byte[] generateSecureRawToken() {
-        try {
-            // 256 bits of entropy ought to be enough for everybody
-            final byte[] tokenRaw = new byte[32];
-            SecureRandom.getInstanceStrong().nextBytes(tokenRaw);
-            return tokenRaw;
-        } catch (NoSuchAlgorithmException e) {
-            throw new AssertionError(e);
-        }
+        // 256 bits of entropy ought to be enough for everybody
+        final byte[] tokenRaw = new byte[32];
+        new SecureRandom().nextBytes(tokenRaw);
+        return tokenRaw;
     }
 
 }
