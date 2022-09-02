@@ -295,7 +295,7 @@ public abstract class VMThreads {
     public static class StatusSupport {
 
         /** The status of a {@link IsolateThread}. */
-        public static final FastThreadLocalInt statusTL = FastThreadLocalFactory.createInt();
+        private static final FastThreadLocalInt statusTL = FastThreadLocalFactory.createInt();
 
         /**
          * Boolean flag whether safepoints are disabled. This is a separate thread local in addition
@@ -310,13 +310,13 @@ public abstract class VMThreads {
          * {@link IsolateThread} memory has been allocated for the thread, but the thread is not on
          * the VMThreads list yet.
          */
-        public static final int STATUS_CREATED = 0;
+        private static final int STATUS_CREATED = 0;
         /** The thread is running in Java code. */
-        public static final int STATUS_IN_JAVA = STATUS_CREATED + 1;
+        private static final int STATUS_IN_JAVA = STATUS_CREATED + 1;
         /** The thread has been requested to stop at a safepoint. */
-        public static final int STATUS_IN_SAFEPOINT = STATUS_IN_JAVA + 1;
+        private static final int STATUS_IN_SAFEPOINT = STATUS_IN_JAVA + 1;
         /** The thread is running in native code. */
-        public static final int STATUS_IN_NATIVE = STATUS_IN_SAFEPOINT + 1;
+        private static final int STATUS_IN_NATIVE = STATUS_IN_SAFEPOINT + 1;
 
         private static String statusToString(int status, boolean safepointsDisabled) {
             switch (status) {
@@ -338,11 +338,6 @@ public abstract class VMThreads {
         /** For debugging. */
         public static String getStatusString(IsolateThread vmThread) {
             return statusToString(statusTL.getVolatile(vmThread), isStatusIgnoreSafepoints(vmThread));
-        }
-
-        @Uninterruptible(reason = "Called from uninterruptible code.")
-        public static int getStatusVolatile(IsolateThread vmThread) {
-            return statusTL.getVolatile(vmThread);
         }
 
         @Uninterruptible(reason = "Called from uninterruptible code.")
