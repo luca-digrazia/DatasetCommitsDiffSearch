@@ -81,7 +81,7 @@ public abstract class ArrayLengthNode extends QuickNode {
     })
     int doBufferLike(StaticObject array,
                     @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
-                    @SuppressWarnings("unused") @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
                     @Cached BranchProfile sizeOverflowProfile) {
         try {
             long bufferLength = interop.getBufferSize(array.rawForeignObject());
@@ -103,7 +103,7 @@ public abstract class ArrayLengthNode extends QuickNode {
     })
     int doArrayLike(StaticObject array,
                     @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
-                    @SuppressWarnings("unused") @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
                     @Cached BranchProfile sizeOverflowProfile) {
         try {
             long arrayLength = interop.getArraySize(array.rawForeignObject());
