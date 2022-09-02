@@ -324,10 +324,8 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     Map<PolyglotLanguage, Map<String, String>> languagesOptions, Map<PolyglotInstrument, Map<String, String>> instrumentsOptions,
                     Map<String, Level> logOptions, boolean preInitialization) {
         // When changing this logic, make sure it is in synch with #isEngineGroup()
-        final Map<String, String> optionsWithSystemProperties;
         if (useSystemProperties) {
             Properties properties = System.getProperties();
-            optionsWithSystemProperties = new HashMap<>(options);
             synchronized (properties) {
                 for (Object systemKey : properties.keySet()) {
                     String key = (String) systemKey;
@@ -337,18 +335,15 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                         if (!options.containsKey(engineKey) && (!preInitialization || idToPublicLanguage.containsKey(optionGroup) ||
                                         engineKey.equals(PolyglotImpl.OPTION_GROUP_ENGINE + '.' + PolyglotEngineOptions.PREINITIALIZE_CONTEXT_NAME) ||
                                         PolyglotEngineOptions.OPTION_GROUP_LOG.equals(optionGroup))) {
-                            optionsWithSystemProperties.put(engineKey, System.getProperty(key));
+                            options.put(engineKey, System.getProperty(key));
                         }
                     }
                 }
             }
-        } else {
-            optionsWithSystemProperties = options;
         }
-
-        for (String key : optionsWithSystemProperties.keySet()) {
+        for (String key : options.keySet()) {
             String group = parseOptionGroup(key);
-            String value = optionsWithSystemProperties.get(key);
+            String value = options.get(key);
             PolyglotLanguage language = idToLanguage.get(group);
             if (language != null && !language.cache.isInternal()) {
                 Map<String, String> languageOptions = languagesOptions.get(language);

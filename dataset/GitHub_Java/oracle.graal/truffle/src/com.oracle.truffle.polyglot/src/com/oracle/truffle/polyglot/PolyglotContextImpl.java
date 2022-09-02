@@ -189,7 +189,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.weakReference = new ContextWeakReference(this);
         this.contexts = createContextArray();
         if (!config.logLevels.isEmpty()) {
-            VMAccessor.LANGUAGE.configureLoggers(this, config.logLevels, getAllLoggers(engine));
+            VMAccessor.LANGUAGE.configureLoggers(this, config.logLevels);
         }
         PolyglotLanguageContext hostContext = getContextInitialized(engine.hostLanguage, null);
         this.polyglotHostBindings = getAPIAccess().newValue(polyglotBindings, new PolyglotBindingsValue(hostContext));
@@ -214,7 +214,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.truffleContext = spiContext;
         this.polyglotBindings = new ConcurrentHashMap<>();
         if (!parent.config.logLevels.isEmpty()) {
-            VMAccessor.LANGUAGE.configureLoggers(this, parent.config.logLevels, getAllLoggers(engine));
+            VMAccessor.LANGUAGE.configureLoggers(this, parent.config.logLevels);
         }
         this.contexts = createContextArray();
 
@@ -1045,9 +1045,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             VMAccessor.INSTRUMENT.notifyContextClosed(engine, truffleContext);
             if (parent == null) {
                 if (!this.config.logLevels.isEmpty()) {
-                    VMAccessor.LANGUAGE.configureLoggers(this, null, getAllLoggers(engine));
+                    VMAccessor.LANGUAGE.configureLoggers(this, null);
                 }
-                if (this.config.logHandler != null && !PolyglotLogHandler.isSameLogSink(this.config.logHandler, engine.logHandler)) {
+                if (this.config.logHandler != null && this.config.logHandler != engine.logHandler) {
                     this.config.logHandler.close();
                 }
             }
@@ -1148,7 +1148,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.config = newConfig;
         initializeStaticContext(this);
         if (!newConfig.logLevels.isEmpty()) {
-            VMAccessor.LANGUAGE.configureLoggers(this, newConfig.logLevels, getAllLoggers(engine));
+            VMAccessor.LANGUAGE.configureLoggers(this, newConfig.logLevels);
         }
         final Object prev = enter();
         try {
@@ -1218,15 +1218,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             fs.patchDelegate(FileSystems.INVALID_FILESYSTEM);
             FileSystems.resetDefaultFileSystemProvider();
             if (!config.logLevels.isEmpty()) {
-                VMAccessor.LANGUAGE.configureLoggers(context, null, getAllLoggers(engine));
+                VMAccessor.LANGUAGE.configureLoggers(context, null);
             }
         }
-    }
-
-    private static Object[] getAllLoggers(PolyglotEngineImpl engine) {
-        Object defaultLoggers = VMAccessor.LANGUAGE.getDefaultLoggers();
-        Object engineLoggers = engine.getEngineLoggers();
-        return engineLoggers == null ? new Object[]{defaultLoggers} : new Object[]{defaultLoggers, engineLoggers};
     }
 
     static class ContextWeakReference extends WeakReference<PolyglotContextImpl> {

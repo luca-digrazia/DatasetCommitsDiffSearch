@@ -120,6 +120,7 @@ public abstract class AbstractLanguageLauncher extends Launcher {
             builder = Context.newBuilder(getDefaultLanguages()).options(polyglotOptions);
         }
         builder.allowAllAccess(true);
+        builder.allowExperimentalOptions(allowExperimentalOptions());
 
         final Path logFile = getLogFile();
         if (logFile != null) {
