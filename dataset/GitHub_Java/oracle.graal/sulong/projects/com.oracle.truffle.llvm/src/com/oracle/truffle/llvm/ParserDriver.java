@@ -30,7 +30,7 @@
 package com.oracle.truffle.llvm;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -167,7 +167,7 @@ final class ParserDriver {
         return createLibraryCallTarget(source.getName(), result, source);
     }
 
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     private TruffleFile createNativeTruffleFile(String libName, String libPath) {
         NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
         if (nfiContextExtension != null) {
@@ -502,7 +502,7 @@ final class ParserDriver {
         if (context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
             return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
         } else {
-            // check if the functions should be resolved eagerly or lazily.
+            // check if the functions should be resolved eagerly or lazyly.
             boolean lazyParsing = context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING);
             LoadModulesNode loadModules = LoadModulesNode.create(name, parserResult, lazyParsing, context.isInternalLibraryFile(parserResult.getRuntime().getFile()), dependencies, source, language);
             return Truffle.getRuntime().createCallTarget(loadModules);
