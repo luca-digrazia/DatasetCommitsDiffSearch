@@ -34,8 +34,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.management.Attribute;
 import javax.management.AttributeList;
 import javax.management.AttributeNotFoundException;
@@ -62,8 +60,6 @@ import javax.management.openmbean.OpenType;
 import javax.management.openmbean.SimpleType;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.hotspot.HotSpotGraalManagementRegistration;
-import org.graalvm.compiler.hotspot.management.HotSpotGraalRuntimeMBean;
 import org.graalvm.libgraal.LibGraal;
 import org.graalvm.libgraal.LibGraalScope;
 import org.graalvm.nativeimage.Platform;
@@ -71,13 +67,12 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.util.OptionsEncoder;
 
 /**
- * Encapsulates a handle to a {@link HotSpotGraalRuntimeMBean} object in the SVM heap. Implements
- * the {@link DynamicMBean} by delegating all operations to an object in the SVM heap.
+ * Encapsulates a handle to a {@link DynamicMBean} object in the SVM heap. Implements the
+ * {@link DynamicMBean} by delegating all operations to an object in the SVM heap.
  */
 @Platforms(Platform.HOSTED_ONLY.class)
 class SVMMBean implements DynamicMBean {
 
-    private static final Logger LOG = Logger.getLogger(SVMMBean.class.getName());
     private static final String COMPOSITE_TAG = ".composite";
     private static final Map<Class<?>, OpenType<?>> PRIMITIVE_TO_OPENTYPE;
     static {
@@ -104,7 +99,7 @@ class SVMMBean implements DynamicMBean {
 
     /**
      * Obtain the value of a specific attribute of the Dynamic MBean by delegating to
-     * {@link HotSpotGraalRuntimeMBean} instance in the SVM heap.
+     * {@link DynamicMBean} instance in the SVM heap.
      *
      * @param attribute the name of the attribute to be retrieved
      */
@@ -116,7 +111,7 @@ class SVMMBean implements DynamicMBean {
 
     /**
      * Set the value of a specific attribute of the Dynamic MBean by delegating to
-     * {@link HotSpotGraalRuntimeMBean} instance in the SVM heap.
+     * {@link DynamicMBean} instance in the SVM heap.
      *
      * @param attribute the identification of the attribute to be set and the value it is to be set
      *            to
@@ -130,7 +125,7 @@ class SVMMBean implements DynamicMBean {
 
     /**
      * Get the values of several attributes of the Dynamic MBean by delegating to
-     * {@link HotSpotGraalRuntimeMBean} instance in the SVM heap.
+     * {@link DynamicMBean} instance in the SVM heap.
      *
      * @param attributes a list of the attributes to be retrieved
      */
@@ -145,7 +140,7 @@ class SVMMBean implements DynamicMBean {
 
     /**
      * Sets the values of several attributes of the Dynamic MBean by delegating to
-     * {@link HotSpotGraalRuntimeMBean} instance in the SVM heap.
+     * {@link DynamicMBean} instance in the SVM heap.
      *
      * @param attributes a list of attributes: The identification of the attributes to be set and
      *            the values they are to be set to.
@@ -180,11 +175,11 @@ class SVMMBean implements DynamicMBean {
             if (isComposite(attrName)) {
                 try {
                     attrValue = readComposite(attrName, (String) attrValue, it);
-                    attrName = compositeAttrName(attrName);
                 } catch (OpenDataException ex) {
-                    LOG.log(Level.WARNING, "Cannot read composite attribute " + attrName, ex);
-                    continue;
+                    attrValue = null;
+                    TTY.printf("WARNING: Cannot read composite attribute %s due to %s", attrName, ex.getMessage());
                 }
+                attrName = compositeAttrName(attrName);
             }
             res.add(new Attribute(attrName, attrValue));
         }
@@ -251,8 +246,8 @@ class SVMMBean implements DynamicMBean {
     }
 
     /**
-     * Invokes an action on the Dynamic MBean by delegating to {@link HotSpotGraalRuntimeMBean}
-     * instance in the SVM heap.
+     * Invokes an action on the Dynamic MBean by delegating to {@link DynamicMBean} instance in the
+     * SVM heap.
      *
      * @param actionName the name of the action to be invoked
      * @param params an array containing the parameters to be set when the action is invoked
@@ -286,7 +281,7 @@ class SVMMBean implements DynamicMBean {
 
     /**
      * Provides the attributes and actions of the Dynamic MBean by delegating to
-     * {@link HotSpotGraalRuntimeMBean} instance in the SVM heap.
+     * {@link DynamicMBean} instance in the SVM heap.
      *
      */
     @Override
@@ -535,8 +530,8 @@ class SVMMBean implements DynamicMBean {
     }
 
     /**
-     * A factory thread creating the {@link SVMMBean} instances for
-     * {@link HotSpotGraalRuntimeMBean}s in SVM heap and registering them to {@link MBeanServer}.
+     * A factory thread creating the {@link SVMMBean} instances for {@link DynamicMBean}s in SVM
+     * heap and registering them to {@link MBeanServer}.
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     static final class Factory extends Thread {
@@ -547,16 +542,16 @@ class SVMMBean implements DynamicMBean {
         private boolean dirty;
 
         private Factory() {
-            super("HotSpotGraalManagement Bean Registration");
+            super("Libgraal MBean Registration");
             this.setPriority(Thread.MIN_PRIORITY);
             this.setDaemon(true);
             LibGraal.registerNativeMethods(runtime(), HotSpotToSVMCalls.class);
         }
 
         /**
-         * Main loop waiting for {@link HotSpotGraalRuntimeMBean} creation in SVM heap. When a new
-         * {@link HotSpotGraalRuntimeMBean} is created in the SVM heap this thread creates a new
-         * {@link SVMMBean} encapsulation the {@link HotSpotGraalRuntimeMBean} and registers it to
+         * Main loop waiting for {@link DynamicMBean} creation in SVM heap. When a new
+         * {@link DynamicMBean} is created in the SVM heap this thread creates a new
+         * {@link SVMMBean} encapsulating the {@link DynamicMBean} and registers it to
          * {@link MBeanServer}.
          */
         @Override
@@ -586,8 +581,8 @@ class SVMMBean implements DynamicMBean {
         }
 
         /**
-         * Called by {@link HotSpotGraalManagementRegistration} in SVM heap to notify the factory
-         * thread about new {@link HotSpotGraalRuntimeMBean}s.
+         * Called by {@code MBeanProxy} in SVM heap to notify the factory thread about new
+         * {@link DynamicMBean}s.
          */
         synchronized void signal() {
             dirty = true;
@@ -595,8 +590,8 @@ class SVMMBean implements DynamicMBean {
         }
 
         /**
-         * In case of successful {@link MBeanServer} initialization creates {@link SVMMBean} for
-         * pending {@link HotSpotGraalRuntimeMBean}s and registers them.
+         * In case of successful {@link MBeanServer} initialization creates {@link SVMMBean}s for
+         * pending libgraal {@link DynamicMBean}s and registers them.
          *
          * @return {@code true} if {@link SVMMBean}s were successfuly registered, {@code false} when
          *         {@link MBeanServer} is not yet available and {@code poll} should be retried.
@@ -620,7 +615,7 @@ class SVMMBean implements DynamicMBean {
         }
 
         /**
-         * Creates {@link SVMMBean} for pending {@link HotSpotGraalRuntimeMBean}s and registers them
+         * Creates {@link SVMMBean}s for pending libgraal {@link DynamicMBean}s and registers them
          * {@link MBeanServer}.
          *
          * @return {@code true}
@@ -635,10 +630,17 @@ class SVMMBean implements DynamicMBean {
                 long[] svmRegistrations = HotSpotToSVMCalls.pollRegistrations(LibGraalScope.getIsolateThread());
                 if (svmRegistrations.length > 0) {
                     for (long svmRegistration : svmRegistrations) {
+                        SVMMBean bean = new SVMMBean(svmRegistration);
+                        String name = HotSpotToSVMCalls.getObjectName(LibGraalScope.getIsolateThread(), svmRegistration);
                         try {
-                            SVMMBean bean = new SVMMBean(svmRegistration);
-                            String name = HotSpotToSVMCalls.getObjectName(LibGraalScope.getIsolateThread(), svmRegistration);
-                            platformMBeanServer.registerMBean(bean, new ObjectName(name));
+                            try {
+                                platformMBeanServer.registerMBean(bean, new ObjectName(name));
+                            } catch (InstanceAlreadyExistsException e) {
+                                String newName = name + "_" + Long.toHexString(LibGraalScope.getIsolateThread());
+                                TTY.out.printf("WARNING: The object name '%s' is already used by an existing MBean, using '%s' for libgraal MBean.%n",
+                                                name, newName);
+                                platformMBeanServer.registerMBean(bean, new ObjectName(newName));
+                            }
                         } catch (MalformedObjectNameException | InstanceAlreadyExistsException | MBeanRegistrationException | NotCompliantMBeanException e) {
                             e.printStackTrace(TTY.out);
                         }
