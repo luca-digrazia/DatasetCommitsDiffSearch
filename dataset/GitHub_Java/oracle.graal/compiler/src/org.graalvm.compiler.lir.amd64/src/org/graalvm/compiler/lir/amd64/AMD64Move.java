@@ -699,8 +699,8 @@ public class AMD64Move {
                 // a CMP and a Jcc in which case the XOR will modify the condition
                 // flags and interfere with the Jcc.
                 if (input.isNull()) {
-                    if (moveKind == AMD64Kind.QWORD && crb.mustReplaceWithUncompressedNullRegister(input)) {
-                        masm.movq(result, crb.uncompressedNullRegister);
+                    if (moveKind == AMD64Kind.QWORD && crb.mustReplaceWithNullRegister(input)) {
+                        masm.movq(result, crb.nullRegister);
                     } else {
                         // Upper bits will be zeroed so this also works for narrow oops
                         masm.movslq(result, 0);
@@ -769,8 +769,8 @@ public class AMD64Move {
                 break;
             case Object:
                 if (input.isNull()) {
-                    if (crb.mustReplaceWithUncompressedNullRegister(input)) {
-                        masm.movq(dest, crb.uncompressedNullRegister);
+                    if (crb.mustReplaceWithNullRegister(input)) {
+                        masm.movq(dest, crb.nullRegister);
                         return;
                     }
                     imm = 0;
@@ -958,7 +958,7 @@ public class AMD64Move {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            Register nullRegister = crb.uncompressedNullRegister;
+            Register nullRegister = crb.nullRegister;
             if (!nullRegister.equals(Register.None)) {
                 emitConversion(asRegister(result), asRegister(input), nullRegister, masm);
             }
