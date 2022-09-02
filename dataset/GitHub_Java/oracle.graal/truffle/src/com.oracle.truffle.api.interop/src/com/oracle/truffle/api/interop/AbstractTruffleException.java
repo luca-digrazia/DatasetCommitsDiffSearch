@@ -220,8 +220,6 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
      */
     @Deprecated
     @TruffleBoundary
-    @Override
-    @SuppressWarnings("sync-override")
     public final Throwable initCause(Throwable cause) {
         throw new UnsupportedOperationException("Not supported. Pass in the cause using the constructors instead.");
     }
@@ -232,7 +230,6 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
      * {@inheritDoc}
      */
     @Override
-    @SuppressWarnings("sync-override")
     public final Throwable getCause() {
         return internalCause;
     }

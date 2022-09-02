@@ -201,7 +201,6 @@ final class DefaultAbstractTruffleExceptionExports {
         }
 
         @ExportMessage
-        @SuppressWarnings("static-method")
         boolean hasArrayElements() {
             return true;
         }

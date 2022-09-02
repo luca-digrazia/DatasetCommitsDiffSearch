@@ -128,7 +128,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
                 ExceptionType exceptionType = interop.getExceptionType(exception);
                 this.internal = false;
                 this.cancelled = exceptionType == ExceptionType.CANCEL;
-                this.syntaxError = exceptionType == ExceptionType.PARSE_ERROR;
+                this.syntaxError = exceptionType == ExceptionType.SYNTAX_ERROR;
                 this.exit = exceptionType == ExceptionType.EXIT;
                 this.exitStatus = this.exit ? interop.getExceptionExitStatus(exception) : 0;
                 this.incompleteSource = this.syntaxError ? interop.isExceptionIncompleteSource(exception) : false;
@@ -514,10 +514,11 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
 
         private Throwable findCause(Throwable throwable) {
             Throwable cause = throwable;
+            Throwable stackTrace;
             if (cause instanceof HostException) {
                 return findCause(((HostException) cause).getOriginal());
-            } else if (EngineAccessor.EXCEPTION.isException(cause)) {
-                return EngineAccessor.EXCEPTION.getLazyStackTrace(cause);
+            } else if ((stackTrace = EngineAccessor.INTEROP.getLazyStackTrace(cause)) != null) {
+                return stackTrace;
             } else {
                 while (cause.getCause() != null && cause.getStackTrace().length == 0) {
                     if (cause instanceof HostException) {

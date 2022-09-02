@@ -40,42 +40,37 @@
  */
 package com.oracle.truffle.api.interop;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.ParsingRequest;
-
 /**
- * Represents a type of a Truffle exception.
+ * Represents a {@link TruffleException} type.
  *
- * @see InteropLibrary#isException(Object)
- * @see InteropLibrary#getExceptionType(Object)
- *
- * @since 20.3
+ * @since 20.2
  */
 public enum ExceptionType implements TruffleObject {
     /**
-     * Indicates that the application was exited within the guest language program. To obtain the
-     * exit status use {@link InteropLibrary#getExceptionExitStatus(Object) getExceptionExitStatus}.
+     * Indicates that guest language application was cancelled during its execution.
      *
-     * @see InteropLibrary#getExceptionExitStatus(Object)
-     * @since 20.3
+     * @since 20.2
+     */
+    CANCEL,
+
+    /**
+     * Indicates that the application was exited within the guest language program.
+     *
+     * @since 20.2
      */
     EXIT,
 
     /**
      * Indicates a guest language error.
      *
-     * @since 20.3
+     * @since 20.2
      */
-    RUNTIME_ERROR,
+    LANGUAGE_ERROR,
 
     /**
-     * Indicates a parser or syntax error. Syntax errors typically occur while
-     * {@link TruffleLanguage#parse(ParsingRequest) parsing} of guest language source code. Use
-     * {@link InteropLibrary#isExceptionIncompleteSource(Object) isExceptionIncompleteSource} to
-     * find out if the parse error happened due to incomplete source.
+     * Indicates a parser or syntax error.
      *
-     * @see InteropLibrary#isExceptionIncompleteSource(Object)
-     * @since 20.3
+     * @since 20.2
      */
-    PARSE_ERROR
+    SYNTAX_ERROR
 }
