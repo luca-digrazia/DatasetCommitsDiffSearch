@@ -47,7 +47,6 @@ final class JDWP {
 
     private static final boolean CAN_REDEFINE_CLASSES = false;
     private static final boolean CAN_GET_INSTANCE_INFO = false;
-    private static final boolean CAN_FORCE_EARLY_RETURN = false;
 
     private static final int ACC_SYNTHETIC = 0x00001000;
     private static final int JDWP_SYNTHETIC = 0xF0000000;
@@ -342,7 +341,7 @@ final class JDWP {
                 reply.writeBoolean(false); // canGetMonitorFrameInfo
                 reply.writeBoolean(false); // canUseSourceNameFilters
                 reply.writeBoolean(true); // canGetConstantPool
-                reply.writeBoolean(CAN_FORCE_EARLY_RETURN); // canForceEarlyReturn
+                reply.writeBoolean(false); // canForceEarlyReturn
                 reply.writeBoolean(false); // reserved for future
                 reply.writeBoolean(false); // reserved for future
                 reply.writeBoolean(false); // reserved for future
@@ -1986,23 +1985,6 @@ final class JDWP {
 
                 reply.writeInt(suspensionCount);
                 return new CommandResult(reply);
-            }
-        }
-
-        static class FORCE_EARLY_RETURN {
-            public static final int ID = 14;
-
-            static CommandResult createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                if (!CAN_FORCE_EARLY_RETURN) {
-                    // tracked by: /browse/GR-20412
-                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
-                    return new CommandResult(reply);
-                } else {
-                    throw new RuntimeException("Not implemented!");
-                }
             }
         }
 
