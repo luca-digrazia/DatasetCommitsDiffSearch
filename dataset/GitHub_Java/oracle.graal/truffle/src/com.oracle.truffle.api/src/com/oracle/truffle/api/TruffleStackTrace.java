@@ -335,9 +335,7 @@ public final class TruffleStackTrace extends Exception {
         addStackFrames(stackFrameLimit, lazyFrames, topCallSite, frames);
 
         lazy.stackTrace = new TruffleStackTrace(frames, lazyFrames);
-        if (throwable.getStackTrace().length == 0) {
-            lazy.stackTrace.materializeHostException();
-        }
+        lazy.stackTrace.materializeHostException();
         return lazy.stackTrace;
     }
 

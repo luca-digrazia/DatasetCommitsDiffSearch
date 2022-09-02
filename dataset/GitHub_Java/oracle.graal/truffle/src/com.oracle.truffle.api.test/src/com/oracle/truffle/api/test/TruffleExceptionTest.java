@@ -152,26 +152,6 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
     }
 
     @Test
-    public void testPolyglotStackTraceInternalFrame() {
-        testStackTraceImpl(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                ThrowNode throwNode = new ThrowNode((n) -> {
-                    return new TruffleExceptionImpl("Test exception", n);
-                });
-                CallTarget throwTarget = Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test-throw-internal", null, true, throwNode));
-                CallTarget innerInvokeTarget = Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test-call-inner", null, new InvokeNode(throwTarget)));
-                CallTarget internalInvokeTarget = Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test-call-internal", null, true, new InvokeNode(innerInvokeTarget)));
-                CallTarget outerInvokeTarget = Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test-call-outer", null, new InvokeNode(internalInvokeTarget)));
-                return outerInvokeTarget;
-            }
-        },
-                        "<proxyLanguage> test-call-inner",
-                        "<proxyLanguage> test-call-outer",
-                        "(org.graalvm.sdk/)?org.graalvm.polyglot.Context.eval");
-    }
-
-    @Test
     public void testPolyglotStackTraceExplicitFillIn() {
         testStackTraceImpl(new ProxyLanguage() {
             @Override
@@ -253,19 +233,13 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
 
         private final String name;
         private final String ownerName;
-        private final boolean internal;
         private final StackTraceElementGuestObject customStackTraceElementGuestObject;
         @Child StatementNode body;
 
         TestRootNode(TruffleLanguage<?> language, String name, String ownerName, StatementNode body) {
-            this(language, name, ownerName, false, body);
-        }
-
-        TestRootNode(TruffleLanguage<?> language, String name, String ownerName, boolean internal, StatementNode body) {
             super(language);
             this.name = name;
             this.ownerName = ownerName;
-            this.internal = internal;
             this.body = body;
             this.customStackTraceElementGuestObject = ownerName != null ? new StackTraceElementGuestObject(name, ownerName) : null;
         }
@@ -293,11 +267,6 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
             } else {
                 return super.translateStackTraceElement(element);
             }
-        }
-
-        @Override
-        public boolean isInternal() {
-            return internal;
         }
     }
 

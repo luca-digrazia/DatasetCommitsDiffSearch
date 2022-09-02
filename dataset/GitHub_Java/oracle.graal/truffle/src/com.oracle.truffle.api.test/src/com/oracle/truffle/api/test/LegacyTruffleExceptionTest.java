@@ -40,12 +40,13 @@
  */
 package com.oracle.truffle.api.test;
 
-import static com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest.assertFails;
 import static com.oracle.truffle.api.test.TruffleExceptionTest.createAST;
 import static com.oracle.truffle.api.test.TruffleExceptionTest.createContext;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -53,8 +54,11 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.test.TruffleExceptionTest.BlockNode;
+import com.oracle.truffle.api.test.TruffleExceptionTest.TestRootNode;
+import com.oracle.truffle.api.test.TruffleExceptionTest.ThrowNode;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
+import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.Assert;
 import org.junit.Before;
@@ -70,14 +74,16 @@ public class LegacyTruffleExceptionTest extends AbstractPolyglotTest {
     }
 
     @Test
-    public void testLegacyCatchableException() {
+    public void testLegacyException() {
         setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
             @Override
             protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                LegacyCatchableException exception = new LegacyCatchableException();
-                LangObject exceptionObject = new LangObject(exception);
-                exception.setExceptionObject(exceptionObject);
-                return createAST(LegacyTruffleExceptionTest.class, languageInstance, exceptionObject, (node) -> exception.setLocation(node));
+                return createAST(LegacyTruffleExceptionTest.class, languageInstance, (n) -> {
+                    LegacyCatchableException exception = new LegacyCatchableException("Test exception", n);
+                    LangObject exceptionObject = new LangObject(exception);
+                    exception.setExceptionObject(exceptionObject);
+                    return exceptionObject;
+                }, false);
             }
         });
         verifyingHandler.expect(BlockNode.Kind.TRY, BlockNode.Kind.CATCH, BlockNode.Kind.FINALLY);
@@ -85,24 +91,64 @@ public class LegacyTruffleExceptionTest extends AbstractPolyglotTest {
     }
 
     @Test
-    public void testLegacyUnCatchableException() {
+    public void testLegacyExceptionCustomGuestObject() {
         setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
             @Override
             protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                LegacyUnCatchableException exception = new LegacyUnCatchableException();
-                LangObject exceptionObject = new LangObject(exception);
-                exception.setExceptionObject(exceptionObject);
-                return createAST(LegacyTruffleExceptionTest.class, languageInstance, exceptionObject, (node) -> exception.setLocation(node));
+                return createAST(LegacyTruffleExceptionTest.class, languageInstance, (n) -> {
+                    LegacyCatchableException exception = new LegacyCatchableException("Test exception", n);
+                    LangObject exceptionObject = new LangObject(exception);
+                    exception.setExceptionObject(exceptionObject);
+                    return exceptionObject;
+                }, true);
+            }
+        });
+        verifyingHandler.expect(BlockNode.Kind.TRY, BlockNode.Kind.CATCH, BlockNode.Kind.FINALLY);
+        context.eval(ProxyLanguage.ID, "Test");
+    }
+
+    @Test
+    public void testLegacyCancelException() {
+        setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
+            @Override
+            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
+                return createAST(LegacyTruffleExceptionTest.class, languageInstance, (n) -> {
+                    LegacyCancelException exception = new LegacyCancelException(n);
+                    LangObject exceptionObject = new LangObject(exception);
+                    exception.setExceptionObject(exceptionObject);
+                    return exceptionObject;
+                }, false);
             }
         });
         verifyingHandler.expect(BlockNode.Kind.TRY);
-        assertFails(() -> context.eval(ProxyLanguage.ID, "Test"), PolyglotException.class, (e) -> Assert.assertTrue(e.isCancelled()));
+        assertFails(() -> context.eval(ProxyLanguage.ID, "Test"), PolyglotException.class, (e) -> {
+            Assert.assertTrue(e.isCancelled());
+            Assert.assertNotNull(e.getGuestObject());
+        });
+    }
+
+    @Test
+    public void testPolyglotStackTrace() {
+        setupEnv(Context.create(), new ProxyLanguage() {
+            @Override
+            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
+                ThrowNode throwNode = new ThrowNode((n) -> {
+                    return new LegacyCatchableException("Test exception", n);
+                });
+                return Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test", null, throwNode));
+            }
+        });
+        assertFails(() -> context.eval(ProxyLanguage.ID, "Test"), PolyglotException.class, (pe) -> {
+            TruffleExceptionTest.verifyStackTrace(pe,
+                            "<proxyLanguage> test",
+                            "(org.graalvm.sdk/)?org.graalvm.polyglot.Context.eval");
+        });
     }
 
     @ExportLibrary(InteropLibrary.class)
     static final class LangObject implements TruffleObject {
 
-        private Throwable exception;
+        private final Throwable exception;
 
         LangObject(Throwable exception) {
             this.exception = exception;
@@ -114,11 +160,11 @@ public class LegacyTruffleExceptionTest extends AbstractPolyglotTest {
         }
 
         @ExportMessage
-        public boolean isExceptionUnwind() throws UnsupportedMessageException {
+        public ExceptionType getExceptionType() throws UnsupportedMessageException {
             if (exception == null) {
                 throw UnsupportedMessageException.create();
             }
-            return true;
+            return ExceptionType.RUNTIME_ERROR;
         }
 
         @ExportMessage
@@ -126,30 +172,23 @@ public class LegacyTruffleExceptionTest extends AbstractPolyglotTest {
             if (exception == null) {
                 throw UnsupportedMessageException.create();
             }
-            throw sthrow(RuntimeException.class, exception);
-        }
-
-        @SuppressWarnings({"unchecked", "unused"})
-        private static <T extends Throwable> T sthrow(Class<T> type, Throwable t) throws T {
-            throw (T) t;
+            throw TruffleExceptionTest.sthrow(RuntimeException.class, exception);
         }
     }
 
     @SuppressWarnings({"serial", "deprecation"})
     static final class LegacyCatchableException extends RuntimeException implements com.oracle.truffle.api.TruffleException, TruffleObject {
 
-        private Node location;
+        private final Node location;
         private Object exeptionObject;
 
-        LegacyCatchableException() {
+        LegacyCatchableException(String message, Node location) {
+            super(message);
+            this.location = location;
         }
 
         void setExceptionObject(Object exeptionObject) {
             this.exeptionObject = exeptionObject;
-        }
-
-        void setLocation(Node node) {
-            this.location = node;
         }
 
         @Override
@@ -164,20 +203,18 @@ public class LegacyTruffleExceptionTest extends AbstractPolyglotTest {
     }
 
     @SuppressWarnings({"serial", "deprecation"})
-    static final class LegacyUnCatchableException extends ThreadDeath implements com.oracle.truffle.api.TruffleException, TruffleObject {
+    static final class LegacyCancelException extends ThreadDeath implements com.oracle.truffle.api.TruffleException, TruffleObject {
 
         private Node location;
         private Object exeptionObject;
 
-        LegacyUnCatchableException() {
+        LegacyCancelException(Node location) {
+            super();
+            this.location = location;
         }
 
         void setExceptionObject(Object exeptionObject) {
             this.exeptionObject = exeptionObject;
-        }
-
-        void setLocation(Node node) {
-            this.location = node;
         }
 
         @Override
