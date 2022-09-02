@@ -51,7 +51,6 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -59,7 +58,7 @@ import java.util.function.Function;
 
 /**
  * Configuration of host access. There are two predefined instances of host access {@link #EXPLICIT}
- * and {@link #PUBLIC} which one can use when building a context
+ * and {@link #ALL} which one can use when building a context
  * {@link Context.Builder#allowHostAccess(org.graalvm.polyglot.HostAccessPolicy)}. Should the
  * predefined instances not be enough, one can create own configuration with {@link #newBuilder()}.
  *
@@ -86,14 +85,24 @@ public final class HostAccessPolicy {
      * 
      * @since 1.0 RC14
      */
-    public static final HostAccessPolicy EXPLICIT = new HostAccessPolicy(Collections.singleton(HostAccessPolicy.Export.class), null, null, "HostAccess.EXPLICIT", false);
+    public static final HostAccessPolicy EXPLICIT = newBuilder().allowAccessAnnotatedBy(HostAccessPolicy.Export.class).name("HostAccessPolicy.EXPLICIT").build();
 
     /**
-     * All public access, but no reflection access.
+     * Access all public elements. This policy allows the guest script to access all elements that
+     * your Java code could. It is useful for polyglot programing and writing parts of the
+     * functionality in other language than in Java. This policy isn't suitable for executing
+     * untrusted code.
      * 
      * @since 1.0 RC14
      */
-    public static final HostAccessPolicy PUBLIC = new HostAccessPolicy(null, null, null, "HostAccess.PUBLIC", true);
+    public static final HostAccessPolicy ALL = newBuilder().allowPublicAccess(true).name("HostAccessPolicy.ALL").build();
+
+    /**
+     * Disables access to elements.
+     * 
+     * @since 1.0 RC15
+     */
+    public static final HostAccessPolicy NONE = newBuilder().name("HostAccessPolicy.NONE").build();
 
     HostAccessPolicy(Set<Class<? extends Annotation>> annotations, Set<AnnotatedElement> excludes, Set<AnnotatedElement> members, String name, boolean allowPublic) {
         this.annotations = annotations;
@@ -110,7 +119,7 @@ public final class HostAccessPolicy {
      * @since 1.0 RC14
      */
     public static Builder newBuilder() {
-        return EXPLICIT.new Builder();
+        return new HostAccessPolicy(null, null, null, null, false).new Builder();
     }
 
     boolean allowAccess(AnnotatedElement member) {
@@ -189,6 +198,7 @@ public final class HostAccessPolicy {
         private final Set<AnnotatedElement> excludes = new HashSet<>();
         private final Set<AnnotatedElement> members = new HashSet<>();
         private boolean allowPublic;
+        private String name;
 
         Builder() {
         }
@@ -208,11 +218,12 @@ public final class HostAccessPolicy {
         /**
          * Public elements can be accessed.
          *
+         * @param allow should access to all public elements be allowed or not?
          * @return this builder
          * @since 1.0 RC14
          */
-        public Builder allowPublicAccess() {
-            allowPublic = true;
+        public Builder allowPublicAccess(boolean allow) {
+            allowPublic = allow;
             return this;
         }
 
@@ -284,6 +295,11 @@ public final class HostAccessPolicy {
             return this;
         }
 
+        HostAccessPolicy.Builder name(String givenName) {
+            this.name = givenName;
+            return this;
+        }
+
         /**
          * Creates an instance of host access configuration.
          *
@@ -291,7 +307,7 @@ public final class HostAccessPolicy {
          * @since 1.0 RC14
          */
         public HostAccessPolicy build() {
-            return new HostAccessPolicy(annotations, excludes, members, null, allowPublic);
+            return new HostAccessPolicy(annotations, excludes, members, name, allowPublic);
         }
     }
 }
