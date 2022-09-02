@@ -24,9 +24,7 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.options.OptionValues;
-
-import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Class used to store data used by the compiler in the Engine. Enables "global" compiler state per
@@ -34,21 +32,15 @@ import java.util.function.Function;
  */
 final class EngineData {
 
-    static final Function<OptionValues, EngineData> ENGINE_DATA_SUPPLIER = new Function<OptionValues, EngineData>() {
+    static final Supplier<EngineData> ENGINE_DATA_SUPPLIER = new Supplier<EngineData>() {
         @Override
-        public EngineData apply(OptionValues engineOptions) {
-            return new EngineData(engineOptions);
+        public EngineData get() {
+            return new EngineData();
         }
     };
 
     int splitLimit;
     int splitCount;
-    final RuntimeOptionsCache options;
-    final TruffleSplittingStrategy.SplitStatisticsReporter reporter;
-
-    private EngineData(OptionValues engineOptions) {
-        this.options = new RuntimeOptionsCache(engineOptions);
-        this.reporter = new TruffleSplittingStrategy.SplitStatisticsReporter(this);
-    }
-
+    final RuntimeOptionsCache options = new RuntimeOptionsCache();
+    final TruffleSplittingStrategy.SplitStatisticsReporter reporter = new TruffleSplittingStrategy.SplitStatisticsReporter(this);
 }
