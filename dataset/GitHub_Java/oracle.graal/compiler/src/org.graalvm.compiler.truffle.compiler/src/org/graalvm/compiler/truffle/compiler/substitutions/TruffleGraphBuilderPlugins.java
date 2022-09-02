@@ -33,7 +33,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -52,7 +51,7 @@ import org.graalvm.compiler.nodes.DynamicPiNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.InvokeNode;
-import org.graalvm.compiler.truffle.compiler.nodes.IsInlinedNode;
+import org.graalvm.compiler.nodes.IsInlinedNode;
 import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
@@ -122,19 +121,6 @@ public class TruffleGraphBuilderPlugins {
         registerCompilerAssertsPlugins(plugins, metaAccess, canDelayIntrinsification);
         registerOptimizedCallTargetPlugins(plugins, metaAccess, canDelayIntrinsification, types);
         registerFrameWithoutBoxingPlugins(plugins, metaAccess, canDelayIntrinsification, providers.getConstantReflection(), types);
-        registerAtomicFieldUpdater(plugins, metaAccess);
-    }
-
-    private static void registerAtomicFieldUpdater(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
-        TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-        ResolvedJavaType casUpdater = rt.resolveType(metaAccess, AtomicLongFieldUpdater.class.getName() + "$CASUpdater");
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(casUpdater));
-        r.register2("accessCheck", Receiver.class, Object.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
-                return true;
-            }
-        });
     }
 
     public static void registerOptimizedAssumptionPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, KnownTruffleTypes types) {
