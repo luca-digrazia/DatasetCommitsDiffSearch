@@ -24,11 +24,6 @@
  */
 package com.oracle.truffle.regex.tregex.parser;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.regex.RegexFlags;
@@ -36,12 +31,11 @@ import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
 import com.oracle.truffle.regex.UnsupportedRegexException;
-import com.oracle.truffle.regex.charset.CharSet;
-import com.oracle.truffle.regex.charset.CodePointSet;
+import com.oracle.truffle.regex.charset.CodePointRange;
+import com.oracle.truffle.regex.charset.CodePointSetBuilder;
 import com.oracle.truffle.regex.charset.Constants;
-import com.oracle.truffle.regex.charset.SortedListOfRanges;
+import com.oracle.truffle.regex.charset.CharSet;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
-import com.oracle.truffle.regex.tregex.buffer.IntRangesBuffer;
 import com.oracle.truffle.regex.tregex.parser.ast.BackReference;
 import com.oracle.truffle.regex.tregex.parser.ast.CharacterClass;
 import com.oracle.truffle.regex.tregex.parser.ast.Group;
@@ -61,6 +55,11 @@ import com.oracle.truffle.regex.tregex.parser.ast.visitors.DeleteVisitor;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.InitIDVisitor;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.MarkLookBehindEntriesVisitor;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.SetSourceSectionVisitor;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 public final class RegexParser {
 
@@ -116,9 +115,6 @@ public final class RegexParser {
     private Term curTerm;
 
     private RegexFeatures features;
-
-    private IntRangesBuffer tmpRangesBuffer1;
-    private IntRangesBuffer tmpRangesBuffer2;
 
     @TruffleBoundary
     public RegexParser(RegexSource source, RegexOptions options) throws RegexSyntaxException {
@@ -177,7 +173,7 @@ public final class RegexParser {
         int maxPath = 0;
         for (int i = 0; i < terms.size(); i++) {
             Term t = terms.get(i);
-            if (t instanceof CharacterClass && (((CharacterClass) t).getMatcherBuilder().matchesSingleChar() || ((CharacterClass) t).getMatcherBuilder().matches2CharsWith1BitDifference())) {
+            if (t instanceof CharacterClass && ((CharacterClass) t).getMatcherBuilder().matchesSingleChar()) {
                 if (literalStart < 0) {
                     literalStart = i;
                 }
@@ -192,7 +188,11 @@ public final class RegexParser {
             }
         }
         if (literalStart >= 0 && (literalStart > 0 || literalEnd - literalStart > 1)) {
-            properties.setInnerLiteral(literalStart, literalEnd);
+            StringBuilder sb = new StringBuilder(literalEnd - literalStart);
+            for (int i = literalStart; i < literalEnd; i++) {
+                sb.append(((CharacterClass) terms.get(i)).getMatcherBuilder().getLo(0));
+            }
+            properties.setInnerLiteral(sb.toString());
         }
     }
 
@@ -322,31 +322,16 @@ public final class RegexParser {
         createGroup(token, false, false, lookAhead);
     }
 
-    private IntRangesBuffer getTmpRangesBuffer1() {
-        if (tmpRangesBuffer1 == null) {
-            tmpRangesBuffer1 = new IntRangesBuffer();
-        }
-        return tmpRangesBuffer1;
-    }
-
-    private IntRangesBuffer getTmpRangesBuffer2() {
-        if (tmpRangesBuffer2 == null) {
-            tmpRangesBuffer2 = new IntRangesBuffer();
-        }
-        return tmpRangesBuffer2;
-    }
-
     private Term translateUnicodeCharClass(Token.CharacterClass token) {
-        CodePointSet codePointSet = token.getCodePointSet();
+        CodePointSetBuilder codePointSet = token.getCodePointSet();
         SourceSection src = token.getSourceSection();
         Group group = ast.createGroup();
         group.setEnclosedCaptureGroupsLow(groupCount.getCount());
         group.setEnclosedCaptureGroupsHigh(groupCount.getCount());
-        IntRangesBuffer tmp = getTmpRangesBuffer1();
-        CodePointSet bmpRanges = codePointSet.createIntersection(Constants.BMP_WITHOUT_SURROGATES, tmp);
-        CodePointSet astralRanges = codePointSet.createIntersection(Constants.ASTRAL_SYMBOLS, tmp);
-        CodePointSet loneLeadSurrogateRanges = codePointSet.createIntersection(Constants.LEAD_SURROGATES, tmp);
-        CodePointSet loneTrailSurrogateRanges = codePointSet.createIntersection(Constants.TRAIL_SURROGATES, tmp);
+        CodePointSetBuilder bmpRanges = codePointSet.createIntersection(Constants.BMP_WITHOUT_SURROGATES);
+        CodePointSetBuilder astralRanges = codePointSet.createIntersection(Constants.ASTRAL_SYMBOLS);
+        CodePointSetBuilder loneLeadSurrogateRanges = codePointSet.createIntersection(Constants.LEAD_SURROGATES);
+        CodePointSetBuilder loneTrailSurrogateRanges = codePointSet.createIntersection(Constants.TRAIL_SURROGATES);
 
         if (bmpRanges.matchesSomething()) {
             Sequence bmpAlternative = group.addSequence(ast);
@@ -370,17 +355,15 @@ public final class RegexParser {
         if (astralRanges.matchesSomething()) {
             // completeRanges matches surrogate pairs where leading surrogates can be followed by
             // any trailing surrogates
-            IntRangesBuffer completeRanges = getTmpRangesBuffer2();
-            completeRanges.clear();
+            CodePointSetBuilder completeRanges = CodePointSetBuilder.createEmpty();
 
-            char curLead = Character.highSurrogate(astralRanges.getLo(0));
-            IntRangesBuffer curTrails = tmp;
-            curTrails.clear();
-            for (int i = 0; i < astralRanges.size(); i++) {
-                char startLead = Character.highSurrogate(astralRanges.getLo(i));
-                final char startTrail = Character.lowSurrogate(astralRanges.getLo(i));
-                char endLead = Character.highSurrogate(astralRanges.getHi(i));
-                final char endTrail = Character.lowSurrogate(astralRanges.getHi(i));
+            char curLead = Character.highSurrogate(astralRanges.getRanges().get(0).lo);
+            CodePointSetBuilder curTrails = CodePointSetBuilder.createEmpty();
+            for (CodePointRange astralRange : astralRanges.getRanges()) {
+                char startLead = Character.highSurrogate(astralRange.lo);
+                final char startTrail = Character.lowSurrogate(astralRange.lo);
+                char endLead = Character.highSurrogate(astralRange.hi);
+                final char endTrail = Character.lowSurrogate(astralRange.hi);
 
                 if (startLead > curLead) {
                     if (curTrails.matchesSomething()) {
@@ -389,13 +372,13 @@ public final class RegexParser {
                         finishedAlternative.add(createCharClass(curTrails, src));
                     }
                     curLead = startLead;
-                    curTrails.clear();
+                    curTrails = CodePointSetBuilder.createEmpty();
                 }
                 if (startLead == endLead) {
-                    curTrails.addRange(startTrail, endTrail);
+                    curTrails.addRange(new CodePointRange(startTrail, endTrail));
                 } else {
-                    if (startTrail != Constants.TRAIL_SURROGATE_RANGE.getLo(0)) {
-                        curTrails.addRange(startTrail, Constants.TRAIL_SURROGATE_RANGE.getHi(0));
+                    if (startTrail != Constants.TRAIL_SURROGATE_RANGE.lo) {
+                        curTrails.addRange(new CodePointRange(startTrail, Constants.TRAIL_SURROGATE_RANGE.hi));
                         assert startLead < Character.MAX_VALUE;
                         startLead = (char) (startLead + 1);
                     }
@@ -406,16 +389,16 @@ public final class RegexParser {
                         finishedAlternative.add(createCharClass(curTrails, src));
                     }
                     curLead = endLead;
-                    curTrails.clear();
+                    curTrails = CodePointSetBuilder.createEmpty();
 
-                    if (endTrail != Constants.TRAIL_SURROGATE_RANGE.getHi(0)) {
-                        curTrails.addRange(Constants.TRAIL_SURROGATE_RANGE.getLo(0), endTrail);
+                    if (endTrail != Constants.TRAIL_SURROGATE_RANGE.hi) {
+                        curTrails.addRange(new CodePointRange(Constants.TRAIL_SURROGATE_RANGE.lo, endTrail));
                         assert endLead > Character.MIN_VALUE;
                         endLead = (char) (endLead - 1);
                     }
 
                     if (startLead <= endLead) {
-                        completeRanges.addRange(startLead, endLead);
+                        completeRanges.addRange(new CodePointRange(startLead, endLead));
                     }
 
                 }
@@ -451,7 +434,7 @@ public final class RegexParser {
     }
 
     private void addCharClass(Token.CharacterClass token) {
-        CodePointSet codePointSet = token.getCodePointSet();
+        CodePointSetBuilder codePointSet = token.getCodePointSet();
         if (flags.isUnicode()) {
             if (codePointSet.matchesNothing()) {
                 // We need this branch because a Group with no alternatives is invalid
@@ -464,8 +447,8 @@ public final class RegexParser {
         }
     }
 
-    private CharacterClass createCharClass(SortedListOfRanges codePointSet, SourceSection sourceSection) {
-        return createCharClass(CharSet.fromSortedRanges(codePointSet), sourceSection);
+    private CharacterClass createCharClass(CodePointSetBuilder codePointSet, SourceSection sourceSection) {
+        return createCharClass(CharSet.create(codePointSet), sourceSection);
     }
 
     private CharacterClass createCharClass(CharSet matcherBuilder, SourceSection sourceSection) {
@@ -632,6 +615,7 @@ public final class RegexParser {
             deleteVisitor.run(curSequence.getLastTerm());
             curSequence.removeLastTerm();
             addTerm(createCharClass(CharSet.getEmpty(), null));
+            curSequence.markAsDead();
             return;
         }
         if (quantifier.getMin() == 0) {

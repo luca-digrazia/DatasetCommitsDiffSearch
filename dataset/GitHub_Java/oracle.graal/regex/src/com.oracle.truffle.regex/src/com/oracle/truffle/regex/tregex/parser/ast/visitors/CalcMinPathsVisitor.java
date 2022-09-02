@@ -28,7 +28,6 @@ import com.oracle.truffle.regex.tregex.parser.ast.BackReference;
 import com.oracle.truffle.regex.tregex.parser.ast.CharacterClass;
 import com.oracle.truffle.regex.tregex.parser.ast.Group;
 import com.oracle.truffle.regex.tregex.parser.ast.LookAheadAssertion;
-import com.oracle.truffle.regex.tregex.parser.ast.LookAroundAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.MatchFound;
 import com.oracle.truffle.regex.tregex.parser.ast.PositionAssertion;
@@ -106,9 +105,7 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
         boolean caret = true;
         boolean dollar = true;
         boolean hasLoops = group.isLoop();
-        boolean isDead = true;
         for (Sequence s : group.getAlternatives()) {
-            isDead &= s.isDead();
             if (s.isDead()) {
                 continue;
             }
@@ -121,9 +118,6 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
         group.setStartsWithCaret(caret);
         group.setEndsWithDollar(dollar);
         group.setHasLoops(hasLoops);
-        if (isDead) {
-            group.markAsDead();
-        }
         group.setMinPath(minPath);
         group.setMaxPath(maxPath);
         if (group.getParent() instanceof Sequence) {
@@ -139,9 +133,6 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
             }
             if (hasLoops) {
                 group.getParent().setHasLoops();
-            }
-            if (isDead) {
-                group.getParent().markAsDead();
             }
         }
     }
@@ -159,7 +150,6 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
                 if (!isReverse()) {
                     if (assertion.getParent().getMinPath() > 0) {
                         assertion.markAsDead();
-                        assertion.getParent().markAsDead();
                     } else {
                         assertion.getParent().setStartsWithCaret();
                     }
@@ -169,7 +159,6 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
                 if (isReverse()) {
                     if (assertion.getParent().getMinPath() > 0) {
                         assertion.markAsDead();
-                        assertion.getParent().markAsDead();
                     } else {
                         assertion.getParent().setEndsWithDollar();
                     }
@@ -186,7 +175,15 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
 
     @Override
     protected void leave(LookBehindAssertion assertion) {
-        leaveLookAroundAssertion(assertion);
+        if (assertion.startsWithCaret()) {
+            assertion.getParent().setStartsWithCaret();
+        }
+        if (assertion.endsWithDollar()) {
+            assertion.getParent().setEndsWithDollar();
+        }
+        if (assertion.hasLoops()) {
+            assertion.getParent().setHasLoops();
+        }
     }
 
     @Override
@@ -197,10 +194,6 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
 
     @Override
     protected void leave(LookAheadAssertion assertion) {
-        leaveLookAroundAssertion(assertion);
-    }
-
-    public void leaveLookAroundAssertion(LookAroundAssertion assertion) {
         if (assertion.startsWithCaret()) {
             assertion.getParent().setStartsWithCaret();
         }
@@ -210,9 +203,6 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
         if (assertion.hasLoops()) {
             assertion.getParent().setHasLoops();
         }
-        if (assertion.isDead()) {
-            assertion.getParent().markAsDead();
-        }
     }
 
     @Override
@@ -221,9 +211,6 @@ public class CalcMinPathsVisitor extends DepthFirstTraversalRegexASTVisitor {
         characterClass.getParent().incMaxPath();
         characterClass.setMinPath(characterClass.getParent().getMinPath());
         characterClass.setMaxPath(characterClass.getParent().getMaxPath());
-        if (characterClass.isDead()) {
-            characterClass.getParent().markAsDead();
-        }
     }
 
     @Override

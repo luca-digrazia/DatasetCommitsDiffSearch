@@ -44,9 +44,7 @@ public class RegexProperties implements JsonConvertible {
     private boolean complexLookBehindAssertions = false;
     private boolean negativeLookBehindAssertions = false;
     private boolean largeCountedRepetitions = false;
-    private boolean charClassesCanBeMatchedWithMask = true;
-    private int innerLiteralStart = -1;
-    private int innerLiteralEnd = -1;
+    private String innerLiteral = null;
 
     public boolean hasAlternations() {
         return alternations;
@@ -148,29 +146,16 @@ public class RegexProperties implements JsonConvertible {
         largeCountedRepetitions = true;
     }
 
-    public boolean charClassesCanBeMatchedWithMask() {
-        return charClassesCanBeMatchedWithMask;
-    }
-
-    public void unsetCharClassesCanBeMatchedWithMask() {
-        charClassesCanBeMatchedWithMask = false;
-    }
-
-    public void setInnerLiteral(int start, int end) {
-        this.innerLiteralStart = start;
-        this.innerLiteralEnd = end;
+    public void setInnerLiteral(String containedLiteral) {
+        this.innerLiteral = containedLiteral;
     }
 
     public boolean hasInnerLiteral() {
-        return innerLiteralStart >= 0;
+        return innerLiteral != null;
     }
 
-    public int getInnerLiteralStart() {
-        return innerLiteralStart;
-    }
-
-    public int getInnerLiteralEnd() {
-        return innerLiteralEnd;
+    public String getInnerLiteral() {
+        return innerLiteral;
     }
 
     @TruffleBoundary
