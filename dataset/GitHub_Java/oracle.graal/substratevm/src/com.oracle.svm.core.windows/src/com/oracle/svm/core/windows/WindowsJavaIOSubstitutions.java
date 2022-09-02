@@ -24,7 +24,12 @@
  */
 package com.oracle.svm.core.windows;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -37,7 +42,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.core.windows.headers.FileAPI;
 
 @Platforms(Platform.WINDOWS.class)
 @AutomaticFeature
@@ -69,6 +73,14 @@ final class Target_java_io_FileDescriptor {
 
     @Alias
     static native void initIDs();
+
+    @Alias
+    static native FileDescriptor standardStream(int fd);
+
+    @Alias static FileDescriptor in;
+    @Alias static FileDescriptor out;
+    @Alias static FileDescriptor err;
+
 }
 
 @TargetClass(java.io.FileOutputStream.class)
@@ -104,11 +116,13 @@ public final class WindowsJavaIOSubstitutions {
             Target_java_io_FileOutputStream.initIDs();
             Target_java_io_WinNTFileSystem.initIDs();
 
-            /* Initialize the handles of standard FileDescriptors. */
-            WindowsUtils.setHandle(FileDescriptor.in, FileAPI.GetStdHandle(FileAPI.STD_INPUT_HANDLE()));
-            WindowsUtils.setHandle(FileDescriptor.out, FileAPI.GetStdHandle(FileAPI.STD_OUTPUT_HANDLE()));
-            WindowsUtils.setHandle(FileDescriptor.err, FileAPI.GetStdHandle(FileAPI.STD_ERROR_HANDLE()));
+            Target_java_io_FileDescriptor.in = Target_java_io_FileDescriptor.standardStream(0);
+            Target_java_io_FileDescriptor.out = Target_java_io_FileDescriptor.standardStream(1);
+            Target_java_io_FileDescriptor.err = Target_java_io_FileDescriptor.standardStream(2);
 
+            System.setIn(new BufferedInputStream(new FileInputStream(FileDescriptor.in)));
+            System.setOut(new PrintStream(new BufferedOutputStream(new FileOutputStream(FileDescriptor.out), 128), true));
+            System.setErr(new PrintStream(new BufferedOutputStream(new FileOutputStream(FileDescriptor.err), 128), true));
             return true;
         } catch (UnsatisfiedLinkError e) {
             Log.log().string("System.loadLibrary failed, " + e).newline();
