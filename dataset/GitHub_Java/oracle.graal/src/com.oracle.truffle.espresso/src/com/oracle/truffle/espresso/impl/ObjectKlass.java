@@ -36,7 +36,6 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
 import com.oracle.truffle.api.Assumption;
@@ -633,34 +632,15 @@ public final class ObjectKlass extends Klass {
         return -1;
     }
 
-    void lookupVirtualMethodOverrides(Method current, Klass subKlass, List<Method> result) {
-        Symbol<Name> name = current.getName();
-        Symbol<Signature> signature = current.getRawSignature();
+    List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, Klass subKlass, List<Method> result) {
         for (Method m : getVTable()) {
             if (!m.isStatic() && !m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
-                if (m.isProtected() || m.isPublic()) {
+                if (m.isProtected() || m.isPublic() || m.getDeclaringKlass().sameRuntimePackage(subKlass)) {
                     result.add(m);
-                } else {
-                    if (m.getDeclaringKlass().sameRuntimePackage(subKlass)) {
-                        result.add(m);
-                    } else {
-                        ObjectKlass currentKlass = this.getSuperKlass();
-                        int index = m.getVTableIndex();
-                        while (currentKlass != null) {
-                            if (index >= currentKlass.getVTable().length) {
-                                break;
-                            }
-                            Method toExamine = currentKlass.getVTable()[index];
-                            if (current.canOverride(toExamine)) {
-                                result.add(toExamine);
-                                break;
-                            }
-                            currentKlass = currentKlass.getSuperKlass();
-                        }
-                    }
                 }
             }
         }
+        return result;
     }
 
     public Method resolveInterfaceMethod(Symbol<Name> name, Symbol<Signature> signature) {
@@ -1096,7 +1076,7 @@ public final class ObjectKlass extends Klass {
             JDWPLogger.log("Redefining method %s.%s", JDWPLogger.LogLevel.REDEFINE, method.getDeclaringKlass().getName(), method.getName());
         }
 
-        Set<Method> removedMethods = change.getRemovedMethods();
+        List<Method> removedMethods = change.getRemovedMethods();
         List<ParserMethod> addedMethods = change.getAddedMethods();
 
         LinkedList<Method> declaredMethods = new LinkedList<>(Arrays.asList(oldVersion.declaredMethods));
@@ -1167,7 +1147,7 @@ public final class ObjectKlass extends Klass {
 
             while (superKlass != null) {
                 // look for the method
-                int vtableIndex = superKlass.findVirtualMethodIndex(name, signature, this);
+                int vtableIndex = superKlass.findVirtualMethodIndex(name, signature, superKlass);
                 if (vtableIndex != -1) {
                     superKlass.getVTable()[vtableIndex].onSubclassMethodChanged(ids);
                 }
