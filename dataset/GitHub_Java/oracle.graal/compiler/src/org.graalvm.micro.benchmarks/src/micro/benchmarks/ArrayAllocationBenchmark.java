@@ -29,6 +29,7 @@ import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
+import org.openjdk.jmh.annotations.Warmup;
 
 /**
  * Benchmarks cost of ArrayList.
@@ -42,7 +43,8 @@ public class ArrayAllocationBenchmark extends BenchmarkBase {
     }
 
     @Benchmark
-    @Threads(Threads.MAX)
+    @Threads(8)
+    @Warmup(iterations = 10)
     public void arrayAllocate(ThreadState state) {
         state.result = new byte[state.size];
     }
