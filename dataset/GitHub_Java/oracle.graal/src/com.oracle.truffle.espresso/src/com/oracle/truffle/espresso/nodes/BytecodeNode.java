@@ -908,17 +908,17 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                 CompilerAsserts.partialEvaluationConstant(curBCI);
                 ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
                 ExceptionHandler handler = null;
-                for (ExceptionHandler toCheck : handlers) {
-                    if (curBCI >= toCheck.getStartBCI() && curBCI < toCheck.getEndBCI()) {
+                for (ExceptionHandler handler1 : handlers) {
+                    if (curBCI >= handler1.getStartBCI() && curBCI < handler1.getEndBCI()) {
                         Klass catchType = null;
-                        if (!toCheck.isCatchAll()) {
+                        if (!handler1.isCatchAll()) {
                             // exception handlers are similar to instanceof bytecodes, so we pass
                             // instanceof
-                            catchType = resolveType(Bytecodes.INSTANCEOF, (char) toCheck.catchTypeCPI());
+                            catchType = resolveType(Bytecodes.INSTANCEOF, (char) handler1.catchTypeCPI());
                         }
                         if (catchType == null || InterpreterToVM.instanceOf(e.getException(), catchType)) {
                             // the first found exception handler is our exception handler
-                            handler = toCheck;
+                            handler = handler1;
                             break;
                         }
                     }
@@ -954,17 +954,17 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                 CompilerAsserts.partialEvaluationConstant(curBCI);
                 ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
                 ExceptionHandler handler = null;
-                for (ExceptionHandler toCheck : handlers) {
-                    if (curBCI >= toCheck.getStartBCI() && curBCI < toCheck.getEndBCI()) {
+                for (ExceptionHandler handler1 : handlers) {
+                    if (curBCI >= handler1.getStartBCI() && curBCI < handler1.getEndBCI()) {
                         Klass catchType = null;
-                        if (!toCheck.isCatchAll()) {
+                        if (!handler1.isCatchAll()) {
                             // exception handlers are similar to instanceof bytecodes, so we pass
                             // instanceof
-                            catchType = resolveType(Bytecodes.INSTANCEOF, (char) toCheck.catchTypeCPI());
+                            catchType = resolveType(Bytecodes.INSTANCEOF, (char) handler1.catchTypeCPI());
                         }
                         if (catchType == null || InterpreterToVM.instanceOf(ex, catchType)) {
                             // the first found exception handler is our exception handler
-                            handler = toCheck;
+                            handler = handler1;
                             break;
                         }
                     }
@@ -1172,22 +1172,20 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
     // endregion Operand stack shuffling
 
     @ExplodeLoop
-    @SuppressWarnings("unused")
-    //
     private ExceptionHandler resolveExceptionHandlers(int bci, StaticObject ex) {
         CompilerAsserts.partialEvaluationConstant(bci);
         ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
         ExceptionHandler resolved = null;
-        for (ExceptionHandler toCheck : handlers) {
-            if (bci >= toCheck.getStartBCI() && bci < toCheck.getEndBCI()) {
+        for (ExceptionHandler handler : handlers) {
+            if (bci >= handler.getStartBCI() && bci < handler.getEndBCI()) {
                 Klass catchType = null;
-                if (!toCheck.isCatchAll()) {
+                if (!handler.isCatchAll()) {
                     // exception handlers are similar to instanceof bytecodes, so we pass instanceof
-                    catchType = resolveType(Bytecodes.INSTANCEOF, (char) toCheck.catchTypeCPI());
+                    catchType = resolveType(Bytecodes.INSTANCEOF, (char) handler.catchTypeCPI());
                 }
                 if (catchType == null || InterpreterToVM.instanceOf(ex, catchType)) {
                     // the first found exception handler is our exception handler
-                    resolved = toCheck;
+                    resolved = handler;
                     break;
                 }
             }
@@ -1727,7 +1725,8 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
             case Float   : putFloat(frame, resultAt, InterpreterToVM.getFieldFloat(receiver, field));   break;
             case Long    : putLong(frame, resultAt, InterpreterToVM.getFieldLong(receiver, field));     break;
             case Object  : putObject(frame, resultAt, InterpreterToVM.getFieldObject(receiver, field)); break;
-            default      : throw EspressoError.shouldNotReachHere("unexpected kind");
+            default      : 
+                throw EspressoError.shouldNotReachHere("unexpected kind");
         }
         // @formatter:on
         // Checkstyle: resume
