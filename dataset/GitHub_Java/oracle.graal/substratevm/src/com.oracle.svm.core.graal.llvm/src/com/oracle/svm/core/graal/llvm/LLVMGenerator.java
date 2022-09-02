@@ -29,16 +29,9 @@ import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.dumpTypes;
 import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.dumpValues;
 import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.getType;
 import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.getVal;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_READ;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_WRITE;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_READ;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_WRITE;
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
 import static org.graalvm.compiler.debug.GraalError.unimplemented;
 
-// Checkstyle: allow reflection
-import java.lang.reflect.Field;
-// Checkstyle: disallow reflection
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -79,7 +72,6 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.c.constant.CEnum;
 import org.graalvm.util.GuardedAnnotationAccess;
 
@@ -183,7 +175,7 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
         this.providers = providers;
         this.compilationResult = result;
         this.builder = new LLVMIRBuilder(method.format("%H.%n"));
-        this.arithmetic = new ArithmeticLLVMGenerator();
+        this.arithmetic = new ArithmeticLLVMGenerator(builder);
         this.lirKindTool = new LLVMUtils.LLVMKindTool(builder);
         this.debugInfoPrinter = new DebugInfoPrinter(this, debugLevel);
 
@@ -1391,8 +1383,11 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
 
     /* Arithmetic */
 
-    public class ArithmeticLLVMGenerator implements ArithmeticLIRGeneratorTool, LLVMIntrinsicGenerator {
-        ArithmeticLLVMGenerator() {
+    public static class ArithmeticLLVMGenerator implements ArithmeticLIRGeneratorTool, LLVMIntrinsicGenerator {
+        private final LLVMIRBuilder builder;
+
+        ArithmeticLLVMGenerator(LLVMIRBuilder builder) {
+            this.builder = builder;
         }
 
         @Override
@@ -1769,17 +1764,12 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
 
         @Override
         public Variable emitVolatileLoad(LIRKind kind, Value address, LIRFrameState state) {
-            emitMembar(JMM_PRE_VOLATILE_READ);
-            Variable var = emitLoad(kind, address, state);
-            emitMembar(JMM_POST_VOLATILE_READ);
-            return var;
+            throw GraalError.shouldNotReachHere();
         }
 
         @Override
         public void emitVolatileStore(ValueKind<?> kind, Value address, Value input, LIRFrameState state) {
-            emitMembar(JMM_PRE_VOLATILE_WRITE);
-            emitStore(kind, address, input, state);
-            emitMembar(JMM_POST_VOLATILE_WRITE);
+            throw GraalError.shouldNotReachHere();
         }
     }
 
@@ -1952,50 +1942,5 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
                 this.level = level;
             }
         }
-    }
-
-    @Override
-    public void emitCacheWriteback(Value address) {
-        int cacheLineSize = getDataCacheLineFlushSize();
-        if (cacheLineSize == 0) {
-            throw shouldNotReachHere("cache writeback with cache line size of 0");
-        }
-        LLVMValueRef start = builder.buildBitcast(getVal(address), builder.rawPointerType());
-        LLVMValueRef end = builder.buildGEP(start, builder.constantInt(cacheLineSize));
-        builder.buildClearCache(start, end);
-    }
-
-    @Override
-    public void emitCacheWritebackSync(boolean isPreSync) {
-        throw unimplemented("cache sync barrier (GR-30894)");
-    }
-
-    private static final int dataCacheLineFlushSize = initDataCacheLineFlushSize();
-
-    /**
-     * Gets the value of {@code jdk.internal.misc.UnsafeConstants.DATA_CACHE_LINE_FLUSH_SIZE} which
-     * was introduced in JDK 14 by JEP 352.
-     *
-     * This method uses reflection to be compatible with JDKs prior to 14.
-     */
-    private static int initDataCacheLineFlushSize() {
-        if (JavaVersionUtil.JAVA_SPEC >= 14) {
-            Class<?> c;
-            try {
-                // Checkstyle: stop
-                c = Class.forName("jdk.internal.misc.UnsafeConstants");
-                // Checkstyle: resume
-                Field f = c.getDeclaredField("DATA_CACHE_LINE_FLUSH_SIZE");
-                f.setAccessible(true);
-                return (int) f.get(null);
-            } catch (Exception e) {
-                throw new GraalError(e, "Expected UnsafeConstants.DATA_CACHE_LINE_FLUSH_SIZE to exist and be readable");
-            }
-        }
-        return 0;
-    }
-
-    private static int getDataCacheLineFlushSize() {
-        return dataCacheLineFlushSize;
     }
 }

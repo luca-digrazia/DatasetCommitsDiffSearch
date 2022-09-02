@@ -30,18 +30,30 @@ import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMBasicBlockRef;
 import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMTypeRef;
 import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMValueRef;
 
-public class LLVMHelperFunctions {
+/*
+ * These helper functions are used to hide the specific lowerings of some instructions
+ * into LLVM bitcode to the statepoint emission pass. This may be needed for two reasons:
+ * 
+ * 1. The pass doesn't support creating tracked object from these instructions. This is the case for the
+ * inttoptr instruction, for example.
+ * 2. The lowering includes treating a pointer to a Java object as an untracked pointer temporarily.
+ * In this case, the helper function encapsulates the operation to prevent the untracked value from being moved
+ * across a function call, which would prevent the statepoint emission pass from registering it properly.
+ */
+class LLVMHelperFunctions {
     private LLVMIRBuilder builder;
 
     private LLVMValueRef intToObjectFunction;
     private LLVMValueRef loadObjectFromUntrackedPointerFunction;
     private LLVMValueRef atomicObjectXchgFunction;
-    private LLVMValueRef objectsCmpxchgFunction;
+    private LLVMValueRef objectsValueCmpxchgFunction;
+    private LLVMValueRef objectsLogicCmpxchgFunction;
 
     private LLVMValueRef intToCompressedObjectFunction;
     private LLVMValueRef loadCompressedObjectFromUntrackedPointerFunction;
     private LLVMValueRef atomicCompressedObjectXchgFunction;
-    private LLVMValueRef compressedObjectsCmpxchgFunction;
+    private LLVMValueRef compressedObjectsValueCmpxchgFunction;
+    private LLVMValueRef compressedObjectsLogicCmpxchgFunction;
 
     private LLVMValueRef[] compressFunctions;
     private LLVMValueRef[] nonNullCompressFunctions;
@@ -52,12 +64,6 @@ public class LLVMHelperFunctions {
         this.builder = new LLVMIRBuilder(primary);
     }
 
-    /* TODO correct (global description)
-     * This function declares a GC-tracked pointer from an untracked pointer. This is needed as
-     * the statepoint emission pass, which tracks live references in the function, doesn't
-     * recognize an address space cast (see pointerType()) as declaring a new reference, but it
-     * does a function return value.
-     */
     LLVMValueRef getIntToObjectFunction(boolean compressed) {
         if (!compressed && intToObjectFunction == null) {
             intToObjectFunction = buildIntToObjectFunction(false);
@@ -67,12 +73,6 @@ public class LLVMHelperFunctions {
         return compressed ? intToCompressedObjectFunction : intToObjectFunction;
     }
 
-    /* TODO correct
-     * This function declares a GC-tracked pointer from an untracked pointer. This is needed as
-     * the statepoint emission pass, which tracks live references in the function, doesn't
-     * recognize an address space cast (see pointerType()) as declaring a new reference, but it
-     * does a function return value.
-     */
     LLVMValueRef getLoadObjectFromUntrackedPointerFunction(boolean compressed) {
         if (!compressed && loadObjectFromUntrackedPointerFunction == null) {
             loadObjectFromUntrackedPointerFunction = buildLoadObjectFromUntrackedPointerFunction(false);
@@ -91,13 +91,18 @@ public class LLVMHelperFunctions {
         return compressed ? atomicCompressedObjectXchgFunction : atomicObjectXchgFunction;
     }
 
-    LLVMValueRef getCmpxchgFunction(boolean compressed) {
-        if (!compressed && objectsCmpxchgFunction == null) {
-            objectsCmpxchgFunction = buildObjectsCmpxchgFunction(false);
-        } else if (compressed && compressedObjectsCmpxchgFunction == null) {
-            compressedObjectsCmpxchgFunction = buildObjectsCmpxchgFunction(true);
+    LLVMValueRef getCmpxchgFunction(boolean compressed, boolean returnsValue) {
+        if (!compressed && returnsValue && objectsValueCmpxchgFunction == null) {
+            objectsValueCmpxchgFunction = buildObjectsCmpxchgFunction(false, true);
+        } else if (compressed && returnsValue && compressedObjectsValueCmpxchgFunction == null) {
+            compressedObjectsValueCmpxchgFunction = buildObjectsCmpxchgFunction(true, true);
+        } else if (!compressed && !returnsValue && objectsLogicCmpxchgFunction == null) {
+            objectsLogicCmpxchgFunction = buildObjectsCmpxchgFunction(false, false);
+        } else if (compressed && !returnsValue && compressedObjectsLogicCmpxchgFunction == null) {
+            compressedObjectsLogicCmpxchgFunction = buildObjectsCmpxchgFunction(true, false);
         }
-        return compressed ? compressedObjectsCmpxchgFunction : objectsCmpxchgFunction;
+        return compressed ? returnsValue ? compressedObjectsValueCmpxchgFunction : compressedObjectsLogicCmpxchgFunction
+                        : returnsValue ? objectsValueCmpxchgFunction : objectsLogicCmpxchgFunction;
     }
 
     private static final int MAX_COMPRESS_SHIFT = 3;
@@ -145,7 +150,7 @@ public class LLVMHelperFunctions {
 
     private LLVMValueRef buildIntToObjectFunction(boolean compressed) {
         String funcName = compressed ? INT_TO_COMPRESSED_OBJECT_FUNCTION_NAME : INT_TO_OBJECT_FUNCTION_NAME;
-        LLVMValueRef func = builder.addFunction(funcName, builder.functionType(builder.objectType(compressed), builder.longType()));
+        LLVMValueRef func = builder.addFunction(funcName, builder.functionType(builder.objectType(compressed), builder.wordType()));
         LLVMIRBuilder.setLinkage(func, LinkageType.LinkOnce);
         builder.setFunctionAttribute(func, Attribute.AlwaysInline);
         builder.setFunctionAttribute(func, Attribute.GCLeafFunction);
@@ -193,7 +198,7 @@ public class LLVMHelperFunctions {
         builder.positionAtEnd(block);
         LLVMValueRef address = LLVMIRBuilder.getParam(func, 0);
         LLVMValueRef value = LLVMIRBuilder.getParam(func, 1);
-        LLVMValueRef castedValue = builder.buildPtrToInt(value, builder.longType());
+        LLVMValueRef castedValue = builder.buildPtrToInt(value);
         LLVMValueRef ret = builder.buildLLVMAtomicXchg(address, castedValue);
         ret = builder.buildLLVMIntToPtr(ret, builder.objectType(compressed));
         builder.buildRet(ret);
@@ -201,13 +206,17 @@ public class LLVMHelperFunctions {
         return func;
     }
 
-    private static final String OBJECTS_CMPXCHG_FUNCTION_NAME = "__llvm_objects_cmpxchg";
-    private static final String COMPRESSED_OBJECTS_CMPXCHG_FUNCTION_NAME = "__llvm_compressed_objects_cmpxchg";
+    private static final String OBJECTS_VALUE_CMPXCHG_FUNCTION_NAME = "__llvm_objects_value_cmpxchg";
+    private static final String OBJECTS_LOGIC_CMPXCHG_FUNCTION_NAME = "__llvm_objects_logic_cmpxchg";
+    private static final String COMPRESSED_OBJECTS_VALUE_CMPXCHG_FUNCTION_NAME = "__llvm_compressed_objects_value_cmpxchg";
+    private static final String COMPRESSED_OBJECTS_LOGIC_CMPXCHG_FUNCTION_NAME = "__llvm_compressed_objects_logic_cmpxchg";
 
-    private LLVMValueRef buildObjectsCmpxchgFunction(boolean compressed) {
-        String funcName = compressed ? COMPRESSED_OBJECTS_CMPXCHG_FUNCTION_NAME : OBJECTS_CMPXCHG_FUNCTION_NAME;
+    private LLVMValueRef buildObjectsCmpxchgFunction(boolean compressed, boolean returnsValue) {
+        String funcName = compressed ? returnsValue ? COMPRESSED_OBJECTS_VALUE_CMPXCHG_FUNCTION_NAME : COMPRESSED_OBJECTS_LOGIC_CMPXCHG_FUNCTION_NAME
+                        : returnsValue ? OBJECTS_VALUE_CMPXCHG_FUNCTION_NAME : OBJECTS_LOGIC_CMPXCHG_FUNCTION_NAME;
         LLVMTypeRef exchangeType = builder.objectType(compressed);
-        LLVMValueRef func = builder.addFunction(funcName, builder.functionType(exchangeType, builder.pointerType(exchangeType, true, compressed), exchangeType, exchangeType));
+        LLVMValueRef func = builder.addFunction(funcName,
+                        builder.functionType(returnsValue ? exchangeType : builder.booleanType(), builder.pointerType(exchangeType, true, false), exchangeType, exchangeType));
         LLVMIRBuilder.setLinkage(func, LinkageType.LinkOnce);
         builder.setFunctionAttribute(func, Attribute.AlwaysInline);
         builder.setFunctionAttribute(func, Attribute.GCLeafFunction);
@@ -217,7 +226,7 @@ public class LLVMHelperFunctions {
         LLVMValueRef addr = LLVMIRBuilder.getParam(func, 0);
         LLVMValueRef expected = LLVMIRBuilder.getParam(func, 1);
         LLVMValueRef newVal = LLVMIRBuilder.getParam(func, 2);
-        LLVMValueRef result = builder.buildAtomicCmpXchg(addr, expected, newVal, true);
+        LLVMValueRef result = builder.buildAtomicCmpXchg(addr, expected, newVal, returnsValue);
         builder.buildRet(result);
 
         return func;
@@ -227,14 +236,14 @@ public class LLVMHelperFunctions {
 
     private LLVMValueRef buildCompressFunction(boolean nonNull, int shift) {
         String funcName = COMPRESS_FUNCTION_BASE_NAME + (nonNull ? "_nonNull" : "") + "_" + shift;
-        LLVMValueRef func = builder.addFunction(funcName, builder.functionType(builder.objectType(true), builder.objectType(false), builder.longType()));
+        LLVMValueRef func = builder.addFunction(funcName, builder.functionType(builder.objectType(true), builder.objectType(false), builder.wordType()));
         LLVMIRBuilder.setLinkage(func, LinkageType.LinkOnce);
         builder.setFunctionAttribute(func, Attribute.AlwaysInline);
         builder.setFunctionAttribute(func, Attribute.GCLeafFunction);
 
         LLVMBasicBlockRef block = builder.appendBasicBlock(func, "main");
         builder.positionAtEnd(block);
-        LLVMValueRef uncompressed = builder.buildPtrToInt(LLVMIRBuilder.getParam(func, 0), builder.longType());
+        LLVMValueRef uncompressed = builder.buildPtrToInt(LLVMIRBuilder.getParam(func, 0));
         LLVMValueRef heapBase = LLVMIRBuilder.getParam(func, 1);
         LLVMValueRef compressed = builder.buildSub(uncompressed, heapBase);
 
@@ -247,7 +256,7 @@ public class LLVMHelperFunctions {
             compressed = builder.buildShr(compressed, builder.constantInt(shift));
         }
 
-        compressed = builder.buildIntToPtr(compressed, builder.objectType(true));
+        compressed = builder.buildLLVMIntToPtr(compressed, builder.objectType(true));
         builder.buildRet(compressed);
 
         return func;
@@ -257,14 +266,14 @@ public class LLVMHelperFunctions {
 
     private LLVMValueRef buildUncompressFunction(boolean nonNull, int shift) {
         String funcName = UNCOMPRESS_FUNCTION_BASE_NAME + (nonNull ? "_nonNull" : "") + "_" + shift;
-        LLVMValueRef func = builder.addFunction(funcName, builder.functionType(builder.objectType(false), builder.objectType(true), builder.longType()));
+        LLVMValueRef func = builder.addFunction(funcName, builder.functionType(builder.objectType(false), builder.objectType(true), builder.wordType()));
         LLVMIRBuilder.setLinkage(func, LinkageType.LinkOnce);
         builder.setFunctionAttribute(func, Attribute.AlwaysInline);
         builder.setFunctionAttribute(func, Attribute.GCLeafFunction);
 
         LLVMBasicBlockRef block = builder.appendBasicBlock(func, "main");
         builder.positionAtEnd(block);
-        LLVMValueRef compressed = builder.buildPtrToInt(LLVMIRBuilder.getParam(func, 0), builder.longType());
+        LLVMValueRef compressed = builder.buildPtrToInt(LLVMIRBuilder.getParam(func, 0));
         LLVMValueRef heapBase = LLVMIRBuilder.getParam(func, 1);
 
         if (shift != 0) {
@@ -277,7 +286,7 @@ public class LLVMHelperFunctions {
             uncompressed = builder.buildSelect(isNull, compressed, uncompressed);
         }
 
-        uncompressed = builder.buildIntToPtr(uncompressed, builder.objectType(false));
+        uncompressed = builder.buildLLVMIntToPtr(uncompressed, builder.objectType(false));
         builder.buildRet(uncompressed);
 
         return func;
