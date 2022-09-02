@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.core.genscavenge;
 
+//Checkstyle: stop
+
 import static com.oracle.svm.core.snippets.KnownIntrinsics.readCallerStackPointer;
 import static com.oracle.svm.core.snippets.KnownIntrinsics.readReturnAddress;
 
@@ -88,6 +90,8 @@ import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.core.util.TimeUtils;
 import com.oracle.svm.core.util.VMError;
 
+//Checkstyle: resume
+
 /**
  * Garbage collector (incremental or complete) for {@link HeapImpl}.
  */
@@ -100,7 +104,7 @@ public final class GCImpl implements GC {
     private final RuntimeCodeCacheWalker runtimeCodeCacheWalker = new RuntimeCodeCacheWalker(greyToBlackObjRefVisitor);
     private final RuntimeCodeCacheCleaner runtimeCodeCacheCleaner = new RuntimeCodeCacheCleaner();
 
-    private final GCAccounting accounting = new GCAccounting();
+    private final Accounting accounting = new Accounting();
     private final Timers timers = new Timers();
 
     private final CollectionVMOperation collectOperation = new CollectionVMOperation();
@@ -161,8 +165,7 @@ public final class GCImpl implements GC {
 
         printGCBefore(cause.getName());
         boolean outOfMemory = collectImpl(cause.getName());
-        HeapPolicy.edenUsedBytes.set(WordFactory.unsigned(0));
-        HeapPolicy.youngUsedBytes.set(accounting.getYoungChunkBytesAfter());
+        HeapPolicy.youngUsedBytes.set(getAccounting().getYoungChunkBytesAfter());
         printGCAfter(cause.getName());
 
         finishCollection();
@@ -211,7 +214,7 @@ public final class GCImpl implements GC {
     private boolean doCollectImpl(CollectionPolicy appliedPolicy) {
         CommittedMemoryProvider.get().beforeGarbageCollection();
 
-        accounting.beforeCollection();
+        getAccounting().beforeCollection();
 
         try (Timer ct = timers.collection.open()) {
             if (appliedPolicy.collectIncrementally()) {
@@ -224,9 +227,9 @@ public final class GCImpl implements GC {
         }
         CommittedMemoryProvider.get().afterGarbageCollection(completeCollection);
 
-        accounting.afterCollection(completeCollection, timers.collection);
+        getAccounting().afterCollection(completeCollection, timers.collection);
         UnsignedWord maxBytes = HeapPolicy.getMaximumHeapSize();
-        UnsignedWord usedBytes = getChunkBytes();
+        UnsignedWord usedBytes = getChunkUsedBytesAfterCollection();
         boolean outOfMemory = usedBytes.aboveThan(maxBytes);
 
         ReferenceObjectProcessing.afterCollection(usedBytes, maxBytes);
@@ -234,19 +237,10 @@ public final class GCImpl implements GC {
         return outOfMemory;
     }
 
-    /**
-     * This value is only updated during a GC.
-     */
-    private static UnsignedWord getChunkBytes() {
-        UnsignedWord youngBytes = HeapImpl.getHeapImpl().getYoungGeneration().getChunkBytes();
-        UnsignedWord oldBytes = HeapImpl.getHeapImpl().getOldGeneration().getChunkBytes();
-        return youngBytes.add(oldBytes);
-    }
-
     private void printGCBefore(String cause) {
         Log verboseGCLog = Log.log();
         HeapImpl heap = HeapImpl.getHeapImpl();
-        sizeBefore = ((SubstrateGCOptions.PrintGC.getValue() || HeapOptions.PrintHeapShape.getValue()) ? getChunkBytes() : WordFactory.zero());
+        sizeBefore = ((SubstrateGCOptions.PrintGC.getValue() || HeapOptions.PrintHeapShape.getValue()) ? heap.getUsedChunkBytes() : WordFactory.zero());
         if (SubstrateGCOptions.VerboseGC.getValue() && getCollectionEpoch().equal(1)) {
             verboseGCLog.string("[Heap policy parameters: ").newline();
             verboseGCLog.string("  YoungGenerationSize: ").unsigned(HeapPolicy.getMaximumYoungGenerationSize()).newline();
@@ -281,7 +275,7 @@ public final class GCImpl implements GC {
         if (SubstrateGCOptions.PrintGC.getValue() || SubstrateGCOptions.VerboseGC.getValue()) {
             if (SubstrateGCOptions.PrintGC.getValue()) {
                 Log printGCLog = Log.log();
-                UnsignedWord sizeAfter = getChunkBytes();
+                UnsignedWord sizeAfter = heap.getUsedChunkBytes();
                 printGCLog.string("[");
                 if (HeapOptions.PrintGCTimeStamps.getValue()) {
                     long finishNanos = timers.collection.getFinish();
@@ -390,6 +384,12 @@ public final class GCImpl implements GC {
                 witness.string("]").newline();
             }
         }
+    }
+
+    private UnsignedWord getChunkUsedBytesAfterCollection() {
+        /* The old generation and the survivor spaces have objects */
+        UnsignedWord survivorUsedBytes = HeapImpl.getHeapImpl().getYoungGeneration().getSurvivorChunkUsedBytes();
+        return getAccounting().getOldGenerationAfterChunkBytes().add(survivorUsedBytes);
     }
 
     @Fold
@@ -940,7 +940,7 @@ public final class GCImpl implements GC {
         return collectionEpoch;
     }
 
-    public GCAccounting getAccounting() {
+    Accounting getAccounting() {
         return accounting;
     }
 
@@ -1088,15 +1088,15 @@ public final class GCImpl implements GC {
         HeapImpl heap = HeapImpl.getHeapImpl();
         Space edenSpace = heap.getYoungGeneration().getEden();
         UnsignedWord youngChunkBytes = edenSpace.getChunkBytes();
-        UnsignedWord youngObjectBytes = edenSpace.computeObjectBytes();
+        UnsignedWord youngObjectBytes = edenSpace.getObjectBytes();
 
-        UnsignedWord allocatedChunkBytes = accounting.getAllocatedChunkBytes().add(youngChunkBytes);
-        UnsignedWord allocatedObjectBytes = accounting.getAllocatedObjectBytes().add(youngObjectBytes);
+        UnsignedWord allocatedNormalChunkBytes = accounting.getNormalChunkBytes().add(youngChunkBytes);
+        UnsignedWord allocatedNormalObjectBytes = accounting.getNormalObjectBytes().add(youngObjectBytes);
 
         log.string(prefix).string("CollectedTotalChunkBytes: ").signed(accounting.getCollectedTotalChunkBytes()).newline();
         log.string(prefix).string("CollectedTotalObjectBytes: ").signed(accounting.getCollectedTotalObjectBytes()).newline();
-        log.string(prefix).string("AllocatedNormalChunkBytes: ").signed(allocatedChunkBytes).newline();
-        log.string(prefix).string("AllocatedNormalObjectBytes: ").signed(allocatedObjectBytes).newline();
+        log.string(prefix).string("AllocatedNormalChunkBytes: ").signed(allocatedNormalChunkBytes).newline();
+        log.string(prefix).string("AllocatedNormalObjectBytes: ").signed(allocatedNormalObjectBytes).newline();
 
         long incrementalNanos = accounting.getIncrementalCollectionTotalNanos();
         log.string(prefix).string("IncrementalGCCount: ").signed(accounting.getIncrementalCollectionCount()).newline();
