@@ -45,7 +45,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.exception.WasmTrap;
 
 public class GlobalRegistry {
@@ -98,7 +97,7 @@ public class GlobalRegistry {
     public int allocateExternalGlobal(Object object) {
         ensureExternalGlobalCapacity();
         externalGlobals[externalGlobalCount] = object;
-        int idx = -externalGlobalCount - 1;
+        int idx = -externalGlobalCount;
         externalGlobalCount++;
         return idx;
     }
@@ -234,12 +233,5 @@ public class GlobalRegistry {
             other.allocateExternalGlobal(this.externalGlobals[i]);
         }
         return other;
-    }
-
-    public Object externalGlobal(int address) {
-        if (address >= 0) {
-            throw WasmExecutionException.create(null, "Global at address " + address + " is not external.");
-        }
-        return externalGlobals[-address - 1];
     }
 }
