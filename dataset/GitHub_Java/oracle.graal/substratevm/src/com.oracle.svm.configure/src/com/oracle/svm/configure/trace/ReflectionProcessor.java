@@ -138,15 +138,6 @@ class ReflectionProcessor extends AbstractProcessor {
                 break;
             }
 
-            case "getDeclaredClasses": {
-                configuration.getOrCreateType(clazz).setAllDeclaredClasses();
-                break;
-            }
-            case "getClasses": {
-                configuration.getOrCreateType(clazz).setAllPublicClasses();
-                break;
-            }
-
             case "objectFieldOffset":
                 unsafeAccess = true;
                 // fall through
@@ -228,8 +219,6 @@ class ReflectionProcessor extends AbstractProcessor {
                 resourceConfiguration.addBundle((String) args.get(2));
                 break;
             }
-            default:
-                System.err.println("Unsupported reflection method: " + function);
         }
     }
 

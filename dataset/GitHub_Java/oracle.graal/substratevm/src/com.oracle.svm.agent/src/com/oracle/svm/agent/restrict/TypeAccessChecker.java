@@ -59,12 +59,8 @@ public class TypeAccessChecker {
         return configuration;
     }
 
-    public boolean isClassAccessible(JNIObjectHandle clazz) {
-        return getType(clazz) != null;
-    }
-
     public boolean isFieldAccessible(JNIEnvironment env, JNIObjectHandle clazz, Supplier<String> name, JNIFieldId field, JNIObjectHandle declaring) {
-        if (!isClassAccessible(clazz)) { // queried class must be registered
+        if (getType(clazz) == null) { // queried class must be registered
             return false;
         }
         ConfigurationType declaringType = getType(declaring);
@@ -110,7 +106,7 @@ public class TypeAccessChecker {
     }
 
     public boolean isMethodAccessible(JNIEnvironment env, JNIObjectHandle clazz, String name, Supplier<String> signature, JNIMethodId method, JNIObjectHandle declaring) {
-        if (!isClassAccessible(clazz)) { // queried class must be registered
+        if (getType(clazz) == null) { // queried class must be registered
             return false;
         }
         boolean isConstructor = ConfigurationMethod.CONSTRUCTOR_NAME.equals(name);
