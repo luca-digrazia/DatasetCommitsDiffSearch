@@ -55,6 +55,9 @@ import com.oracle.truffle.wasm.test.options.WasmTestOptions;
 
 public abstract class WasmSuiteBase extends WasmTestBase {
     private static WasmTestStatus runTestCase(WasmTestCase testCase) {
+        if (!filterTestName().test(testCase.name)) {
+            return WasmTestStatus.SKIPPED;
+        }
         try {
             byte[] binary = testCase.selfCompile();
             Context context = Context.create();
@@ -96,22 +99,21 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
     @Override
     public void test() throws IOException {
-        Collection<? extends WasmTestCase> allTestCases = collectTestCases();
-        Collection<? extends WasmTestCase> qualifyingTestCases = filterTestCases(allTestCases);
+        Collection<? extends WasmTestCase> testCases = collectTestCases();
         Map<WasmTestCase, Throwable> errors = new LinkedHashMap<>();
         System.out.println();
         System.out.println("--------------------------------------------------------------------------------");
-        System.out.print(String.format("Running: %s ", suiteName()));
-        if (allTestCases.size() != qualifyingTestCases.size()) {
-            System.out.println(String.format("(%d/%d tests - you have enabled filters)", qualifyingTestCases.size(), allTestCases.size()));
-        } else {
-            System.out.println(String.format("(%d tests)", qualifyingTestCases.size()));
-        }
+        System.out.println(String.format("Running: %s (%d %s)", suiteName(), testCases.size(), testCases.size() == 1 ? "test" : "tests"));
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("Using runtime: " + Truffle.getRuntime().toString());
-        for (WasmTestCase testCase : qualifyingTestCases) {
+        int skipped = 0;
+        for (WasmTestCase testCase : testCases) {
             try {
-                runTestCase(testCase);
+                WasmTestStatus status = runTestCase(testCase);
+                if (status == WasmTestStatus.SKIPPED) {
+                    skipped++;
+                    continue;
+                }
                 System.out.print("\uD83D\uDE0D");
                 System.out.flush();
             } catch (Throwable e) {
@@ -128,9 +130,9 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 System.err.println(entry.getValue().getClass().getSimpleName() + ": " + entry.getValue().getMessage());
                 entry.getValue().printStackTrace();
             }
-            System.err.println(String.format("\uD83D\uDCA5\u001B[31m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
+            System.err.println(String.format("\uD83D\uDCA5\u001B[31m %d/%d Wasm tests passed.\u001B[0m", testCases.size() - skipped - errors.size(), testCases.size() - skipped));
         } else {
-            System.out.println(String.format("\uD83C\uDF40\u001B[32m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
+            System.out.println(String.format("\uD83C\uDF40\u001B[32m %d/%d Wasm tests passed.\u001B[0m", testCases.size() - skipped - errors.size(), testCases.size() - skipped));
         }
         System.out.println();
     }
@@ -145,10 +147,6 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
     protected Collection<? extends WasmTestCase> collectStringTestCases() {
         return new ArrayList<>();
-    }
-
-    protected Collection<? extends WasmTestCase> filterTestCases(Collection<? extends WasmTestCase> testCases) {
-        return testCases.stream().filter((WasmTestCase x) -> filterTestName().test(x.name)).collect(Collectors.toList());
     }
 
     protected Collection<WasmTestCase> collectFileTestCases(Path path) throws IOException {
