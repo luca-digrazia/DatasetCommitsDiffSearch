@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.core.graal.amd64;
 
+import static com.oracle.svm.core.SubstrateOptions.CompilerBackend;
+
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
@@ -34,7 +36,6 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
 import com.oracle.svm.core.graal.code.SubstrateBackendFactory;
@@ -61,7 +62,7 @@ class SubstrateAMD64Feature implements Feature {
             }
         });
 
-        if (!SubstrateOptions.useLLVMBackend()) {
+        if (CompilerBackend.getValue().equals("lir")) {
             AMD64CalleeSavedRegisters.createAndRegister();
 
             ImageSingletons.add(SubstrateBackendFactory.class, new SubstrateBackendFactory() {

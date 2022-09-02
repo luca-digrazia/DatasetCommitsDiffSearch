@@ -314,7 +314,7 @@ public final class ThreadLocalAllocation {
 
     static boolean isThreadLocalAllocationSpace(Space space) {
         // Compare "space" to a compile-time constant, rather than accessing a field of the space.
-        return (space == HeapImpl.getHeapImpl().getYoungGeneration().getEden());
+        return (space == HeapImpl.getHeapImpl().getYoungGeneration().getSpace());
     }
 
     /** Stop using the current chunk for thread-local allocation. */

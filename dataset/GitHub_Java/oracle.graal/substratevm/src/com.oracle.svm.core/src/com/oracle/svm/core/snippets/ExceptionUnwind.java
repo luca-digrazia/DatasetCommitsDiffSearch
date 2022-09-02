@@ -46,6 +46,7 @@ import com.oracle.svm.core.code.UntetheredCodeInfo;
 import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 import com.oracle.svm.core.deopt.Deoptimizer;
+import com.oracle.svm.core.jdk.JDKUtils;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescriptor;
 import com.oracle.svm.core.stack.JavaStackWalk;
@@ -158,8 +159,7 @@ public abstract class ExceptionUnwind {
      * treated as fatal errors.
      */
     private static void reportFatalUnwind(Throwable exception) {
-        Log.log().string("Fatal error: exception unwind while thread is not in Java state: ");
-        Log.log().exception(exception);
+        Log.log().string("Fatal error: exception unwind while thread is not in Java state: ").string(exception.getClass().getName());
         ImageSingletons.lookup(LogHandler.class).fatalError();
     }
 
@@ -170,7 +170,12 @@ public abstract class ExceptionUnwind {
      * using a normal Java catch-all exception handler.
      */
     private static void reportUnhandledException(Throwable exception) {
-        Log.log().exception(exception);
+        Log.log().string(exception.getClass().getName());
+        String detail = JDKUtils.getRawMessage(exception);
+        if (detail != null) {
+            Log.log().string(": ").string(detail);
+        }
+        Log.log().newline();
         ImageSingletons.lookup(LogHandler.class).fatalError();
     }
 

@@ -38,10 +38,12 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.graph.NodeClass;
+import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
+import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
@@ -54,16 +56,19 @@ import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.Snippets;
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.word.UnsignedWord;
+import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.RestrictHeapAccess.Access;
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.code.CodeInfoAccess;
+import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
@@ -104,7 +109,7 @@ final class StackOverflowCheckImpl implements StackOverflowCheck {
      */
     @Fold
     static boolean supportedByOS() {
-        return ImageSingletons.contains(StackOverflowCheck.OSSupport.class) && SubstrateOptions.CompilerBackend.getValue().equals("lir");
+        return ImageSingletons.contains(StackOverflowCheck.OSSupport.class);
     }
 
     @Uninterruptible(reason = "Called while thread is being attached to the VM, i.e., when the thread state is not yet set up.")
@@ -141,6 +146,19 @@ final class StackOverflowCheckImpl implements StackOverflowCheck {
             stackBoundaryTL.set(stackBoundaryTL.get().subtract(Options.StackYellowZoneSize.getValue()));
         }
         yellowZoneStateTL.set(state + 1);
+
+        /*
+         * Check that after enabling the yellow zone there is actually stack space available again.
+         * Otherwise we would immediately throw a StackOverflowError when reaching the first
+         * non-Uninterruptible callee, and then we would recursively end up here again.
+         */
+        UnsignedWord stackBoundary = StackOverflowCheckImpl.stackBoundaryTL.get();
+        if (KnownIntrinsics.readStackPointer().belowOrEqual(stackBoundary)) {
+            throw VMError.shouldNotReachHere("StackOverflowError: Enabling the yellow zone of the stack did not make any stack space available. Possible reasons for that: " +
+                            "1) A call from native code to Java code provided the wrong JNI environment or the wrong IsolateThread; " +
+                            "2) Frames of native code filled the stack, and now there is not even enough stack space left to throw a regular StackOverflowError; " +
+                            "3) An internal VM error occurred.");
+        }
     }
 
     @Uninterruptible(reason = "Atomically manipulating state of multiple thread local variables.")
@@ -167,6 +185,22 @@ final class StackOverflowCheckImpl implements StackOverflowCheck {
         }
 
         return Options.StackYellowZoneSize.getValue() + Options.StackRedZoneSize.getValue();
+    }
+
+    @Uninterruptible(reason = "Called by fatal error handling that is uninterruptible.")
+    @Override
+    public void disableStackOverflowChecksForFatalError() {
+        /*
+         * Setting the boundary to a low value effectively disables the check. We are not using 0 so
+         * that we can distinguish the value set here from an uninitialized value.
+         */
+        stackBoundaryTL.set(WordFactory.unsigned(1));
+        /*
+         * A random marker value. The actual value does not matter, but having a high value also
+         * ensures that any future calls to protectYellowZone() do not modify the stack boundary
+         * again.
+         */
+        yellowZoneStateTL.set(0xfefefefe);
     }
 }
 
@@ -250,8 +284,15 @@ final class StackOverflowCheckSnippets extends SubstrateTemplates implements Sni
      * stack pointer has already been changed to the new value for the frame.
      */
     @Snippet
-    private static void stackOverflowCheckSnippet(@ConstantParameter boolean mustNotAllocate) {
+    private static void stackOverflowCheckSnippet(@ConstantParameter boolean mustNotAllocate, @ConstantParameter boolean hasDeoptFrameSize, long deoptFrameSize) {
         UnsignedWord stackBoundary = StackOverflowCheckImpl.stackBoundaryTL.get();
+        if (hasDeoptFrameSize) {
+            /*
+             * Methods that can deoptimize must have enough space on the stack for all frames after
+             * deoptimization.
+             */
+            stackBoundary = stackBoundary.add(WordFactory.unsigned(deoptFrameSize));
+        }
         if (KnownIntrinsics.readStackPointer().belowOrEqual(stackBoundary)) {
 
             /*
@@ -278,7 +319,7 @@ final class StackOverflowCheckSnippets extends SubstrateTemplates implements Sni
      * that the method with the stack overflow check must never allocate.
      */
     @Uninterruptible(reason = "Must not have a stack overflow check: we are here because the stack overflow check failed.")
-    @SubstrateForeignCallTarget
+    @SubstrateForeignCallTarget(stubCallingConvention = true)
     private static void throwCachedStackOverflowError() {
         VMError.guarantee(StackOverflowCheckImpl.yellowZoneStateTL.get() != StackOverflowCheckImpl.STATE_UNINITIALIZED,
                         "Stack boundary for the current thread not yet initialized. Only uninterruptible code with no stack overflow checks can run at this point.");
@@ -292,7 +333,7 @@ final class StackOverflowCheckSnippets extends SubstrateTemplates implements Sni
      * {@link StackOverflowError} is thrown.
      */
     @Uninterruptible(reason = "Must not have a stack overflow check: we are here because the stack overflow check failed.")
-    @SubstrateForeignCallTarget
+    @SubstrateForeignCallTarget(stubCallingConvention = true)
     private static void throwNewStackOverflowError() {
         int state = StackOverflowCheckImpl.yellowZoneStateTL.get();
         VMError.guarantee(state != StackOverflowCheckImpl.STATE_UNINITIALIZED,
@@ -350,10 +391,46 @@ final class StackOverflowCheckSnippets extends SubstrateTemplates implements Sni
 
         @Override
         public void lower(StackOverflowCheckNode node, LoweringTool tool) {
-            Arguments args = new Arguments(stackOverflowCheck, node.graph().getGuardsStage(), tool.getLoweringStage());
-            args.addConst("mustNotAllocate", mustNotAllocatePredicate != null && mustNotAllocatePredicate.test(node.graph().method()));
+            StructuredGraph graph = node.graph();
+
+            long deoptFrameSize = 0;
+            if (ImageInfo.inImageRuntimeCode()) {
+                /*
+                 * Deoptimization must not lead to stack overflow errors, i.e., the deoptimization
+                 * source must check for a stack frame size large enough to cover all possible
+                 * deoptimization point (with all the methods inlined at that point). We do not know
+                 * which frame states are used for deoptimization, so we simply look at all frame
+                 * states and use the largest.
+                 *
+                 * Many frame states can share the same outer frame states. To avoid recomputing the
+                 * same information multiple times, we cache all values that we already computed.
+                 */
+                NodeMap<Long> deoptFrameSizeCache = new NodeMap<>(graph);
+                for (FrameState state : graph.getNodes(FrameState.TYPE)) {
+                    deoptFrameSize = Math.max(deoptFrameSize, computeDeoptFrameSize(state, deoptFrameSizeCache));
+                }
+            }
+
+            Arguments args = new Arguments(stackOverflowCheck, graph.getGuardsStage(), tool.getLoweringStage());
+            args.addConst("mustNotAllocate", mustNotAllocatePredicate != null && mustNotAllocatePredicate.test(graph.method()));
+            args.addConst("hasDeoptFrameSize", deoptFrameSize > 0);
+            args.add("deoptFrameSize", deoptFrameSize);
             template(node, args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
+    }
+
+    static long computeDeoptFrameSize(FrameState state, NodeMap<Long> deoptFrameSizeCache) {
+        Long existing = deoptFrameSizeCache.get(state);
+        if (existing != null) {
+            return existing;
+        }
+
+        long outerFrameSize = state.outerFrameState() == null ? 0 : computeDeoptFrameSize(state.outerFrameState(), deoptFrameSizeCache);
+        long myFrameSize = CodeInfoAccess.lookupTotalFrameSize(CodeInfoTable.getImageCodeInfo(), ((SharedMethod) state.getMethod()).getDeoptOffsetInImage());
+
+        long result = outerFrameSize + myFrameSize;
+        deoptFrameSizeCache.put(state, result);
+        return result;
     }
 }
 
