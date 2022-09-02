@@ -34,6 +34,7 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryWalker;
+import com.oracle.svm.core.SubstrateGCOptions;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.genscavenge.AlignedHeapChunk.AlignedHeader;
@@ -142,7 +143,7 @@ public final class HeapVerifier {
          * reasonable state. Now, we can verify the remembered sets without having to worry about
          * heap consistency basic.
          */
-        if (!SubstrateOptions.useRememberedSet() || !HeapOptions.VerifyRememberedSet.getValue()) {
+        if (!SubstrateOptions.useRememberedSet() || !SubstrateGCOptions.VerifyRememberedSet.getValue()) {
             return true;
         }
 
@@ -326,7 +327,7 @@ public final class HeapVerifier {
 
     // This method is executed exactly once per object in the heap.
     private static boolean verifyReferences(Object obj) {
-        if (!HeapOptions.VerifyReferences.getValue()) {
+        if (!SubstrateGCOptions.VerifyReferences.getValue()) {
             return true;
         }
 
