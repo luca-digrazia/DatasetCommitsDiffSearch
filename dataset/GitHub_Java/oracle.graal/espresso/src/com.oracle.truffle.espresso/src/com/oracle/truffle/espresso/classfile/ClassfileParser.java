@@ -635,9 +635,6 @@ public final class ClassfileParser {
                 if (context.getJavaVersion().java9OrLater() && signature != null) {
                     throw ConstantPool.classFormatError("Duplicate AnnotationDefault attribute");
                 }
-                if (attributeSize != 2) {
-                    throw ConstantPool.classFormatError("Invalid attribute_length value for signature attribute: " + attributeSize + " != 2");
-                }
                 return signature = parseSignatureAttribute(attributeName);
             }
             return null;
@@ -1072,7 +1069,6 @@ public final class ClassfileParser {
     private SignatureAttribute parseSignatureAttribute(Symbol<Name> name) {
         assert Name.Signature.equals(name);
         int signatureIndex = stream.readU2();
-        pool.utf8At(signatureIndex).validateUTF8();
         return new SignatureAttribute(name, signatureIndex);
     }
 
@@ -1283,11 +1279,11 @@ public final class ClassfileParser {
         if (numberOfClasses == 0) {
             return PermittedSubclassesAttribute.EMPTY;
         }
-        char[] classes = new char[numberOfClasses];
+        short[] classes = new short[numberOfClasses];
         for (int i = 0; i < numberOfClasses; i++) {
             int pos = stream.readU2();
             pool.classAt(pos).validate(pool);
-            classes[i] = (char) pos;
+            classes[i] = (short) pos;
         }
         return new PermittedSubclassesAttribute(attributeName, classes);
     }
