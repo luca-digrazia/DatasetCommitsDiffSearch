@@ -123,7 +123,6 @@ import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.ArrayCodeTypeMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
-import com.oracle.truffle.dsl.processor.java.model.GeneratedElement;
 import com.oracle.truffle.dsl.processor.library.ExportsParser;
 import com.oracle.truffle.dsl.processor.library.LibraryData;
 import com.oracle.truffle.dsl.processor.library.LibraryParser;
@@ -341,7 +340,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
 
         if (mode == ParseMode.DEFAULT) {
             boolean emitWarnings = Boolean.parseBoolean(System.getProperty("truffle.dsl.cacheSharingWarningsEnabled", "false"));
-            node.setSharedCaches(computeSharing(node.getTemplateType(), Arrays.asList(node), emitWarnings));
+            node.setSharedCaches(computeSharing(Arrays.asList(node), emitWarnings));
         } else {
             // sharing is computed by the ExportsParser
         }
@@ -355,7 +354,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
         return node;
     }
 
-    public static Map<CacheExpression, String> computeSharing(Element templateType, Collection<NodeData> nodes, boolean emitSharingWarnings) {
+    public static Map<CacheExpression, String> computeSharing(Collection<NodeData> nodes, boolean emitSharingWarnings) {
         TruffleTypes types = ProcessorContext.getInstance().getTypes();
         Map<SharableCache, Collection<CacheExpression>> groups = computeSharableCaches(nodes);
         // compute unnecessary sharing.
@@ -382,33 +381,11 @@ public final class NodeParser extends AbstractParser<NodeData> {
                     if (cache.isAlwaysInitialized()) {
                         continue;
                     }
-                    Element declaringElement;
-                    if (node.getTemplateType() instanceof GeneratedElement) {
-                        // generated node
-                        declaringElement = node.getTemplateType().getEnclosingElement();
-                        if (!declaringElement.getKind().isClass() &&
-                                        !declaringElement.getKind().isInterface()) {
-                            throw new AssertionError("Unexpected declared element for generated element: " + declaringElement.toString());
-                        }
-                    } else {
-                        declaringElement = node.getTemplateType();
-                    }
-
                     String group = cache.getSharedGroup();
                     SharableCache sharable = new SharableCache(specialization, cache);
                     Collection<CacheExpression> expressions = groups.get(sharable);
                     List<SharableCache> declaredSharing = declaredGroups.get(group);
                     if (group != null) {
-                        if (declaredSharing.size() <= 1) {
-                            if (!ElementUtils.elementEquals(templateType, declaringElement)) {
-                                // ignore errors for single declared sharing as its not in the same
-                                // class but only happens between class and superclass. These
-                                // errors might not be resolvable if the base class is not
-                                // modifiable.
-                                continue;
-                            }
-                        }
-
                         if (declaredSharing.size() <= 1 && (expressions == null || expressions.size() <= 1)) {
                             cache.addError(cache.getSharedGroupMirror(), cache.getSharedGroupValue(),
                                             "Could not find any other cached parameter that this parameter could be shared. " +
@@ -417,7 +394,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
                                             types.Cached_Shared.asElement().getSimpleName().toString());
                         } else {
                             if (declaredSharing.size() <= 1) {
-
                                 String error = String.format("No other cached parameters are specified as shared with the group '%s'.", group);
                                 Set<String> similarGroups = new LinkedHashSet<>(declaredGroups.keySet());
                                 similarGroups.remove(group);
@@ -458,38 +434,25 @@ public final class NodeParser extends AbstractParser<NodeData> {
                             }
                         }
                     } else if (expressions != null && expressions.size() > 1) {
-                        if (emitSharingWarnings) {
-                            /*
-                             * We only emit sharing warnings for the same declaring type, because
-                             * otherwise sharing warnings might not be resolvable if the base type
-                             * is not modifiable.
-                             */
-                            List<CacheExpression> declaredInExpression = new ArrayList<>();
-                            for (CacheExpression expression : expressions) {
-                                if (ElementUtils.isDeclaredIn(expression.getParameter().getVariableElement(), declaringElement)) {
-                                    declaredInExpression.add(expression);
-                                }
-                            }
-                            if (declaredInExpression.size() > 1 && findAnnotationMirror(cache.getParameter().getVariableElement(), types.Cached_Exclusive) == null) {
-                                StringBuilder sharedCaches = new StringBuilder();
-                                Set<String> recommendedGroups = new LinkedHashSet<>();
-                                for (CacheExpression cacheExpression : declaredInExpression) {
-                                    if (cacheExpression != cache) {
-                                        String signature = formatCacheExpression(cacheExpression);
-                                        sharedCaches.append(String.format("  - %s%n", signature));
-                                        String otherGroup = cacheExpression.getSharedGroup();
-                                        if (otherGroup != null) {
-                                            recommendedGroups.add(otherGroup);
-                                        }
+                        if (emitSharingWarnings && findAnnotationMirror(cache.getParameter().getVariableElement(), types.Cached_Exclusive) == null) {
+                            StringBuilder sharedCaches = new StringBuilder();
+                            Set<String> recommendedGroups = new LinkedHashSet<>();
+                            for (CacheExpression cacheExpression : expressions) {
+                                if (cacheExpression != cache) {
+                                    String signature = formatCacheExpression(cacheExpression);
+                                    sharedCaches.append(String.format("  - %s%n", signature));
+
+                                    String otherGroup = cacheExpression.getSharedGroup();
+                                    if (otherGroup != null) {
+                                        recommendedGroups.add(otherGroup);
                                     }
                                 }
-
-                                String recommendedGroup = recommendedGroups.size() == 1 ? recommendedGroups.iterator().next() : "group";
-                                cache.addWarning("The cached parameter may be shared with: %n%s Annotate the parameter with @%s(\"%s\") or @%s to allow or deny sharing of the parameter.",
-                                                sharedCaches, types.Cached_Shared.asElement().getSimpleName().toString(),
-                                                recommendedGroup,
-                                                types.Cached_Exclusive.asElement().getSimpleName().toString());
                             }
+                            String recommendedGroup = recommendedGroups.size() == 1 ? recommendedGroups.iterator().next() : "group";
+                            cache.addWarning("The cached parameter may be shared with: %n%s Annotate the parameter with @%s(\"%s\") or @%s to allow or deny sharing of the parameter.",
+                                            sharedCaches, types.Cached_Shared.asElement().getSimpleName().toString(),
+                                            recommendedGroup,
+                                            types.Cached_Exclusive.asElement().getSimpleName().toString());
                         }
                     }
                 }
@@ -872,7 +835,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
                     node.addError(importAnnotation, importClassesValue, "The specified static import class '%s' is not visible.",
                                     getQualifiedName(importClass));
                 }
-                elements.addAll(importVisibleStaticMembersImpl(node.getTemplateType(), importClassElement, false));
+                elements.addAll(importVisibleStaticMembers(node.getTemplateType(), importClassElement, false));
             }
         }
     }
@@ -908,20 +871,13 @@ public final class NodeParser extends AbstractParser<NodeData> {
     private final Map<ImportsKey, List<Element>> importCache = ProcessorContext.getInstance().getCacheMap(ImportsKey.class);
 
     @SuppressWarnings("unchecked")
-    private List<Element> importVisibleStaticMembersImpl(TypeElement relativeTo, TypeElement importType, boolean includeConstructors) {
+    private List<Element> importVisibleStaticMembers(TypeElement relativeTo, TypeElement importType, boolean includeConstructors) {
         ImportsKey key = new ImportsKey(relativeTo, importType, includeConstructors);
         List<Element> elements = importCache.get(key);
         if (elements != null) {
             return elements;
         }
 
-        List<Element> members = importVisibleStaticMembers(relativeTo, importType, includeConstructors);
-        importCache.put(key, members);
-        return members;
-    }
-
-    public static List<Element> importVisibleStaticMembers(TypeElement relativeTo, TypeElement importType, boolean includeConstructors) {
-        ProcessorContext context = ProcessorContext.getInstance();
         // hack to reload type is necessary for incremental compiling in eclipse.
         // otherwise methods inside of import guard types are just not found.
         TypeElement importElement = fromTypeMirror(context.reloadType(importType.asType()));
@@ -980,6 +936,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 return superTypes;
             }
         });
+        importCache.put(key, members);
         return members;
     }
 
@@ -1071,7 +1028,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
 
         for (NodeFieldData nodeFieldData : fields) {
             nodeFieldData.setGetter(findGetter(elements, nodeFieldData.getName(), nodeFieldData.getType()));
-            nodeFieldData.setSetter(findSetter(elements, nodeFieldData.getName(), nodeFieldData.getType()));
         }
 
         return fields;
@@ -2477,7 +2433,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
     private DSLExpressionResolver importStatics(DSLExpressionResolver resolver, TypeMirror targetType) {
         DSLExpressionResolver localResolver = resolver;
         if (targetType.getKind() == TypeKind.DECLARED) {
-            List<Element> prefixedImports = importVisibleStaticMembersImpl(resolver.getAccessType(), fromTypeMirror(targetType), true);
+            List<Element> prefixedImports = importVisibleStaticMembers(resolver.getAccessType(), fromTypeMirror(targetType), true);
             localResolver = localResolver.copy(prefixedImports);
         }
         return localResolver;
@@ -2730,9 +2686,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
             if (field.getGetter() != null) {
                 unusedElements.remove(field.getGetter());
             }
-            if (field.getSetter() != null) {
-                unusedElements.remove(field.getSetter());
-            }
         }
 
         for (NodeChildData child : nodeData.getChildren()) {
@@ -2895,19 +2848,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
 
         for (ExecutableElement method : ElementFilter.methodsIn(elements)) {
             if (method.getSimpleName().toString().equals(methodName) && method.getParameters().size() == 0 && isAssignable(type, method.getReturnType())) {
-                return method;
-            }
-        }
-        return null;
-    }
-
-    private static ExecutableElement findSetter(List<? extends Element> elements, String variableName, TypeMirror type) {
-        if (type == null) {
-            return null;
-        }
-        String methodName = "set" + firstLetterUpperCase(variableName);
-        for (ExecutableElement method : ElementFilter.methodsIn(elements)) {
-            if (method.getSimpleName().toString().equals(methodName) && method.getParameters().size() == 1 && typeEquals(type, method.getParameters().get(0).asType())) {
                 return method;
             }
         }
