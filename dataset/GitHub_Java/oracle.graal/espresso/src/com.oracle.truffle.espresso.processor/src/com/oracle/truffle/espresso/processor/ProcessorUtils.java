@@ -23,12 +23,7 @@
 
 package com.oracle.truffle.espresso.processor;
 
-public final class ProcessorUtils {
-    /** Appends "import " and prepend ";\n" to the given string. */
-    public static String imports(String str) {
-        return "import " + str + ";\n";
-    }
-
+public class ProcessorUtils {
     /** Appends and prepends a quotation mark around the given string. */
     public static String stringify(String str) {
         return '\"' + str + '\"';
@@ -59,12 +54,12 @@ public final class ProcessorUtils {
         return className + " " + argName;
     }
 
-    /** "varName = value;". */
+    /** "varName = value;" */
     public static String assignment(String varName, String value) {
         return varName + " = " + value + ";";
     }
 
-    /** "[receiver.]methodName(comma-separated args)". */
+    /** "[receiver.]methodName(comma-separated args)" */
     public static String call(String receiver, String methodName, String[] args) {
         StringBuilder str = new StringBuilder();
         if (receiver != null) {
@@ -77,7 +72,7 @@ public final class ProcessorUtils {
         return str.toString();
     }
 
-    /** Returns the given string whose first letter is upper case. */
+    /** Returns the given string whose first letter is upper case */
     public static String capitalize(String str) {
         if (str.length() > 0) {
             char[] c = str.toCharArray();
@@ -87,7 +82,7 @@ public final class ProcessorUtils {
         return "";
     }
 
-    /** Returns the given string whose first letter is lower case. */
+    /** Returns the given string whose first letter is lower case */
     public static String decapitalize(String str) {
         if (str.length() > 0) {
             char[] c = str.toCharArray();
@@ -95,42 +90,6 @@ public final class ProcessorUtils {
             return new String(c);
         }
         return "";
-    }
-
-    /**
-     * Transforms a Java-like class name declaration to a member name for it. Acts the same as
-     * {@link #decapitalize(String)} for strings starting with a single capital letter, but for
-     * strings with multiple upper case characters at the beginning, it lower-cases the start until
-     * the last upper-case.
-     * <p>
-     * For example:
-     * <ul>
-     * <li>"JVMSomeThing" -> "jvmSomeThing"</li>
-     * <li>"AClass" -> "aClass"</li>
-     * <li>"ClassName" -> "className"</li>
-     * </ul>
-     */
-    public static String toMemberName(String str) {
-        if (str.length() >= 2) {
-            if (Character.isUpperCase(str.charAt(0)) && (Character.isUpperCase(str.charAt(1)))) {
-                // the first two characters are upper-case: need some special handling.
-                char[] c = str.toCharArray();
-                int i = 0;
-                while (i < c.length && Character.isUpperCase(c[i])) {
-                    // Lower case everything until we see a lower case.
-                    c[i] = Character.toLowerCase(c[i]);
-                    i++;
-                }
-                if (i != c.length) {
-                    // If we are not at the end, we went too far by one. Re-upper case the lastly
-                    // modified character.
-                    c[i - 1] = Character.toUpperCase(c[i - 1]);
-                }
-                return new String(c);
-            }
-        }
-        // Handles empty string
-        return decapitalize(str);
     }
 
     /**
