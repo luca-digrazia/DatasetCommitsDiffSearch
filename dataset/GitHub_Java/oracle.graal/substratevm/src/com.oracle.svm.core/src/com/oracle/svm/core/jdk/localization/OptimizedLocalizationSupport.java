@@ -79,10 +79,4 @@ public class OptimizedLocalizationSupport extends LocalizationSupport {
         bundle.keySet();
         this.resourceBundles.put(Pair.create(bundleName, locale), bundle);
     }
-
-    @Override
-    public boolean shouldSubstituteLoadLookup(String className) {
-        /*- All bundles are stored in the image heap as objects, no need to keep the content around */
-        return true;
-    }
 }
