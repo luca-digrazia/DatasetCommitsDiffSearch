@@ -24,62 +24,56 @@
  */
 package com.oracle.svm.jfr;
 
-//Checkstyle: allow reflection
-import java.lang.reflect.Field;
+import java.util.List;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
-import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
-import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.thread.ThreadListener;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.util.ReflectionUtil;
+import com.oracle.svm.jfr.logging.JfrLogging;
 
+import jdk.jfr.Configuration;
 import jdk.jfr.internal.EventWriter;
 import jdk.jfr.internal.JVM;
-import jdk.jfr.internal.LogLevel;
 import jdk.jfr.internal.LogTag;
-import sun.misc.Unsafe;
 
+/**
+ * Manager class that handles most JFR Java API, see {@link Target_jdk_jfr_internal_JVM}.
+ */
 class SubstrateJVM {
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
-    private static final Field EPOCH_FIELD = ReflectionUtil.lookupField(SubstrateJVM.class, "epoch");
-
+    private final List<Configuration> knownConfigurations;
     private final JfrOptionSet options;
     private final JfrNativeEventSetting[] eventSettings;
-    private final JfrStringRepository stringRepo;
     private final JfrSymbolRepository symbolRepo;
     private final JfrTypeRepository typeRepo;
-    private final JfrMethodRepository methodRepo;
-    private final JfrStackTraceRepository stackTraceRepo;
-    private final JfrRepository[] repositories;
+    private final JfrConstantPool[] repositories;
 
     private final JfrThreadLocal threadLocal;
     private final JfrGlobalMemory globalMemory;
     private final JfrUnlockedChunkWriter unlockedChunkWriter;
     private final JfrRecorderThread recorderThread;
 
+    private final JfrLogging jfrLogging;
+
     private boolean initialized;
     // We can't reuse the field JVM.recording because it does not get set in all the cases that we
     // are interested in.
     private volatile boolean recording;
-    private long epoch;
     private byte[] metadataDescriptor;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    SubstrateJVM() {
+    SubstrateJVM(List<Configuration> configurations) {
+        this.knownConfigurations = configurations;
+
         options = new JfrOptionSet();
 
         int eventCount = JfrEvents.getEventCount();
@@ -88,27 +82,32 @@ class SubstrateJVM {
             eventSettings[i] = new JfrNativeEventSetting();
         }
 
-        stringRepo = new JfrStringRepository();
         symbolRepo = new JfrSymbolRepository();
-        typeRepo = new JfrTypeRepository(symbolRepo);
-        methodRepo = new JfrMethodRepository(typeRepo, symbolRepo);
-        stackTraceRepo = new JfrStackTraceRepository(methodRepo);
-        repositories = new JfrRepository[]{stringRepo, symbolRepo, typeRepo, methodRepo, stackTraceRepo};
+        typeRepo = new JfrTypeRepository();
+        // The ordering in the array dictates the order in which the constant pools will be written
+        // in the recording.
+        repositories = new JfrConstantPool[]{typeRepo, symbolRepo};
 
         threadLocal = new JfrThreadLocal();
         globalMemory = new JfrGlobalMemory();
-        unlockedChunkWriter = new JfrChunkWriter();
+        unlockedChunkWriter = new JfrChunkWriter(globalMemory);
         recorderThread = new JfrRecorderThread(globalMemory, unlockedChunkWriter);
+
+        jfrLogging = new JfrLogging();
 
         initialized = false;
         recording = false;
-        epoch = 0L;
         metadataDescriptor = null;
     }
 
     @Fold
     public static SubstrateJVM get() {
         return ImageSingletons.lookup(SubstrateJVM.class);
+    }
+
+    @Fold
+    public static List<Configuration> getKnownConfigurations() {
+        return get().knownConfigurations;
     }
 
     @Fold
@@ -126,12 +125,19 @@ class SubstrateJVM {
         return get().threadLocal;
     }
 
+    @Fold
     public static JfrTypeRepository getTypeRepository() {
         return get().typeRepo;
     }
 
-    public static JfrMethodRepository getMethodRepository() {
-        return get().methodRepo;
+    @Fold
+    public static JfrSymbolRepository getSymbolRepository() {
+        return get().symbolRepo;
+    }
+
+    @Fold
+    public static JfrLogging getJfrLogging() {
+        return get().jfrLogging;
     }
 
     public static boolean isInitialized() {
@@ -186,7 +192,6 @@ class SubstrateJVM {
         }
 
         globalMemory.teardown();
-        stackTraceRepo.teardown();
         symbolRepo.teardown();
 
         initialized = false;
@@ -194,8 +199,9 @@ class SubstrateJVM {
     }
 
     /** See {@link JVM#getStackTraceId}. */
-    public long getStackTraceId(int skipCount) {
-        return stackTraceRepo.recordStackTrace(skipCount);
+    public long getStackTraceId(@SuppressWarnings("unused") int skipCount) {
+        // Stack traces are not supported at the moment.
+        return 0;
     }
 
     /** See {@link JVM#getThreadId}. */
@@ -241,13 +247,9 @@ class SubstrateJVM {
     }
 
     /** See {@link JVM#getClassId}. */
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public long getClassId(Class<?> clazz) {
         return typeRepo.getClassId(clazz);
-    }
-
-    /** See {@link JVM#getTypeId}. */
-    public long getTypeId(Class<?> clazz) {
-        return DynamicHub.fromClass(clazz).getTypeID();
     }
 
     /**
@@ -279,13 +281,6 @@ class SubstrateJVM {
         }
     }
 
-    /** See {@link JVM#getEpochAddress}. */
-    public long getEpochAddress() {
-        // Only works because this object lives in the image heap.
-        UnsignedWord epochFieldOffset = WordFactory.unsigned(UNSAFE.objectFieldOffset(EPOCH_FIELD));
-        return Word.objectToUntrackedPointer(this).add(epochFieldOffset).rawValue();
-    }
-
     /** See {@link JVM#setFileNotification}. */
     public void setFileNotification(long delta) {
         options.maxChunkSize.setUserValue(delta);
@@ -308,7 +303,7 @@ class SubstrateJVM {
 
     /** See {@link JVM#setMethodSamplingInterval}. */
     public void setMethodSamplingInterval(@SuppressWarnings("unused") long type, @SuppressWarnings("unused") long intervalMillis) {
-        throw new IllegalStateException("JFR Method sampling is currently not supported.");
+        // Not supported but this method is called during JFR startup, so we can't throw an error.
     }
 
     /** See {@link JVM#setSampleThreads}. */
@@ -330,7 +325,7 @@ class SubstrateJVM {
 
     /** See {@link JVM#setStackTraceEnabled}. */
     public void setStackTraceEnabled(@SuppressWarnings("unused") long eventTypeId, @SuppressWarnings("unused") boolean enabled) {
-        throw new IllegalStateException("JFR stack traces are not supported");
+        // Not supported but this method is called during JFR startup, so we can't throw an error.
     }
 
     /** See {@link JVM#setThreadBufferSize}. */
@@ -351,17 +346,17 @@ class SubstrateJVM {
         if (newBuffer.isNull()) {
             // The flush failed for some reason, so mark the EventWriter as invalid for this write
             // attempt.
-            UNSAFE.putLong(writer, Target_jdk_jfr_internal_EventWriter.startPositionOffset, oldBuffer.getPos().rawValue());
-            UNSAFE.putLong(writer, Target_jdk_jfr_internal_EventWriter.currentPositionOffset, oldBuffer.getPos().rawValue());
-            UNSAFE.putBooleanVolatile(writer, Target_jdk_jfr_internal_EventWriter.validOffset, false);
+            JfrEventWriterAccess.setStartPosition(writer, oldBuffer.getPos().rawValue());
+            JfrEventWriterAccess.setCurrentPosition(writer, oldBuffer.getPos().rawValue());
+            JfrEventWriterAccess.setValid(writer, false);
         } else {
             // Update the EventWriter so that it uses the correct buffer and positions.
             Pointer newCurrentPos = newBuffer.getPos().add(uncommittedSize);
-            UNSAFE.putLong(writer, Target_jdk_jfr_internal_EventWriter.startPositionOffset, newBuffer.getPos().rawValue());
-            UNSAFE.putLong(writer, Target_jdk_jfr_internal_EventWriter.currentPositionOffset, newCurrentPos.rawValue());
+            JfrEventWriterAccess.setStartPosition(writer, newBuffer.getPos().rawValue());
+            JfrEventWriterAccess.setCurrentPosition(writer, newCurrentPos.rawValue());
             if (newBuffer.notEqual(oldBuffer)) {
-                UNSAFE.putLong(writer, Target_jdk_jfr_internal_EventWriter.startPositionAddressOffset, JfrBufferAccess.getAddressOfPos(newBuffer).rawValue());
-                UNSAFE.putLong(writer, Target_jdk_jfr_internal_EventWriter.maxPositionOffset, JfrBufferAccess.getDataEnd(newBuffer).rawValue());
+                JfrEventWriterAccess.setStartPositionAddress(writer, JfrBufferAccess.getAddressOfPos(newBuffer).rawValue());
+                JfrEventWriterAccess.setMaxPosition(writer, JfrBufferAccess.getDataEnd(newBuffer).rawValue());
             }
         }
 
@@ -371,8 +366,8 @@ class SubstrateJVM {
     }
 
     /** See {@link JVM#setRepositoryLocation}. */
-    public void setRepositoryLocation(String dirText) {
-        // TODO: implement
+    public void setRepositoryLocation(@SuppressWarnings("unused") String dirText) {
+        // Would only be used in case of an emergency dump, which is not supported at the moment.
     }
 
     /** See {@link JVM#abort}. */
@@ -390,37 +385,14 @@ class SubstrateJVM {
         }
     }
 
-    /** See {@link JVM#addStringConstant}. */
-    public boolean addStringConstant(boolean expectedEpoch, long id, String value) {
-        return stringRepo.add(expectedEpoch, id, value);
-    }
-
     /** See {@link JVM#log}. */
     public void log(int tagSetId, int level, String message) {
-        if (level < LogLevel.WARN.ordinal() + 1) {
-            return;
-        }
-
-        Log log = Log.log();
-        log.string(getLogTag(tagSetId).toString());
-        log.spaces(1);
-        log.string(getLogLevel(level).toString());
-        log.spaces(1);
-        log.string(message);
-        log.newline();
+        jfrLogging.log(tagSetId, level, message);
     }
 
     /** See {@link JVM#subscribeLogLevel}. */
-    public void subscribeLogLevel(LogTag lt, int tagSetId) {
-        // TODO: implement
-    }
-
-    private static LogLevel getLogLevel(int level) {
-        return LogLevel.values()[level - 1];
-    }
-
-    private static LogTag getLogTag(int tagSetId) {
-        return LogTag.values()[tagSetId];
+    public void subscribeLogLevel(@SuppressWarnings("unused") LogTag lt, @SuppressWarnings("unused") int tagSetId) {
+        // Currently unused because logging support is minimal.
     }
 
     /** See {@link JVM#getEventWriter}. */
@@ -438,8 +410,9 @@ class SubstrateJVM {
         eventSettings[NumUtil.safeToInt(eventTypeId)].setEnabled(enabled);
     }
 
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isEnabled(JfrEvents event) {
-        return eventSettings[event.getId()].isEnabled();
+        return eventSettings[(int) event.getId()].isEnabled();
     }
 
     /** See {@link JVM#setThreshold}. */
@@ -452,9 +425,5 @@ class SubstrateJVM {
     public boolean setCutoff(long eventTypeId, long cutoffTicks) {
         eventSettings[NumUtil.safeToInt(eventTypeId)].setCutoffTicks(cutoffTicks);
         return true;
-    }
-
-    public boolean getEpoch() {
-        return epoch == 1L;
     }
 }

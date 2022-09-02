@@ -36,6 +36,7 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.jdk.JDK14OrEarlier;
 import com.oracle.svm.core.jdk.JDK15OrLater;
+import com.oracle.svm.jfr.traceid.JfrTraceId;
 
 import jdk.jfr.Event;
 import jdk.jfr.internal.EventWriter;
@@ -69,7 +70,7 @@ public final class Target_jdk_jfr_internal_JVM {
     /** See {@link JVM#counterTime}. */
     @Substitute
     public static long counterTime() {
-        return JfrTicks.counterTime();
+        return JfrTicks.elapsedTicks();
     }
 
     /** See {@link JVM#emitEvent}. */
@@ -87,7 +88,7 @@ public final class Target_jdk_jfr_internal_JVM {
     /** See {@link JVM#getAllEventClasses}. */
     @Substitute
     public List<Class<? extends Event>> getAllEventClasses() {
-        return JfrAllEvents.getAllEventClasses();
+        return JfrJavaEvents.getAllEventClasses();
     }
 
     /** See {@link JVM#getUnloadedEventClassCount}. */
@@ -99,14 +100,13 @@ public final class Target_jdk_jfr_internal_JVM {
     /** See {@link JVM#getClassId}. Intrinsified on HotSpot. */
     @Substitute
     public static long getClassId(Class<?> clazz) {
-        // Is intrinsified on HotSpot.
-        return SubstrateJVM.get().getClassId(clazz);
+        return getClassIdNonIntrinsic(clazz);
     }
 
     /** See {@link JVM#getClassIdNonIntrinsic}. */
     @Substitute
     public static long getClassIdNonIntrinsic(Class<?> clazz) {
-        return getClassId(clazz);
+        return SubstrateJVM.get().getClassId(clazz);
     }
 
     /** See {@link JVM#getPid}. */
@@ -149,7 +149,7 @@ public final class Target_jdk_jfr_internal_JVM {
     /** See {@link JVM#retransformClasses}. */
     @Substitute
     public synchronized void retransformClasses(Class<?>[] classes) {
-        throw new IllegalStateException("Class retransformation is not supported.");
+        // Not supported but this method is called during JFR startup, so we can't throw an error.
     }
 
     /** See {@link JVM#setEnabled}. */
@@ -274,7 +274,7 @@ public final class Target_jdk_jfr_internal_JVM {
     /** See {@link JVM#getTypeId}. */
     @Substitute
     public long getTypeId(Class<?> clazz) {
-        return SubstrateJVM.get().getTypeId(clazz);
+        return JfrTraceId.getTraceId(clazz);
     }
 
     /** See {@link JVM#getEventWriter}. */
@@ -307,18 +307,6 @@ public final class Target_jdk_jfr_internal_JVM {
         SubstrateJVM.get().abort(errorMsg);
     }
 
-    /** See {@link JVM#addStringConstant}. */
-    @Substitute
-    public static boolean addStringConstant(boolean epoch, long id, String s) {
-        return SubstrateJVM.get().addStringConstant(epoch, id, s);
-    }
-
-    /** See {@link JVM#getEpochAddress}. */
-    @Substitute
-    public long getEpochAddress() {
-        return SubstrateJVM.get().getEpochAddress();
-    }
-
     /** See {@link JVM#uncaughtException}. */
     @Substitute
     public void uncaughtException(Thread thread, Throwable t) {
@@ -336,14 +324,14 @@ public final class Target_jdk_jfr_internal_JVM {
     @Substitute
     @TargetElement(onlyWith = JDK14OrEarlier.class) //
     public void emitOldObjectSamples(long cutoff, boolean emitAll) {
-        throw new IllegalStateException("Object sampling not supported");
+        // Not supported but this method is called during JFR shutdown, so we can't throw an error.
     }
 
     /** See {@link JVM#emitOldObjectSamples}. */
     @Substitute
     @TargetElement(onlyWith = JDK15OrLater.class) //
     public void emitOldObjectSamples(long cutoff, boolean emitAll, boolean skipBFS) {
-        throw new IllegalStateException("Object sampling not supported");
+        // Not supported but this method is called during JFR shutdown, so we can't throw an error.
     }
 
     /** See {@link JVM#shouldRotateDisk}. */
