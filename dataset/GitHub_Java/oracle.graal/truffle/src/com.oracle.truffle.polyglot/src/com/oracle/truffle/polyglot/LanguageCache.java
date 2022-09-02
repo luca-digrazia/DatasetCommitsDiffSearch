@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -285,18 +285,9 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     String getLanguageHome() {
         if (languageHome == null) {
-            languageHome = getLanguageHomeImpl(id);
+            languageHome = System.getProperty(id + ".home");
         }
         return languageHome;
-    }
-
-    private static String getLanguageHomeImpl(String languageId) {
-        String home = System.getProperty("org.graalvm.language." + languageId + ".home");
-        if (home == null) {
-            // check legacy property
-            home = System.getProperty(languageId + ".home");
-        }
-        return home;
     }
 
     TruffleLanguage<?> loadLanguage() {
@@ -616,7 +607,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
                 if (id == null) {
                     id = defaultId(name, info.getProperty(prefix + "className"));
                 }
-                String languageHome = getLanguageHomeImpl(id);
+                String languageHome = System.getProperty(id + ".home");
                 if (languageHome == null) {
                     languageHome = getLanguageHomeFromURLConnection(id, connection);
                 }
@@ -833,7 +824,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
                     if (id == null || id.isEmpty()) {
                         id = defaultId(name, className);
                     }
-                    String languageHome = getLanguageHomeImpl(id);
+                    String languageHome = System.getProperty(id + ".home");
                     if (languageHome == null) {
                         URL url = provider.getClass().getClassLoader().getResource(className.replace('.', '/') + ".class");
                         if (url != null) {

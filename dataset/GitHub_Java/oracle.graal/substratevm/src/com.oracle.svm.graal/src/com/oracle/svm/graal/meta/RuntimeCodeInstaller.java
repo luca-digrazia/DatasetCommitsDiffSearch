@@ -240,7 +240,7 @@ public class RuntimeCodeInstaller {
         Map<Integer, NativeImagePatcher> patches = new HashMap<>();
         for (CodeAnnotation codeAnnotation : compilation.getCodeAnnotations()) {
             if (codeAnnotation instanceof NativeImagePatcher) {
-                patches.put(codeAnnotation.getPosition(), (NativeImagePatcher) codeAnnotation);
+                patches.put(codeAnnotation.position, (NativeImagePatcher) codeAnnotation);
             }
         }
         patchData(patches, objectConstants);
@@ -328,7 +328,7 @@ public class RuntimeCodeInstaller {
         assert !adjuster.isFinished() || codeInfoEncoder.verifyFrameInfo(runtimeMethodInfo);
 
         DeoptimizationSourcePositionEncoder sourcePositionEncoder = new DeoptimizationSourcePositionEncoder();
-        sourcePositionEncoder.encodeAndInstall(compilation.getDeoptimizationSourcePositions(), runtimeMethodInfo, adjuster);
+        sourcePositionEncoder.encodeAndInstall(compilation.getDeoptimizationSourcePositions(), runtimeMethodInfo);
     }
 
     private void patchData(Map<Integer, NativeImagePatcher> patcher, @SuppressWarnings("unused") ObjectConstantsHolder objectConstants) {

@@ -191,12 +191,6 @@ public abstract class Accessor {
         public abstract SourceBuilder newBuilder(String language, File origin);
 
         public abstract void setFileSystemContext(SourceBuilder builder, Object fileSystemContext);
-
-        public abstract Runnable createReinitializableKey(TruffleFile truffleFile, String pathInLanguageHome, Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
-
-        public abstract Object createLanguageHomeKey(String pathInLanguageHome, Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
-
-        public abstract Object createImmutableSourceKey(Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
     }
 
     public abstract static class DumpSupport {
@@ -419,8 +413,6 @@ public abstract class Accessor {
 
         public abstract String getUnparsedOptionValue(OptionValues optionValues, OptionKey<?> optionKey);
 
-        public abstract Object createSourceKey(TruffleFile truffleFile, Object content, String mimeType, String languageId, URL url, URI uri,
-            String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
     }
 
     public abstract static class LanguageSupport {
@@ -717,7 +709,6 @@ public abstract class Accessor {
             case "com.oracle.truffle.api.test.polyglot.FileSystemsTest$TestAPIAccessor":
             case "com.oracle.truffle.api.impl.TVMCIAccessor":
             case "org.graalvm.compiler.truffle.runtime.CompilerRuntimeAccessor":
-            case "org.graalvm.compiler.truffle.runtime.debug.CompilerDebugAccessor":
             case "com.oracle.truffle.api.library.LibraryAccessor":
                 // OK, classes allowed to use accessors
                 break;
