@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.core.jdk;
 
+/* Checkstyle: allow reflection */
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -37,6 +39,7 @@ import org.graalvm.nativeimage.impl.InternalPlatform;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.util.ReflectionUtil;
+import com.oracle.svm.util.ReflectionUtil.ReflectionUtilError;
 
 /**
  * Registration of classes, methods, and fields accessed via JNI by C code of the JDK.
@@ -50,6 +53,7 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
     public void duringSetup(DuringSetupAccess a) {
         rerunClassInit(a, "sun.nio.ch.IOUtil", "sun.nio.ch.ServerSocketChannelImpl", "sun.nio.ch.DatagramChannelImpl", "sun.nio.ch.FileChannelImpl", "sun.nio.ch.FileKey");
         rerunClassInit(a, "java.nio.file.FileSystems$DefaultFileSystemHolder");
+        rerunClassInit(a, "java.nio.file.Files$FileTypeDetectors");
         if (isPosix()) {
             rerunClassInit(a, "sun.nio.fs.UnixNativeDispatcher");
             if (isLinux()) {
@@ -77,7 +81,7 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
 
         if (isPosix()) {
             a.registerReachabilityHandler(JNIRegistrationJavaNio::registerUnixNativeDispatcherInit, method(a, "sun.nio.fs.UnixNativeDispatcher", "init"));
-            a.registerReachabilityHandler(JNIRegistrationJavaNio::registerDefaultFileSystemProviderCreate, method(a, "sun.nio.fs.DefaultFileSystemProvider", "create"));
+            a.registerReachabilityHandler(JNIRegistrationJavaNio::registerDefaultFileSystemProvider, getDefaultFileSystemProviderFactoryMethod(a));
             if (isLinux()) {
                 a.registerReachabilityHandler(JNIRegistrationJavaNio::registerSctpChannelImplInitIDs, method(a, "sun.nio.ch.sctp.SctpChannelImpl", "initIDs"));
             }
@@ -90,14 +94,36 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
         a.registerReachabilityHandler(JNIRegistrationJavaNio::registerConnectionCreateInetSocketAddress, method(a, "com.sun.jndi.ldap.Connection", "createInetSocketAddress", String.class, int.class));
     }
 
-    private static void registerDefaultFileSystemProviderCreate(@SuppressWarnings("unused") DuringAnalysisAccess a) {
+    private static void registerDefaultFileSystemProvider(DuringAnalysisAccess a) {
         /*
          * The class instantiated on Posix systems depends on the OS, and instantiation is via
          * reflection. So we register exactly the class that is returned by the hosted invocation.
          */
-        Object hostedDefaultProvider = sun.nio.fs.DefaultFileSystemProvider.create();
+        Object hostedDefaultProvider;
+        try {
+            hostedDefaultProvider = getDefaultFileSystemProviderFactoryMethod(a).invoke(null);
+        } catch (Exception e) {
+            throw new InternalError(e);
+        }
         RuntimeReflection.register(hostedDefaultProvider.getClass());
         RuntimeReflection.register(ReflectionUtil.lookupConstructor(hostedDefaultProvider.getClass()));
+    }
+
+    private static Method getDefaultFileSystemProviderFactoryMethod(BeforeAnalysisAccess a) {
+        Method factoryMethod;
+        try {
+            factoryMethod = method(a, "sun.nio.fs.DefaultFileSystemProvider", "create");
+        } catch (ReflectionUtilError e) {
+            try {
+                // JDK-8213406
+                factoryMethod = method(a, "sun.nio.fs.DefaultFileSystemProvider", "instance");
+            } catch (Exception e2) {
+                throw new InternalError(e2);
+            }
+        } catch (Exception e) {
+            throw new InternalError(e);
+        }
+        return factoryMethod;
     }
 
     private static void registerServerSocketChannelImplInitIDs(DuringAnalysisAccess a) {
