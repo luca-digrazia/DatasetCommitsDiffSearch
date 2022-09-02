@@ -38,7 +38,7 @@ import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 
-@Platforms(Platform.LINUX.class)
+@Platforms(Platform.LINUX_AMD64.class)
 @SuppressWarnings({"static-method", "unused"})
 public final class JavaAWTSubstitutions {
     // Checkstyle: stop
