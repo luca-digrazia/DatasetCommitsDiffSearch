@@ -666,10 +666,6 @@ public abstract class JavaThreads {
         if (thread.isInterrupted()) { // avoid state changes and synchronization
             return;
         }
-        /*
-         * We can defer assigning a ParkEvent to here because Thread.interrupt() is guaranteed to
-         * assign and unpark one if it doesn't yet exist, otherwise we could lose a wakeup.
-         */
         final ParkEvent parkEvent = ensureUnsafeParkEvent(thread);
         // Change the Java thread state while parking.
         final int oldStatus = JavaThreads.getThreadStatus(thread);
@@ -689,10 +685,6 @@ public abstract class JavaThreads {
         if (thread.isInterrupted()) { // avoid state changes and synchronization
             return;
         }
-        /*
-         * We can defer assigning a ParkEvent to here because Thread.interrupt() is guaranteed to
-         * assign and unpark one if it doesn't yet exist, otherwise we could lose a wakeup.
-         */
         final ParkEvent parkEvent = ensureUnsafeParkEvent(thread);
         final int oldStatus = JavaThreads.getThreadStatus(thread);
         int newStatus = MonitorSupport.maybeAdjustNewParkStatus(ThreadStatus.PARKED_TIMED);
@@ -704,12 +696,7 @@ public abstract class JavaThreads {
         }
     }
 
-    /**
-     * Unpark a Thread.
-     *
-     * @see #park()
-     * @see #park(long)
-     */
+    /** Unpark a Thread. */
     static void unpark(Thread thread) {
         ensureUnsafeParkEvent(thread).unpark();
     }
@@ -726,12 +713,9 @@ public abstract class JavaThreads {
         final ParkEvent sleepEvent = ParkEvent.initializeOnce(JavaThreads.getSleepParkEvent(thread), true);
         sleepEvent.reset();
         /*
-         * It is critical to reset the event *before* checking for an interrupt to avoid losing a
-         * wakeup in the race. This requires that updates to the event's unparked status and updates
-         * to the thread's interrupt status cannot be reordered with regard to each other. Another
-         * important aspect is that the thread must have a sleepParkEvent assigned to it *before*
-         * the interrupted check because if not, the interrupt code will not assign one and the
-         * wakeup will be lost, too.
+         * It is critical to reset the event *before* checking for an interrupt, which requires that
+         * updates to the event's unparked status and updates to the thread's interrupt status
+         * cannot be reordered with regard to each other.
          */
         if (thread.isInterrupted()) {
             return; // likely leaves a stale unpark which will be reset before the next sleep()
@@ -745,11 +729,7 @@ public abstract class JavaThreads {
         }
     }
 
-    /**
-     * Interrupt a sleeping thread.
-     *
-     * @see #sleep(long)
-     */
+    /** Interrupt a sleeping thread. */
     static void interrupt(Thread thread) {
         final ParkEvent sleepEvent = JavaThreads.getSleepParkEvent(thread).get();
         if (sleepEvent != null) {
