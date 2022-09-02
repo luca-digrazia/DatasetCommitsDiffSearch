@@ -153,10 +153,6 @@ public class NativeImage {
         return oH + option.getName() + "=";
     }
 
-    private static <T> String oR(OptionKey<T> option) {
-        return oR + option.getName() + "=";
-    }
-
     final String oHClass = oH(SubstrateOptions.Class);
     final String oHName = oH(SubstrateOptions.Name);
     final String oHPath = oH(SubstrateOptions.Path);
@@ -165,7 +161,7 @@ public class NativeImage {
     final String oHOptimize = oH(SubstrateOptions.Optimize);
     final String oHFallbackThreshold = oH(SubstrateOptions.FallbackThreshold);
     final String oHFallbackExecutorJavaArg = oH(FallbackExecutor.Options.FallbackExecutorJavaArg);
-    final String oRRuntimeJavaArg = oR(Options.FallbackExecutorRuntimeJavaArg);
+    final String oHRuntimeJavaArg = oH(Options.FallbackExecutorRuntimeJavaArg);
 
     /* List arguments */
     final String oHSubstitutionFiles = oH(ConfigurationFiles.Options.SubstitutionFiles);
@@ -519,7 +515,7 @@ public class NativeImage {
         }
 
         List<String> runtimeJavaArgs = imageBuilderArgs.stream()
-                        .filter(s -> s.startsWith(oRRuntimeJavaArg))
+                        .filter(s -> s.startsWith(oHRuntimeJavaArg))
                         .collect(Collectors.toList());
         for (String runtimeJavaArg : runtimeJavaArgs) {
             buildArgs.add(runtimeJavaArg);
