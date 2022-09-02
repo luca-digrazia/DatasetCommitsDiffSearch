@@ -41,12 +41,14 @@
 package com.oracle.truffle.api.dsl.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
@@ -54,6 +56,7 @@ import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.dsl.AOTSupport;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
+import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
@@ -67,16 +70,20 @@ import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTAutoLibraryNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTManualLibraryNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTManualLibrarySingleLimitNodeGen;
+import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTRecursiveErrorNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.NoSpecializationTestNodeGen;
+import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.RecursiveNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.TestNodeGen;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.DynamicDispatchLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
+import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.Node;
@@ -92,6 +99,7 @@ import com.oracle.truffle.api.profiles.LoopConditionProfile;
 import com.oracle.truffle.api.profiles.PrimitiveValueProfile;
 import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
+import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 /**
  * Note that this test is also used in AOTSupportCompilationTest.
@@ -219,6 +227,12 @@ public class AOTSupportTest extends AbstractPolyglotTest {
                     assertEquals(1, countActiveSpecializations(root));
                 }
             }
+
+            // test excluded message with library
+            if (receiver != null) {
+                root.node.execute(new AOTInitializable(), 11);
+            }
+
         } finally {
             context.leave();
         }
@@ -286,6 +300,10 @@ public class AOTSupportTest extends AbstractPolyglotTest {
 
         @Specialization(guards = "arg == 2")
         int nodeCachedSingle(int arg,
+                        @Cached("1") int one,
+                        @Cached("2") int two,
+                        @Cached("3") int three,
+                        @Cached("4") int four,
                         @Cached NoSpecializationTestNode node) {
             return arg;
         }
@@ -410,6 +428,7 @@ public class AOTSupportTest extends AbstractPolyglotTest {
 
     @GenerateAOT
     @GenerateLibrary
+    @DefaultExport(DefaultAOTExport.class)
     public abstract static class AOTTestLibrary extends Library {
 
         public abstract int m0(Object receiver, Object arg);
@@ -418,13 +437,51 @@ public class AOTSupportTest extends AbstractPolyglotTest {
 
     }
 
+    @ExportLibrary(value = AOTTestLibrary.class, receiverType = DefaultAOTReceiver.class, useForAOT = true, useForAOTPriority = 0)
+    @SuppressWarnings("unused")
+    public static final class DefaultAOTExport {
+        @ExportMessage
+        static int m0(DefaultAOTReceiver receiver, Object arg) {
+            return 42;
+        }
+
+        @ExportMessage
+        static int m1(DefaultAOTReceiver receiver) {
+            return 43;
+        }
+
+    }
+
+    static final class DefaultAOTReceiver {
+
+    }
+
+    @GenerateAOT
+    @GenerateLibrary
+    public abstract static class OtherAOTTestLibrary extends Library {
+
+        public abstract int m2(Object receiver);
+
+    }
+
     @ExportLibrary(value = AOTTestLibrary.class, useForAOT = true, useForAOTPriority = 0)
+    @ExportLibrary(value = OtherAOTTestLibrary.class, useForAOT = true, useForAOTPriority = 0)
     @SuppressWarnings("unused")
     public static final class AOTInitializable {
 
         @ExportMessage
+        static boolean accepts(AOTInitializable receiver, @Cached("43") int cachedValue) {
+            return true;
+        }
+
+        @ExportMessage
         static int m1(AOTInitializable receiver, @Cached("42") int cachedValue) {
             return cachedValue;
+        }
+
+        @ExportMessage
+        static int m2(AOTInitializable receiver) {
+            return 42;
         }
 
         @ExportMessage
@@ -504,8 +561,7 @@ public class AOTSupportTest extends AbstractPolyglotTest {
                             @Cached("createRawIdentityProfile()") DoubleValueProfile doubleValue,
                             @Cached("createEqualityProfile()") PrimitiveValueProfile primitiveValue,
                             @Cached("createClassProfile()") ValueProfile classValue,
-                            @Cached("createIdentityProfile()") ValueProfile identityValue,
-                            @Cached("createEqualityProfile()") ValueProfile equalityValue) {
+                            @Cached("createIdentityProfile()") ValueProfile identityValue) {
 
                 branch.enter();
                 binaryCondition.profile(true);
@@ -547,21 +603,73 @@ public class AOTSupportTest extends AbstractPolyglotTest {
 
                 classValue.profile(Integer.class);
                 identityValue.profile(receiver);
-                equalityValue.profile(receiver);
 
                 return arg;
             }
 
             @Specialization(guards = {"arg == 9"})
-            static int nop1(AOTInitializable receiver, int arg) {
+            static int nop1(AOTInitializable receiver, int arg, @CachedLibrary("receiver") AOTTestLibrary library) {
                 return arg;
             }
 
             @Specialization(guards = {"arg == 10"})
-            static int nop2(AOTInitializable receiver, int arg) {
+            static int nop2(AOTInitializable receiver, int arg,
+                            @CachedContext(ProxyLanguage.class) ProxyLanguage.LanguageContext context,
+                            @CachedLanguage ProxyLanguage language) {
                 return arg;
             }
 
+            @GenerateAOT.Exclude
+            @Specialization(guards = {"arg == 11"})
+            @TruffleBoundary
+            static int excludedCache(AOTInitializable receiver, int arg, @CachedLibrary("receiver") InteropLibrary library) {
+                assertNotNull(library);
+                return 42;
+            }
+
+        }
+
+    }
+
+    @Test
+    public void testRecursionError() {
+        TestRootNode root = setup(AOTRecursiveErrorNodeGen.create());
+        AbstractPolyglotTest.assertFails(() -> AOTSupport.prepareForAOT(root), AssertionError.class, (e) -> {
+            assertTrue(e.getMessage(), e.getMessage().contains("<-recursion-detected->"));
+        });
+    }
+
+    @SuppressWarnings("unused")
+    @GenerateAOT
+    public abstract static class AOTRecursiveErrorNode extends BaseNode {
+
+        @Specialization
+        int doDefault(Object receiver, int arg1, @Cached AOTIndirectRecursiveErrorNode cachedValue) {
+            return arg1;
+        }
+
+    }
+
+    @SuppressWarnings("unused")
+    @GenerateAOT
+    public abstract static class AOTDirectRecursionError extends BaseNode {
+
+        @Specialization
+        int doDefault(Object receiver, int arg1,
+                        @ExpectError("Failed to generate code for @GenerateAOT: Recursive AOT preparation detected. %")//
+                        @Cached AOTDirectRecursionError cachedValue) {
+            return arg1;
+        }
+
+    }
+
+    @SuppressWarnings("unused")
+    @GenerateAOT
+    public abstract static class AOTIndirectRecursiveErrorNode extends BaseNode {
+
+        @Specialization
+        int doDefault(Object receiver, int arg1, @Cached AOTRecursiveErrorNode asdf) {
+            return arg1;
         }
 
     }
@@ -794,10 +902,56 @@ public class AOTSupportTest extends AbstractPolyglotTest {
 
         @SuppressWarnings("static-method")
         @ExportMessage
-        int m0(Object arg0, @ExpectError("Merged librares are not supported in combination with AOT preparation. " + //
-                        "Either disable useForAOT for this @ExportLibrary or use an automatically dispatched library instead.") //
-        @CachedLibrary("this.delegate") AOTTestLibrary lib) {
+        int m0(Object arg0,
+                        @ExpectError("Merged librares are not supported in combination with AOT preparation. Resolve this problem by either: %n" +
+                                        " - Setting @ExportLibrary(..., useForAOT=false) to disable AOT preparation for this export. %n" +
+                                        " - Using a dispatched library without receiver expression. %n" +
+                                        " - Adding the @GenerateAOT.Exclude annotation to the specialization or exported method.")//
+                        @CachedLibrary("this.delegate") AOTTestLibrary lib) {
             return 42;
+        }
+
+        @ExportMessage
+        static class M1 {
+
+            @SuppressWarnings("static-method")
+            @Specialization
+            static int doDefault(ErrorMergedLibrary receiver,
+                            @ExpectError("Merged librares are not supported in combination with AOT preparation. Resolve this problem by either: %n" +
+                                            " - Setting @ExportLibrary(..., useForAOT=false) to disable AOT preparation for this export. %n" +
+                                            " - Using a dispatched library without receiver expression. %n" +
+                                            " - Adding the @GenerateAOT.Exclude annotation to the specialization or exported method.")//
+                            @CachedLibrary("receiver") InteropLibrary lib) {
+                return 42;
+            }
+        }
+
+    }
+
+    @ExportLibrary(value = AOTTestLibrary.class, useForAOT = true, useForAOTPriority = 0)
+    @SuppressWarnings("unused")
+    public static final class ErrorMergedLibraryExclude {
+
+        final Object delegate = null;
+
+        @SuppressWarnings("static-method")
+        @ExportMessage
+        @GenerateAOT.Exclude
+        int m0(Object arg0,
+                        @CachedLibrary("this.delegate") AOTTestLibrary lib) {
+            return 42;
+        }
+
+        @ExportMessage
+        static class M1 {
+
+            @SuppressWarnings("static-method")
+            @Specialization
+            @GenerateAOT.Exclude
+            static int doDefault(ErrorMergedLibraryExclude receiver,
+                            @CachedLibrary("receiver") InteropLibrary lib) {
+                return 42;
+            }
         }
 
     }
@@ -857,6 +1011,88 @@ public class AOTSupportTest extends AbstractPolyglotTest {
         void m0() {
         }
 
+    }
+
+    @SuppressWarnings("unused")
+    @ExportLibrary(value = AOTTestLibrary.class, useForAOT = true, useForAOTPriority = 0)
+    public static final class ErrorAcceptsExcluded {
+
+        @ExpectError("Cannot use with @GenerateAOT.Exclude with the accepts message. The accepts message must always be usable for AOT.")
+        @ExportMessage
+        @GenerateAOT.Exclude
+        static boolean accepts(ErrorAcceptsExcluded receiver) {
+            return true;
+        }
+
+        @SuppressWarnings("static-method")
+        @ExportMessage
+        int m0(Object arg) {
+            return 0;
+        }
+
+        @SuppressWarnings("static-method")
+        @ExportMessage
+        int m1() {
+            return 0;
+        }
+
+    }
+
+    @SuppressWarnings("unused")
+    @ExportLibrary(value = AOTTestLibrary.class, useForAOT = true, useForAOTPriority = 0)
+    @ExportLibrary(value = OtherAOTTestLibrary.class, useForAOT = false)
+    public static final class ErrorMultiExport implements TruffleObject {
+
+        @SuppressWarnings("static-method")
+        @ExportMessage(library = AOTTestLibrary.class, name = "m1")
+        @ExportMessage(library = OtherAOTTestLibrary.class, name = "m2")
+        int multiExport(@Cached("42") int cachedValue) {
+            return 0;
+        }
+
+        @SuppressWarnings("static-method")
+        @ExportMessage
+        int m0(Object arg) {
+            return 0;
+        }
+
+    }
+
+    @GenerateAOT
+    @GenerateUncached
+    public abstract static class RecursiveNode extends BaseNode {
+
+        @Specialization(limit = "3")
+        @SuppressWarnings("unused")
+        int doI32DerefHandle(Object arg, @CachedLibrary("arg") RecursiveLibrary lib) {
+            return 42;
+        }
+
+    }
+
+    @GenerateLibrary
+    @GenerateAOT
+    public abstract static class RecursiveLibrary extends Library {
+
+        public abstract void m0(Object receiver);
+
+    }
+
+    @ExportLibrary(value = RecursiveLibrary.class, useForAOT = true, useForAOTPriority = 1)
+    public static final class RecursiveExportingClass {
+
+        @SuppressWarnings("unused")
+        @ExportMessage
+        void m0(@Cached RecursiveNode lib) {
+        }
+    }
+
+    @Test
+    public void testRecursionError2() {
+        TestRootNode root = setup(RecursiveNodeGen.create());
+        AbstractPolyglotTest.assertFails(() -> AOTSupport.prepareForAOT(root), AssertionError.class, (e) -> {
+            assertTrue(e.getMessage(), e.getMessage().contains("<-recursion-detected->"));
+        });
     }
 
 }
