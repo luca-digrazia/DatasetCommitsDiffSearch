@@ -29,9 +29,6 @@ package com.oracle.svm.core.jdk;
 import java.io.FileDescriptor;
 import java.nio.channels.spi.SelectorProvider;
 
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
-
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
@@ -77,7 +74,6 @@ final class Target_java_nio_channels_spi_SelectorProvider {
     }
 }
 
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
 @SuppressWarnings({"unused"})
 @TargetClass(sun.nio.ch.Net.class)
 final class Target_sun_nio_ch_Net {
@@ -103,7 +99,6 @@ final class Target_sun_nio_ch_Net {
     }
 }
 
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
 @SuppressWarnings({"unused"})
 @TargetClass(className = "sun.nio.ch.DatagramDispatcher")
 final class Target_sun_nio_ch_DatagramDispatcher {
