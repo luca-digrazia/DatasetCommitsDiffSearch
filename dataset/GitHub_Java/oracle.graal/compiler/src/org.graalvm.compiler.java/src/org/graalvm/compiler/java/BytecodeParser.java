@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -336,6 +336,7 @@ import org.graalvm.compiler.nodes.InliningLog;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
+import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNegationNode;
 import org.graalvm.compiler.nodes.LogicNode;
@@ -353,7 +354,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
-import org.graalvm.compiler.nodes.WithExceptionNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.AndNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
@@ -2073,7 +2073,11 @@ public class BytecodeParser implements GraphBuilderContext {
         if (exceptionEdge == ExceptionEdgeAction.OMIT) {
             return createInvoke(invokeBci, callTarget, resultType);
         } else {
-            return createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge);
+            Invoke invoke = createInvokeWithException(invokeBci, callTarget, resultType, exceptionEdge);
+            AbstractBeginNode beginNode = graph.add(KillingBeginNode.create(LocationIdentity.any()));
+            invoke.setNext(beginNode);
+            lastInstr = beginNode;
+            return invoke;
         }
     }
 
@@ -2334,7 +2338,7 @@ public class BytecodeParser implements GraphBuilderContext {
                     if (node instanceof Invoke) {
                         Invoke invoke = (Invoke) node;
                         if (invoke.bci() == BytecodeFrame.UNKNOWN_BCI) {
-                            invoke.setBci(bci());
+                            invoke.replaceBci(bci());
                         }
                         if (node instanceof InvokeWithExceptionNode) {
                             // The graphs for MethodSubsitutions are produced assuming that
@@ -2363,7 +2367,7 @@ public class BytecodeParser implements GraphBuilderContext {
                         }
                     } else if (node instanceof ForeignCallNode) {
                         ForeignCallNode call = (ForeignCallNode) node;
-                        if (call.bci() == BytecodeFrame.UNKNOWN_BCI) {
+                        if (call.getBci() == BytecodeFrame.UNKNOWN_BCI) {
                             call.setBci(bci());
                             if (call.stateAfter() != null && call.stateAfter().bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
                                 call.setStateAfter(inlineScope.stateBefore);
@@ -2776,9 +2780,7 @@ public class BytecodeParser implements GraphBuilderContext {
             ValueNode receiver = graph.start().stateAfter().localAt(0);
             assert receiver != null && receiver.getStackKind() == JavaKind.Object;
             if (RegisterFinalizerNode.mayHaveFinalizer(receiver, graph.getAssumptions())) {
-                RegisterFinalizerNode regFin = new RegisterFinalizerNode(receiver);
-                append(regFin);
-                regFin.setStateAfter(graph.start().stateAfter());
+                append(new RegisterFinalizerNode(receiver));
             }
         }
         genInfoPointNode(InfopointReason.METHOD_END, x);
@@ -2923,23 +2925,10 @@ public class BytecodeParser implements GraphBuilderContext {
                 FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) fixedNode;
                 assert fixedWithNextNode.next() == null : "cannot append instruction to instruction which isn't end";
                 lastInstr = fixedWithNextNode;
-            } else if (fixedNode instanceof WithExceptionNode) {
-                lastInstr = updateWithExceptionNode((WithExceptionNode) fixedNode);
             } else {
                 lastInstr = null;
             }
         }
-    }
-
-    private AbstractBeginNode updateWithExceptionNode(WithExceptionNode withExceptionNode) {
-        if (withExceptionNode.exceptionEdge() == null) {
-            AbstractBeginNode exceptionEdge = handleException(null, bci(), false);
-            withExceptionNode.setExceptionEdge(exceptionEdge);
-        }
-        assert withExceptionNode.next() == null : "new WithExceptionNode with existing next";
-        AbstractBeginNode nextBegin = graph.add(withExceptionNode.createNextBegin());
-        withExceptionNode.setNext(nextBegin);
-        return nextBegin;
     }
 
     private Target checkLoopExit(Target target, BciBlock targetBlock) {
@@ -4345,33 +4334,19 @@ public class BytecodeParser implements GraphBuilderContext {
         if (intrinsicContext != null) {
             constantPool.loadReferencedType(cpi, bytecode);
         } else if (graphBuilderConfig.eagerResolving()) {
-            Object lock = loadReferenceTypeLock();
-            if (lock != null) {
-                synchronized (lock) {
-                    loadReferenceType(cpi, bytecode);
+            /*
+             * Since we're potentially triggering class initialization here, we need synchronization
+             * to mitigate the potential for class initialization related deadlock being caused by
+             * the compiler (e.g., https://github.com/graalvm/graal-core/pull/232/files#r90788550).
+             */
+            synchronized (BytecodeParser.class) {
+                ClassInitializationPlugin classInitializationPlugin = graphBuilderConfig.getPlugins().getClassInitializationPlugin();
+                if (classInitializationPlugin != null) {
+                    classInitializationPlugin.loadReferencedType(this, constantPool, cpi, bytecode);
+                } else {
+                    constantPool.loadReferencedType(cpi, bytecode);
                 }
-            } else {
-                loadReferenceType(cpi, bytecode);
             }
-        }
-    }
-
-    /**
-     * Gets the object to lock when resolving and initializing a type referenced by a constant pool
-     * entry.
-     *
-     * @return {@code null} if no synchronization is necessary
-     */
-    protected Object loadReferenceTypeLock() {
-        return BytecodeParser.class;
-    }
-
-    private void loadReferenceType(int cpi, int bytecode) {
-        ClassInitializationPlugin classInitializationPlugin = graphBuilderConfig.getPlugins().getClassInitializationPlugin();
-        if (classInitializationPlugin != null) {
-            classInitializationPlugin.loadReferencedType(this, constantPool, cpi, bytecode);
-        } else {
-            constantPool.loadReferencedType(cpi, bytecode);
         }
     }
 

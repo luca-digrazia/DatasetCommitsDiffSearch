@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
@@ -103,7 +102,7 @@ public interface Replacements {
      * @return the method substitution graph, if any, that is derived from {@code method}
      */
     StructuredGraph getMethodSubstitution(MethodSubstitutionPlugin plugin, ResolvedJavaMethod original, IntrinsicContext.CompilationContext context,
-                    AllowAssumptions allowAssumptions, Cancellable cancellable, OptionValues options);
+                    StructuredGraph.AllowAssumptions allowAssumptions, Cancellable cancellable, OptionValues options);
 
     /**
      * Registers a plugin as a substitution.
@@ -123,13 +122,10 @@ public interface Replacements {
      * @param invokeBci the call site BCI if this request is made for inlining a substitute
      *            otherwise {@code -1}
      * @param trackNodeSourcePosition
-     * @param replaceePosition
-     * @param allowAssumptions
      * @param options
      * @return the graph, if any, that is a substitution for {@code method}
      */
-    StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition, AllowAssumptions allowAssumptions,
-                    OptionValues options);
+    StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition, OptionValues options);
 
     /**
      * Gets a graph produced from the intrinsic for a given method that can be compiled and
@@ -138,15 +134,14 @@ public interface Replacements {
      * @param method
      * @param compilationId
      * @param debug
-     * @param allowAssumptions
      * @param cancellable
      * @return an intrinsic graph that can be compiled and installed for {@code method} or null
      */
-    StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, CompilationIdentifier compilationId, DebugContext debug, AllowAssumptions allowAssumptions, Cancellable cancellable);
+    StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, CompilationIdentifier compilationId, DebugContext debug, Cancellable cancellable);
 
     /**
      * Determines if there may be a
-     * {@linkplain #getSubstitution(ResolvedJavaMethod, int, boolean, NodeSourcePosition, AllowAssumptions, OptionValues)
+     * {@linkplain #getSubstitution(ResolvedJavaMethod, int, boolean, NodeSourcePosition, OptionValues)
      * substitution graph} for a given method.
      *
      * A call to {@link #getSubstitution} may still return {@code null} for {@code method} and
