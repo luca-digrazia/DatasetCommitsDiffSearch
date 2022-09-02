@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -45,21 +44,21 @@ public final class EventFilters {
     }
 
     public RequestFilter getRequestFilter(int requestId) {
-        Lock readLock = lock.readLock();
         try {
-            readLock.lock();
+            lock.readLock().lock();
             // likely the filters are required from last inserted
             for (int i = requestFilters.length - 1; i > -1; i--) {
                 RequestFilter filter = requestFilters[i];
                 if (filter != null) {
                     if (filter.getRequestId() == requestId) {
+                        lock.readLock().unlock();
                         return filter;
                     }
                 }
             }
-            return null;
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
+        return null;
     }
 }
