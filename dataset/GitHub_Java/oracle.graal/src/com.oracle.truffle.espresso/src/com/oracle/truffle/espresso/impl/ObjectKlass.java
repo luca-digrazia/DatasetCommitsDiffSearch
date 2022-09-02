@@ -24,6 +24,7 @@
 package com.oracle.truffle.espresso.impl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -62,8 +63,6 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal(dimensions = 1) //
     private Method[] declaredMethods;
-
-    @CompilationFinal int trueDeclaredMethods;
 
     private final InnerClassesAttribute innerClasses;
 
@@ -110,25 +109,31 @@ public final class ObjectKlass extends Klass {
         for (int i = 0; i < fields.length; ++i) {
             fields[i] = new Field(linkedFields[i], this);
         }
-        this.declaredFields = fields;
 
         LinkedMethod[] linkedMethods = linkedKlass.getLinkedMethods();
         Method[] methods = new Method[linkedMethods.length];
         for (int i = 0; i < methods.length; ++i) {
             methods[i] = new Method(this, linkedMethods[i]);
         }
-
+        this.declaredFields = fields;
         this.declaredMethods = methods;
+        InterfaceTables.CreationResult cr;
         if (this.isInterface()) {
-            InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, superInterfaces, declaredMethods);
-            this.itable = methodCR.getItable();
-            this.iKlassTable = methodCR.getiKlass();
+            cr = InterfaceTables.create(this, superInterfaces, declaredMethods);
+            this.itable = cr.getItable();
+            this.iKlassTable = cr.getiKlass();
             this.vtable = null;
         } else {
-            InterfaceTables.CreationResult methodCR = InterfaceTables.create(superKlass, superInterfaces, this);
-            this.itable = methodCR.getItable();
-            this.iKlassTable = methodCR.getiKlass();
-            this.vtable = VirtualTable.create(superKlass, declaredMethods, this);
+            cr = InterfaceTables.create(superKlass, superInterfaces, this);
+            this.itable = cr.getItable();
+            this.iKlassTable = cr.getiKlass();
+            this.vtable = VirtualTable.create(superKlass, declaredMethods, cr.getMirandas());
+            // Artificially declare miranda methods.
+            if (!cr.getMirandas().isEmpty()) {
+                ArrayList<Method> declaredMethodAndMirandas = new ArrayList<>(Arrays.asList(methods));
+                declaredMethodAndMirandas.addAll(cr.getMirandas());
+                this.declaredMethods = declaredMethodAndMirandas.toArray(Method.EMPTY_ARRAY);
+            }
         }
     }
 
@@ -332,12 +337,12 @@ public final class ObjectKlass extends Klass {
     }
 
     @Override
-    public final Method vtableLooup(int index) {
+    public final Method lookupMethod(int index) {
         return (index == -1) ? null : vtable[index];
     }
 
     @Override
-    public final Method itableLookup(Klass interfKlass, int index) {
+    public final Method lookupMethod(Klass interfKlass, int index) {
         assert (index >= 0) : "Undeclared interface method";
         int i = 0;
         for (Klass k : iKlassTable) {
@@ -349,11 +354,11 @@ public final class ObjectKlass extends Klass {
         return null;
     }
 
-    final Method[][] getItable() {
+    Method[][] getItable() {
         return itable;
     }
 
-    final Klass[] getiKlassTable() {
+    Klass[] getiKlassTable() {
         return iKlassTable;
     }
 
@@ -364,16 +369,5 @@ public final class ObjectKlass extends Klass {
             }
         }
         return null;
-    }
-
-    final void setMirandas(ArrayList<InterfaceTables.Miranda> mirandas) {
-        this.trueDeclaredMethods = declaredMethods.length;
-        Method[] declaredAndMirandaMethods = new Method[declaredMethods.length + mirandas.size()];
-        System.arraycopy(declaredMethods, 0, declaredAndMirandaMethods, 0, declaredMethods.length);
-        int pos = declaredMethods.length;
-        for (InterfaceTables.Miranda miranda : mirandas) {
-            declaredAndMirandaMethods[pos++] = miranda.method;
-        }
-        this.declaredMethods = declaredAndMirandaMethods;
     }
 }

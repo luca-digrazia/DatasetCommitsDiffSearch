@@ -98,8 +98,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
     @CompilationFinal(dimensions = 1) //
     private ObjectKlass[] checkedExceptions;
 
-    private final Method proxy;
-
     // can have a different constant pool than it's declaring class
     public ConstantPool getConstantPool() {
         return pool;
@@ -125,34 +123,12 @@ public final class Method implements ModifiersProvider, ContextAccess {
         return parsedSignature;
     }
 
-    Method(Method method) {
-        this.declaringKlass = method.declaringKlass;
-        // TODO(peterssen): Custom constant pool for methods is not supported.
-        this.pool = declaringKlass.getConstantPool();
-
-        this.name = method.linkedMethod.getName();
-        this.linkedMethod = method.linkedMethod;
-
-        this.rawSignature = method.getRawSignature();
-        this.parsedSignature = getSignatures().parsed(this.rawSignature);
-
-        this.codeAttribute = method.codeAttribute;
-        this.callTarget = method.callTarget;
-
-        this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
-
-        initRefKind();
-        // Proxy the method, so that we have the same callTarget if it is not yet initialized.
-        // Allows for not duplicating the codeAttribute
-        this.proxy = method;
+    Method(ObjectKlass declaringKlass, Method method) {
+        this(declaringKlass, method.linkedMethod, method.rawSignature);
     }
 
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod) {
         this(declaringKlass, linkedMethod, linkedMethod.getRawSignature());
-    }
-
-    Method(ObjectKlass declaringKlass, Method method) {
-        this(declaringKlass, method.linkedMethod, method.getRawSignature());
     }
 
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod, Symbol<Signature> rawSignature) {
@@ -171,7 +147,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
         this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
 
         initRefKind();
-        this.proxy = null;
     }
 
     public final int getRefKind() {
@@ -256,10 +231,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
     public CallTarget getCallTarget() {
         // TODO(peterssen): Make lazy call target thread-safe.
         if (callTarget == null) {
-            if (proxy != null) {
-                this.callTarget = proxy.getCallTarget();
-                return callTarget;
-            }
             CompilerDirectives.transferToInterpreterAndInvalidate();
 
             EspressoRootNode redirectedMethod = getSubstitutions().get(this);
@@ -546,7 +517,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
     }
 
     final void setVTableIndex(int i) {
-        assert (vtableIndex == -1 || vtableIndex == i);
         this.vtableIndex = i;
     }
 
@@ -555,19 +525,10 @@ public final class Method implements ModifiersProvider, ContextAccess {
     }
 
     final void setITableIndex(int i) {
-        assert (itableIndex == -1 || itableIndex == i);
         this.itableIndex = i;
     }
 
     final public int getITableIndex() {
         return itableIndex;
-    }
-
-    public final boolean hasCode() {
-        return codeAttribute != null;
-    }
-
-    public final boolean isVirtualCall() {
-        return !isStatic() && !isConstructor() && !isPrivate() && !getDeclaringKlass().isInterface();
     }
 }
