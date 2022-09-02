@@ -67,9 +67,7 @@ public final class CancellableCompileTask implements TruffleCompilationTask {
     public synchronized boolean cancel() {
         if (!cancelled) {
             cancelled = true;
-            // Successfully canceling the future (without interrupting if running) means we removed the
-            // task from the compilation queue before it started.
-            if (future.cancel(false)) {
+            if (removeFromQueueBeforeStarting()) {
                 finished();
             }
             return true;
@@ -77,7 +75,13 @@ public final class CancellableCompileTask implements TruffleCompilationTask {
         return false;
     }
 
-    public void finished() {
+    private boolean removeFromQueueBeforeStarting() {
+        // Successfully canceling the future (without interrupting if running) means we removed the
+        // task from the compilation queue before it started.
+        return future.cancel(false);
+    }
+
+    public synchronized void finished() {
         final OptimizedCallTarget target = targetRef.get();
         if (target != null) {
             target.resetCompilationTask();
