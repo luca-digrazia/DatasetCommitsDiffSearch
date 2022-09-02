@@ -29,6 +29,23 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import org.graalvm.collections.Pair;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -75,20 +92,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.pthread.LLVMPThreadContext;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-
 public final class LLVMContext {
 
     private final List<Path> libraryPaths = new ArrayList<>();
@@ -122,7 +125,10 @@ public final class LLVMContext {
 
     @CompilationFinal private Env env;
     private final LLVMScope globalScope;
+    private final LLVMScope globalScopeTmp;
+
     private final ArrayList<LLVMLocalScope> localScopes;
+    private final ArrayList<LLVMLocalScope> localScopesTmp;
 
     private final DynamicLinkChain dynamicLinkChain;
     private final List<RootCallTarget> destructorFunctions;
@@ -142,9 +148,6 @@ public final class LLVMContext {
 
     // pThread state
     private final LLVMPThreadContext pThreadContext;
-
-    private LLVMFunction sulongInitContext;
-    private LLVMFunction sulongDisposeContext;
 
     private boolean initialized;
     private boolean cleanupNecessary;
@@ -196,7 +199,9 @@ public final class LLVMContext {
         assert !internalLibraryNames.isEmpty() : "No internal libraries?";
 
         this.globalScope = new LLVMScope();
+        this.globalScopeTmp = new LLVMScope();
         this.localScopes = new ArrayList<>();
+        this.localScopesTmp = new ArrayList<>();
         this.dynamicLinkChain = new DynamicLinkChain();
 
         this.mainArguments = getMainArguments(env);
@@ -206,9 +211,6 @@ public final class LLVMContext {
         pThreadContext = new LLVMPThreadContext(this);
 
         symbolStorage = new AssumedValue[10][];
-
-        sulongInitContext = null;
-        sulongDisposeContext = null;
     }
 
     boolean patchContext(Env newEnv) {
@@ -226,14 +228,6 @@ public final class LLVMContext {
         return mainArgs == null ? environment.getApplicationArguments() : (Object[]) mainArgs;
     }
 
-    public void setSulongInitContext(LLVMFunction function) {
-        this.sulongInitContext = function;
-    }
-
-    public void setSulongDisposeContext(LLVMFunction function) {
-        this.sulongDisposeContext = function;
-    }
-
     abstract static class InitializeContextNode extends LLVMStatementNode {
 
         @CompilationFinal private ContextReference<LLVMContext> ctxRef;
@@ -241,8 +235,14 @@ public final class LLVMContext {
 
         @Child DirectCallNode initContext;
 
-        InitializeContextNode(LLVMFunctionDescriptor initContextDescriptor, FrameDescriptor rootFrame) {
+        InitializeContextNode(LLVMContext ctx, FrameDescriptor rootFrame) {
             this.stackPointer = rootFrame.findFrameSlot(LLVMStack.FRAME_ID);
+
+            LLVMFunction function = ctx.globalScope.getFunction("__sulong_init_context");
+            if (function == null) {
+                throw new IllegalStateException("Context cannot be initialized: _sulong_init_context was not found");
+            }
+            LLVMFunctionDescriptor initContextDescriptor = ctx.createFunctionDescriptor(function);
             RootCallTarget initContextFunction = initContextDescriptor.getFunctionCode().getLLVMIRFunctionSlowPath();
             this.initContext = DirectCallNode.create(initContextFunction);
         }
@@ -338,10 +338,7 @@ public final class LLVMContext {
         // we can't do the initialization in the LLVMContext constructor nor in
         // Sulong.createContext() because Truffle is not properly initialized there. So, we need to
         // do it in a delayed way.
-        if (sulongInitContext == null) {
-            throw new IllegalStateException("Context cannot be initialized: _sulong_init_context was not found");
-        }
-        return InitializeContextNodeGen.create(createFunctionDescriptor(sulongInitContext), rootFrame);
+        return InitializeContextNodeGen.create(this, rootFrame);
     }
 
     public Toolchain getToolchain() {
@@ -419,11 +416,12 @@ public final class LLVMContext {
         // - _exit(), _Exit(), or abort(): no cleanup necessary
         if (cleanupNecessary) {
             try {
-                if (sulongDisposeContext == null) {
-                    throw new IllegalStateException("Context cannot be disposed: __sulong_dispose_context was not found");
+                LLVMFunction function = globalScope.getFunction("__sulong_dispose_context");
+                if (function == null) {
+                    throw new IllegalStateException("Context cannot be disposed: _sulong_dispose_context was not found");
                 }
-                AssumedValue<LLVMPointer>[] functions = findSymbolTable(sulongDisposeContext.getBitcodeID(false));
-                int index = sulongDisposeContext.getSymbolIndex(false);
+                AssumedValue<LLVMPointer>[] functions = findSymbolTable(function.getBitcodeID(false));
+                int index = function.getSymbolIndex(false);
                 LLVMPointer pointer = functions[index].get();
                 if (LLVMManagedPointer.isInstance(pointer)) {
                     LLVMFunctionDescriptor functionDescriptor = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(pointer).getObject();
@@ -716,13 +714,126 @@ public final class LLVMContext {
         return globalScope;
     }
 
+    public LLVMScope getGlobalScopeTmp() {
+        return globalScopeTmp;
+    }
+
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public static Pair<Collection<LLVMSymbol>, Collection<LLVMSymbol>> checkGlobalScopeTmp(Collection<LLVMSymbol> original, Collection<LLVMSymbol> tmp) {
+        Collection<LLVMSymbol> globals = new ArrayList<>(original);
+        Collection<LLVMSymbol> globalsTmp = new ArrayList<>(tmp);
+
+        for (LLVMSymbol symbol : tmp) {
+            globals.remove(symbol);
+        }
+
+        for (LLVMSymbol symbol : original) {
+            globalsTmp.remove(symbol);
+        }
+
+        return Pair.create(globals, globalsTmp);
+    }
+
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public static void printCheckScope(Collection<LLVMSymbol> originals, Collection<LLVMSymbol> tmps) {
+        Pair<Collection<LLVMSymbol>, Collection<LLVMSymbol>> globals = checkGlobalScopeTmp(originals, tmps);
+        Collection<LLVMSymbol> original = globals.getLeft();
+        Collection<LLVMSymbol> tmp = globals.getRight();
+
+        System.out.println("**********************************Original**********************************");
+        for (LLVMSymbol symbol : original) {
+            System.out.println("original symbol not in tmp: " + symbol.getName() + ", library: " + symbol.getLibrary() + ", location: " + symbol.getBitcodeID(true) + ", " +
+                            symbol.getSymbolIndex(true) + ", symbol: " + symbol);
+        }
+
+        System.out.println("**********************************TMP**********************************");
+        for (LLVMSymbol symbol : tmp) {
+            System.out.println("tmp symbol not in original: " + symbol.getName() + ", library: " + symbol.getLibrary() + ", location: " + symbol.getBitcodeID(true) + ", " +
+                            symbol.getSymbolIndex(true) + ", symbol: " + symbol);
+        }
+    }
+
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public static void assertCheckScope(Collection<LLVMSymbol> originals, Collection<LLVMSymbol> tmps) {
+        Pair<Collection<LLVMSymbol>, Collection<LLVMSymbol>> globals = checkGlobalScopeTmp(originals, tmps);
+        Collection<LLVMSymbol> original = globals.getLeft();
+        Collection<LLVMSymbol> tmp = globals.getRight();
+        assert original.isEmpty();
+        assert tmp.isEmpty();
+    }
+
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public void assertCheckLocalScope() {
+        LLVMLocalScope[] lscope = new LLVMLocalScope[localScopes.size()];
+        int i = 0;
+        for (LLVMLocalScope scope : localScopes) {
+            lscope[i] = scope;
+            i++;
+        }
+
+        LLVMLocalScope[] tscope = new LLVMLocalScope[localScopesTmp.size()];
+        int j = 0;
+        for (LLVMLocalScope scope : localScopesTmp) {
+            tscope[j] = scope;
+            j++;
+        }
+
+        for (int n = 0; n < lscope.length; n++) {
+            assertCheckScope(lscope[n].values(), tscope[n].values());
+        }
+    }
+
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public void assertCheckGlobalScope() {
+        assertCheckScope(globalScope.values(), globalScopeTmp.values());
+    }
+
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public void printCheckLocalScope() {
+        LLVMLocalScope[] lscope = new LLVMLocalScope[localScopes.size()];
+        int i = 0;
+        for (LLVMLocalScope scope : localScopes) {
+            lscope[i] = scope;
+            i++;
+        }
+
+        LLVMLocalScope[] tscope = new LLVMLocalScope[localScopesTmp.size()];
+        int j = 0;
+        for (LLVMLocalScope scope : localScopesTmp) {
+            tscope[j] = scope;
+            j++;
+        }
+
+        System.out.println("++++++++++++++++++++++++++++++++++++++LOCALS++++++++++++++++++++++++++++++++++++++");
+        for (int n = 0; n < lscope.length; n++) {
+            printCheckScope(lscope[n].values(), tscope[n].values());
+        }
+    }
+
+    @TruffleBoundary
+    @SuppressWarnings("unused")
+    public void printCheckGlobalScope() {
+        System.out.println("++++++++++++++++++++++++++++++++++++++GLOBALS++++++++++++++++++++++++++++++++++++++");
+        printCheckScope(globalScope.values(), globalScopeTmp.values());
+    }
+
     public void addLocalScope(LLVMLocalScope scope) {
         localScopes.add(scope);
     }
 
+    public void addLocalScopeTmp(LLVMLocalScope scope) {
+        localScopesTmp.add(scope);
+    }
+
     @TruffleBoundary
-    public LLVMLocalScope getLocalScope(int id) {
-        for (LLVMLocalScope scope : localScopes) {
+    public LLVMLocalScope getLocalScopeTmp(int id) {
+        for (LLVMLocalScope scope : localScopesTmp) {
             if (scope.containID(id)) {
                 return scope;
             }
