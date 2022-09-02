@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.api.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -51,32 +49,6 @@ final class InteropAccessor extends Accessor {
     static final InteropAccessor ACCESSOR = new InteropAccessor();
 
     private InteropAccessor() {
-    }
-
-    static Object checkInteropType(Object obj) {
-        assert checkInteropTypeImpl(obj);
-        return obj;
-    }
-
-    private static boolean checkInteropTypeImpl(Object obj) {
-        if (AssertUtils.isInteropValue(obj)) {
-            return true;
-        }
-        CompilerDirectives.transferToInterpreter();
-        Class<?> clazz = obj != null ? obj.getClass() : null;
-        return yieldAnError(clazz);
-    }
-
-    private static boolean yieldAnError(Class<?> clazz) {
-        CompilerDirectives.transferToInterpreter();
-        StringBuilder sb = new StringBuilder();
-        sb.append(clazz == null ? "null" : clazz.getName());
-        sb.append(" isn't allowed Truffle interop type!\n");
-        if (clazz == null) {
-            throw new NullPointerException(sb.toString());
-        } else {
-            throw new ClassCastException(sb.toString());
-        }
     }
 
     /*
@@ -91,12 +63,7 @@ final class InteropAccessor extends Accessor {
 
         @Override
         public void checkInteropType(Object result) {
-            InteropAccessor.checkInteropType(result);
-        }
-
-        @Override
-        public boolean isExecutableObject(Object value) {
-            return InteropLibrary.getFactory().getUncached().isExecutable(value);
+            InteropAccessNode.checkInteropType(result);
         }
 
         @Override
@@ -105,61 +72,69 @@ final class InteropAccessor extends Accessor {
         }
 
         @Override
-        @TruffleBoundary
         public boolean isValidNodeObject(Object obj) {
-            InteropLibrary interop = InteropLibrary.getFactory().getUncached(obj);
-
-            if (!interop.hasMembers(obj)) {
-                throw new AssertionError("Invalid node object: must return true for the hasMembers message.");
-            }
-            Object members;
-            try {
-                members = interop.getMembers(obj);
-            } catch (UnsupportedMessageException e) {
-                throw new AssertionError("Invalid node object: must support the getMembers message.", e);
-            }
-            InteropLibrary membersInterop = InteropLibrary.getFactory().getUncached(members);
-            if (!membersInterop.hasArrayElements(members)) {
-                throw new AssertionError("Invalid node object: the returned members object must support hasArrayElements.");
-            }
-            long size;
-            try {
-                size = membersInterop.getArraySize(members);
-            } catch (UnsupportedMessageException e) {
-                throw new AssertionError("Invalid node object: the returned members object must have a size.");
-            }
-            for (long i = 0; i < size; i++) {
-                Object key;
+            if (obj instanceof TruffleObject) {
+                TruffleObject tObj = (TruffleObject) obj;
+                if (!ForeignAccess.sendHasKeys(Message.HAS_KEYS.createNode(), tObj)) {
+                    throw new AssertionError("Invalid node object: must return true for the HAS_KEYS message.");
+                }
+                Object keys;
                 try {
-                    key = membersInterop.readArrayElement(members, i);
-                } catch (InvalidArrayIndexException | UnsupportedMessageException e) {
-                    throw new AssertionError("Invalid node object: the returned members object must be readable at number index " + i);
+                    keys = ForeignAccess.sendKeys(Message.KEYS.createNode(), tObj);
+                } catch (UnsupportedMessageException e) {
+                    throw new AssertionError("Invalid node object: must support the KEYS message.", e);
                 }
-                InteropLibrary keyInterop = InteropLibrary.getFactory().getUncached(key);
-                if (!keyInterop.isString(key)) {
-                    throw new AssertionError("Invalid node object: the returned member must return a string at index " + i + ". But was " + key.getClass().getName() + ".");
+                if (!(keys instanceof TruffleObject)) {
+                    throw new AssertionError("Invalid node object: the returned KEYS object must be a TruffleObject.");
                 }
-                String member;
+                TruffleObject tKeys = (TruffleObject) keys;
+
+                Node hasSize = Message.HAS_SIZE.createNode();
+                if (!ForeignAccess.sendHasSize(hasSize, tKeys)) {
+                    throw new AssertionError("Invalid node object: the returned KEYS object must support HAS_SIZE.");
+                }
+                Node getSize = Message.GET_SIZE.createNode();
+
+                Number size;
                 try {
-                    member = keyInterop.asString(key);
-                } catch (UnsupportedMessageException e1) {
-                    throw new AssertionError("Invalid node object: the returned member must return a string  ");
+                    size = (Number) ForeignAccess.sendGetSize(getSize, tKeys);
+                } catch (UnsupportedMessageException e) {
+                    throw new AssertionError("Invalid node object: the returned KEYS object must have a size.");
                 }
-                try {
-                    membersInterop.readMember(obj, member);
-                } catch (UnknownIdentifierException | UnsupportedMessageException e) {
-                    throw new AssertionError("Invalid node object: the returned member must be readable with identifier " + member);
+                Node readKeyNode = Message.READ.createNode();
+                Node readElementNode = Message.READ.createNode();
+                Node keyInfoNode = Message.KEY_INFO.createNode();
+                long longValue = size.longValue();
+                for (long i = 0; i < longValue; i++) {
+                    Object key;
+                    try {
+                        key = ForeignAccess.sendRead(readKeyNode, tKeys, i);
+                    } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+                        throw new AssertionError("Invalid node object: the returned KEYS object must be readable at number identifier " + i);
+                    }
+                    if (!(key instanceof String)) {
+                        throw new AssertionError("Invalid node object: the returned KEYS object must return a string at number identifier " + i + ". But was " + key.getClass().getName() + ".");
+                    }
+                    try {
+                        ForeignAccess.sendRead(readElementNode, tObj, key);
+                    } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+                        throw new AssertionError("Invalid node object: the returned KEYS element must be readable with identifier " + key);
+                    }
+
+                    int keyInfo = ForeignAccess.sendKeyInfo(keyInfoNode, tObj, key);
+                    if (KeyInfo.isWritable(keyInfo)) {
+                        throw new AssertionError("Invalid node object: The key " + key + " is marked as writable but node objects must not be writable.");
+                    }
+                }
+                Node node = Message.HAS_SIZE.createNode();
+                if (ForeignAccess.sendHasSize(node, tObj)) {
+                    throw new AssertionError("Invalid node object: the node object must not return true for HAS_SIZE.");
                 }
 
-                if (membersInterop.isMemberWritable(obj, member)) {
-                    throw new AssertionError("Invalid node object: The member " + member + " is marked as writable but node objects must not be writable.");
-                }
+                return true;
+            } else {
+                throw new AssertionError("Invalid node object: Node objects must be of type TruffleObject.");
             }
-            if (interop.hasArrayElements(obj)) {
-                throw new AssertionError("Invalid node object: the node object must not return true for hasArrayElements.");
-            }
-
-            return true;
         }
     }
 
