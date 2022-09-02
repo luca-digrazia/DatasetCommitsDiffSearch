@@ -913,7 +913,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         Assumption argumentTypesAssumption = profiledArgumentTypesAssumption;
         if (argumentTypesAssumption != null && argumentTypesAssumption.isValid()) {
             // Argument profiling is not possible for targets of indirect calls.
-            // The assumption will invalidate the callee but we shouldn't invalidate the caller.
             CompilerDirectives.transferToInterpreter();
             argumentTypesAssumption.invalidate();
             profiledArgumentTypes = null;
