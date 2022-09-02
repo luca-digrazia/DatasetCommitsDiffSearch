@@ -64,14 +64,12 @@ public final class CacheExpression extends MessageContainer {
     private int dimensions = -1;
     private DSLExpression defaultExpression;
     private DSLExpression uncachedExpression;
-    private boolean alwaysInitialized;
-    private boolean eagerInitialize;
+    private boolean alwaysInitialized = false;
+    private boolean eagerInitialize = false;
     private Message uncachedExpressionError;
     private boolean requiresBoundary;
     private String sharedGroup;
     private boolean mergedLibrary;
-    private boolean removeIfNull;
-    private boolean ignoreInUncached;
 
     private TypeMirror languageType;
     private TypeMirror referenceType;
@@ -191,10 +189,6 @@ public final class CacheExpression extends MessageContainer {
         return isType(types.Cached);
     }
 
-    public boolean isExtract() {
-        return isType(types.Extract);
-    }
-
     public boolean isCachedLibrary() {
         return isType(types.CachedLibrary);
     }
@@ -289,22 +283,6 @@ public final class CacheExpression extends MessageContainer {
         String libraryName = ElementUtils.getSimpleName(getParameter().getType());
 
         return b.toString() + libraryName + "_";
-    }
-
-    public void setRemoveIfNull(boolean b) {
-        this.removeIfNull = b;
-    }
-
-    public boolean isRemoveIfNull() {
-        return removeIfNull;
-    }
-
-    public void setIgnoreInUncached(boolean ignoreInUncached) {
-        this.ignoreInUncached = ignoreInUncached;
-    }
-
-    public boolean isIgnoreInUncached() {
-        return ignoreInUncached;
     }
 
 }
