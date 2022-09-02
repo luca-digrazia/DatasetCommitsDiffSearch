@@ -29,6 +29,7 @@ import java.util.function.IntFunction;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
+import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -75,7 +76,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             return (((StaticObjectArray) arr).<int[]> unwrap())[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -83,7 +84,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             return (((StaticObjectArray) arr).<StaticObject[]> unwrap())[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -91,7 +92,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             return (((StaticObjectArray) arr).<long[]> unwrap())[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -99,7 +100,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             return (((StaticObjectArray) arr).<float[]> unwrap())[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -107,7 +108,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             return (((StaticObjectArray) arr).<double[]> unwrap())[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -119,7 +120,7 @@ public final class InterpreterToVM implements ContextAccess {
             }
             return ((byte[]) raw)[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -127,7 +128,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             return (((StaticObjectArray) arr).<char[]> unwrap())[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -135,7 +136,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             return (((StaticObjectArray) arr).<short[]> unwrap())[index];
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
     // endregion
@@ -145,7 +146,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             (((StaticObjectArray) arr).<int[]> unwrap())[index] = value;
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -153,7 +154,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             (((StaticObjectArray) arr).<long[]> unwrap())[index] = value;
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -161,7 +162,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             (((StaticObjectArray) arr).<float[]> unwrap())[index] = value;
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -169,7 +170,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             (((StaticObjectArray) arr).<double[]> unwrap())[index] = value;
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -183,7 +184,7 @@ public final class InterpreterToVM implements ContextAccess {
                 ((byte[]) raw)[index] = value;
             }
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -191,7 +192,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             (((StaticObjectArray) arr).<char[]> unwrap())[index] = value;
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
@@ -199,7 +200,7 @@ public final class InterpreterToVM implements ContextAccess {
         try {
             (((StaticObjectArray) arr).<short[]> unwrap())[index] = value;
         } catch (ArrayIndexOutOfBoundsException e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class, e.getMessage());
         }
     }
 
