@@ -185,18 +185,8 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
             if (contexts != null) {
                 for (PolyglotContextImpl context : contexts) {
                     synchronized (context) {
-                        if (context.closed || context.invalid) {
-                            continue;
-                        }
-                        /*
-                         * contextLocals might not be initialized yet, in which case the context
-                         * local factory for this instrument will be invoked during contextLocals
-                         * initialization.
-                         */
-                        if (context.contextLocals != null) {
-                            context.invokeContextLocalsFactory(context.contextLocals, contextLocalLocations);
-                            context.invokeContextThreadLocalFactory(contextThreadLocalLocations);
-                        }
+                        context.invokeContextLocalsFactory(context.contextLocals, contextLocalLocations);
+                        context.invokeContextThreadLocalFactory(contextThreadLocalLocations);
                     }
                 }
             }
@@ -214,7 +204,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
     }
 
     void ensureClosed() {
-        assert Thread.holdsLock(engine.lock);
+        assert Thread.holdsLock(engine);
         if (created) {
             synchronized (instrumentLock) {
                 if (created) {
