@@ -38,7 +38,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -91,7 +90,6 @@ import com.oracle.graal.pointsto.flow.builder.TypeFlowBuilder;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 
-import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -140,7 +138,7 @@ public class PointsToStats {
 
     }
 
-    private static List<TypeFlowBuilder<?>> typeFlowBuilders = new CopyOnWriteArrayList<>();
+    private static List<TypeFlowBuilder<?>> typeFlowBuilders = new ArrayList<>();
 
     public static void registerTypeFlowBuilder(BigBang bb, TypeFlowBuilder<?> builder) {
         if (!bb.reportAnalysisStatistics()) {
@@ -191,15 +189,15 @@ public class PointsToStats {
 
         final TypeFlow<?> flow;
 
-        final List<TypeState> allUpdates;
-        final List<TypeState> successfulUpdates;
+        final ArrayList<TypeState> allUpdates;
+        final ArrayList<TypeState> successfulUpdates;
         final AtomicInteger queuedUpdates;
 
         TypeFlowStats(TypeFlow<?> flow) {
             this.retainReason = "";
             this.flow = flow;
-            this.allUpdates = new CopyOnWriteArrayList<>();
-            this.successfulUpdates = new CopyOnWriteArrayList<>();
+            this.allUpdates = new ArrayList<>();
+            this.successfulUpdates = new ArrayList<>();
             this.queuedUpdates = new AtomicInteger(0);
         }
 
@@ -587,7 +585,7 @@ public class PointsToStats {
         } else if (flow instanceof ActualReturnTypeFlow) {
             ActualReturnTypeFlow ret = (ActualReturnTypeFlow) flow;
             InvokeTypeFlow invoke = ret.invokeFlow();
-            return "ActualReturn(" + (invoke == null ? "null" : formatMethod(invoke.getTargetMethod())) + ")@ " + formatSource(flow);
+            return "ActualReturn(" + formatMethod(invoke.getTargetMethod()) + ")@ " + formatSource(flow);
         } else if (flow instanceof MergeTypeFlow) {
             return "Merge @ " + formatSource(flow);
         } else if (flow instanceof SourceTypeFlow) {
@@ -604,15 +602,20 @@ public class PointsToStats {
 
     private static String formatSource(TypeFlow<?> flow) {
         Object source = flow.getSource();
-        if (source instanceof BytecodePosition) {
-            BytecodePosition nodeSource = (BytecodePosition) source;
-            return formatMethod(nodeSource.getMethod()) + ":" + nodeSource.getBCI();
+        if (source instanceof ValueNode) {
+            ValueNode node = (ValueNode) source;
+            NodeSourcePosition nodeSource = node.getNodeSourcePosition();
+            if (nodeSource != null) {
+                return formatMethod(nodeSource.getMethod()) + ":" + nodeSource.getBCI();
+            } else if (flow.graphRef() != null) {
+                return formatMethod(flow.graphRef().getMethod());
+            } else {
+                return "<unknown-source>";
+            }
         } else if (source instanceof AnalysisType) {
             return formatType((AnalysisType) source);
         } else if (source instanceof AnalysisField) {
             return formatField((AnalysisField) source);
-        } else if (flow.graphRef() != null) {
-            return formatMethod(flow.graphRef().getMethod());
         } else if (source == null) {
             return "<no-source>";
         } else {

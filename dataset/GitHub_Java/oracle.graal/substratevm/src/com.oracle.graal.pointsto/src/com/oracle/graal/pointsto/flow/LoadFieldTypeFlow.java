@@ -30,12 +30,10 @@ import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.flow.context.object.AnalysisObject;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
-import jdk.vm.ci.code.BytecodePosition;
-
 /**
  * Implements a field load operation type flow.
  */
-public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow {
+public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow<LoadFieldNode> {
 
     protected LoadFieldTypeFlow(LoadFieldNode node) {
         super(node);
@@ -66,7 +64,7 @@ public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow {
         }
 
         @Override
-        public TypeFlow<BytecodePosition> copy(BigBang bb, MethodFlowsGraph methodFlows) {
+        public TypeFlow<LoadFieldNode> copy(BigBang bb, MethodFlowsGraph methodFlows) {
             return new LoadStaticFieldTypeFlow(methodFlows, this);
         }
 
@@ -116,11 +114,6 @@ public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow {
         }
 
         @Override
-        public void setObserved(TypeFlow<?> newObjectFlow) {
-            this.objectFlow = newObjectFlow;
-        }
-
-        @Override
         public void onObservedUpdate(BigBang bb) {
             /* Only a clone should be updated */
             assert this.isClone();
@@ -135,7 +128,7 @@ public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow {
                 bb.reportIllegalUnknownUse(graphRef.getMethod(), source, "Illegal: Field loading from UnknownTypeState objects. Field: " + field);
                 return;
             }
-            objectState = filterObjectState(bb, objectState);
+
             /* Iterate over the receiver objects. */
             for (AnalysisObject object : objectState.objects()) {
                 /* Get the field flow corresponding to the receiver object. */
@@ -144,13 +137,6 @@ public abstract class LoadFieldTypeFlow extends AccessFieldTypeFlow {
                 /* Add the load field flow as a use to the heap sensitive field flow. */
                 fieldFlow.addUse(bb, this);
             }
-        }
-
-        @Override
-        public void onObservedSaturated(BigBang bb, TypeFlow<?> observed) {
-            assert this.isClone();
-            /* When receiver flow saturates start observing the flow of the field declaring type. */
-            replaceObservedWith(bb, field.getDeclaringClass());
         }
 
         @Override

@@ -37,13 +37,11 @@ import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
-import jdk.vm.ci.code.BytecodePosition;
-
 /**
  * The abstract class for offset load flows (i.e. indexed loads, unsafe loads at offset, java read
  * loads).
  */
-public abstract class OffsetLoadTypeFlow extends TypeFlow<BytecodePosition> {
+public abstract class OffsetLoadTypeFlow extends TypeFlow<ValueNode> {
 
     /*
      * The type of the receiver object of the offset load operation. Can be approximated by Object
@@ -56,7 +54,7 @@ public abstract class OffsetLoadTypeFlow extends TypeFlow<BytecodePosition> {
 
     @SuppressWarnings("unused")
     public OffsetLoadTypeFlow(ValueNode node, AnalysisType objectType, AnalysisType componentType, TypeFlow<?> objectFlow, MethodTypeFlow methodFlow) {
-        super(node.getNodeSourcePosition(), componentType);
+        super(node, componentType);
         this.objectType = objectType;
         this.objectFlow = objectFlow;
     }
@@ -75,19 +73,7 @@ public abstract class OffsetLoadTypeFlow extends TypeFlow<BytecodePosition> {
     }
 
     @Override
-    public void setObserved(TypeFlow<?> newObjectFlow) {
-        this.objectFlow = newObjectFlow;
-    }
-
-    @Override
     public abstract void onObservedUpdate(BigBang bb);
-
-    @Override
-    public void onObservedSaturated(BigBang bb, TypeFlow<?> observed) {
-        assert this.isClone();
-        /* When receiver object flow saturates start observing the flow of the the object type. */
-        replaceObservedWith(bb, objectType);
-    }
 
     @Override
     public TypeFlow<?> receiver() {
@@ -131,10 +117,6 @@ public abstract class OffsetLoadTypeFlow extends TypeFlow<BytecodePosition> {
             }
 
             for (AnalysisObject object : arrayState.objects()) {
-                if (bb.analysisPolicy().relaxTypeFlowConstraints() && !object.type().isArray()) {
-                    /* Ignore non-array types when type flow constraints are relaxed. */
-                    continue;
-                }
                 if (object.isPrimitiveArray() || object.isEmptyObjectArrayConstant(bb)) {
                     /* Nothing to read from a primitive array or an empty array constant. */
                     continue;

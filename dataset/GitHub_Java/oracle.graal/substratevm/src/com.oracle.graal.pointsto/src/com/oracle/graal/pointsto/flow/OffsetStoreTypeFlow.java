@@ -40,8 +40,6 @@ import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionStoreNode;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
-import jdk.vm.ci.code.BytecodePosition;
-
 /**
  * The abstract class for offset store flows (i.e. indexed stores, unsafe stores at offset, java
  * writes).
@@ -52,7 +50,7 @@ import jdk.vm.ci.code.BytecodePosition;
  * state, i.e., the one of the stored value, to the corresponding array elements flows (in case of
  * indexed stores) or field flows (in case of unsafe stores).
  */
-public abstract class OffsetStoreTypeFlow extends TypeFlow<BytecodePosition> {
+public abstract class OffsetStoreTypeFlow extends TypeFlow<ValueNode> {
 
     /*
      * The type of the receiver object of the offset store operation. Can be approximated by Object
@@ -66,7 +64,7 @@ public abstract class OffsetStoreTypeFlow extends TypeFlow<BytecodePosition> {
     protected TypeFlow<?> objectFlow;
 
     public OffsetStoreTypeFlow(ValueNode node, AnalysisType objectType, AnalysisType componentType, TypeFlow<?> objectFlow, TypeFlow<?> valueFlow) {
-        super(node.getNodeSourcePosition(), componentType);
+        super(node, componentType);
         this.objectType = objectType;
         this.valueFlow = valueFlow;
         this.objectFlow = objectFlow;
@@ -90,25 +88,13 @@ public abstract class OffsetStoreTypeFlow extends TypeFlow<BytecodePosition> {
     }
 
     @Override
-    public abstract TypeFlow<BytecodePosition> copy(BigBang bb, MethodFlowsGraph methodFlows);
+    public abstract TypeFlow<ValueNode> copy(BigBang bb, MethodFlowsGraph methodFlows);
 
     @Override
     public abstract boolean addState(BigBang bb, TypeState add);
 
     @Override
-    public void setObserved(TypeFlow<?> newObjectFlow) {
-        this.objectFlow = newObjectFlow;
-    }
-
-    @Override
     public abstract void onObservedUpdate(BigBang bb);
-
-    @Override
-    public void onObservedSaturated(BigBang bb, TypeFlow<?> observed) {
-        assert this.isClone();
-        /* When receiver object flow saturates start observing the flow of the the object type. */
-        replaceObservedWith(bb, objectType);
-    }
 
     /**
      * Implements the type flow of an indexed store operation. The type state of an indexed store
@@ -132,6 +118,7 @@ public abstract class OffsetStoreTypeFlow extends TypeFlow<BytecodePosition> {
         }
 
         @Override
+
         public boolean addState(BigBang bb, TypeState add) {
             /* Only a clone should be updated */
             assert this.isClone();
@@ -156,10 +143,7 @@ public abstract class OffsetStoreTypeFlow extends TypeFlow<BytecodePosition> {
 
             /* Iterate over the receiver objects. */
             for (AnalysisObject object : objectState.objects()) {
-                if (bb.analysisPolicy().relaxTypeFlowConstraints() && !object.type().isArray()) {
-                    /* Ignore non-array types when type flow constraints are relaxed. */
-                    continue;
-                }
+
                 if (object.isPrimitiveArray() || object.isEmptyObjectArrayConstant(bb)) {
                     /* Cannot write to a primitive array or an empty array constant. */
                     continue;

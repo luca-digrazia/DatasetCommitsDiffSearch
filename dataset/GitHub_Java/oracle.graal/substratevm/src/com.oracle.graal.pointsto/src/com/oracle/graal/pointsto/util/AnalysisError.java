@@ -154,10 +154,6 @@ public class AnalysisError extends Error {
         throw new AnalysisError(cause);
     }
 
-    public static RuntimeException shouldNotReachHere(String msg, Throwable cause) {
-        throw new AnalysisError(msg, cause);
-    }
-
     public static void guarantee(boolean condition) {
         if (!condition) {
             throw new AnalysisError("guarantee failed");

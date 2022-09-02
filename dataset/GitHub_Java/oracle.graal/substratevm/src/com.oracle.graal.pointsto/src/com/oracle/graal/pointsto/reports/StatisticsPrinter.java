@@ -113,14 +113,13 @@ public final class StatisticsPrinter {
                     totalFilters++;
                     InstanceOfTypeFlow originalInstanceOf = entry.getValue();
 
-                    boolean isSaturated = methodFlow.isSaturated(bb, originalInstanceOf);
                     TypeState instanceOfTypeState = methodFlow.foldTypeFlow(bb, originalInstanceOf);
-                    if (!isSaturated && instanceOfTypeState.typesCount() < 2) {
+                    if (instanceOfTypeState.typesCount() < 2) {
                         totalRemovableFilters++;
                     }
                     if (!runtimeMethod) {
                         appTotalFilters++;
-                        if (!isSaturated && instanceOfTypeState.typesCount() < 2) {
+                        if (instanceOfTypeState.typesCount() < 2) {
                             appTotalRemovableFilters++;
                         }
                     }

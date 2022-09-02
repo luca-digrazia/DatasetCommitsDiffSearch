@@ -32,6 +32,8 @@ import java.util.Iterator;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import org.graalvm.compiler.nodes.ValueNode;
+
 import com.oracle.graal.pointsto.AnalysisPolicy;
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.api.PointstoOptions;
@@ -45,6 +47,7 @@ import com.oracle.graal.pointsto.util.BitArrayUtils;
 
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 
 public abstract class TypeState {
 
@@ -311,16 +314,17 @@ public abstract class TypeState {
     }
 
     /** Wraps the analysis object corresponding to an allocation site into a non-null type state. */
-    public static TypeState forAllocation(BigBang bb, BytecodeLocation allocationLabel, AnalysisType exactType) {
-        return forAllocation(bb, allocationLabel, exactType, bb.contextPolicy().emptyContext());
+    public static TypeState forAllocation(BigBang bb, ValueNode allocation, BytecodeLocation allocationLabel, AnalysisType exactType) {
+        return forAllocation(bb, allocation, allocationLabel, exactType, bb.contextPolicy().emptyContext());
     }
 
     /**
      * Wraps the analysis object corresponding to an allocation site for a given context into a
      * non-null type state.
      */
-    public static TypeState forAllocation(BigBang bb, BytecodeLocation allocationSite, AnalysisType objectType, AnalysisContext allocationContext) {
+    public static TypeState forAllocation(BigBang bb, ValueNode allocation, BytecodeLocation allocationSite, AnalysisType objectType, AnalysisContext allocationContext) {
         assert objectType.isArray() || (objectType.isInstanceClass() && !Modifier.isAbstract(objectType.getModifiers())) : objectType;
+        assert allocation.getStackKind() == JavaKind.Object;
 
         AnalysisObject allocationObject = bb.analysisPolicy().createHeapObject(bb, objectType, allocationSite, allocationContext);
         return forNonNullObject(bb, allocationObject);
@@ -330,8 +334,9 @@ public abstract class TypeState {
      * Wraps the analysis object corresponding to a clone site for a given context into a non-null
      * type state.
      */
-    public static TypeState forClone(BigBang bb, BytecodeLocation cloneSite, AnalysisType type, AnalysisContext allocationContext) {
-        return forAllocation(bb, cloneSite, type, allocationContext);
+    public static TypeState forClone(BigBang bb, ValueNode cloneSource, BytecodeLocation cloneSite, AnalysisType type, AnalysisContext allocationContext) {
+        assert cloneSource.getStackKind() == JavaKind.Object;
+        return forAllocation(bb, cloneSource, cloneSite, type, allocationContext);
     }
 
     public static TypeState forExactType(BigBang bb, AnalysisType exactType, boolean canBeNull) {
@@ -550,7 +555,7 @@ public abstract class TypeState {
              * Speculate that s2 has a single object and s1 already contains that object. This
              * happens often during object scanning where we repeatedly add the scanned constants to
              * field or array elements flows. The binary search executed by containsObject should be
-             * faster than the linear search below.
+             * faster than the linear search bellow.
              */
             return s1.forCanBeNull(bb, resultCanBeNull);
         }
@@ -884,7 +889,7 @@ public abstract class TypeState {
      * Implementation of intersection.
      *
      * The implementation of intersection is specific to our current use case, i.e., it is not a
-     * general set intersection implementation. The limitation, checked by the assertions below,
+     * general set intersection implementation. The limitation, checked by the assertions bellow,
      * refers to the fact that when we use intersection we only care about selecting all the objects
      * of a certain type or types, e.g., for filtering. We don't currently have a situation where we
      * only want to select a subset of objects of a type. In our use the types whose objects need to
@@ -1195,7 +1200,7 @@ public abstract class TypeState {
      * Implementation of subtraction.
      *
      * The implementation of subtraction is specific to our current use case, i.e., it is not a
-     * general set subtraction implementation. The limitation, checked by the assertions below,
+     * general set subtraction implementation. The limitation, checked by the assertions bellow,
      * refers to the fact that when we use subtraction we only care about eliminating all the
      * objects of a certain type or types, e.g., for filtering. We don't currently have a situation
      * where we only want to remove a subset of objects of a type. In our use the types whose
