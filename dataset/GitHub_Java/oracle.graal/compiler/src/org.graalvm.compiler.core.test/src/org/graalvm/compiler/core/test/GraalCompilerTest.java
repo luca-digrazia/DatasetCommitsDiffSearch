@@ -643,7 +643,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected final BasePhase<HighTierContext> createInliningPhase() {
-        return createInliningPhase(this.createCanonicalizerPhase());
+        return createInliningPhase(new CanonicalizerPhase());
     }
 
     protected BasePhase<HighTierContext> createInliningPhase(CanonicalizerPhase canonicalizer) {
@@ -1514,9 +1514,5 @@ public abstract class GraalCompilerTest extends GraalTest {
      */
     protected boolean isArchitecture(String name) {
         return name.equals(backend.getTarget().arch.getName());
-    }
-
-    protected CanonicalizerPhase createCanonicalizerPhase() {
-        return CanonicalizerPhase.create();
     }
 }

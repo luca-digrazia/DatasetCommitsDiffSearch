@@ -347,7 +347,6 @@ import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
-import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StartNode;
@@ -2707,25 +2706,11 @@ public class BytecodeParser implements GraphBuilderContext {
         }
         MonitorIdNode monitorId = frameState.peekMonitorId();
         ValueNode lockedObject = frameState.popLock();
-        if (safeOriginalValue(lockedObject) != safeOriginalValue(x)) {
-            throw bailout(String.format("unbalanced monitors: mismatch at monitorexit, %s != %s", safeOriginalValue(x), safeOriginalValue(lockedObject)));
+        if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
+            throw bailout(String.format("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject)));
         }
         MonitorExitNode monitorExit = append(new MonitorExitNode(lockedObject, monitorId, escapedValue));
         monitorExit.setStateAfter(createFrameState(bci, monitorExit));
-    }
-
-    /**
-     * A phi node on a loop header is not necessarily complete during parsing so don't try to read
-     * through it.
-     */
-    static ValueNode safeOriginalValue(ValueNode value) {
-        if (value instanceof PhiNode) {
-            PhiNode phi = (PhiNode) value;
-            if (phi.isLoopPhi()) {
-                return value;
-            }
-        }
-        return GraphUtil.originalValue(value);
     }
 
     protected void genJsr(int dest) {

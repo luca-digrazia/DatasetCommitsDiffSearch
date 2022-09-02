@@ -31,6 +31,7 @@ import java.util.Queue;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
+import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
@@ -259,29 +260,22 @@ public class LoopEx {
             boolean unsigned = false;
             switch (condition) {
                 case EQ:
-                    if (iv.initNode() == limit) {
-                        // allow "single iteration" case
-                        oneOff = true;
-                    } else {
-                        return false;
-                    }
-                    break;
+                    return false;
                 case NE: {
                     IntegerStamp initStamp = (IntegerStamp) iv.initNode().stamp(NodeView.DEFAULT);
                     IntegerStamp limitStamp = (IntegerStamp) limit.stamp(NodeView.DEFAULT);
-                    IntegerStamp counterStamp = (IntegerStamp) iv.valueNode().stamp(NodeView.DEFAULT);
                     if (iv.direction() == Direction.Up) {
-                        if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.upperBound()) {
+                        if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == NumUtil.maxValue(limitStamp.getBits())) {
                             // signed: i < MAX_INT
-                        } else if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.unsignedUpperBound()) {
+                        } else if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == NumUtil.maxValueUnsigned(limitStamp.getBits())) {
                             unsigned = true;
                         } else if (!iv.isConstantStride() || Math.abs(iv.constantStride()) != 1 || initStamp.upperBound() > limitStamp.lowerBound()) {
                             return false;
                         }
                     } else if (iv.direction() == Direction.Down) {
-                        if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.lowerBound()) {
+                        if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == NumUtil.minValue(limitStamp.getBits())) {
                             // signed: MIN_INT > i
-                        } else if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.unsignedLowerBound()) {
+                        } else if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == 0) {
                             unsigned = true;
                         } else if (!iv.isConstantStride() || Math.abs(iv.constantStride()) != 1 || initStamp.lowerBound() < limitStamp.upperBound()) {
                             return false;
