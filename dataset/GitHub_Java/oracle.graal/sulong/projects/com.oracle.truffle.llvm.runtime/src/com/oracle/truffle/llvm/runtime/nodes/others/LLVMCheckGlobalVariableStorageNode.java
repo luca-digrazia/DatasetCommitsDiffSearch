@@ -42,6 +42,7 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMCheckGlobalVariableStorageNode extends LLVMNode {
 
@@ -51,11 +52,10 @@ public abstract class LLVMCheckGlobalVariableStorageNode extends LLVMNode {
         this.descriptor = descriptor;
     }
 
-    public abstract boolean execute();
-
+    public abstract void execute(LLVMPointer value);
 
     @Specialization
-    boolean doCheck(
+    boolean doWrite(
                     @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @Cached CheckDynamicObjectHelper checkHelper) {
         return checkHelper.execute(context.getGlobalStorage(), descriptor);
@@ -72,7 +72,8 @@ public abstract class LLVMCheckGlobalVariableStorageNode extends LLVMNode {
                         }, //
                         assumptions = {
                                         "layoutAssumption"
-                        })
+                        }, //
+                        replaces = "readDirectFinal")
         protected boolean checkDirect(DynamicObject dynamicObject, LLVMGlobal descriptor,
                         @Cached("dynamicObject.getShape()") Shape cachedShape,
                         @Cached("cachedShape.getValidAssumption()") Assumption layoutAssumption,
