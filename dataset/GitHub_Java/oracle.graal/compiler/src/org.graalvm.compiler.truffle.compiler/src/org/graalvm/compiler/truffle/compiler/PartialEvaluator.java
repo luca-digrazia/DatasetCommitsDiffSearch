@@ -258,6 +258,7 @@ public abstract class PartialEvaluator {
         public final DebugContext debug;
         public final CompilableTruffleAST compilable;
         public final TruffleInliningPlan inliningPlan;
+        public final AllowAssumptions allowAssumptions;
         public final CompilationIdentifier compilationId;
         public final SpeculationLog log;
         public final Cancellable cancellable;
@@ -265,16 +266,17 @@ public abstract class PartialEvaluator {
         final HighTierContext highTierContext;
 
         public Request(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, ResolvedJavaMethod method, TruffleInliningPlan inliningPlan,
-                        CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable) {
+                        AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable) {
             this.options = options;
             this.debug = debug;
             this.compilable = compilable;
             this.inliningPlan = inliningPlan;
+            this.allowAssumptions = allowAssumptions;
             this.compilationId = compilationId;
             this.log = log;
             this.cancellable = cancellable;
             // @formatter:off
-            StructuredGraph.Builder builder = new StructuredGraph.Builder(TruffleCompilerOptions.getOptions(), this.debug, AllowAssumptions.YES).
+            StructuredGraph.Builder builder = new StructuredGraph.Builder(TruffleCompilerOptions.getOptions(), this.debug, this.allowAssumptions).
                     name(this.compilable.toString()).
                     method(method).
                     speculationLog(this.log).
