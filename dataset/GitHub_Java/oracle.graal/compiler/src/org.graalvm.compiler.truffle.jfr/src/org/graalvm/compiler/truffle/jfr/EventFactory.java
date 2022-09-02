@@ -24,11 +24,7 @@
  */
 package org.graalvm.compiler.truffle.jfr;
 
-import java.lang.annotation.Annotation;
-
 public interface EventFactory {
-
-    Class<? extends Annotation> getRequiredAnnotation();
 
     boolean isInitialized();
 
