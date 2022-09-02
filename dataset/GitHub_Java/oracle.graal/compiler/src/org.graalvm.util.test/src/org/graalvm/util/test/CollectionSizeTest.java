@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,11 +28,11 @@ import static org.junit.Assert.assertEquals;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.compiler.test.AddExports;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.util.ObjectSizeEstimate;
+import org.junit.Assume;
 import org.junit.Test;
 
-@AddExports("org.graalvm.graal_sdk/org.graalvm.collections")
 public class CollectionSizeTest {
 
     /**
@@ -38,16 +40,17 @@ public class CollectionSizeTest {
      */
     @Test
     public void testSize() {
+        Assume.assumeTrue("Not working in JDK9 due to module visibility.", JavaVersionUtil.JAVA_SPEC <= 8);
         EconomicMap<Object, Object> map = EconomicMap.create(Equivalence.IDENTITY);
-        assertEquals(48, ObjectSizeEstimate.forObject(map).getTotalBytes());
+        assertEquals(49, ObjectSizeEstimate.forObject(map).getTotalBytes());
 
         Integer value = 1;
         map.put(value, value);
-        assertEquals(152, ObjectSizeEstimate.forObject(map).getTotalBytes());
+        assertEquals(153, ObjectSizeEstimate.forObject(map).getTotalBytes());
 
         Integer secondValue = 2;
         map.put(secondValue, secondValue);
-        assertEquals(152 + 20, ObjectSizeEstimate.forObject(map).getTotalBytes());
+        assertEquals(153 + 20, ObjectSizeEstimate.forObject(map).getTotalBytes());
     }
 
     /**
@@ -56,6 +59,7 @@ public class CollectionSizeTest {
      */
     @Test
     public void testCompress() {
+        Assume.assumeTrue("Not working in JDK9 due to module visibility.", JavaVersionUtil.JAVA_SPEC <= 8);
         EconomicMap<Object, Object> map = EconomicMap.create();
 
         // Measuring size of map with one entry.

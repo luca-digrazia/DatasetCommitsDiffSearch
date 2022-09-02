@@ -42,7 +42,6 @@ import java.util.TimerTask;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 
-import org.graalvm.collections.Pair;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
@@ -227,7 +226,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             classlistTimer.print();
 
             Map<Method, CEntryPointData> entryPoints = new HashMap<>();
-            Pair<Method, CEntryPointData> mainEntryPointData = Pair.empty();
+            Method mainEntryPoint = null;
             JavaMainSupport javaMainSupport = null;
 
             AbstractBootImage.NativeImageKind imageKind;
@@ -252,7 +251,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             }
 
             if (!className.isEmpty()) {
-                Method mainEntryPoint;
                 Class<?> mainClass;
                 try {
                     mainClass = Class.forName(className, false, classLoader);
@@ -295,19 +293,19 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
                 if (annotation == null) {
                     throw UserError.abort("Entry point must have the '@" + CEntryPoint.class.getSimpleName() + "' annotation");
                 }
+                entryPoints.put(mainEntryPoint, CEntryPointData.create(mainEntryPoint));
 
                 Class<?>[] pt = mainEntryPoint.getParameterTypes();
                 if (pt.length != 2 || pt[0] != int.class || pt[1] != CCharPointerPointer.class || mainEntryPoint.getReturnType() != int.class) {
                     throw UserError.abort("Main entry point must have signature 'int main(int argc, CCharPointerPointer argv)'.");
                 }
-                mainEntryPointData = Pair.create(mainEntryPoint, CEntryPointData.create(mainEntryPoint));
             }
 
             int maxConcurrentThreads = NativeImageOptions.getMaximumNumberOfConcurrentThreads(parsedHostedOptions);
             analysisExecutor = Inflation.createExecutor(debug, NativeImageOptions.getMaximumNumberOfAnalysisThreads(parsedHostedOptions));
             compilationExecutor = Inflation.createExecutor(debug, maxConcurrentThreads);
-            generator = new NativeImageGenerator(imageClassLoader, optionParser, mainEntryPointData);
-            generator.run(entryPoints, javaMainSupport, imageName, imageKind, SubstitutionProcessor.IDENTITY,
+            generator = new NativeImageGenerator(imageClassLoader, optionParser);
+            generator.run(entryPoints, mainEntryPoint, javaMainSupport, imageName, imageKind, SubstitutionProcessor.IDENTITY,
                             compilationExecutor, analysisExecutor, optionParser.getRuntimeOptionNames());
         } catch (InterruptImageBuilding e) {
             if (analysisExecutor != null) {

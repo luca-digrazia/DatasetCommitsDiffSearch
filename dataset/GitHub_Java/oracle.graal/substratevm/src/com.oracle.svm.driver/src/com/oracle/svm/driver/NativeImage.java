@@ -277,7 +277,7 @@ public class NativeImage {
          * @return additional arguments for JVM that runs image builder
          */
         default List<String> getBuilderJavaArgs() {
-            String javaVersion = String.valueOf(JavaVersionUtil.JAVA_SPECIFICATION_VERSION);
+            String javaVersion = String.valueOf(JavaVersionUtil.JAVA_SPEC);
             String[] flagsForVersion = graalCompilerFlags.get(javaVersion);
             if (flagsForVersion == null) {
                 showError(String.format("Image building not supported for Java version %s in %s with VM configuration \"%s\"",
@@ -350,13 +350,6 @@ public class NativeImage {
          */
         default List<String> getBuildArgs() {
             throw VMError.unimplemented();
-        }
-
-        /**
-         * @return true for fallback image building
-         */
-        default boolean buildFallbackImage() {
-            return false;
         }
     }
 
@@ -556,8 +549,6 @@ public class NativeImage {
                     return Collections.emptyList();
                 case "getBuildArgs":
                     return buildArgs;
-                case "buildFallbackImage":
-                    return true;
                 default:
                     return method.invoke(original.config, args);
             }
@@ -857,7 +848,7 @@ public class NativeImage {
         }
 
         /* If no customImageClasspath was specified put "." on classpath */
-        if (!config.buildFallbackImage() && customImageClasspath.isEmpty() && queryOption == null) {
+        if (customImageClasspath.isEmpty() && queryOption == null) {
             addImageProvidedClasspath(Paths.get("."));
         } else {
             imageClasspath.addAll(customImageClasspath);

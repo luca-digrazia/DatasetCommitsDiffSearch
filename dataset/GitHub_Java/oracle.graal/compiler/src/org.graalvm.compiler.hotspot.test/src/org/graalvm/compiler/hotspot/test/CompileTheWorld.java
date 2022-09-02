@@ -419,6 +419,13 @@ public final class CompileTheWorld {
         }
     }
 
+    private AutoCloseable enterCompilation() {
+        if (!LibGraal.isAvailable()) {
+            return null;
+        }
+        return new LibGraalParams(compilerOptions);
+    }
+
     public void println() {
         println("");
     }
@@ -919,10 +926,6 @@ public final class CompileTheWorld {
 
     private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
-    /**
-     * Implemented by
-     * {@code com.oracle.svm.graal.hotspot.libgraal.LibGraalEntryPoints.compileMethod}.
-     */
     static native long compileMethodInLibgraal(long isolateThread,
                     long methodHandle,
                     boolean useProfilingInfo,
@@ -970,8 +973,8 @@ public final class CompileTheWorld {
                         byte[] data = new byte[length];
                         UNSAFE.copyMemory(null, stackTraceBufferAddress + Integer.BYTES, data, ARRAY_BYTE_BASE_OFFSET, length);
                         String stackTrace = new String(data).trim();
-                        println(true, String.format("CompileTheWorld (%d) : Error compiling method: %s", counter, method.format("%H.%n(%p):%r")));
-                        println(true, stackTrace);
+                        println("CompileTheWorld (%d) : Error compiling method: %s", counter, method.format("%H.%n(%p):%r"));
+                        println(stackTrace);
                     }
                 }
             } else {

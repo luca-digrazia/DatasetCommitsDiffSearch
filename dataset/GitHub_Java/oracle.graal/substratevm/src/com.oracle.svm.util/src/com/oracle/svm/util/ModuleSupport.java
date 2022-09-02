@@ -24,23 +24,10 @@
  */
 package com.oracle.svm.util;
 
-import java.util.Collections;
-import java.util.List;
-
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
-public final class ModuleSupport {
+final class ModuleSupport {
     private ModuleSupport() {
-    }
-
-    /**
-     * Provide a list of all resources in the JVMCI module.
-     */
-    @SuppressWarnings("unused")
-    public static List<String> getJCMVIModuleResources() {
-        /* Nothing to do in JDK 8 version. JDK 11 version provides a proper implementation. */
-        assert JavaVersionUtil.JAVA_SPEC <= 8;
-        return Collections.emptyList();
     }
 
     /**

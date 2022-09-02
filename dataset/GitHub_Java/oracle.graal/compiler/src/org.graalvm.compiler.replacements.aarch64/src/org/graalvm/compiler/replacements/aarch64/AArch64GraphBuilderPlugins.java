@@ -45,28 +45,25 @@ import org.graalvm.compiler.nodes.java.AtomicReadAndAddNode;
 import org.graalvm.compiler.nodes.java.AtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
-import org.graalvm.compiler.replacements.TargetGraphBuilderPlugins;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode;
-import org.graalvm.compiler.replacements.nodes.FusedMultiplyAddNode;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.word.LocationIdentity;
 
-import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import sun.misc.Unsafe;
 
-public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
-    @Override
-    public void register(Plugins plugins, BytecodeProvider replacementsBytecodeProvider, Architecture arch, boolean explicitUnsafeNullChecks, boolean registerMathPlugins,
-                    boolean emitJDK9StringSubstitutions, boolean useFMAIntrinsics) {
-        register(plugins, replacementsBytecodeProvider, explicitUnsafeNullChecks, registerMathPlugins, emitJDK9StringSubstitutions, useFMAIntrinsics);
+public class AArch64GraphBuilderPlugins {
+
+    public static void register(Plugins plugins, BytecodeProvider bytecodeProvider, boolean explicitUnsafeNullChecks,
+                    boolean registerMathPlugins) {
+        register(plugins, bytecodeProvider, explicitUnsafeNullChecks, registerMathPlugins, true);
     }
 
     public static void register(Plugins plugins, BytecodeProvider bytecodeProvider, boolean explicitUnsafeNullChecks,
-                    boolean registerMathPlugins, boolean emitJDK9StringSubstitutions, boolean useFMAIntrinsics) {
+                    boolean registerMathPlugins, boolean emitJDK9StringSubstitutions) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
         invocationPlugins.defer(new Runnable() {
             @Override
@@ -74,7 +71,7 @@ public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
                 registerIntegerLongPlugins(invocationPlugins, JavaKind.Int, bytecodeProvider);
                 registerIntegerLongPlugins(invocationPlugins, JavaKind.Long, bytecodeProvider);
                 if (registerMathPlugins) {
-                    registerMathPlugins(invocationPlugins, useFMAIntrinsics);
+                    registerMathPlugins(invocationPlugins);
                 }
                 if (emitJDK9StringSubstitutions) {
                     registerStringLatin1Plugins(invocationPlugins, bytecodeProvider);
@@ -126,7 +123,7 @@ public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
         });
     }
 
-    private static void registerMathPlugins(InvocationPlugins plugins, boolean useFMAIntrinsics) {
+    private static void registerMathPlugins(InvocationPlugins plugins) {
         Registration r = new Registration(plugins, Math.class);
         registerUnaryMath(r, "sin", SIN);
         registerUnaryMath(r, "cos", COS);
@@ -144,36 +141,6 @@ public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
         registerRound(r, "rint", RoundingMode.NEAREST);
         registerRound(r, "ceil", RoundingMode.UP);
         registerRound(r, "floor", RoundingMode.DOWN);
-        if (useFMAIntrinsics && JavaVersionUtil.JAVA_SPEC > 8) {
-            registerFMA(r);
-        }
-    }
-
-    private static void registerFMA(Registration r) {
-        r.register3("fma", Double.TYPE, Double.TYPE, Double.TYPE, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b,
-                            ResolvedJavaMethod targetMethod,
-                            Receiver receiver,
-                            ValueNode na,
-                            ValueNode nb,
-                            ValueNode nc) {
-                b.push(JavaKind.Double, b.append(new FusedMultiplyAddNode(na, nb, nc)));
-                return true;
-            }
-        });
-        r.register3("fma", Float.TYPE, Float.TYPE, Float.TYPE, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b,
-                            ResolvedJavaMethod targetMethod,
-                            Receiver receiver,
-                            ValueNode na,
-                            ValueNode nb,
-                            ValueNode nc) {
-                b.push(JavaKind.Float, b.append(new FusedMultiplyAddNode(na, nb, nc)));
-                return true;
-            }
-        });
     }
 
     private static void registerUnaryMath(Registration r, String name, UnaryOperation operation) {

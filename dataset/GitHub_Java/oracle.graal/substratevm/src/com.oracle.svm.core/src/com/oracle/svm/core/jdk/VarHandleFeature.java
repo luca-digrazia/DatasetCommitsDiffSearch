@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -202,7 +202,17 @@ public class VarHandleFeature implements Feature {
             VMError.guarantee(markAsUnsafeAccessed != null, "New VarHandle found after static analysis");
 
             Field field = findVarHandleField(obj);
-            markAsUnsafeAccessed.accept(field);
+            if (info.isStatic) {
+                /*
+                 * GR-10238 implements Unsafe access for static fields, then this branch can be
+                 * removed and static fields can be properly marked for Unsafe access too.
+                 */
+                // Checkstyle: stop
+                System.out.println("WARNING GR-10238: VarHandle for static field is currently not fully supported. Static field " + field + " is not properly marked for Unsafe access!");
+                // Checkstyle: resume
+            } else {
+                markAsUnsafeAccessed.accept(field);
+            }
         }
         return obj;
     }
@@ -479,7 +489,7 @@ final class Target_java_lang_invoke_VarHandle {
      * collects details about the MemberName, which are method handle internals that must not be
      * reachable.
      */
-    @TargetElement(onlyWith = JDK14OrLater.class)
+    @TargetElement(onlyWith = JDK13OrLater.class)
     @Substitute
     @Override
     public String toString() {

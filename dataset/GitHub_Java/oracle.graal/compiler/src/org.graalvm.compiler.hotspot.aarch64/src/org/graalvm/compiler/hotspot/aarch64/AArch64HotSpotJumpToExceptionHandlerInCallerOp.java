@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -75,7 +75,8 @@ public class AArch64HotSpotJumpToExceptionHandlerInCallerOp extends AArch64HotSp
             // Restore sp from fp if the exception PC is a method handle call site.
             try (ScratchRegister sc = masm.getScratchRegister()) {
                 Register scratch = sc.getRegister();
-                AArch64Address address = masm.makeAddress(32, thread, isMethodHandleReturnOffset, scratch);
+                final boolean allowOverwrite = false;
+                AArch64Address address = masm.makeAddress(thread, isMethodHandleReturnOffset, scratch, 4, allowOverwrite);
                 masm.ldr(32, scratch, address);
                 Label noRestore = new Label();
                 masm.cbz(32, scratch, noRestore);

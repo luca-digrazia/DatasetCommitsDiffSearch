@@ -142,7 +142,7 @@ final class ReflectionSubstitution extends CustomSubstitution<ReflectionSubstitu
             }
         }
         /* Always initialize proxy classes. */
-        classInitializationSupport.forceInitializeHosted(ret, "all proxy classes are initialized", false);
+        classInitializationSupport.forceInitializeHosted(ret, "all proxy classes are initialized");
         return ret;
     }
 

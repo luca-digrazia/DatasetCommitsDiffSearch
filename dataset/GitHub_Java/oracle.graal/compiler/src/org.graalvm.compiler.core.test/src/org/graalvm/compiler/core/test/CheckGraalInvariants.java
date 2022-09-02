@@ -77,8 +77,6 @@ import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.compiler.test.AddExports;
-import org.graalvm.compiler.test.ModuleSupport;
 import org.graalvm.word.LocationIdentity;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -100,14 +98,7 @@ import jdk.vm.ci.meta.Value;
  * global invariants such as using {@link Object#equals(Object)} to compare certain types instead of
  * identity comparisons.
  */
-@AddExports("jdk.internal.vm.ci/*=jdk.aot")
 public class CheckGraalInvariants extends GraalCompilerTest {
-
-    /**
-     * Magic token to denote the classes in the Java runtime image (i.e. in the {@code jrt:/} file
-     * system).
-     */
-    public static final String JRT_CLASS_PATH_ENTRY = "<jrt>";
 
     private static boolean shouldVerifyEquals(ResolvedJavaMethod m) {
         if (m.getName().equals("identityEquals")) {
@@ -128,9 +119,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
     public static class InvariantsTool {
 
         protected boolean shouldProcess(String classpathEntry) {
-            if (classpathEntry.equals(JRT_CLASS_PATH_ENTRY)) {
-                return true;
-            }
             if (classpathEntry.endsWith(".jar")) {
                 String name = new File(classpathEntry).getName();
                 return name.contains("jvmci") || name.contains("graal") || name.contains("jdk.internal.vm.compiler");
@@ -143,7 +131,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
             if (JavaVersionUtil.JAVA_SPEC <= 8) {
                 bootclasspath = System.getProperty("sun.boot.class.path");
             } else {
-                bootclasspath = JRT_CLASS_PATH_ENTRY;
+                bootclasspath = System.getProperty("jdk.module.path") + File.pathSeparatorChar + System.getProperty("jdk.module.upgrade.path");
             }
             return bootclasspath;
         }
@@ -220,8 +208,19 @@ public class CheckGraalInvariants extends GraalCompilerTest {
         for (String path : bootclasspath.split(File.pathSeparator)) {
             if (tool.shouldProcess(path)) {
                 try {
-                    if (path.equals(JRT_CLASS_PATH_ENTRY)) {
-                        for (String className : ModuleSupport.getJRTGraalClassNames()) {
+                    final ZipFile zipFile = new ZipFile(new File(path));
+                    for (final Enumeration<? extends ZipEntry> entry = zipFile.entries(); entry.hasMoreElements();) {
+                        final ZipEntry zipEntry = entry.nextElement();
+                        String name = zipEntry.getName();
+                        if (name.endsWith(".class") && !name.startsWith("META-INF/versions/")) {
+                            String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
+                            if (isInNativeImage(className)) {
+                                /*
+                                 * Native Image is an external tool and does not need to follow the
+                                 * Graal invariants.
+                                 */
+                                continue;
+                            }
                             if (isGSON(className)) {
                                 /*
                                  * GSON classes are compiled with old JDK
@@ -229,29 +228,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
                                 continue;
                             }
                             classNames.add(className);
-                        }
-                    } else {
-                        final ZipFile zipFile = new ZipFile(new File(path));
-                        for (final Enumeration<? extends ZipEntry> entry = zipFile.entries(); entry.hasMoreElements();) {
-                            final ZipEntry zipEntry = entry.nextElement();
-                            String name = zipEntry.getName();
-                            if (name.endsWith(".class") && !name.startsWith("META-INF/versions/")) {
-                                String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
-                                if (isInNativeImage(className)) {
-                                    /*
-                                     * Native Image is an external tool and does not need to follow
-                                     * the Graal invariants.
-                                     */
-                                    continue;
-                                }
-                                if (isGSON(className)) {
-                                    /*
-                                     * GSON classes are compiled with old JDK
-                                     */
-                                    continue;
-                                }
-                                classNames.add(className);
-                            }
                         }
                     }
                 } catch (IOException ex) {
@@ -338,12 +314,8 @@ public class CheckGraalInvariants extends GraalCompilerTest {
 
                 ResolvedJavaType type = metaAccess.lookupJavaType(c);
                 List<ResolvedJavaMethod> methods = new ArrayList<>();
-                try {
-                    methods.addAll(Arrays.asList(type.getDeclaredMethods()));
-                    methods.addAll(Arrays.asList(type.getDeclaredConstructors()));
-                } catch (Throwable e) {
-                    errors.add(String.format("Error while checking %s:%n%s", className, printStackTraceToString(e)));
-                }
+                methods.addAll(Arrays.asList(type.getDeclaredMethods()));
+                methods.addAll(Arrays.asList(type.getDeclaredConstructors()));
                 ResolvedJavaMethod clinit = type.getClassInitializer();
                 if (clinit != null) {
                     methods.add(clinit);
@@ -432,8 +404,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
             try {
                 Class<?> c = Class.forName(className, true, CheckGraalInvariants.class.getClassLoader());
                 classes.add(c);
-            } catch (UnsupportedClassVersionError e) {
-                // graal-test.jar can contain classes compiled for different Java versions
             } catch (Throwable t) {
                 tool.handleClassLoadingException(t);
             }

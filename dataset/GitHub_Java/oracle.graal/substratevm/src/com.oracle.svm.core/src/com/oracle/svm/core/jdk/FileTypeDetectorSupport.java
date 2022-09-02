@@ -28,7 +28,6 @@ package com.oracle.svm.core.jdk;
 /* Checkstyle: allow reflection */
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.spi.FileTypeDetector;
@@ -37,11 +36,11 @@ import java.util.List;
 import java.util.Objects;
 
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
@@ -50,7 +49,7 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -90,6 +89,13 @@ public final class FileTypeDetectorSupport {
     public static void setDefault(FileTypeDetector detector) {
         ImageSingletons.lookup(FileTypeDetectorFeature.class).defaultFileTypeDetector = Objects.requireNonNull(detector);
     }
+
+    public static class AlwaysNullFileTypeDetector extends FileTypeDetector {
+        @Override
+        public String probeContentType(Path path) throws IOException {
+            return null;
+        }
+    }
 }
 
 @AutomaticFeature
@@ -108,35 +114,19 @@ final class FileTypeDetectorFeature implements Feature {
         if (FileTypeDetectorSupport.Options.AddAllFileTypeDetectors.getValue()) {
             Class<?> jdkClass = access.findClassByName("java.nio.file.Files$FileTypeDetectors");
             /* Note the typo in the JDK field name on JDK 8. */
-            String installedDetectorsFieldName = GraalServices.Java8OrEarlier ? "installeDetectors" : "installedDetectors";
-            installedDetectors.addAll(readStaticField(jdkClass, installedDetectorsFieldName));
-            defaultFileTypeDetector = readStaticField(jdkClass, "defaultFileTypeDetector");
-        } else {
+            String installedDetectorsFieldName = JavaVersionUtil.JAVA_SPEC <= 8 ? "installeDetectors" : "installedDetectors";
+            installedDetectors.addAll(ReflectionUtil.readStaticField(jdkClass, installedDetectorsFieldName));
+            defaultFileTypeDetector = ReflectionUtil.readStaticField(jdkClass, "defaultFileTypeDetector");
+        }
+        if (defaultFileTypeDetector == null) {
             /*
              * The JDK does not allow a null value for the defaultFileTypeDetector, so we need an
              * implementation class that always returns null.
              */
-            defaultFileTypeDetector = new AlwaysNullFileTypeDetector();
+            defaultFileTypeDetector = new FileTypeDetectorSupport.AlwaysNullFileTypeDetector();
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> T readStaticField(Class<?> clazz, String fieldName) {
-        try {
-            Field result = clazz.getDeclaredField(fieldName);
-            result.setAccessible(true);
-            return (T) result.get(null);
-        } catch (ReflectiveOperationException ex) {
-            throw VMError.shouldNotReachHere(ex);
-        }
-    }
-}
-
-final class AlwaysNullFileTypeDetector extends FileTypeDetector {
-    @Override
-    public String probeContentType(Path path) throws IOException {
-        return null;
-    }
 }
 
 final class InstalledDetectorsComputer implements RecomputeFieldValue.CustomFieldValueComputer {
@@ -159,7 +149,7 @@ final class Target_java_nio_file_Files_FileTypeDetectors {
     @Alias @TargetElement(onlyWith = JDK8OrEarlier.class) //
     @RecomputeFieldValue(kind = Kind.Custom, declClass = InstalledDetectorsComputer.class) //
     static List<FileTypeDetector> installeDetectors;
-    @Alias @TargetElement(onlyWith = JDK9OrLater.class) //
+    @Alias @TargetElement(onlyWith = JDK11OrLater.class) //
     @RecomputeFieldValue(kind = Kind.Custom, declClass = InstalledDetectorsComputer.class) //
     static List<FileTypeDetector> installedDetectors;
 
