@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.jdwp.api.CallFrame;
 
@@ -64,9 +63,5 @@ public class SuspendedInfo {
 
     public RootNode getCallerRootNode() {
         return callerRootNode;
-    }
-
-    public FrameInstance getCallerFrameInstance() {
-        return stackFrames.length > 1 ? stackFrames[1].getFrameInstance() : null;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@ package com.oracle.truffle.espresso.classfile;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.jdwp.api.LineNumberTableRef;
 import com.oracle.truffle.espresso.runtime.Attribute;
 
 /**
@@ -31,7 +32,7 @@ import com.oracle.truffle.espresso.runtime.Attribute;
  *
  * @see "https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.7.12"
  */
-public final class LineNumberTable extends Attribute {
+public final class LineNumberTable extends Attribute implements LineNumberTableRef {
 
     public static final Symbol<Name> NAME = Name.LineNumberTable;
 
@@ -39,9 +40,17 @@ public final class LineNumberTable extends Attribute {
 
     private final Entry[] entries;
 
+    private int lastLine = -1;
+
+    private int firstLine = -1;
+
     public LineNumberTable(Symbol<Name> name, Entry[] entries) {
         super(name, null);
         this.entries = entries;
+    }
+
+    public Entry[] getEntries() {
+        return entries;
     }
 
     /**
@@ -56,7 +65,48 @@ public final class LineNumberTable extends Attribute {
         return entries[entries.length - 1].lineNumber;
     }
 
-    public static final class Entry {
+    public long getBCI(int line) {
+        for (Entry entry : entries) {
+            if (entry.getLineNumber() == line) {
+                return entry.getBCI();
+            }
+        }
+        return -1;
+    }
+
+    public int getLastLine() {
+        if (lastLine != -1) {
+            return lastLine;
+        }
+        int max = -1;
+        for (Entry entry : entries) {
+            max = Math.max(max, entry.getLineNumber());
+        }
+        return max;
+    }
+
+    public int getFirstLine() {
+        if (firstLine != -1) {
+            return firstLine;
+        }
+        int min = Integer.MAX_VALUE;
+        for (Entry entry : entries) {
+            min = Math.min(min, entry.getLineNumber());
+        }
+        return min;
+    }
+
+    public int getNextLine(int line) {
+        int next = Integer.MAX_VALUE;
+        for (Entry entry : entries) {
+            if (entry.getLineNumber() > line) {
+                next = Math.min(next, entry.getLineNumber());
+            }
+        }
+        return next;
+    }
+
+    public static final class Entry implements EntryRef {
 
         public static final Entry[] EMPTY_ARRAY = new Entry[0];
 
