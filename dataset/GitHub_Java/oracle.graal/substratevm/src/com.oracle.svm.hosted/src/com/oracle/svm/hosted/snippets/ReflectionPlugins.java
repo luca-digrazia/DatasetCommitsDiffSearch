@@ -60,7 +60,6 @@ import org.graalvm.nativeimage.ImageSingletons;
 import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.svm.core.ParsingReason;
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.TypeResult;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.option.HostedOptionKey;
@@ -216,7 +215,6 @@ public final class ReflectionPlugins {
     private void registerClassPlugins(InvocationPlugins plugins) {
         registerFoldInvocationPlugins(plugins, Class.class,
                         "getClassLoader",
-                        "isInterface", "isPrimitive",
                         "getField", "getMethod", "getConstructor",
                         "getDeclaredField", "getDeclaredMethod", "getDeclaredConstructor");
 
@@ -447,8 +445,6 @@ public final class ReflectionPlugins {
         return null;
     }
 
-    private final boolean parseOnce = SubstrateOptions.parseOnce();
-
     /**
      * This method checks if the element should be intrinsified and returns the cached intrinsic
      * element if found. Caching intrinsic elements during analysis and reusing the same element
@@ -459,7 +455,6 @@ public final class ReflectionPlugins {
      * initialized. Therefore, we want to intrinsify the same, eagerly initialized object during
      * compilation, not a lossy copy of it.
      */
-    @SuppressWarnings("unchecked")
     private <T> T getIntrinsic(GraphBuilderContext context, T element) {
         if (reason == ParsingReason.UnsafeSubstitutionAnalysis || reason == ParsingReason.EarlyClassInitializerAnalysis) {
             /* We are analyzing the static initializers and should always intrinsify. */
@@ -469,7 +464,7 @@ public final class ReflectionPlugins {
         if (context.bciCanBeDuplicated()) {
             return null;
         }
-        if (parseOnce || reason == ParsingReason.PointsToAnalysis) {
+        if (reason == ParsingReason.PointsToAnalysis) {
             if (isDeleted(element, context.getMetaAccess())) {
                 /*
                  * Should not intrinsify. Will fail during the reflective lookup at
@@ -480,11 +475,6 @@ public final class ReflectionPlugins {
             }
 
             Object replaced = aUniverse.replaceObject(element);
-
-            if (parseOnce) {
-                /* No separate parsing for compilation, so no need to cache the result. */
-                return (T) replaced;
-            }
 
             /* During parsing for analysis we intrinsify and cache the result for compilation. */
             ImageSingletons.lookup(ReflectionPluginRegistry.class).add(context.getCallingContext(), replaced);
