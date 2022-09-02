@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.graal.hosted;
 
+import java.lang.management.ThreadMXBean;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,6 +53,7 @@ import com.oracle.svm.core.graal.nodes.SubstrateFieldLocationIdentity;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.core.util.HostedStringDeduplication;
+import com.oracle.svm.core.util.Replaced;
 import com.oracle.svm.graal.SubstrateGraalRuntime;
 import com.oracle.svm.graal.meta.SubstrateField;
 import com.oracle.svm.graal.meta.SubstrateMethod;
@@ -90,7 +92,7 @@ public class GraalObjectReplacer implements Function<Object, Object> {
     private final AnalysisMetaAccess aMetaAccess;
     private final HashMap<AnalysisMethod, SubstrateMethod> methods = new HashMap<>();
     private final HashMap<AnalysisField, SubstrateField> fields = new HashMap<>();
-    private final HashMap<FieldLocationIdentity, SubstrateFieldLocationIdentity> fieldLocationIdentities = new HashMap<>();
+    private final HashMap<FieldLocationIdentity, FieldLocationIdentity> fieldLocationIdentities = new HashMap<>();
     private final HashMap<AnalysisType, SubstrateType> types = new HashMap<>();
     private final HashMap<Signature, SubstrateSignature> signatures = new HashMap<>();
     private final GraalProviderObjectReplacements providerReplacements;
@@ -150,23 +152,37 @@ public class GraalObjectReplacer implements Function<Object, Object> {
             /* Ensure lazily initialized name fields are computed. */
             ((MetricKey) source).getName();
 
-        } else if (source instanceof HotSpotResolvedJavaMethod) {
-            throw new UnsupportedFeatureException(source.toString());
-        } else if (source instanceof HotSpotResolvedJavaField) {
-            throw new UnsupportedFeatureException(source.toString());
-        } else if (source instanceof HotSpotResolvedJavaType) {
-            throw new UnsupportedFeatureException(source.toString());
-        } else if (source instanceof HotSpotSignature) {
-            throw new UnsupportedFeatureException(source.toString());
-
-        } else if (source instanceof ResolvedJavaMethod && !(source instanceof SubstrateMethod)) {
-            dest = createMethod((ResolvedJavaMethod) source);
-        } else if (source instanceof ResolvedJavaField && !(source instanceof SubstrateField)) {
-            dest = createField((ResolvedJavaField) source);
-        } else if (source instanceof ResolvedJavaType && !(source instanceof SubstrateType)) {
-            dest = createType((ResolvedJavaType) source);
-        } else if (source instanceof FieldLocationIdentity && !(source instanceof SubstrateFieldLocationIdentity)) {
-            dest = createFieldLocationIdentity((FieldLocationIdentity) source);
+        } else if (shouldBeReplaced(source)) {
+            /*
+             * The hash maps must be synchronized, because replace() may be called from
+             * BigBang.finish(), which is multi-threaded.
+             */
+            synchronized (this) {
+                if (source instanceof HotSpotResolvedJavaMethod) {
+                    throw new UnsupportedFeatureException(source.toString());
+                } else if (source instanceof HotSpotResolvedJavaField) {
+                    throw new UnsupportedFeatureException(source.toString());
+                } else if (source instanceof HotSpotResolvedJavaType) {
+                    throw new UnsupportedFeatureException(source.toString());
+                } else if (source instanceof HotSpotSignature) {
+                    throw new UnsupportedFeatureException(source.toString());
+                } else if (source instanceof ResolvedJavaMethod) {
+                    dest = createMethod((ResolvedJavaMethod) source);
+                } else if (source instanceof ResolvedJavaField) {
+                    dest = createField((ResolvedJavaField) source);
+                } else if (source instanceof ResolvedJavaType) {
+                    dest = createType((ResolvedJavaType) source);
+                } else if (source instanceof Signature) {
+                    dest = createSignature((Signature) source);
+                } else if (source instanceof FieldLocationIdentity) {
+                    dest = fieldLocationIdentities.get(source);
+                    if (dest == null) {
+                        SubstrateField destField = (SubstrateField) apply(((FieldLocationIdentity) source).getField());
+                        dest = new SubstrateFieldLocationIdentity(destField);
+                        fieldLocationIdentities.put((FieldLocationIdentity) source, (FieldLocationIdentity) dest);
+                    }
+                }
+            }
         }
 
         assert dest != null;
@@ -179,9 +195,33 @@ public class GraalObjectReplacer implements Function<Object, Object> {
         return dest;
     }
 
-    public synchronized SubstrateMethod createMethod(ResolvedJavaMethod original) {
-        assert !(original instanceof SubstrateMethod) : original;
+    private static boolean shouldBeReplaced(Object object) {
+        if (object instanceof Replaced) {
+            return false;
+        }
 
+        /*
+         * Must be in sync with the types checked in replace()
+         */
+        if (object instanceof ResolvedJavaMethod) {
+            return true;
+        }
+        if (object instanceof ResolvedJavaField) {
+            return true;
+        }
+        if (object instanceof ResolvedJavaType) {
+            return true;
+        }
+        if (object instanceof ThreadMXBean) {
+            return true;
+        }
+        if (object instanceof FieldLocationIdentity) {
+            return true;
+        }
+        return false;
+    }
+
+    public SubstrateMethod createMethod(ResolvedJavaMethod original) {
         AnalysisMethod aMethod;
         if (original instanceof AnalysisMethod) {
             aMethod = (AnalysisMethod) original;
@@ -211,9 +251,7 @@ public class GraalObjectReplacer implements Function<Object, Object> {
         return sMethod;
     }
 
-    public synchronized SubstrateField createField(ResolvedJavaField original) {
-        assert !(original instanceof SubstrateField) : original;
-
+    public SubstrateField createField(ResolvedJavaField original) {
         AnalysisField aField;
         if (original instanceof AnalysisField) {
             aField = (AnalysisField) original;
@@ -243,18 +281,6 @@ public class GraalObjectReplacer implements Function<Object, Object> {
         return sField;
     }
 
-    private synchronized SubstrateFieldLocationIdentity createFieldLocationIdentity(FieldLocationIdentity original) {
-        assert !(original instanceof SubstrateFieldLocationIdentity) : original;
-
-        SubstrateFieldLocationIdentity dest = fieldLocationIdentities.get(original);
-        if (dest == null) {
-            SubstrateField destField = createField(original.getField());
-            dest = new SubstrateFieldLocationIdentity(destField);
-            fieldLocationIdentities.put(original, dest);
-        }
-        return dest;
-    }
-
     public SubstrateField getField(AnalysisField field) {
         return fields.get(field);
     }
@@ -267,8 +293,7 @@ public class GraalObjectReplacer implements Function<Object, Object> {
         return types.containsKey(toAnalysisType(original));
     }
 
-    public synchronized SubstrateType createType(JavaType original) {
-        assert !(original instanceof SubstrateType) : original;
+    public SubstrateType createType(JavaType original) {
         if (original == null) {
             return null;
         }
@@ -278,7 +303,6 @@ public class GraalObjectReplacer implements Function<Object, Object> {
 
         if (sType == null) {
             assert !(original instanceof HostedType) : "too late to create new type";
-            aType.registerAsReachable();
             DynamicHub hub = ((SVMHost) aUniverse.hostVM()).dynamicHub(aType);
             sType = new SubstrateType(aType.getJavaKind(), hub);
             types.put(aType, sType);
@@ -313,9 +337,7 @@ public class GraalObjectReplacer implements Function<Object, Object> {
         return sFields;
     }
 
-    private synchronized SubstrateSignature createSignature(Signature original) {
-        assert !(original instanceof SubstrateSignature) : original;
-
+    private SubstrateSignature createSignature(Signature original) {
         SubstrateSignature sSignature = signatures.get(original);
         if (sSignature == null) {
             sSignature = new SubstrateSignature();
