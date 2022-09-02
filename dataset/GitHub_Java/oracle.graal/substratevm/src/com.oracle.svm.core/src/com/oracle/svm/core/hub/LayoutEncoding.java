@@ -140,7 +140,6 @@ public class LayoutEncoding {
         return encoding > LAST_SPECIAL_VALUE;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static UnsignedWord getInstanceSize(int encoding) {
         return WordFactory.unsigned(encoding);
     }

@@ -53,7 +53,6 @@ import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.JavaMemoryUtil;
 import com.oracle.svm.core.c.NonmovableArray;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
@@ -79,24 +78,18 @@ public final class SubstrateObjectCloneSnippets extends SubstrateTemplates imple
     }
 
     @SubstrateForeignCallTarget(stubCallingConvention = false)
-    private static Object doClone(Object original) throws CloneNotSupportedException, InstantiationException {
-        if (original == null) {
+    private static Object doClone(Object thisObj) throws CloneNotSupportedException, InstantiationException {
+        if (thisObj == null) {
             throw new NullPointerException();
-        } else if (!(original instanceof Cloneable)) {
+        } else if (!(thisObj instanceof Cloneable)) {
             throw CLONE_NOT_SUPPORTED_EXCEPTION;
         }
 
-        DynamicHub hub = KnownIntrinsics.readHub(original);
+        DynamicHub hub = KnownIntrinsics.readHub(thisObj);
         int layoutEncoding = hub.getLayoutEncoding();
         if (LayoutEncoding.isArray(layoutEncoding)) {
-            int length = ArrayLengthNode.arrayLength(original);
-            Object newArray = java.lang.reflect.Array.newInstance(DynamicHub.toClass(hub.getComponentHub()), length);
-            if (LayoutEncoding.isObjectArray(layoutEncoding)) {
-                JavaMemoryUtil.copyObjectArrayForward(original, 0, newArray, 0, length, layoutEncoding);
-            } else {
-                JavaMemoryUtil.copyPrimitiveArrayForward(original, 0, newArray, 0, length, layoutEncoding);
-            }
-            return newArray;
+            int length = ArrayLengthNode.arrayLength(thisObj);
+            return SubstrateArraysCopyOfSnippets.doArraysCopyOf(hub, thisObj, length, length);
         } else {
             sun.misc.Unsafe unsafe = GraalUnsafeAccess.getUnsafe();
             Object result = unsafe.allocateInstance(DynamicHub.toClass(hub));
@@ -104,12 +97,11 @@ public final class SubstrateObjectCloneSnippets extends SubstrateTemplates imple
             int curOffset = firstFieldOffset;
 
             NonmovableArray<Byte> referenceMapEncoding = DynamicHubSupport.getReferenceMapEncoding();
+            int referenceSize = ConfigurationValues.getObjectLayout().getReferenceSize();
             int referenceMapIndex = hub.getReferenceMapIndex();
             int entryCount = NonmovableByteArrayReader.getS4(referenceMapEncoding, referenceMapIndex);
             assert entryCount >= 0;
 
-            // The UniverseBuilder actively groups object references together. So, this loop will
-            // typically be only executed for a very small number of iterations.
             long entryStart = referenceMapIndex + InstanceReferenceMapEncoder.MAP_HEADER_SIZE;
             for (long idx = entryStart; idx < entryStart + entryCount * InstanceReferenceMapEncoder.MAP_ENTRY_SIZE; idx += InstanceReferenceMapEncoder.MAP_ENTRY_SIZE) {
                 int objectOffset = NonmovableByteArrayReader.getS4(referenceMapEncoding, idx);
@@ -119,24 +111,22 @@ public final class SubstrateObjectCloneSnippets extends SubstrateTemplates imple
                 // copy non-object data
                 int primitiveDataSize = objectOffset - curOffset;
                 assert primitiveDataSize >= 0;
-                assert curOffset >= 0;
-                JavaMemoryUtil.copyForward(original, WordFactory.unsigned(curOffset), result, WordFactory.unsigned(curOffset), WordFactory.unsigned(primitiveDataSize));
+                ArraycopySnippets.primitiveCopyForward(thisObj, WordFactory.unsigned(curOffset), result, WordFactory.unsigned(curOffset), WordFactory.unsigned(primitiveDataSize));
                 curOffset += primitiveDataSize;
 
                 // copy object data
-                assert curOffset >= 0;
-                assert count >= 0;
-                JavaMemoryUtil.copyObjectsForward(original, WordFactory.unsigned(curOffset), result, WordFactory.unsigned(curOffset), WordFactory.unsigned(count));
+                for (int c = 0; c < count; c++) {
+                    BarrieredAccess.writeObject(result, curOffset, BarrieredAccess.readObject(thisObj, curOffset));
+                    curOffset += referenceSize;
+                }
             }
 
             // copy remaining non-object data
             int objectSize = NumUtil.safeToInt(LayoutEncoding.getInstanceSize(layoutEncoding).rawValue());
             int primitiveDataSize = objectSize - curOffset;
             assert primitiveDataSize >= 0;
-            assert curOffset >= 0;
-            JavaMemoryUtil.copyForward(original, WordFactory.unsigned(curOffset), result, WordFactory.unsigned(curOffset), WordFactory.unsigned(primitiveDataSize));
+            ArraycopySnippets.primitiveCopyForward(thisObj, WordFactory.unsigned(curOffset), result, WordFactory.unsigned(curOffset), WordFactory.unsigned(primitiveDataSize));
             curOffset += primitiveDataSize;
-            assert curOffset == objectSize;
 
             // reset monitor to uninitialized values
             int monitorOffset = hub.getMonitorOffset();
@@ -144,6 +134,7 @@ public final class SubstrateObjectCloneSnippets extends SubstrateTemplates imple
                 BarrieredAccess.writeObject(result, monitorOffset, null);
             }
 
+            assert curOffset == objectSize;
             return result;
         }
     }

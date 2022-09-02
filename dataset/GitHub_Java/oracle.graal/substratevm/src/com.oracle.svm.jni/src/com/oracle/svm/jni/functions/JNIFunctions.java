@@ -36,7 +36,6 @@ import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
@@ -94,9 +93,6 @@ import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerRetu
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerReturnNullWord;
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerReturnZero;
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerVoid;
-import com.oracle.svm.jni.hosted.JNIFieldAccessorMethod;
-import com.oracle.svm.jni.hosted.JNIJavaCallWrapperMethod;
-import com.oracle.svm.jni.hosted.JNIPrimitiveArrayOperationMethod;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIErrors;
 import com.oracle.svm.jni.nativeapi.JNIFieldId;
@@ -112,30 +108,14 @@ import jdk.vm.ci.meta.MetaUtil;
 import sun.misc.Unsafe;
 
 /**
- * Implementations of the functions defined by the Java Native Interface.
- * 
- * Not all functions are currently implemented. Some functions are generated, and therefore not
- * defined in this class:
- * 
- * <ul>
- * <li>Field getters and setters ({@code Get<Type>Field}, {@code Set<Type>Field},
- * {@code GetStatic<Type>Field}, and {@code SetStatic<Type>Field}) are generated in
- * {@link JNIFieldAccessorMethod}.</li>
- * 
- * <li>Operations on primitive arrays {@code New<PrimitiveType>Array},
- * {@code Get<PrimitiveType>ArrayElements}, {@code Release<PrimitiveType>ArrayElements},
- * {@code Get<PrimitiveType>ArrayRegion} and {@code Set<PrimitiveType>ArrayRegion}) are generated in
- * {@link JNIPrimitiveArrayOperationMethod}</li>
- * 
- * <li>Wrappers for the methods callable by JNI are generated in
- * {@link JNIJavaCallWrapperMethod}.</li>
- * </ul>
+ * Implementations of the functions defined by the Java Native Interface. Not all functions are
+ * currently implemented.
  *
  * @see <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html">Java
  *      Native Interface Specification: JNI Functions</a>
  */
 @SuppressWarnings("unused")
-public final class JNIFunctions {
+final class JNIFunctions {
 
     // Checkstyle: stop
 
@@ -732,13 +712,7 @@ public final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerReturnMinusOne.class)
     @CEntryPointOptions(prologue = JNIEnvEnterReturnMinusOneOnFailurePrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static int GetArrayLength(JNIEnvironment env, JNIObjectHandle harray) {
-        /*
-         * JNI does not specify the behavior for illegal arguments (e.g. null or non-array objects);
-         * it is the JNI caller's responsibility to ensure that arguments are correct. We therefore
-         * use an unchecked access to the length field. Note that the lack of check is also
-         * necessary to support hybrid object layouts.
-         */
-        return ArrayLengthNode.arrayLength(JNIObjectHandles.getObject(harray));
+        return Array.getLength(JNIObjectHandles.getObject(harray));
     }
 
     /*
@@ -983,7 +957,7 @@ public final class JNIFunctions {
      * Helper code for JNI functions. This is an inner class because the outer methods must match
      * JNI functions.
      */
-    public static class Support {
+    static class Support {
         static class JNIEnvEnterReturnEDetachedOnFailurePrologue {
             public static void enter(JNIEnvironment env) {
                 int error = CEntryPointActions.enter((IsolateThread) env);
@@ -1023,7 +997,7 @@ public final class JNIFunctions {
         static final CGlobalData<CCharPointer> JNIENV_ENTER_FAIL_FATALLY_MESSAGE = CGlobalDataFactory.createCString(
                         "A JNI call failed to enter the isolate via its JNI environment argument. The environment might be invalid or no longer exists.");
 
-        public static class JNIEnvEnterFatalOnFailurePrologue {
+        static class JNIEnvEnterFatalOnFailurePrologue {
             public static void enter(JNIEnvironment env) {
                 int error = CEntryPointActions.enter((IsolateThread) env);
                 if (error != 0) {
@@ -1048,7 +1022,7 @@ public final class JNIFunctions {
             }
         }
 
-        public static class JNIExceptionHandlerVoid {
+        static class JNIExceptionHandlerVoid {
             static void handle(Throwable t) {
                 Support.handleException(t);
             }

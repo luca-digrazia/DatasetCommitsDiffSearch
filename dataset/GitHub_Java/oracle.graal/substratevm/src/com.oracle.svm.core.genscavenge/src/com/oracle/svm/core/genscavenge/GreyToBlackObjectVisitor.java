@@ -33,8 +33,7 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.SubstrateDiagnostics.DiagnosticThunk;
-import com.oracle.svm.core.SubstrateDiagnostics.DiagnosticThunkRegister;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
@@ -53,7 +52,7 @@ import com.oracle.svm.core.util.VMError;
  *
  * This visitor is used during GC and so it must be constructed during native image generation.
  */
-public final class GreyToBlackObjectVisitor implements ObjectVisitor {
+final class GreyToBlackObjectVisitor implements ObjectVisitor {
     private final DiagnosticReporter diagnosticReporter;
     private final GreyToBlackObjRefVisitor objRefVisitor;
 
@@ -62,7 +61,7 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
         this.objRefVisitor = greyToBlackObjRefVisitor;
         if (DiagnosticReporter.getHistoryLength() > 0) {
             this.diagnosticReporter = new DiagnosticReporter();
-            DiagnosticThunkRegister.getSingleton().register(diagnosticReporter);
+            SubstrateUtil.DiagnosticThunkRegister.getSingleton().register(diagnosticReporter);
         } else {
             this.diagnosticReporter = null;
         }
@@ -92,7 +91,7 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
     }
 
     /** A ring buffer of visited objects for diagnostics. */
-    static final class DiagnosticReporter implements DiagnosticThunk {
+    static final class DiagnosticReporter implements SubstrateUtil.DiagnosticThunk {
 
         static class Options {
             @Option(help = "Length of GreyToBlackObjectVisitor history for diagnostics. 0 implies no history is kept.") //
