@@ -144,14 +144,6 @@ public interface DynamicConstant extends PoolConstant {
         default Symbol<Type> getTypeSymbol(ConstantPool pool) {
             throw EspressoError.shouldNotReachHere("Getting type symbol of a resolved dynamic constant");
         }
-
-        default StaticObject guestBoxedValue(Meta meta) {
-            Object value = value();
-            if (value instanceof StaticObject) {
-                return (StaticObject) value;
-            }
-            return Meta.box(meta, value);
-        }
     }
 
     final class ResolvedObject implements Resolved {
