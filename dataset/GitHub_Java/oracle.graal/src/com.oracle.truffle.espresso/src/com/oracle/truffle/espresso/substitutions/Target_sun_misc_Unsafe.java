@@ -45,10 +45,10 @@ import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
-import com.oracle.truffle.espresso.vm.UnsafeAccess;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
+
 import sun.misc.Unsafe;
 
 @EspressoSubstitutions
@@ -56,12 +56,15 @@ public final class Target_sun_misc_Unsafe {
 
     static final int SAFETY_FIELD_OFFSET = 123456789;
 
-    private static final Unsafe UNSAFE = UnsafeAccess.get();
+    private static final Unsafe U;
 
     static {
         try {
-            parkBlockerOffset = UNSAFE.objectFieldOffset(Thread.class.getDeclaredField("parkBlocker"));
-        } catch (NoSuchFieldException e) {
+            java.lang.reflect.Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            U = (Unsafe) f.get(null);
+            parkBlockerOffset = U.objectFieldOffset(Thread.class.getDeclaredField("parkBlocker"));
+        } catch (NoSuchFieldException | IllegalAccessException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
     }
@@ -150,10 +153,10 @@ public final class Target_sun_misc_Unsafe {
         assert clazz.getMirrorKlass().isArray();
         if (clazz.getMirrorKlass().getComponentType().isPrimitive()) {
             Class<?> hostPrimitive = clazz.getMirrorKlass().getComponentType().getJavaKind().toJavaClass();
-            return UNSAFE.arrayBaseOffset(Array.newInstance(hostPrimitive, 0).getClass());
+            return U.arrayBaseOffset(Array.newInstance(hostPrimitive, 0).getClass());
         } else {
             // Just a reference type.
-            return UNSAFE.arrayBaseOffset(Object[].class);
+            return U.arrayBaseOffset(Object[].class);
         }
     }
 
@@ -171,15 +174,15 @@ public final class Target_sun_misc_Unsafe {
         assert clazz.getMirrorKlass().isArray();
         if (clazz.getMirrorKlass().getComponentType().isPrimitive()) {
             Class<?> hostPrimitive = clazz.getMirrorKlass().getComponentType().getJavaKind().toJavaClass();
-            return UNSAFE.arrayIndexScale(Array.newInstance(hostPrimitive, 0).getClass());
+            return U.arrayIndexScale(Array.newInstance(hostPrimitive, 0).getClass());
         } else {
             // Just a reference type.
-            return UNSAFE.arrayIndexScale(Object[].class);
+            return U.arrayIndexScale(Object[].class);
         }
     }
 
-    /** The value of {@code addressSize()}. */
-    public static final int ADDRESS_SIZE = UNSAFE.addressSize();
+    /** The value of {@code addressSize()} */
+    public static final int ADDRESS_SIZE = U.addressSize();
 
     /**
      * Report the size in bytes of a native pointer, as stored via {@link #putAddress}. This value
@@ -246,7 +249,7 @@ public final class Target_sun_misc_Unsafe {
     public static boolean compareAndSwapObject(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset,
                     Object before, Object after) {
         if (holder.isArray()) {
-            return UNSAFE.compareAndSwapObject((holder).unwrap(), offset, before, after);
+            return U.compareAndSwapObject((holder).unwrap(), offset, before, after);
         }
         // TODO(peterssen): Current workaround assumes it's a field access, offset <-> field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
@@ -258,7 +261,7 @@ public final class Target_sun_misc_Unsafe {
     public static boolean compareAndSwapInt(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, int before,
                     int after) {
         if (holder.isArray()) {
-            return UNSAFE.compareAndSwapInt((holder).unwrap(), offset, before, after);
+            return U.compareAndSwapInt((holder).unwrap(), offset, before, after);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -269,7 +272,7 @@ public final class Target_sun_misc_Unsafe {
     public static boolean compareAndSwapLong(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, long before,
                     long after) {
         if (holder.isArray()) {
-            return UNSAFE.compareAndSwapLong((holder).unwrap(), offset, before, after);
+            return U.compareAndSwapLong((holder).unwrap(), offset, before, after);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -299,7 +302,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static long allocateMemory(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long length) {
-        return UNSAFE.allocateMemory(length);
+        return U.allocateMemory(length);
     }
 
     /**
@@ -311,7 +314,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void freeMemory(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long address) {
-        UNSAFE.freeMemory(address);
+        U.freeMemory(address);
     }
 
     // region get*(Object holder, long offset)
@@ -325,7 +328,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static byte getByte(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getByte((holder).unwrap(), offset);
+            return U.getByte((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -335,7 +338,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static @Host(Object.class) StaticObject getObject(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return (StaticObject) UNSAFE.getObject((holder).unwrap(), offset);
+            return (StaticObject) U.getObject((holder).unwrap(), offset);
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
         // field index.
@@ -347,7 +350,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static boolean getBoolean(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getBoolean((holder).unwrap(), offset);
+            return U.getBoolean((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -357,7 +360,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static char getChar(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getChar((holder).unwrap(), offset);
+            return U.getChar((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -367,7 +370,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static short getShort(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getShort((holder).unwrap(), offset);
+            return U.getShort((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -377,7 +380,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static int getInt(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getInt((holder).unwrap(), offset);
+            return U.getInt((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -387,7 +390,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static float getFloat(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getFloat((holder).unwrap(), offset);
+            return U.getFloat((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -397,7 +400,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static double getDouble(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getDouble((holder).unwrap(), offset);
+            return U.getDouble((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -407,7 +410,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static long getLong(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getLong((holder).unwrap(), offset);
+            return U.getLong((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -422,7 +425,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static boolean getBooleanVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getBooleanVolatile((holder).unwrap(), offset);
+            return U.getBooleanVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -433,7 +436,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static byte getByteVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getByteVolatile((holder).unwrap(), offset);
+            return U.getByteVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -444,7 +447,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static short getShortVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getShortVolatile((holder).unwrap(), offset);
+            return U.getShortVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -455,7 +458,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static char getCharVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getCharVolatile((holder).unwrap(), offset);
+            return U.getCharVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -465,7 +468,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static float getFloatVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getFloatVolatile((holder).unwrap(), offset);
+            return U.getFloatVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -476,7 +479,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static int getIntVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject unsafe, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getIntVolatile((holder).unwrap(), offset);
+            return U.getIntVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -486,7 +489,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static long getLongVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject unsafe, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getLongVolatile((holder).unwrap(), offset);
+            return U.getLongVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -497,7 +500,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static double getDoubleVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getDoubleVolatile((holder).unwrap(), offset);
+            return U.getDoubleVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -508,7 +511,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static Object getObjectVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
-            return UNSAFE.getObjectVolatile((holder).unwrap(), offset);
+            return U.getObjectVolatile((holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
@@ -521,37 +524,37 @@ public final class Target_sun_misc_Unsafe {
 
     @Substitution(hasReceiver = true)
     public static byte getByte(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset) {
-        return UNSAFE.getByte(offset);
+        return U.getByte(offset);
     }
 
     @Substitution(hasReceiver = true)
     public static char getChar(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset) {
-        return UNSAFE.getChar(offset);
+        return U.getChar(offset);
     }
 
     @Substitution(hasReceiver = true)
     public static short getShort(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset) {
-        return UNSAFE.getShort(offset);
+        return U.getShort(offset);
     }
 
     @Substitution(hasReceiver = true)
     public static int getInt(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset) {
-        return UNSAFE.getInt(offset);
+        return U.getInt(offset);
     }
 
     @Substitution(hasReceiver = true)
     public static float getFloat(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset) {
-        return UNSAFE.getFloat(offset);
+        return U.getFloat(offset);
     }
 
     @Substitution(hasReceiver = true)
     public static long getLong(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset) {
-        return UNSAFE.getLong(offset);
+        return U.getLong(offset);
     }
 
     @Substitution(hasReceiver = true)
     public static double getDouble(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset) {
-        return UNSAFE.getDouble(offset);
+        return U.getDouble(offset);
     }
 
     // endregion get*(long offset)
@@ -560,7 +563,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putObjectVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, Object value) {
         if (holder.isArray()) {
-            UNSAFE.putObjectVolatile((holder).unwrap(), offset, value);
+            U.putObjectVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -575,7 +578,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putIntVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, int value) {
         if (holder.isArray()) {
-            UNSAFE.putIntVolatile((holder).unwrap(), offset, value);
+            U.putIntVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -590,7 +593,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putLongVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, long value) {
         if (holder.isArray()) {
-            UNSAFE.putLongVolatile((holder).unwrap(), offset, value);
+            U.putLongVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -605,7 +608,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putBooleanVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, boolean value) {
         if (holder.isArray()) {
-            UNSAFE.putBooleanVolatile((holder).unwrap(), offset, value);
+            U.putBooleanVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -620,7 +623,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putCharVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, char value) {
         if (holder.isArray()) {
-            UNSAFE.putCharVolatile((holder).unwrap(), offset, value);
+            U.putCharVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -635,7 +638,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putShortVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, short value) {
         if (holder.isArray()) {
-            UNSAFE.putShortVolatile((holder).unwrap(), offset, value);
+            U.putShortVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -650,7 +653,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putFloatVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, float value) {
         if (holder.isArray()) {
-            UNSAFE.putFloatVolatile((holder).unwrap(), offset, value);
+            U.putFloatVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -665,7 +668,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putDoubleVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, double value) {
         if (holder.isArray()) {
-            UNSAFE.putDoubleVolatile((holder).unwrap(), offset, value);
+            U.putDoubleVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -680,7 +683,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putByteVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, byte value) {
         if (holder.isArray()) {
-            UNSAFE.putByteVolatile((holder).unwrap(), offset, value);
+            U.putByteVolatile((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -717,7 +720,7 @@ public final class Target_sun_misc_Unsafe {
         if (bytes == 0) {
             return;
         }
-        UNSAFE.copyMemory(MetaUtil.unwrapArrayOrNull(srcBase), srcOffset, MetaUtil.unwrapArrayOrNull(destBase), destOffset, bytes);
+        U.copyMemory(MetaUtil.unwrapArrayOrNull(srcBase), srcOffset, MetaUtil.unwrapArrayOrNull(destBase), destOffset, bytes);
     }
 
     // region put*(long offset, * value)
@@ -730,37 +733,37 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void putByte(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset, byte value) {
-        UNSAFE.putByte(offset, value);
+        U.putByte(offset, value);
     }
 
     @Substitution(hasReceiver = true)
     public static void putChar(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset, char value) {
-        UNSAFE.putChar(offset, value);
+        U.putChar(offset, value);
     }
 
     @Substitution(hasReceiver = true)
     public static void putShort(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset, short value) {
-        UNSAFE.putShort(offset, value);
+        U.putShort(offset, value);
     }
 
     @Substitution(hasReceiver = true)
     public static void putInt(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset, int value) {
-        UNSAFE.putInt(offset, value);
+        U.putInt(offset, value);
     }
 
     @Substitution(hasReceiver = true)
     public static void putFloat(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset, float value) {
-        UNSAFE.putFloat(offset, value);
+        U.putFloat(offset, value);
     }
 
     @Substitution(hasReceiver = true)
     public static void putDouble(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset, double value) {
-        UNSAFE.putDouble(offset, value);
+        U.putDouble(offset, value);
     }
 
     @Substitution(hasReceiver = true)
     public static void putLong(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long offset, long x) {
-        UNSAFE.putLong(offset, x);
+        U.putLong(offset, x);
     }
 
     // endregion put*(long offset, * value)
@@ -770,7 +773,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putObject(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, Object value) {
         if (holder.isArray()) {
-            UNSAFE.putObject((holder).unwrap(), offset, value);
+            U.putObject((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -783,7 +786,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putBoolean(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, boolean value) {
         if (holder.isArray()) {
-            UNSAFE.putBoolean((holder).unwrap(), offset, value);
+            U.putBoolean((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -796,7 +799,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putByte(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, byte value) {
         if (holder.isArray()) {
-            UNSAFE.putByte((holder).unwrap(), offset, value);
+            U.putByte((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -809,7 +812,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putChar(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, char value) {
         if (holder.isArray()) {
-            UNSAFE.putChar((holder).unwrap(), offset, value);
+            U.putChar((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -822,7 +825,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putShort(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, short value) {
         if (holder.isArray()) {
-            UNSAFE.putShort((holder).unwrap(), offset, value);
+            U.putShort((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -835,7 +838,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putInt(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, int value) {
         if (holder.isArray()) {
-            UNSAFE.putInt((holder).unwrap(), offset, value);
+            U.putInt((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -848,7 +851,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putFloat(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, float value) {
         if (holder.isArray()) {
-            UNSAFE.putFloat((holder).unwrap(), offset, value);
+            U.putFloat((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -861,7 +864,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putDouble(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, double value) {
         if (holder.isArray()) {
-            UNSAFE.putDouble((holder).unwrap(), offset, value);
+            U.putDouble((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -874,7 +877,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putLong(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, long value) {
         if (holder.isArray()) {
-            UNSAFE.putLong((holder).unwrap(), offset, value);
+            U.putLong((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -887,7 +890,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putOrderedInt(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, int value) {
         if (holder.isArray()) {
-            UNSAFE.putOrderedInt((holder).unwrap(), offset, value);
+            U.putOrderedInt((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -901,7 +904,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putOrderedLong(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, long value) {
         if (holder.isArray()) {
-            UNSAFE.putOrderedLong((holder).unwrap(), offset, value);
+            U.putOrderedLong((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -915,7 +918,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void putOrderedObject(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, Object value) {
         if (holder.isArray()) {
-            UNSAFE.putOrderedObject((holder).unwrap(), offset, value);
+            U.putOrderedObject((holder).unwrap(), offset, value);
             return;
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
@@ -957,7 +960,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void setMemory(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject o, long offset, long bytes, byte value) {
-        UNSAFE.setMemory(StaticObject.isNull(o) ? null : o, offset, bytes, value);
+        U.setMemory(StaticObject.isNull(o) ? null : o, offset, bytes, value);
     }
 
     /**
@@ -966,7 +969,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static int pageSize(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self) {
-        return UNSAFE.pageSize();
+        return U.pageSize();
     }
 
     /**
@@ -1057,11 +1060,11 @@ public final class Target_sun_misc_Unsafe {
         StaticObject guestBlocker = thread.getField(parkBlocker);
         // LockSupport.park(/* guest blocker */);
         if (!StaticObject.isNull(guestBlocker)) {
-            UNSAFE.putObject(hostThread, parkBlockerOffset, guestBlocker);
+            U.putObject(hostThread, parkBlockerOffset, guestBlocker);
         }
-        UNSAFE.park(isAbsolute, time);
+        U.park(isAbsolute, time);
         Target_java_lang_Thread.toRunnable(thread, context.getMeta(), State.RUNNABLE);
-        UNSAFE.putObject(hostThread, parkBlockerOffset, blocker);
+        U.putObject(hostThread, parkBlockerOffset, blocker);
     }
 
     private static final long parkBlockerOffset;
@@ -1080,7 +1083,7 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void unpark(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject thread) {
         Thread hostThread = (Thread) thread.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        UNSAFE.unpark(hostThread);
+        U.unpark(hostThread);
     }
 
     /**
@@ -1097,7 +1100,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static long getAddress(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long address) {
-        return UNSAFE.getAddress(address);
+        return U.getAddress(address);
     }
 
     /**
@@ -1112,7 +1115,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void putAddress(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long address, long x) {
-        UNSAFE.putAddress(address, x);
+        U.putAddress(address, x);
     }
 
     /**
@@ -1122,7 +1125,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void loadFence(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self) {
-        UNSAFE.loadFence();
+        U.loadFence();
     }
 
     /**
@@ -1132,7 +1135,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void storeFence(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self) {
-        UNSAFE.storeFence();
+        U.storeFence();
     }
 
     /**
@@ -1143,7 +1146,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void fullFence(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self) {
-        UNSAFE.fullFence();
+        U.fullFence();
     }
 
     /**
@@ -1163,14 +1166,14 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static long reallocateMemory(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long address, long bytes) {
-        return UNSAFE.reallocateMemory(address, bytes);
+        return U.reallocateMemory(address, bytes);
     }
 
     @Substitution(hasReceiver = true)
     public static @Host(Object.class) StaticObject getAndSetObject(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset,
                     @Host(Object.class) StaticObject value) {
         if (holder.isArray()) {
-            return (StaticObject) UNSAFE.getAndSetObject((holder).unwrap(), offset, value);
+            return (StaticObject) U.getAndSetObject((holder).unwrap(), offset, value);
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
         // field index.
