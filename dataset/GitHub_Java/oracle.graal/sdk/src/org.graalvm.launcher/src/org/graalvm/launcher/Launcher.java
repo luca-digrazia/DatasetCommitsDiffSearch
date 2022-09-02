@@ -542,7 +542,19 @@ public abstract class Launcher {
             printOption("--log.file=<String>",           "Redirect guest languages logging into a given file.");
             printOption("--log.[logger].level=<String>", "Set language log level to OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST or ALL.");
             // @formatter:on
-            printEngineOptions(getTempEngine(), helpCategory);
+            List<PrintableOption> engineOptions = new ArrayList<>();
+            for (OptionDescriptor descriptor : getTempEngine().getOptions()) {
+                if (!descriptor.getName().startsWith("engine.") && !descriptor.getName().startsWith("compiler.")) {
+                    continue;
+                }
+                if (!descriptor.isDeprecated() && sameCategory(descriptor, helpCategory)) {
+                    engineOptions.add(asPrintableOption(descriptor));
+                }
+            }
+            if (!engineOptions.isEmpty()) {
+                System.out.println();
+                printOptions(engineOptions, "Engine options:", 2);
+            }
         }
 
         if (helpLanguages) {
@@ -567,22 +579,6 @@ public abstract class Launcher {
         }
 
         return false;
-    }
-
-    private static void printEngineOptions(Engine engine, OptionCategory helpCategory) {
-        List<PrintableOption> engineOptions = new ArrayList<>();
-        for (OptionDescriptor descriptor : engine.getOptions()) {
-            if (!descriptor.getName().startsWith("engine.") && !descriptor.getName().startsWith("compiler.")) {
-                continue;
-            }
-            if (!descriptor.isDeprecated() && sameCategory(descriptor, helpCategory)) {
-                engineOptions.add(asPrintableOption(descriptor));
-            }
-        }
-        if (!engineOptions.isEmpty()) {
-            System.out.println();
-            printOptions(engineOptions, "Engine options:", 2);
-        }
     }
 
     private static void printInstrumentOptions(Engine engine, OptionCategory optionCategory) {
