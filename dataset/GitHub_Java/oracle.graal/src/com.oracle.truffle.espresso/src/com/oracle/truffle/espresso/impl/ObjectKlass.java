@@ -210,7 +210,7 @@ public final class ObjectKlass extends Klass {
     }
 
     @ExplodeLoop
-    private void actualInit() {
+    private void actualInit(boolean initSupers) {
         synchronized (this) {
             if (!(isInitializedOrPrepared())) { // Check under lock
                 if (initState == ERRONEOUS) {
@@ -228,12 +228,14 @@ public final class ObjectKlass extends Klass {
                      */
                     prepare();
                     initState = PREPARED;
-                    if (getSuperKlass() != null) {
-                        getSuperKlass().initialize();
-                    }
-                    for (ObjectKlass interf : getSuperInterfaces()) {
-                        if (interf.needsRecursiveInit) {
-                            interf.recursiveInitialize();
+                    if (initSupers) {
+                        if (getSuperKlass() != null) {
+                            getSuperKlass().initialize();
+                        }
+                        for (ObjectKlass interf : getSuperInterfaces()) {
+                            if (interf.needsRecursiveInit) {
+                                interf.recursiveInitialize();
+                            }
                         }
                     }
                     Method clinit = getClassInitializer();
@@ -328,21 +330,15 @@ public final class ObjectKlass extends Klass {
         if (!isInitialized()) { // Skip synchronization and locks if already init.
             CompilerDirectives.transferToInterpreterAndInvalidate();
             verifyKlass();
-            actualInit();
+            actualInit(!isInterface());
         }
     }
 
     private void recursiveInitialize() {
         if (!isInitialized()) { // Skip synchronization and locks if already init.
-            if (needsRecursiveInit) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                verifyKlass();
-                actualInit();
-            } else {
-                for (ObjectKlass interf : getSuperInterfaces()) {
-                    interf.recursiveInitialize();
-                }
-            }
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            verifyKlass();
+            actualInit(true);
         }
     }
 
