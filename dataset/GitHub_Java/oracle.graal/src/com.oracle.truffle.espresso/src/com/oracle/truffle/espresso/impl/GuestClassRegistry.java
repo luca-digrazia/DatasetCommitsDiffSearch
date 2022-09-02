@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,12 +23,18 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import java.util.concurrent.ConcurrentHashMap;
-
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
+import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.StaticObjectClass;
-import com.oracle.truffle.espresso.types.TypeDescriptor;
+import com.oracle.truffle.espresso.substitutions.Host;
+import com.oracle.truffle.object.DebugCounter;
 
 /**
  * A {@link GuestClassRegistry} maps class names to resolved {@link Klass} instances. Each class
@@ -36,51 +42,105 @@ import com.oracle.truffle.espresso.types.TypeDescriptor;
  *
  * This class is analogous to the ClassLoaderData C++ class in HotSpot.
  */
-public class GuestClassRegistry implements ClassRegistry {
+public final class GuestClassRegistry extends ClassRegistry {
 
-    private final EspressoContext context;
+    static final DebugCounter loadKlassCount = DebugCounter.create("Guest loadKlassCount");
+    static final DebugCounter loadKlassCacheHits = DebugCounter.create("Guest loadKlassCacheHits");
 
-    /**
-     * The map from symbol to classes for the classes defined by the class loader associated with
-     * this registry. Use of {@link ConcurrentHashMap} allows for atomic insertion while still
-     * supporting fast, non-blocking lookup. There's no need for deletion as class unloading removes
-     * a whole class registry and all its contained classes.
-     */
-    private final ConcurrentHashMap<TypeDescriptor, Klass> classes = new ConcurrentHashMap<>();
+    // used to mark a loading event of the type for which the defineClass event
+    // is intercepted, returning the underlying class bytes through an special
+    // exception type
+    private Symbol<Type> specialLoading;
+
+    private Assumption specialLoadingAssumption = Truffle.getRuntime().createAssumption();
+
+    @Override
+    protected void loadKlassCountInc() {
+        loadKlassCount.inc();
+    }
+
+    @Override
+    protected void loadKlassCacheHitsInc() {
+        loadKlassCacheHits.inc();
+    }
 
     /**
      * The class loader associated with this registry.
      */
-    private final Object classLoader;
+    private final StaticObject classLoader;
 
-    public GuestClassRegistry(EspressoContext context, Object classLoader) {
-        this.context = context;
+    // The virtual method can be cached because the receiver (classLoader) is constant.
+    private final Method loadClass;
+    private final Method addClass;
+
+    public GuestClassRegistry(EspressoContext context, @Host(ClassLoader.class) StaticObject classLoader) {
+        super(context);
+        assert StaticObject.notNull(classLoader) : "cannot be the BCL";
         this.classLoader = classLoader;
-    }
-
-    @Override
-    public Klass resolve(TypeDescriptor type) {
-        if (type.isArray()) {
-            return resolve(type.getComponentType()).getArrayClass();
+        this.loadClass = classLoader.getKlass().lookupMethod(Name.loadClass, Signature.Class_String);
+        this.addClass = classLoader.getKlass().lookupMethod(Name.addClass, Signature._void_Class);
+        if (getJavaVersion().modulesEnabled()) {
+            StaticObject unnamedModule = classLoader.getField(getMeta().java_lang_ClassLoader_unnamedModule);
+            initUnnamedModule(unnamedModule);
+            unnamedModule.setHiddenField(getMeta().HIDDEN_MODULE_ENTRY, getUnnamedModule());
         }
-        assert classLoader != null;
-        MethodInfo loadClass = ((StaticObject) classLoader).getKlass().findMethod("loadClass", context.getSignatureDescriptors().make("(Ljava/lang/String;Z)Ljava/lang/Class;"));
-        // TODO(peterssen): Should the class be resolved?
-        StaticObjectClass guestClass = (StaticObjectClass) loadClass.getCallTarget().call(classLoader, context.getMeta().toGuest(type.toJavaName()), false);
-        Klass k = guestClass.getMirror();
-        classes.put(type, k);
-        return k;
     }
 
     @Override
-    public Klass findLoadedClass(TypeDescriptor type) {
-        if (type.isArray()) {
-            Klass klass = findLoadedClass(type.getComponentType());
-            if (klass == null) {
+    public Klass loadKlassImpl(Symbol<Type> type) {
+        assert StaticObject.notNull(classLoader);
+        StaticObject guestClass = (StaticObject) loadClass.invokeDirect(classLoader, getMeta().toGuestString(Types.binaryName(type)));
+        Klass klass = guestClass.getMirrorKlass();
+        getRegistries().recordConstraint(type, klass, getClassLoader());
+        ClassRegistries.RegistryEntry entry = new ClassRegistries.RegistryEntry(klass);
+        ClassRegistries.RegistryEntry previous = classes.putIfAbsent(type, entry);
+        assert previous == null || previous.klass() == klass;
+        return klass;
+    }
+
+    @Override
+    public @Host(ClassLoader.class) StaticObject getClassLoader() {
+        return classLoader;
+    }
+
+    @SuppressWarnings("sync-override")
+    @Override
+    public ObjectKlass defineKlass(Symbol<Type> type, final byte[] bytes) {
+        if (!specialLoadingAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            // special loading event
+            if (specialLoading == type) {
+                throw ForceAnonClassLoading.throwing(bytes);
+            }
+        }
+        ObjectKlass klass = super.defineKlass(type, bytes);
+        // Register class in guest CL. Mimics HotSpot behavior.
+        addClass.invokeDirect(classLoader, klass.mirror());
+        return klass;
+    }
+
+    @Override
+    public Klass findLoadedKlass(Symbol<Type> type) {
+        if (!specialLoadingAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            // special loading event
+            if (specialLoading == type) {
                 return null;
             }
-            return klass.getArrayClass();
         }
-        return classes.get(type);
+        return super.findLoadedKlass(type);
+
+    }
+
+    @Override
+    public void markSpecialLoading(Symbol<Type> type) {
+        specialLoading = type;
+        specialLoadingAssumption.invalidate();
+    }
+
+    @Override
+    public void clearSpecialLoading() {
+        specialLoading = null;
+        specialLoadingAssumption = Truffle.getRuntime().createAssumption();
     }
 }

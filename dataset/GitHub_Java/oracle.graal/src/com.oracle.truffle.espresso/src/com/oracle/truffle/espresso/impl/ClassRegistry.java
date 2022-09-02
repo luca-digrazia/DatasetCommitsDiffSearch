@@ -36,8 +36,6 @@ import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.perf.DebugCloseable;
-import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -51,10 +49,6 @@ import com.oracle.truffle.espresso.substitutions.Host;
  */
 public abstract class ClassRegistry implements ContextAccess {
 
-    private static final DebugTimer KLASS_PROBE = DebugTimer.create("klass probe");
-    private static final DebugTimer KLASS_DEFINE = DebugTimer.create("klass define");
-    private static final DebugTimer KLASS_PARSE = DebugTimer.create("klass parse");
-
     /**
      * Traces the classes being initialized by this thread. Its only use is to be able to detect
      * class circularity errors. A class being defined, that needs its superclass also to be defined
@@ -63,6 +57,15 @@ public abstract class ClassRegistry implements ContextAccess {
      */
     // TODO: Rework this, a thread local is certainly less than optimal.
     static final ThreadLocal<TypeStack> stack = ThreadLocal.withInitial(TypeStack.supplier);
+
+    @SuppressWarnings("unused")
+    public void markSpecialLoading(Symbol<Type> type) {
+        // default implementation does nothing
+    }
+
+    public void clearSpecialLoading() {
+        // default implementation does nothing
+    }
 
     static final class TypeStack {
         static final Supplier<TypeStack> supplier = new Supplier<TypeStack>() {
@@ -167,7 +170,7 @@ public abstract class ClassRegistry implements ContextAccess {
 
     /**
      * Queries a registry to load a Klass for us.
-     *
+     * 
      * @param type the symbolic reference to the Klass we want to load
      * @param protectionDomain The protection domain extracted from the guest class, or
      *            {@link StaticObject#NULL} if trusted.
@@ -185,10 +188,7 @@ public abstract class ClassRegistry implements ContextAccess {
         loadKlassCountInc();
 
         // Double-checked locking on the symbol (globally unique).
-        ClassRegistries.RegistryEntry entry;
-        try (DebugCloseable probe = KLASS_PROBE.scope(getContext().getTimers())) {
-            entry = classes.get(type);
-        }
+        ClassRegistries.RegistryEntry entry = classes.get(type);
         if (entry == null) {
             synchronized (type) {
                 entry = classes.get(type);
@@ -217,7 +217,12 @@ public abstract class ClassRegistry implements ContextAccess {
     public abstract @Host(ClassLoader.class) StaticObject getClassLoader();
 
     public Klass[] getLoadedKlasses() {
-        return classes.values().toArray(Klass.EMPTY_ARRAY);
+        ClassRegistries.RegistryEntry[] values = classes.values().toArray(new ClassRegistries.RegistryEntry[0]);
+        Klass[] result = new Klass[values.length];
+        for (int i = 0; i < values.length; i++) {
+            result[i] = values[i].klass();
+        }
+        return result;
     }
 
     public Klass findLoadedKlass(Symbol<Type> type) {
@@ -239,10 +244,7 @@ public abstract class ClassRegistry implements ContextAccess {
     public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes) {
         Meta meta = getMeta();
         String strType = typeOrNull == null ? null : typeOrNull.toString();
-        ParserKlass parserKlass;
-        try (DebugCloseable parse = KLASS_PARSE.scope(getContext().getTimers())) {
-            parserKlass = getParserKlass(bytes, strType);
-        }
+        ParserKlass parserKlass = getParserKlass(bytes, strType);
         Symbol<Type> type = typeOrNull == null ? parserKlass.getType() : typeOrNull;
 
         Klass maybeLoaded = findLoadedKlass(type);
@@ -307,13 +309,11 @@ public abstract class ClassRegistry implements ContextAccess {
         } finally {
             chain.pop();
         }
-        ObjectKlass klass;
 
-        try (DebugCloseable define = KLASS_DEFINE.scope(getContext().getTimers())) {
-            // FIXME(peterssen): Do NOT create a LinkedKlass every time, use a global cache.
-            LinkedKlass linkedKlass = new LinkedKlass(parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
-            klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
-        }
+        // FIXME(peterssen): Do NOT create a LinkedKlass every time, use a global cache.
+        LinkedKlass linkedKlass = new LinkedKlass(parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
+
+        ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
 
         if (superKlass != null && !Klass.checkAccess(superKlass, klass)) {
             throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, "class " + type + " cannot access its superclass " + superKlassType);
@@ -351,5 +351,19 @@ public abstract class ClassRegistry implements ContextAccess {
             throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Super interface of " + type + " is in fact not an interface.");
         }
         return (ObjectKlass) klass;
+    }
+
+    public void onClassRenamed(ObjectKlass oldKlass, String newName) {
+        Symbol<Symbol.Type> newType = context.getTypes().fromClassGetName(newName);
+        classes.put(newType, new ClassRegistries.RegistryEntry(oldKlass));
+    }
+
+    public void onInnerClassRemoved(Symbol<Symbol.Type> type) {
+        // "unload" the class by removing from classes
+        ClassRegistries.RegistryEntry removed = classes.remove(type);
+        // purge class loader constraint for this type
+        if (removed != null && removed.klass() != null) {
+            getRegistries().removeUnloadedKlassConstraint(removed.klass(), type);
+        }
     }
 }

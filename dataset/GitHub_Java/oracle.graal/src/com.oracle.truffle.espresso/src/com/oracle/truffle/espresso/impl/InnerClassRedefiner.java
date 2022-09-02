@@ -22,18 +22,18 @@
  */
 package com.oracle.truffle.espresso.impl;
 
+import com.oracle.truffle.espresso.classfile.ClassNameFromBytesException;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
+import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
 import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.lang.instrument.IllegalClassFormatException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -62,7 +62,7 @@ public final class InnerClassRedefiner {
     // list of class info for all top-level classed about to be redefined
     private static final Map<String, HotSwapClassInfo> hotswapState = new HashMap<>();
 
-    public static HotSwapClassInfo[] matchAnonymousInnerClasses(RedefineInfo[] redefineInfos, EspressoContext context, List<ObjectKlass> removedInnerClasses) {
+    public static HotSwapClassInfo[] matchAnonymousInnerClasses(RedefineInfo[] redefineInfos, EspressoContext context, List<ClassInfo> removedInnerClasses) {
         hotswapState.clear();
         ArrayList<RedefineInfo> unhandled = new ArrayList<>(redefineInfos.length);
         Collections.addAll(unhandled, redefineInfos);
@@ -119,11 +119,7 @@ public final class InnerClassRedefiner {
             if (classInfo.getBytes() != null) {
                 Map<String, String> rules = renamingRules.get(classInfo.getClassLoader());
                 if (rules != null && !rules.isEmpty()) {
-                    try {
-                        classInfo.patchBytes(ConstantPoolPatcher.patchConstantPool(classInfo.getBytes(), rules));
-                    } catch (IllegalClassFormatException ex) {
-                        throw new RedefintionNotSupportedException(ErrorCodes.INVALID_CLASS_FORMAT);
-                    }
+                    classInfo.patchBytes(ConstantPoolPatcher.patchConstantPool(classInfo.getBytes(), rules));
                 }
             }
         }
@@ -131,26 +127,16 @@ public final class InnerClassRedefiner {
         return result.toArray(new HotSwapClassInfo[0]);
     }
 
+    // method is only reachable from test code, because we pass in bytes
+    // for new anonynous inner classes without a refTypeID
     public static String getClassNameFromBytes(byte[] bytes, EspressoContext context) {
         try {
-            // pass in a class name we know is not correct only to catch
-            // the NoClassDefFoundError which is known to contain the type
-            // name of the class in the exception message
-            ClassfileParser.parse(new ClassfileStream(bytes, null), "!INVALID!", null, context);
-        } catch (EspressoException ex) {
-            String message = ex.getMessage();
-            if (message != null && message.contains("(wrong name:")) {
-                int typeEndIndex = message.indexOf(';');
-                if (typeEndIndex != -1) {
-                    // name is between 'L' and ';' as the first characters in the message
-                    return message.substring(1, typeEndIndex);
-                }
-            }
+            // pass in the special test marked as the requested class name
+            ClassfileParser.parse(new ClassfileStream(bytes, null), "!TEST!", null, context);
+        } catch (ClassNameFromBytesException ex) {
+            return ex.getClassTypeName().substring(1, ex.getClassTypeName().length() - 1);
         }
-        // We only end up here in case the message in the
-        // exception changed format in that case, we fail fast
-        JDWPLogger.log("Critical failure in fetching class name from bytes", JDWPLogger.LogLevel.ALL);
-        throw new RedefintionNotSupportedException(ErrorCodes.INVALID_CLASS);
+        return null;
     }
 
     private static void collectAllHotswapClasses(Collection<HotSwapClassInfo> infos, ArrayList<HotSwapClassInfo> result) {
@@ -164,11 +150,7 @@ public final class InnerClassRedefiner {
         StaticObject definingLoader = hotswapInfo.getClassLoader();
 
         ArrayList<String> innerNames = new ArrayList<>(1);
-        try {
-            searchConstantPoolForInnerClassNames(hotswapInfo, innerNames);
-        } catch (IllegalClassFormatException ex) {
-            throw new RedefintionNotSupportedException(ErrorCodes.INVALID_CLASS_FORMAT);
-        }
+        searchConstantPoolForInnerClassNames(hotswapInfo, innerNames);
 
         // poke the defining guest classloader for the resources
         for (String innerName : innerNames) {
@@ -179,17 +161,36 @@ public final class InnerClassRedefiner {
                 if (StaticObject.notNull(inputStream)) {
                     classBytes = readAllBytes(inputStream, context);
                 } else {
-                    // There is no safe way to retrieve the class bytes using e.g. a scheme using
-                    // j.l.ClassLoader#loadClass and special marker for the type to have the call
-                    // end up in defineClass where we could grab the bytes. Guest language
-                    // classloaders in many cases have caches for the class name that prevents
-                    // forcefully attempting to load previously not loadable classes.
-                    // without the class bytes, the matching is less precise and cached un-matched
-                    // inner class instances that are executed after redefintion will lead to
-                    // NoSuchMethod errors because they're marked as removed
+                    // if getResourceAsStream is not able to fetch the class bytes
+                    // fall back to use loadClass on the defining classloader using
+                    // the following scheme:
+
+                    // we play a trick to get the bytes of the new inner class
+                    // 1. mark this a special loading in the associated class registry
+                    // 2. in findLoadedClass we return null for the special loading of the class
+                    // name
+                    // 3. in define class we grab the bytes and throws a Special
+                    // ForceAnonClassLoadException
+                    // in which the bytes are stored. Note that in defineClass we must check if the
+                    // threadlocal
+                    // contains the expected combination of class name and defining class loader
+                    ClassRegistry classRegistry = context.getRegistries().getClassRegistry(definingLoader);
+                    try {
+                        Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(innerName);
+                        classRegistry.markSpecialLoading(type);
+                        StaticObject guestName = context.getMeta().toGuestString(innerName.replace('/', '.'));
+                        context.getMeta().java_lang_ClassLoader_loadClass.invokeDirect(definingLoader, guestName);
+                    } catch (ForceAnonClassLoading.BlockDefiningClassException ex) {
+                        classBytes = ex.getBytes();
+                    } finally {
+                        classRegistry.clearSpecialLoading();
+                    }
                 }
                 if (classBytes != null) {
                     hotswapInfo.addInnerClass(ClassInfo.create(innerName, classBytes, definingLoader, context));
+                } else {
+                    // bail out on redefinition if we can't fetch the class bytes
+                    throw new RedefintionNotSupportedException(ErrorCodes.HIERARCHY_CHANGE_NOT_IMPLEMENTED);
                 }
             }
         }
@@ -213,7 +214,7 @@ public final class InnerClassRedefiner {
         }
     }
 
-    private static void searchConstantPoolForInnerClassNames(ClassInfo classInfo, ArrayList<String> innerNames) throws IllegalClassFormatException {
+    private static void searchConstantPoolForInnerClassNames(ClassInfo classInfo, ArrayList<String> innerNames) {
         byte[] bytes = classInfo.getBytes();
         assert bytes != null;
 
@@ -225,7 +226,7 @@ public final class InnerClassRedefiner {
         return innerName.substring(0, innerName.lastIndexOf('$'));
     }
 
-    private static void matchClassInfo(HotSwapClassInfo hotSwapInfo, EspressoContext context, List<ObjectKlass> removedInnerClasses, Map<StaticObject, Map<String, String>> renamingRules) {
+    private static void matchClassInfo(HotSwapClassInfo hotSwapInfo, EspressoContext context, List<ClassInfo> removedInnerClasses, Map<StaticObject, Map<String, String>> renamingRules) {
         Klass klass = hotSwapInfo.getKlass();
 
         // try to fetch all direct inner classes
@@ -279,10 +280,8 @@ public final class InnerClassRedefiner {
                         info.setKlass(bestMatch.getKlass());
                     }
                 }
-                for (ImmutableClassInfo removedClass : removedClasses) {
-                    if (removedClass.getKlass() != null) {
-                        removedInnerClasses.add(removedClass.getKlass());
-                    }
+                for (ClassInfo removedClass : removedClasses) {
+                    removedInnerClasses.add(removedClass);
                 }
             }
         }
@@ -328,7 +327,7 @@ public final class InnerClassRedefiner {
     public static Klass[] findLoadedInnerClasses(Klass klass, EspressoContext context) {
         ArrayList<Klass> result = new ArrayList<>(1);
         String name = klass.getNameAsString();
-        List<Klass> loadedKlasses = context.getRegistries().getClassRegistry(klass.getDefiningClassLoader()).getLoadedKlasses();
+        Klass[] loadedKlasses = context.getRegistries().getClassRegistry(klass.getDefiningClassLoader()).getLoadedKlasses();
 
         for (Klass loadedKlass : loadedKlasses) {
             String klassName = loadedKlass.getNameAsString();
@@ -351,9 +350,10 @@ public final class InnerClassRedefiner {
                 classLoaderMap.remove(info.getNewName());
             }
         }
+        Map<String, ImmutableClassInfo> classLoaderMap = null;
         for (HotSwapClassInfo hotSwapInfo : infos) {
             StaticObject classLoader = hotSwapInfo.getClassLoader();
-            Map<String, ImmutableClassInfo> classLoaderMap = innerClassInfoMap.get(classLoader);
+            classLoaderMap = innerClassInfoMap.get(classLoader);
             if (classLoaderMap == null) {
                 classLoaderMap = new HashMap<>(1);
                 innerClassInfoMap.put(classLoader, classLoaderMap);
