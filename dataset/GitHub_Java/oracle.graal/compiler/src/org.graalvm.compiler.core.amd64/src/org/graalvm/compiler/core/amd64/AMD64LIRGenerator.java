@@ -578,8 +578,12 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public Variable emitArrayIndexOf(JavaKind arrayKind, JavaKind valueKind, boolean findTwoConsecutive, Value arrayPointer, Value arrayLength, Value fromIndex, Value... searchValues) {
         Variable result = newVariable(LIRKind.value(AMD64Kind.QWORD));
+        Value[] allocatableSearchValues = new Value[searchValues.length];
+        for (int i = 0; i < searchValues.length; i++) {
+            allocatableSearchValues[i] = asAllocatable(searchValues[i]);
+        }
         append(new AMD64ArrayIndexOfOp(arrayKind, valueKind, findTwoConsecutive, getVMPageSize(), getMaxVectorSize(), this, result,
-                        asAllocatable(arrayPointer), asAllocatable(arrayLength), asAllocatable(fromIndex), searchValues));
+                        asAllocatable(arrayPointer), asAllocatable(arrayLength), asAllocatable(fromIndex), allocatableSearchValues));
         return result;
     }
 

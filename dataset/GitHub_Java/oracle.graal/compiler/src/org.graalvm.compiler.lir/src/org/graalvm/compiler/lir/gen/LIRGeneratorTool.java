@@ -65,14 +65,6 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
     interface MoveFactory {
 
         /**
-         * Checks whether the loading of the supplied constant can be deferred until usage.
-         */
-        @SuppressWarnings("unused")
-        default boolean mayEmbedConstantLoad(Constant constant, boolean mayEmbedPrerequisite) {
-            return false;
-        }
-
-        /**
          * Checks whether the supplied constant can be used without loading it into a register for
          * most operations, i.e., for commonly used arithmetic, logical, and comparison operations.
          *
@@ -138,7 +130,7 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
 
     BlockScope getBlockScope(AbstractBlockBase<?> block);
 
-    Value emitConstant(LIRKind kind, Constant constant, boolean mayEmbedConstantLoadPrerequisite);
+    Value emitConstant(LIRKind kind, Constant constant);
 
     Value emitJavaConstant(JavaConstant constant);
 

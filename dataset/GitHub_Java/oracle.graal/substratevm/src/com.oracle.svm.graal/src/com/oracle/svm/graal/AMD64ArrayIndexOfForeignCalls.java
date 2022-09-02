@@ -37,7 +37,6 @@ import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
@@ -50,11 +49,6 @@ import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 @AutomaticFeature
 @Platforms(AMD64.class)
 class AMD64ArrayIndexOfForeignCallsFeature implements GraalFeature {
-    @Override
-    public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.CompilerBackend.getValue().equals("lir");
-    }
-
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
         BeforeAnalysisAccessImpl impl = (BeforeAnalysisAccessImpl) access;
@@ -99,77 +93,77 @@ class AMD64ArrayIndexOfForeignCalls {
                     .map(call -> SnippetRuntime.findForeignCall(AMD64ArrayIndexOfForeignCalls.class, call.getName(), true))
                     .toArray(SubstrateForeignCallDescriptor[]::new);
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOfTwoConsecutiveBytes(byte[] array, int arrayLength, int fromIndex, int searchValue) {
         return AMD64ArrayIndexOfNode.indexOf2ConsecutiveBytes(array, arrayLength, fromIndex, searchValue);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOfTwoConsecutiveChars(char[] array, int arrayLength, int fromIndex, int searchValue) {
         return AMD64ArrayIndexOfNode.indexOf2ConsecutiveChars(array, arrayLength, fromIndex, searchValue);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOfTwoConsecutiveCharsCompact(byte[] array, int arrayLength, int fromIndex, int searchValue) {
         return AMD64ArrayIndexOfNode.indexOf2ConsecutiveChars(array, arrayLength, fromIndex, searchValue);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf1Byte(byte[] array, int arrayLength, int fromIndex, byte b) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, b);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf2Bytes(byte[] array, int arrayLength, int fromIndex, byte b1, byte b2) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, b1, b2);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf3Bytes(byte[] array, int arrayLength, int fromIndex, byte b1, byte b2, byte b3) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, b1, b2, b3);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf4Bytes(byte[] array, int arrayLength, int fromIndex, byte b1, byte b2, byte b3, byte b4) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, b1, b2, b3, b4);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf1Char(char[] array, int arrayLength, int fromIndex, char c) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf2Chars(char[] array, int arrayLength, int fromIndex, char c1, char c2) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c1, c2);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf3Chars(char[] array, int arrayLength, int fromIndex, char c1, char c2, char c3) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c1, c2, c3);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf4Chars(char[] array, int arrayLength, int fromIndex, char c1, char c2, char c3, char c4) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c1, c2, c3, c4);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf1CharCompact(byte[] array, int arrayLength, int fromIndex, char c) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf2CharsCompact(byte[] array, int arrayLength, int fromIndex, char c1, char c2) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c1, c2);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf3CharsCompact(byte[] array, int arrayLength, int fromIndex, char c1, char c2, char c3) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c1, c2, c3);
     }
 
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static int indexOf4CharsCompact(byte[] array, int arrayLength, int fromIndex, char c1, char c2, char c3, char c4) {
         return AMD64ArrayIndexOfNode.indexOf(array, arrayLength, fromIndex, c1, c2, c3, c4);
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,11 +23,6 @@
  * questions.
  */
 package org.graalvm.compiler.replacements.amd64;
-
-import static org.graalvm.compiler.api.directives.GraalDirectives.LIKELY_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.UNLIKELY_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.SLOWPATH_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.injectBranchProbability;
 
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.Fold;
@@ -106,14 +101,14 @@ public class AMD64StringLatin1Substitutions {
     @MethodSubstitution
     public static int indexOf(byte[] value, int ch, int origFromIndex) {
         int fromIndex = origFromIndex;
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, ch >>> 8 != 0)) {
+        if (ch >>> 8 != 0) {
             // search value must be a byte value
             return -1;
         }
         int length = value.length;
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex < 0)) {
+        if (fromIndex < 0) {
             fromIndex = 0;
-        } else if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex >= length)) {
+        } else if (fromIndex >= length) {
             // Note: fromIndex might be near -1>>>1.
             return -1;
         }
@@ -123,39 +118,37 @@ public class AMD64StringLatin1Substitutions {
     @MethodSubstitution
     public static int indexOf(byte[] source, int sourceCount, byte[] target, int targetCount, int origFromIndex) {
         int fromIndex = origFromIndex;
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex >= sourceCount)) {
+        if (fromIndex >= sourceCount) {
             return (targetCount == 0 ? sourceCount : -1);
         }
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex < 0)) {
+        if (fromIndex < 0) {
             fromIndex = 0;
         }
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, targetCount == 0)) {
+        if (targetCount == 0) {
             // The empty string is in every string.
             return fromIndex;
         }
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, sourceCount - fromIndex < targetCount)) {
+        if (sourceCount - fromIndex < targetCount) {
             // The empty string contains nothing except the empty string.
             return -1;
         }
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, targetCount == 1)) {
+        if (targetCount == 1) {
             return AMD64ArrayIndexOf.indexOf1Byte(source, sourceCount, fromIndex, target[0]);
+        } else if (targetCount == 2) {
+            return AMD64ArrayIndexOf.indexOfTwoConsecutiveBytes(source, sourceCount, fromIndex, target[0], target[1]);
         } else {
             int haystackLength = sourceCount - (targetCount - 2);
             int offset = fromIndex;
-            while (injectBranchProbability(LIKELY_PROBABILITY, offset < haystackLength)) {
+            while (offset < haystackLength) {
                 int indexOfResult = AMD64ArrayIndexOf.indexOfTwoConsecutiveBytes(source, haystackLength, offset, target[0], target[1]);
-                if (injectBranchProbability(UNLIKELY_PROBABILITY, indexOfResult < 0)) {
+                if (indexOfResult < 0) {
                     return -1;
                 }
                 offset = indexOfResult;
-                if (injectBranchProbability(UNLIKELY_PROBABILITY, targetCount == 2)) {
+                Pointer cmpSourcePointer = byteOffsetPointer(source, offset);
+                Pointer targetPointer = pointer(target);
+                if (ArrayRegionEqualsNode.regionEquals(cmpSourcePointer, targetPointer, targetCount, JavaKind.Byte)) {
                     return offset;
-                } else {
-                    Pointer cmpSourcePointer = byteOffsetPointer(source, offset);
-                    Pointer targetPointer = pointer(target);
-                    if (injectBranchProbability(UNLIKELY_PROBABILITY, ArrayRegionEqualsNode.regionEquals(cmpSourcePointer, targetPointer, targetCount, JavaKind.Byte))) {
-                        return offset;
-                    }
                 }
                 offset++;
             }
@@ -173,11 +166,7 @@ public class AMD64StringLatin1Substitutions {
      */
     @MethodSubstitution
     public static void inflate(byte[] src, int srcIndex, char[] dest, int destIndex, int len) {
-        if (injectBranchProbability(SLOWPATH_PROBABILITY, len < 0) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, srcIndex < 0) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, srcIndex + len > src.length) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, destIndex < 0) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, destIndex + len > dest.length)) {
+        if (len < 0 || srcIndex < 0 || (srcIndex + len > src.length) || destIndex < 0 || (destIndex + len > dest.length)) {
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.BoundsCheckException);
         }
 
@@ -201,11 +190,7 @@ public class AMD64StringLatin1Substitutions {
      */
     @MethodSubstitution
     public static void inflate(byte[] src, int srcIndex, byte[] dest, int destIndex, int len) {
-        if (injectBranchProbability(SLOWPATH_PROBABILITY, len < 0) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, srcIndex < 0) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, srcIndex + len > src.length) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, destIndex < 0) ||
-                        injectBranchProbability(SLOWPATH_PROBABILITY, destIndex * 2 + len * 2 > dest.length)) {
+        if (len < 0 || srcIndex < 0 || (srcIndex + len > src.length) || destIndex < 0 || (destIndex * 2 + len * 2 > dest.length)) {
             DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.BoundsCheckException);
         }
 
