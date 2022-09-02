@@ -35,11 +35,13 @@ import static org.graalvm.compiler.debug.GraalError.unimplemented;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import jdk.vm.ci.aarch64.AArch64Kind;
 import org.bytedeco.javacpp.LLVM.LLVMBasicBlockRef;
 import org.bytedeco.javacpp.LLVM.LLVMTypeRef;
 import org.bytedeco.javacpp.LLVM.LLVMValueRef;
@@ -78,7 +80,6 @@ import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.phases.util.Providers;
 
-import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterAttributes;
@@ -1007,12 +1008,16 @@ public class LLVMGenerator implements LIRGeneratorTool {
     }
 
     @Override
-    public VirtualStackSlot allocateStackSlots(int slots) {
+    public VirtualStackSlot allocateStackSlots(int slots, BitSet objects, List<VirtualStackSlot> outObjectStackSlots) {
         builder.positionAtStart();
         LLVMValueRef alloca = builder.buildPtrToInt(builder.buildArrayAlloca(slots), builder.longType());
         builder.positionAtEnd(getBlockEnd(currentBlock));
 
-        return new LLVMStackSlot(alloca);
+        LLVMStackSlot stackSlot = new LLVMStackSlot(alloca);
+        if (outObjectStackSlots != null) {
+            outObjectStackSlots.add(stackSlot);
+        }
+        return stackSlot;
     }
 
     @Override
@@ -1352,13 +1357,12 @@ public class LLVMGenerator implements LIRGeneratorTool {
         }
 
         @Override
-        @SuppressWarnings("unused")
         public Value emitRound(Value value, RoundingMode mode) {
             // This should be implemented, see #1168
             return null;
         }
 
-        @SuppressWarnings("unused")
+        @Override
         public void emitCompareOp(AArch64Kind cmpKind, Variable left, Value right) {
             // This should be implemented, see #1168
         }
