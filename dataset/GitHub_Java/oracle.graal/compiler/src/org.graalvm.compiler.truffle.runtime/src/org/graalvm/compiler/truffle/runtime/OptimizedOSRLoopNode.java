@@ -71,15 +71,12 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     private int baseLoopCount;
 
-    private final int osrThreshold;
-    private final int invalidationBackoff;
-
-    private OptimizedOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold, int invalidationBackoff) {
+    private OptimizedOSRLoopNode(RepeatingNode repeatableNode) {
         Objects.requireNonNull(repeatableNode);
         this.repeatableNode = repeatableNode;
-        this.osrThreshold = osrThreshold;
-        this.invalidationBackoff = invalidationBackoff;
     }
+
+    protected abstract int getInvalidationBackoff(OptimizedCallTarget target);
 
     /**
      * @param rootFrameDescriptor may be {@code null}.
@@ -91,6 +88,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
          */
         return new OSRRootNode(this, new FrameDescriptor(), clazz);
     }
+
+    protected abstract int getThreshold();
 
     @Override
     public final Node copy() {
@@ -132,10 +131,11 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     private boolean profilingLoop(VirtualFrame frame) {
         int iterations = 0;
+        int threshold = getThreshold();
         try {
             while (repeatableNode.executeRepeating(frame)) {
                 // the baseLoopCount might be updated from a child loop during an iteration.
-                if (++iterations + baseLoopCount > osrThreshold) {
+                if (++iterations + baseLoopCount > threshold) {
                     compileLoop(frame);
                     return false;
                 }
@@ -162,7 +162,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      * Forces OSR compilation for this loop.
      */
     public final void forceOSR() {
-        baseLoopCount = osrThreshold;
+        baseLoopCount = getThreshold();
         RootNode rootNode = getRootNode();
         VirtualFrame dummyFrame = Truffle.getRuntime().createVirtualFrame(new Object[0], rootNode != null ? rootNode.getFrameDescriptor() : new FrameDescriptor());
         compileLoop(dummyFrame);
@@ -255,10 +255,11 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             public void run() {
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target != null) {
+                    int invalidationBackoff = getInvalidationBackoff(target);
                     if (invalidationBackoff < 0) {
                         throw new IllegalArgumentException("Invalid OSR invalidation backoff.");
                     }
-                    baseLoopCount = Math.min(osrThreshold - invalidationBackoff, baseLoopCount);
+                    baseLoopCount = Math.min(getThreshold() - invalidationBackoff, baseLoopCount);
                     compiledOSRLoop = null;
                     target.invalidate(source, reason);
                 }
@@ -277,16 +278,14 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         // using static methods with LoopNode return type ensures
         // that only one loop node implementation gets loaded.
         if (PolyglotCompilerOptions.getValue(engineOptions, PolyglotCompilerOptions.OSR)) {
-            return createDefault(repeat, engineOptions);
+            return createDefault(repeat);
         } else {
             return OptimizedLoopNode.create(repeat);
         }
     }
 
-    private static LoopNode createDefault(RepeatingNode repeatableNode, OptionValues options) {
-        return new OptimizedDefaultOSRLoopNode(repeatableNode,
-                PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.OSRCompilationThreshold),
-                PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.InvalidationReprofileCount));
+    private static LoopNode createDefault(RepeatingNode repeatableNode) {
+        return new OptimizedDefaultOSRLoopNode(repeatableNode);
     }
 
     /**
@@ -332,8 +331,18 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     private static final class OptimizedDefaultOSRLoopNode extends OptimizedOSRLoopNode {
 
-        OptimizedDefaultOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold, int invalidationBackoff) {
-            super(repeatableNode, osrThreshold, invalidationBackoff);
+        OptimizedDefaultOSRLoopNode(RepeatingNode repeatableNode) {
+            super(repeatableNode);
+        }
+
+        @Override
+        protected int getInvalidationBackoff(OptimizedCallTarget target) {
+            return target.getOptionValue(PolyglotCompilerOptions.InvalidationReprofileCount);
+        }
+
+        @Override
+        protected int getThreshold() {
+            return TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleOSRCompilationThreshold);
         }
 
     }
@@ -344,15 +353,29 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     private static final class OptimizedVirtualizingOSRLoopNode extends OptimizedOSRLoopNode {
 
+        private final int invalidationBackoff;
         @CompilationFinal(dimensions = 1) private final FrameSlot[] readFrameSlots;
         @CompilationFinal(dimensions = 1) private final FrameSlot[] writtenFrameSlots;
 
         private VirtualizingOSRRootNode previousRoot;
+        private final int osrThreshold;
 
         private OptimizedVirtualizingOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold, int invalidationBackoff, FrameSlot[] readFrameSlots, FrameSlot[] writtenFrameSlots) {
-            super(repeatableNode, osrThreshold, invalidationBackoff);
+            super(repeatableNode);
+            this.invalidationBackoff = invalidationBackoff;
+            this.osrThreshold = osrThreshold;
             this.readFrameSlots = readFrameSlots;
             this.writtenFrameSlots = writtenFrameSlots;
+        }
+
+        @Override
+        protected int getThreshold() {
+            return osrThreshold;
+        }
+
+        @Override
+        public int getInvalidationBackoff(OptimizedCallTarget target) {
+            return invalidationBackoff;
         }
 
         @Override
