@@ -369,7 +369,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
         if (node.hasErrors()) {
             return node;  // error sync point
         }
-        initializeUncachable(node);
+        initializeUncachable(node, members);
 
         if (mode == ParseMode.DEFAULT) {
             boolean emitWarnings = Boolean.parseBoolean(System.getProperty("truffle.dsl.cacheSharingWarningsEnabled", "false"));
@@ -571,36 +571,28 @@ public final class NodeParser extends AbstractParser<NodeData> {
         node.setNodeBound(nodeBound);
     }
 
-    private void initializeUncachable(NodeData node) {
+    private void initializeUncachable(NodeData node, List<Element> members) {
         AnnotationMirror generateUncached = findAnnotationMirror(node.getTemplateType().getAnnotationMirrors(), context.getType(GenerateUncached.class));
 
         boolean requireUncachable = node.isGenerateUncached();
         boolean uncachable = true;
-        TypeElement type = node.getTemplateType();
-        while (type != null) {
-            if (ElementUtils.typeEquals(type.asType(), context.getType(Node.class))) {
-                // don't care about fields in node.
-                break;
+        for (VariableElement field : ElementFilter.fieldsIn(members)) {
+            if (field.getModifiers().contains(Modifier.STATIC)) {
+                continue;
+            } else if (typeEquals(field.getEnclosingElement().asType(), context.getType(Node.class))) {
+                // ignore fields in Node. They are safe.
+                continue;
             }
-            for (VariableElement field : ElementFilter.fieldsIn(type.getEnclosedElements())) {
-                if (field.getModifiers().contains(Modifier.STATIC)) {
-                    continue;
-                } else if (typeEquals(field.getEnclosingElement().asType(), context.getType(Node.class))) {
-                    // ignore fields in Node. They are safe.
-                    continue;
-                }
-                // uncachable because local non-static fields are not allowed
-                uncachable = false;
+            // uncachable because local non-static fields are not allowed
+            uncachable = false;
 
-                if (requireUncachable) {
-                    node.addError(generateUncached, null, "Failed to generate code for @%s: The node must not declare any instance variables. " +
-                                    "Found instance variable %s.%s. Remove instance variable to resolve this.",
-                                    GenerateUncached.class.getSimpleName(),
-                                    getSimpleName(field.getEnclosingElement().asType()), field.getSimpleName().toString());
-                }
-                break;
+            if (requireUncachable) {
+                node.addError(generateUncached, null, "Failed to generate code for @%s: The node must not declare any instance variables. " +
+                                "Found instance variable %s.%s. Remove instance variable to resolve this.",
+                                GenerateUncached.class.getSimpleName(),
+                                getSimpleName(field.getEnclosingElement().asType()), field.getSimpleName().toString());
             }
-            type = ElementUtils.getSuperType(type);
+            break;
         }
 
         for (SpecializationData specialization : node.computeUncachedSpecializations(node.getSpecializations())) {

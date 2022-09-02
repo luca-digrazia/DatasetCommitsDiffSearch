@@ -3781,25 +3781,24 @@ public class FlatNodeGenFactory {
         for (GuardExpression guard : guardExpressions) {
             if (mode.isSlowPath() && !guard.isConstantTrueInSlowPath(context)) {
                 CodeTreeBuilder builder = new CodeTreeBuilder(null);
+                boolean guardStateBit = false;
                 List<IfTriple> innerTriples = new ArrayList<>();
-                boolean guardStateBit = guardNeedsStateBit(group.getSpecialization(), guard);
-                FrameState innerFrameState = frameState;
-                if (guardStateBit) {
+                if (guardNeedsStateBit(group.getSpecialization(), guard)) {
                     if (group.getSpecialization() == null) {
                         throw new AssertionError();
                     }
-                    innerFrameState = frameState.copy();
-                    builder.startIf().tree(state.createNotContains(innerFrameState, new Object[]{guard})).end().startBlock();
-                    innerTriples.addAll(initializeSpecializationClass(innerFrameState, group.getSpecialization()));
-                    innerTriples.addAll(persistSpecializationClass(innerFrameState, group.getSpecialization()));
+                    builder.startIf().tree(state.createNotContains(frameState, new Object[]{guard})).end().startBlock();
+                    innerTriples.addAll(initializeSpecializationClass(frameState, group.getSpecialization()));
+                    innerTriples.addAll(persistSpecializationClass(frameState, group.getSpecialization()));
+                    guardStateBit = true;
                 }
-                innerTriples.addAll(initializeCaches(innerFrameState, mode, group, group.getSpecialization().getBoundCaches(guard.getExpression()), !guardStateBit, guardStateBit));
-                innerTriples.addAll(initializeCasts(innerFrameState, group, guard.getExpression(), mode));
+                innerTriples.addAll(initializeCaches(frameState, mode, group, group.getSpecialization().getBoundCaches(guard.getExpression()), !guardStateBit, guardStateBit));
+                innerTriples.addAll(initializeCasts(frameState, group, guard.getExpression(), mode));
 
                 IfTriple.materialize(builder, innerTriples, true);
 
                 if (guardStateBit) {
-                    builder.tree(state.createSet(innerFrameState, new Object[]{guard}, true, true));
+                    builder.tree(state.createSet(frameState, new Object[]{guard}, true, true));
                     builder.end();
                 }
                 triples.add(new IfTriple(builder.build(), null, null));
