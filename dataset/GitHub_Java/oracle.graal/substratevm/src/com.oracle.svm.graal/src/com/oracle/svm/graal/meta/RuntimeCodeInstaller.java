@@ -71,7 +71,6 @@ import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.os.CommittedMemoryProvider;
 import com.oracle.svm.core.thread.JavaVMOperation;
-import com.oracle.svm.core.util.UnsignedUtils;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.code.TargetDescription;
@@ -100,9 +99,7 @@ public class RuntimeCodeInstaller {
 
     private Pointer code;
     private int codeSize;
-    private int dataOffset;
-    private int dataSize;
-    private int codeAndDataMemorySize;
+    private int constantsOffset;
     private InstalledCodeObserver[] codeObservers;
     protected byte[] compiledBytes;
 
@@ -122,19 +119,20 @@ public class RuntimeCodeInstaller {
                 throw VMError.shouldNotReachHere("wrong object size");
             }
 
+            int constantsSize = compilation.getDataSection().getSectionSize();
             codeSize = compilation.getTargetCodeSize();
-            dataSize = compilation.getDataSection().getSectionSize();
-            dataOffset = NumUtil.roundUp(codeSize, compilation.getDataSection().getSectionAlignment());
+            constantsOffset = NumUtil.roundUp(codeSize, compilation.getDataSection().getSectionAlignment());
             if (!RuntimeCodeCache.Options.WriteableCodeCache.getValue()) {
-                // round up for readonly code cache so that the data section can remain writeable
-                dataOffset = UnsignedUtils.safeToInt(UnsignedUtils.roundUp(WordFactory.unsigned(dataOffset), CommittedMemoryProvider.get().getGranularity()));
+                // round up for readonly code cache, s.t. the data section can remain writeable
+                constantsOffset = (int) NumUtil.roundUp(constantsOffset, CommittedMemoryProvider.get().getGranularity().rawValue());
             }
-            codeAndDataMemorySize = UnsignedUtils.safeToInt(UnsignedUtils.roundUp(WordFactory.unsigned(dataOffset + dataSize), CommittedMemoryProvider.get().getGranularity()));
-            code = allocateCodeMemory(codeAndDataMemorySize);
+
+            // Allocate executable memory. It contains the compiled code and the constants
+            code = allocateCodeMemory(constantsOffset + constantsSize);
             compiledBytes = compilation.getTargetCode();
 
             if (!RuntimeCodeCache.Options.WriteableCodeCache.getValue()) {
-                makeDataSectionNX(code.add(dataOffset), codeAndDataMemorySize - dataOffset);
+                makeDataSectionNX(code.add(constantsOffset), constantsSize);
             }
 
             codeObservers = ImageSingletons.lookup(InstalledCodeObserverSupport.class).createObservers(debug, method, compilation, code);
@@ -212,15 +210,15 @@ public class RuntimeCodeInstaller {
         }
 
         /* Write primitive constants to the buffer, record object constants with offsets */
-        ByteBuffer dataBuffer = CTypeConversion.asByteBuffer(code.add(dataOffset), compilation.getDataSection().getSectionSize());
-        compilation.getDataSection().buildDataSection(dataBuffer, (position, constant) -> {
-            objectConstants.add(dataOffset + position,
+        ByteBuffer constantsBuffer = CTypeConversion.asByteBuffer(code.add(constantsOffset), compilation.getDataSection().getSectionSize());
+        compilation.getDataSection().buildDataSection(constantsBuffer, (position, constant) -> {
+            objectConstants.add(constantsOffset + position,
                             ConfigurationValues.getObjectLayout().getReferenceSize(),
                             (SubstrateObjectConstant) constant);
         });
 
         NonmovableArray<InstalledCodeObserverHandle> observerHandles = InstalledCodeObserverSupport.installObservers(codeObservers);
-        RuntimeCodeInfoAccess.initialize(codeInfo, code, codeSize, dataOffset, dataSize, codeAndDataMemorySize, tier, observerHandles);
+        RuntimeCodeInfoAccess.initialize(codeInfo, code, codeSize, tier, observerHandles);
 
         CodeReferenceMapEncoder encoder = new CodeReferenceMapEncoder();
         encoder.add(objectConstants.referenceMap);
@@ -293,7 +291,7 @@ public class RuntimeCodeInstaller {
             NativeImagePatcher patch = patcher.get(dataPatch.pcOffset);
             if (dataPatch.reference instanceof DataSectionReference) {
                 DataSectionReference ref = (DataSectionReference) dataPatch.reference;
-                int pcDisplacement = dataOffset + ref.getOffset() - dataPatch.pcOffset;
+                int pcDisplacement = constantsOffset + ref.getOffset() - dataPatch.pcOffset;
                 patch.patchCode(pcDisplacement, compiledBytes);
             } else if (dataPatch.reference instanceof ConstantReference) {
                 ConstantReference ref = (ConstantReference) dataPatch.reference;
