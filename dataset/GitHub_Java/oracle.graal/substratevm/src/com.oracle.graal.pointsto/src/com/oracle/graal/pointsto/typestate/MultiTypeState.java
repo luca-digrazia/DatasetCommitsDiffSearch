@@ -109,7 +109,7 @@ public class MultiTypeState extends TypeState {
             // ArrayOutOfBoundsException
             int[] result = new int[objects.length + 1];
             for (int i = 0; i < objects.length; i++) {
-                result[i] = objects[i].getTypeId();
+                result[i] = objects[i].type().getId();
             }
             this.objectTypeIds = result;
         }
