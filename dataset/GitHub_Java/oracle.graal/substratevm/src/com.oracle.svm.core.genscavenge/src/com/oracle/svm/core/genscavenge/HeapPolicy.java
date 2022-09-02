@@ -35,10 +35,8 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.heap.GCCause;
 import com.oracle.svm.core.heap.PhysicalMemory;
-import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.XOptions;
@@ -193,25 +191,13 @@ public final class HeapPolicy {
          * If the physical size is known yet, the maximum size of the heap is a fraction of the size
          * of the physical memory.
          */
-        UnsignedWord addressSpaceSize = getAddressSpaceSize();
         if (PhysicalMemory.isInitialized()) {
             UnsignedWord physicalMemorySize = PhysicalMemory.getCachedSize();
             int maximumHeapSizePercent = getMaximumHeapSizePercent();
             /* Do not cache because `-Xmx` option parsing may not have happened yet. */
-            UnsignedWord result = physicalMemorySize.unsignedDivide(100).multiply(maximumHeapSizePercent);
-            if (result.belowThan(addressSpaceSize)) {
-                return result;
-            }
+            return physicalMemorySize.unsignedDivide(100).multiply(maximumHeapSizePercent);
         }
-        return addressSpaceSize;
-    }
-
-    private static UnsignedWord getAddressSpaceSize() {
-        int compressionShift = ReferenceAccess.singleton().getCompressEncoding().getShift();
-        if (compressionShift > 0) {
-            int referenceSize = ConfigurationValues.getObjectLayout().getReferenceSize();
-            return WordFactory.unsigned(1L << (referenceSize * Byte.SIZE)).shiftLeft(compressionShift);
-        }
+        /* Otherwise return "unlimited". */
         return UnsignedUtils.MAX_VALUE;
     }
 
