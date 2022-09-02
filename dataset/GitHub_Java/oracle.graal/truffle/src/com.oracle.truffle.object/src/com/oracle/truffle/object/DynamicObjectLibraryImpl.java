@@ -377,11 +377,15 @@ abstract class DynamicObjectLibraryImpl {
         return true;
     }
 
-    static RemovePlan prepareRemove(ShapeImpl shapeBefore, ShapeImpl shapeAfter) {
+    private static void shiftPropertyValuesAfterRemove(DynamicObject object, ShapeImpl shapeBefore, ShapeImpl shapeAfter) {
+        MovePlan plan = prepareShiftValuesAfterRemove(shapeBefore, shapeAfter);
+        plan.execute(object);
+    }
+
+    static MovePlan prepareShiftValuesAfterRemove(ShapeImpl shapeBefore, ShapeImpl shapeAfter) {
         LayoutStrategy strategy = shapeBefore.getLayout().getStrategy();
         List<Move> moves = new ArrayList<>();
-        boolean canMoveInPlace = shapeAfter.getObjectArrayCapacity() <= shapeBefore.getObjectArrayCapacity() &&
-                        shapeAfter.getPrimitiveArrayCapacity() <= shapeBefore.getPrimitiveArrayCapacity();
+        boolean canMoveInPlace = true;
         for (ListIterator<Property> iterator = shapeAfter.getPropertyListInternal(false).listIterator(); iterator.hasNext();) {
             Property to = iterator.next();
             Property from = shapeBefore.getProperty(to.getKey());
@@ -402,7 +406,7 @@ abstract class DynamicObjectLibraryImpl {
                 Collections.sort(moves);
             }
         }
-        return new RemovePlan(moves.toArray(new Move[0]), canMoveInPlace, shapeBefore, shapeAfter);
+        return new MovePlan(moves.toArray(new Move[0]), canMoveInPlace);
     }
 
     private static boolean isSorted(List<Move> moves) {
@@ -473,17 +477,13 @@ abstract class DynamicObjectLibraryImpl {
         }
     }
 
-    private static final class RemovePlan {
+    private static final class MovePlan {
         @CompilationFinal(dimensions = 1) private final Move[] moves;
         private final boolean canMoveInPlace;
-        private final Shape shapeBefore;
-        private final Shape shapeAfter;
 
-        RemovePlan(Move[] moves, boolean canMoveInPlace, Shape shapeBefore, Shape shapeAfter) {
+        MovePlan(Move[] moves, boolean canMoveInPlace) {
             this.moves = moves;
             this.canMoveInPlace = canMoveInPlace;
-            this.shapeBefore = shapeBefore;
-            this.shapeAfter = shapeAfter;
         }
 
         @ExplodeLoop
@@ -494,15 +494,12 @@ abstract class DynamicObjectLibraryImpl {
                 for (int i = moves.length - 1; i >= 0; i--) {
                     moves[i].perform(object, i == 0);
                 }
-                ACCESS.trimToSize(object, shapeBefore, shapeAfter);
-                ACCESS.setShape(object, shapeAfter);
             } else {
                 // we cannot perform the moves in place, so stash away the values
                 Object[] tempValues = new Object[moves.length];
                 for (int i = moves.length - 1; i >= 0; i--) {
                     tempValues[i] = moves[i].performGet(object);
                 }
-                ACCESS.resizeAndSetShape(object, shapeBefore, shapeAfter);
                 for (int i = moves.length - 1; i >= 0; i--) {
                     moves[i].performSet(object, tempValues[i], true);
                 }
@@ -679,12 +676,11 @@ abstract class DynamicObjectLibraryImpl {
             ShapeImpl newShape = oldShape.removeProperty(property);
             assert oldShape != newShape;
             assert ACCESS.getShape(obj) == oldShape;
+            ACCESS.setShape(obj, newShape);
 
             if (!oldShape.isShared()) {
-                RemovePlan plan = prepareRemove(oldShape, newShape);
-                plan.execute(obj);
-            } else {
-                ACCESS.setShape(obj, newShape);
+                shiftPropertyValuesAfterRemove(obj, oldShape, newShape);
+                ACCESS.trimToSize(obj, newShape);
             }
 
             assert ACCESS.verifyValues(obj, archive);
@@ -1588,10 +1584,11 @@ abstract class DynamicObjectLibraryImpl {
                     Map<Object, Object> archive = null;
                     assert (archive = ACCESS.archive(object)) != null;
 
+                    ACCESS.setShape(object, newShape);
+
                     if (!oldShape.isShared()) {
-                        ((RemovePropertyCacheData) c).removePlan.execute(object);
-                    } else {
-                        ACCESS.setShape(object, newShape);
+                        ((RemovePropertyCacheData) c).movePlan.execute(object);
+                        ACCESS.trimToSize(object, newShape);
                     }
 
                     assert ACCESS.verifyValues(object, archive);
@@ -1625,13 +1622,13 @@ abstract class DynamicObjectLibraryImpl {
                     return Generic.instance();
                 }
 
-                RemovePlan removePlan = null;
+                MovePlan movePlan = null;
                 if (!oldShape.isShared()) {
-                    removePlan = prepareRemove(oldShape, newShape);
+                    movePlan = prepareShiftValuesAfterRemove(oldShape, newShape);
                 }
 
                 Assumption newShapeValid = getShapeValidAssumption(oldShape, newShape);
-                this.cache = new RemovePropertyCacheData(newShape, newShapeValid, removePlan, tail);
+                this.cache = new RemovePropertyCacheData(newShape, newShapeValid, movePlan, tail);
                 return this;
             } finally {
                 lock.unlock();
@@ -1744,16 +1741,16 @@ abstract class DynamicObjectLibraryImpl {
 
     static class RemovePropertyCacheData extends MutateCacheData {
 
-        final RemovePlan removePlan;
+        final MovePlan movePlan;
 
-        RemovePropertyCacheData(Shape newShape, Assumption newShapeValidAssumption, RemovePlan removePlan, MutateCacheData next) {
+        RemovePropertyCacheData(Shape newShape, Assumption newShapeValidAssumption, MovePlan movePlan, MutateCacheData next) {
             super(next, newShape, newShapeValidAssumption);
-            this.removePlan = removePlan;
+            this.movePlan = movePlan;
         }
 
         @Override
         protected MutateCacheData withNext(MutateCacheData newNext) {
-            return new RemovePropertyCacheData(newShape, newShapeValidAssumption, removePlan, newNext);
+            return new RemovePropertyCacheData(newShape, newShapeValidAssumption, movePlan, newNext);
         }
     }
 
