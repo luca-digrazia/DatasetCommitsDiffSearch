@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,6 +29,9 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -36,15 +39,11 @@ import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
-
 public final class StructureType extends AggregateType {
 
     private final String name;
     private final boolean isPacked;
     @CompilationFinal(dimensions = 1) private final Type[] types;
-    private long size = -1;
 
     public StructureType(String name, boolean isPacked, Type[] types) {
         this.name = name;
@@ -52,20 +51,8 @@ public final class StructureType extends AggregateType {
         this.types = types;
     }
 
-    public StructureType(String structName, boolean isPacked, int numElements) {
-        this(structName, isPacked, new Type[numElements]);
-    }
-
     public StructureType(boolean isPacked, Type[] types) {
         this(LLVMIdentifier.UNKNOWN, isPacked, types);
-    }
-
-    public StructureType(boolean isPacked, int numElements) {
-        this(isPacked, new Type[numElements]);
-    }
-
-    public void setElementType(int idx, Type type) {
-        types[idx] = type;
     }
 
     public Type[] getElementTypes() {
@@ -81,13 +68,9 @@ public final class StructureType extends AggregateType {
     }
 
     @Override
-    public long getBitSize() throws TypeOverflowException {
+    public int getBitSize() {
         if (isPacked) {
-            try {
-                return Arrays.stream(types).mapToLong(Type::getBitSizeUnchecked).reduce(0, Type::addUnsignedExactUnchecked);
-            } catch (TypeOverflowExceptionUnchecked e) {
-                throw e.getCause();
-            }
+            return Arrays.stream(types).mapToInt(Type::getBitSize).sum();
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new UnsupportedOperationException("TargetDataLayout is necessary to compute Padding information!");
@@ -100,11 +83,7 @@ public final class StructureType extends AggregateType {
     }
 
     @Override
-    public long getNumberOfElements() {
-        return types.length;
-    }
-
-    public int getNumberOfElementsInt() {
+    public int getNumberOfElements() {
         return types.length;
     }
 
@@ -120,39 +99,36 @@ public final class StructureType extends AggregateType {
     }
 
     @Override
-    public long getSize(DataLayout targetDataLayout) throws TypeOverflowException {
-        if (size != -1) {
-            return size;
-        }
-        long sumByte = 0;
+    public int getSize(DataLayout targetDataLayout) {
+        int sumByte = 0;
         for (final Type elementType : types) {
             if (!isPacked) {
-                sumByte = addUnsignedExact(sumByte, Type.getPadding(sumByte, elementType, targetDataLayout));
+                sumByte += Type.getPadding(sumByte, elementType, targetDataLayout);
             }
-            sumByte = addUnsignedExact(sumByte, elementType.getSize(targetDataLayout));
+            sumByte += elementType.getSize(targetDataLayout);
         }
 
-        long padding = 0;
+        int padding = 0;
         if (!isPacked && sumByte != 0) {
             padding = Type.getPadding(sumByte, getAlignment(targetDataLayout));
         }
-        size = Math.addExact(sumByte, padding);
-        return size;
+
+        return sumByte + padding;
     }
 
     @Override
-    public long getOffsetOf(long index, DataLayout targetDataLayout) throws TypeOverflowException {
-        long offset = 0;
+    public long getOffsetOf(long index, DataLayout targetDataLayout) {
+        int offset = 0;
         for (int i = 0; i < index; i++) {
             final Type elementType = types[i];
             if (!isPacked) {
-                offset = addUnsignedExact(offset, Type.getPadding(offset, elementType, targetDataLayout));
+                offset += Type.getPadding(offset, elementType, targetDataLayout);
             }
-            offset = addUnsignedExact(offset, elementType.getSize(targetDataLayout));
+            offset += elementType.getSize(targetDataLayout);
         }
         if (!isPacked && getSize(targetDataLayout) > offset) {
             assert index == (int) index;
-            offset = Math.addExact(offset, Type.getPadding(offset, types[(int) index], targetDataLayout));
+            offset += Type.getPadding(offset, types[(int) index], targetDataLayout);
         }
         return offset;
     }
@@ -209,7 +185,9 @@ public final class StructureType extends AggregateType {
         } else if (!name.equals(other.name)) {
             return false;
         }
-        return Arrays.equals(types, other.types);
+        if (!Arrays.equals(types, other.types)) {
+            return false;
+        }
+        return true;
     }
-
 }

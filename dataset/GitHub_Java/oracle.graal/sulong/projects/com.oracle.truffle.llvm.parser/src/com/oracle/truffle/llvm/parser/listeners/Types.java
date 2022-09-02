@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,12 +32,11 @@ package com.oracle.truffle.llvm.parser.listeners;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
-import com.oracle.truffle.llvm.parser.scanner.RecordBuffer;
+import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
@@ -96,13 +95,12 @@ public final class Types implements ParserListener, Iterable<Type> {
     }
 
     @Override
-    public void record(RecordBuffer buffer) {
+    public void record(long id, long[] args) {
         Type type;
-        int id = buffer.getId();
 
-        switch (id) {
+        switch ((int) id) {
             case TYPE_NUMBER_OF_ENTRIES:
-                table = new Type[buffer.readInt()];
+                table = new Type[(int) args[0]];
                 return;
 
             case TYPE_VOID:
@@ -132,23 +130,18 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case TYPE_INTEGER:
-                type = Type.getIntegerType(buffer.readInt());
+                type = Type.getIntegerType((int) args[0]);
                 break;
 
             case TYPE_POINTER: {
                 final PointerType pointerType = new PointerType(null);
-                setType(buffer.readInt(), pointerType::setPointeeType);
+                setType((int) args[0], pointerType::setPointeeType);
                 type = pointerType;
                 break;
             }
             case TYPE_FUNCTION_OLD: {
-                boolean isVarargs = buffer.readBoolean();
-                buffer.skip();
-                int index = buffer.readInt();
-                int numArguments = buffer.remaining();
-                final FunctionType functionType = new FunctionType(null, numArguments, isVarargs);
-                setTypes(buffer, numArguments, functionType::setArgumentType);
-                setType(index, functionType::setReturnType);
+                final FunctionType functionType = new FunctionType(null, toTypes(args, 3, args.length), args[0] != 0);
+                setType((int) args[2], functionType::setReturnType);
                 type = functionType;
                 break;
             }
@@ -157,15 +150,15 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case TYPE_ARRAY: {
-                final ArrayType arrayType = new ArrayType(null, buffer.read());
-                setType(buffer.readInt(), arrayType::setElementType);
+                final ArrayType arrayType = new ArrayType(null, (int) args[0]);
+                setType((int) args[1], arrayType::setElementType);
                 type = arrayType;
                 break;
             }
 
             case TYPE_VECTOR: {
-                final VectorType vectorType = new VectorType(null, buffer.readInt());
-                setType(buffer.readInt(), vectorType::setElementType);
+                final VectorType vectorType = new VectorType(null, (int) args[0]);
+                setType((int) args[1], vectorType::setElementType);
                 type = vectorType;
                 break;
             }
@@ -191,33 +184,26 @@ public final class Types implements ParserListener, Iterable<Type> {
                 break;
 
             case TYPE_STRUCT_NAME: {
-                structName = buffer.readString();
+                structName = Records.toString(args);
                 return;
             }
 
             case TYPE_STRUCT_ANON:
             case TYPE_STRUCT_NAMED: {
-                final boolean isPacked = buffer.readBoolean();
-                int numMembers = buffer.remaining();
-                StructureType structureType;
+                final boolean isPacked = args[0] != 0;
+                final Type[] members = toTypes(args, 1, args.length);
                 if (structName != null) {
-                    structureType = new StructureType(structName, isPacked, numMembers);
+                    type = new StructureType(structName, isPacked, members);
                     structName = null;
-                    module.addGlobalType(structureType);
+                    module.addGlobalType(type);
                 } else {
-                    structureType = new StructureType(isPacked, numMembers);
+                    type = new StructureType(isPacked, members);
                 }
-                setTypes(buffer, numMembers, structureType::setElementType);
-                type = structureType;
                 break;
             }
             case TYPE_FUNCTION: {
-                boolean isVarargs = buffer.readBoolean();
-                int index = buffer.readInt();
-                int numArguments = buffer.remaining();
-                FunctionType functionType = new FunctionType(null, numArguments, isVarargs);
-                setTypes(buffer, numArguments, functionType::setArgumentType);
-                setType(index, functionType::setReturnType);
+                final FunctionType functionType = new FunctionType(null, toTypes(args, 2, args.length), args[0] != 0);
+                setType((int) args[1], functionType::setReturnType);
                 type = functionType;
                 break;
             }
@@ -250,36 +236,41 @@ public final class Types implements ParserListener, Iterable<Type> {
         }
     }
 
-    void setTypes(RecordBuffer buffer, int numTypes, BiConsumer<Integer, Type> indexSetter) {
-        assert numTypes == buffer.remaining();
-        for (int i = 0; i < numTypes; i++) {
-            final int typeIndex = buffer.readInt();
+    private Type[] toTypes(long[] args, int from, int to) {
+        final Type[] types = new Type[to - from];
+
+        for (int i = 0; i < types.length; i++) {
+            final int typeIndex = (int) args[from + i];
             if (typeIndex < size) {
-                indexSetter.accept(i, table[typeIndex]);
+                types[i] = table[typeIndex];
+
             } else {
-                final Consumer<Type> setter = new MemberDependent(i, indexSetter);
+                final Consumer<Type> setter = new MemberDependent(i, types);
                 if (table[typeIndex] == null) {
                     table[typeIndex] = new UnresolvedType(setter);
+
                 } else {
                     ((UnresolvedType) table[typeIndex]).addDependent(setter);
                 }
             }
         }
+
+        return types;
     }
 
     private static final class MemberDependent implements Consumer<Type> {
 
         private final int index;
-        private final BiConsumer<Integer, Type> setter;
+        private final Type[] target;
 
-        private MemberDependent(int index, BiConsumer<Integer, Type> setter) {
+        private MemberDependent(int index, Type[] target) {
             this.index = index;
-            this.setter = setter;
+            this.target = target;
         }
 
         @Override
         public void accept(Type type) {
-            setter.accept(index, type);
+            target[index] = type;
         }
     }
 
@@ -306,7 +297,7 @@ public final class Types implements ParserListener, Iterable<Type> {
         }
 
         @Override
-        public long getBitSize() {
+        public int getBitSize() {
             CompilerDirectives.transferToInterpreter();
             throw new LLVMParserException("Unresolved Forward-Referenced Type!");
         }
@@ -318,7 +309,7 @@ public final class Types implements ParserListener, Iterable<Type> {
         }
 
         @Override
-        public long getSize(DataLayout targetDataLayout) {
+        public int getSize(DataLayout targetDataLayout) {
             CompilerDirectives.transferToInterpreter();
             throw new LLVMParserException("Unresolved Forward-Referenced Type!");
         }

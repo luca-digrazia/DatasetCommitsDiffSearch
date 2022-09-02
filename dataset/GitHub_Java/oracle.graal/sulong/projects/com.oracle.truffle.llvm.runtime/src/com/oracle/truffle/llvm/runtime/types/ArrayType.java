@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -41,12 +41,9 @@ public final class ArrayType extends AggregateType {
 
     @CompilationFinal private Assumption elementTypeAssumption;
     @CompilationFinal private Type elementType;
-    /**
-     * Length of the vector. The value is interpreted as an unsigned 64 bit integer value.
-     */
-    private final long length;
+    private final int length;
 
-    public ArrayType(Type type, long length) {
+    public ArrayType(Type type, int length) {
         this.elementTypeAssumption = Truffle.getRuntime().createAssumption("ArrayType.elementType");
         this.elementType = type;
         this.length = length;
@@ -65,8 +62,8 @@ public final class ArrayType extends AggregateType {
     }
 
     @Override
-    public long getBitSize() throws TypeOverflowException {
-        return multiplyUnsignedExact(getElementType().getBitSize(), getNumberOfElements());
+    public int getBitSize() {
+        return getElementType().getBitSize() * getNumberOfElements();
     }
 
     public Type getElementType() {
@@ -77,7 +74,7 @@ public final class ArrayType extends AggregateType {
     }
 
     @Override
-    public long getNumberOfElements() {
+    public int getNumberOfElements() {
         return length;
     }
 
@@ -92,20 +89,19 @@ public final class ArrayType extends AggregateType {
     }
 
     @Override
-    public long getSize(DataLayout targetDataLayout) throws TypeOverflowException {
-        return multiplyUnsignedExact(getElementType().getSize(targetDataLayout), length);
+    public int getSize(DataLayout targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * length;
     }
 
     @Override
-    public long getOffsetOf(long index, DataLayout targetDataLayout) throws TypeOverflowException {
-        // a pointer can be cast to an array type and for pointers, the index can be negative
-        return multiplySignedExact(getElementType().getSize(targetDataLayout), index);
+    public long getOffsetOf(long index, DataLayout targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
     @TruffleBoundary
     public String toString() {
-        return String.format("[%s x %s]", Long.toUnsignedString(getNumberOfElements()), getElementType());
+        return String.format("[%d x %s]", getNumberOfElements(), getElementType());
     }
 
     @Override
@@ -113,7 +109,7 @@ public final class ArrayType extends AggregateType {
         final int prime = 31;
         int result = 1;
         result = prime * result + ((getElementType() == null) ? 0 : getElementType().hashCode());
-        result = prime * result + (int) length;
+        result = prime * result + length;
         return result;
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -55,14 +55,6 @@ public final class FunctionType extends Type {
         this.isVarargs = isVarargs;
     }
 
-    public FunctionType(Type returnType, int numArguments, boolean isVarargs) {
-        this(returnType, new Type[numArguments], isVarargs);
-    }
-
-    public void setArgumentType(int idx, Type type) {
-        argumentTypes[idx] = type;
-    }
-
     public Type[] getArgumentTypes() {
         return argumentTypes;
     }
@@ -86,7 +78,7 @@ public final class FunctionType extends Type {
     }
 
     @Override
-    public long getBitSize() {
+    public int getBitSize() {
         return 0;
     }
 
@@ -105,7 +97,7 @@ public final class FunctionType extends Type {
     }
 
     @Override
-    public long getSize(DataLayout targetDataLayout) {
+    public int getSize(DataLayout targetDataLayout) {
         return LLVMNode.ADDRESS_SIZE_IN_BYTES;
     }
 

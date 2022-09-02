@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -67,6 +67,10 @@ public abstract class Type {
             default:
                 return new VariableBitWidthType(size);
         }
+    }
+
+    public static boolean isFunctionOrFunctionPointer(Type type) {
+        return type instanceof FunctionType || (type instanceof PointerType && ((PointerType) type).getPointeeType() instanceof FunctionType);
     }
 
     public static Type createConstantForType(Type type, Object value) {
@@ -145,14 +149,4 @@ public abstract class Type {
         final int alignment = type.getAlignment(targetDataLayout);
         return getPadding(offset, alignment);
     }
-
-    public static boolean fitsIntoUnsignedInt(long l) {
-        return (l & 0xFFFF_FFFF_0000_0000L) == 0;
-    }
-
-    public static int toUnsignedInt(long l) {
-        assert fitsIntoUnsignedInt(l);
-        return (int)l; // drop 32 MSB
-    }
-
 }
