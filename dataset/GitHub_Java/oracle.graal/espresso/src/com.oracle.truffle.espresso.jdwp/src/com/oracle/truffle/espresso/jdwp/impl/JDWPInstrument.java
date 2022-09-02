@@ -30,7 +30,6 @@ import java.util.Collection;
 import java.util.concurrent.Callable;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 
@@ -128,7 +127,6 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         }
     }
 
-    @SuppressWarnings("deprecation")
     private void handleConnectException(ConnectException ex, boolean swallowExitException) {
         System.err.println("ERROR: transport error 202: connect failed: " + ex.getMessage());
         System.err.println("ERROR: JDWP Transport dt_socket failed to initialize, TRANSPORT_INIT(510)");
@@ -137,16 +135,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
             context.abort(197);
         } catch (Throwable t) {
             if (swallowExitException) {
-                // swallow exit exception if thread will exit anyway
-                if (t instanceof AbstractTruffleException) {
-                    if (!((AbstractTruffleException) t).isExit()) {
-                        throw t;
-                    }
-                } else if (t instanceof com.oracle.truffle.api.TruffleException) {
-                    if (!((com.oracle.truffle.api.TruffleException) t).isExit()) {
-                        throw t;
-                    }
-                }
+                // swallow if thread will exit anyway
             } else {
                 throw t;
             }
