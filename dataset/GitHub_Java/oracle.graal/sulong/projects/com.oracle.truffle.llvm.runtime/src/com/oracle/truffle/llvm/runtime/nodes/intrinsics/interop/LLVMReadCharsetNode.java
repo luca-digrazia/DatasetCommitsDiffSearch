@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -48,18 +48,24 @@ public abstract class LLVMReadCharsetNode extends LLVMNode {
 
     public abstract Object execute(VirtualFrame frame);
 
-    @Specialization(guards = "cachedPointer.equals(pointer)")
-    @SuppressWarnings("unused")
+    /**
+     * @param pointer @NodeChild
+     * @see LLVMReadCharsetNode
+     */
+    @Specialization(guards = "cachedPointer.isSame(pointer)")
     protected LLVMCharset doCachedPointer(LLVMPointer pointer,
-                    @Cached("pointer") LLVMPointer cachedPointer,
+                    @Cached("pointer") @SuppressWarnings("unused") LLVMPointer cachedPointer,
                     @Cached("doGeneric(cachedPointer)") LLVMCharset cachedCharset) {
         return cachedCharset;
     }
 
+    /**
+     * @param address @NodeChild
+     * @see LLVMReadCharsetNode
+     */
     @Specialization(guards = "address == cachedAddress")
-    @SuppressWarnings("unused")
     protected LLVMCharset doCachedOther(Object address,
-                    @Cached("address") Object cachedAddress,
+                    @Cached("address") @SuppressWarnings("unused") Object cachedAddress,
                     @Cached("doGeneric(cachedAddress)") LLVMCharset cachedCharset) {
         return cachedCharset;
     }
@@ -95,8 +101,8 @@ public abstract class LLVMReadCharsetNode extends LLVMNode {
         }
 
         @TruffleBoundary
-        public String decode(ByteBuffer b) {
-            return charset.decode(b).toString();
+        public String decode(byte[] b) {
+            return charset.decode(ByteBuffer.wrap(b)).toString();
         }
     }
 }
