@@ -36,22 +36,26 @@ public class EspressoReferenceArrayStoreNode extends Node {
     @CompilationFinal boolean noOutOfBoundEx = true;
     @CompilationFinal boolean noArrayStoreEx = true;
 
-    public EspressoReferenceArrayStoreNode() {
-        this.typeCheck = TypeCheckNodeGen.create();
+    public EspressoReferenceArrayStoreNode(EspressoContext context) {
+        this.typeCheck = TypeCheckNodeGen.create(context);
     }
 
-    public void arrayStore(EspressoContext context, StaticObject value, int index, StaticObject array) {
-        if (Integer.compareUnsigned(index, array.length()) >= 0) {
+    public void arrayStore(StaticObject value, int index, StaticObject array) {
+        assert !array.isForeignObject();
+        assert array.isArray();
+        if (Integer.compareUnsigned(index, array.length()) < 0) {
+            if (StaticObject.isNull(value) || typeCheck.executeTypeCheck(((ArrayKlass) array.getKlass()).getComponentType(), value.getKlass())) {
+                array.putObjectUnsafe(value, index);
+            } else {
+                enterArrayStoreEx();
+                Meta meta = typeCheck.getMeta();
+                throw meta.throwException(meta.java_lang_ArrayStoreException);
+            }
+        } else {
             enterOutOfBound();
-            Meta meta = context.getMeta();
+            Meta meta = typeCheck.getMeta();
             throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
-        if (!StaticObject.isNull(value) && !typeCheck.executeTypeCheck(((ArrayKlass) array.getKlass()).getComponentType(), value.getKlass())) {
-            enterArrayStoreEx();
-            Meta meta = context.getMeta();
-            throw meta.throwException(meta.java_lang_ArrayStoreException);
-        }
-        (array.<Object[]> unwrap())[index] = value;
     }
 
     private void enterOutOfBound() {
