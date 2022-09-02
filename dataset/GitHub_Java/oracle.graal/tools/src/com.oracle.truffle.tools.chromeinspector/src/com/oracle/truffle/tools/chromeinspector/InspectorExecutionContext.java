@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,6 @@
  */
 package com.oracle.truffle.tools.chromeinspector;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.util.ArrayList;
@@ -35,11 +31,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
 
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugValue;
+import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.SourceFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
@@ -53,53 +51,41 @@ import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
  */
 public final class InspectorExecutionContext {
 
+    public static final String VALUE_NOT_READABLE = "<not readable>";
     private static final AtomicLong LAST_ID = new AtomicLong(0);
 
     private final String name;
     private final TruffleInstrument.Env env;
     private final PrintWriter err;
-    private final PrintStream traceLogger;
     private final List<Listener> listeners = Collections.synchronizedList(new ArrayList<>(3));
     private final long id = LAST_ID.incrementAndGet();
     private final boolean[] runPermission = new boolean[]{false};
     private final boolean inspectInternal;
     private final boolean inspectInitialization;
     private final List<URI> sourceRoots;
+    private final TruffleLogger log;
+    // Till the legacy TruffleLanguage.toString() is around, we must keep this as true
+    private final boolean allowToStringSideEffects = true;
 
     private volatile DebuggerSuspendedInfo suspendedInfo;
     private volatile SuspendedThreadExecutor suspendThreadExecutor;
     private RemoteObjectsHandler roh;
-    private ScriptsHandler sch;
-    private EventBinding<ScriptsHandler> schBinding;
-    private AtomicInteger schCounter;
+    private volatile ScriptsHandler scriptsHandler;
+    private volatile EventBinding<ScriptsHandler> schBinding;
+    private int schCounter;
     private volatile String lastMimeType = "text/javascript";   // Default JS
     private volatile String lastLanguage = "js";
+    private boolean synchronous = false;
+    private boolean customObjectFormatterEnabled = false;
 
-    public InspectorExecutionContext(String name, boolean inspectInternal, boolean inspectInitialization, TruffleInstrument.Env env, List<URI> sourceRoots, PrintWriter err) throws IOException {
+    public InspectorExecutionContext(String name, boolean inspectInternal, boolean inspectInitialization, TruffleInstrument.Env env, List<URI> sourceRoots, PrintWriter err) {
         this.name = name;
         this.inspectInternal = inspectInternal;
         this.inspectInitialization = inspectInitialization;
         this.env = env;
         this.sourceRoots = sourceRoots;
         this.err = err;
-        this.traceLogger = createTraceLogger();
-    }
-
-    private static PrintStream createTraceLogger() throws IOException {
-        PrintStream traceLog = null;
-        String traceLogFile = System.getProperty("chromeinspector.traceMessages");
-        if (traceLogFile != null) {
-            if (Boolean.parseBoolean(traceLogFile)) {
-                traceLog = System.err;
-            } else if (!"false".equalsIgnoreCase(traceLogFile)) {
-                if ("tmp".equalsIgnoreCase(traceLogFile)) {
-                    traceLog = new PrintStream(new FileOutputStream(File.createTempFile("ChromeInspectorProtocol", ".txt")));
-                } else {
-                    traceLog = new PrintStream(new FileOutputStream(traceLogFile));
-                }
-            }
-        }
-        return traceLog;
+        this.log = env.getLogger("");
     }
 
     public boolean isInspectInternal() {
@@ -108,6 +94,10 @@ public final class InspectorExecutionContext {
 
     public boolean isInspectInitialization() {
         return inspectInitialization;
+    }
+
+    public boolean areToStringSideEffectsAllowed() {
+        return allowToStringSideEffects;
     }
 
     public TruffleInstrument.Env getEnv() {
@@ -122,8 +112,22 @@ public final class InspectorExecutionContext {
         return err;
     }
 
-    public PrintStream getLogger() {
-        return traceLogger;
+    public void logMessage(String prefix, Object message) {
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("CONTEXT " + id + " " + prefix + message);
+        }
+    }
+
+    public void logException(Throwable ex) {
+        if (log.isLoggable(Level.FINE)) {
+            log.log(Level.FINE, "CONTEXT " + id, ex);
+        }
+    }
+
+    public void logException(String prefix, Throwable ex) {
+        if (log.isLoggable(Level.FINE)) {
+            log.log(Level.FINE, "CONTEXT " + id + " " + prefix, ex);
+        }
     }
 
     Iterable<URI> getSourcePath() {
@@ -145,21 +149,28 @@ public final class InspectorExecutionContext {
     }
 
     public ScriptsHandler acquireScriptsHandler() {
-        if (sch == null) {
-            sch = new ScriptsHandler(inspectInternal);
-            schBinding = env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, sch, true);
-            schCounter = new AtomicInteger(0);
+        ScriptsHandler sh;
+        boolean attachListener = false;
+        synchronized (this) {
+            sh = scriptsHandler;
+            if (sh == null) {
+                scriptsHandler = sh = new ScriptsHandler(env, inspectInternal);
+                attachListener = true;
+                schCounter = 0;
+            }
+            schCounter++;
         }
-        schCounter.incrementAndGet();
-        return sch;
+        if (attachListener) {
+            schBinding = env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, sh, true);
+        }
+        return sh;
     }
 
-    public void releaseScriptsHandler() {
-        if (schCounter.decrementAndGet() == 0) {
+    public synchronized void releaseScriptsHandler() {
+        if (--schCounter == 0) {
             schBinding.dispose();
             schBinding = null;
-            sch = null;
-            schCounter = null;
+            scriptsHandler = null;
         }
     }
 
@@ -178,6 +189,9 @@ public final class InspectorExecutionContext {
     }
 
     public void waitForRunPermission() throws InterruptedException {
+        if (synchronous) {
+            return;
+        }
         synchronized (runPermission) {
             while (!runPermission[0]) {
                 runPermission.wait();
@@ -185,15 +199,15 @@ public final class InspectorExecutionContext {
         }
     }
 
-    synchronized RemoteObjectsHandler getRemoteObjectsHandler() {
+    public synchronized RemoteObjectsHandler getRemoteObjectsHandler() {
         if (roh == null) {
-            roh = new RemoteObjectsHandler(err);
+            roh = new RemoteObjectsHandler(this);
         }
         return roh;
     }
 
-    public RemoteObject createAndRegister(DebugValue value) {
-        RemoteObject ro = new RemoteObject(value, getErr());
+    public RemoteObject createAndRegister(DebugValue value, boolean generatePreview) {
+        RemoteObject ro = new RemoteObject(value, generatePreview, this);
         if (ro.getId() != null) {
             getRemoteObjectsHandler().register(ro);
         }
@@ -201,12 +215,16 @@ public final class InspectorExecutionContext {
     }
 
     void setValue(DebugValue debugValue, CallArgument newValue) {
+        debugValue.set(getDebugValue(newValue, debugValue.getSession()));
+    }
+
+    DebugValue getDebugValue(CallArgument newValue, DebuggerSession session) {
         String objectId = newValue.getObjectId();
         if (objectId != null) {
             RemoteObject obj = getRemoteObjectsHandler().getRemote(objectId);
-            debugValue.set(obj.getDebugValue());
+            return obj.getDebugValue();
         } else {
-            debugValue.set(newValue.getPrimitiveValue());
+            return session.createPrimitiveValue(newValue.getPrimitiveValue(), null);
         }
     }
 
@@ -215,6 +233,15 @@ public final class InspectorExecutionContext {
     }
 
     <T> T executeInSuspendThread(SuspendThreadExecutable<T> executable) throws NoSuspendedThreadException, CommandProcessException {
+        if (synchronous) {
+            try {
+                return executable.executeCommand();
+            } catch (ThreadDeath td) {
+                throw td;
+            } catch (DebugException dex) {
+                return executable.processException(dex);
+            }
+        }
         CompletableFuture<T> cf = new CompletableFuture<>();
         suspendThreadExecutor.execute(new CancellableRunnable() {
             @Override
@@ -274,6 +301,14 @@ public final class InspectorExecutionContext {
 
     void setSuspendedInfo(DebuggerSuspendedInfo suspendedInfo) {
         this.suspendedInfo = suspendedInfo;
+        if (suspendedInfo == null) {
+            // not suspended, clear variables
+            synchronized (this) {
+                if (roh != null) {
+                    roh.reset();
+                }
+            }
+        }
     }
 
     DebuggerSuspendedInfo getSuspendedInfo() {
@@ -291,10 +326,27 @@ public final class InspectorExecutionContext {
         this.suspendedInfo = null;
         this.suspendThreadExecutor = null;
         this.roh = null;
-        assert sch == null;
+        assert scriptsHandler == null;
         synchronized (runPermission) {
-            runPermission[0] = false;
+            runPermission[0] = true;
+            runPermission.notifyAll();
         }
+    }
+
+    public void setSynchronous(boolean synchronousExecution) {
+        this.synchronous = synchronousExecution;
+    }
+
+    public boolean isSynchronous() {
+        return synchronous;
+    }
+
+    void setCustomObjectFormatterEnabled(boolean enabled) {
+        this.customObjectFormatterEnabled = enabled;
+    }
+
+    public boolean isCustomObjectFormatterEnabled() {
+        return this.customObjectFormatterEnabled;
     }
 
     public interface Listener {
@@ -330,8 +382,9 @@ public final class InspectorExecutionContext {
             throw new NoSuspendedThreadException("<Resuming...>");
         }
 
+        @SuppressWarnings("sync-override")
         @Override
-        public synchronized Throwable fillInStackTrace() {
+        public Throwable fillInStackTrace() {
             return this;
         }
     }
