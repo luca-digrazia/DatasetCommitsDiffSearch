@@ -296,6 +296,7 @@ public final class LLVMContext {
         return new SecureRandom();
     }
 
+
     private LLVMManagedPointer toTruffleObjects(String[] values) {
         TruffleObject[] result = new TruffleObject[values.length];
         for (int i = 0; i < values.length; i++) {
