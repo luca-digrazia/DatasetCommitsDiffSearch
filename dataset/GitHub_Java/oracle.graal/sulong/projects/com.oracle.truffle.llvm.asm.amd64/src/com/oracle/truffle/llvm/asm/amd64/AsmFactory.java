@@ -37,10 +37,27 @@ import java.util.Set;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
+import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RepNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SetFlagNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64Ud2Node;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64Flags;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64Target;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdateCPAZSOFlagsNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdateCPZSOFlagsNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdatePZSFlagsNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdatePZSOFlagsNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteBooleanNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteTupelNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteValueNode;
+import com.oracle.truffle.llvm.runtime.nodes.func.LLVMInlineAssemblyRootNode;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugTrapNode;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNode;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMUnsupportedInstructionNode;
+import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMWriteNode.LLVMWritePointerNode;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
+import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
@@ -141,7 +158,6 @@ import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RdSeedNodeFactory.LLVM
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RdSeedNodeFactory.LLVMAMD64RdSeedqNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RdSeedNodeFactory.LLVMAMD64RdSeedwNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RdtscNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RepNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RolNodeFactory.LLVMAMD64RolbNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RolNodeFactory.LLVMAMD64RollNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64RolNodeFactory.LLVMAMD64RolqNodeGen;
@@ -158,7 +174,6 @@ import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SarNodeFactory.LLVMAMD
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SarNodeFactory.LLVMAMD64SarlNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SarNodeFactory.LLVMAMD64SarqNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SarNodeFactory.LLVMAMD64SarwNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SetFlagNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64ShlNodeFactory.LLVMAMD64ShlbNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64ShlNodeFactory.LLVMAMD64ShllNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64ShlNodeFactory.LLVMAMD64ShlqNodeGen;
@@ -177,7 +192,6 @@ import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SubNodeFactory.LLVMAMD
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SubNodeFactory.LLVMAMD64SublNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SubNodeFactory.LLVMAMD64SubqNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64SubNodeFactory.LLVMAMD64SubwNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64Ud2Node;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64XaddNodeFactory.LLVMAMD64XaddbNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64XaddNodeFactory.LLVMAMD64XaddlNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.LLVMAMD64XaddNodeFactory.LLVMAMD64XaddqNodeGen;
@@ -194,31 +208,19 @@ import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64AddressComputa
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64AddressComputationNodeFactory.LLVMAMD64AddressNoBaseOffsetComputationNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64AddressComputationNodeFactory.LLVMAMD64AddressOffsetComputationNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64AddressComputationNodeFactory.LLVMAMD64AddressSegmentComputationNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64Flags;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64GetTlsNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64ReadAddressNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64ReadRegisterNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64Target;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64ToI8NodeFactory.LLVMAMD64I64ToI8NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64ToRegisterNodeFactory.LLVMI16ToR64NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64ToRegisterNodeFactory.LLVMI32ToR64NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64ToRegisterNodeFactory.LLVMI8ToR64NodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdateCPAZSOFlagsNode;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdateCPZSOFlagsNode;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdatePZSFlagsNode;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64UpdateFlagsNode.LLVMAMD64UpdatePZSOFlagsNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteAddressRegisterNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteBooleanNode;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteTupelNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteTupelNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteValueNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.support.LLVMAMD64WriteValueNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.cast.LLVMToAddressNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMArgNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMInlineAssemblyRootNode;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugTrapNode;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory;
 import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMFenceNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMPointerDirectLoadNodeGen;
@@ -231,10 +233,8 @@ import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI32StoreNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI64StoreNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI8StoreNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMPointerStoreNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMUnsupportedInstructionNode;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMReadNodeFactory.LLVMAddressReadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMReadNodeFactory.LLVMI1ReadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMWriteNode.LLVMWritePointerNode;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMWriteNodeFactory;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI1NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI64NodeGen;
@@ -271,9 +271,11 @@ class AsmFactory {
     private String currentPrefix;
 
     private final LLVMLanguage language;
+    private final NodeFactory nodeFactory;
 
-    AsmFactory(LLVMLanguage language, Type[] argTypes, String asmFlags, Type retType, Type[] retTypes, int[] retOffsets) {
+    AsmFactory(LLVMLanguage language, Type[] argTypes, String asmFlags, Type retType, Type[] retTypes, int[] retOffsets, NodeFactory nodeFactory) {
         this.language = language;
+        this.nodeFactory = nodeFactory;
         this.argTypes = argTypes;
         this.asmFlags = asmFlags;
         this.frameDescriptor = new FrameDescriptor();
@@ -1326,47 +1328,47 @@ class AsmFactory {
                 break;
             case "movsbw":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = CommonNodeFactory.createSignedCast(srcA, PrimitiveType.I16);
+                out = nodeFactory.createSignedCast(srcA, PrimitiveType.I16);
                 break;
             case "movsbl":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = CommonNodeFactory.createSignedCast(srcA, PrimitiveType.I32);
+                out = nodeFactory.createSignedCast(srcA, PrimitiveType.I32);
                 break;
             case "movsbq":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = CommonNodeFactory.createSignedCast(srcA, PrimitiveType.I64);
+                out = nodeFactory.createSignedCast(srcA, PrimitiveType.I64);
                 break;
             case "movswl":
                 srcA = getOperandLoad(PrimitiveType.I16, a);
-                out = CommonNodeFactory.createSignedCast(srcA, PrimitiveType.I32);
+                out = nodeFactory.createSignedCast(srcA, PrimitiveType.I32);
                 break;
             case "movswq":
                 srcA = getOperandLoad(PrimitiveType.I16, a);
-                out = CommonNodeFactory.createSignedCast(srcA, PrimitiveType.I64);
+                out = nodeFactory.createSignedCast(srcA, PrimitiveType.I64);
                 break;
             case "movslq":
                 srcA = getOperandLoad(PrimitiveType.I32, a);
-                out = CommonNodeFactory.createSignedCast(srcA, PrimitiveType.I64);
+                out = nodeFactory.createSignedCast(srcA, PrimitiveType.I64);
                 break;
             case "movzbw":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = CommonNodeFactory.createUnsignedCast(srcA, PrimitiveType.I16);
+                out = nodeFactory.createUnsignedCast(srcA, PrimitiveType.I16);
                 break;
             case "movzbl":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = CommonNodeFactory.createUnsignedCast(srcA, PrimitiveType.I32);
+                out = nodeFactory.createUnsignedCast(srcA, PrimitiveType.I32);
                 break;
             case "movzbq":
                 srcA = getOperandLoad(PrimitiveType.I8, a);
-                out = CommonNodeFactory.createUnsignedCast(srcA, PrimitiveType.I64);
+                out = nodeFactory.createUnsignedCast(srcA, PrimitiveType.I64);
                 break;
             case "movzwl":
                 srcA = getOperandLoad(PrimitiveType.I16, a);
-                out = CommonNodeFactory.createUnsignedCast(srcA, PrimitiveType.I32);
+                out = nodeFactory.createUnsignedCast(srcA, PrimitiveType.I32);
                 break;
             case "movzwq":
                 srcA = getOperandLoad(PrimitiveType.I16, a);
-                out = CommonNodeFactory.createUnsignedCast(srcA, PrimitiveType.I64);
+                out = nodeFactory.createUnsignedCast(srcA, PrimitiveType.I64);
                 break;
             case "salb":
                 out = LLVMAMD64SalbNodeGen.create(srcB, srcA);
@@ -1681,15 +1683,15 @@ class AsmFactory {
                             PrimitiveKind primitiveKind = getPrimitiveKind(arg);
                             switch (primitiveKind) {
                                 case I8:
-                                    valueNodes[arg.getOutIndex()] = CommonNodeFactory.createSignedCast(register, PrimitiveType.I8);
+                                    valueNodes[arg.getOutIndex()] = nodeFactory.createSignedCast(register, PrimitiveType.I8);
                                     writeNodes[arg.getOutIndex()] = LLVMI8StoreNodeGen.create(null, null);
                                     break;
                                 case I16:
-                                    valueNodes[arg.getOutIndex()] = CommonNodeFactory.createSignedCast(register, PrimitiveType.I16);
+                                    valueNodes[arg.getOutIndex()] = nodeFactory.createSignedCast(register, PrimitiveType.I16);
                                     writeNodes[arg.getOutIndex()] = LLVMI16StoreNodeGen.create(null, null);
                                     break;
                                 case I32:
-                                    valueNodes[arg.getOutIndex()] = CommonNodeFactory.createSignedCast(register, PrimitiveType.I32);
+                                    valueNodes[arg.getOutIndex()] = nodeFactory.createSignedCast(register, PrimitiveType.I32);
                                     writeNodes[arg.getOutIndex()] = LLVMI32StoreNodeGen.create(null, null);
                                     break;
                                 case I64:
@@ -1724,14 +1726,14 @@ class AsmFactory {
                     } else if (argTypes[arg.getInIndex()] instanceof VectorType) {
                         arguments.add(LLVMWriteNodeFactory.LLVMWriteVectorNodeGen.create(slot, argnode));
                     } else {
-                        LLVMExpressionNode node = CommonNodeFactory.createSignedCast(argnode, PrimitiveType.I64);
+                        LLVMExpressionNode node = nodeFactory.createSignedCast(argnode, PrimitiveType.I64);
                         arguments.add(LLVMWriteI64NodeGen.create(slot, node));
                     }
                 }
                 slot = getArgumentSlot(arg.getIndex(), argTypes[arg.getInIndex()]);
                 LLVMExpressionNode argnode = LLVMArgNodeGen.create(arg.getInIndex());
                 if (arg.getType() instanceof PrimitiveType) {
-                    LLVMExpressionNode node = CommonNodeFactory.createSignedCast(argnode, PrimitiveType.I64);
+                    LLVMExpressionNode node = nodeFactory.createSignedCast(argnode, PrimitiveType.I64);
                     arguments.add(LLVMWriteI64NodeGen.create(slot, node));
                 } else if (arg.getType() instanceof VectorType) {
                     arguments.add(LLVMWriteNodeFactory.LLVMWriteVectorNodeGen.create(slot, argnode));
@@ -1787,7 +1789,7 @@ class AsmFactory {
         if (retType instanceof PointerType) {
             return LLVMToAddressNodeGen.create(register);
         }
-        return CommonNodeFactory.createSignedCast(register, retType);
+        return nodeFactory.createSignedCast(register, retType);
     }
 
     private boolean isLeaPointer(AsmOperand operand) {
@@ -1899,11 +1901,11 @@ class AsmFactory {
             if (type instanceof PointerType) {
                 switch (((PrimitiveType) op.getType()).getPrimitiveKind()) {
                     case I8:
-                        return CommonNodeFactory.createSignedCast(register, PrimitiveType.I8);
+                        return nodeFactory.createSignedCast(register, PrimitiveType.I8);
                     case I16:
-                        return CommonNodeFactory.createSignedCast(register, PrimitiveType.I16);
+                        return nodeFactory.createSignedCast(register, PrimitiveType.I16);
                     case I32:
-                        return CommonNodeFactory.createSignedCast(register, PrimitiveType.I32);
+                        return nodeFactory.createSignedCast(register, PrimitiveType.I32);
                     case I64:
                         return LLVMAMD64ReadAddressNodeGen.create(frame);
                     default:
@@ -1914,9 +1916,9 @@ class AsmFactory {
                 case I8:
                     return LLVMAMD64I64ToI8NodeGen.create(shift, register);
                 case I16:
-                    return CommonNodeFactory.createSignedCast(register, PrimitiveType.I16);
+                    return nodeFactory.createSignedCast(register, PrimitiveType.I16);
                 case I32:
-                    return CommonNodeFactory.createSignedCast(register, PrimitiveType.I32);
+                    return nodeFactory.createSignedCast(register, PrimitiveType.I32);
                 case I64:
                     return register;
                 default:
@@ -1966,14 +1968,14 @@ class AsmFactory {
                     return LLVMAMD64ReadAddressNodeGen.create(frame);
                 }
                 LLVMExpressionNode register = LLVMAMD64ReadRegisterNodeGen.create(frame);
-                return CommonNodeFactory.createSignedCast(register, type);
+                return nodeFactory.createSignedCast(register, type);
             } else { // constraint "0"-"9"
                 if (type instanceof PointerType) {
                     return LLVMAMD64ReadAddressNodeGen.create(frame);
                 }
                 LLVMExpressionNode register = LLVMAMD64ReadRegisterNodeGen.create(frame);
                 PrimitiveType primitiveType = (PrimitiveType) type;
-                return CommonNodeFactory.createSignedCast(register, primitiveType);
+                return nodeFactory.createSignedCast(register, primitiveType);
             }
         } else if (operand instanceof AsmMemoryOperand) {
             LLVMExpressionNode address = getOperandAddress(operand);
