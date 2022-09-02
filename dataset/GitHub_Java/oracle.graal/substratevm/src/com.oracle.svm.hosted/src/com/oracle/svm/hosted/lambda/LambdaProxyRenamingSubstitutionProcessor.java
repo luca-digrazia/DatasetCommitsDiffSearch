@@ -30,7 +30,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 
@@ -84,7 +83,7 @@ public class LambdaProxyRenamingSubstitutionProcessor extends SubstitutionProces
     private LambdaSubstitutionType getSubstitution(ResolvedJavaType original) {
         return typeSubstitutions.computeIfAbsent(original, (key) -> {
             OptionValues options = bb.getOptions();
-            DebugContext debug = new Builder(options, new GraalDebugHandlersFactory(bb.getProviders().getSnippetReflection())).build();
+            DebugContext debug = DebugContext.create(options, new GraalDebugHandlersFactory(bb.getProviders().getSnippetReflection()));
 
             Providers providers = GraalAccess.getOriginalProviders();
             String lambdaTargetName = LambdaUtils.findStableLambdaName(new NoClassInitializationPlugin(), providers, key, options, debug, this);
