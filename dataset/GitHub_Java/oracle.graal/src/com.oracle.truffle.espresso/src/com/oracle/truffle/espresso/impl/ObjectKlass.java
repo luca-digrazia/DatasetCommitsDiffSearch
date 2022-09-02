@@ -49,7 +49,6 @@ import com.oracle.truffle.espresso.classfile.attributes.NestHostAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.NestMembersAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SignatureAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SourceDebugExtensionAttribute;
-import com.oracle.truffle.espresso.descriptors.Names;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -181,9 +180,6 @@ public final class ObjectKlass extends Klass {
 
         // Move attribute name to better location.
         this.runtimeVisibleAnnotations = getAttribute(Name.RuntimeVisibleAnnotations);
-        // Package initialization must be done before vtable creation, as there are same package
-        // checks.
-        initPackage();
 
         if (this.isInterface()) {
             this.itable = null;
@@ -200,6 +196,7 @@ public final class ObjectKlass extends Klass {
         this.itableLength = iKlassTable.length;
         this.initState = LINKED;
         assert verifyTables();
+        initPackage();
     }
 
     private boolean verifyTables() {
@@ -687,7 +684,9 @@ public final class ObjectKlass extends Klass {
             // Implicit interface methods.
             method = lookupMirandas(methodName, signature);
         }
-        if (method == null && getType() == Type.java_lang_invoke_MethodHandle) {
+        if (method == null &&
+                        (getType() == Type.java_lang_invoke_MethodHandle ||
+                                        getType() == Type.java_lang_invoke_VarHandle)) {
             method = lookupPolysigMethod(methodName, signature);
         }
         if (method == null && getSuperKlass() != null) {
@@ -884,8 +883,8 @@ public final class ObjectKlass extends Klass {
     }
 
     private void initPackage() {
-        if (!Names.isUnnamedPackage(getRuntimePackage())) {
-            ClassRegistry registry = getRegistries().getClassRegistry(getDefiningClassLoader());
+        ClassRegistry registry = getRegistries().getClassRegistry(getDefiningClassLoader());
+        if (getRuntimePackage() != null) {
             packageEntry = registry.packages().lookup(getRuntimePackage());
             // If the package name is not found in the loader's package
             // entry table, it is an indication that the package has not

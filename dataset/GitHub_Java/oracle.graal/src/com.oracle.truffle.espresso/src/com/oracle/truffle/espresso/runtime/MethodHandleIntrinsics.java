@@ -80,10 +80,6 @@ public final class MethodHandleIntrinsics implements ContextAccess {
         }
     }
 
-    public Method findIntrinsic(Method thisMethod, Symbol<Signature> signature) {
-        return findIntrinsic(thisMethod, new MethodRef(thisMethod, signature));
-    }
-
     public enum PolySigIntrinsics {
         None(0),
         InvokeGeneric(1),
@@ -98,20 +94,26 @@ public final class MethodHandleIntrinsics implements ContextAccess {
         PolySigIntrinsics(int value) {
             this.value = value;
         }
+    }
 
-        public final boolean isStaticPolymorphicSignature() {
-            return value >= FIRST_STATIC_SIG_POLY && value <= LAST_STATIC_SIG_POLY;
-        }
+    public static final int FIRST_STATIC_SIG_POLY = PolySigIntrinsics.LinkToVirtual.value;
+    public static final int LAST_STATIC_SIG_POLY = PolySigIntrinsics.LinkToVirtual.value;
+    public static final int LAST_SIG_POLY = PolySigIntrinsics.LinkToInterface.value;
 
-        public final boolean isSignatrePolymorphicIntrinsic() {
-            return this != InvokeGeneric;
-        }
+    private static final PolySigIntrinsics FIRST_MH_SIG_POLY = PolySigIntrinsics.InvokeGeneric;
+    private static final PolySigIntrinsics LAST_MH_SIG_POLY = PolySigIntrinsics.LinkToInterface;
 
-        private boolean isSignaturePolymorphic() {
-            return (value >= FIRST_MH_SIG_POLY.value &&
-                            value <= LAST_MH_SIG_POLY.value);
-        }
+    private static boolean isSignaturePolymorphic(PolySigIntrinsics iid) {
+        return (iid.value >= FIRST_MH_SIG_POLY.value &&
+                        iid.value <= LAST_MH_SIG_POLY.value);
+    }
 
+    @SuppressWarnings("unused")
+    private static boolean isSignaturePolymorphicIntrinsic(PolySigIntrinsics iid) {
+        assert isSignaturePolymorphic(iid);
+        // Most sig-poly methods are intrinsics which do not require an
+        // appeal to Java for adapter code.
+        return (iid != PolySigIntrinsics.InvokeGeneric);
     }
 
     public static boolean isMethodHandleIntrinsic(Method m) {
@@ -122,7 +124,7 @@ public final class MethodHandleIntrinsics implements ContextAccess {
          *
          * HotSpot: return isSignaturePolymorphic(id) && isSignaturePolymorphicIntrinsic(id);
          */
-        return id.isSignaturePolymorphic();
+        return isSignaturePolymorphic(id);
     }
 
     public static PolySigIntrinsics getId(Method m) {
@@ -157,20 +159,25 @@ public final class MethodHandleIntrinsics implements ContextAccess {
         return PolySigIntrinsics.None;
     }
 
-    private static final int FIRST_STATIC_SIG_POLY = PolySigIntrinsics.LinkToVirtual.value;
-    private static final int LAST_STATIC_SIG_POLY = PolySigIntrinsics.LinkToVirtual.value;
-
-    private static final PolySigIntrinsics FIRST_MH_SIG_POLY = PolySigIntrinsics.InvokeGeneric;
-
-    private static final PolySigIntrinsics LAST_MH_SIG_POLY = PolySigIntrinsics.LinkToInterface;
-
     private final EspressoContext context;
 
-    private final ConcurrentHashMap<MethodRef, Method> intrinsics;
+    private final ConcurrentHashMap<Symbol<Signature>, Method> invokeIntrinsics;
+    private final ConcurrentHashMap<MethodRef, Method> invokeExactIntrinsics;
+    private final ConcurrentHashMap<Symbol<Signature>, Method> invokeBasicIntrinsics;
+    private final ConcurrentHashMap<Symbol<Signature>, Method> linkToStaticIntrinsics;
+    private final ConcurrentHashMap<Symbol<Signature>, Method> linkToVirtualIntrinsics;
+    private final ConcurrentHashMap<Symbol<Signature>, Method> linkToSpecialIntrinsics;
+    private final ConcurrentHashMap<Symbol<Signature>, Method> linkToInterfaceIntrinsics;
 
     MethodHandleIntrinsics(EspressoContext context) {
         this.context = context;
-        this.intrinsics = new ConcurrentHashMap<>();
+        this.invokeIntrinsics = new ConcurrentHashMap<>();
+        this.invokeExactIntrinsics = new ConcurrentHashMap<>();
+        this.invokeBasicIntrinsics = new ConcurrentHashMap<>();
+        this.linkToStaticIntrinsics = new ConcurrentHashMap<>();
+        this.linkToVirtualIntrinsics = new ConcurrentHashMap<>();
+        this.linkToSpecialIntrinsics = new ConcurrentHashMap<>();
+        this.linkToInterfaceIntrinsics = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -178,26 +185,60 @@ public final class MethodHandleIntrinsics implements ContextAccess {
         return context;
     }
 
-    private Method findIntrinsic(Method m, MethodRef methodRef) {
-        Method method = getIntrinsic(methodRef);
+    public Method findIntrinsic(Method thisMethod, Symbol<Signature> signature, PolySigIntrinsics id) {
+        Method method = getIntrinsic(id, thisMethod, signature);
         if (method != null) {
             return method;
         }
         CompilerAsserts.neverPartOfCompilation();
-        method = m.createIntrinsic(methodRef.signature);
-        Method previous = putIntrinsic(methodRef, method);
+        method = thisMethod.createIntrinsic(signature);
+        Method previous = putIntrinsic(id, method, signature);
         if (previous != null) {
             return previous;
         }
         return method;
     }
 
-    private Method getIntrinsic(MethodRef methodRef) {
-        return intrinsics.get(methodRef);
+    private Method getIntrinsic(PolySigIntrinsics id, Method thisMethod, Symbol<Signature> signature) {
+        switch (id) {
+            case InvokeBasic:
+                return invokeBasicIntrinsics.get(signature);
+            case InvokeGeneric:
+                return (thisMethod.getName() == Symbol.Name.invoke ? invokeIntrinsics.get(signature) : invokeExactIntrinsics.get(new MethodRef(thisMethod, signature)));
+            case LinkToVirtual:
+                return linkToVirtualIntrinsics.get(signature);
+            case LinkToStatic:
+                return linkToStaticIntrinsics.get(signature);
+            case LinkToSpecial:
+                return linkToSpecialIntrinsics.get(signature);
+            case LinkToInterface:
+                return linkToInterfaceIntrinsics.get(signature);
+            default:
+                throw EspressoError.shouldNotReachHere("unrecognized intrinsic polymorphic method: " + id);
+        }
     }
 
-    private Method putIntrinsic(MethodRef methodRef, Method m) {
-        return intrinsics.putIfAbsent(methodRef, m);
+    private Method putIntrinsic(PolySigIntrinsics id, Method thisMethod, Symbol<Signature> signature) {
+        switch (id) {
+            case InvokeBasic:
+                return invokeBasicIntrinsics.putIfAbsent(signature, thisMethod);
+            case InvokeGeneric:
+                if (thisMethod.getName() == Symbol.Name.invoke) {
+                    return invokeIntrinsics.putIfAbsent(signature, thisMethod);
+                } else {
+                    return invokeExactIntrinsics.putIfAbsent(new MethodRef(thisMethod, signature), thisMethod);
+                }
+            case LinkToVirtual:
+                return linkToVirtualIntrinsics.putIfAbsent(signature, thisMethod);
+            case LinkToStatic:
+                return linkToStaticIntrinsics.putIfAbsent(signature, thisMethod);
+            case LinkToSpecial:
+                return linkToSpecialIntrinsics.putIfAbsent(signature, thisMethod);
+            case LinkToInterface:
+                return linkToInterfaceIntrinsics.putIfAbsent(signature, thisMethod);
+            default:
+                throw EspressoError.shouldNotReachHere("unrecognized intrinsic polymorphic method: " + id);
+        }
     }
 
     private static final class MethodRef {

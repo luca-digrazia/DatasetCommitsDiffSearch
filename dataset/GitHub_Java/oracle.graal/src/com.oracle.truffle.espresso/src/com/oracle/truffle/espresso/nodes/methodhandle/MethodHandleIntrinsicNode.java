@@ -61,6 +61,7 @@ public abstract class MethodHandleIntrinsicNode extends Node implements ContextA
 
     public abstract Object call(Object[] args);
 
+    @SuppressWarnings("static-method")
     public Object processReturnValue(Object obj, JavaKind kind) {
         switch (kind) {
             case Boolean:

@@ -594,8 +594,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     // Polymorphic signature method 'creation'
 
-    Method findIntrinsic(Symbol<Signature> signature) {
-        return getContext().getMethodHandleIntrinsics().findIntrinsic(this, signature);
+    Method findIntrinsic(Symbol<Signature> signature, MethodHandleIntrinsics.PolySigIntrinsics id) {
+        return getContext().getMethodHandleIntrinsics().findIntrinsic(this, signature, id);
     }
 
     public boolean isSignaturePolymorphicDeclared() {

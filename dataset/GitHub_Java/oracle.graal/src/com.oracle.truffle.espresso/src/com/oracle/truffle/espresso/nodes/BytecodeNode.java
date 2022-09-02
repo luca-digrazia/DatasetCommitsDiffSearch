@@ -1589,7 +1589,7 @@ public final class BytecodeNode extends EspressoMethodNode {
             invoke = InlinedGetterNode.create(resolved, top, opcode, curBCI);
         } else if (allowFieldAccessInlining && resolved.isInlinableSetter()) {
             invoke = InlinedSetterNode.create(resolved, top, opcode, curBCI);
-        } else if (resolved.isMethodHandleIntrinsic()) {
+        } else if (resolved.isPolySignatureIntrinsic()) {
             invoke = new InvokeHandleNode(resolved, getMethod().getDeclaringKlass(), top, curBCI);
         } else if (opcode == INVOKEINTERFACE && resolved.getITableIndex() < 0) {
             // Can happen in old classfiles that calls j.l.Object on interfaces.
@@ -1721,14 +1721,14 @@ public final class BytecodeNode extends EspressoMethodNode {
         try {
             for (int i = 0; i < pcount; i++) {
                 Symbol<Type> paramType = Signatures.parameterType(signature, i);
-                ptypes[i] = meta.resolveSymbolOrFail(paramType, accessingKlass.getDefiningClassLoader()).mirror();
+                ptypes[i] = meta.resolveSymbol(paramType, accessingKlass.getDefiningClassLoader()).mirror();
             }
         } catch (Throwable e) {
             throw Meta.throwException(meta.java_lang_NoClassDefFoundError);
         }
         StaticObject rtype;
         try {
-            rtype = meta.resolveSymbolOrFail(rt, accessingKlass.getDefiningClassLoader()).mirror();
+            rtype = meta.resolveSymbol(rt, accessingKlass.getDefiningClassLoader()).mirror();
         } catch (Throwable e) {
             throw Meta.throwException(meta.java_lang_BootstrapMethodError);
         }
