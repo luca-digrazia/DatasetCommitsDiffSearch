@@ -104,7 +104,7 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
+    public final @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
         return StaticObject.NULL; // BCL
     }
 
@@ -144,7 +144,7 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
+    public final Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
         return null;
     }
 
@@ -164,12 +164,12 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public int getModifiers() {
+    public final int getFlags() {
         return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
     }
 
     @Override
-    public int getClassModifiers() {
-        return getModifiers();
+    public final int getModifiers() {
+        return getFlags();
     }
 }

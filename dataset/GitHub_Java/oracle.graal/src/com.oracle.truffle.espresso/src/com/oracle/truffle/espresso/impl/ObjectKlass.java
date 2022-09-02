@@ -34,7 +34,6 @@ import java.util.List;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
@@ -112,11 +111,11 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal private int computedModifiers = -1;
 
-    public static final int LOADED = 0;
-    public static final int LINKED = 1;
-    public static final int PREPARED = 2;
-    public static final int INITIALIZED = 3;
-    public static final int ERRONEOUS = 99;
+    private static final int LOADED = 0;
+    private static final int LINKED = 1;
+    private static final int PREPARED = 2;
+    private static final int INITIALIZED = 3;
+    private static final int ERRONEOUS = 99;
 
     public final Attribute getAttribute(Symbol<Name> name) {
         return linkedKlass.getAttribute(name);
@@ -176,33 +175,6 @@ public final class ObjectKlass extends Klass {
         }
         this.itableLength = iKlassTable.length;
         this.initState = LINKED;
-        assert verifyTables();
-    }
-
-    private boolean verifyTables() {
-        if (vtable != null) {
-            for (int i = 0; i < vtable.length; i++) {
-                if (isInterface()) {
-                    if (vtable[i].getITableIndex() != i) {
-                        return false;
-                    }
-                } else {
-                    if (vtable[i].getVTableIndex() != i) {
-                        return false;
-                    }
-                }
-            }
-        }
-        if (itable != null) {
-            for (Method[] table : itable) {
-                for (int i = 0; i < table.length; i++) {
-                    if (table[i].getITableIndex() != i) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
     }
 
     @Override
@@ -226,7 +198,7 @@ public final class ObjectKlass extends Klass {
     }
 
     @Override
-    public final int getModifiers() {
+    public int getFlags() {
         return linkedKlass.getFlags();
     }
 
@@ -237,10 +209,6 @@ public final class ObjectKlass extends Klass {
 
     private boolean isPrepared() {
         return initState == PREPARED;
-    }
-
-    public int getState() {
-        return initState;
     }
 
     private boolean isInitializedOrPrepared() {
@@ -288,7 +256,6 @@ public final class ObjectKlass extends Klass {
                     }
                 } catch (Throwable e) {
                     System.err.println("Host exception happened during class initialization");
-                    e.printStackTrace();
                     setErroneous();
                     throw e;
                 }
@@ -561,18 +528,17 @@ public final class ObjectKlass extends Klass {
         return iKlassTable;
     }
 
-    final int lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
-        for (int i = 0; i < vtable.length; i++) {
-            Method m = vtable[i];
+    final Method lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
+        for (Method m : vtable) {
             if (!m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
                 if (m.isProtected() || m.isPublic()) {
-                    return i;
+                    return m;
                 } else if (sameRuntimePackage(subClass)) {
-                    return i;
+                    return m;
                 }
             }
         }
-        return -1;
+        return null;
     }
 
     final List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, Klass subKlass, List<Method> result) {
@@ -839,30 +805,26 @@ public final class ObjectKlass extends Klass {
         }
     }
 
-    @TruffleBoundary
-    private int computeModifiers() {
-        int modifiers = getModifiers();
-        if (innerClasses != null) {
-            for (InnerClassesAttribute.Entry entry : innerClasses.entries()) {
-                if (entry.innerClassIndex != 0) {
-                    Symbol<Name> innerClassName = pool.classAt(entry.innerClassIndex).getName(pool);
-                    if (innerClassName.equals(this.getName())) {
-                        modifiers = entry.innerClassAccessFlags;
-                        break;
+    @Override
+    public final int getModifiers() {
+        int modifiers = computedModifiers;
+        if (modifiers == -1) {
+            modifiers = getFlags();
+            if (innerClasses != null) {
+                for (InnerClassesAttribute.Entry entry : innerClasses.entries()) {
+                    if (entry.innerClassIndex != 0) {
+                        Symbol<Name> innerClassName = pool.classAt(entry.innerClassIndex).getName(pool);
+                        if (innerClassName.equals(this.getName())) {
+                            modifiers = entry.innerClassAccessFlags;
+                            break;
+                        }
                     }
                 }
             }
-        }
-        return modifiers;
-    }
-
-    @Override
-    public final int getClassModifiers() {
-        int modifiers = computedModifiers;
-        if (modifiers == -1) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            computedModifiers = modifiers = computeModifiers();
+            computedModifiers = modifiers;
         }
+
         // Remember to strip ACC_SUPER bit
         return modifiers & ~ACC_SUPER & JVM_ACC_WRITTEN_FLAGS;
     }

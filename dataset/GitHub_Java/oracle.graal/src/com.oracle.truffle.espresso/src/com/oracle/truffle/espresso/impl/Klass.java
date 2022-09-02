@@ -692,16 +692,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         }, id);
     }
 
-    /**
-     * Returns the access flags provided by the .class file, e.g. ignores inner class access flags.
-     */
-    public abstract int getModifiers();
-
-    /**
-     * Returns the modifiers for the guest Class, it takes into account inner classes which are
-     * public at the JVM level, but protected/private at the Java level.
-     */
-    public abstract int getClassModifiers();
+    public abstract int getFlags();
 
     public final StaticObject allocateInstance() {
         return InterpreterToVM.newObject(this);
