@@ -77,7 +77,6 @@ import com.oracle.truffle.sl.SLLanguage;
  * @see ExportMessage
  * @see InteropLibrary
  */
-@SuppressWarnings("static-method")
 @ExportLibrary(InteropLibrary.class)
 public final class SLObject extends DynamicObject implements TruffleObject {
     protected static final int CACHE_LIMIT = 3;
@@ -86,11 +85,13 @@ public final class SLObject extends DynamicObject implements TruffleObject {
         super(shape);
     }
 
+    @SuppressWarnings("static-method")
     @ExportMessage
     boolean hasLanguage() {
         return true;
     }
 
+    @SuppressWarnings("static-method")
     @ExportMessage
     Class<? extends TruffleLanguage<?>> getLanguage() {
         return SLLanguage.class;
@@ -116,22 +117,26 @@ public final class SLObject extends DynamicObject implements TruffleObject {
         return System.identityHashCode(this);
     }
 
+    @SuppressWarnings("static-method")
     @ExportMessage
     boolean hasMetaObject() {
         return true;
     }
 
+    @SuppressWarnings("static-method")
     @ExportMessage
     Object getMetaObject() {
         return SLType.OBJECT;
     }
 
+    @SuppressWarnings("static-method")
     @ExportMessage
     @TruffleBoundary
     Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
         return "Object";
     }
 
+    @SuppressWarnings("static-method")
     @ExportMessage
     boolean hasMembers() {
         return true;
@@ -162,6 +167,7 @@ public final class SLObject extends DynamicObject implements TruffleObject {
     }
 
     @ExportMessage
+    @SuppressWarnings("static-method")
     boolean isMemberInsertable(String member,
                     @CachedLibrary("this") InteropLibrary receivers) {
         return !receivers.isMemberExisting(this, member);
@@ -184,6 +190,7 @@ public final class SLObject extends DynamicObject implements TruffleObject {
             return keys[(int) index];
         }
 
+        @SuppressWarnings("static-method")
         @ExportMessage
         boolean hasArrayElements() {
             return true;
