@@ -46,7 +46,8 @@ import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.UnsignedUtils;
 
 /** Discovers and handles {@link Reference} objects during garbage collection. */
-final class ReferenceObjectProcessing {
+public class ReferenceObjectProcessing {
+
     /** Head of the linked list of discovered references that need to be revisited. */
     private static Reference<?> rememberedRefsList;
 
@@ -64,9 +65,6 @@ final class ReferenceObjectProcessing {
      * that were created earlier than that.
      */
     private static long initialSoftRefClock = 0;
-
-    private ReferenceObjectProcessing() { // all static
-    }
 
     /*
      * Enables (or disables) reclaiming all objects that are softly reachable only, typically as a
@@ -215,7 +213,7 @@ final class ReferenceObjectProcessing {
     private static boolean willSurviveThisCollection(Object obj) {
         HeapChunk.Header<?> chunk = HeapChunk.getEnclosingHeapChunk(obj);
         Space space = chunk.getSpace();
-        return !space.isFromSpace();
+        return !space.isFrom();
     }
 
     private static Reference<?> popRememberedRef() {
@@ -229,7 +227,7 @@ final class ReferenceObjectProcessing {
 
     public static boolean verify(Reference<?> dr) {
         final Pointer refPointer = ReferenceInternals.getReferentPointer(dr);
-        final int refClassification = HeapVerifier.classifyPointer(refPointer);
+        final int refClassification = HeapVerifierImpl.classifyPointer(refPointer);
         if (refClassification < 0) {
             final Log witness = Log.log();
             witness.string("[ReferenceObjectProcessing.verify:");
