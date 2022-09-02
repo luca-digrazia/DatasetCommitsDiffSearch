@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -172,10 +172,6 @@ public final class RemoteObject {
     }
 
     public RemoteObject(DebugScope scope) {
-        this(scope, null);
-    }
-
-    public RemoteObject(DebugScope scope, String objectId) {
         this.valueValue = null;
         this.valueScope = scope;
         this.generatePreview = false;
@@ -185,7 +181,7 @@ public final class RemoteObject {
         this.value = null;
         this.replicableValue = false;
         this.unserializableValue = null;
-        this.objectId = (objectId == null) ? Long.toString(LAST_ID.incrementAndGet()) : objectId;
+        this.objectId = Long.toString(LAST_ID.incrementAndGet());
         this.description = scope.getName();
         this.jsonObject = createJSON();
     }

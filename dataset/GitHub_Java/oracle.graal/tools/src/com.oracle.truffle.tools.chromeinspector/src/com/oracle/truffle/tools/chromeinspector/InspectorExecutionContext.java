@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 
@@ -68,9 +69,9 @@ public final class InspectorExecutionContext {
     private volatile DebuggerSuspendedInfo suspendedInfo;
     private volatile SuspendedThreadExecutor suspendThreadExecutor;
     private RemoteObjectsHandler roh;
-    private volatile ScriptsHandler scriptsHandler;
-    private volatile EventBinding<ScriptsHandler> schBinding;
-    private int schCounter;
+    private ScriptsHandler sch;
+    private EventBinding<ScriptsHandler> schBinding;
+    private AtomicInteger schCounter;
     private volatile String lastMimeType = "text/javascript";   // Default JS
     private volatile String lastLanguage = "js";
     private boolean synchronous = false;
@@ -143,28 +144,21 @@ public final class InspectorExecutionContext {
     }
 
     public ScriptsHandler acquireScriptsHandler() {
-        ScriptsHandler sh;
-        boolean attachListener = false;
-        synchronized (this) {
-            sh = scriptsHandler;
-            if (sh == null) {
-                scriptsHandler = sh = new ScriptsHandler(inspectInternal);
-                attachListener = true;
-                schCounter = 0;
-            }
-            schCounter++;
+        if (sch == null) {
+            sch = new ScriptsHandler(inspectInternal);
+            schCounter = new AtomicInteger(0);
+            schBinding = env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, sch, true);
         }
-        if (attachListener) {
-            schBinding = env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, sh, true);
-        }
-        return sh;
+        schCounter.incrementAndGet();
+        return sch;
     }
 
-    public synchronized void releaseScriptsHandler() {
-        if (--schCounter == 0) {
+    public void releaseScriptsHandler() {
+        if (schCounter.decrementAndGet() == 0) {
             schBinding.dispose();
             schBinding = null;
-            scriptsHandler = null;
+            sch = null;
+            schCounter = null;
         }
     }
 
@@ -303,7 +297,7 @@ public final class InspectorExecutionContext {
      * @return the current debugger session, or <code>null</code>.
      */
     public DebuggerSession getDebuggerSession() {
-        ScriptsHandler handler = this.scriptsHandler;
+        ScriptsHandler handler = this.sch;
         return (handler != null) ? handler.getDebuggerSession() : null;
     }
 
@@ -318,7 +312,7 @@ public final class InspectorExecutionContext {
         this.suspendedInfo = null;
         this.suspendThreadExecutor = null;
         this.roh = null;
-        assert scriptsHandler == null;
+        assert sch == null;
         synchronized (runPermission) {
             runPermission[0] = false;
         }
