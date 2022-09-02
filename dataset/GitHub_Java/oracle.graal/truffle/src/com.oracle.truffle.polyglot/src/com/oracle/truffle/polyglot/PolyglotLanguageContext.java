@@ -66,6 +66,14 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.LanguageInfo;
+import com.oracle.truffle.api.source.Source;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -111,6 +119,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     volatile boolean finalized;
     @CompilationFinal private volatile Value hostBindings;
     @CompilationFinal private volatile Lazy lazy;
+
     @CompilationFinal volatile Env env; // effectively final
     @CompilationFinal private volatile List<Object> languageServices = Collections.emptyList();
 
@@ -154,7 +163,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         if (env != null) {
             return LANGUAGE.getContext(env);
         } else {
-            CompilerDirectives.transferToInterpreter();
             return null;
         }
     }
@@ -274,10 +282,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             seenThreads.remove(thread);
         }
         VMAccessor.INSTRUMENT.notifyThreadFinished(context.engine, context.truffleContext, thread);
-    }
-
-    boolean isCreated() {
-        return lazy != null;
     }
 
     void ensureCreated(PolyglotLanguage accessingLanguage) {
