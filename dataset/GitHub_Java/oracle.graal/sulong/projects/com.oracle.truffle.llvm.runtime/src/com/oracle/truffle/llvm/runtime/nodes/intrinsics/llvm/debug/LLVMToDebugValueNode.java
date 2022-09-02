@@ -228,8 +228,7 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
                 return new LLDBMemoryValue(managedPointer);
             }
         } else if (!LLVMPointer.isInstance(target)) {
-            // a non-pointer was stored as a pointer in this global -- PLi: I'm not sure if this is
-            // possible anymore
+            // a non-pointer was stored as a pointer in this global -- PLi: I'm not sure if this is possible anymore
             // since we have removed AssumedValue<Object> being stored in a global
             return executeWithTarget(target);
         }

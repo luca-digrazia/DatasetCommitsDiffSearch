@@ -54,7 +54,5 @@ public final class LLVMDebugGlobalVariable implements LLVMInternalTruffleObject 
         return descriptor;
     }
 
-    public LLVMContext getContext() {
-        return context;
-    }
+    public LLVMContext getContext() { return context;}
 }
