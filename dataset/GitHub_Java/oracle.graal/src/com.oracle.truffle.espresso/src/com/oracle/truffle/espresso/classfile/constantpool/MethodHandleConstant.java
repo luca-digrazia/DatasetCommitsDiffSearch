@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import java.nio.ByteBuffer;
-
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
@@ -269,12 +267,6 @@ public interface MethodHandleConstant extends PoolConstant {
                 throw ConstantPool.classFormatError("Ill-formed constant: " + tag());
             }
 
-        }
-
-        @Override
-        public void dump(ByteBuffer buf) {
-            buf.put(refKind);
-            buf.putChar(refIndex);
         }
     }
 

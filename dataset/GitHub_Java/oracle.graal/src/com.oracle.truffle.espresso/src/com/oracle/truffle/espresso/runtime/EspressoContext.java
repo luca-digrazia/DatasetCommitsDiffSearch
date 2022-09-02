@@ -126,7 +126,6 @@ public final class EspressoContext {
     public final boolean SoftExit;
     public final EspressoOptions.VerifyMode Verify;
     public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
-    public final boolean IsolatedNamespace;
 
     // Debug option
     public final com.oracle.truffle.espresso.jdwp.api.JDWPOptions JDWPOptions;
@@ -197,8 +196,6 @@ public final class EspressoContext {
         this.MultiThreaded = env.getOptions().get(EspressoOptions.MultiThreaded);
         this.SoftExit = env.getOptions().get(EspressoOptions.SoftExit);
 
-        // Isolated (native) namespaces via dlmopen is only supported on Linux.
-        this.IsolatedNamespace = env.getOptions().get(EspressoOptions.UseTruffleNFIIsolatedNamespace) && OS.getCurrent() == OS.Linux;
     }
 
     public ClassRegistries getRegistries() {
@@ -387,6 +384,7 @@ public final class EspressoContext {
         initDoneTimeNanos = System.nanoTime();
         long elapsedNanos = initDoneTimeNanos - initStartTimeNanos;
         getLogger().log(Level.FINE, "VM booted in {0} ms", TimeUnit.NANOSECONDS.toMillis(elapsedNanos));
+
     }
 
     private void initVmProperties() {
@@ -396,17 +394,6 @@ public final class EspressoContext {
         builder.javaHome(Engine.findHome());
         vmProperties = EspressoProperties.processOptions(getLanguage(), builder, getEnv().getOptions()).build();
         javaVersion = new JavaVersion(vmProperties.bootClassPathType().getJavaVersion());
-        verifyOptionsConsistency();
-    }
-
-    /**
-     * Version of the java home has been discovered. Ensure consistency with selected version from
-     * {@link EspressoOptions#Version}, and ensure that other set options are valid (ie: no module
-     * options when running Java 8).
-     */
-    private void verifyOptionsConsistency() {
-        javaVersion.checkVersion(EspressoOptions.Version.getValue(getEnv().getOptions()));
-        javaVersion.checkOptions(getEnv().getOptions());
     }
 
     private void initializeKnownClass(Symbol<Type> type) {

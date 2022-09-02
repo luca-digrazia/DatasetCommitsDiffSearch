@@ -222,8 +222,6 @@ public final class ClassfileParser {
             return parseClassImpl();
         } catch (EspressoException e) {
             throw e;
-        } catch (ClassNameFromBytesException e) {
-            throw e;
         } catch (Throwable e) {
             context.getLogger().severe("Unexpected host exception " + e + " thrown during class parsing.");
             throw e;
@@ -346,11 +344,6 @@ public final class ClassfileParser {
 
         // Checks if name in class file matches requested name
         if (requestedClassType != null && !requestedClassType.equals(classType.toString())) {
-            if ("!TEST!".equals(requestedClassType)) {
-                // throw exception including the name found in the bytecode
-                // used from test code to obtain the class name only
-                throw new ClassNameFromBytesException(classType.toString());
-            }
             throw ConstantPool.noClassDefFoundError(classType + " (wrong name: " + requestedClassType + ")");
         }
 
@@ -1019,7 +1012,7 @@ public final class ClassfileParser {
              * HotSpot does not perform this check. Enforcing the spec here break some applications
              * in the wild e.g. Intellij IDEA.
              */
-            if (context.specCompliancyMode() == STRICT) {
+            if (context.SpecCompliancyMode == STRICT) {
                 if (majorVersion >= JAVA_7_VERSION && innerClassInfo.innerNameIndex == 0 && outerClassIndex != 0) {
                     throw ConstantPool.classFormatError("InnerClassesAttribute: the value of the outer_class_info_index item must be zero if the value of the inner_name_index item is zero.");
                 }

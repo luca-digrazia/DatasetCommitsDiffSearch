@@ -182,7 +182,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     Method(Method method) {
         super(method.getRawSignature(), method.getName());
         this.declaringKlass = method.declaringKlass;
-        this.methodVersion = method.methodVersion;
+
+        initMethodVersion(method.getRuntimeConstantPool(), method.getLinkedMethod(), method.getCodeAttribute());
 
         try {
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
@@ -204,7 +205,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private Method(Method method, CodeAttribute split) {
         super(method.getRawSignature(), method.getName());
         this.declaringKlass = method.declaringKlass;
-        this.methodVersion = method.methodVersion;
+        initMethodVersion(method.getRuntimeConstantPool(), method.getLinkedMethod(), split);
 
         try {
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
@@ -229,7 +230,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod, Symbol<Signature> rawSignature, RuntimeConstantPool pool) {
         super(rawSignature, linkedMethod.getName());
-        this.methodVersion = new MethodVersion(pool, linkedMethod, (CodeAttribute) linkedMethod.getAttribute(CodeAttribute.NAME));
+        initMethodVersion(pool, linkedMethod, (CodeAttribute) linkedMethod.getAttribute(CodeAttribute.NAME));
         this.declaringKlass = declaringKlass;
 
         try {
@@ -244,6 +245,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         initRefKind();
         this.proxy = null;
         this.isLeaf = Truffle.getRuntime().createAssumption();
+    }
+
+    private void initMethodVersion(RuntimeConstantPool runtimeConstantPool, LinkedMethod linkedMethod, CodeAttribute codeAttribute) {
+        this.methodVersion = new MethodVersion(runtimeConstantPool, linkedMethod, codeAttribute);
     }
 
     public int getRefKind() {
