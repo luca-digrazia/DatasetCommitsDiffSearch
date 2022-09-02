@@ -54,8 +54,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 
-import org.graalvm.collections.EconomicSet;
-
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -567,10 +565,6 @@ abstract class DynamicObjectLibraryImpl {
             return put(object, cachedShape, key, value, putFlags);
         }
 
-        boolean isIdentity() {
-            return false;
-        }
-
         static KeyCacheNode create(Shape cachedShape, Object key) {
             if (key == null) {
                 return getUncached();
@@ -721,7 +715,7 @@ abstract class DynamicObjectLibraryImpl {
         }
 
         public static KeyCacheNode create(Object key, Shape cachedShape) {
-            return new AnyKey(SpecificKey.create(key, cachedShape, null, true));
+            return new AnyKey(SpecificKey.create(key, cachedShape, null));
         }
 
         @ExplodeLoop
@@ -903,7 +897,6 @@ abstract class DynamicObjectLibraryImpl {
                 KeyCacheEntry tail = this.keyCache;
                 int cachedCount = 0;
                 boolean generic = false;
-                boolean useIdentity = true;
 
                 for (KeyCacheEntry c = tail; c != null; c = c.next) {
                     if (c == KeyCacheNode.getUncached()) {
@@ -914,19 +907,6 @@ abstract class DynamicObjectLibraryImpl {
                         if (c.acceptsKey(key)) {
                             return c;
                         }
-                        if (!c.isIdentity()) {
-                            useIdentity = false;
-                        }
-                    }
-                }
-
-                if (cachedCount > 1 && useIdentity) {
-                    // if we have duplicate keys in the cache due to identity comparison,
-                    // clear the cache and compare keys with equals() from now on.
-                    if (hasDuplicateCacheKeys(tail, key)) {
-                        tail = null;
-                        cachedCount = 0;
-                        useIdentity = false;
                     }
                 }
 
@@ -942,26 +922,13 @@ abstract class DynamicObjectLibraryImpl {
                     reportPolymorphicSpecialize();
                 }
 
-                SpecificKey newEntry = SpecificKey.create(key, cachedShape, tail, useIdentity);
+                SpecificKey newEntry = SpecificKey.create(key, cachedShape, tail);
                 insert(newEntry);
                 this.keyCache = newEntry;
                 return this;
             } finally {
                 lock.unlock();
             }
-        }
-
-        private static boolean hasDuplicateCacheKeys(KeyCacheEntry tail, Object key) {
-            EconomicSet<Object> keySet = EconomicSet.create();
-            for (KeyCacheEntry c = tail; c != null; c = c.next) {
-                if (c instanceof SpecificKey) {
-                    SpecificKey cacheEntry = (SpecificKey) c;
-                    if (!keySet.add(cacheEntry.cachedKey)) {
-                        return true;
-                    }
-                }
-            }
-            return !keySet.add(key);
         }
     }
 
@@ -975,14 +942,14 @@ abstract class DynamicObjectLibraryImpl {
             this.cachedKey = key;
         }
 
-        static SpecificKey create(Object key, Shape shape, KeyCacheEntry next, boolean useIdentity) {
+        static SpecificKey create(Object key, Shape shape, KeyCacheEntry next) {
             if (key != null) {
                 Property property = shape.getProperty(key);
                 if (property != null) {
-                    return useIdentity ? new SpecificKey.ExistingKeyIdentity(key, property, next) : new SpecificKey.ExistingKey(key, property, next);
+                    return new SpecificKey.ExistingKey(key, property, next);
                 }
             }
-            return useIdentity ? new SpecificKey.MissingKeyIdentity(key, next) : new SpecificKey.MissingKey(key, next);
+            return new SpecificKey.MissingKey(key, next);
         }
 
         protected final boolean assertCachedKeyAndShapeForRead(DynamicObject object, Shape cachedShape, Object key) {
@@ -1194,38 +1161,6 @@ abstract class DynamicObjectLibraryImpl {
                 CompilerAsserts.partialEvaluationConstant(cachedShape);
                 assert assertCachedKeyAndShapeForWrite(object, cachedShape, key);
                 return false;
-            }
-        }
-
-        static class ExistingKeyIdentity extends ExistingKey {
-            ExistingKeyIdentity(Object key, Property property, KeyCacheEntry next) {
-                super(key, property, next);
-            }
-
-            @Override
-            public boolean acceptsKey(Object key) {
-                return cachedKey == key;
-            }
-
-            @Override
-            boolean isIdentity() {
-                return true;
-            }
-        }
-
-        static class MissingKeyIdentity extends MissingKey {
-            MissingKeyIdentity(Object key, KeyCacheEntry next) {
-                super(key, next);
-            }
-
-            @Override
-            public boolean acceptsKey(Object key) {
-                return cachedKey == key;
-            }
-
-            @Override
-            boolean isIdentity() {
-                return true;
             }
         }
 
