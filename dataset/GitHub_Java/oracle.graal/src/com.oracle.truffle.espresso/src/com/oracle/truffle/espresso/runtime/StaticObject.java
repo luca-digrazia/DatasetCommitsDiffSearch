@@ -109,7 +109,7 @@ public final class StaticObject implements TruffleObject {
             throw EspressoError.shouldNotReachHere("StaticObject.NULL.getLock()");
         }
         EspressoLock l = lock;
-        if (l == null) {
+        if (lock == null) {
             synchronized (this) {
                 l = lock;
                 if (l == null) {
