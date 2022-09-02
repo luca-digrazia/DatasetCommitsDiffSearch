@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.espresso.impl;
 
+import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 import java.lang.ref.WeakReference;
@@ -30,7 +31,7 @@ import java.util.ArrayList;
 // Represents ClassInfo instances that are cached in the global
 // cache for all classes having been involved in a redefinition
 public final class ImmutableClassInfo extends ClassInfo {
-    private final String name; // key in global cache
+    private final Symbol<Symbol.Name> name; // key in global cache
     private final WeakReference<ObjectKlass> klass;
     private final StaticObject classLoader;
     private final byte[] bytes;
@@ -41,10 +42,10 @@ public final class ImmutableClassInfo extends ClassInfo {
     private final String fieldFingerprint;
     private final String enclosingMethodFingerprint;
 
-    private final ImmutableClassInfo[] innerClasses;
+    private final ArrayList<ImmutableClassInfo> innerClasses;
 
-    ImmutableClassInfo(ObjectKlass klass, String originalName, StaticObject classLoader, String classFingerprint, String methodFingerprint, String fieldFingerprint, String enclosingMethodFingerprint,
-                       ImmutableClassInfo[] inners, byte[] bytes) {
+    ImmutableClassInfo(ObjectKlass klass, Symbol<Symbol.Name> originalName, StaticObject classLoader, String classFingerprint, String methodFingerprint, String fieldFingerprint,
+                    String enclosingMethodFingerprint, ArrayList<ImmutableClassInfo> inners, byte[] bytes) {
         this.klass = new WeakReference<>(klass);
         this.name = originalName;
         this.classLoader = classLoader;
@@ -56,7 +57,8 @@ public final class ImmutableClassInfo extends ClassInfo {
         this.bytes = bytes;
     }
 
-    public String getName() {
+    @Override
+    public Symbol<Symbol.Name> getName() {
         return name;
     }
 
@@ -70,18 +72,22 @@ public final class ImmutableClassInfo extends ClassInfo {
         return classLoader;
     }
 
+    @Override
     public String getClassFingerprint() {
         return classFingerprint;
     }
 
+    @Override
     public String getMethodFingerprint() {
         return methodFingerprint;
     }
 
+    @Override
     public String getFieldFingerprint() {
         return fieldFingerprint;
     }
 
+    @Override
     public String getEnclosingMethodFingerprint() {
         return enclosingMethodFingerprint;
     }
@@ -91,7 +97,12 @@ public final class ImmutableClassInfo extends ClassInfo {
         return bytes;
     }
 
-    public ImmutableClassInfo[] getInnerClasses() {
+    @Override
+    public ArrayList<? extends ClassInfo> getInnerClasses() {
+        return innerClasses;
+    }
+
+    public ArrayList<ImmutableClassInfo> getImmutableInnerClasses() {
         return innerClasses;
     }
 }

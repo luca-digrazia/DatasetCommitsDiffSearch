@@ -26,6 +26,7 @@ import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.descriptors.ByteSequence;
 import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.jni.ModifiedUtf8;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 import java.lang.instrument.IllegalClassFormatException;
@@ -117,11 +118,12 @@ public class ConstantPoolPatcher {
 
                     if (rules.containsKey(asSymbol)) {
                         int originalLegth = byteSequence.length();
-                        Symbol<Symbol.Name> replacedSymbol = rules.get(asSymbol);
-                        if (originalLegth == replacedSymbol.length()) {
-                            replacedSymbol.writeTo(result, position + byteArrayGrowth);
+                        byte[] replacedBytes = ModifiedUtf8.fromJavaString(rules.get(asSymbol).toString());
+                        int newLength = replacedBytes.length;
+                        if (originalLegth == newLength) {
+                            System.arraycopy(replacedBytes, 0, result, position + byteArrayGrowth, replacedBytes.length);
                         } else {
-                            int diff = replacedSymbol.length() - originalLegth;
+                            int diff = newLength - originalLegth;
                             byteArrayGrowth += diff;
 
                             // make room for the longer class name
@@ -132,13 +134,13 @@ public class ConstantPoolPatcher {
                             System.arraycopy(bytes, currentPosition, result, currentPosition + byteArrayGrowth, bytes.length - currentPosition);
 
                             // update utfLength
-                            char utfLength = (char) replacedSymbol.length();
+                            char utfLength = (char) newLength;
                             int utfLengthPosition = position - 2 + byteArrayGrowth - diff;
                             result[utfLengthPosition] = (byte) (utfLength >> 8);
                             result[utfLengthPosition + 1] = (byte) (utfLength);
 
                             // insert patched byte array
-                            replacedSymbol.writeTo(result, utfLengthPosition + 2);
+                            System.arraycopy(replacedBytes, 0, result, utfLengthPosition + 2, replacedBytes.length);
                         }
                     }
                     break;
