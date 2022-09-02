@@ -33,9 +33,10 @@ import org.graalvm.compiler.core.common.CancellationBailoutException;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.nodes.EncodedGraph;
-import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.runtime.DefaultInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
@@ -58,6 +59,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.graalvm.compiler.options.OptionValues;
 
 @Ignore("GR-26854")
 public final class EncodedGraphCacheTest extends PartialEvaluationTest {
@@ -130,7 +132,8 @@ public final class EncodedGraphCacheTest extends PartialEvaluationTest {
         DebugContext debug = new DebugContext.Builder(runtime.getGraalOptions(OptionValues.class)).build();
         try (DebugContext.Scope s = debug.scope("EncodedGraphCacheTest")) {
             CompilationIdentifier compilationId = getTruffleCompilerFromRuntime(target).createCompilationIdentifier(target);
-            getTruffleCompilerFromRuntime(target).compileAST(target.getOptionValues(), debug, target, new TruffleInlining(), compilationId, null, null);
+            TruffleInliningPlan inliningPlan = new TruffleInlining(target, new DefaultInliningPolicy());
+            getTruffleCompilerFromRuntime(target).compileAST(target.getOptionValues(), debug, target, inliningPlan, compilationId, null, null);
             assertTrue(target.isValid());
             return target;
         }
