@@ -86,10 +86,6 @@ public final class ExportsLibrary extends Template {
         this.explicitReceiver = explicitReceiver;
     }
 
-    public ExportsData getExports() {
-        return exports;
-    }
-
     public void setDefaultExportPriority(int defaultExportPriority) {
         this.defaultExportPriority = defaultExportPriority;
     }
