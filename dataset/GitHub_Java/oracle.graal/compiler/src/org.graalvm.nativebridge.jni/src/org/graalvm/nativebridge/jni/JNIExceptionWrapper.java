@@ -118,8 +118,7 @@ public final class JNIExceptionWrapper extends RuntimeException {
             res = false;
         } else {
             StackTraceElement[] nativeStack = getStackTrace();
-            boolean originatedInHotSpot = hsStack.length == 0 || !hsStack[0].isNativeMethod();
-            mergedStack = mergeStackTraces(hsStack, nativeStack, 0, getIndexOfPropagateJNIExceptionFrame(nativeStack), originatedInHotSpot);
+            mergedStack = mergeStackTraces(hsStack, nativeStack, 0, getIndexOfPropagateJNIExceptionFrame(nativeStack), true);
             res = true;
         }
         setStackTrace(mergedStack);
@@ -235,34 +234,6 @@ public final class JNIExceptionWrapper extends RuntimeException {
          */
         public JThrowable getThrowable() {
             return throwable;
-        }
-
-        /**
-         * Returns pending JNI exception message.
-         */
-        public String getThrowableMessage() {
-            return getMessage(env, throwable);
-        }
-
-        /**
-         * Returns pending JNI exception class name.
-         */
-        public String getThrowableClassName() {
-            return getClassName(env, throwable);
-        }
-
-        /**
-         * Returns merged JNI exception and native stack trace.
-         */
-        public StackTraceElement[] getMergedStackTrace() {
-            StackTraceElement[] hsStack = getJNIExceptionStackTrace(env, throwable);
-            if (containsHotSpotCall(hsStack)) {
-                return hsStack;
-            } else {
-                StackTraceElement[] nativeStack = Thread.currentThread().getStackTrace();
-                boolean originatedInHotSpot = hsStack.length == 0 || !hsStack[0].isNativeMethod();
-                return mergeStackTraces(hsStack, nativeStack, 0, getIndexOfPropagateJNIExceptionFrame(nativeStack), originatedInHotSpot);
-            }
         }
 
         /**
@@ -593,8 +564,7 @@ public final class JNIExceptionWrapper extends RuntimeException {
     }
 
     private static JNI.JClass getHotSpotEntryPoints(JNIEnv env) {
-        JNI.JClass res = entryPointsClass;
-        if (res.isNull()) {
+        if (entryPointsClass.isNull()) {
             String binaryName = getBinaryName(HS_ENTRYPOINTS_CLASS);
             JNI.JObject classLoader = getJVMCIClassLoader(env);
             JNI.JClass entryPoints;
@@ -609,14 +579,8 @@ public final class JNIExceptionWrapper extends RuntimeException {
                 ExceptionClear(env);
                 throw new InternalError("Failed to load " + HS_ENTRYPOINTS_CLASS);
             }
-            synchronized (JNIExceptionWrapper.class) {
-                res = entryPointsClass;
-                if (res.isNull()) {
-                    res = NewGlobalRef(env, entryPoints, "Class<" + HS_ENTRYPOINTS_CLASS + ">");
-                    entryPointsClass = res;
-                }
-            }
+            JNIExceptionWrapper.entryPointsClass = NewGlobalRef(env, entryPoints, "Class<" + HS_ENTRYPOINTS_CLASS + ">");
         }
-        return res;
+        return entryPointsClass;
     }
 }
