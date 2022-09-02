@@ -25,6 +25,7 @@
 package com.oracle.graal.pointsto;
 
 import org.graalvm.compiler.nodes.Invoke;
+import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.options.OptionValues;
 
 import com.oracle.graal.pointsto.flow.AbstractVirtualInvokeTypeFlow;
@@ -107,7 +108,7 @@ public abstract class AnalysisPolicy {
     public abstract ArrayElementsTypeStore createArrayElementsTypeStore(AnalysisObject object, AnalysisUniverse universe);
 
     /** Provides implementation for the virtual invoke type flow. */
-    public abstract AbstractVirtualInvokeTypeFlow createVirtualInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
+    public abstract AbstractVirtualInvokeTypeFlow createVirtualInvokeTypeFlow(Invoke invoke, MethodCallTargetNode target,
                     TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location);
 
     @SuppressWarnings("unused")
