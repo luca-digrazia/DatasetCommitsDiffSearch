@@ -22,8 +22,10 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import com.oracle.truffle.espresso.classfile.ClassfileParser;
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
+import java.nio.ByteBuffer;
+
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Validation;
 
@@ -37,7 +39,8 @@ public final class Utf8Constant implements PoolConstant {
 
     private static final int VALID_UTF8 = 0x20;
     private static final int VALID_TYPE = 0x40;
-    private static final int VALID_TYPE_OR_VOID = 0x80;
+
+    private static final int VALID_INIT_SIGNATURE = 0x80;
 
     private byte validationCache;
 
@@ -66,7 +69,7 @@ public final class Utf8Constant implements PoolConstant {
     public void validateUTF8() {
         if ((validationCache & VALID_UTF8) == 0) {
             if (!Validation.validModifiedUTF8(value())) {
-                throw ClassfileParser.classFormatError("Ill-formed modified-UTF8 entry");
+                throw ConstantPool.classFormatError("Ill-formed modified-UTF8 entry");
             }
             validationCache |= VALID_UTF8;
         }
@@ -76,7 +79,7 @@ public final class Utf8Constant implements PoolConstant {
         validateUTF8();
         if ((validationCache & VALID_CLASS_NAME) == 0) {
             if (!Validation.validClassNameEntry(value)) {
-                throw ClassfileParser.classFormatError("Invalid class name entry: " + value);
+                throw ConstantPool.classFormatError("Invalid class name entry: " + value);
             }
             validationCache |= VALID_CLASS_NAME;
         }
@@ -84,12 +87,11 @@ public final class Utf8Constant implements PoolConstant {
 
     public void validateType(boolean allowVoid) {
         validateUTF8();
-        int mask = allowVoid ? VALID_TYPE_OR_VOID : VALID_TYPE;
-        if ((validationCache & mask) == 0) {
+        if ((validationCache & VALID_TYPE) == 0) {
             if (!Validation.validTypeDescriptor(value, allowVoid)) {
-                throw ClassfileParser.classFormatError("Invalid type descriptor: " + value);
+                throw ConstantPool.classFormatError("Invalid type descriptor: " + value);
             }
-            validationCache |= mask;
+            validationCache |= VALID_TYPE;
         }
     }
 
@@ -98,7 +100,7 @@ public final class Utf8Constant implements PoolConstant {
         int mask = allowClinit ? VALID_METHOD_NAME_OR_CLINIT : VALID_METHOD_NAME;
         if ((validationCache & mask) == 0) {
             if (!Validation.validMethodName(value, allowClinit)) {
-                throw ClassfileParser.classFormatError("Invalid method name: " + value);
+                throw ConstantPool.classFormatError("Invalid method name: " + value);
             }
             validationCache |= mask;
         }
@@ -108,20 +110,46 @@ public final class Utf8Constant implements PoolConstant {
         validateUTF8();
         if ((validationCache & VALID_FIELD_NAME) == 0) {
             if (!Validation.validUnqualifiedName(value)) {
-                throw ClassfileParser.classFormatError("Invalid field name: " + value);
+                throw ConstantPool.classFormatError("Invalid field name: " + value);
             }
             validationCache |= VALID_FIELD_NAME;
         }
     }
 
     public void validateSignature() {
+        validateSignature(false);
+    }
+
+    public void validateSignature(boolean isInitOrClinit) {
         validateUTF8();
-        if ((validationCache & VALID_SIGNATURE) == 0) {
-            if (!Validation.validSignatureDescriptor(value)) {
-                throw ClassfileParser.classFormatError("Invalid signature descriptor: " + value);
-            }
-            validationCache |= VALID_SIGNATURE;
+        int mask;
+        if (isInitOrClinit) {
+            mask = VALID_INIT_SIGNATURE;
+        } else {
+            mask = VALID_SIGNATURE;
         }
+        if ((validationCache & mask) == 0) {
+            if (!Validation.validSignatureDescriptor(value, isInitOrClinit)) {
+                throw ConstantPool.classFormatError("Invalid signature descriptor: " + value);
+            }
+            validationCache |= (mask | VALID_SIGNATURE);
+        }
+    }
+
+    public int validateSignatureGetSlots(boolean isInitOrClinit) {
+        validateUTF8();
+        int mask;
+        if (isInitOrClinit) {
+            mask = VALID_INIT_SIGNATURE;
+        } else {
+            mask = VALID_SIGNATURE;
+        }
+        int slots = Validation.validSignatureDescriptorGetSlots(value, isInitOrClinit);
+        if (slots < 0) {
+            throw ConstantPool.classFormatError("Invalid signature descriptor: " + value);
+        }
+        validationCache |= (mask | VALID_SIGNATURE);
+        return slots;
     }
 
     @Override
@@ -132,5 +160,13 @@ public final class Utf8Constant implements PoolConstant {
     @Override
     public String toString(ConstantPool pool) {
         return value.toString();
+    }
+
+    @Override
+    public void dump(ByteBuffer buf) {
+        buf.putChar((char) value().length());
+        for (int i = 0; i < value().length(); i++) {
+            buf.put(value().byteAt(i));
+        }
     }
 }

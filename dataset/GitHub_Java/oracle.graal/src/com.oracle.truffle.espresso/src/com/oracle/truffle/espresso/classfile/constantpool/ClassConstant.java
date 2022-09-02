@@ -22,24 +22,46 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
-
+import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.logging.Level;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Validation;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
+import com.oracle.truffle.object.DebugCounter;
 
 /**
  * Interface denoting a class entry in a constant pool.
  */
 public interface ClassConstant extends PoolConstant {
+
+    /* static final */ DebugCounter CLASS_RESOLVE_COUNT = DebugCounter.create("ClassConstant.resolve calls");
+
+    static ClassConstant create(int classNameIndex) {
+        return new Index(classNameIndex);
+    }
+
+    static ClassConstant preResolved(Klass klass) {
+        return new PreResolved(klass);
+    }
+
+    static ClassConstant withString(Symbol<Name> name) {
+        return new WithString(name);
+    }
+
+    static Resolvable.ResolvedConstant resolved(Klass klass) {
+        return new Resolved(klass);
+    }
 
     @Override
     default Tag tag() {
@@ -95,25 +117,28 @@ public interface ClassConstant extends PoolConstant {
          */
         @Override
         public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
-            resolveKlassCount.inc();
+            CLASS_RESOLVE_COUNT.inc();
+            assert accessingKlass != null;
             CompilerDirectives.transferToInterpreterAndInvalidate();
             Symbol<Name> klassName = getName(pool);
             try {
                 EspressoContext context = pool.getContext();
                 Symbol<Symbol.Type> type = context.getTypes().fromName(klassName);
-                Klass klass = context.getMeta().resolveSymbol(type, accessingKlass.getDefiningClassLoader());
+                Klass klass = context.getMeta().resolveSymbolOrFail(type, accessingKlass.getDefiningClassLoader(), accessingKlass.protectionDomain());
                 if (!Klass.checkAccess(klass.getElementalType(), accessingKlass)) {
                     Meta meta = context.getMeta();
-                    System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
-                    throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(klassName));
+                    context.getLogger().log(Level.WARNING,
+                                    EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
+                    throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(klassName));
                 }
 
                 return new Resolved(klass);
 
             } catch (EspressoException e) {
                 CompilerDirectives.transferToInterpreter();
-                if (pool.getContext().getMeta().ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
-                    throw pool.getContext().getMeta().throwExWithMessage(NoClassDefFoundError.class, klassName.toString());
+                Meta meta = pool.getContext().getMeta();
+                if (meta.java_lang_ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                    throw Meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, meta.toGuestString(klassName));
                 }
                 throw e;
             } catch (VirtualMachineError e) {
@@ -129,6 +154,11 @@ public interface ClassConstant extends PoolConstant {
         @Override
         public void validate(ConstantPool pool) {
             pool.utf8At(classNameIndex).validateClassName();
+        }
+
+        @Override
+        public void dump(ByteBuffer buf) {
+            buf.putChar(classNameIndex);
         }
     }
 
@@ -164,16 +194,18 @@ public interface ClassConstant extends PoolConstant {
 
         @Override
         public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
-            resolveKlassCount.inc();
+            CLASS_RESOLVE_COUNT.inc();
+            assert accessingKlass != null;
             CompilerDirectives.transferToInterpreterAndInvalidate();
             Symbol<Name> klassName = getName(pool);
             try {
                 EspressoContext context = pool.getContext();
-                Klass klass = context.getMeta().resolveSymbol(context.getTypes().fromName(klassName), accessingKlass.getDefiningClassLoader());
+                Meta meta = context.getMeta();
+                Klass klass = meta.resolveSymbolOrFail(context.getTypes().fromName(klassName), accessingKlass.getDefiningClassLoader(), accessingKlass.protectionDomain());
                 if (!Klass.checkAccess(klass.getElementalType(), accessingKlass)) {
-                    Meta meta = context.getMeta();
-                    System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
-                    throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(klassName));
+                    context.getLogger().log(Level.WARNING,
+                                    EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
+                    throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(klassName));
                 }
 
                 return new Resolved(klass);
@@ -186,6 +218,19 @@ public interface ClassConstant extends PoolConstant {
                 // Needs clarification to section 5.4.3 of the JVM spec (see 6308271)
                 throw e;
             }
+        }
+
+        @Override
+        public void validate(ConstantPool pool) {
+            // No UTF8 entry: cannot cache validation.
+            if (!Validation.validModifiedUTF8(name) || !Validation.validClassNameEntry(name)) {
+                throw ConstantPool.classFormatError("Invalid class name entry: " + name);
+            }
+        }
+
+        @Override
+        public void dump(ByteBuffer buf) {
+            buf.putChar((char) 0);
         }
     }
 
@@ -211,6 +256,11 @@ public interface ClassConstant extends PoolConstant {
         @Override
         public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             return new Resolved(resolved);
+        }
+
+        @Override
+        public void dump(ByteBuffer buf) {
+            buf.putChar((char) 0);
         }
     }
 }

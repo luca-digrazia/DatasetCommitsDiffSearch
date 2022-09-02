@@ -22,7 +22,10 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
+import java.nio.ByteBuffer;
+
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 
 /**
  * Place holder for invalid constant pool indexes such as 0 and the indexes immediately after a
@@ -45,4 +48,12 @@ public final class InvalidConstant implements PoolConstant {
     }
 
     public static final InvalidConstant VALUE = new InvalidConstant();
+
+    @Override
+    public void dumpBytes(ByteBuffer buf) {
+    }
+
+    @Override
+    public void dump(ByteBuffer buf) {
+    }
 }

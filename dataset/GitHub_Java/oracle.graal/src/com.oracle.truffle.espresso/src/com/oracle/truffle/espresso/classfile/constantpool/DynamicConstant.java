@@ -111,6 +111,7 @@ public interface DynamicConstant extends PoolConstant {
 
             // Indy constant resolving.
             BootstrapMethodsAttribute bms = (BootstrapMethodsAttribute) ((ObjectKlass) accessingKlass).getAttribute(BootstrapMethodsAttribute.NAME);
+            NameAndTypeConstant specifier = pool.nameAndTypeAt(nameAndTypeIndex);
 
             assert (bms != null);
             // TODO(garcia) cache bootstrap method resolution
@@ -120,8 +121,8 @@ public interface DynamicConstant extends PoolConstant {
             StaticObject bootstrapmethodMethodHandle = bsEntry.getMethodHandle(accessingKlass, pool);
             StaticObject[] args = bsEntry.getStaticArguments(accessingKlass, pool);
 
-            StaticObject fieldName = meta.toGuestString(getName(pool));
-            Klass fieldType = meta.resolveSymbolOrFail(Types.fromDescriptor(getSignature(pool)),
+            StaticObject fieldName = meta.toGuestString(specifier.getName(pool));
+            Klass fieldType = meta.resolveSymbolOrFail(Types.fromDescriptor(specifier.getDescriptor(pool)),
                             accessingKlass.getDefiningClassLoader(),
                             accessingKlass.protectionDomain());
 

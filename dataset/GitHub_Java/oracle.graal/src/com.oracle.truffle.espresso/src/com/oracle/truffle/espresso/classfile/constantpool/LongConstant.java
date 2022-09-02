@@ -22,9 +22,17 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
+import java.nio.ByteBuffer;
+
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 
 public final class LongConstant implements PoolConstant {
+
+    public static LongConstant create(long value) {
+        // TODO: cache ?
+        return new LongConstant(value);
+    }
 
     @Override
     public Tag tag() {
@@ -44,5 +52,10 @@ public final class LongConstant implements PoolConstant {
     @Override
     public String toString(ConstantPool pool) {
         return String.valueOf(value);
+    }
+
+    @Override
+    public void dump(ByteBuffer buf) {
+        buf.putLong(value());
     }
 }

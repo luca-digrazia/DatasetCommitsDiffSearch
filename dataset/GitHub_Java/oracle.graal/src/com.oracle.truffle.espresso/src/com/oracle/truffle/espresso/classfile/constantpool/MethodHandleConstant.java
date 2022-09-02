@@ -22,18 +22,27 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
+import java.nio.ByteBuffer;
+
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
-import com.oracle.truffle.espresso.descriptors.Signatures;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public interface MethodHandleConstant extends PoolConstant {
+
+    static MethodHandleConstant create(int refKind, int refIndex) {
+        return new Index(refKind, refIndex);
+    }
+
     default Tag tag() {
         return Tag.METHODHANDLE;
     }
@@ -102,71 +111,77 @@ public interface MethodHandleConstant extends PoolConstant {
             return refIndex;
         }
 
-        private static StaticObject[] resolveSignatureParameters(Klass accessingKlass, Symbol<Symbol.Type>[] signature, Meta meta) {
-            int paramCount = Signatures.parameterCount(signature, false);
-            StaticObject[] paramsKlasses = paramCount > 0 ? new StaticObject[paramCount] : StaticObject.EMPTY_ARRAY;
-            for (int i = 0; i < paramCount; ++i) {
-                Symbol<Symbol.Type> paramType = Signatures.parameterType(signature, i);
-                paramsKlasses[i] = meta.resolveSymbol(paramType, accessingKlass.getDefiningClassLoader()).mirror();
-            }
-            return paramsKlasses;
-        }
-
-        private static StaticObject resolveReturnType(Klass accessingKlass, Symbol<Symbol.Type>[] signature, Meta meta) {
-            return meta.resolveSymbol(Signatures.returnType(signature), accessingKlass.getDefiningClassLoader()).mirror();
-        }
-
         @Override
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             Meta meta = pool.getContext().getMeta();
-            if (meta.getContext().specCompliancyMode() == EspressoOptions.SpecCompliancyMode.HOTSPOT) {
-                return hotspotResolutionBehavior(pool, accessingKlass, meta);
-            } else {
+            if (meta.getContext().SpecCompliancyMode == EspressoOptions.SpecCompliancyMode.STRICT || meta.getJavaVersion().java9OrLater()) {
                 return specCompliantResolution(pool, accessingKlass, meta);
+            } else {
+                return hotspotResolutionBehavior(pool, accessingKlass, meta);
             }
         }
 
         private ResolvedConstant specCompliantResolution(RuntimeConstantPool pool, Klass accessingKlass, Meta meta) {
-            Method target = pool.resolvedMethodAt(accessingKlass, refIndex);
+            StaticObject mtype;
+            Klass mklass;
+            Symbol<Name> refName;
 
-            Symbol<Symbol.Type>[] parsed = target.getParsedSignature();
-            StaticObject[] ptypes = resolveSignatureParameters(accessingKlass, parsed, meta);
-            StaticObject rtype = resolveReturnType(accessingKlass, parsed, meta);
+            Tag refTag = pool.tagAt(getRefIndex());
+            if (refTag == Tag.METHOD_REF || refTag == Tag.INTERFACE_METHOD_REF) {
+                Method target = pool.resolvedMethodAt(accessingKlass, refIndex);
+                Symbol<Symbol.Type>[] parsed = target.getParsedSignature();
 
-            StaticObject mtype = (StaticObject) meta.MethodHandleNatives_findMethodHandleType.invokeDirect(
-                            null,
-                            rtype, StaticObject.createArray(meta.Class_Array, ptypes));
+                mtype = MethodTypeConstant.signatureToMethodType(parsed, accessingKlass, false, meta);
+                mklass = target.getDeclaringKlass();
+                refName = target.getName();
+            } else {
+                assert refTag == Tag.FIELD_REF;
+                Field field = pool.resolvedFieldAt(accessingKlass, refIndex);
+                mtype = meta.resolveSymbolAndAccessCheck(field.getType(), accessingKlass).mirror();
+                mklass = field.getDeclaringKlass();
+                refName = field.getName();
+            }
 
-            Klass mklass = target.getDeclaringKlass();
-            StaticObject mname = meta.toGuestString(target.getName());
-
-            return new Resolved((StaticObject) meta.MethodHandleNatives_linkMethodHandleConstant.invokeDirect(
-                            null,
-                            accessingKlass.mirror(), (int) refKind,
-                            mklass.mirror(), mname, mtype));
+            return linkMethodHandleConstant(accessingKlass, meta, mtype, mklass, refName);
         }
 
         /**
          * Resolves a method handle without resolving the method reference, which is not the
          * behavior described in the specs {5.4.3.5. Method Type and Method Handle Resolution }
+         * <p>
+         * see {@code JDK-8188145}
          */
         private ResolvedConstant hotspotResolutionBehavior(RuntimeConstantPool pool, Klass accessingKlass, Meta meta) {
-            MethodRefConstant ref = pool.methodAt(getRefIndex());
-            Symbol<Symbol.Signature> signature = ref.getSignature(pool);
+            StaticObject mtype;
+            Klass mklass;
+            Symbol<Name> refName;
 
-            Symbol<Symbol.Type>[] parsed = meta.getSignatures().parsed(signature);
+            Tag refTag = pool.tagAt(getRefIndex());
+            if (refTag == Tag.METHOD_REF || refTag == Tag.INTERFACE_METHOD_REF) {
+                MethodRefConstant ref = pool.methodAt(getRefIndex());
+                Symbol<Symbol.Signature> signature = ref.getSignature(pool);
+                Symbol<Symbol.Type>[] parsed = meta.getSignatures().parsed(signature);
 
-            StaticObject[] ptypes = resolveSignatureParameters(accessingKlass, parsed, meta);
-            StaticObject rtype = resolveReturnType(accessingKlass, parsed, meta);
+                mtype = MethodTypeConstant.signatureToMethodType(parsed, accessingKlass, false, meta);
+                mklass = pool.resolvedKlassAt(accessingKlass, ((MemberRefConstant.Indexes) ref).classIndex);
+                refName = ref.getName(pool);
+            } else {
+                assert refTag == Tag.FIELD_REF;
+                assert pool.fieldAt(getRefIndex()) instanceof FieldRefConstant.Indexes;
+                FieldRefConstant.Indexes ref = (FieldRefConstant.Indexes) pool.fieldAt(getRefIndex());
 
-            StaticObject mtype = (StaticObject) meta.MethodHandleNatives_findMethodHandleType.invokeDirect(
-                            null,
-                            rtype, StaticObject.createArray(meta.Class_Array, ptypes));
+                Symbol<Symbol.Type> type = ref.getType(pool);
+                mtype = meta.resolveSymbolAndAccessCheck(type, accessingKlass).mirror();
+                mklass = ref.getResolvedHolderKlass(accessingKlass, pool);
+                refName = ref.getName(pool);
+            }
 
-            Klass mklass = pool.resolvedKlassAt(accessingKlass, ((MemberRefConstant.Indexes) ref).classIndex);
+            return linkMethodHandleConstant(accessingKlass, meta, mtype, mklass, refName);
+        }
 
-            StaticObject mname = meta.toGuestString(ref.getName(pool));
-            return new Resolved((StaticObject) meta.MethodHandleNatives_linkMethodHandleConstant.invokeDirect(
+        private ResolvedConstant linkMethodHandleConstant(Klass accessingKlass, Meta meta, StaticObject mtype, Klass mklass, Symbol<Name> refName) {
+            StaticObject mname = meta.toGuestString(refName);
+            return new Resolved((StaticObject) meta.java_lang_invoke_MethodHandleNatives_linkMethodHandleConstant.invokeDirect(
                             null,
                             accessingKlass.mirror(), (int) refKind,
                             mklass.mirror(), mname, mtype));
@@ -179,29 +194,29 @@ public interface MethodHandleConstant extends PoolConstant {
             RefKind kind = getRefKind();
 
             Symbol<Name> memberName = pool.memberAt(refIndex).getName(pool);
-            if (Name.CLINIT.equals(memberName)) {
-                throw ClassfileParser.classFormatError("Ill-formed constant: " + tag());
+            if (Name._clinit_.equals(memberName)) {
+                throw ConstantPool.classFormatError("Ill-formed constant: " + tag());
             }
 
             // If the value is 8 (REF_newInvokeSpecial), the name of the method represented by a
             // CONSTANT_Methodref_info structure must be <init>.
-            if (Name.INIT.equals(memberName) && kind != RefKind.NEWINVOKESPECIAL) {
-                throw ClassfileParser.classFormatError("Ill-formed constant: " + tag());
+            if (Name._init_.equals(memberName) && kind != RefKind.NEWINVOKESPECIAL) {
+                throw ConstantPool.classFormatError("Ill-formed constant: " + tag());
             }
             if (getRefKind() == null) {
-                throw ClassfileParser.classFormatError("Ill-formed constant: " + tag());
+                throw ConstantPool.classFormatError("Ill-formed constant: " + tag());
             }
 
             // If the value of the reference_kind item is 5 (REF_invokeVirtual), 6
             // (REF_invokeStatic), 7 (REF_invokeSpecial), or 9 (REF_invokeInterface), the name of
             // the method represented by a CONSTANT_Methodref_info structure or a
             // CONSTANT_InterfaceMethodref_info structure must not be <init> or <clinit>.
-            if (memberName.equals(Name.INIT) || memberName.equals(Name.CLINIT)) {
+            if (memberName.equals(Name._init_) || memberName.equals(Name._clinit_)) {
                 if (kind == RefKind.INVOKEVIRTUAL ||
                                 kind == RefKind.INVOKESTATIC ||
                                 kind == RefKind.INVOKESPECIAL ||
                                 kind == RefKind.INVOKEINTERFACE) {
-                    throw ClassfileParser.classFormatError("Ill-formed constant: " + tag());
+                    throw ConstantPool.classFormatError("Ill-formed constant: " + tag());
                 }
             }
 
@@ -251,9 +266,15 @@ public interface MethodHandleConstant extends PoolConstant {
             }
 
             if (!valid) {
-                throw ClassfileParser.classFormatError("Ill-formed constant: " + tag());
+                throw ConstantPool.classFormatError("Ill-formed constant: " + tag());
             }
 
+        }
+
+        @Override
+        public void dump(ByteBuffer buf) {
+            buf.put(refKind);
+            buf.putChar(refIndex);
         }
     }
 
