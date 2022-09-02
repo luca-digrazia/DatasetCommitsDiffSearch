@@ -58,8 +58,7 @@ public final class InvokeSpecialNode extends QuickNode {
                 // accept a slow path once the method has been removed
                 // put method behind a boundary to avoid a deopt loop
                 Method resolutionSeed = method.getMethod();
-                StaticObject receiver = ((StaticObject) args[0]);
-                method = ClassRedefinition.handleRemovedMethod(resolutionSeed, receiver.getKlass(), receiver).getMethodVersion();
+                method = ClassRedefinition.handleRemovedMethod(resolutionSeed, ((StaticObject) args[0]).getKlass()).getMethodVersion();
             } else {
                 method = method.getMethod().getMethodVersion();
             }
