@@ -41,7 +41,6 @@ import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
-import com.oracle.svm.util.ModuleSupport;
 
 public class LocalizationSupport {
     protected final Map<String, Charset> charsets;
@@ -73,7 +72,8 @@ public class LocalizationSupport {
     @Platforms(Platform.HOSTED_ONLY.class)
     ResourceBundle getBundleInDefaultLocale(String bundleName) {
         RuntimeClassInitialization.initializeAtBuildTime(bundleName);
-        return ModuleSupport.getResourceBundle(bundleName, Locale.getDefault(), Thread.currentThread().getContextClassLoader());
+        final ResourceBundle result = ResourceBundle.getBundle(bundleName, Locale.getDefault(), Thread.currentThread().getContextClassLoader());
+        return result;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
