@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -123,7 +123,7 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
+import org.graalvm.compiler.truffle.common.CallNodeProvider;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
 
 /**
@@ -238,8 +238,8 @@ final class SVMToHotSpotEntryPoints {
     }
 
     @SVMToHotSpot(Log)
-    static void log(HotSpotTruffleCompilerRuntime truffleRuntime, CompilableTruffleAST compilable, String message) {
-        truffleRuntime.log(compilable, message);
+    static void log(HotSpotTruffleCompilerRuntime truffleRuntime, String message) {
+        truffleRuntime.log(message);
     }
 
     @SVMToHotSpot(CreateInliningPlan)
@@ -482,7 +482,7 @@ final class SVMToHotSpotEntryPoints {
     }
 
     @SVMToHotSpot(FindCallNode)
-    static TruffleCallNode findCallNode(TruffleMetaAccessProvider provider, long callNodeHandle) {
+    static TruffleCallNode findCallNode(CallNodeProvider provider, long callNodeHandle) {
         JavaConstant callNode = LibGraal.unhand(jvmciRuntime, JavaConstant.class, callNodeHandle);
         return provider.findCallNode(callNode);
     }

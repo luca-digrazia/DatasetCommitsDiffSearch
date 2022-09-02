@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
+import org.graalvm.compiler.truffle.common.CallNodeProvider;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
@@ -74,7 +74,7 @@ public @interface SVMToHotSpot {
         CreateException(Throwable.class, String.class),
         CreateInliningPlan(TruffleInliningPlan.class, HotSpotTruffleCompilerRuntime.class, CompilableTruffleAST.class, TruffleCompilationTask.class),
         CreateStringSupplier(Supplier.class, long.class),
-        FindCallNode(TruffleCallNode.class, TruffleMetaAccessProvider.class, long.class),
+        FindCallNode(TruffleCallNode.class, CallNodeProvider.class, long.class),
         FindDecision(TruffleInliningPlan.Decision.class, TruffleInliningPlan.class, long.class),
         GetCallCount(int.class, TruffleCallNode.class),
         GetCallNodes(TruffleCallNode[].class, CompilableTruffleAST.class),
