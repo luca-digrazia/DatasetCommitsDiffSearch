@@ -22,21 +22,18 @@
  */
 package com.oracle.truffle.espresso.nodes.quick.invoke;
 
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.ClassRedefinition;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.VM;
 
 public final class InvokeStaticNode extends QuickNode {
@@ -47,7 +44,6 @@ public final class InvokeStaticNode extends QuickNode {
     @Child private DirectCallNode directCallNode;
 
     final int resultAt;
-    final boolean returnsPrimitiveType;
 
     public InvokeStaticNode(Method method, int top, int curBCI) {
         super(top, curBCI);
@@ -57,7 +53,6 @@ public final class InvokeStaticNode extends QuickNode {
                         Name.doPrivileged.equals(method.getName());
         this.resultAt = top - Signatures.slotsForParameters(method.getParsedSignature()); // no
                                                                                           // receiver
-        this.returnsPrimitiveType = Types.isPrimitive(Signatures.returnType(method.getParsedSignature()));
     }
 
     @Override
@@ -93,16 +88,12 @@ public final class InvokeStaticNode extends QuickNode {
 
         Object[] args = BytecodeNode.popArguments(primitives, refs, top, false, method.getMethod().getParsedSignature());
         Object result = directCallNode.call(args);
-
-        if (!returnsPrimitiveType) {
-            Assumption noForeignObjects = getBytecodeNode().getNoForeignObjects();
-            if (noForeignObjects.isValid() && ((StaticObject) result).isForeignObject()) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                noForeignObjects.invalidate();
-            }
-        }
-
         return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, method.getMethod().getReturnKind());
+    }
+
+    @Override
+    public boolean producedForeignObject(Object[] refs) {
+        return method.getMethod().getReturnKind().isObject() && BytecodeNode.peekObject(refs, getResultAt()).isForeignObject();
     }
 
     private int getResultAt() {
