@@ -514,7 +514,7 @@ public abstract class LLVMInteropType implements TruffleObject {
             for (int i = 0; i < interopParameterTypes.length; i++) {
                 interopParameterTypes[i] = get(parameterTypes.get(i));
             }
-            return interopMethodType;
+            return interopMethodType;// TODO (pichristoph) call convertFunction
         }
 
         private static Value convertBasic(LLVMSourceBasicType type) {

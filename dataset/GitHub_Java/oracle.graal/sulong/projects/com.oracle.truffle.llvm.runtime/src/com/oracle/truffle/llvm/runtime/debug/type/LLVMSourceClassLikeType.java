@@ -39,30 +39,42 @@ import java.util.function.Supplier;
 
 public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
 
-    private final List<LLVMSourceMethodType> methods;
+    /*
+     * TODO (pichristoph): currently, the order in these lists is really important, because the n-th
+     * entry in each of them refers to the same method. Maybe boxing into a LLVMSourceMethodType
+     * makes sense.
+     */
+    private final List<LLVMSourceFunctionType> methods;
+    private final List<String> methodLinkageNames;
+    private final List<String> methodNames;
 
     @TruffleBoundary
     public LLVMSourceClassLikeType(String name, long size, long align, long offset, LLVMSourceLocation location) {
         super(name, size, align, offset, location);
         this.methods = new ArrayList<>();
+        this.methodLinkageNames = new ArrayList<>();
+        this.methodNames = new ArrayList<>();
     }
 
     private LLVMSourceClassLikeType(Supplier<String> name, long size, long align, long offset, List<LLVMSourceMemberType> dynamicMembers, LLVMSourceStaticMemberType.CollectionType staticMembers,
-                    List<LLVMSourceMethodType> methods, LLVMSourceLocation location) {
+                    List<LLVMSourceFunctionType> methods, List<String> methodLinkageNames, List<String> methodNames, LLVMSourceLocation location) {
         super(name, size, align, offset, dynamicMembers, staticMembers, location);
         this.methods = methods;
+        this.methodLinkageNames = methodLinkageNames;
+        this.methodNames = methodNames;
     }
 
     @TruffleBoundary
-    public void addMethod(String name, String linkageName, LLVMSourceFunctionType function) {
+    public void addMethod(String name, String linkageName, LLVMSourceFunctionType method) {
         CompilerAsserts.neverPartOfCompilation();
-        final LLVMSourceMethodType method = new LLVMSourceMethodType(function.getParameterTypes(), name, linkageName, this);
+        methodNames.add(name);
+        methodLinkageNames.add(linkageName);
         methods.add(method);
     }
 
     @Override
     public LLVMSourceType getOffset(long newOffset) {
-        return new LLVMSourceClassLikeType(this::getName, getSize(), getAlign(), newOffset, dynamicMembers, staticMembers, methods, getLocation());
+        return new LLVMSourceClassLikeType(this::getName, getSize(), getAlign(), newOffset, dynamicMembers, staticMembers, methods, methodLinkageNames, methodNames, getLocation());
     }
 
     @Override
@@ -79,11 +91,11 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
     }
 
     public String getMethodName(int i) {
-        return methods.get(i).getName();
+        return methodNames.get(i);
     }
 
     public String getMethodLinkageName(int i) {
-        return methods.get(i).getLinkageName();
+        return methodLinkageNames.get(i);
     }
 
     @Override
@@ -167,7 +179,10 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
                 return member.getOffsetElementType();
             }
         }
-        int idx = getMethodIndexByName(name);
+        int idx = methodLinkageNames.indexOf(name);
+        if (idx < 0) {
+            idx = methodNames.indexOf(name);
+        }
         if (idx >= 0) {
             return methods.get(idx).getReturnType();
         }
@@ -200,16 +215,6 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
         return null;
     }
 
-    private int getMethodIndexByName(String name) {
-        for (int i = 0; i < methods.size(); i++) {
-            LLVMSourceMethodType method = methods.get(i);
-            if (name.contentEquals(method.getLinkageName()) || name.contentEquals(method.getName())) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     @Override
     @TruffleBoundary
     public LLVMSourceLocation getElementDeclaration(String name) {
@@ -221,7 +226,10 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
                 return member.getLocation();
             }
         }
-        int idx = getMethodIndexByName(name);
+        int idx = methodLinkageNames.indexOf(name);
+        if (idx < 0) {
+            idx = methodNames.indexOf(name);
+        }
         if (idx >= 0) {
             return methods.get(idx).getLocation();
         }
