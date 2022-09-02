@@ -89,16 +89,15 @@ public final class WasmInitialization implements Consumer<WasmContext>, TruffleO
 
     public void accept(WasmContext context) {
         try {
-            final WasmModule envModule = context.modules().get("env");
+            final WasmModule module = context.modules().get("env");
             for (Map.Entry<String, Long> entry : globalValues.entrySet()) {
                 final String name = entry.getKey();
                 final Long value = entry.getValue();
-                if (!envModule.isLinked() || envModule.global(name).isMutable()) {
-                    envModule.writeMember(name, value);
+                if (!module.isLinked() || module.global(name).isMutable()) {
+                    module.writeMember(name, value);
                 }
             }
-            final WasmModule memoryModule = context.modules().get("memory");
-            final WasmMemory memory = (WasmMemory) memoryModule.readMember("memory");
+            final WasmMemory memory = (WasmMemory) module.readMember("memory");
             for (Map.Entry<String, String> entry : memoryValues.entrySet()) {
                 final String addressGlobal = entry.getKey();
                 final long address = getValue(addressGlobal);

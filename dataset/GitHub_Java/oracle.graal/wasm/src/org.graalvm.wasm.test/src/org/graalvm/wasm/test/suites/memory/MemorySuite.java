@@ -44,9 +44,9 @@ import java.io.IOException;
 
 import org.junit.Test;
 
-import org.graalvm.wasm.test.WasmFileSuite;
+import org.graalvm.wasm.test.WasmSuiteBase;
 
-public class MemorySuite extends WasmFileSuite {
+public class MemorySuite extends WasmSuiteBase {
     @Override
     protected String testResource() {
         return "memory";

@@ -48,24 +48,14 @@ public class WasmCaseData {
     BiConsumer<Value, String> resultValidator;
     String expectedErrorMessage;
 
-    ErrorPhase expectedErrorPhase;
-
-    public enum ErrorPhase {
-        Parsing,
-        Linking,
-        Running,
-    }
-
     WasmCaseData(BiConsumer<Value, String> resultValidator) {
         this.resultValidator = resultValidator;
         this.expectedErrorMessage = null;
-        this.expectedErrorPhase = null;
     }
 
-    WasmCaseData(String expectedErrorMessage, ErrorPhase expectedErrorPhase) {
+    WasmCaseData(String expectedErrorMessage) {
         this.resultValidator = null;
         this.expectedErrorMessage = expectedErrorMessage;
-        this.expectedErrorPhase = expectedErrorPhase;
     }
 
     public BiConsumer<Value, String> resultValidator() {
@@ -74,9 +64,5 @@ public class WasmCaseData {
 
     public String expectedErrorMessage() {
         return expectedErrorMessage;
-    }
-
-    public ErrorPhase expectedErrorTime() {
-        return expectedErrorPhase;
     }
 }

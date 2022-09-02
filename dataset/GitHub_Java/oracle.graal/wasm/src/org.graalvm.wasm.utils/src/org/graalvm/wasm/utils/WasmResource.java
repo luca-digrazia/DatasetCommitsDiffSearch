@@ -66,7 +66,6 @@ public class WasmResource {
         }
         byte[] contents = new byte[stream.available()];
         new DataInputStream(stream).readFully(contents);
-        stream.close();
         return contents;
     }
 

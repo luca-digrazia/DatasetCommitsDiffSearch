@@ -42,10 +42,10 @@ package org.graalvm.wasm.test.suites.control;
 
 import java.io.IOException;
 
-import org.graalvm.wasm.test.WasmFileSuite;
+import org.graalvm.wasm.test.WasmSuiteBase;
 import org.junit.Test;
 
-public class BlockWithLocalsSuite extends WasmFileSuite {
+public class BlockWithLocalsSuite extends WasmSuiteBase {
     @Override
     protected String testResource() {
         return "block-with-locals";

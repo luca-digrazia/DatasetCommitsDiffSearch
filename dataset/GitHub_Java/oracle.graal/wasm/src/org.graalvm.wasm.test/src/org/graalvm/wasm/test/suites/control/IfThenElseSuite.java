@@ -44,9 +44,9 @@ import java.io.IOException;
 
 import org.junit.Test;
 
-import org.graalvm.wasm.test.WasmFileSuite;
+import org.graalvm.wasm.test.WasmSuiteBase;
 
-public class IfThenElseSuite extends WasmFileSuite {
+public class IfThenElseSuite extends WasmSuiteBase {
     @Override
     protected String testResource() {
         return "if-then-else";
