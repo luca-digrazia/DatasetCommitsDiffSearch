@@ -923,10 +923,10 @@ public final class EspressoContext {
 
     @TruffleBoundary
     public void doExit(int code) {
-        if (!isClosing()) {
+        if (!isClosing) {
             Object sync = getShutdownSynchronizer();
             synchronized (sync) {
-                if (isClosing()) {
+                if (isClosing) {
                     return;
                 }
                 isClosing = true;
@@ -947,13 +947,12 @@ public final class EspressoContext {
 
     private void waitForClose() throws EspressoExitException {
         Object synchronizer = getShutdownSynchronizer();
-        Thread initiating = Thread.currentThread();
         synchronized (synchronizer) {
             while (true) {
                 if (isClosing()) {
                     throw new EspressoExitException(exitStatus);
                 }
-                if (hasActiveNonDaemon(initiating)) {
+                if (hasActiveNonDaemon()) {
                     try {
                         synchronizer.wait();
                     } catch (InterruptedException e) {
@@ -968,10 +967,10 @@ public final class EspressoContext {
         }
     }
 
-    private boolean hasActiveNonDaemon(Thread initiating) {
+    private boolean hasActiveNonDaemon() {
         for (StaticObject guest : threadManager.activeThreads()) {
             Thread host = Target_java_lang_Thread.getHostFromGuestThread(guest);
-            if (host != initiating && !host.isDaemon()) {
+            if (!host.isDaemon()) {
                 if (host.isAlive()) {
                     return true;
                 }
