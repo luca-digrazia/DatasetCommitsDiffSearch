@@ -44,28 +44,22 @@ public class StackTraceUtils {
     private static final Class<?>[] NO_CLASSES = new Class<?>[0];
     private static final StackTraceElement[] NO_ELEMENTS = new StackTraceElement[0];
 
-    /**
-     * Captures the stack trace of the current thread. Used by {@link Throwable#fillInStackTrace()},
-     * {@link Thread#getStackTrace()}, and {@link Thread#getAllStackTraces()}.
-     *
-     * Captures at most {@link SubstrateOptions#MaxJavaStackTraceDepth} stack trace elements if max
-     * depth > 0, or all if max depth <= 0.
-     */
     public static StackTraceElement[] getStackTrace(boolean filterExceptions, Pointer startSP) {
-        BuildStackTraceVisitor visitor = new BuildStackTraceVisitor(filterExceptions, SubstrateOptions.MaxJavaStackTraceDepth.getValue());
+        int limit = SubstrateOptions.MaxJavaStackTraceDepth.getValue();
+        if (limit == 0) {
+            return NO_ELEMENTS;
+        }
+        BuildStackTraceVisitor visitor = new BuildStackTraceVisitor(filterExceptions, limit);
         JavaStackWalker.walkCurrentThread(startSP, visitor);
         return visitor.trace.toArray(NO_ELEMENTS);
     }
 
-    /**
-     * Captures the stack trace of another thread. Used by {@link Thread#getStackTrace()} and
-     * {@link Thread#getAllStackTraces()}.
-     *
-     * Captures at most {@link SubstrateOptions#MaxJavaStackTraceDepth} stack trace elements if max
-     * depth > 0, or all if max depth <= 0.
-     */
     public static StackTraceElement[] getStackTrace(boolean filterExceptions, IsolateThread thread) {
-        BuildStackTraceVisitor visitor = new BuildStackTraceVisitor(filterExceptions, SubstrateOptions.MaxJavaStackTraceDepth.getValue());
+        int limit = SubstrateOptions.MaxJavaStackTraceDepth.getValue();
+        if (limit == 0) {
+            return NO_ELEMENTS;
+        }
+        BuildStackTraceVisitor visitor = new BuildStackTraceVisitor(filterExceptions, limit);
         JavaStackWalker.walkThread(thread, visitor);
         return visitor.trace.toArray(NO_ELEMENTS);
     }
