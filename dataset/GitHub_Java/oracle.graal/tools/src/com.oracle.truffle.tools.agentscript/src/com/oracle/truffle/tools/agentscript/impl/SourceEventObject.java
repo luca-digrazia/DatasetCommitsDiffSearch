@@ -46,49 +46,33 @@ final class SourceEventObject implements TruffleObject {
         return true;
     }
 
-    enum Members {
-        characters,
-        name,
-        language,
-        mimeType,
-        uri;
-    }
-
     @ExportMessage
     static Object getMembers(SourceEventObject obj, boolean includeInternal) {
-        return ArrayObject.wrap(Members.values());
-    }
-
-    @ExportMessage
-    static boolean isMemberReadable(SourceEventObject obj, String member) {
-        try {
-            return Members.valueOf(member) != null;
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
+        return new Object[0];
     }
 
     @CompilerDirectives.TruffleBoundary
     @ExportMessage
     static Object readMember(SourceEventObject obj, String member) throws UnknownIdentifierException {
-        final Members existingMember;
-        try {
-            existingMember = Members.valueOf(member);
-        } catch (IllegalArgumentException ex) {
-            throw UnknownIdentifierException.create(member);
-        }
-        switch (existingMember) {
-            case characters:
+        switch (member) {
+            case "characters":
                 return obj.source.getCharacters().toString();
-            case name:
+            case "name":
                 return obj.source.getName();
-            case language:
+            case "language":
                 return obj.source.getLanguage();
-            case mimeType:
+            case "mimeType":
                 return NullObject.nullCheck(obj.source.getMimeType());
-            case uri:
+            case "uri":
                 return obj.source.getURI().toASCIIString();
+            default:
+                throw UnknownIdentifierException.create(member);
         }
-        throw new IllegalArgumentException(member);
     }
+
+    @ExportMessage
+    static boolean isMemberReadable(SourceEventObject obj, String member) {
+        return true;
+    }
+
 }
