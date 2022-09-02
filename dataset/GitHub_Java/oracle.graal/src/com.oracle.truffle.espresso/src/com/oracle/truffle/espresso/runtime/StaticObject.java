@@ -104,9 +104,11 @@ public final class StaticObject implements TruffleObject {
      * directly read a long.
      */
     // Note: For the time being, Graal does not allow virtualization of byte arrays with access
-    // kinds bigger than a byte.
+    // kinds bigger than a byte. To still benefit from virtualization, we use a long array until
+    // support for byte arrays is live.
     // @see: VirtualizerToolImpl.setVirtualEntry
-    private final byte[] primitiveFields;
+    // TODO(garcia): Revert to byte[] once Graal supports it.
+    private final long[] primitiveFields;
 
     // Dedicated constructor for VOID and NULL pseudo-singletons
     private StaticObject() {
@@ -116,7 +118,7 @@ public final class StaticObject implements TruffleObject {
     }
 
     // Constructor for object copy
-    StaticObject(ObjectKlass klass, Object[] fields, byte[] primitiveFields) {
+    StaticObject(ObjectKlass klass, Object[] fields, long[] primitiveFields) {
         this.klass = klass;
         this.fields = fields;
         this.primitiveFields = primitiveFields;
@@ -133,9 +135,9 @@ public final class StaticObject implements TruffleObject {
         assert guestClass == guestClass.getMeta().Class;
         this.klass = guestClass;
         // assert !isStatic || klass.isInitialized(); else {
-        int primitiveFieldCount = guestClass.getPrimitiveFieldTotalByteCount();
+        int primitiveFieldCount = guestClass.getPrimitiveFieldSize();
         this.fields = guestClass.getObjectFieldsCount() > 0 ? new Object[guestClass.getObjectFieldsCount()] : null;
-        this.primitiveFields = primitiveFieldCount > 0 ? new byte[primitiveFieldCount] : null;
+        this.primitiveFields = primitiveFieldCount > 0 ? new long[primitiveFieldCount] : null;
         initFields(guestClass, false);
         setHiddenField(thisKlass.getMeta().HIDDEN_MIRROR_KLASS, thisKlass);
     }
@@ -145,11 +147,13 @@ public final class StaticObject implements TruffleObject {
         this.klass = klass;
         // assert !isStatic || klass.isInitialized();
         if (isStatic) {
+            int primitiveStaticFieldCount = klass.getPrimitiveStaticFieldSize();
             this.fields = klass.getStaticObjectFieldsCount() > 0 ? new Object[klass.getStaticObjectFieldsCount()] : null;
-            this.primitiveFields = klass.getPrimitiveStaticFieldTotalByteCount() > 0 ? new byte[klass.getPrimitiveStaticFieldTotalByteCount()] : null;
+            this.primitiveFields = primitiveStaticFieldCount > 0 ? new long[primitiveStaticFieldCount] : null;
         } else {
+            int primitiveFieldCount = klass.getPrimitiveFieldSize();
             this.fields = klass.getObjectFieldsCount() > 0 ? new Object[klass.getObjectFieldsCount()] : null;
-            this.primitiveFields = klass.getPrimitiveFieldTotalByteCount() > 0 ? new byte[klass.getPrimitiveFieldTotalByteCount()] : null;
+            this.primitiveFields = primitiveFieldCount > 0 ? new long[primitiveFieldCount] : null;
         }
         initFields(klass, isStatic);
     }
