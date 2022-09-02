@@ -169,31 +169,28 @@ public abstract class ClassRegistry implements ContextAccess {
         return classes.get(type);
     }
 
-    /**
-     * TODO(peterssen): defineKlass being synchronized is too costly when several threads load
-     * different classes. Ideally, parsing should be extracted out from the synchronized block and
-     * synchronization left entirely to the concurrent map.
-     */
-    public synchronized ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes) {
+    public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes) {
         Meta meta = getMeta();
+        if (typeOrNull != null && classes.containsKey(typeOrNull)) {
+            throw meta.throwExWithMessage(LinkageError.class, "Class " + typeOrNull + " already defined in the BCL");
+        }
+
         String strType = typeOrNull == null ? null : typeOrNull.toString();
         ParserKlass parserKlass = getParserKlass(bytes, strType);
         Symbol<Type> type = typeOrNull == null ? parserKlass.getType() : typeOrNull;
-
-        Klass maybeLoaded = findLoadedKlass(type);
-        assert Thread.holdsLock(this);
-        if (maybeLoaded != null) {
-            throw meta.throwExWithMessage(LinkageError.class, "Class " + type + " already defined");
-        }
-
         Symbol<Type> superKlassType = parserKlass.getSuperKlass();
 
         return createAndPutKlass(meta, parserKlass, type, superKlassType);
     }
 
     private ParserKlass getParserKlass(byte[] bytes, String strType) {
-        // May throw guest ClassFormatError, NoClassDefFoundError.
-        ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), strType, null, context);
+        ParserKlass parserKlass = null;
+        try {
+            parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), strType, null, context);
+        } catch (NoClassDefFoundError ncdfe) {
+            throw getMeta().throwExWithMessage(NoClassDefFoundError.class, ncdfe.getMessage());
+        }
+
         if (StaticObject.notNull(getClassLoader()) && parserKlass.getName().toString().startsWith("java/")) {
             throw getMeta().throwExWithMessage(SecurityException.class, "Define class in prohibited package name: " + parserKlass.getName());
         }
@@ -254,11 +251,13 @@ public abstract class ClassRegistry implements ContextAccess {
             }
         }
 
-        assert Thread.holdsLock(this) : "Class definition must be protected by a lock";
-        Klass previous = classes.putIfAbsent(type, klass);
-        assert previous == null : "class already defined";
-
         getRegistries().recordConstraint(type, klass, getClassLoader());
+
+        Klass previous = classes.putIfAbsent(type, klass);
+        if (previous != null) {
+            throw meta.throwExWithMessage(LinkageError.class, "Class " + previous + " loaded twice");
+        }
+
         return klass;
     }
 
@@ -279,5 +278,16 @@ public abstract class ClassRegistry implements ContextAccess {
             throw meta.throwExWithMessage(IncompatibleClassChangeError.class, "Super interface of " + type + " is in fact not an interface.");
         }
         return (ObjectKlass) klass;
+    }
+
+    public ObjectKlass putKlass(Symbol<Type> type, final ObjectKlass klass) {
+        if (classes.containsKey(type)) {
+            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + type + " already defined in the BCL");
+        }
+        Klass previous = classes.put(type, klass);
+        if (previous != null) {
+            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + previous + " loaded twice");
+        }
+        return klass;
     }
 }

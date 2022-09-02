@@ -29,6 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -58,13 +60,17 @@ public final class BootClassRegistry extends ClassRegistry {
 
     public BootClassRegistry(EspressoContext context) {
         super(context);
+        // Primitive classes do not have a .class definition, inject them directly in the BCL.
+        for (JavaKind kind : JavaKind.values()) {
+            if (kind.isPrimitive()) {
+                classes.put(kind.getType(), new PrimitiveKlass(context, kind));
+            }
+        }
     }
 
     @Override
     public Klass loadKlassImpl(Symbol<Type> type) {
-        if (Types.isPrimitive(type)) {
-            return null;
-        }
+        EspressoError.guarantee(!Types.isPrimitive(type), "Primitives must be in the registry");
         ClasspathFile classpathFile = getContext().getBootClasspath().readClassFile(type);
         if (classpathFile == null) {
             return null;
@@ -82,8 +88,8 @@ public final class BootClassRegistry extends ClassRegistry {
         return result;
     }
 
-    public String[] getPackages() {
-        return packageMap.keySet().toArray(new String[0]);
+    public String[] getPackagePaths() {
+        return packageMap.values().toArray(new String[0]);
     }
 
     @Override

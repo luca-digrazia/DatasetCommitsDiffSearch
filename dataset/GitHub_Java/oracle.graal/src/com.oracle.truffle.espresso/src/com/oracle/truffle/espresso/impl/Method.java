@@ -79,7 +79,7 @@ import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
-public final class Method extends Member<Signature> implements TruffleObject, ContextAccess {
+public final class Method implements TruffleObject, ModifiersProvider, ContextAccess {
     public static final Method[] EMPTY_ARRAY = new Method[0];
 
     private static final byte GETTER_LENGTH = 5;
@@ -94,6 +94,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private final RuntimeConstantPool pool;
 
     private final ObjectKlass declaringKlass;
+
+    private final Symbol<Name> name;
+
+    private final Symbol<Signature> rawSignature;
 
     @CompilationFinal(dimensions = 1) //
     private final Symbol<Type>[] parsedSignature;
@@ -126,30 +130,34 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return pool;
     }
 
-    @Override
-    public ObjectKlass getDeclaringKlass() {
+    public Klass getDeclaringKlass() {
         return declaringKlass;
     }
 
+    public Symbol<Name> getName() {
+        return name;
+    }
+
     public Symbol<Signature> getRawSignature() {
-        return descriptor;
+        return rawSignature;
     }
 
     public Symbol<Type>[] getParsedSignature() {
-        assert parsedSignature != null;
         return parsedSignature;
     }
 
     Method(Method method) {
-        super(method.getRawSignature(), method.getName());
         this.declaringKlass = method.declaringKlass;
         // TODO(peterssen): Custom constant pool for methods is not supported.
         this.pool = (RuntimeConstantPool) method.getConstantPool();
 
+        this.name = method.linkedMethod.getName();
         this.linkedMethod = method.linkedMethod;
 
+        this.rawSignature = method.getRawSignature();
+
         try {
-            this.parsedSignature = getSignatures().parsed(this.getRawSignature());
+            this.parsedSignature = getSignatures().parsed(this.rawSignature);
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw getMeta().throwExWithMessage(ClassFormatError.class, e.getMessage());
@@ -173,15 +181,17 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod, Symbol<Signature> rawSignature) {
-        super(rawSignature, linkedMethod.getName());
         this.declaringKlass = declaringKlass;
         // TODO(peterssen): Custom constant pool for methods is not supported.
         this.pool = declaringKlass.getConstantPool();
 
+        this.name = linkedMethod.getName();
         this.linkedMethod = linkedMethod;
 
+        this.rawSignature = rawSignature;
+
         try {
-            this.parsedSignature = getSignatures().parsed(this.getRawSignature());
+            this.parsedSignature = getSignatures().parsed(this.rawSignature);
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw getMeta().throwExWithMessage(ClassFormatError.class, e.getMessage());
@@ -460,6 +470,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             }
             checkedExceptions = tmpchecked;
         }
+    }
+
+    public boolean isFinal() {
+        return ModifiersProvider.super.isFinalFlagSet();
     }
 
     /**

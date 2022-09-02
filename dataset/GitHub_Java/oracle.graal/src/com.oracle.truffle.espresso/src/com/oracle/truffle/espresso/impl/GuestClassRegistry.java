@@ -87,7 +87,6 @@ public final class GuestClassRegistry extends ClassRegistry {
         return classLoader;
     }
 
-    @SuppressWarnings("sync-override")
     @Override
     public ObjectKlass defineKlass(Symbol<Type> type, final byte[] bytes) {
         ObjectKlass klass = super.defineKlass(type, bytes);

@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.classfile.SignatureAttribute;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -33,6 +32,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.meta.ModifiersProvider;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
@@ -40,20 +40,22 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 /**
  * Represents a resolved Espresso field.
  */
-public final class Field extends Member<Type> {
+public final class Field implements ModifiersProvider {
 
     public static final Field[] EMPTY_ARRAY = new Field[0];
 
     private final LinkedField linkedField;
     private final ObjectKlass holder;
+    private final Symbol<Type> type;
+    private final Symbol<Name> name;
     private volatile Klass typeKlassCache;
 
-    @CompilationFinal private int fieldIndex = -1;
-    @CompilationFinal private String genericSignature = null;
-    @CompilationFinal private int slot = -1;
+    @CompilerDirectives.CompilationFinal private int fieldIndex = -1;
+    @CompilerDirectives.CompilationFinal private String genericSignature = null;
+    @CompilerDirectives.CompilationFinal private int slot = -1;
 
     public Symbol<Type> getType() {
-        return descriptor;
+        return type;
     }
 
     public final String getGenericSignature() {
@@ -69,16 +71,18 @@ public final class Field extends Member<Type> {
     }
 
     public Field(LinkedField linkedField, ObjectKlass holder) {
-        super(linkedField.getType(), linkedField.getName());
         this.linkedField = linkedField;
         this.holder = holder;
+        this.type = linkedField.getType();
+        this.name = linkedField.getName();
     }
 
     // Hidden field. Placeholder in the fieldTable
     public Field(ObjectKlass holder, int hiddenSlot, int hiddenIndex, Symbol<Name> name) {
-        super(null, name);
         this.holder = holder;
         this.linkedField = new LinkedField(new ParserField(0, name, Type.Object, -1, null), holder.getLinkedKlass(), -1);
+        this.type = null;
+        this.name = name;
         this.slot = hiddenSlot;
         this.fieldIndex = hiddenIndex;
     }
@@ -95,7 +99,6 @@ public final class Field extends Member<Type> {
         return linkedField.getFlags() & Constants.JVM_RECOGNIZED_FIELD_MODIFIERS;
     }
 
-    @Override
     public ObjectKlass getDeclaringKlass() {
         return holder;
     }
@@ -168,6 +171,10 @@ public final class Field extends Member<Type> {
         }
         // @formatter:on
         // Checkstyle: resume
+    }
+
+    public Symbol<Name> getName() {
+        return name;
     }
 
     public final Klass resolveTypeKlass() {

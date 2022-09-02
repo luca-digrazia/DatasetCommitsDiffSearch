@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
+import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.UTF8;
 import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
 
 import java.util.Objects;
@@ -31,13 +32,10 @@ import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 
 /**
  * Interface denoting a class entry in a constant pool.
@@ -70,7 +68,7 @@ public interface ClassConstant extends PoolConstant {
 
         @Override
         public Symbol<Name> getName(ConstantPool pool) {
-            return pool.symbolAt(classNameIndex);
+            return pool.utf8At(classNameIndex);
         }
 
         /**
@@ -116,7 +114,7 @@ public interface ClassConstant extends PoolConstant {
             } catch (EspressoException e) {
                 CompilerDirectives.transferToInterpreter();
                 if (pool.getContext().getMeta().ClassNotFoundException.isAssignableFrom(e.getException().getKlass())) {
-                    throw pool.getContext().getMeta().throwExWithMessage(NoClassDefFoundError.class, klassName.toString());
+                    throw pool.getContext().getMeta().throwEx(NoClassDefFoundError.class);
                 }
                 throw e;
             } catch (VirtualMachineError e) {
@@ -130,8 +128,11 @@ public interface ClassConstant extends PoolConstant {
         }
 
         @Override
-        public void validate(ConstantPool pool) {
-            pool.utf8At(classNameIndex).validateClassName();
+        public void checkValidity(ConstantPool pool) {
+            if (pool.at(classNameIndex).tag() != UTF8) {
+                throw new VerifyError("Ill-formed constant: " + tag());
+            }
+            pool.at(classNameIndex).checkValidity(pool);
         }
     }
 
