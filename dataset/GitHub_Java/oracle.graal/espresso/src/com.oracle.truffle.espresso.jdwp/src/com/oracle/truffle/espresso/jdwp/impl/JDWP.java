@@ -195,14 +195,6 @@ final class JDWP {
 
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 controller.suspendAll();
-
-                // give threads time to suspend before returning
-                for (Object guestThread : controller.getContext().getAllGuestThreads()) {
-                    SuspendedInfo info = controller.getSuspendedInfo(guestThread);
-                    if (info instanceof UnknownSuspendedInfo) {
-                        awaitSuspendedInfo(controller, guestThread, info);
-                    }
-                }
                 return new CommandResult(reply);
             }
         }
