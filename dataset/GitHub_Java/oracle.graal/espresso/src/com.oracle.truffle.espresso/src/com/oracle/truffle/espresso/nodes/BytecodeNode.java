@@ -1239,7 +1239,6 @@ public final class BytecodeNode extends EspressoMethodNode {
             Object earlyReturnValue = earlyReturns.get();
             if (earlyReturnValue != null) {
                 earlyReturns.set(null);
-                earlyReturnsActive.set(false);
                 return earlyReturnValue;
             }
         }
