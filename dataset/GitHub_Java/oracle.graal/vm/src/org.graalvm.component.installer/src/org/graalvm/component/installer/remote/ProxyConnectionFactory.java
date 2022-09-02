@@ -288,9 +288,7 @@ public class ProxyConnectionFactory implements URLConnectionFactory {
                             }
                             // swallow, we want to report just proxy failed.
                         }
-                        if (!isDirect()) {
-                            throw new IOException(feedback.l10n("EXC_ProxyFailed", rcode));
-                        }
+                        throw new IOException(feedback.l10n("EXC_ProxyFailed", rcode));
                     }
                 }
                 won = ctx.setOutcome(this, test);
@@ -345,7 +343,7 @@ public class ProxyConnectionFactory implements URLConnectionFactory {
                 res = ctx.getConnection();
             }
         } catch (InterruptedException ex) {
-            throw new ConnectException(feedback.l10n("EXC_InterruptedConnectingTo", url));
+            Thread.currentThread().interrupt();
         }
         return res;
     }
