@@ -217,12 +217,13 @@ public final class LLVMContext {
 
     private static final class InitializeContextNode extends LLVMStatementNode {
 
-        @CompilationFinal private ContextReference<LLVMContext> ctxRef;
+        private final ContextReference<LLVMContext> ctxRef;
         private final FrameSlot stackPointer;
 
         @Child DirectCallNode initContext;
 
         InitializeContextNode(LLVMContext ctx, FrameDescriptor rootFrame) {
+            this.ctxRef = ctx.getLanguage().getContextReference();
             this.stackPointer = rootFrame.findFrameSlot(LLVMStack.FRAME_ID);
 
             LLVMFunctionDescriptor initContextDescriptor = ctx.globalScope.getFunction("__sulong_init_context");
@@ -232,10 +233,6 @@ public final class LLVMContext {
 
         @Override
         public void execute(VirtualFrame frame) {
-            if (ctxRef == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                ctxRef = lookupContextReference(LLVMLanguage.class);
-            }
             LLVMContext ctx = ctxRef.get();
             if (!ctx.initialized) {
                 assert !ctx.cleanupNecessary;
