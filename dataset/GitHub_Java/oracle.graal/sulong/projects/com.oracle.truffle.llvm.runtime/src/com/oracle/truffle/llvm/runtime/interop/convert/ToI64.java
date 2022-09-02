@@ -39,6 +39,7 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.library.LLVMNativeLibrary;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class ToI64 extends ForeignToLLVM {
@@ -89,8 +90,9 @@ public abstract class ToI64 extends ForeignToLLVM {
     }
 
     @Specialization
-    protected LLVMPointer fromPointer(LLVMPointer value) {
-        return value;
+    protected long fromPointer(LLVMPointer boxed,
+                    @Cached LLVMToNativeNode toNative) {
+        return toNative.executeWithTarget(boxed).asNative();
     }
 
     @Specialization(limit = "5", guards = {"notLLVM(obj)", "interop.isNumber(obj)"})

@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.interop.nfi;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -96,7 +95,7 @@ public final class LLVMNativeWrapper implements TruffleObject {
         Object doCached(@SuppressWarnings("unused") LLVMFunctionDescriptor function, Object[] args,
                         @Cached("function") @SuppressWarnings("unused") LLVMFunctionDescriptor cachedFunction,
                         @Cached LLVMGetStackNode getStack,
-                        @CachedContext(LLVMLanguage.class) ContextReference<LLVMContext> ctxRef,
+                        @Cached("getLLVMContextReference()") ContextReference<LLVMContext> ctxRef,
                         @Cached("createCallNode(cachedFunction)") DirectCallNode call,
                         @Cached("createFromNativeNodes(cachedFunction.getType())") LLVMNativeConvertNode[] convertArgs,
                         @Cached("createToNative(cachedFunction.getType().getReturnType())") LLVMNativeConvertNode convertRet) {

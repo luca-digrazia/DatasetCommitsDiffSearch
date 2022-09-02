@@ -32,7 +32,9 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
@@ -73,43 +75,43 @@ public abstract class ToPointer extends ForeignToLLVM {
     }
 
     @Specialization
-    protected LLVMManagedPointer fromInt(int value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromInt(int value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMManagedPointer fromChar(char value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromChar(char value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMManagedPointer fromLong(long value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromLong(long value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMManagedPointer fromByte(byte value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromByte(byte value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMManagedPointer fromShort(short value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromShort(short value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMManagedPointer fromFloat(float value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromFloat(float value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMManagedPointer fromDouble(double value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromDouble(double value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
-    protected LLVMManagedPointer fromBoolean(boolean value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(value);
+    protected LLVMBoxedPrimitive fromBoolean(boolean value, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return new LLVMBoxedPrimitive(value);
     }
 
     @Specialization
@@ -118,13 +120,13 @@ public abstract class ToPointer extends ForeignToLLVM {
     }
 
     @Specialization
-    protected LLVMPointer fromPointer(LLVMPointer pointer, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
-        return pointer;
+    protected LLVMBoxedPrimitive id(LLVMBoxedPrimitive boxed, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return boxed;
     }
 
-    @Specialization(guards = {"notLLVM(obj)"})
-    protected LLVMManagedPointer fromTruffleObject(Object obj, LLVMInteropType.Structured type) {
-        return LLVMManagedPointer.create(LLVMTypedForeignObject.create(obj, type));
+    @Specialization
+    protected LLVMPointer fromPointer(LLVMPointer pointer, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+        return pointer;
     }
 
     @Specialization
@@ -132,22 +134,30 @@ public abstract class ToPointer extends ForeignToLLVM {
         return LLVMManagedPointer.create(object);
     }
 
+    @Specialization(guards = {"notLLVM(obj)"})
+    protected LLVMManagedPointer fromTruffleObject(TruffleObject obj, LLVMInteropType.Structured type) {
+        return LLVMManagedPointer.create(LLVMTypedForeignObject.create(obj, type));
+    }
+
     @TruffleBoundary
     static Object slowPathPrimitiveConvert(Object value, LLVMInteropType.Structured type) throws UnsupportedTypeException {
         if (value instanceof Number) {
-            return LLVMManagedPointer.create(value);
+            return new LLVMBoxedPrimitive(value);
         } else if (value instanceof Boolean) {
-            return LLVMManagedPointer.create(value);
+            return new LLVMBoxedPrimitive(value);
         } else if (value instanceof Character) {
-            return LLVMManagedPointer.create(value);
+            return new LLVMBoxedPrimitive(value);
         } else if (value instanceof String) {
+            return value;
+        } else if (value instanceof LLVMBoxedPrimitive) {
             return value;
         } else if (LLVMPointer.isInstance(value)) {
             return value;
         } else if (value instanceof LLVMInternalTruffleObject) {
-            return LLVMManagedPointer.create(value);
-        } else if (notLLVM(value)) {
-            return LLVMManagedPointer.create(LLVMTypedForeignObject.create(value, type));
+            return LLVMManagedPointer.create((LLVMInternalTruffleObject) value);
+        } else if (value instanceof TruffleObject && notLLVM(value)) {
+            LLVMTypedForeignObject typed = LLVMTypedForeignObject.create((TruffleObject) value, type);
+            return LLVMManagedPointer.create(typed);
         } else {
             throw UnsupportedTypeException.create(new Object[]{value});
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,17 +30,19 @@
 package com.oracle.truffle.llvm.test.interop;
 
 import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.Sulong;
-import com.oracle.truffle.llvm.test.interop.values.BoxedTestValue;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.test.interop.values.ArrayObject;
+import com.oracle.truffle.llvm.test.interop.values.BoxedIntValue;
 import com.oracle.truffle.llvm.test.options.TestOptions;
 import java.io.File;
 import java.nio.file.Path;
@@ -238,7 +240,7 @@ public class LLVMInteropTest {
     @Test
     public void test013() {
         try (Runner runner = new Runner("interop013")) {
-            runner.export(new BoxedTestValue(42), "foreign");
+            runner.export(new BoxedIntValue(42), "foreign");
             Assert.assertEquals(42, runner.run());
         }
     }
@@ -246,7 +248,7 @@ public class LLVMInteropTest {
     @Test
     public void test014() {
         try (Runner runner = new Runner("interop014")) {
-            runner.export(new BoxedTestValue(42), "foreign");
+            runner.export(new BoxedIntValue(42), "foreign");
             Assert.assertEquals(42, runner.run(), 0.1);
         }
     }
@@ -405,7 +407,7 @@ public class LLVMInteropTest {
     // implicit interop
     // structs not yet implemented
     @Test
-    public void test030() throws Exception {
+    public void test030() {
         try (Runner runner = new Runner("interop030")) {
             runner.run();
             Value get = runner.findGlobalSymbol("getValueI");
@@ -416,7 +418,7 @@ public class LLVMInteropTest {
 
     @Test
     @Ignore
-    public void test031() throws Exception {
+    public void test031() {
         try (Runner runner = new Runner("interop031")) {
             runner.run();
             Value apply = runner.findGlobalSymbol("complexAdd");
@@ -433,7 +435,7 @@ public class LLVMInteropTest {
 
     // arrays: foreign array to llvm
     @Test
-    public void test032() throws Exception {
+    public void test032() {
         try (Runner runner = new Runner("interop032")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -444,7 +446,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void test033() throws Exception {
+    public void test033() {
         try (Runner runner = new Runner("interop033")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -455,7 +457,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void test034() throws Exception {
+    public void test034() {
         try (Runner runner = new Runner("interop034")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -466,7 +468,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void test035() throws Exception {
+    public void test035() {
         try (Runner runner = new Runner("interop035")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -477,7 +479,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void test036() throws Exception {
+    public void test036() {
         try (Runner runner = new Runner("interop036")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -488,7 +490,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void test037() throws Exception {
+    public void test037() {
         try (Runner runner = new Runner("interop037")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -500,7 +502,7 @@ public class LLVMInteropTest {
 
     // foreign array with different type
     @Test
-    public void test038() throws Exception {
+    public void test038() {
         try (Runner runner = new Runner("interop038")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -511,7 +513,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void test039() throws Exception {
+    public void test039() {
         try (Runner runner = new Runner("interop039")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -523,7 +525,7 @@ public class LLVMInteropTest {
 
     @Test
     @Ignore(value = "test semantics not clear")
-    public void test040() throws Exception {
+    public void test040() {
         try (Runner runner = new Runner("interop040")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -534,7 +536,7 @@ public class LLVMInteropTest {
 
     @Test
     @Ignore(value = "test semantics not clear")
-    public void test041() throws Exception {
+    public void test041() {
         try (Runner runner = new Runner("interop041")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -546,7 +548,7 @@ public class LLVMInteropTest {
     }
 
     @Test(expected = UnsupportedOperationException.class)
-    public void test042() throws Exception {
+    public void test042() {
         try (Runner runner = new Runner("interop042")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
@@ -1034,6 +1036,7 @@ public class LLVMInteropTest {
         }
     }
 
+    @ExportLibrary(InteropLibrary.class)
     static class ForeignObject implements TruffleObject {
         protected int foo;
 
@@ -1041,44 +1044,60 @@ public class LLVMInteropTest {
             this.foo = i;
         }
 
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return ForeignObjectMessageResolutionForeign.ACCESS;
+        @ExportMessage
+        boolean hasMembers() {
+            return true;
         }
 
-        public static boolean isInstance(TruffleObject o) {
-            return o instanceof ForeignObject;
+        @ExportMessage
+        boolean isMemberReadable(String member) {
+            return "foo".equals(member);
         }
-    }
 
-    @MessageResolution(receiverType = ForeignObject.class)
-    static class ForeignObjectMessageResolution {
-        @Resolve(message = "READ")
-        abstract static class ReadNode extends Node {
-            int access(ForeignObject object, Object key) {
-                Assert.assertEquals("foo", key);
-                return object.foo;
+        @ExportMessage
+        int readMember(String member) {
+            Assert.assertEquals("foo", member);
+            return foo;
+        }
+
+        @ExportMessage
+        boolean isMemberModifiable(String member) {
+            return "foo".equals(member);
+        }
+
+        @ExportMessage
+        boolean isMemberInsertable(@SuppressWarnings("unused") String member) {
+            return false;
+        }
+
+        @ExportMessage(limit = "3")
+        void writeMember(String member, Object value,
+                        @CachedLibrary("value") InteropLibrary numbers) throws UnsupportedTypeException {
+            Assert.assertEquals("foo", member);
+            try {
+                foo = numbers.asInt(value) * 2;
+            } catch (InteropException ex) {
+                throw UnsupportedTypeException.create(new Object[]{value});
             }
         }
 
-        @Resolve(message = "WRITE")
-        abstract static class WriteNode extends Node {
-            int access(ForeignObject object, Object key, int value) {
-                Assert.assertEquals("foo", key);
-                return object.foo = value * 2;
-            }
+        @ExportMessage
+        Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+            return new ArrayObject("foo");
         }
 
-        @Resolve(message = "TO_NATIVE")
-        abstract static class ToNativeNode extends Node {
-            Object access(Object object) {
-                TruffleObject function = (TruffleObject) Sulong.getLLVMContextReference().get().getEnv().importSymbol("test_to_native");
-                try {
-                    return ForeignAccess.sendExecute(Message.EXECUTE.createNode(), function, object);
-                } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-                    Assert.fail("TO_NATIVE should have created a handle");
-                    return null;
-                }
+        static TruffleObject getTestToNative() {
+            return (TruffleObject) LLVMLanguage.getLLVMContextReference().get().getEnv().importSymbol("test_to_native");
+        }
+
+        @ExportMessage
+        void toNative(
+                        @Cached(value = "getTestToNative()", allowUncached = true) TruffleObject testToNative,
+                        @CachedLibrary("testToNative") InteropLibrary interop) {
+            try {
+                interop.execute(testToNative, this);
+            } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+                Assert.fail("TO_NATIVE should have created a handle");
             }
         }
     }
@@ -1092,7 +1111,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testStrlen() throws Exception {
+    public void testStrlen() {
         try (Runner runner = new Runner("strlen")) {
             runner.run();
             Value strlenFunction = runner.findGlobalSymbol("func");
@@ -1108,7 +1127,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testStrcmp() throws Exception {
+    public void testStrcmp() {
         try (Runner runner = new Runner("strcmp")) {
             runner.run();
             Value strcmpFunction = runner.findGlobalSymbol("func");
@@ -1145,7 +1164,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testHandleFromNativeCallback() throws Exception {
+    public void testHandleFromNativeCallback() {
         try (Runner runner = new Runner("handleFromNativeCallback", getSulongTestLibContextOptions())) {
             runner.run();
             Value testHandleFromNativeCallback = runner.findGlobalSymbol("testHandleFromNativeCallback");
@@ -1155,7 +1174,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testAutoDerefHandle() throws Exception {
+    public void testAutoDerefHandle() {
         try (Runner runner = new Runner("autoDerefHandle")) {
             runner.run();
             Value testHandleFromNativeCallback = runner.findGlobalSymbol("testAutoDerefHandle");
@@ -1173,7 +1192,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testPointerThroughNativeCallback() throws Exception {
+    public void testPointerThroughNativeCallback() {
         try (Runner runner = new Runner("pointerThroughNativeCallback", getSulongTestLibContextOptions())) {
             int result = runner.run();
             Assert.assertEquals(42, result);
@@ -1181,14 +1200,14 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testManagedMallocMemSet() throws Exception {
+    public void testManagedMallocMemSet() {
         try (Runner runner = new Runner("managedMallocMemset")) {
             Assert.assertEquals(0, runner.run());
         }
     }
 
     @Test
-    public void testVirtualMallocArray() throws Exception {
+    public void testVirtualMallocArray() {
         try (Runner runner = new Runner("virtualMallocArray")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
@@ -1197,7 +1216,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testVirtualMallocArray2() throws Exception {
+    public void testVirtualMallocArray2() {
         try (Runner runner = new Runner("virtualMallocArray2")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
@@ -1206,7 +1225,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testVirtualMallocArrayPointer() throws Exception {
+    public void testVirtualMallocArrayPointer() {
         try (Runner runner = new Runner("virtualMallocArrayPointer")) {
             runner.load();
             Value test1 = runner.findGlobalSymbol("test1");
@@ -1217,7 +1236,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testVirtualMallocGlobal() throws Exception {
+    public void testVirtualMallocGlobal() {
         try (Runner runner = new Runner("virtualMallocGlobal")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
@@ -1226,7 +1245,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testVirtualMallocGlobaAssignl() throws Exception {
+    public void testVirtualMallocGlobaAssignl() {
         try (Runner runner = new Runner("virtualMallocGlobalAssign")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
@@ -1235,7 +1254,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testVirtualMallocObject() throws Exception {
+    public void testVirtualMallocObject() {
         try (Runner runner = new Runner("virtualMallocObject")) {
             runner.load();
             Value setA = runner.findGlobalSymbol("testGetA");
@@ -1254,7 +1273,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testVirtualMallocObjectCopy() throws Exception {
+    public void testVirtualMallocObjectCopy() {
         try (Runner runner = new Runner("virtualMallocObjectCopy")) {
             runner.load();
             Value setA = runner.findGlobalSymbol("testGetA");
@@ -1273,7 +1292,7 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testVirtualMallocCompare1() throws Exception {
+    public void testVirtualMallocCompare1() {
         try (Runner runner = new Runner("virtualMallocCompare1")) {
             runner.load();
             Value test1 = runner.findGlobalSymbol("test1");

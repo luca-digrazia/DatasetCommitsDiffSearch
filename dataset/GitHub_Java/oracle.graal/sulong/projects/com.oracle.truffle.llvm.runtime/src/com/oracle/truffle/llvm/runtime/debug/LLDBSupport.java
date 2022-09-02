@@ -34,7 +34,6 @@ import org.graalvm.collections.Equivalence;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -77,7 +76,6 @@ public final class LLDBSupport {
         }
     }
 
-    @TruffleBoundary
     public CallTarget getLoadFunction(Type loadType) {
         CallTarget ret = loadFunctionCache.get(loadType);
         if (ret == null) {

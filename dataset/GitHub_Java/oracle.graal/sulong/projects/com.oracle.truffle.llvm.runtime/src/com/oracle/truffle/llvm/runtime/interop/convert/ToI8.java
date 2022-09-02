@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,7 +38,6 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 
 public abstract class ToI8 extends ForeignToLLVM {
 
@@ -87,13 +86,12 @@ public abstract class ToI8 extends ForeignToLLVM {
         return (byte) getSingleStringCharacter(value);
     }
 
-    @Specialization(limit = "5", guards = {"foreigns.isForeign(obj)", "interop.isNumber(foreigns.asForeign(obj))"})
+    @Specialization(limit = "5", guards = {"notLLVM(obj)", "interop.isNumber(obj)"})
     protected byte fromForeign(Object obj,
-                    @CachedLibrary("obj") LLVMAsForeignLibrary foreigns,
-                    @CachedLibrary(limit = "3") InteropLibrary interop,
+                    @CachedLibrary("obj") InteropLibrary interop,
                     @Cached BranchProfile exception) {
         try {
-            return interop.asByte(foreigns.asForeign(obj));
+            return interop.asByte(obj);
         } catch (UnsupportedMessageException ex) {
             exception.enter();
             throw new LLVMPolyglotException(this, "Polyglot number can't be converted to byte.");

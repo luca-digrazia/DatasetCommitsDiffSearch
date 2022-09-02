@@ -177,7 +177,6 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
                     try {
                         pointer = LLVMNativePointer.create(InteropLibrary.getFactory().getUncached().asPointer(wrapper));
                     } catch (UnsupportedMessageException e) {
-                        CompilerDirectives.transferToInterpreter();
                         throw new AssertionError(e);
                     }
                 }
@@ -363,7 +362,6 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
             this.library = lib;
             setFunction(newFunction);
         } else {
-            CompilerDirectives.transferToInterpreter();
             throw new AssertionError("Found multiple definitions of function " + getName() + ".");
         }
     }

@@ -52,7 +52,6 @@ import com.oracle.truffle.tools.chromeinspector.server.ConnectionWatcher;
 import com.oracle.truffle.tools.chromeinspector.server.InspectServerSession;
 import com.oracle.truffle.tools.chromeinspector.server.JSONMessageListener;
 import com.oracle.truffle.tools.utils.json.JSONObject;
-import java.io.IOException;
 
 /**
  * Implementation of Inspector.Session module described at
@@ -177,24 +176,18 @@ class Session extends AbstractInspectorObject {
 
     private Object connect() {
         if (iss != null) {
-            throw new InspectorStateException("The inspector session is already connected");
+            throw new IllegalStateException("The inspector session is already connected");
         }
         InspectorExecutionContext execContext = contextSupplier.get();
         iss = InspectServerSession.create(execContext, false, new ConnectionWatcher());
         iss.setJSONMessageListener(getListeners());
         execContext.setSynchronous(true);
-        // Enable the Runtime by default
-        iss.sendCommand(new Command("{\"id\":0,\"method\":\"Runtime.enable\"}"));
         return NullObject.INSTANCE;
     }
 
     private Object disconnect() {
         if (iss != null) {
-            try {
-                iss.sendClose();
-            } catch (IOException e) {
-                // Closed already
-            }
+            iss.sendClose();
             iss = null;
         }
         return NullObject.INSTANCE;
@@ -291,9 +284,6 @@ class Session extends AbstractInspectorObject {
         }
         if (callback != null) {
             getListeners().addCallback(id, callback);
-        }
-        if (iss == null) {
-            throw new InspectorStateException("The inspector session is not connected.");
         }
         iss.sendCommand(new Command(id, method, params));
     }
