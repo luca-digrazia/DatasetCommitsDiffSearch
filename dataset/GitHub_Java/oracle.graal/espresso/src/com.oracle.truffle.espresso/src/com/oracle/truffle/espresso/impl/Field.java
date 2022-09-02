@@ -39,6 +39,7 @@ import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.redefinition.ClassRedefinition;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -79,6 +80,9 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public FieldVersion getFieldVersion() {
+        // block execution during class redefinition
+        ClassRedefinition.check();
+
         FieldVersion version = fieldVersion;
         if (!version.getAssumption().isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
