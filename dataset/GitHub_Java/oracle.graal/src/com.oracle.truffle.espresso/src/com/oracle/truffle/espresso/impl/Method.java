@@ -140,14 +140,19 @@ public final class Method implements ModifiersProvider, ContextAccess {
 
         if (isStatic()) {
             this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeStatic;
-        } else if (isPrivate() || isConstructor() || isFinal() || declaringKlass.isFinalFlagSet()) {
-            this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeSpecial;
-        } else if (declaringKlass.isInterface()) {
-            this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeInterface;
-        } else {
-            assert !declaringKlass.isPrimitive();
-            this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeVirtual;
+            return;
         }
+        if (isPrivate() || isConstructor()) {
+            this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeSpecial;
+            return;
+        }
+        for (ObjectKlass klassInterface : declaringKlass.getInterfaces()) {
+            if (klassInterface.lookupDeclaredMethod(this.name, this.rawSignature) != null) {
+                this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeInterface;
+                return;
+            }
+        }
+        this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeVirtual;
     }
 
     public int getRefKind() {
