@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -82,7 +82,6 @@ public abstract class AbstractPolyglotTest {
 
     protected final void setupEnv(Context.Builder contextBuilder, ProxyInstrument instrument) {
         setupEnv(null, contextBuilder, null, instrument);
-
     }
 
     protected final void setupEnv(Context.Builder contextBuilder, ProxyLanguage language) {
@@ -211,9 +210,6 @@ public abstract class AbstractPolyglotTest {
             context.close();
             context = null;
         }
-        // restore static state
-        ProxyLanguage.setDelegate(new ProxyLanguage());
-        ProxyInstrument.setDelegate(new ProxyInstrument());
     }
 
     public static void assertFails(Runnable callable, Class<?> exceptionType) {
@@ -259,10 +255,6 @@ public abstract class AbstractPolyglotTest {
             return;
         }
         fail("expected " + exceptionType.getName() + " but no exception was thrown");
-    }
-
-    public static boolean isGraalRuntime() {
-        return Truffle.getRuntime().getName().contains("Graal");
     }
 
     private static class TestRootNode extends RootNode {
