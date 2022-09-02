@@ -173,6 +173,10 @@ public final class NativeImageHeap implements ImageHeap {
         return objectLayout;
     }
 
+    public ImageHeapLayouter getHeapLayouter() {
+        return heapLayouter;
+    }
+
     @Fold
     static boolean useHeapBase() {
         return SubstrateOptions.SpawnIsolates.getValue() && ImageSingletons.lookup(CompressEncoding.class).hasBase();
@@ -649,7 +653,7 @@ public final class NativeImageHeap implements ImageHeap {
          * Returns the index into the {@link RelocatableBuffer} to which this object is written.
          */
         public int getIndexInBuffer(long index) {
-            long result = getPartition().getStartOffset() + getOffsetInPartition() + index;
+            long result = getPartition().getOffsetInSection() + getOffsetInPartition() + index;
             return NumUtil.safeToInt(result);
         }
 
@@ -664,7 +668,7 @@ public final class NativeImageHeap implements ImageHeap {
              * the beginning of the heap. So, all heap-base-relative addresses must be adjusted by
              * that offset.
              */
-            return Heap.getHeap().getImageHeapOffsetInAddressSpace() + getPartition().getStartOffset() + getOffsetInPartition();
+            return Heap.getHeap().getImageHeapOffsetInAddressSpace() + getPartition().getOffsetInSection() + getOffsetInPartition();
         }
 
         /**
