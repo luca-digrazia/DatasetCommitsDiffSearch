@@ -322,10 +322,8 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return Total number of samples taken during execution
-     * @deprecated Will be removed. Use {@link CPUSamplerData#samplesTaken} .
      * @since 0.30
      */
-    @Deprecated
     public long getSampleCount() {
         long sum = 0;
         for (AtomicLong value : samplesTaken.values()) {
@@ -357,10 +355,8 @@ public final class CPUSampler implements Closeable {
      * Merges all the 'per thread' profiles into one set of nodes and returns it.
      *
      * @return The roots of the trees representing the profile of the execution.
-     * @deprecated Use {@link #getData()}.
      * @since 0.30
      */
-    @Deprecated
     public synchronized Collection<ProfilerNode<Payload>> getRootNodes() {
         ProfilerNode<Payload> mergedRoot = new ProfilerNode<>();
         Map<Thread, Collection<ProfilerNode<Payload>>> threadToNodes = getThreadToNodesMap();
@@ -374,10 +370,8 @@ public final class CPUSampler implements Closeable {
 
     /**
      * @return The roots of the trees representing the profile of the execution per thread.
-     * @deprecated Use {@link #getData()}.
      * @since 19.0
      */
-    @Deprecated
     public synchronized Map<Thread, Collection<ProfilerNode<Payload>>> getThreadToNodesMap() {
         if (activeContexts.isEmpty()) {
             return Collections.emptyMap();
@@ -397,7 +391,7 @@ public final class CPUSampler implements Closeable {
      * @return a map from {@link TruffleContext} to {@link CPUSamplerData}.
      * @since 21.3.0
      */
-    public synchronized Map<TruffleContext, CPUSamplerData> getData() {
+    public synchronized Map<TruffleContext, CPUSamplerData> getContextData() {
         if (activeContexts.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -506,17 +500,14 @@ public final class CPUSampler implements Closeable {
      * @since 19.0
      */
     public Map<Thread, List<StackTraceEntry>> takeSample() {
-        TruffleContext context;
-        synchronized (CPUSampler.this) {
-            if (safepointStackSampler == null) {
-                this.safepointStackSampler = new SafepointStackSampler(stackLimit, filter, period);
-            }
-            if (activeContexts.isEmpty()) {
-                return Collections.emptyMap();
-            }
-            context = activeContexts.keySet().iterator().next();
+        if (safepointStackSampler == null) {
+            this.safepointStackSampler = new SafepointStackSampler(stackLimit, filter, period);
+        }
+        if (activeContexts.isEmpty()) {
+            return Collections.emptyMap();
         }
         Map<Thread, List<StackTraceEntry>> stacks = new HashMap<>();
+        TruffleContext context = activeContexts.keySet().iterator().next();
         List<StackSample> sample = safepointStackSampler.sample(env, context);
         for (StackSample stackSample : sample) {
             stacks.put(stackSample.thread, stackSample.stack);
@@ -567,10 +558,8 @@ public final class CPUSampler implements Closeable {
     /**
      * Describes the different modes in which the CPU sampler can operate.
      *
-     * @deprecated Will be removed without replacement.
      * @since 0.30
      */
-    @Deprecated
     public enum Mode {
         /**
          * Sample {@link RootTag Roots} <b>excluding</b> the ones that get inlined during
