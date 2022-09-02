@@ -731,13 +731,7 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
         LLVMTypeRef newType = LLVMIRBuilder.typeOf(newValue);
         assert LLVMIRBuilder.compatibleTypes(expectedType, newType) : dumpValues("invalid cmpxchg arguments", expectedValue, newValue);
 
-        boolean trackedAddress = LLVMIRBuilder.isObjectType(typeOf(address));
-        LLVMValueRef castedAddress;
-        if (!trackedAddress && LLVMIRBuilder.isObjectType(expectedType)) {
-            castedAddress = builder.buildAddrSpaceCast(address, builder.pointerType(expectedType, true, false));
-        } else {
-            castedAddress = builder.buildBitcast(address, builder.pointerType(expectedType, trackedAddress, false));
-        }
+        LLVMValueRef castedAddress = builder.buildBitcast(address, builder.pointerType(expectedType, LLVMIRBuilder.isObjectType(typeOf(address)), false));
         return builder.buildCmpxchg(castedAddress, expectedValue, newValue, returnValue);
     }
 
