@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import org.graalvm.options.OptionValues;
-import org.graalvm.tools.lsp.instrument.LSOptions;
+import org.graalvm.tools.lsp.instrument.LSPInstrument;
 
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter.SourcePredicate;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -51,7 +51,7 @@ public final class SourcePredicateBuilder {
      * @param uri
      */
     public SourcePredicateBuilder uriOrTruffleName(URI uri) {
-        SourcePredicate predicate = src -> src.getURI().equals(uri) || (src.getURI().getScheme().equals("truffle") && src.getName().equals(uri.getPath()));
+        SourcePredicate predicate = src -> src.getURI().equals(uri) || ("truffle".equals(src.getURI().getScheme()) && src.getName() != null && src.getName().equals(uri.getPath()));
         this.predicates.add(predicate);
         return this;
     }
@@ -64,7 +64,7 @@ public final class SourcePredicateBuilder {
     }
 
     public SourcePredicateBuilder excludeInternal(OptionValues options) {
-        boolean includeInternal = options.get(LSOptions.InternalSources);
+        boolean includeInternal = options.get(LSPInstrument.Internal);
         if (!includeInternal) {
             SourcePredicate predicate = src -> !src.isInternal();
             this.predicates.add(predicate);
