@@ -27,26 +27,10 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.wasm.test.parser;
+package com.oracle.truffle.wasm.test;
 
-import com.oracle.truffle.wasm.parser.binary.BinaryReader;
-import com.oracle.truffle.wasm.test.WasmTest;
-import com.oracle.truffle.wasm.test.WasmTestToolkit;
-import org.junit.Test;
+public final class WasmTestOptions {
 
-import java.io.IOException;
+    public static final String WAT2WASM_ENV_VAR = "WAT2WASM_BINARY";
 
-public class WasmParserTest extends WasmTest {
-
-    @Test
-    public void parseHelloWorldTest() throws IOException, InterruptedException {
-        parseProgram("(module (func (result i32) (i32.const 42)))");
-        parseProgram("(module (func (result i32) (i32.const 1690433)))");
-    }
-
-    private static void parseProgram(String program) throws IOException, InterruptedException {
-        byte[] binary = WasmTestToolkit.compileWat(program);
-        BinaryReader reader = new BinaryReader(binary);
-        reader.readModule();
-    }
 }
