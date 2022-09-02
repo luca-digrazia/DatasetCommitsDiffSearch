@@ -29,32 +29,40 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class PointerType extends AggregateType {
     public static final PointerType I8 = new PointerType(PrimitiveType.I8);
     public static final PointerType VOID = new PointerType(VoidType.INSTANCE);
 
-    private Type pointeeType;
+    @CompilationFinal private Type pointeeType;
+    @CompilationFinal private Assumption pointeeTypeAssumption;
 
     public PointerType(Type pointeeType) {
+        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption("PointerType.pointeeType");
         this.pointeeType = pointeeType;
     }
 
     public Type getPointeeType() {
-        CompilerAsserts.neverPartOfCompilation();
+        if (!pointeeTypeAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
         return pointeeType;
     }
 
     public void setPointeeType(Type type) {
-        CompilerAsserts.neverPartOfCompilation();
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         verifyCycleFree(type);
+        this.pointeeTypeAssumption.invalidate();
         this.pointeeType = type;
+        this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption("PointerType.pointeeType");
     }
 
     @Override

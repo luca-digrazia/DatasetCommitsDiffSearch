@@ -44,14 +44,12 @@ public final class StructureType extends AggregateType {
 
     private final String name;
     private final boolean isPacked;
-    private final boolean isNamed;
     @CompilationFinal(dimensions = 1) private final Type[] types;
     private long size = -1;
 
-    private StructureType(String name, boolean isPacked, boolean isNamed, Type[] types) {
+    private StructureType(String name, boolean isPacked, Type[] types) {
         this.name = name;
         this.isPacked = isPacked;
-        this.isNamed = isNamed;
         this.types = types;
     }
 
@@ -64,14 +62,14 @@ public final class StructureType extends AggregateType {
      * instead.
      */
     public static StructureType createNamedByCopy(String name, boolean isPacked, Type[] types) {
-        return new StructureType(name, isPacked, true, types.clone());
+        return new StructureType(name, isPacked, types.clone());
     }
 
     /**
      * @see #createNamedByCopy(String, boolean, Type[])
      */
     public static StructureType createNamedByCopy(String name, boolean isPacked, ArrayList<Type> types) {
-        return new StructureType(name, isPacked, true, types.toArray(Type.EMPTY_ARRAY));
+        return new StructureType(name, isPacked, types.toArray(Type.EMPTY_ARRAY));
     }
 
     /**
@@ -82,15 +80,15 @@ public final class StructureType extends AggregateType {
      * structure with unknown element types use {@link #StructureType(boolean, int)} instead.
      */
     public static StructureType createUnnamedByCopy(boolean isPacked, Type[] types) {
-        return new StructureType(LLVMIdentifier.UNKNOWN, isPacked, false, types.clone());
+        return new StructureType(LLVMIdentifier.UNKNOWN, isPacked, types.clone());
     }
 
     public StructureType(String name, boolean isPacked, int numElements) {
-        this(name, isPacked, true, new Type[numElements]);
+        this(name, isPacked, new Type[numElements]);
     }
 
     public StructureType(boolean isPacked, int numElements) {
-        this(LLVMIdentifier.UNKNOWN, isPacked, false, new Type[numElements]);
+        this(LLVMIdentifier.UNKNOWN, isPacked, new Type[numElements]);
     }
 
     public void setElementType(int idx, Type type) {
@@ -107,7 +105,7 @@ public final class StructureType extends AggregateType {
     }
 
     public boolean isNamed() {
-        return isNamed;
+        return !LLVMIdentifier.UNKNOWN.equals(name);
     }
 
     @Override

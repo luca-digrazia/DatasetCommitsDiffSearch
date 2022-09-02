@@ -29,15 +29,18 @@
  */
 package com.oracle.truffle.llvm.runtime.types;
 
-import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class VectorType extends AggregateType {
 
-    private Type elementType;
+    @CompilationFinal private Assumption elementTypeAssumption;
+    @CompilationFinal private Type elementType;
     /**
      * Length of the vector. The value is interpreted as an unsigned 32 bit integer value.
      */
@@ -48,12 +51,15 @@ public final class VectorType extends AggregateType {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new AssertionError("Invalid ElementType of Vector: " + elementType.getClass().getSimpleName());
         }
+        this.elementTypeAssumption = Truffle.getRuntime().createAssumption("VectorType.elementType");
         this.elementType = elementType;
         this.length = length;
     }
 
     public Type getElementType() {
-        CompilerAsserts.neverPartOfCompilation();
+        if (!elementTypeAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
         return elementType;
     }
 
@@ -72,12 +78,14 @@ public final class VectorType extends AggregateType {
     }
 
     public void setElementType(Type elementType) {
-        CompilerAsserts.neverPartOfCompilation();
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         if (!(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
             throw new AssertionError("Invalid ElementType of Vector: " + (elementType == null ? "null" : elementType.getClass().getSimpleName()));
         }
         verifyCycleFree(elementType);
+        this.elementTypeAssumption.invalidate();
         this.elementType = elementType;
+        this.elementTypeAssumption = Truffle.getRuntime().createAssumption("VectorType.elementType");
     }
 
     @Override
