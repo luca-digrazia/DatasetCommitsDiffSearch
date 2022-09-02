@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.hotspot.management.libgraal;
 
-import static org.graalvm.compiler.hotspot.management.libgraal.MBeanProxy.nameWithIsolateId;
-
 import java.lang.management.MemoryUsage;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,16 +45,12 @@ import javax.management.openmbean.CompositeType;
 import javax.management.openmbean.OpenDataException;
 import javax.management.openmbean.OpenType;
 import javax.management.openmbean.SimpleType;
-import org.graalvm.compiler.serviceprovider.IsolateUtil;
 
 final class LibGraalMemoryPoolMBean implements DynamicMBean {
 
-    private static final String BASE_OBJECT_NAME = "org.graalvm.compiler.hotspot:type=Libgraal";
-    private static final String MEMORY_MANAGER = "Libgraal Memory Pool";
+    static final String NAME = "java.lang:type=MemoryPool,name=Libgraal";
 
-    private static final String ATTR_NAME = "Name";
     private static final String ATTR_TYPE = "Type";
-    private static final String ATTR_MEMORY_MANAGER_NAMES = "MemoryManagerNames";
     private static final String ATTR_VALID = "Valid";
     private static final String ATTR_USAGE = "Usage";
     private static final String ATTR_PEAK_USAGE = "PeakUsage";
@@ -87,27 +81,17 @@ final class LibGraalMemoryPoolMBean implements DynamicMBean {
     }
 
     private final Runtime rt;
-    private final String objectId;
-    private final String name;
     private volatile long peekTotalMemory;
     private volatile long peekUsedMemory;
 
     LibGraalMemoryPoolMBean() {
         rt = Runtime.getRuntime();
-        objectId = nameWithIsolateId(BASE_OBJECT_NAME);
-        name = MEMORY_MANAGER + " " + IsolateUtil.getIsolateID();
-    }
-
-    String getObjectId() {
-        return objectId;
     }
 
     @Override
     public MBeanInfo getMBeanInfo() {
         List<MBeanAttributeInfo> attrs = new ArrayList<>();
-        attrs.add(createAttributeInfo(ATTR_NAME, String.class));
         attrs.add(createAttributeInfo(ATTR_TYPE, String.class));
-        attrs.add(createAttributeInfo(ATTR_MEMORY_MANAGER_NAMES, String[].class));
         attrs.add(createAttributeInfo(ATTR_VALID, Boolean.class));
         attrs.add(createAttributeInfo(ATTR_USAGE, CompositeData.class));
         attrs.add(createAttributeInfo(ATTR_PEAK_USAGE, CompositeData.class));
@@ -123,7 +107,7 @@ final class LibGraalMemoryPoolMBean implements DynamicMBean {
 
         return new MBeanInfo(
                         getClass().getName(),
-                        MEMORY_MANAGER,
+                        "Libgraal Memory Pool",
                         attrs.toArray(new MBeanAttributeInfo[attrs.size()]),
                         new MBeanConstructorInfo[0],
                         new MBeanOperationInfo[0],
@@ -137,12 +121,8 @@ final class LibGraalMemoryPoolMBean implements DynamicMBean {
     @Override
     public Object getAttribute(String attribute) throws AttributeNotFoundException, MBeanException, ReflectionException {
         switch (attribute) {
-            case ATTR_NAME:
-                return name;
             case ATTR_TYPE:
                 return "NON_HEAP";
-            case ATTR_MEMORY_MANAGER_NAMES:
-                return new String[]{MEMORY_MANAGER};
             case ATTR_VALID:
                 return true;
             case ATTR_USAGE:
