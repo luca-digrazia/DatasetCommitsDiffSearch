@@ -1,130 +1,253 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * All rights reserved.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * Redistribution and use in source and binary forms, with or without modification, are
- * permitted provided that the following conditions are met:
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * 1. Redistributions of source code must retain the above copyright notice, this list of
- * conditions and the following disclaimer.
+ * (a) the Software, and
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided
- * with the distribution.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to
- * endorse or promote products derived from this software without specific prior written
- * permission.
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package org.graalvm.wasm.memory;
 
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+
+import org.graalvm.wasm.collection.ByteArrayList;
+import org.graalvm.wasm.constants.Sizes;
+import org.graalvm.wasm.nodes.WasmNode;
+
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.InvalidBufferOffsetException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-
-import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreter;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.profiles.BranchProfile;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class WasmMemory implements TruffleObject {
-    static final int PAGE_SIZE = 1 << 16;
-    static final int LONG_SIZE = 8;
 
-    public abstract void validateAddress(long address, int size);
-
-    public abstract void copy(long src, long dst, long n);
+    public abstract void copy(Node node, int src, int dst, int n);
 
     /**
-     * The size of the memory, measured in number of pages.
+     * The current size of this memory instance (measured in number of {@link Sizes#MEMORY_PAGE_SIZE
+     * pages}).
      */
-    public abstract long pageSize();
+    public abstract int size();
 
     /**
-     * The size of the memory, measured in bytes.
+     * The current size of this memory instance (measured in bytes).
      */
-    public abstract long byteSize();
+    public abstract int byteSize();
 
-    public abstract boolean grow(long extraSize);
+    /**
+     * The minimum size of this memory as declared in the binary (measured in number of
+     * {@link Sizes#MEMORY_PAGE_SIZE pages}).
+     * <p>
+     * This is a lower bound on this memory's size. This memory can only be imported with a lower or
+     * equal minimum size.
+     */
+    public abstract int declaredMinSize();
 
-    public abstract long maxPageSize();
+    /**
+     * The maximum size of this memory as declared in the binary (measured in number of
+     * {@link Sizes#MEMORY_PAGE_SIZE pages}).
+     * <p>
+     * This is an upper bound on this memory's size. This memory can only be imported with a greater
+     * or equal maximum size.
+     * <p>
+     * This is different from the internal maximum allowed size, which can be lower.
+     */
+    public abstract int declaredMaxSize();
+
+    public abstract boolean grow(int extraPageSize);
+
+    /**
+     * Shrinks this memory's size to its {@link #declaredMinSize()} initial size}, and sets all
+     * bytes to 0.
+     * <p>
+     * Note: this does not restore content from data section. For this, use
+     * {@link org.graalvm.wasm.BinaryParser#resetMemoryState}.
+     */
+    public abstract void reset();
 
     // Checkstyle: stop
-    public abstract int load_i32(long address);
+    public abstract int load_i32(Node node, int address);
 
-    public abstract long load_i64(long address);
+    public abstract long load_i64(Node node, int address);
 
-    public abstract float load_f32(long address);
+    public abstract float load_f32(Node node, int address);
 
-    public abstract double load_f64(long address);
+    public abstract double load_f64(Node node, int address);
 
-    public abstract int load_i32_8s(long address);
+    public abstract int load_i32_8s(Node node, int address);
 
-    public abstract int load_i32_8u(long address);
+    public abstract int load_i32_8u(Node node, int address);
 
-    public abstract int load_i32_16s(long address);
+    public abstract int load_i32_16s(Node node, int address);
 
-    public abstract int load_i32_16u(long address);
+    public abstract int load_i32_16u(Node node, int address);
 
-    public abstract long load_i64_8s(long address);
+    public abstract long load_i64_8s(Node node, int address);
 
-    public abstract long load_i64_8u(long address);
+    public abstract long load_i64_8u(Node node, int address);
 
-    public abstract long load_i64_16s(long address);
+    public abstract long load_i64_16s(Node node, int address);
 
-    public abstract long load_i64_16u(long address);
+    public abstract long load_i64_16u(Node node, int address);
 
-    public abstract long load_i64_32s(long address);
+    public abstract long load_i64_32s(Node node, int address);
 
-    public abstract long load_i64_32u(long address);
+    public abstract long load_i64_32u(Node node, int address);
 
-    public abstract void store_i32(long address, int value);
+    public abstract void store_i32(Node node, int address, int value);
 
-    public abstract void store_i64(long address, long value);
+    public abstract void store_i64(Node node, int address, long value);
 
-    public abstract void store_f32(long address, float value);
+    public abstract void store_f32(Node node, int address, float value);
 
-    public abstract void store_f64(long address, double value);
+    public abstract void store_f64(Node node, int address, double value);
 
-    public abstract void store_i32_8(long address, byte value);
+    public abstract void store_i32_8(Node node, int address, byte value);
 
-    public abstract void store_i32_16(long address, short value);
+    public abstract void store_i32_16(Node node, int address, short value);
 
-    public abstract void store_i64_8(long address, byte value);
+    public abstract void store_i64_8(Node node, int address, byte value);
 
-    public abstract void store_i64_16(long address, short value);
+    public abstract void store_i64_16(Node node, int address, short value);
 
-    public abstract void store_i64_32(long address, int value);
+    public abstract void store_i64_32(Node node, int address, int value);
     // Checkstyle: resume
-
-    public abstract void clear();
 
     public abstract WasmMemory duplicate();
 
-    long[] view(long address, int length) {
+    /**
+     * Reads the null-terminated UTF-8 string starting at {@code startOffset}.
+     *
+     * @param startOffset memory index of the first character
+     * @param node a node indicating the location where this read occurred in the Truffle AST. It
+     *            may be {@code null} to indicate that the location is not available.
+     * @return the read {@code String}
+     */
+    @CompilerDirectives.TruffleBoundary
+    public String readString(int startOffset, WasmNode node) {
+        ByteArrayList bytes = new ByteArrayList();
+        byte currentByte;
+        int offset = startOffset;
+
+        while ((currentByte = (byte) load_i32_8u(node, offset)) != 0) {
+            bytes.add(currentByte);
+            ++offset;
+        }
+
+        return new String(bytes.toArray(), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Reads the UTF-8 string of length {@code length} starting at {@code startOffset}.
+     *
+     * @param startOffset memory index of the first character
+     * @param length length of the UTF-8 string to read in bytes
+     * @param node a node indicating the location where this read occurred in the Truffle AST. It
+     *            may be {@code null} to indicate that the location is not available.
+     * @return the read {@code String}
+     */
+    @CompilerDirectives.TruffleBoundary
+    public final String readString(int startOffset, int length, Node node) {
+        ByteArrayList bytes = new ByteArrayList();
+
+        for (int i = 0; i < length; ++i) {
+            bytes.add((byte) load_i32_8u(node, startOffset + i));
+        }
+
+        return new String(bytes.toArray(), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Writes a Java String at offset {@code offset}.
+     * <p>
+     * The written string is encoded as UTF-8 and <em>not</em> terminated with a null character.
+     *
+     * @param node a node indicating the location where this write occurred in the Truffle AST. It
+     *            may be {@code null} to indicate that the location is not available.
+     * @param string the string to write
+     * @param offset memory index where to write the string
+     * @param length the maximum number of bytes to write, including the trailing null character
+     * @return the number of bytes written, including the trailing null character
+     */
+    @CompilerDirectives.TruffleBoundary
+    public final int writeString(Node node, String string, int offset, int length) {
+        final byte[] bytes = string.getBytes(StandardCharsets.UTF_8);
+        int i = 0;
+        for (; i < bytes.length && i < length; ++i) {
+            store_i32_8(node, offset + i, bytes[i]);
+        }
+        return i;
+    }
+
+    public final int writeString(Node node, String string, int offset) {
+        return writeString(node, string, offset, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Returns the number of bytes needed to write {@code string} with {@link #writeString}.
+     *
+     * @param string the string to write
+     * @return the number of bytes needed to write {@code string}
+     */
+    @CompilerDirectives.TruffleBoundary
+    public static int encodedStringLength(String string) {
+        return string.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    long[] view(int address, int length) {
         long[] chunk = new long[length / 8];
-        for (long p = address; p < address + length; p += 8) {
-            chunk[(int) (p - address) / 8] = load_i64(p);
+        for (int p = address; p < address + length; p += 8) {
+            chunk[(p - address) / 8] = load_i64(null, p);
         }
         return chunk;
     }
 
-    String viewByte(long address) {
-        final int value = load_i32_8u(address);
+    String viewByte(int address) {
+        final int value = load_i32_8u(null, address);
         String result = Integer.toHexString(value);
         if (result.length() == 1) {
             result = "0" + result;
@@ -132,7 +255,7 @@ public abstract class WasmMemory implements TruffleObject {
         return result;
     }
 
-    public String hexView(long address, int length) {
+    public String hexView(int address, int length) {
         long[] chunk = view(address, length);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < chunk.length; i++) {
@@ -169,6 +292,139 @@ public abstract class WasmMemory implements TruffleObject {
         return padded.toString();
     }
 
+    @SuppressWarnings("static-method")
+    @ExportMessage
+    final boolean hasBufferElements() {
+        return true;
+    }
+
+    @ExportMessage
+    final long getBufferSize() {
+        return byteSize();
+    }
+
+    private void checkOffset(long byteOffset, int opLength, BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        if (byteOffset < 0 || getBufferSize() - opLength < byteOffset) {
+            errorBranch.enter();
+            throw InvalidBufferOffsetException.create(byteOffset, opLength);
+        }
+    }
+
+    @ExportMessage
+    final byte readBufferByte(long byteOffset,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Byte.BYTES, errorBranch);
+        return (byte) load_i32_8s(null, (int) byteOffset);
+    }
+
+    @ExportMessage
+    final short readBufferShort(ByteOrder order, long byteOffset,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Short.BYTES, errorBranch);
+        short result = (short) load_i32_16s(null, (int) byteOffset);
+        if (order == ByteOrder.BIG_ENDIAN) {
+            result = Short.reverseBytes(result);
+        }
+        return result;
+    }
+
+    @ExportMessage
+    final int readBufferInt(ByteOrder order, long byteOffset,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Integer.BYTES, errorBranch);
+        int result = load_i32(null, (int) byteOffset);
+        if (order == ByteOrder.BIG_ENDIAN) {
+            result = Integer.reverseBytes(result);
+        }
+        return result;
+    }
+
+    @ExportMessage
+    final long readBufferLong(ByteOrder order, long byteOffset,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Long.BYTES, errorBranch);
+        long result = load_i64(null, (int) byteOffset);
+        if (order == ByteOrder.BIG_ENDIAN) {
+            result = Long.reverseBytes(result);
+        }
+        return result;
+    }
+
+    @ExportMessage
+    final float readBufferFloat(ByteOrder order, long byteOffset,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Float.BYTES, errorBranch);
+        float result = load_f32(null, (int) byteOffset);
+        if (order == ByteOrder.BIG_ENDIAN) {
+            result = Float.intBitsToFloat(Integer.reverseBytes(Float.floatToRawIntBits(result)));
+        }
+        return result;
+    }
+
+    @ExportMessage
+    final double readBufferDouble(ByteOrder order, long byteOffset,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Double.BYTES, errorBranch);
+        double result = load_f64(null, (int) byteOffset);
+        if (order == ByteOrder.BIG_ENDIAN) {
+            result = Double.longBitsToDouble(Long.reverseBytes(Double.doubleToRawLongBits(result)));
+        }
+        return result;
+    }
+
+    @SuppressWarnings("static-method")
+    @ExportMessage
+    final boolean isBufferWritable() {
+        return true;
+    }
+
+    @ExportMessage
+    final void writeBufferByte(long byteOffset, byte value,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Byte.BYTES, errorBranch);
+        store_i32_8(null, (int) byteOffset, value);
+    }
+
+    @ExportMessage
+    final void writeBufferShort(ByteOrder order, long byteOffset, short value,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Short.BYTES, errorBranch);
+        short actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Short.reverseBytes(value);
+        store_i32_16(null, (int) byteOffset, actualValue);
+    }
+
+    @ExportMessage
+    final void writeBufferInt(ByteOrder order, long byteOffset, int value,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Integer.BYTES, errorBranch);
+        int actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Integer.reverseBytes(value);
+        store_i32(null, (int) byteOffset, actualValue);
+    }
+
+    @ExportMessage
+    final void writeBufferLong(ByteOrder order, long byteOffset, long value,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Long.BYTES, errorBranch);
+        long actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Long.reverseBytes(value);
+        store_i64(null, (int) byteOffset, actualValue);
+    }
+
+    @ExportMessage
+    final void writeBufferFloat(ByteOrder order, long byteOffset, float value,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Float.BYTES, errorBranch);
+        float actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Float.intBitsToFloat(Integer.reverseBytes(Float.floatToRawIntBits(value)));
+        store_f32(null, (int) byteOffset, actualValue);
+    }
+
+    @ExportMessage
+    final void writeBufferDouble(ByteOrder order, long byteOffset, double value,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidBufferOffsetException {
+        checkOffset(byteOffset, Double.BYTES, errorBranch);
+        double actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Double.longBitsToDouble(Long.reverseBytes(Double.doubleToRawLongBits(value)));
+        store_f64(null, (int) byteOffset, actualValue);
+    }
+
     @ExportMessage
     boolean hasArrayElements() {
         return true;
@@ -176,53 +432,51 @@ public abstract class WasmMemory implements TruffleObject {
 
     @ExportMessage
     long getArraySize() {
-        return byteSize() / LONG_SIZE;
+        return byteSize();
     }
 
     @ExportMessage
-    boolean isArrayElementReadable(long index) {
-        return index >= 0 && index < getArraySize();
+    boolean isArrayElementReadable(long address) {
+        return address >= 0 && address < getArraySize();
     }
 
     @ExportMessage
-    final boolean isArrayElementModifiable(long index) {
-        return isArrayElementReadable(index);
+    final boolean isArrayElementModifiable(long address) {
+        return isArrayElementReadable(address);
     }
 
     @SuppressWarnings({"unused", "static-method"})
     @ExportMessage
-    final boolean isArrayElementInsertable(long index) {
+    final boolean isArrayElementInsertable(long address) {
         return false;
     }
 
     @ExportMessage
-    public Object readArrayElement(long index) throws InvalidArrayIndexException {
-        if (!isArrayElementReadable(index)) {
-            transferToInterpreter();
-            throw InvalidArrayIndexException.create(index);
+    public Object readArrayElement(long address,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch) throws InvalidArrayIndexException {
+        if (!isArrayElementReadable(address)) {
+            errorBranch.enter();
+            throw InvalidArrayIndexException.create(address);
         }
-        long address = index * LONG_SIZE;
-        return load_i64(address);
+        return load_i32_8u(null, (int) address);
     }
 
-    @ExportMessage(limit = "3")
-    public void writeArrayElement(long index64, Object value, @CachedLibrary("value") InteropLibrary valueLib)
+    @ExportMessage
+    public void writeArrayElement(long address, Object value,
+                    @CachedLibrary(limit = "3") InteropLibrary valueLib,
+                    @Shared("errorBranch") @Cached BranchProfile errorBranch)
                     throws InvalidArrayIndexException, UnsupportedMessageException, UnsupportedTypeException {
-        if (!isArrayElementReadable(index64)) {
-            transferToInterpreter();
-            throw InvalidArrayIndexException.create(index64);
+        if (!isArrayElementModifiable(address)) {
+            errorBranch.enter();
+            throw InvalidArrayIndexException.create(address);
         }
-        long rawValue;
-        if (valueLib.fitsInLong(value)) {
-            rawValue = valueLib.asLong(value);
-        } else if (valueLib.fitsInFloat(value)) {
-            rawValue = Float.floatToRawIntBits(valueLib.asFloat(value));
-        } else if (valueLib.fitsInDouble(value)) {
-            rawValue = Double.doubleToRawLongBits(valueLib.asDouble(value));
+        byte rawValue;
+        if (valueLib.fitsInByte(value)) {
+            rawValue = valueLib.asByte(value);
         } else {
-            throw UnsupportedTypeException.create(new Object[]{value});
+            errorBranch.enter();
+            throw UnsupportedTypeException.create(new Object[]{value}, "Only bytes can be stored into WebAssembly memory.");
         }
-        long address = index64 * LONG_SIZE;
-        store_i64(address, rawValue);
+        store_i32_8(null, (int) address, rawValue);
     }
 }
