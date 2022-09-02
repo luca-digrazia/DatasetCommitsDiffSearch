@@ -1721,10 +1721,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case I64_EXTEND_I32_U: {
-                    stackPointer--;
-                    int x = popInt(frame, stackPointer);
-                    push(frame, stackPointer, x & 0xFFFF_FFFFL);
-                    stackPointer++;
                     break;
                 }
                 case I64_TRUNC_F32_S:
