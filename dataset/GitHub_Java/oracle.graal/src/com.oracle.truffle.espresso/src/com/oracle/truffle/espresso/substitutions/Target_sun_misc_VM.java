@@ -23,10 +23,23 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-@EspressoSubstitutions
+@EspressoSubstitutions(nameProvider = Target_sun_misc_VM.SharedVM.class)
 public final class Target_sun_misc_VM {
     @Substitution
     public static void initialize() {
         /* nop */
+    }
+
+    public static class SharedVM extends SubstitutionNamesProvider {
+        private static String[] NAMES = new String[]{
+                        "Target_sun_misc_VM",
+                        "Target_jdk_internal_misc_VM"
+        };
+        public static SubstitutionNamesProvider INSTANCE = new SharedVM();
+
+        @Override
+        public String[] substitutionClassNames() {
+            return NAMES;
+        }
     }
 }
