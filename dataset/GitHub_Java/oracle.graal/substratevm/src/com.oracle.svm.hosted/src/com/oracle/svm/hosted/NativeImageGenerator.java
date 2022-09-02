@@ -290,6 +290,8 @@ public class NativeImageGenerator {
     private AbstractBootImage image;
     private AtomicBoolean buildStarted = new AtomicBoolean();
 
+    private Platform targetPlatform;
+
     public NativeImageGenerator(ImageClassLoader loader, HostedOptionProvider optionProvider) {
         this.loader = loader;
         this.featureHandler = new FeatureHandler();
@@ -608,7 +610,7 @@ public class NativeImageGenerator {
                 /* release memory taken by graphs for the image writing */
                 hUniverse.getMethods().forEach(HostedMethod::clear);
 
-                codeCache = NativeImageCodeCacheFactory.get().newCodeCache(compileQueue, heap, loader.platform);
+                codeCache = NativeImageCodeCacheFactory.get().newCodeCache(compileQueue, heap, targetPlatform);
                 codeCache.layoutConstants();
                 codeCache.layoutMethods(debug, imageName);
 
@@ -797,8 +799,9 @@ public class NativeImageGenerator {
                     ForkJoinPool analysisExecutor, SnippetReflectionProvider originalSnippetReflection, DebugContext debug) {
         try (Indent ignored = debug.logAndIndent("setup native-image builder")) {
             try (StopTimer ignored1 = new Timer(imageName, "setup").start()) {
-                SubstrateTargetDescription target = createTarget(loader.platform);
-                ImageSingletons.add(Platform.class, loader.platform);
+                this.targetPlatform = defaultPlatform(loader.getClassLoader());
+                SubstrateTargetDescription target = createTarget(targetPlatform);
+                ImageSingletons.add(Platform.class, targetPlatform);
                 ImageSingletons.add(SubstrateTargetDescription.class, target);
 
                 if (javaMainSupport != null) {
@@ -825,7 +828,7 @@ public class NativeImageGenerator {
 
                 AnnotationSubstitutionProcessor annotationSubstitutions = createDeclarativeSubstitutionProcessor(originalMetaAccess, loader, classInitializationSupport);
                 CEnumCallWrapperSubstitutionProcessor cEnumProcessor = new CEnumCallWrapperSubstitutionProcessor();
-                aUniverse = createAnalysisUniverse(options, target, loader, originalMetaAccess, originalSnippetReflection, annotationSubstitutions, cEnumProcessor,
+                aUniverse = createAnalysisUniverse(options, targetPlatform, target, loader, originalMetaAccess, originalSnippetReflection, annotationSubstitutions, cEnumProcessor,
                                 classInitializationSupport, Collections.singletonList(harnessSubstitutions));
 
                 AnalysisMetaAccess aMetaAccess = new SVMAnalysisMetaAccess(aUniverse, originalMetaAccess);
@@ -851,7 +854,7 @@ public class NativeImageGenerator {
         }
     }
 
-    public static AnalysisUniverse createAnalysisUniverse(OptionValues options, TargetDescription target, ImageClassLoader loader, MetaAccessProvider originalMetaAccess,
+    public static AnalysisUniverse createAnalysisUniverse(OptionValues options, Platform platform, TargetDescription target, ImageClassLoader loader, MetaAccessProvider originalMetaAccess,
                     SnippetReflectionProvider originalSnippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions, SubstitutionProcessor cEnumProcessor,
                     ClassInitializationSupport classInitializationSupport, List<SubstitutionProcessor> additionalSubstitutions) {
         UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = createAutomaticUnsafeSubstitutions(originalSnippetReflection, originalMetaAccess, annotationSubstitutions, loader);
@@ -861,7 +864,7 @@ public class NativeImageGenerator {
         SVMHost hostVM = new SVMHost(options, loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
         AnalysisPolicy analysisPolicy = PointstoOptions.AllocationSiteSensitiveHeap.getValue(options) ? new AllocationSiteSensitiveAnalysisPolicy(options)
                         : new ContextInsensitiveAnalysisPolicy(options);
-        return new AnalysisUniverse(hostVM, target.wordJavaKind, loader.platform, analysisPolicy, aSubstitutions, originalMetaAccess, originalSnippetReflection,
+        return new AnalysisUniverse(hostVM, target.wordJavaKind, platform, analysisPolicy, aSubstitutions, originalMetaAccess, originalSnippetReflection,
                         new SubstrateSnippetReflectionProvider(new SubstrateWordTypes(originalMetaAccess, FrameAccess.getWordKind())));
     }
 
