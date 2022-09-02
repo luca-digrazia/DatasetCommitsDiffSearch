@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -54,7 +53,6 @@ public final class LLVMPolyglotRemove {
     public abstract static class LLVMPolyglotRemoveMember extends LLVMIntrinsic {
 
         @Specialization
-        @GenerateAOT.Exclude
         protected boolean doRemove(LLVMManagedPointer value, Object id,
                         @Cached LLVMAsForeignNode asForeign,
                         @Cached LLVMReadStringNode readStr,
@@ -70,7 +68,7 @@ public final class LLVMPolyglotRemove {
                 return false;
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Cannot remove member '%s' from polyglot value.", id);
+                throw new LLVMPolyglotException(this, "Can not remove member '%s' from polyglot value.", id);
             }
         }
 
@@ -91,7 +89,6 @@ public final class LLVMPolyglotRemove {
     public abstract static class LLVMPolyglotRemoveArrayElement extends LLVMIntrinsic {
 
         @Specialization
-        @GenerateAOT.Exclude
         protected boolean doRemove(LLVMManagedPointer value, int idx,
                         @Cached LLVMAsForeignNode asForeign,
                         @CachedLibrary(limit = "3") InteropLibrary interop,
@@ -106,7 +103,7 @@ public final class LLVMPolyglotRemove {
                 return false;
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Cannot remove index %d from polyglot value.", idx);
+                throw new LLVMPolyglotException(this, "Can not remove index %d from polyglot value.", idx);
             }
         }
 

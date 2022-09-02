@@ -92,10 +92,5 @@ public abstract class BasicPlatformCapability<S extends Enum<S> & LLVMSyscallEnt
         }
     }
 
-    @Override
-    public String getLibrarySuffix() {
-        return NFIContextExtension.getNativeLibrarySuffix();
-    }
-
     protected abstract LLVMSyscallOperationNode createSyscallNode(S syscall);
 }

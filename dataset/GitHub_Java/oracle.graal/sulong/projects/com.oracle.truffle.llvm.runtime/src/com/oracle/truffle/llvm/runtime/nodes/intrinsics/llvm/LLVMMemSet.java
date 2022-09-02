@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,12 +29,9 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
@@ -50,26 +47,26 @@ public abstract class LLVMMemSet extends LLVMBuiltin {
         this.memSet = memSet;
     }
 
-    @SuppressWarnings("unused")
+    /**
+     * @param address @NodeChild
+     * @param value @NodeChild
+     * @param length @NodeChild
+     * @param isVolatile @NodeChild
+     * @see LLVMMemSet
+     */
     @Specialization
     protected Object doOp(LLVMPointer address, byte value, int length, boolean isVolatile) {
         memSet.executeWithTarget(address, value, length);
         return address;
     }
 
-    @SuppressWarnings("unused")
+    /**
+     * @param isVolatile
+     * @see LLVMMemSet
+     */
     @Specialization
     protected Object doOp(LLVMPointer address, byte value, long length, boolean isVolatile) {
         memSet.executeWithTarget(address, value, length);
-        return address;
-    }
-
-    @SuppressWarnings("unused")
-    @Specialization
-    protected Object doOp(LLVMVirtualAllocationAddress address, byte value, long length, boolean isVolatile, @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
-        for (int i = 0; i < length; i++) {
-            address.writeI8(memory, value);
-        }
         return address;
     }
 }

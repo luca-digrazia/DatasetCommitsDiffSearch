@@ -29,10 +29,7 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import java.util.function.Supplier;
-
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallArchPrctlNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallBrkNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallFutexNodeGen;
@@ -41,10 +38,9 @@ import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallMmapNod
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallRtSigactionNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallRtSigprocmaskNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64SyscallSetTidAddressNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMNativeSyscallNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMSyscallExitNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMUnknownSyscallNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.linux.amd64.LinuxAMD64Syscall;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VaListStorage;
 
 final class LinuxAMD64PlatformCapability extends BasicPlatformCapability<LinuxAMD64Syscall> {
 
@@ -75,13 +71,7 @@ final class LinuxAMD64PlatformCapability extends BasicPlatformCapability<LinuxAM
             case SYS_set_tid_address:
                 return LLVMAMD64SyscallSetTidAddressNodeGen.create();
             default:
-                return new LLVMNativeSyscallNode(syscall);
+                return new LLVMUnknownSyscallNode(syscall);
         }
     }
-
-    @Override
-    public Object createVAListStorage(Supplier<LLVMExpressionNode> allocaNodeFactory) {
-        return new LLVMX86_64VaListStorage(allocaNodeFactory);
-    }
-
 }
