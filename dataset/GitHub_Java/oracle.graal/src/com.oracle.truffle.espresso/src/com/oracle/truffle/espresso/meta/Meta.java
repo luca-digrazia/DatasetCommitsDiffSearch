@@ -24,6 +24,8 @@ package com.oracle.truffle.espresso.meta;
 
 import java.lang.management.MemoryUsage;
 import java.lang.management.ThreadInfo;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -182,8 +184,6 @@ public final class Meta implements ContextAccess {
         PrivilegedActionException_init_Exception = PrivilegedActionException.lookupDeclaredMethod(Name.INIT, Signature._void_Exception);
 
         ClassLoader = knownKlass(Type.ClassLoader);
-        ClassLoader_NativeLibrary = knownKlass(Type.ClassLoader_NativeLibrary);
-        ClassLoader_NativeLibrary_getFromClass = ClassLoader_NativeLibrary.lookupDeclaredMethod(Name.getFromClass, Signature.Class);
         ClassLoader_findNative = ClassLoader.lookupDeclaredMethod(Name.findNative, Signature._long_ClassLoader_String);
         ClassLoader_getSystemClassLoader = ClassLoader.lookupDeclaredMethod(Name.getSystemClassLoader, Signature.ClassLoader);
         ClassLoader_parent = ClassLoader.lookupDeclaredField(Name.parent, Type.ClassLoader);
@@ -455,8 +455,6 @@ public final class Meta implements ContextAccess {
 
     public final ObjectKlass ClassLoader;
     public final Field ClassLoader_parent;
-    public final ObjectKlass ClassLoader_NativeLibrary;
-    public final Method ClassLoader_NativeLibrary_getFromClass;
     public final Method ClassLoader_findNative;
     public final Method ClassLoader_getSystemClassLoader;
 
