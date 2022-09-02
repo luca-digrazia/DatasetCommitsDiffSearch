@@ -70,15 +70,14 @@ public abstract class WasmSuiteBase extends WasmTestBase {
     private static final String TEST_PASSED_ICON = "\uD83D\uDE0D";
     private static final String TEST_FAILED_ICON = "\uD83D\uDE21";
     private static final String TEST_IN_PROGRESS_ICON = "\u003F";
-    private static final String PHASE_PARSE_ICON = "\uD83D\uDCD6";
-    private static final String PHASE_SYNC_NO_INLINE_ICON = "\uD83D\uDD39";
-    private static final String PHASE_SYNC_INLINE_ICON = "\uD83D\uDD37";
-    private static final String PHASE_ASYNC_ICON = "\uD83D\uDD36";
+    private static final String PHASE_PARSE_ICON = "\uD83E\uDD13";
+    private static final String PHASE_SYNC_NO_INLINE_ICON = "\uD83D\uDD34";
+    private static final String PHASE_SYNC_INLINE_ICON = "\uD83D\uDD36";
+    private static final String PHASE_ASYNC_ICON = "\uD83D\uDD35";
     private static final String PHASE_INTERPRETER_ICON = "\uD83E\uDD16";
     private static final String PHASE_FINAL_CHECK_ICON = "\uD83D\uDE09";
     private static final int STATUS_ICON_WIDTH = 2;
     private static final int STATUS_LABEL_WIDTH = 11;
-    public static final int DEFAULT_ASYNC_ITERATIONS = 50000;
 
     private Context getInterpretedNoInline(Context.Builder contextBuilder) {
         contextBuilder.option("engine.Compilation", "false");
@@ -131,10 +130,9 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
         Value result = null;
         resetStatus(oldOut, phaseIcon, phaseLabel);
-        ByteArrayOutputStream capturedStdout = null;
         for (int i = 0; i != iterations; ++i) {
+            final ByteArrayOutputStream capturedStdout = new ByteArrayOutputStream();
             try {
-                capturedStdout = new ByteArrayOutputStream();
                 System.setOut(new PrintStream(capturedStdout));
 
                 if (testCase.initialization() != null) {
@@ -148,7 +146,6 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 System.setOut(oldOut);
             }
         }
-        assert capturedStdout != null;
 
         return result;
     }
@@ -195,21 +192,21 @@ public abstract class WasmSuiteBase extends WasmTestBase {
             // Run in synchronous compiled mode, with inlining turned off.
             // We need to run the test at least twice like this, since the first run will lead to de-opts due to empty profiles.
             context = getSyncCompiledNoInline(contextBuilder);
-            runInContext(testCase, context, source, 3, PHASE_SYNC_NO_INLINE_ICON, "sync,no-inl");
+            runInContext(testCase, context, source, 2, PHASE_SYNC_NO_INLINE_ICON, "sync,no-inl");
 
             // Run in interpreted mode, with inlining turned on, to ensure profiles are populated.
             context = getInterpretedWithInline(contextBuilder);
-            runInContext(testCase, context, source, 3, PHASE_INTERPRETER_ICON, "interpreter");
+            runInContext(testCase, context, source, 1, PHASE_INTERPRETER_ICON, "interpreter");
 
             // Run in synchronous compiled mode, with inlining turned on.
             // We need to run the test at least twice like this, since the first run will lead to de-opts due to empty profiles.
             context = getSyncCompiledWithInline(contextBuilder);
-            runInContext(testCase, context, source, 3, PHASE_SYNC_INLINE_ICON, "sync,inl");
+            runInContext(testCase, context, source, 2, PHASE_SYNC_INLINE_ICON, "sync,inl");
 
             // Run with normal, asynchronous compilation.
             // Run 1000 + 1 times - the last time run with a surrogate stream, to collect output.
             context = getAsyncCompiled(contextBuilder);
-            runInContext(testCase, context, source, DEFAULT_ASYNC_ITERATIONS, PHASE_ASYNC_ICON, "async,multi");
+            runInContext(testCase, context, source, 1000, PHASE_ASYNC_ICON, "async,multi");
             runInContext(testCase, context, source, 1, PHASE_FINAL_CHECK_ICON, "async,check");
         } catch (InterruptedException | IOException e) {
             Assert.fail(String.format("Test %s failed: %s", testCase.name, e.getMessage()));
