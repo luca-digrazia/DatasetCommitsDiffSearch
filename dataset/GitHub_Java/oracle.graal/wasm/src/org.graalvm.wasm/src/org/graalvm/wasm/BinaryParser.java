@@ -313,19 +313,10 @@ public class BinaryParser extends BinaryStreamParser {
         rootNode.codeEntry().initLocalSlots(rootNode.getFrameDescriptor());
 
         /* Initialize the Truffle-related components required for execution. */
-        if (state.byteConstants().length > 0) {
-            rootNode.codeEntry().setByteConstants(state.byteConstants());
-        }
-        if (state.intConstants().length > 0) {
-            rootNode.codeEntry().setIntConstants(state.intConstants());
-        }
-        if (state.longConstants().length > 0) {
-            rootNode.codeEntry().setLongConstants(state.longConstants());
-        }
-        if (state.branchTables().length > 0) {
-            rootNode.codeEntry().setBranchTables(state.branchTables());
-        }
-        rootNode.codeEntry().setConditionsCount(state.profileCount());
+        rootNode.codeEntry().setByteConstants(state.byteConstants());
+        rootNode.codeEntry().setIntConstants(state.intConstants());
+        rootNode.codeEntry().setLongConstants(state.longConstants());
+        rootNode.codeEntry().setBranchTables(state.branchTables());
         rootNode.codeEntry().initStackSlots(rootNode.getFrameDescriptor(), state.maxStackSize());
     }
 
@@ -378,9 +369,8 @@ public class BinaryParser extends BinaryStreamParser {
         int startIntConstantOffset = state.intConstantOffset();
         int startLongConstantOffset = state.longConstantOffset();
         int startBranchTableOffset = state.branchTableOffset();
-        int startProfileCount = state.profileCount();
         WasmBlockNode currentBlock = new WasmBlockNode(module, codeEntry, startOffset, returnTypeId, continuationTypeId, startStackSize,
-                        startByteConstantOffset, startIntConstantOffset, startLongConstantOffset, startBranchTableOffset, startProfileCount);
+                        startByteConstantOffset, startIntConstantOffset, startLongConstantOffset, startBranchTableOffset);
 
         // Push the type length of the current block's continuation.
         // Used when branching out of nested blocks (br and br_if instructions).
@@ -481,7 +471,6 @@ public class BinaryParser extends BinaryStreamParser {
                     final int unwindLevel = readLabelIndex(state);
                     state.useIntConstant(state.getStackState(unwindLevel));
                     state.useIntConstant(state.getContinuationReturnLength(unwindLevel));
-                    state.incrementProfileCount();
                     break;
                 }
                 case Instructions.BR_TABLE: {
@@ -879,7 +868,7 @@ public class BinaryParser extends BinaryStreamParser {
         currentBlock.initialize(toArray(children),
                         offset() - startOffset, state.byteConstantOffset() - startByteConstantOffset,
                         state.intConstantOffset() - startIntConstantOffset, state.longConstantOffset() - startLongConstantOffset,
-                        state.branchTableOffset() - startBranchTableOffset, state.profileCount() - startProfileCount);
+                        state.branchTableOffset() - startBranchTableOffset);
         // TODO: Restore this check, when we fix the case where the block contains a return
         // instruction.
         // checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
