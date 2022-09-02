@@ -47,6 +47,9 @@ abstract class ShapeGenerator<T> {
     private static final int JAVA_SPEC_VERSION;
     private static final Method DEFINE_CLASS;
 
+    protected final Class<?> generatedStorageClass;
+    protected final Class<? extends T> generatedFactoryClass;
+
     static {
         String value = System.getProperty("java.specification.version");
         if (value.startsWith("1.")) {
@@ -62,6 +65,11 @@ abstract class ShapeGenerator<T> {
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    ShapeGenerator(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass) {
+        this.generatedStorageClass = generatedStorageClass;
+        this.generatedFactoryClass = generatedFactoryClass;
     }
 
     abstract StaticShape<T> generateShape(StaticShape<T> parentShape, Collection<ExtendedProperty> extendedProperties);
