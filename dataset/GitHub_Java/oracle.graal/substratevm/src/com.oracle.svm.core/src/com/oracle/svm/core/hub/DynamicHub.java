@@ -105,9 +105,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     /* Value copied from java.lang.Class. */
     private static final int SYNTHETIC = 0x00001000;
 
-    @Platforms(Platform.HOSTED_ONLY.class) //
-    private final Class<?> hostedJavaClass;
-
     /**
      * The name of the class this hub is representing, as defined in {@link Class#getName()}.
      */
@@ -162,6 +159,17 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      * instance is locked.
      */
     private int monitorOffset;
+
+    /**
+     * The offset of the synthetic hash-code field which stores the identity hash-code for an
+     * instance of the class.
+     * <p>
+     * If 0, the class has no hash-code field. A class has a hash-code field if an instance of this
+     * class may be a parameter to {@link System#identityHashCode(Object)} or the this-parameter to
+     * {@link Object#hashCode()}. It stores a random hash-code, which is generated at the first call
+     * to one of those methods.
+     */
+    private int hashCodeOffset;
 
     /**
      * The result of {@link Class#isLocalClass()}.
@@ -366,9 +374,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private final LazyFinalReference<String> packageNameReference = new LazyFinalReference<>(this::computePackageName);
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public DynamicHub(Class<?> hostedJavaClass, String name, HubType hubType, ReferenceType referenceType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub,
-                    String sourceFileName, int modifiers, ClassLoader classLoader, boolean isHidden, boolean isRecord, Class<?> nestHost, boolean assertionStatus) {
-        this.hostedJavaClass = hostedJavaClass;
+    public DynamicHub(String name, HubType hubType, ReferenceType referenceType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName,
+                    int modifiers, ClassLoader classLoader, boolean isHidden, boolean isRecord, Class<?> nestHost, boolean assertionStatus) {
         this.name = name;
         this.hubType = hubType.getValue();
         this.referenceType = referenceType.getValue();
@@ -398,12 +405,13 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public void setData(int layoutEncoding, int typeID, int monitorOffset,
+    public void setData(int layoutEncoding, int typeID, int monitorOffset, int hashCodeOffset,
                     short typeCheckStart, short typeCheckRange, short typeCheckSlot, short[] typeCheckSlots,
                     CFunctionPointer[] vtable, long referenceMapIndex, boolean isInstantiated) {
         this.layoutEncoding = layoutEncoding;
         this.typeID = typeID;
         this.monitorOffset = monitorOffset;
+        this.hashCodeOffset = hashCodeOffset;
         this.typeCheckStart = typeCheckStart;
         this.typeCheckRange = typeCheckRange;
         this.typeCheckSlot = typeCheckSlot;
@@ -418,11 +426,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public void setData(int layoutEncoding, int typeID, int monitorOffset, int[] assignableFromMatches, BitSet instanceOfBits,
+    public void setData(int layoutEncoding, int typeID, int monitorOffset, int hashCodeOffset, int[] assignableFromMatches, BitSet instanceOfBits,
                     CFunctionPointer[] vtable, long referenceMapIndex, boolean isInstantiated) {
         this.layoutEncoding = layoutEncoding;
         this.typeID = typeID;
         this.monitorOffset = monitorOffset;
+        this.hashCodeOffset = hashCodeOffset;
         this.assignableFromMatches = assignableFromMatches;
         this.instanceOfBits = instanceOfBits;
         this.vtable = vtable;
@@ -596,6 +605,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         return monitorOffset;
     }
 
+    public int getHashCodeOffset() {
+        return hashCodeOffset;
+    }
+
     public DynamicHub getSuperHub() {
         return superHub;
     }
@@ -631,14 +644,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static Class<?> toClass(DynamicHub hub) {
         return SubstrateUtil.cast(hub, Class.class);
-    }
-
-    /**
-     * Returns the {@link Class} object that represents the type during image generation.
-     */
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public Class<?> getHostedJavaClass() {
-        return hostedJavaClass;
     }
 
     @Substitute
@@ -814,8 +819,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private boolean isAnonymousClass() {
         if (isAnonymousClass instanceof Boolean) {
             return (Boolean) isAnonymousClass;
-        } else if (isAnonymousClass instanceof LinkageError) {
-            throw (LinkageError) isAnonymousClass;
+        } else if (isAnonymousClass instanceof NoClassDefFoundError) {
+            throw (NoClassDefFoundError) isAnonymousClass;
         } else if (isAnonymousClass instanceof InternalError) {
             throw (InternalError) isAnonymousClass;
         } else {
@@ -1390,10 +1395,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         /* See open/src/hotspot/share/prims/jvm.cpp#1522. */
     }
 
-    @KeepOriginal //
+    @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
     @SuppressWarnings({"unused"})
-    private native List<Method> getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes);
+    List<Method> getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes) {
+        throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes)");
+    }
 
     @Substitute
     @TargetElement(onlyWith = JDK11OrLater.class)

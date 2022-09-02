@@ -27,6 +27,8 @@ package com.oracle.svm.hosted.meta;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
 import java.lang.annotation.Annotation;
+import java.util.Arrays;
+import java.util.BitSet;
 
 import org.graalvm.word.WordBase;
 
@@ -62,7 +64,23 @@ public abstract class HostedType implements SharedType, WrappedJavaType, Compara
 
     protected HostedMethod[] vtable;
 
+    /**
+     * @see SharedType#getInstanceOfFromTypeID()
+     */
+    protected int instanceOfFromTypeID;
+
+    /**
+     * @see SharedType#getInstanceOfNumTypeIDs()
+     */
+    protected int instanceOfNumTypeIDs;
+
+    /**
+     * Bits for instanceof checks. See {@link DynamicHub}.instanceOfBits.
+     */
+    protected BitSet instanceOfBits;
+
     protected int typeID;
+    protected int[] assignableFromMatches;
     protected HostedType uniqueConcreteImplementation;
     protected HostedMethod[] allDeclaredMethods;
 
@@ -113,6 +131,11 @@ public abstract class HostedType implements SharedType, WrappedJavaType, Compara
         return strengthenStampType;
     }
 
+    public void setInstanceOfRange(int instanceOfFromTypeID, int instanceOfNumTypeIDs) {
+        this.instanceOfFromTypeID = instanceOfFromTypeID;
+        this.instanceOfNumTypeIDs = instanceOfNumTypeIDs;
+    }
+
     public HostedType[] getSubTypes() {
         assert subTypes != null;
         return subTypes;
@@ -126,6 +149,11 @@ public abstract class HostedType implements SharedType, WrappedJavaType, Compara
     public int getTypeID() {
         assert typeID != -1;
         return typeID;
+    }
+
+    public int[] getAssignableFromMatches() {
+        assert assignableFromMatches != null;
+        return assignableFromMatches;
     }
 
     public void setTypeCheckRange(short typeCheckStart, short typeCheckRange) {
@@ -183,6 +211,16 @@ public abstract class HostedType implements SharedType, WrappedJavaType, Compara
     @Override
     public DynamicHub getHub() {
         return universe.hostVM().dynamicHub(wrapped);
+    }
+
+    @Override
+    public int getInstanceOfFromTypeID() {
+        return instanceOfFromTypeID;
+    }
+
+    @Override
+    public int getInstanceOfNumTypeIDs() {
+        return instanceOfNumTypeIDs;
     }
 
     @Override
@@ -309,31 +347,49 @@ public abstract class HostedType implements SharedType, WrappedJavaType, Compara
     }
 
     @Override
-    public ResolvedJavaMethod resolveConcreteMethod(ResolvedJavaMethod m, ResolvedJavaType callerType) {
+    public ResolvedJavaMethod resolveConcreteMethod(ResolvedJavaMethod m, ResolvedJavaType ct) {
         HostedMethod method = (HostedMethod) m;
+        HostedType callerType = (HostedType) ct;
 
-        AnalysisMethod aResult = wrapped.resolveConcreteMethod(method.wrapped);
-        HostedMethod hResult;
-        if (aResult == null) {
-            hResult = null;
-        } else if (!aResult.isImplementationInvoked() && !isWordType()) {
+        if (isWordType()) {
             /*
-             * Filter out methods that are not seen as invoked by the static analysis, e.g., because
-             * the declaring type is not instantiated. Word types are an exception, because methods
-             * of word types are never marked as invoked (they are always intrinsified).
+             * We do not keep any method information on word types on our own, so ask the hosting VM
+             * for the answer.
              */
-            hResult = null;
-        } else {
-            hResult = universe.lookup(aResult);
+            return wrappedResolveMethod(method, callerType);
         }
 
-        /**
-         * Check that the SharedType implementation, which is used for JIT compilation, gives the
-         * same result as the hosted implementation.
-         */
-        assert hResult == null || isWordType() || hResult.equals(SharedType.super.resolveConcreteMethod(method, callerType));
+        /* Use the same algorithm that is also used for SubstrateType during runtime compilation. */
+        ResolvedJavaMethod found = SharedType.super.resolveConcreteMethod(method, callerType);
+        /* Check that our algorithm returns the same result as the hosting VM. */
 
-        return hResult;
+        /*
+         * For abstract classes, our result can be different than the result from HotSpot. It is
+         * unclear what concrete method resolution on an abstract class means.
+         */
+        assert isAbstract() || (found == null || checkWrappedResolveMethod(method, found, callerType));
+
+        return found;
+    }
+
+    private boolean checkWrappedResolveMethod(HostedMethod method, ResolvedJavaMethod found, HostedType callerType) {
+        /*
+         * The static analysis can determine that the resolved wrapped method is not reachable, case
+         * in which wrappedResolveMethod returns null.
+         */
+        ResolvedJavaMethod wrappedMethod = wrappedResolveMethod(method, callerType);
+        return wrappedMethod == null || found.equals(wrappedMethod);
+    }
+
+    private ResolvedJavaMethod wrappedResolveMethod(HostedMethod method, HostedType callerType) {
+        AnalysisMethod orig = wrapped.resolveConcreteMethod(method.wrapped, callerType.wrapped);
+        ResolvedJavaMethod result = orig == null ? null : universe.lookup(orig);
+
+        if (result != null && !isWordType() && !Arrays.asList(method.getImplementations()).contains(result)) {
+            /* Our static analysis found out that this method is not reachable. */
+            result = null;
+        }
+        return result;
     }
 
     @Override

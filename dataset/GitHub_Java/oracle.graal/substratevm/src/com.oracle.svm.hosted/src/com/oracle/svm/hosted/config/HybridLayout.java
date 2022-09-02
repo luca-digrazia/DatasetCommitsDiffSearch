@@ -32,9 +32,10 @@ import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedInstanceClass;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
-import com.oracle.svm.hosted.meta.HostedType;
 
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Defines the layout for a hybrid class.
@@ -46,20 +47,17 @@ import jdk.vm.ci.meta.JavaKind;
  */
 public class HybridLayout<T> {
 
-    public static boolean isHybrid(HostedType clazz) {
+    public static boolean isHybrid(ResolvedJavaType clazz) {
         return ImageSingletons.lookup(HybridLayoutSupport.class).isHybrid(clazz);
     }
 
-    public static boolean isHybridField(HostedField field) {
+    public static boolean isHybridField(ResolvedJavaField field) {
         return ImageSingletons.lookup(HybridLayoutSupport.class).isHybridField(field);
-    }
-
-    public static boolean canHybridFieldsBeDuplicated(HostedType clazz) {
-        return ImageSingletons.lookup(HybridLayoutSupport.class).canHybridFieldsBeDuplicated(clazz);
     }
 
     private final ObjectLayout layout;
     private final HostedField arrayField;
+    private final HostedField bitsetField;
     private final HostedField typeIDSlotsField;
     private final int instanceSize;
 
@@ -72,6 +70,7 @@ public class HybridLayout<T> {
         HybridLayoutSupport utils = ImageSingletons.lookup(HybridLayoutSupport.class);
         HybridLayoutSupport.HybridFields hybridFields = utils.findHybridFields(hybridClass);
         arrayField = hybridFields.arrayField;
+        bitsetField = hybridFields.bitsetField;
         typeIDSlotsField = hybridFields.typeIDSlotsField;
         instanceSize = hybridClass.getInstanceSize();
     }
@@ -96,6 +95,10 @@ public class HybridLayout<T> {
         return arrayField;
     }
 
+    public HostedField getBitsetField() {
+        return bitsetField;
+    }
+
     public HostedField getTypeIDSlotsField() {
         return typeIDSlotsField;
     }
@@ -107,7 +110,7 @@ public class HybridLayout<T> {
     /**
      * In a given build, only the bit field or the type id slot array field will exist.
      */
-    public static int getTypeIDSlotsFieldOffset(ObjectLayout layout) {
+    public static int getBitFieldOrTypeIDSlotsFieldOffset(ObjectLayout layout) {
         return layout.getArrayLengthOffset() + layout.sizeInBytes(JavaKind.Int);
     }
 }

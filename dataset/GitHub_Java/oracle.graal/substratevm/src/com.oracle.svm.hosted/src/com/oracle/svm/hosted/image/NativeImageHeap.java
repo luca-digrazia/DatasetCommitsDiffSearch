@@ -243,7 +243,7 @@ public final class NativeImageHeap implements ImageHeap {
          * fields manually.
          */
         for (HostedField field : getUniverse().getFields()) {
-            if (Modifier.isStatic(field.getModifiers()) && field.hasLocation() && field.getType().getStorageKind() == JavaKind.Object && field.isInImageHeap()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.hasLocation() && field.getType().getStorageKind() == JavaKind.Object) {
                 assert field.isWritten() || MaterializedConstantFields.singleton().contains(field.wrapped);
                 addObject(readObjectField(field, null), false, field);
             }
@@ -283,7 +283,17 @@ public final class NativeImageHeap implements ImageHeap {
             throw reportIllegalType(original, reason);
         }
 
-        int identityHashCode = SubstrateObjectConstant.computeIdentityHashCode(original);
+        int identityHashCode;
+        if (original instanceof DynamicHub) {
+            /*
+             * We need to use the identity hash code of the original java.lang.Class object and not
+             * of the DynamicHub, so that hash maps that are filled during image generation and use
+             * Class keys still work at run time.
+             */
+            identityHashCode = System.identityHashCode(universe.hostVM().lookupType((DynamicHub) original).getJavaClass());
+        } else {
+            identityHashCode = System.identityHashCode(original);
+        }
         VMError.guarantee(identityHashCode != 0, "0 is used as a marker value for 'hash code not yet computed'");
 
         if (original instanceof String) {
@@ -294,17 +304,6 @@ public final class NativeImageHeap implements ImageHeap {
         if (existing == null) {
             addObjectToBootImageHeap(original, immutableFromParent, identityHashCode, reason);
         }
-    }
-
-    @Override
-    public int countDynamicHubs() {
-        int count = 0;
-        for (ObjectInfo o : getObjects()) {
-            if (o.getObject() instanceof DynamicHub) {
-                count++;
-            }
-        }
-        return count;
     }
 
     /**
@@ -385,6 +384,7 @@ public final class NativeImageHeap implements ImageHeap {
 
             final JavaConstant con = SubstrateObjectConstant.forObject(object);
             HostedField hybridTypeIDSlotsField = null;
+            HostedField hybridBitsetField = null;
             HostedField hybridArrayField = null;
             Object hybridArray = null;
             final long size;
@@ -398,22 +398,31 @@ public final class NativeImageHeap implements ImageHeap {
 
                 /*
                  * The hybrid array, bit set, and typeID array are written within the hybrid object.
-                 * If the hybrid object declares that they can never be duplicated, i.e. written as
-                 * a separate object, we ensure that they never are duplicated. We use the blacklist
-                 * to check that.
+                 * So they may not be written as separate objects. We use the blacklist to check
+                 * that.
                  */
-                boolean shouldBlacklist = !HybridLayout.canHybridFieldsBeDuplicated(clazz);
+                boolean containsTypeIDSlot = false;
                 hybridTypeIDSlotsField = hybridLayout.getTypeIDSlotsField();
-                if (hybridTypeIDSlotsField != null && shouldBlacklist) {
+                if (hybridTypeIDSlotsField != null) {
                     Object typeIDSlots = readObjectField(hybridTypeIDSlotsField, con);
                     if (typeIDSlots != null) {
                         blacklist.add(typeIDSlots);
+                        containsTypeIDSlot = true;
+                    }
+                }
+
+                hybridBitsetField = hybridLayout.getBitsetField();
+                if (hybridBitsetField != null) {
+                    Object bitSet = readObjectField(hybridBitsetField, con);
+                    if (bitSet != null) {
+                        blacklist.add(bitSet);
+                        VMError.guarantee(!containsTypeIDSlot, "Hub cannot contain both a bitset and typeID slots.");
                     }
                 }
 
                 hybridArrayField = hybridLayout.getArrayField();
                 hybridArray = readObjectField(hybridArrayField, con);
-                if (hybridArray != null && shouldBlacklist) {
+                if (hybridArray != null) {
                     blacklist.add(hybridArray);
                     written = true;
                 }
@@ -431,6 +440,7 @@ public final class NativeImageHeap implements ImageHeap {
                 for (HostedField field : clazz.getInstanceFields(true)) {
                     if (field.isInImageHeap() &&
                                     !field.equals(hybridArrayField) &&
+                                    !field.equals(hybridBitsetField) &&
                                     !field.equals(hybridTypeIDSlotsField)) {
                         boolean fieldRelocatable = false;
                         if (field.getJavaKind() == JavaKind.Object) {

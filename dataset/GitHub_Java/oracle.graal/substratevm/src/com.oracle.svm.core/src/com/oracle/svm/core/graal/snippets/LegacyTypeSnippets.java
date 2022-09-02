@@ -46,7 +46,6 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.InstanceOfSnippetsTemplates;
 import org.graalvm.compiler.replacements.SnippetTemplate;
-import org.graalvm.compiler.replacements.Snippets;
 import org.graalvm.compiler.word.ObjectAccess;
 
 import com.oracle.svm.core.annotate.DuplicatedInNativeCode;
@@ -58,37 +57,7 @@ import com.oracle.svm.core.meta.SharedType;
 
 import jdk.vm.ci.code.TargetDescription;
 
-public final class LegacyTypeSnippets extends SubstrateTemplates implements Snippets {
-
-    @Snippet
-    protected static SubstrateIntrinsics.Any typeEqualityTestSnippet(Object object, SubstrateIntrinsics.Any trueValue, SubstrateIntrinsics.Any falseValue,
-                    @Snippet.ConstantParameter boolean allowsNull, int fromTypeID) {
-        if (object == null) {
-            return allowsNull ? trueValue : falseValue;
-        }
-        Object objectNonNull = PiNode.piCastNonNull(object, SnippetAnchorNode.anchor());
-        int typeCheckId = loadHub(objectNonNull).getTypeID();
-
-        if (typeCheckId == fromTypeID) {
-            return trueValue;
-        }
-        return falseValue;
-    }
-
-    @Snippet
-    protected static SubstrateIntrinsics.Any typeEqualityTestDynamicSnippet(Object object, SubstrateIntrinsics.Any trueValue, SubstrateIntrinsics.Any falseValue,
-                    @Snippet.ConstantParameter boolean allowsNull, DynamicHub exactType) {
-        if (object == null) {
-            return allowsNull ? trueValue : falseValue;
-        }
-        Object objectNonNull = PiNode.piCastNonNull(object, SnippetAnchorNode.anchor());
-        int typeCheckId = loadHub(objectNonNull).getTypeID();
-
-        if (typeCheckId == exactType.getTypeID()) {
-            return trueValue;
-        }
-        return falseValue;
-    }
+public final class LegacyTypeSnippets extends TypeSnippets {
 
     @Snippet
     protected static SubstrateIntrinsics.Any instanceOfSnippet(Object object, SubstrateIntrinsics.Any trueValue, SubstrateIntrinsics.Any falseValue, @Snippet.ConstantParameter boolean allowsNull,
@@ -176,12 +145,9 @@ public final class LegacyTypeSnippets extends SubstrateTemplates implements Snip
         new LegacyTypeSnippets(options, runtimeConfig, factories, providers, snippetReflection, lowerings);
     }
 
-    final RuntimeConfiguration runtimeConfig;
-
     private LegacyTypeSnippets(OptionValues options, RuntimeConfiguration runtimeConfig, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
                     Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
-        super(options, factories, providers, snippetReflection);
-        this.runtimeConfig = runtimeConfig;
+        super(options, runtimeConfig, factories, providers, snippetReflection);
 
         lowerings.put(InstanceOfNode.class, new InstanceOfLowering(options, factories, providers, snippetReflection,
                         ConfigurationValues.getTarget()));
@@ -193,7 +159,7 @@ public final class LegacyTypeSnippets extends SubstrateTemplates implements Snip
 
     protected class InstanceOfLowering extends InstanceOfSnippetsTemplates implements NodeLoweringProvider<FloatingNode> {
 
-        private final SnippetTemplate.SnippetInfo typeEqualityTest = snippet(LegacyTypeSnippets.class, "typeEqualityTestSnippet");
+        private final SnippetTemplate.SnippetInfo typeEqualityTest = snippet(TypeSnippets.class, "typeEqualityTestSnippet");
         private final SnippetTemplate.SnippetInfo instanceOf = snippet(LegacyTypeSnippets.class, "instanceOfSnippet");
         private final SnippetTemplate.SnippetInfo instanceOfBitTest = snippet(LegacyTypeSnippets.class, "instanceOfBitTestSnippet");
 
@@ -275,7 +241,7 @@ public final class LegacyTypeSnippets extends SubstrateTemplates implements Snip
 
     protected class InstanceOfDynamicLowering extends InstanceOfSnippetsTemplates implements NodeLoweringProvider<FloatingNode> {
 
-        private final SnippetTemplate.SnippetInfo typeEqualityTestDynamic = snippet(LegacyTypeSnippets.class, "typeEqualityTestDynamicSnippet");
+        private final SnippetTemplate.SnippetInfo typeEqualityTestDynamic = snippet(TypeSnippets.class, "typeEqualityTestDynamicSnippet");
 
         public InstanceOfDynamicLowering(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
                         TargetDescription target) {
@@ -308,6 +274,7 @@ public final class LegacyTypeSnippets extends SubstrateTemplates implements Snip
             }
 
             SnippetTemplate.Arguments args = new SnippetTemplate.Arguments(instanceOfDynamic, node.graph().getGuardsStage(), tool.getLoweringStage());
+            assert node.isMirror();
             args.add("type", node.getMirrorOrHub());
             args.add("object", node.getObject());
             args.add("trueValue", replacer.trueValue);

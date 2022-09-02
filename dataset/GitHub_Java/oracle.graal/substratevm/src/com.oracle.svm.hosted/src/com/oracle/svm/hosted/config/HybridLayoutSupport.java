@@ -31,20 +31,17 @@ import org.graalvm.collections.Pair;
 import com.oracle.svm.core.annotate.Hybrid;
 import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedInstanceClass;
-import com.oracle.svm.hosted.meta.HostedType;
+
+import jdk.vm.ci.meta.ResolvedJavaField;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class HybridLayoutSupport {
-    public boolean isHybrid(HostedType clazz) {
+    public boolean isHybrid(ResolvedJavaType clazz) {
         return clazz.isAnnotationPresent(Hybrid.class);
     }
 
-    public boolean isHybridField(HostedField field) {
-        return field.getAnnotation(Hybrid.Array.class) != null || field.getAnnotation(Hybrid.TypeIDSlots.class) != null;
-    }
-
-    public boolean canHybridFieldsBeDuplicated(HostedType clazz) {
-        assert isHybrid(clazz) : "Can only be called on hybrid types";
-        return clazz.getAnnotation(Hybrid.class).canHybridFieldsBeDuplicated();
+    public boolean isHybridField(ResolvedJavaField field) {
+        return field.getAnnotation(Hybrid.Array.class) != null || field.getAnnotation(Hybrid.Bitset.class) != null || field.getAnnotation(Hybrid.TypeIDSlots.class) != null;
     }
 
     /**
@@ -59,12 +56,18 @@ public class HybridLayoutSupport {
         assert Modifier.isFinal(hybridClass.getModifiers());
 
         HostedField foundArrayField = null;
+        HostedField foundBitsetField = null;
         HostedField foundTypeIDSlotsField = null;
         for (HostedField field : hybridClass.getInstanceFields(true)) {
             if (field.getAnnotation(Hybrid.Array.class) != null) {
                 assert foundArrayField == null : "must have exactly one hybrid array field";
                 assert field.getType().isArray();
                 foundArrayField = field;
+            }
+            if (field.getAnnotation(Hybrid.Bitset.class) != null) {
+                assert foundBitsetField == null : "must have at most one hybrid bitset field";
+                assert !field.getType().isArray();
+                foundBitsetField = field;
             }
             if (field.getAnnotation(Hybrid.TypeIDSlots.class) != null) {
                 assert foundTypeIDSlotsField == null : "must have at most one typeid slot field";
@@ -73,15 +76,17 @@ public class HybridLayoutSupport {
             }
         }
         assert foundArrayField != null : "must have exactly one hybrid array field";
-        return new HybridFields(foundArrayField, foundTypeIDSlotsField);
+        return new HybridFields(foundArrayField, foundBitsetField, foundTypeIDSlotsField);
     }
 
     public static class HybridFields {
         public final HostedField arrayField;
+        public final HostedField bitsetField;
         public final HostedField typeIDSlotsField;
 
-        public HybridFields(HostedField arrayField, HostedField typeIDSlotsField) {
+        public HybridFields(HostedField arrayField, HostedField bitsetField, HostedField typeIDSlotsField) {
             this.arrayField = arrayField;
+            this.bitsetField = bitsetField;
             this.typeIDSlotsField = typeIDSlotsField;
         }
     }

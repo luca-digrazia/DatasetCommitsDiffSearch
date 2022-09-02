@@ -61,7 +61,6 @@ public final class RuntimeConfiguration {
     private int javaFrameAnchorLastSPOffset;
     private int javaFrameAnchorLastIPOffset;
     private int vmThreadStatusOffset;
-    private int imageCodeInfoCodeStartOffset;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public RuntimeConfiguration(Providers providers, SnippetReflectionProvider snippetReflection, EnumMap<ConfigKind, SubstrateBackend> backends, WordTypes wordTypes) {
@@ -78,7 +77,8 @@ public final class RuntimeConfiguration {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public void setLazyState(int vtableBaseOffset, int vtableEntrySize, int instanceofBitsOrTypeIDSlotsOffset, int componentHubOffset,
-                    int javaFrameAnchorLastSPOffset, int javaFrameAnchorLastIPOffset, int vmThreadStatusOffset, int imageCodeInfoCodeStartOffset) {
+                    int javaFrameAnchorLastSPOffset, int javaFrameAnchorLastIPOffset,
+                    int vmThreadStatusOffset) {
         assert !isFullyInitialized();
 
         this.vtableBaseOffset = vtableBaseOffset;
@@ -88,7 +88,6 @@ public final class RuntimeConfiguration {
         this.javaFrameAnchorLastSPOffset = javaFrameAnchorLastSPOffset;
         this.javaFrameAnchorLastIPOffset = javaFrameAnchorLastIPOffset;
         this.vmThreadStatusOffset = vmThreadStatusOffset;
-        this.imageCodeInfoCodeStartOffset = imageCodeInfoCodeStartOffset;
 
         assert isFullyInitialized();
     }
@@ -156,11 +155,6 @@ public final class RuntimeConfiguration {
     public int getVMThreadStatusOffset() {
         assert SubstrateOptions.MultiThreaded.getValue() && vmThreadStatusOffset != -1;
         return vmThreadStatusOffset;
-    }
-
-    public int getImageCodeInfoCodeStartOffset() {
-        assert isFullyInitialized();
-        return imageCodeInfoCodeStartOffset;
     }
 
     public SnippetReflectionProvider getSnippetReflection() {
