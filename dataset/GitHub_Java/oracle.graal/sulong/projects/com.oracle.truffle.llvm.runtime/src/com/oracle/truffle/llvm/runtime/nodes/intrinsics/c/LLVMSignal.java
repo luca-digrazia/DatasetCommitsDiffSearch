@@ -64,7 +64,7 @@ import sun.misc.SignalHandler;
 public abstract class LLVMSignal extends LLVMExpressionNode {
 
     @Specialization
-    protected LLVMPointer doSignal(int signal, LLVMPointer handler,
+    protected LLVMPointer doSignal(int signal, Object handler,
                     @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
         return setSignalHandler(context, signal, toNative.executeWithTarget(handler));
