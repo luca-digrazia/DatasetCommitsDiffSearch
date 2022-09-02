@@ -76,13 +76,12 @@ public final class LLVMParserRuntime {
         return bitcodeID;
     }
 
-    @SuppressWarnings("unsed")
-    public LLVMFunction lookupFunction(String name) {
-        LLVMSymbol symbol = fileScope.get(name);
+    public LLVMFunction lookupFunction(String name, boolean preferGlobalScope) {
+        LLVMSymbol symbol = lookupSymbolImpl(name, preferGlobalScope);
         if (symbol != null && symbol.isFunction()) {
             return symbol.asFunction();
         }
-        throw new IllegalStateException("Retrieving unknown function in LLVMParserRuntime: " + name);
+        throw new IllegalStateException("Unknown function: " + name);
     }
 
     public LLVMGlobal lookupGlobal(String name, boolean preferGlobalScope) {

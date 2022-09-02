@@ -522,26 +522,22 @@ public final class LLVMContext {
     }
 
     /**
-     * @see #addExternalLibrary(String, Object, LibraryLocator)
+     * @return null if already loaded
      */
-    public ExternalLibrary addExternalLibraryDefaultLocator(String lib, Object reason) {
-        return addExternalLibrary(lib, reason, DefaultLibraryLocator.INSTANCE);
+    public ExternalLibrary addExternalLibrary(String lib, boolean isNative, Object reason) {
+        return addExternalLibrary(lib, isNative, reason, DefaultLibraryLocator.INSTANCE);
     }
 
     /**
-     * Adds a new library to the context (if not already added). It is assumed that the library is a
-     * native one until it is parsed and we know for sure.
-     * 
-     * @see ExternalLibrary#makeBitcodeLibrary
-     * @return null if already added
+     * @return null if already loaded
      */
-    public ExternalLibrary addExternalLibrary(String lib, Object reason, LibraryLocator locator) {
+    public ExternalLibrary addExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
         CompilerAsserts.neverPartOfCompilation();
         if (isInternalLibrary(lib)) {
             // Disallow loading internal libraries explicitly.
             return null;
         }
-        ExternalLibrary newLib = createExternalLibrary(lib, reason, locator);
+        ExternalLibrary newLib = createExternalLibrary(lib, isNative, reason, locator);
         ExternalLibrary existingLib = getOrAddExternalLibrary(newLib);
         if (existingLib == newLib) {
             return newLib;
@@ -556,25 +552,18 @@ public final class LLVMContext {
      * 
      * @return null if not yet loaded
      */
-    public ExternalLibrary findExternalLibrary(String lib, Object reason, LibraryLocator locator) {
+    public ExternalLibrary findExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
         final ExternalLibrary newLib;
         if (isInternalLibrary(lib)) {
             Path path = locateInternalLibrary(lib);
-            newLib = ExternalLibrary.internalFromPath(path, true);
+            newLib = ExternalLibrary.internalFromPath(path, isNative);
         } else {
-            newLib = createExternalLibrary(lib, reason, locator);
+            newLib = createExternalLibrary(lib, isNative, reason, locator);
         }
         return getExternalLibrary(newLib);
     }
 
-    /**
-     * Creates a new external library. It is assumed that the library is a native one until it is
-     * parsed and we know for sure.
-     * 
-     * @see ExternalLibrary#makeBitcodeLibrary
-     */
-    private ExternalLibrary createExternalLibrary(String lib, Object reason, LibraryLocator locator) {
-        boolean isNative = true;
+    private ExternalLibrary createExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
         if (isInternalLibrary(lib)) {
             // Disallow loading internal libraries explicitly.
             throw new AssertionError("loading internal libraries explicitly is not allowed");
