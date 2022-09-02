@@ -37,6 +37,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -47,6 +48,7 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
@@ -68,7 +70,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
 import com.oracle.truffle.espresso.nodes.interop.InvokeEspressoNode;
 import com.oracle.truffle.espresso.nodes.interop.LookupDeclaredMethod;
-import com.oracle.truffle.espresso.nodes.interop.LookupFieldNode;
 import com.oracle.truffle.espresso.nodes.interop.ToEspressoNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
@@ -112,6 +113,38 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         }
 
         return false;
+    }
+
+    @GenerateUncached
+    abstract static class LookupFieldNode extends Node {
+        static final int LIMIT = 3;
+
+        LookupFieldNode() {
+        }
+
+        public abstract Field execute(Klass klass, String name, boolean onlyStatic);
+
+        @SuppressWarnings("unused")
+        @Specialization(guards = {"onlyStatic == cachedStatic", "klass == cachedKlass", "cachedName.equals(name)"}, limit = "LIMIT")
+        Field doCached(Klass klass, String name, boolean onlyStatic,
+                        @Cached("onlyStatic") boolean cachedStatic,
+                        @Cached("klass") Klass cachedKlass,
+                        @Cached("name") String cachedName,
+                        @Cached("doUncached(klass, name, onlyStatic)") Field cachedField) {
+            assert cachedField == doUncached(klass, name, onlyStatic);
+            return cachedField;
+        }
+
+        @Specialization(replaces = "doCached")
+        @TruffleBoundary
+        Field doUncached(Klass klass, String name, boolean onlyStatic) {
+            for (Field f : klass.getDeclaredFields()) {
+                if (f.isPublic() && f.isStatic() == onlyStatic && name.equals(f.getNameAsString())) {
+                    return f;
+                }
+            }
+            return null;
+        }
     }
 
     @ExportMessage
