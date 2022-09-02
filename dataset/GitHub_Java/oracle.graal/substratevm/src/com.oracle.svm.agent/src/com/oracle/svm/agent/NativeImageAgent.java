@@ -104,7 +104,6 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         List<String> callerFilterFiles = new ArrayList<>();
         List<String> accessFilterFiles = new ArrayList<>();
         boolean experimentalClassLoaderSupport = true;
-        boolean experimentalClassDefineSupport = false;
         boolean build = false;
         int configWritePeriod = -1; // in seconds
         int configWritePeriodInitialDelay = 1; // in seconds
@@ -148,10 +147,6 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
                 experimentalClassLoaderSupport = true;
             } else if (token.startsWith("experimental-class-loader-support=")) {
                 experimentalClassLoaderSupport = Boolean.parseBoolean(getTokenValue(token));
-            } else if (token.equals("experimental-class-define-support")) {
-                experimentalClassDefineSupport = true;
-            } else if (token.startsWith("experimental-class-define-support=")) {
-                experimentalClassDefineSupport = Boolean.parseBoolean(getTokenValue(token));
             } else if (token.startsWith("config-write-period-secs=")) {
                 configWritePeriod = parseIntegerOrNegative(getTokenValue(token));
                 if (configWritePeriod <= 0) {
@@ -244,7 +239,7 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
 
         accessAdvisor = createAccessAdvisor(builtinHeuristicFilter, callerFilter, accessFilter);
         try {
-            BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, this, experimentalClassLoaderSupport, experimentalClassDefineSupport);
+            BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, this, experimentalClassLoaderSupport);
         } catch (Throwable t) {
             return error(3, t.toString());
         }
