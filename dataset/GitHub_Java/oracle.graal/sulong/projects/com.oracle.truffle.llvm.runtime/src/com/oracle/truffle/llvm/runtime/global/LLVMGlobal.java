@@ -45,35 +45,32 @@ public final class LLVMGlobal extends LLVMSymbol {
 
     private final LLVMSourceSymbol sourceSymbol;
     private final boolean readOnly;
-    private final boolean exported;
-    public static final LLVMGlobal[] EMPTY = {};
 
     @CompilationFinal private String name;
     @CompilationFinal private PointerType type;
     @CompilationFinal private boolean interopTypeCached;
     @CompilationFinal private LLVMInteropType interopType;
 
-    public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id, boolean exported) {
+    public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id) {
         if (index < 0) {
             throw new AssertionError("Invalid index for LLVM global: " + index);
         }
         if (id < 0) {
             throw new AssertionError("Invalid index for LLVM global: " + id);
         }
-        return new LLVMGlobal(name, type, sourceSymbol, readOnly, index, id, exported);
+        return new LLVMGlobal(name, type, sourceSymbol, readOnly, index, id);
     }
 
     public static LLVMGlobal createUnavailable(String name) {
-        return new LLVMGlobal(name + " (unavailable)", PointerType.VOID, null, true, -1, -1, false);
+        return new LLVMGlobal(name + " (unavailable)", PointerType.VOID, null, true, -1, -1);
     }
 
-    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int globalIndex, int moduleId, boolean exported) {
+    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int globalIndex, int moduleId) {
         super(name, null, moduleId, globalIndex);
         this.name = name;
         this.type = type;
         this.sourceSymbol = sourceSymbol;
         this.readOnly = readOnly;
-        this.exported = exported;
 
         this.interopTypeCached = false;
         this.interopType = null;
@@ -141,11 +138,6 @@ public final class LLVMGlobal extends LLVMSymbol {
     @Override
     public boolean isAlias() {
         return false;
-    }
-
-    @Override
-    public boolean isExported() {
-        return exported;
     }
 
     @Override

@@ -137,18 +137,18 @@ public final class LLVMParser {
         // handle the global scope
         if (global.isExported()) {
 
-            LLVMSymbol exportedSymbolFromLocal = localScope.get(global.getName());
-            if (exportedSymbolFromLocal == null) {
+            LLVMSymbol exportedDescriptor = localScope.get(global.getName());
+            if (exportedDescriptor == null) {
                 localScope.register(globalSymbol);
             }
 
-            LLVMSymbol exportedSymbolFromGlobal = runtime.getGlobalScope().get(global.getName());
-            if (exportedSymbolFromGlobal == null) {
+            exportedDescriptor = runtime.getGlobalScope().get(global.getName());
+            if (exportedDescriptor == null) {
                 runtime.getGlobalScope().register(globalSymbol);
-            } else if (exportedSymbolFromGlobal.isGlobalVariable()) {
+            } else if (exportedDescriptor.isGlobalVariable()) {
                 importedSymbols.add(global.getName());
             } else {
-                assert exportedSymbolFromGlobal.isFunction();
+                assert exportedDescriptor.isFunction();
                 // TODO (je) Symbol resolution is currently not correct [GR-21400] - doing
                 // nothing instead of throwing an exception does not make it more wrong but
                 // allows certain use cases to work correctly
@@ -172,18 +172,18 @@ public final class LLVMParser {
         // handle the global scope
         if (functionSymbol.isExported()) {
 
-            LLVMSymbol exportedSymbolFromLocal = localScope.get(functionSymbol.getName());
-            if (exportedSymbolFromLocal == null) {
+            LLVMSymbol exportedDescriptor = localScope.get(functionSymbol.getName());
+            if (exportedDescriptor == null) {
                 localScope.register(llvmFunction);
             }
 
-            LLVMSymbol exportedSymbolFromGlobal = runtime.getGlobalScope().get(functionSymbol.getName());
-            if (exportedSymbolFromGlobal == null) {
+            exportedDescriptor = runtime.getGlobalScope().get(functionSymbol.getName());
+            if (exportedDescriptor == null) {
                 runtime.getGlobalScope().register(llvmFunction);
-            } else if (exportedSymbolFromGlobal.isFunction()) {
+            } else if (exportedDescriptor.isFunction()) {
                 importedSymbols.add(functionSymbol.getName());
             } else {
-                assert exportedSymbolFromGlobal.isGlobalVariable();
+                assert exportedDescriptor.isGlobalVariable();
                 // TODO (je) Symbol resolution is currently not correct [GR-21400] - doing
                 // nothing instead of throwing an exception does not make it more wrong but
                 // allows certain use cases to work correctly
@@ -238,15 +238,15 @@ public final class LLVMParser {
         // handle the global scope
         if (newExported) {
 
-            LLVMSymbol exportedSymbolFromLocal = localScope.get(newName);
-            if (exportedSymbolFromLocal == null) {
+            LLVMSymbol exportedDescriptor = localScope.get(newName);
+            if (exportedDescriptor == null) {
                 localScope.register(aliasSymbol);
             }
 
-            LLVMSymbol exportedSymbolFromGlobal = runtime.getGlobalScope().get(newName);
-            if (exportedSymbolFromGlobal == null) {
+            exportedDescriptor = runtime.getGlobalScope().get(newName);
+            if (exportedDescriptor == null) {
                 runtime.getGlobalScope().register(aliasSymbol);
-            } else if (aliasSymbol.isFunction() && exportedSymbolFromGlobal.isFunction() || aliasSymbol.isGlobalVariable() && exportedSymbolFromGlobal.isGlobalVariable()) {
+            } else if (aliasSymbol.isFunction() && exportedDescriptor.isFunction() || aliasSymbol.isGlobalVariable() && exportedDescriptor.isGlobalVariable()) {
                 importedSymbols.add(newName);
             } else {
                 throw new LLVMLinkerException("The alias " + newName + " conflicts with another symbol that has a different type but the same name.");
