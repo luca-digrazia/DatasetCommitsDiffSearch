@@ -31,6 +31,7 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.nodes.OperandStack;
 import com.oracle.truffle.espresso.nodes.methodhandle.MethodHandleIntrinsicNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 
@@ -61,19 +62,19 @@ public final class InvokeHandleNode extends QuickNode {
     }
 
     @Override
-    public int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
+    public int execute(VirtualFrame frame, OperandStack stack) {
         Object[] args = new Object[argCount];
         if (hasReceiver) {
-            args[0] = nullCheck(BytecodeNode.peekReceiver(primitives, refs, top, method));
+            args[0] = nullCheck(BytecodeNode.peekReceiver(stack, top, method));
         }
-        BytecodeNode.popBasicArgumentsWithArray(primitives, refs, top, parsedSignature, args, parameterCount, hasReceiver ? 1 : 0);
+        BytecodeNode.popBasicArgumentsWithArray(stack, top, parsedSignature, args, parameterCount, hasReceiver ? 1 : 0);
         Object result = intrinsic.processReturnValue(intrinsic.call(args), rKind);
-        return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, method.getReturnKind());
+        return (getResultAt() - top) + BytecodeNode.putKind(stack, getResultAt(), result, method.getReturnKind());
     }
 
     @Override
-    public boolean producedForeignObject(long[] primitives, Object[] refs) {
-        return method.getReturnKind().isObject() && BytecodeNode.peekObject(primitives, refs, getResultAt()).isForeignObject();
+    public boolean producedForeignObject(OperandStack stack) {
+        return method.getReturnKind().isObject() && BytecodeNode.peekObject(stack, getResultAt()).isForeignObject();
     }
 
     private int getResultAt() {

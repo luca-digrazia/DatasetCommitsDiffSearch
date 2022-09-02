@@ -32,6 +32,7 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
+import com.oracle.truffle.espresso.nodes.OperandStack;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.vm.VM;
 
@@ -54,7 +55,7 @@ public final class InvokeStaticNode extends QuickNode {
     }
 
     @Override
-    public int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
+    public int execute(VirtualFrame frame, final OperandStack stack) {
         if (!method.getAssumption().isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             directCallNode = null;
@@ -79,14 +80,14 @@ public final class InvokeStaticNode extends QuickNode {
             }
         }
 
-        Object[] args = BytecodeNode.popArguments(primitives, refs, top, false, method.getMethod().getParsedSignature());
+        Object[] args = BytecodeNode.popArguments(stack, top, false, method.getMethod().getParsedSignature());
         Object result = directCallNode.call(args);
-        return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, method.getMethod().getReturnKind());
+        return (getResultAt() - top) + BytecodeNode.putKind(stack, getResultAt(), result, method.getMethod().getReturnKind());
     }
 
     @Override
-    public boolean producedForeignObject(long[] primitives, Object[] refs) {
-        return method.getMethod().getReturnKind().isObject() && BytecodeNode.peekObject(primitives, refs, getResultAt()).isForeignObject();
+    public boolean producedForeignObject(OperandStack stack) {
+        return method.getMethod().getReturnKind().isObject() && BytecodeNode.peekObject(stack, getResultAt()).isForeignObject();
     }
 
     private int getResultAt() {
