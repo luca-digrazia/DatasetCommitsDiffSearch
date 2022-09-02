@@ -298,6 +298,10 @@ public class DefaultAnalysisPolicy extends AnalysisPolicy {
                 /* Link the actual return. */
                 contextInsensitiveInvoke.getActualReturn().addUse(bb, actualReturn);
             }
+
+            /* Cleanup this type flow's state. */
+            callees = null;
+            seenReceiverTypes = null;
         }
 
         @Override
