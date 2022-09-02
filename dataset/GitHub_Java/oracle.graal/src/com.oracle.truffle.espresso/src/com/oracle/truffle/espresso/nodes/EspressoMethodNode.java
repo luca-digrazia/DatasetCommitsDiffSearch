@@ -77,7 +77,7 @@ public abstract class EspressoMethodNode extends EspressoInstrumentableNode impl
                 if (line > endLine) {
                     endLine = line;
                 }
-                if (line > 0 && line < startLine) {
+                if (line < startLine) {
                     startLine = line;
                 }
             }
