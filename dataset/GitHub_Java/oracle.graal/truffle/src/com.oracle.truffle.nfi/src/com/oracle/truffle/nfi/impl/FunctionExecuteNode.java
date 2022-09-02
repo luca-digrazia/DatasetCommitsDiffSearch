@@ -149,9 +149,8 @@ abstract class FunctionExecuteNode extends Node {
     @ExplodeLoop
     @Specialization(replaces = "cachedSignature", guards = "signature.getArgTypes().length == libs.length")
     protected Object cachedArgCount(NativePointer receiver, LibFFISignature signature, Object[] args,
-                    @CachedLanguage() NFILanguageImpl language,
                     @Cached("getGenericNativeArgumentLibraries(signature.getArgTypes().length)") NativeArgumentLibrary[] libs,
-                    @Cached() IndirectCallNode slowPathCall,
+                    @Cached("createSlowPathCall()") DirectCallNode slowPathCall,
                     @Cached BranchProfile exception) throws ArityException, UnsupportedTypeException {
         LibFFIType[] argTypes = signature.getArgTypes();
 
@@ -177,10 +176,15 @@ abstract class FunctionExecuteNode extends Node {
         }
 
         try {
-            return slowPathCall.call(language.getSlowPathCall(), receiver, signature, buffer);
+            return slowPathCall.call(receiver, signature, buffer);
         } finally {
             assert keepAlive(args);
         }
+    }
+
+    DirectCallNode createSlowPathCall() {
+        NFILanguageImpl language = lookupLanguageReference(NFILanguageImpl.class).get();
+        return DirectCallNode.create(language.getSlowPathCall());
     }
 
     private static void raiseArityException(LibFFIType[] argTypes, int actualArgCount) throws ArityException {

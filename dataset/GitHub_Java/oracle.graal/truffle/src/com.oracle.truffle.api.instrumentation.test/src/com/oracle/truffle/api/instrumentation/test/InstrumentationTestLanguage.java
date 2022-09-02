@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -974,7 +974,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
 
     }
 
-    public static class ThrowNode extends InstrumentedNode {
+    static class ThrowNode extends InstrumentedNode {
 
         private final String type;
         private final String message;
@@ -994,7 +994,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
             return new TestLanguageException(type, message, this);
         }
 
-        public static class TestLanguageException extends RuntimeException implements TruffleException {
+        private static class TestLanguageException extends RuntimeException implements TruffleException {
 
             private static final long serialVersionUID = 2709459650157465163L;
 

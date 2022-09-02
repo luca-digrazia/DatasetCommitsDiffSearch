@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -1237,7 +1237,6 @@ public class ContextPreInitializationTest {
                     if (msg != null) {
                         write(lookupContextReference(languageClass).get().environment().err(), msg);
                     }
-                    assertEquals(0, lookupContextReference(languageClass).get().disposeContextCount);
                     return result;
                 }
             });
@@ -1259,7 +1258,7 @@ public class ContextPreInitializationTest {
         }
     }
 
-    @TruffleLanguage.Registration(id = FIRST, name = FIRST, version = "1.0", dependentLanguages = INTERNAL, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
+    @TruffleLanguage.Registration(id = FIRST, name = FIRST, version = "1.0", dependentLanguages = INTERNAL)
     public static final class ContextPreInitializationTestFirstLanguage extends BaseLanguage {
         @Option(category = OptionCategory.USER, stability = OptionStability.STABLE, help = "Option 1") //
         public static final OptionKey<Boolean> Option1 = new OptionKey<>(false);

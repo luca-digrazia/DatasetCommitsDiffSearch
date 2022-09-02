@@ -53,7 +53,6 @@ import java.util.function.Predicate;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
@@ -211,7 +210,6 @@ class HostLanguage extends TruffleLanguage<HostContext> {
             @Override
             public Object execute(VirtualFrame frame) {
                 if (contextRef == null) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
                     contextRef = lookupContextReference(HostLanguage.class);
                 }
                 HostContext context = contextRef.get();

@@ -25,6 +25,7 @@
 package org.graalvm.compiler.truffle.test;
 
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.polyglot.Context;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -51,32 +52,36 @@ public class TruffleContextCompilationTest extends PartialEvaluationTest {
 
     @Test
     public void testInnerContextsDeoptimize() {
-        setupContext();
-        getContext().initialize(LANGUAGE);
-        Env env = Language.getCurrentContext();
+        try (Context c = Context.create()) {
+            c.initialize(LANGUAGE);
+            c.enter();
+            Env env = Language.getCurrentContext();
 
-        TruffleContext context = env.newContextBuilder().build();
-        OptimizedCallTarget target = assertCompiling(new RootNode(null) {
-            @Override
-            public Object execute(VirtualFrame frame) {
-                Object prev = context.enter();
-                try {
-                    // barrier ensures that the deopt does not move up or downwards
-                    barrier();
-                    Object arg = frame.getArguments()[0];
-                    if (arg != FIRST_RUN) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
+            TruffleContext context = env.newContextBuilder().build();
+            OptimizedCallTarget target = assertCompiling(new RootNode(null) {
+                @Override
+                public Object execute(VirtualFrame frame) {
+                    Object prev = context.enter();
+                    try {
+                        // barrier ensures that the deopt does not move up or downwards
+                        barrier();
+                        Object arg = frame.getArguments()[0];
+                        if (arg != FIRST_RUN) {
+                            CompilerDirectives.transferToInterpreterAndInvalidate();
+                        }
+                        barrier();
+                    } finally {
+                        context.leave(prev);
                     }
-                    barrier();
-                } finally {
-                    context.leave(prev);
+                    return null;
                 }
-                return null;
-            }
-        });
-        assertTrue(target.isValid());
-        target.call(new Object());
-        assertFalse(target.isValid());
+            });
+            assertTrue(target.isValid());
+            target.call(new Object());
+            assertFalse(target.isValid());
+
+            c.leave();
+        }
     }
 
     private OptimizedCallTarget assertCompiling(RootNode node) {
