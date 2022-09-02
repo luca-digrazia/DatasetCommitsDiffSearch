@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -61,7 +61,7 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
 
-public abstract class ArithmeticSnippets extends SubstrateTemplates implements Snippets {
+public final class ArithmeticSnippets extends SubstrateTemplates implements Snippets {
 
     @Snippet
     protected static int idivSnippet(int x, int y, @ConstantParameter boolean needsZeroCheck) {
@@ -179,6 +179,12 @@ public abstract class ArithmeticSnippets extends SubstrateTemplates implements S
 
     private final ObjectLayout layout;
 
+    @SuppressWarnings("unused")
+    public static void registerLowerings(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
+                    Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
+        new ArithmeticSnippets(options, factories, providers, snippetReflection, lowerings);
+    }
+
     private final SnippetInfo idiv;
     private final SnippetInfo ldiv;
     private final SnippetInfo irem;
@@ -188,7 +194,7 @@ public abstract class ArithmeticSnippets extends SubstrateTemplates implements S
     private final SnippetInfo uirem;
     private final SnippetInfo ulrem;
 
-    protected ArithmeticSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
+    private ArithmeticSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
                     Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
         super(options, factories, providers, snippetReflection);
         this.layout = ConfigurationValues.getObjectLayout();
@@ -239,7 +245,7 @@ public abstract class ArithmeticSnippets extends SubstrateTemplates implements S
         }
     }
 
-    public static class IdentityLowering implements NodeLoweringProvider<Node> {
+    static class IdentityLowering implements NodeLoweringProvider<Node> {
         @Override
         public void lower(Node node, LoweringTool tool) {
             // do nothing and leave node unchanged.
