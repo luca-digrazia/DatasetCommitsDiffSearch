@@ -70,7 +70,6 @@ public final class ResourcesFeature implements Feature {
 
     private boolean sealed = false;
     private Set<String> newResources = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private int loadedConfigurations;
 
     private class ResourcesRegistryImpl implements ResourcesRegistry {
         @Override
@@ -94,7 +93,7 @@ public final class ResourcesFeature implements Feature {
     public void beforeAnalysis(BeforeAnalysisAccess access) {
         ImageClassLoader imageClassLoader = ((BeforeAnalysisAccessImpl) access).getImageClassLoader();
         ResourceConfigurationParser parser = new ResourceConfigurationParser(ImageSingletons.lookup(ResourcesRegistry.class));
-        loadedConfigurations = ConfigurationParserUtils.parseAndRegisterConfigurations(parser, imageClassLoader, "resource",
+        ConfigurationParserUtils.parseAndRegisterConfigurations(parser, imageClassLoader, "resource",
                         ConfigurationFiles.Options.ResourceConfigurationFiles, ConfigurationFiles.Options.ResourceConfigurationResources,
                         ConfigurationFiles.RESOURCES_NAME);
 
@@ -165,7 +164,9 @@ public final class ResourcesFeature implements Feature {
             return;
         }
         FallbackFeature.FallbackImageRequest resourceFallback = ImageSingletons.lookup(FallbackFeature.class).resourceFallback;
-        if (resourceFallback != null && Options.IncludeResources.getValue().length == 0 && loadedConfigurations == 0) {
+        if (resourceFallback != null && Options.IncludeResources.getValue().length == 0 &&
+                        ConfigurationFiles.Options.ResourceConfigurationFiles.getValue().length == 0 &&
+                        ConfigurationFiles.Options.ResourceConfigurationResources.getValue().length == 0) {
             throw resourceFallback;
         }
     }

@@ -51,7 +51,6 @@ public final class ReflectionFeature implements GraalFeature {
     private ReflectionDataBuilder reflectionData;
     private ImageClassLoader loader;
     private SVMHost hostVM;
-    private int loadedConfigurations;
 
     @Override
     public void duringSetup(DuringSetupAccess a) {
@@ -66,7 +65,7 @@ public final class ReflectionFeature implements GraalFeature {
         ImageSingletons.add(RuntimeReflectionSupport.class, reflectionData);
 
         ReflectionConfigurationParser<Class<?>> parser = ConfigurationParserUtils.create(reflectionData, access.getImageClassLoader());
-        loadedConfigurations = ConfigurationParserUtils.parseAndRegisterConfigurations(parser, access.getImageClassLoader(), "reflection",
+        ConfigurationParserUtils.parseAndRegisterConfigurations(parser, access.getImageClassLoader(), "reflection",
                         ConfigurationFiles.Options.ReflectionConfigurationFiles, ConfigurationFiles.Options.ReflectionConfigurationResources,
                         ConfigurationFiles.REFLECTION_NAME);
 
@@ -90,7 +89,8 @@ public final class ReflectionFeature implements GraalFeature {
             return;
         }
         FallbackFeature.FallbackImageRequest reflectionFallback = ImageSingletons.lookup(FallbackFeature.class).reflectionFallback;
-        if (reflectionFallback != null && loadedConfigurations == 0) {
+        if (reflectionFallback != null && ConfigurationFiles.Options.ReflectionConfigurationFiles.getValue() == null &&
+                        ConfigurationFiles.Options.ReflectionConfigurationResources.getValue() == null) {
             throw reflectionFallback;
         }
     }
