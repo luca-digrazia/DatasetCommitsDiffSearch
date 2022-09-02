@@ -168,6 +168,7 @@ public abstract class AbstractLanguageLauncher extends LanguageLauncherBase {
     @Override
     protected void printVersion() {
         printVersion(getTempEngine());
+        super.printVersion();
     }
 
     protected void printVersion(Engine engine) {
