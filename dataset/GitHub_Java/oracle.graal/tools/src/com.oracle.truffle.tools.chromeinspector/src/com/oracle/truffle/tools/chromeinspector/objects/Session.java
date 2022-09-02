@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.tools.chromeinspector.objects;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -34,17 +35,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
+
 import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.commands.Command;
 import com.oracle.truffle.tools.chromeinspector.commands.Params;
@@ -80,7 +82,9 @@ class Session extends AbstractInspectorObject {
                     METHOD_OFF, METHOD_PREPEND_LISTENER, METHOD_PREPEND_ONCE_LISTENER,
                     METHOD_REMOVE_LISTENER, METHOD_REMOVE_ALL_LISTENERS, METHOD_LISTENERS,
                     METHOD_LISTENER_COUNT, METHOD_POST};
-    private static final TruffleObject KEYS = new Keys(METHOD_NAMES);
+    private static final TruffleObject KEYS = new Keys();
+
+    private final Node nodeIsExecutable = Message.IS_EXECUTABLE.createNode();
 
     private final AtomicLong cmdId = new AtomicLong(1);
     private final Supplier<InspectorExecutionContext> contextSupplier;
@@ -96,7 +100,7 @@ class Session extends AbstractInspectorObject {
     }
 
     @Override
-    protected TruffleObject getMembers(boolean includeInternal) {
+    protected TruffleObject getKeys() {
         return KEYS;
     }
 
@@ -136,7 +140,7 @@ class Session extends AbstractInspectorObject {
 
     @Override
     @CompilerDirectives.TruffleBoundary
-    protected Object invokeMember(String name, Object[] arguments) throws ArityException, UnsupportedTypeException, UnknownIdentifierException, UnsupportedMessageException {
+    protected Object invokeMethod(String name, Object[] arguments) {
         switch (name) {
             case METHOD_CONNECT:
                 return connect();
@@ -170,7 +174,7 @@ class Session extends AbstractInspectorObject {
                 return post(arguments);
             default:
                 CompilerDirectives.transferToInterpreter();
-                throw UnknownIdentifierException.create(name);
+                throw UnknownIdentifierException.raise(name);
         }
     }
 
@@ -193,19 +197,19 @@ class Session extends AbstractInspectorObject {
         return NullObject.INSTANCE;
     }
 
-    private Object addListener(Object[] arguments, boolean prepend) throws ArityException {
+    private Object addListener(Object[] arguments, boolean prepend) {
         requireListenerArguments(arguments);
         getListeners().addListener(arguments[0], (TruffleObject) arguments[1], prepend);
         return this;
     }
 
-    private Object addOnceListener(Object[] arguments, boolean prepend) throws ArityException {
+    private Object addOnceListener(Object[] arguments, boolean prepend) {
         requireListenerArguments(arguments);
         getListeners().addOnceListener(arguments[0], (TruffleObject) arguments[1], prepend);
         return this;
     }
 
-    private Object removeListener(Object[] arguments) throws ArityException {
+    private Object removeListener(Object[] arguments) {
         requireListenerArguments(arguments);
         getListeners().removeListener(arguments[0], (TruffleObject) arguments[1]);
         return this;
@@ -235,9 +239,9 @@ class Session extends AbstractInspectorObject {
         return getListeners().listenerCount(eventName);
     }
 
-    private Object emit(Object[] arguments) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
+    private Object emit(Object[] arguments) {
         if (arguments.length < 1) {
-            throw ArityException.create(1, arguments.length);
+            throw ArityException.raise(1, arguments.length);
         }
         Object eventName = arguments[0];
         Object[] listenerArgs = new Object[arguments.length - 1];
@@ -245,29 +249,29 @@ class Session extends AbstractInspectorObject {
         return getListeners().emit(eventName, listenerArgs);
     }
 
-    private Object post(Object[] arguments) throws ArityException, UnsupportedTypeException {
+    private Object post(Object[] arguments) {
         if (arguments.length < 1) {
-            throw ArityException.create(1, arguments.length);
+            throw ArityException.raise(1, arguments.length);
         }
         if (!(arguments[0] instanceof String)) {
-            throw UnsupportedTypeException.create(new Object[]{arguments[0]});
+            throw UnsupportedTypeException.raise(new Object[]{arguments[0]});
         }
         String method = (String) arguments[0];
         TruffleObject params = null;
         TruffleObject callback = null;
         if (arguments.length >= 2) {
             if (!(arguments[1] instanceof TruffleObject)) {
-                throw UnsupportedTypeException.create(new Object[]{arguments[1]});
+                throw UnsupportedTypeException.raise(new Object[]{arguments[1]});
             }
             TruffleObject to = (TruffleObject) arguments[1];
-            if (InteropLibrary.getFactory().getUncached().isExecutable(to)) {
+            if (ForeignAccess.sendIsExecutable(nodeIsExecutable, to)) {
                 callback = to;
             } else {
                 params = to;
             }
             if (callback == null && arguments.length >= 3) {
                 if (!(arguments[2] instanceof TruffleObject)) {
-                    throw UnsupportedTypeException.create(new Object[]{arguments[2]});
+                    throw UnsupportedTypeException.raise(new Object[]{arguments[2]});
                 }
                 callback = (TruffleObject) arguments[2];
             }
@@ -288,11 +292,15 @@ class Session extends AbstractInspectorObject {
         iss.sendCommand(new Command(id, method, params));
     }
 
-    private static boolean requireListenerArguments(Object[] arguments) throws ArityException {
+    private boolean requireListenerArguments(Object[] arguments) {
         if (arguments.length < 2) {
-            throw ArityException.create(2, arguments.length);
+            throw ArityException.raise(2, arguments.length);
         }
-        if (!InteropLibrary.getFactory().getUncached().isExecutable(arguments[1])) {
+        if (!(arguments[1] instanceof TruffleObject)) {
+            throw new IllegalArgumentException("The \"listener\" argument must be of type Function");
+        }
+        TruffleObject listener = (TruffleObject) arguments[1];
+        if (!ForeignAccess.sendIsExecutable(nodeIsExecutable, listener)) {
             throw new IllegalArgumentException("The \"listener\" argument must be of type Function");
         }
         return true;
@@ -306,6 +314,23 @@ class Session extends AbstractInspectorObject {
         return l;
     }
 
+    static final class Keys extends AbstractInspectorArray {
+
+        @Override
+        int getLength() {
+            return METHOD_NAMES.length;
+        }
+
+        @Override
+        Object getElementAt(int index) {
+            if (index < 0 || index >= METHOD_NAMES.length) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnknownIdentifierException.raise(Integer.toString(index));
+            }
+            return METHOD_NAMES[index];
+        }
+    }
+
     static final class Listeners implements JSONMessageListener {
 
         private static final String EVENT_INSPECTOR = "inspectorNotification";
@@ -313,6 +338,7 @@ class Session extends AbstractInspectorObject {
         private final Map<String, TruffleObject[]> listenersMap = new ConcurrentHashMap<>();
         private final Set<Object> eventNames = new LinkedHashSet<>();
         private final Map<Long, TruffleObject> callbacksMap = new ConcurrentHashMap<>();
+        private final Node nodeExecute = Message.EXECUTE.createNode();
 
         private void addOnceListener(Object eventName, TruffleObject listener, boolean prepend) {
             addListener(eventName, new AutoremoveListener(this, eventName, listener), prepend);
@@ -422,7 +448,7 @@ class Session extends AbstractInspectorObject {
         }
 
         @Override
-        public void onMessage(JSONObject message) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
+        public void onMessage(JSONObject message) {
             String method = message.optString("method", null);
             if (method != null) {
                 TruffleObject[] ls = listenersMap.get(method);
@@ -453,58 +479,58 @@ class Session extends AbstractInspectorObject {
                         arguments[1] = result != null ? new JSONTruffleObject(result) : NullObject.INSTANCE;
                     }
                     try {
-                        InteropLibrary.getFactory().getUncached().execute(callback, arguments);
+                        ForeignAccess.sendExecute(nodeExecute, callback, arguments);
                     } catch (UnsupportedTypeException ex) {
-                        throw UnsupportedTypeException.create(ex.getSuppliedValues());
+                        throw UnsupportedTypeException.raise(ex.getSuppliedValues());
                     } catch (ArityException ex) {
-                        throw ArityException.create(ex.getExpectedArity(), ex.getActualArity());
+                        throw ArityException.raise(ex.getExpectedArity(), ex.getActualArity());
                     } catch (UnsupportedMessageException ex) {
-                        throw UnsupportedMessageException.create();
+                        throw UnsupportedMessageException.raise(Message.EXECUTE);
                     }
                 }
             }
         }
 
-        private static void notify(TruffleObject[] ls, TruffleObject event) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
+        private void notify(TruffleObject[] ls, TruffleObject event) {
             for (TruffleObject listener : ls) {
                 try {
-                    InteropLibrary.getFactory().getUncached().execute(listener, event);
+                    ForeignAccess.sendExecute(nodeExecute, listener, event);
                 } catch (UnsupportedTypeException ex) {
-                    throw UnsupportedTypeException.create(ex.getSuppliedValues());
+                    throw UnsupportedTypeException.raise(ex.getSuppliedValues());
                 } catch (ArityException ex) {
-                    throw ArityException.create(ex.getExpectedArity(), ex.getActualArity());
+                    throw ArityException.raise(ex.getExpectedArity(), ex.getActualArity());
                 } catch (UnsupportedMessageException ex) {
-                    throw UnsupportedMessageException.create();
+                    throw UnsupportedMessageException.raise(Message.EXECUTE);
                 }
             }
         }
 
-        public Object emit(Object eventName, Object[] listenerArgs) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
+        public Object emit(Object eventName, Object[] listenerArgs) {
             TruffleObject[] ls = listenersMap.get(eventName.toString());
             if (ls == null) {
                 return false;
             } else {
                 for (TruffleObject listener : ls) {
                     try {
-                        InteropLibrary.getFactory().getUncached().execute(listener, listenerArgs);
+                        ForeignAccess.sendExecute(nodeExecute, listener, listenerArgs);
                     } catch (UnsupportedTypeException ex) {
-                        throw UnsupportedTypeException.create(ex.getSuppliedValues());
+                        throw UnsupportedTypeException.raise(ex.getSuppliedValues());
                     } catch (ArityException ex) {
-                        throw ArityException.create(ex.getExpectedArity(), ex.getActualArity());
+                        throw ArityException.raise(ex.getExpectedArity(), ex.getActualArity());
                     } catch (UnsupportedMessageException ex) {
-                        throw UnsupportedMessageException.create();
+                        throw UnsupportedMessageException.raise(Message.EXECUTE);
                     }
                 }
                 return true;
             }
         }
 
-        @ExportLibrary(InteropLibrary.class)
+        @MessageResolution(receiverType = AutoremoveListener.class)
         static class AutoremoveListener implements TruffleObject {
 
             private final Listeners listeners;
             private final Object eventName;
-            final TruffleObject listener;
+            private final TruffleObject listener;
 
             AutoremoveListener(Listeners listeners, Object eventName, TruffleObject listener) {
                 this.listeners = listeners;
@@ -512,25 +538,47 @@ class Session extends AbstractInspectorObject {
                 this.listener = listener;
             }
 
-            @ExportMessage
-            boolean isExecutable() {
-                return true;
+            @Override
+            public ForeignAccess getForeignAccess() {
+                return AutoremoveListenerForeign.ACCESS;
             }
 
-            @ExportMessage(limit = "3")
-            final Object execute(Object[] arguments, @CachedLibrary("this.listener") InteropLibrary library) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-                listeners.removeListener(eventName, this);
-                try {
-                    return library.execute(listener, arguments);
-                } catch (ArityException ex) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw ArityException.create(ex.getExpectedArity(), ex.getActualArity());
-                } catch (UnsupportedMessageException ex) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw UnsupportedMessageException.create();
-                } catch (UnsupportedTypeException ex) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw UnsupportedTypeException.create(ex.getSuppliedValues());
+            public static boolean isInstance(TruffleObject obj) {
+                return obj instanceof AutoremoveListener;
+            }
+
+            @Resolve(message = "IS_EXECUTABLE")
+            abstract static class IsExecutableNode extends Node {
+
+                @SuppressWarnings("unused")
+                public Object access(AutoremoveListener exec) {
+                    return true;
+                }
+            }
+
+            @Resolve(message = "EXECUTE")
+            abstract static class ExecuteNode extends Node {
+
+                @Child private Node nodeExecute;
+
+                public Object access(AutoremoveListener exec, Object[] arguments) {
+                    if (nodeExecute == null) {
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                        nodeExecute = insert(Message.EXECUTE.createNode());
+                    }
+                    exec.listeners.removeListener(exec.eventName, exec);
+                    try {
+                        return ForeignAccess.sendExecute(nodeExecute, exec.listener, arguments);
+                    } catch (ArityException ex) {
+                        CompilerDirectives.transferToInterpreter();
+                        throw ArityException.raise(ex.getExpectedArity(), ex.getActualArity());
+                    } catch (UnsupportedMessageException ex) {
+                        CompilerDirectives.transferToInterpreter();
+                        throw UnsupportedMessageException.raise(ex.getUnsupportedMessage());
+                    } catch (UnsupportedTypeException ex) {
+                        CompilerDirectives.transferToInterpreter();
+                        throw UnsupportedTypeException.raise(ex.getSuppliedValues());
+                    }
                 }
             }
         }
