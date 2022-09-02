@@ -200,7 +200,7 @@ public abstract class CompilerConfigurationFactory implements Comparable<Compile
                 for (CompilerConfigurationFactory candidate : getAllCandidates()) {
                     System.out.println("    " + candidate.name);
                 }
-                HotSpotGraalServices.exit(0);
+                System.exit(0);
             } else if (value != null) {
                 for (CompilerConfigurationFactory candidate : GraalServices.load(CompilerConfigurationFactory.class)) {
                     if (candidate.name.equals(value)) {
