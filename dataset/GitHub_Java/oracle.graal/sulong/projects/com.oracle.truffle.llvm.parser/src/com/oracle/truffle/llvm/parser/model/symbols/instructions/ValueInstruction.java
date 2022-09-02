@@ -29,47 +29,42 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.instructions;
 
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.runtime.types.symbols.SSAValue;
+import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 
-public abstract class ValueInstruction extends Instruction implements SSAValue, ValueSymbol {
+public abstract class ValueInstruction extends Instruction implements ValueSymbol {
 
     private final Type type;
-    private int frameIdentifier = -1;
 
-    // this name is only used for IR debugging
     private String name = LLVMIdentifier.UNKNOWN;
+
+    private boolean isSourceVariable = false;
 
     ValueInstruction(Type type) {
         this.type = type;
     }
 
     @Override
-    public final Type getType() {
-        return type;
-    }
-
-    @Override
-    public final String getName() {
+    public String getName() {
         return name;
     }
 
     @Override
-    public final void setName(String name) {
+    public Type getType() {
+        return type;
+    }
+
+    @Override
+    public void setName(String name) {
         this.name = name;
     }
 
-    @Override
-    public final int getFrameIdentifier() {
-        assert frameIdentifier != -1 : "uninitialized frame identifier";
-        return frameIdentifier;
+    public boolean isSourceVariable() {
+        return isSourceVariable;
     }
 
-    @Override
-    public final void setFrameIdentifier(int frameIdentifier) {
-        assert this.frameIdentifier == -1;
-        this.frameIdentifier = frameIdentifier;
+    public void setSourceVariable(boolean isSourceVariable) {
+        this.isSourceVariable = isSourceVariable;
     }
 }

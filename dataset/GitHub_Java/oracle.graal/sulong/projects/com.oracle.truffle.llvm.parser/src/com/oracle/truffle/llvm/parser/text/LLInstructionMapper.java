@@ -57,7 +57,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstr
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.ValueInstructionVisitor;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 final class LLInstructionMapper {
 
@@ -100,7 +99,7 @@ final class LLInstructionMapper {
 
         @Override
         public void visitValueInstruction(ValueInstruction value) {
-            assignInstructionLocation(value, LLVMIdentifier.toLocalIdentifier(value.getName()));
+            assignInstructionLocation(value, "%" + value.getName());
         }
 
         @Override

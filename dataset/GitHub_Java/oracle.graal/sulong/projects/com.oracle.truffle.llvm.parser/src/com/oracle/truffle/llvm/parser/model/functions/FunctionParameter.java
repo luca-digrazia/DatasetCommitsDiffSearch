@@ -30,21 +30,21 @@
 package com.oracle.truffle.llvm.parser.model.functions;
 
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.runtime.types.symbols.SSAValue;
+import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 
-public final class FunctionParameter implements SSAValue, ValueSymbol {
+public final class FunctionParameter implements ValueSymbol {
 
     private final Type type;
-    private int frameIdentifier = -1;
+
+    private String name = LLVMIdentifier.UNKNOWN;
+
     private final AttributesGroup parameterAttribute;
 
-    // this name is only used for IR debugging
-    private String name = LLVMIdentifier.UNKNOWN;
+    private boolean isSourceVariable = false;
 
     FunctionParameter(Type type, AttributesGroup parameterAttribute) {
         this.type = type;
@@ -62,24 +62,20 @@ public final class FunctionParameter implements SSAValue, ValueSymbol {
     }
 
     @Override
-    public int getFrameIdentifier() {
-        assert frameIdentifier != -1 : "uninitialized frame identifier";
-        return frameIdentifier;
-    }
-
-    @Override
-    public void setFrameIdentifier(int frameIdentifier) {
-        assert this.frameIdentifier == -1;
-        this.frameIdentifier = frameIdentifier;
-    }
-
-    @Override
     public Type getType() {
         return type;
     }
 
     public AttributesGroup getParameterAttribute() {
         return parameterAttribute;
+    }
+
+    public boolean isSourceVariable() {
+        return isSourceVariable;
+    }
+
+    public void setSourceVariable(boolean isSourceVariable) {
+        this.isSourceVariable = isSourceVariable;
     }
 
     @Override
