@@ -28,7 +28,6 @@ import java.lang.reflect.InvocationTargetException;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -203,6 +202,7 @@ public final class Meta implements ContextAccess {
         Method_parameterTypes = Method.lookupDeclaredField(Name.parameterTypes, Type.Class_array);
 
         MethodAccessorImpl = knownKlass(Type.MethodAccessorImpl);
+        ConstructorAccessorImpl = knownKlass(Type.ConstructorAccessorImpl);
 
         Parameter = knownKlass(Type.Parameter);
 
@@ -228,6 +228,7 @@ public final class Meta implements ContextAccess {
         Thread = knownKlass(Type.Thread);
         HIDDEN_HOST_THREAD = Thread.lookupHiddenField(Name.HIDDEN_HOST_THREAD);
         HIDDEN_IS_ALIVE = Thread.lookupHiddenField(Name.HIDDEN_IS_ALIVE);
+        HIDDEN_INTERRUPTED = Thread.lookupHiddenField(Name.HIDDEN_INTERRUPTED);
         ThreadGroup = knownKlass(Type.ThreadGroup);
         ThreadGroup_remove = ThreadGroup.lookupDeclaredMethod(Name.remove, Signature.ThreadGroup_remove);
         Thread_dispatchUncaughtException = Thread.lookupDeclaredMethod(Name.dispatchUncaughtException, Signature._void_Throwable);
@@ -405,6 +406,7 @@ public final class Meta implements ContextAccess {
     public final Field Method_parameterTypes;
 
     public final ObjectKlass MethodAccessorImpl;
+    public final ObjectKlass ConstructorAccessorImpl;
 
     public final ObjectKlass Parameter;
 
@@ -476,6 +478,7 @@ public final class Meta implements ContextAccess {
     public final Method Thread_checkAccess;
     public final Method Thread_stop;
     public final Field HIDDEN_IS_ALIVE;
+    public final Field HIDDEN_INTERRUPTED;
     public final Field Thread_group;
     public final Field Thread_name;
     public final Field Thread_priority;
@@ -730,10 +733,70 @@ public final class Meta implements ContextAccess {
         return knownPrimitive(getTypes().fromClass(primitiveClass));
     }
 
+    /**
+     * Performs class loading according to {§5.3. Creation and Loading}. This method directly asks
+     * the given class loader to perform the load, even for internal primitive types. This is the
+     * method to use when loading symbols that are not directly taken from a constant pool, for
+     * example, when loading a class whose name is given by a guest string..
+     * 
+     * @param type The symbolic type.
+     * @param classLoader The class loader
+     * @return The asked Klass.
+     */
     @TruffleBoundary
     public Klass loadKlass(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
         assert classLoader != null : "use StaticObject.NULL for BCL";
         return getRegistries().loadKlass(type, classLoader);
+    }
+
+    /**
+     * Resolves an internal symbolic type descriptor taken from the constant pool, and returns the
+     * corresponding Klass.
+     * <li>If the symbol represents an internal primitive (/ex: 'B' or 'I'), this method returns
+     * immediately returns the corresponding primitive. Thus, primitives are not 'loaded'.
+     * <li>If the symbol is a symbolic references, it asks the given ClassLoader to load the
+     * corresponding Klass.
+     * <li>If the symbol represents an array, recursively resolve its elemental type, and returns
+     * the array Klass need.
+     * 
+     * @param type The symbolic type
+     * @param classLoader The class loader of the constant pool holder.
+     * @return The asked Klass.
+     */
+    public Klass resolveSymbol(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
+        assert classLoader != null : "use StaticObject.NULL for BCL";
+        // Resolution only resolves references. Bypass loading for primitives.
+        if (type.length() == 1) {
+            switch (type.byteAt(0)) {
+                case 'B': // byte
+                    return _byte;
+                case 'C': // char
+                    return _char;
+                case 'D': // double
+                    return _double;
+                case 'F': // float
+                    return _float;
+                case 'I': // int
+                    return _int;
+                case 'J': // long
+                    return _long;
+                case 'S': // short
+                    return _short;
+                case 'V': // void
+                    return _void;
+                case 'Z': // boolean
+                    return _boolean;
+                default:
+            }
+        }
+        if (Types.isArray(type)) {
+            Klass elemental = resolveSymbol(getTypes().getElementalType(type), classLoader);
+            if (elemental == null) {
+                return null;
+            }
+            return elemental.getArrayClass(Types.getArrayDimensions(type));
+        }
+        return loadKlass(type, classLoader);
     }
 
     @TruffleBoundary
@@ -748,19 +811,13 @@ public final class Meta implements ContextAccess {
 
     @TruffleBoundary
     public StaticObject toGuestString(String hostString) {
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-        return toGuestString(hostString, meta);
-    }
-
-    @TruffleBoundary
-    public StaticObject toGuestString(String hostString, Meta meta) {
         if (hostString == null) {
             return StaticObject.NULL;
         }
         final char[] value = HostJava.getStringValue(hostString);
         final int hash = HostJava.getStringHash(hostString);
         StaticObject guestString = String.allocateInstance();
-        String_value.set(guestString, StaticObject.wrap(value, meta));
+        String_value.set(guestString, StaticObject.wrap(value));
         String_hash.set(guestString, hash);
         // String.hashCode must be equivalent for host and guest.
         assert hostString.hashCode() == (int) String_hashCode.invokeDirect(guestString);
