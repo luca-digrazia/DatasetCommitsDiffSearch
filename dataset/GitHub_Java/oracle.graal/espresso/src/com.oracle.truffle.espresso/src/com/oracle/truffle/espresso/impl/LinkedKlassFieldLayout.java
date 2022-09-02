@@ -29,8 +29,8 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObject.StaticObjectFactory;
-import com.oracle.truffle.espresso.staticobject.ClassLoaderCache;
 import com.oracle.truffle.espresso.staticobject.StaticShape;
+import com.oracle.truffle.espresso.staticobject.StaticShapeBuilder;
 
 final class LinkedKlassFieldLayout {
     final StaticShape<StaticObjectFactory> instanceShape;
@@ -45,9 +45,9 @@ final class LinkedKlassFieldLayout {
 
     final int fieldTableLength;
 
-    LinkedKlassFieldLayout(ClassLoaderCache clc, ParserKlass parserKlass, LinkedKlass superKlass) {
-        StaticShape.Builder instanceBuilder = StaticShape.newBuilder(clc);
-        StaticShape.Builder staticBuilder = StaticShape.newBuilder(clc);
+    LinkedKlassFieldLayout(ParserKlass parserKlass, LinkedKlass superKlass) {
+        StaticShapeBuilder instanceBuilder = StaticShape.newBuilder();
+        StaticShapeBuilder staticBuilder = StaticShape.newBuilder();
 
         FieldCounter fieldCounter = new FieldCounter(parserKlass);
         int nextInstanceFieldIndex = 0;
@@ -60,18 +60,18 @@ final class LinkedKlassFieldLayout {
         for (ParserField parserField : parserKlass.getFields()) {
             if (parserField.isStatic()) {
                 LinkedField field = new LinkedField(parserField, nextStaticFieldSlot++);
-                staticBuilder.property(field);
+                staticBuilder.property(field, parserField.getName().toString(), parserField.isFinal());
                 staticFields[nextStaticFieldIndex++] = field;
             } else {
                 LinkedField field = new LinkedField(parserField, nextInstanceFieldSlot++);
-                instanceBuilder.property(field);
+                instanceBuilder.property(field, parserField.getName().toString(), parserField.isFinal());
                 instanceFields[nextInstanceFieldIndex++] = field;
             }
         }
         for (Symbol<Name> hiddenFieldName : fieldCounter.hiddenFieldNames) {
             ParserField hiddenParserField = new ParserField(ParserField.HIDDEN, hiddenFieldName, Type.java_lang_Object, null);
             LinkedField field = new LinkedField(hiddenParserField, nextInstanceFieldSlot++);
-            instanceBuilder.property(field);
+            instanceBuilder.property(field, hiddenFieldName.toString(), false);
             instanceFields[nextInstanceFieldIndex++] = field;
         }
         if (superKlass == null) {
