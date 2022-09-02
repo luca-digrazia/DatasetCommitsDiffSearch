@@ -1072,9 +1072,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
                     case INVOKEDYNAMIC: top += quickenInvokeDynamic(frame, primitives, refs, top, curBCI, curOpcode); break;
                     case QUICK: {
-                        // Force a volatile read of the opcode.
-                        CompilerAsserts.partialEvaluationConstant(bs.currentVolatileBC(curBCI));
-                        QuickNode quickNode = nodes[bs.readCPI(curBCI)];
+                        QuickNode quickNode = nodes[bs.volatileReadCPI(curBCI)];
                         if (quickNode.removedByRedefintion()) {
                             CompilerDirectives.transferToInterpreterAndInvalidate();
                             synchronized (this) {
