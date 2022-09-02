@@ -217,11 +217,7 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     public void setArrayByte(byte value, int index, @Host(byte[].class /* or boolean[] */) StaticObject arr) {
-        if (getJavaVersion().java9OrLater() && arr.getKlass() == getMeta()._boolean_array) {
-            arr.setArrayByte((byte) (value & 1), index, getMeta());
-        } else {
-            arr.setArrayByte(value, index, getMeta());
-        }
+        arr.setArrayByte(value, index, getMeta());
     }
 
     public void setArrayChar(char value, int index, @Host(char[].class) StaticObject array) {

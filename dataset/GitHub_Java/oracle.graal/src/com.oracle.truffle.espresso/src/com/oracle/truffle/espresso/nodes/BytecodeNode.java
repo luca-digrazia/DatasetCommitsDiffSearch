@@ -264,7 +264,6 @@ import com.oracle.truffle.espresso.classfile.attributes.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
 import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.DoubleConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.DynamicConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.FloatConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.IntegerConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.InvokeDynamicConstant;
@@ -272,10 +271,12 @@ import com.oracle.truffle.espresso.classfile.constantpool.LongConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.MethodHandleConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.MethodRefConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.MethodTypeConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.NameAndTypeConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.StringConstant;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
@@ -1392,10 +1393,6 @@ public final class BytecodeNode extends EspressoMethodNode {
             assert opcode == LDC || opcode == LDC_W;
             StaticObject methodType = pool.resolvedMethodTypeAt(getMethod().getDeclaringKlass(), cpi);
             putObject(frame, top, methodType);
-        } else if (constant instanceof DynamicConstant) {
-            DynamicConstant.Resolved dynamicConstant = pool.resolvedDynamicConstantAt(getMethod().getDeclaringKlass(), cpi);
-            dynamicConstant.putResolved(frame, top, this);
-
         } else {
             CompilerDirectives.transferToInterpreter();
             throw EspressoError.unimplemented(constant.toString());
@@ -1596,8 +1593,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         } else if (resolved.isPolySignatureIntrinsic()) {
             invoke = new InvokeHandleNode(resolved, getMethod().getDeclaringKlass(), top, curBCI);
         } else if (opcode == INVOKEINTERFACE && resolved.getITableIndex() < 0) {
-            if (resolved.isPrivate()) {
-                assert getJavaVersion().java9OrLater();
+            if (getJavaVersion().java9OrLater() && resolved.isPrivate()) {
                 // Interface private methods do not appear in itables.
                 invoke = new InvokeSpecialNode(resolved, top, curBCI);
             } else {
@@ -1625,7 +1621,8 @@ public final class BytecodeNode extends EspressoMethodNode {
     private int quickenInvokeDynamic(final VirtualFrame frame, int top, int curBCI, int opcode) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         assert (Bytecodes.INVOKEDYNAMIC == opcode);
-        RuntimeConstantPool pool = getConstantPool();
+        RuntimeConstantPool pool = null;
+        InvokeDynamicConstant inDy = null;
         QuickNode quick = null;
         int indyIndex = -1;
         synchronized (this) {
@@ -1633,8 +1630,10 @@ public final class BytecodeNode extends EspressoMethodNode {
                 // Check if someone did the job for us. Defer the call until we are out of the lock.
                 quick = nodes[bs.readCPI(curBCI)];
             } else {
+                pool = getConstantPool();
                 // fetch indy under lock.
                 indyIndex = bs.readCPI(curBCI);
+                inDy = ((InvokeDynamicConstant) pool.at(indyIndex));
             }
         }
         if (quick != null) {
@@ -1642,16 +1641,79 @@ public final class BytecodeNode extends EspressoMethodNode {
             return quick.execute(frame) - Bytecodes.stackEffectOf(opcode);
         }
 
-        // Resolution should happen outside of the bytecode patching lock.
-        InvokeDynamicConstant.Resolved inDy = pool.resolvedInvokeDynamicAt(getMethod().getDeclaringKlass(), indyIndex);
+        assert pool != null && inDy != null;
+
+        // Do the long stuff outside the lock.
+        Meta meta = getMeta();
+
+        // Indy constant resolving.
+        BootstrapMethodsAttribute bms = getBootstrapMethods();
+        NameAndTypeConstant specifier = pool.nameAndTypeAt(inDy.getNameAndTypeIndex());
+
+        assert (bms != null);
+        // TODO(garcia) cache bootstrap method resolution
+        // Bootstrap method resolution
+        BootstrapMethodsAttribute.Entry bsEntry = bms.at(inDy.getBootstrapMethodAttrIndex());
+
+        Klass accessingKlass = getMethod().getDeclaringKlass();
+        StaticObject bootstrapmethodMethodHandle = pool.resolvedMethodHandleAt(accessingKlass, bsEntry.getBootstrapMethodRef());
+
+        StaticObject[] args = new StaticObject[bsEntry.numBootstrapArguments()];
+        // @formatter:off
+        for (int i = 0; i < bsEntry.numBootstrapArguments(); i++) {
+            PoolConstant pc = pool.at(bsEntry.argAt(i));
+            switch (pc.tag()) {
+                case METHODHANDLE : args[i] = pool.resolvedMethodHandleAt(accessingKlass, bsEntry.argAt(i));    break;
+                case METHODTYPE   : args[i] = pool.resolvedMethodTypeAt(accessingKlass, bsEntry.argAt(i));      break;
+                case CLASS        : args[i] = pool.resolvedKlassAt(accessingKlass, bsEntry.argAt(i)).mirror();  break;
+                case STRING       : args[i] = pool.resolvedStringAt(bsEntry.argAt(i));                          break;
+                case INTEGER      : args[i] = meta.boxInteger(pool.intAt(bsEntry.argAt(i)));                    break;
+                case LONG         : args[i] = meta.boxLong(pool.longAt(bsEntry.argAt(i)));                      break;
+                case DOUBLE       : args[i] = meta.boxDouble(pool.doubleAt(bsEntry.argAt(i)));                  break;
+                case FLOAT        : args[i] = meta.boxFloat(pool.floatAt(bsEntry.argAt(i)));                    break;
+                default           :
+                    CompilerDirectives.transferToInterpreter();
+                    throw EspressoError.shouldNotReachHere();
+            }
+        }
+        // @formatter:on
+
+        // Preparing Bootstrap call.
+        StaticObject name = meta.toGuestString(specifier.getName(pool));
+        Symbol<Signature> invokeSignature = Signatures.check(specifier.getDescriptor(pool));
+        Symbol<Type>[] parsedInvokeSignature = getSignatures().parsed(invokeSignature);
+        StaticObject methodType = signatureToMethodType(parsedInvokeSignature, accessingKlass, getMeta());
+        StaticObject appendix = StaticObject.createArray(meta.java_lang_Object_array, new StaticObject[1]);
+        StaticObject memberName;
+        if (getJavaVersion().varHandlesEnabled()) {
+            memberName = (StaticObject) meta.java_lang_invoke_MethodHandleNatives_linkCallSite11.invokeDirect(
+                            null,
+                            accessingKlass.mirror(),
+                            indyIndex,
+                            bootstrapmethodMethodHandle,
+                            name, methodType,
+                            StaticObject.createArray(meta.java_lang_Object_array, args),
+                            appendix);
+        } else {
+            memberName = (StaticObject) meta.java_lang_invoke_MethodHandleNatives_linkCallSite8.invokeDirect(
+                            null,
+                            accessingKlass.mirror(),
+                            bootstrapmethodMethodHandle,
+                            name, methodType,
+                            StaticObject.createArray(meta.java_lang_Object_array, args),
+                            appendix);
+        }
+
+        StaticObject unboxedAppendix = appendix.get(0);
 
         // re-lock to check if someone did the job for us, since this was a heavy operation.
+
         synchronized (this) {
             if (bs.currentBC(curBCI) == QUICK) {
                 // someone beat us to it, just trust him.
                 quick = nodes[bs.readCPI(curBCI)];
             } else {
-                quick = injectQuick(curBCI, new InvokeDynamicCallSiteNode(inDy.getMemberName(), inDy.getUnboxedAppendix(), inDy.getParsedSignature(), getMeta(), top, curBCI));
+                quick = injectQuick(curBCI, new InvokeDynamicCallSiteNode(memberName, unboxedAppendix, parsedInvokeSignature, meta, top, curBCI));
             }
         }
         return quick.execute(frame) - Bytecodes.stackEffectOf(opcode);

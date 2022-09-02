@@ -2579,13 +2579,13 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public static boolean JVM_AreNestMates(@Host(Class.class) StaticObject current, @Host(Class.class) StaticObject member) {
+    public boolean JVM_AreNestMates(@Host(Class.class) StaticObject current, @Host(Class.class) StaticObject member) {
         return current.getMirrorKlass().nest() == member.getMirrorKlass().nest();
     }
 
     @VmImpl
     @JniImpl
-    public static @Host(Class.class) StaticObject JVM_GetNestHost(@Host(Class.class) StaticObject current) {
+    public @Host(Class.class) StaticObject JVM_GetNestHost(@Host(Class.class) StaticObject current) {
         return current.getMirrorKlass().nest().mirror();
     }
 
@@ -2622,7 +2622,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @SuppressWarnings("unused")
     public void JVM_InitializeFromArchive(@Host(Class.class) StaticObject cls) {
         /*
          * Used to reduce boot time of certain initializations through CDS (/ex: module
@@ -2632,15 +2631,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public void JVM_BeforeHalt() {
-        /*
-         * currently nop
-         */
-    }
-
-    @VmImpl
-    @JniImpl
-    @SuppressWarnings("unused")
     public void JVM_InitStackTraceElement(@Host(StackTraceElement.class) StaticObject element, @Host(typeName = "Ljava/lang/StackFrameInfo;") StaticObject info) {
         // TODO: this
     }
