@@ -34,10 +34,13 @@ import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
+import com.oracle.truffle.espresso.bytecode.Bytecodes;
+import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.ClassRedefinition;
 import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.jdwp.api.CallFrame;
@@ -542,16 +545,38 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public int getNextBCI(RootNode callerRoot, Frame frame) {
+    public boolean moreMethodCallsOnLine(RootNode callerRoot, Frame frame) {
         if (callerRoot instanceof EspressoRootNode) {
             EspressoRootNode espressoRootNode = (EspressoRootNode) callerRoot;
             int bci = (int) readBCIFromFrame(callerRoot, frame);
             if (bci != -1) {
-                BytecodeStream bs = new BytecodeStream(espressoRootNode.getMethodVersion().getOriginalCode());
-               return bs.nextBCI(bci);
+                Method method = espressoRootNode.getMethod();
+                BytecodeStream bs = new BytecodeStream(method.getOriginalCode());
+                LineNumberTableAttribute lineNumberTable = method.getLineNumberTable();
+                if (lineNumberTable == LineNumberTableAttribute.EMPTY) {
+                    return false;
+                }
+
+                int frameLineNumber = lineNumberTable.getLineNumber(bci);
+                int nextLine = lineNumberTable.getNextLine(frameLineNumber);
+                int end = bs.endBCI();
+
+                if (nextLine != Integer.MAX_VALUE) {
+                    end = (int) lineNumberTable.getBCI(nextLine);
+                }
+                // don't check the current opcode, since this is the invoke
+                bci = bs.nextBCI(bci);
+
+                while (bci < end) {
+                    int opcode = bs.currentBC(bci);
+                    if (Bytecodes.isInvoke(opcode) || opcode == Bytecodes.INVOKEDYNAMIC) {
+                        return true;
+                    }
+                    bci = bs.nextBCI(bci);
+                }
             }
         }
-        return -1;
+        return false;
     }
 
     @Override
