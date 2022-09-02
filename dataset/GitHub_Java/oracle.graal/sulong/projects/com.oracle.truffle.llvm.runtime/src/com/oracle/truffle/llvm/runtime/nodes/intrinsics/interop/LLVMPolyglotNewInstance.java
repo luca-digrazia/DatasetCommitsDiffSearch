@@ -122,7 +122,7 @@ public abstract class LLVMPolyglotNewInstance extends LLVMIntrinsic {
     }
 
     /**
-     * @param value @NodeChild
+     * @param value
      * @see LLVMPolyglotNewInstance
      */
     @Fallback
