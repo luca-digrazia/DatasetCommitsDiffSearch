@@ -53,7 +53,7 @@ final class DefaultInliningPolicy implements InliningPolicy {
 
     DefaultInliningPolicy(OptionValues options) {
         this.options = options;
-        optimizeOnExpand = options.get(PolyglotCompilerOptions.InliningTruffleTierOnExpand);
+        optimizeOnExpand = options.get(PolyglotCompilerOptions.InliningOptimizeOnExpand);
     }
 
     @Override
