@@ -29,17 +29,13 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 
-public abstract class LLVMInstrumentableNode extends LLVMNode implements InstrumentableNode {
+public interface LLVMInstrumentableNode extends InstrumentableNode {
 
-    @CompilationFinal private LLVMNodeSourceDescriptor sourceDescriptor = null;
+    void setSourceDescriptor(LLVMNodeSourceDescriptor sourceDescriptor);
 
     /**
      * Get a {@link LLVMNodeSourceDescriptor descriptor} for the debug and instrumentation
@@ -47,9 +43,7 @@ public abstract class LLVMInstrumentableNode extends LLVMNode implements Instrum
      *
      * @return a source descriptor attached to this node
      */
-    public final LLVMNodeSourceDescriptor getSourceDescriptor() {
-        return sourceDescriptor;
-    }
+    LLVMNodeSourceDescriptor getSourceDescriptor();
 
     /**
      * Get a {@link LLVMNodeSourceDescriptor descriptor} for the debug and instrumentation
@@ -58,67 +52,86 @@ public abstract class LLVMInstrumentableNode extends LLVMNode implements Instrum
      *
      * @return a source descriptor attached to this node
      */
-    public final LLVMNodeSourceDescriptor getOrCreateSourceDescriptor() {
+    LLVMNodeSourceDescriptor getOrCreateSourceDescriptor();
+
+    @Override
+    default boolean isInstrumentable() {
+        final LLVMNodeSourceDescriptor sourceDescriptor = getSourceDescriptor();
         if (sourceDescriptor == null) {
-            setSourceDescriptor(new LLVMNodeSourceDescriptor());
-        }
-        return sourceDescriptor;
-    }
-
-    public final void setSourceDescriptor(LLVMNodeSourceDescriptor sourceDescriptor) {
-        // the source descriptor should only be set in the parser, and should only be modified
-        // before this node is first executed
-        CompilerAsserts.neverPartOfCompilation();
-        this.sourceDescriptor = sourceDescriptor;
-    }
-
-    @Override
-    public SourceSection getSourceSection() {
-        return sourceDescriptor != null ? sourceDescriptor.getSourceSection() : null;
-    }
-
-    @Override
-    public boolean isInstrumentable() {
-        return getSourceSection() != null;
-    }
-
-    /**
-     * Describes whether this node has source-level debug information attached and should be
-     * considered a source-level statement for instrumentation.
-     *
-     * @return whether this node may provide the
-     *         {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag}
-     */
-    private boolean hasStatementTag() {
-        return sourceDescriptor != null && sourceDescriptor.hasStatementTag();
-    }
-
-    /**
-     * Get a {@link LLVMSourceLocation descriptor} for the source-level code location and scope
-     * information of this node.
-     *
-     * @return the {@link LLVMSourceLocation} attached to this node
-     */
-    public LLVMSourceLocation getSourceLocation() {
-        return sourceDescriptor != null ? sourceDescriptor.getSourceLocation() : null;
-    }
-
-    /**
-     * If this node {@link LLVMInstrumentableNode#hasStatementTag() is a statement for source-level
-     * instrumentatipon}, this function considers the node to be tagged with
-     * {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag}.
-     *
-     * @param tag class of a tag {@link com.oracle.truffle.api.instrumentation.ProvidedTags
-     *            provided} by {@link com.oracle.truffle.llvm.runtime.LLVMLanguage}
-     *
-     * @return whether this node is associated with the given tag
-     */
-    @Override
-    public boolean hasTag(Class<? extends Tag> tag) {
-        if (tag == StandardTags.StatementTag.class) {
-            return hasStatementTag();
-        } else {
             return false;
         }
+
+        return sourceDescriptor.getSourceSection() != null;
+    }
+
+    /**
+     * If this node provides a non-null
+     * {@link com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation}, describes whether
+     * this node represents a source-level function root.
+     *
+     * @return whether this node should have the
+     *         {@link com.oracle.truffle.api.instrumentation.StandardTags.RootTag}
+     */
+    default boolean hasRootTag() {
+        return false;
+    }
+
+    /**
+     * If this node provides a non-null
+     * {@link com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation}, describes whether
+     * this node represents a source-level function root.
+     *
+     * @return whether this node should have the
+     *         {@link com.oracle.truffle.api.instrumentation.StandardTags.RootBodyTag}
+     */
+    default boolean hasRootBodyTag() {
+        return false;
+    }
+
+    /**
+     * If this node provides a non-null
+     * {@link com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation}, describes whether
+     * this node represents a source-level function call.
+     *
+     * @return whether this node should have the
+     *         {@link com.oracle.truffle.api.instrumentation.StandardTags.CallTag}
+     */
+    default boolean hasCallTag() {
+        return false;
+    }
+
+    /**
+     * If this node provides a non-null
+     * {@link com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation}, describes whether
+     * this node represents a source-level statement.
+     *
+     * @return whether this node should have the
+     *         {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag}
+     */
+    default boolean hasStatementTag() {
+        return false;
+    }
+
+    @Override
+    default boolean hasTag(Class<? extends Tag> tag) {
+        final LLVMNodeSourceDescriptor sourceDescriptor = getSourceDescriptor();
+        if (sourceDescriptor == null) {
+            return false;
+        }
+
+        // only and all nodes with attached source locations are eligible for source-level
+        // instrumentation
+        if ((tag == StandardTags.StatementTag.class && hasStatementTag()) || (tag == StandardTags.CallTag.class && hasCallTag()) || (tag == StandardTags.RootTag.class && hasRootTag()) ||
+                        (tag == StandardTags.RootBodyTag.class && hasRootBodyTag())) {
+            return sourceDescriptor.getSourceLocation() != null;
+        }
+
+        return sourceDescriptor.hasTag(tag);
+    }
+
+    @Override
+    default Object getNodeObject() {
+        final LLVMNodeSourceDescriptor sourceDescriptor = getSourceDescriptor();
+        return sourceDescriptor != null ? sourceDescriptor.getNodeObject() : null;
     }
 }

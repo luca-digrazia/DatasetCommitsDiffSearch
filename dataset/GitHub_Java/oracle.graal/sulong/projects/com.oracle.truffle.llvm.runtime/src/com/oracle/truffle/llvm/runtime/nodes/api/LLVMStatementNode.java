@@ -30,21 +30,25 @@
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
 
-public abstract class LLVMControlFlowNode extends LLVMNode implements LLVMInstrumentableNode {
+/**
+ * An statement node is a node that returns no result.
+ */
+@GenerateWrapper
+public abstract class LLVMStatementNode extends LLVMNode implements LLVMInstrumentableNode {
 
-    @CompilationFinal private LLVMNodeSourceDescriptor sourceDescriptor = null;
+    @CompilerDirectives.CompilationFinal private LLVMNodeSourceDescriptor sourceDescriptor = null;
 
-    public LLVMControlFlowNode() {
-    }
+    public static final LLVMStatementNode[] NO_STATEMENTS = {};
 
-    public abstract int getSuccessorCount();
+    public abstract void execute(VirtualFrame frame);
 
-    public abstract LLVMStatementNode getPhiNode(int successorIndex);
-
-    public boolean needsBranchProfiling() {
-        return getSuccessorCount() > 1;
+    public String getSourceDescription() {
+        return getRootNode().getName();
     }
 
     @Override
@@ -69,7 +73,22 @@ public abstract class LLVMControlFlowNode extends LLVMNode implements LLVMInstru
     }
 
     @Override
+    public boolean hasRootTag() {
+        return false;
+    }
+
+    @Override
+    public boolean hasCallTag() {
+        return false;
+    }
+
+    @Override
     public boolean hasStatementTag() {
         return true;
+    }
+
+    @Override
+    public WrapperNode createWrapper(ProbeNode probe) {
+        return new LLVMStatementNodeWrapper(this, probe);
     }
 }

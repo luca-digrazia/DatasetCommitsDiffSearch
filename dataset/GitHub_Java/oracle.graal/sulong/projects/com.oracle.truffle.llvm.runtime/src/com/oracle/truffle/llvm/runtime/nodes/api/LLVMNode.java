@@ -35,14 +35,14 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 @TypeSystemReference(LLVMTypes.class)
@@ -94,6 +94,27 @@ public abstract class LLVMNode extends Node {
         return SulongEngineOption.isTrue(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
     }
 
+    public LLVMNodeSourceDescriptor getSourceDescriptor() {
+        return null;
+    }
+
+    /**
+     * Get a {@link LLVMSourceLocation descriptor} for the source-level code location and scope
+     * information of this node.
+     *
+     * @return the descriptor attached to this node
+     */
+    public LLVMSourceLocation getSourceLocation() {
+        final LLVMNodeSourceDescriptor sourceDescriptor = getSourceDescriptor();
+        return sourceDescriptor != null ? sourceDescriptor.getSourceLocation() : null;
+    }
+
+    @Override
+    public SourceSection getSourceSection() {
+        final LLVMNodeSourceDescriptor sourceDescriptor = getSourceDescriptor();
+        return sourceDescriptor != null ? sourceDescriptor.getSourceSection() : null;
+    }
+
     protected static boolean isFunctionDescriptor(Object object) {
         return object instanceof LLVMFunctionDescriptor;
     }
@@ -106,12 +127,4 @@ public abstract class LLVMNode extends Node {
         // used as a workaround for a DSL bug
         return a == b;
     }
-
-    protected DataLayout getDataLayout() {
-        CompilerAsserts.neverPartOfCompilation();
-        LLVMFunctionStartNode startNode = (LLVMFunctionStartNode) getRootNode();
-        return startNode.getDataSpecConverter();
-    }
-
-
 }

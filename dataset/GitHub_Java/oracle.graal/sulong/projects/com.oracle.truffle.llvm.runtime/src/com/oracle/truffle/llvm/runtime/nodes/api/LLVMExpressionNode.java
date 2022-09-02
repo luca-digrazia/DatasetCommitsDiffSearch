@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,24 +29,38 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.GenerateWrapper;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 /**
  * An expression node is a node that returns a result, e.g., a local variable read, or an addition
  * operation.
  */
 @GenerateWrapper
-public abstract class LLVMExpressionNode extends LLVMInstrumentableNode {
+public abstract class LLVMExpressionNode extends LLVMNode implements LLVMInstrumentableNode {
 
-    @SuppressWarnings("static-method")
+    @CompilationFinal private LLVMNodeSourceDescriptor sourceDescriptor = null;
+
     @GenerateWrapper.OutgoingConverter
-    final Object convertOutgoing(@SuppressWarnings("unused") Object object) {
+    Object convertOutgoing(@SuppressWarnings("unused") Object object) {
         return null;
     }
 
@@ -54,15 +68,19 @@ public abstract class LLVMExpressionNode extends LLVMInstrumentableNode {
 
     public abstract Object executeGeneric(VirtualFrame frame);
 
-    public final LLVMPointer executeLLVMPointer(VirtualFrame frame) throws UnexpectedResultException {
+    public LLVM80BitFloat executeLLVM80BitFloat(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVM80BitFloat(executeGeneric(frame));
+    }
+
+    public LLVMPointer executeLLVMPointer(VirtualFrame frame) throws UnexpectedResultException {
         return LLVMTypesGen.expectLLVMPointer(executeGeneric(frame));
     }
 
-    public final LLVMNativePointer executeLLVMNativePointer(VirtualFrame frame) throws UnexpectedResultException {
+    public LLVMNativePointer executeLLVMNativePointer(VirtualFrame frame) throws UnexpectedResultException {
         return LLVMTypesGen.expectLLVMNativePointer(executeGeneric(frame));
     }
 
-    public final LLVMManagedPointer executeLLVMManagedPointer(VirtualFrame frame) throws UnexpectedResultException {
+    public LLVMManagedPointer executeLLVMManagedPointer(VirtualFrame frame) throws UnexpectedResultException {
         return LLVMTypesGen.expectLLVMManagedPointer(executeGeneric(frame));
     }
 
@@ -90,16 +108,82 @@ public abstract class LLVMExpressionNode extends LLVMInstrumentableNode {
         return LLVMTypesGen.expectLong(executeGeneric(frame));
     }
 
+    public LLVMIVarBit executeLLVMIVarBit(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMIVarBit(executeGeneric(frame));
+    }
+
     public byte executeI8(VirtualFrame frame) throws UnexpectedResultException {
         return LLVMTypesGen.expectByte(executeGeneric(frame));
     }
 
-    public final String getSourceDescription() {
+    public LLVMI8Vector executeLLVMI8Vector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMI8Vector(executeGeneric(frame));
+    }
+
+    public LLVMI64Vector executeLLVMI64Vector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMI64Vector(executeGeneric(frame));
+    }
+
+    public LLVMI32Vector executeLLVMI32Vector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMI32Vector(executeGeneric(frame));
+    }
+
+    public LLVMI1Vector executeLLVMI1Vector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMI1Vector(executeGeneric(frame));
+    }
+
+    public LLVMI16Vector executeLLVMI16Vector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMI16Vector(executeGeneric(frame));
+    }
+
+    public LLVMFloatVector executeLLVMFloatVector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMFloatVector(executeGeneric(frame));
+    }
+
+    public LLVMDoubleVector executeLLVMDoubleVector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMDoubleVector(executeGeneric(frame));
+    }
+
+    public LLVMPointerVector executeLLVMPointerVector(VirtualFrame frame) throws UnexpectedResultException {
+        return LLVMTypesGen.expectLLVMPointerVector(executeGeneric(frame));
+    }
+
+    public String getSourceDescription() {
         return getRootNode().getName();
     }
 
     @Override
-    public final WrapperNode createWrapper(ProbeNode probe) {
+    public LLVMNodeSourceDescriptor getSourceDescriptor() {
+        return sourceDescriptor;
+    }
+
+    @Override
+    public LLVMNodeSourceDescriptor getOrCreateSourceDescriptor() {
+        if (sourceDescriptor == null) {
+            setSourceDescriptor(new LLVMNodeSourceDescriptor());
+        }
+        return sourceDescriptor;
+    }
+
+    @Override
+    public void setSourceDescriptor(LLVMNodeSourceDescriptor sourceDescriptor) {
+        // the source descriptor should only be set in the parser, and should only be modified
+        // before this node is first executed
+        CompilerAsserts.neverPartOfCompilation();
+        this.sourceDescriptor = sourceDescriptor;
+    }
+
+    @Override
+    public boolean hasStatementTag() {
+        return true;
+    }
+
+    @Override
+    public WrapperNode createWrapper(ProbeNode probe) {
         return new LLVMExpressionNodeWrapper(this, probe);
+    }
+
+    public static boolean notLLVM(Object object) {
+        return !(object instanceof LLVMInternalTruffleObject) && !LLVMPointer.isInstance(object);
     }
 }

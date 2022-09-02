@@ -30,9 +30,13 @@
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.instrumentation.LLVMNodeObject;
+import org.graalvm.collections.EconomicMap;
 
 public final class LLVMNodeSourceDescriptor {
 
@@ -43,8 +47,9 @@ public final class LLVMNodeSourceDescriptor {
         DEFAULT_SOURCE_SECTION = source.createUnavailableSection();
     }
 
-    private LLVMSourceLocation sourceLocation;
-    private boolean hasStatementTag;
+    @CompilationFinal private LLVMSourceLocation sourceLocation;
+    @CompilationFinal(dimensions = 1) private Class<? extends Tag>[] tags;
+    @CompilationFinal private EconomicMap<String, Object> nodeObjectEntries;
 
     public LLVMSourceLocation getSourceLocation() {
         return sourceLocation;
@@ -57,8 +62,23 @@ public final class LLVMNodeSourceDescriptor {
         return sourceLocation.getSourceSection();
     }
 
-    public boolean hasStatementTag() {
-        return hasStatementTag && sourceLocation != null;
+    public Class<? extends Tag>[] getTags() {
+        return tags;
+    }
+
+    public boolean hasTag(Class<? extends Tag> tag) {
+        if (tags != null) {
+            for (Class<? extends Tag> providedTag : tags) {
+                if (tag == providedTag) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public Object getNodeObject() {
+        return LLVMNodeObject.create(nodeObjectEntries);
     }
 
     public void setSourceLocation(LLVMSourceLocation sourceLocation) {
@@ -66,8 +86,13 @@ public final class LLVMNodeSourceDescriptor {
         this.sourceLocation = sourceLocation;
     }
 
-    public void setHasStatementTag(boolean hasStatementTag) {
+    public void setTags(Class<? extends Tag>[] tags) {
         CompilerAsserts.neverPartOfCompilation();
-        this.hasStatementTag = hasStatementTag;
+        this.tags = tags;
+    }
+
+    public void setNodeObjectEntries(EconomicMap<String, Object> nodeObject) {
+        CompilerAsserts.neverPartOfCompilation();
+        this.nodeObjectEntries = nodeObject;
     }
 }
