@@ -4158,12 +4158,8 @@ public class FlatNodeGenFactory {
 
             if (isNodeInterface || isNodeInterfaceArray) {
                 builder = new CodeTreeBuilder(null);
-                String insertName;
-                if (cache.isAdopt()) {
-                    insertName = useSpecializationClass ? useInsertAccessor(specialization, isNodeInterfaceArray) : "insert";
-                } else {
-                    insertName = null;
-                }
+                String fieldName = createFieldName(specialization, cache.getParameter()) + "__";
+                String insertName = useSpecializationClass ? useInsertAccessor(specialization, isNodeInterfaceArray) : "insert";
                 final TypeMirror castType;
                 if (isNodeInterface) {
                     if (isNode) {
@@ -4190,7 +4186,6 @@ public class FlatNodeGenFactory {
                     }
                     value = noCast.build();
                 } else {
-                    String fieldName = createFieldName(specialization, cache.getParameter()) + "__";
                     builder.declaration(cache.getDefaultExpression().getResolvedType(), fieldName, value);
                     if (cache.isAdopt()) {
                         builder.startIf().string(fieldName).instanceOf(castType).end().startBlock();
@@ -4286,7 +4281,7 @@ public class FlatNodeGenFactory {
 
         CodeTree useValue;
         if ((ElementUtils.isAssignable(type, types.Node) || ElementUtils.isAssignable(type, new ArrayCodeTypeMirror(types.Node))) &&
-                        (!cache.isAlwaysInitialized()) && cache.isAdopt()) {
+                        (!cache.isAlwaysInitialized())) {
             useValue = builder.create().startCall("super.insert").tree(value).end().build();
         } else {
             useValue = value;
