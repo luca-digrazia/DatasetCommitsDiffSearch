@@ -89,7 +89,6 @@ import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilatio
 import org.graalvm.compiler.truffle.compiler.nodes.frame.AllowMaterializeNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.ForceMaterializeNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.NewFrameNode;
-import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameFreeNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameGetNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameIsNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameSetNode;
@@ -441,7 +440,7 @@ public class TruffleGraphBuilderPlugins {
                     KnownTruffleTypes types) {
         ResolvedJavaType frameWithoutBoxingType = getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.FrameWithoutBoxing");
         Registration r = new Registration(plugins, new ResolvedJavaSymbol(frameWithoutBoxingType));
-        registerFrameMethods(r, constantReflection, types);
+        registerFrameMethods(r);
         registerUnsafeCast(r, canDelayIntrinsification);
         registerUnsafeLoadStorePlugins(r, canDelayIntrinsification, null, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Object);
         registerFrameAccessors(r, JavaKind.Object, constantReflection, types);
@@ -529,7 +528,7 @@ public class TruffleGraphBuilderPlugins {
         return -1;
     }
 
-    private static void registerFrameMethods(Registration r, ConstantReflectionProvider constantReflection, KnownTruffleTypes types) {
+    private static void registerFrameMethods(Registration r) {
         r.register1("getArguments", Receiver.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver frame) {
@@ -564,19 +563,6 @@ public class TruffleGraphBuilderPlugins {
 
                 b.addPush(JavaKind.Object, new AllowMaterializeNode(frame));
                 return true;
-            }
-        });
-
-        r.register2("free", Receiver.class, new ResolvedJavaSymbol(types.classFrameSlot), new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode frameSlot) {
-                TruffleCompilerRuntime runtime = getRuntime();
-                int frameSlotIndex = maybeGetConstantFrameSlotIndex(receiver, frameSlot, constantReflection, types);
-                if (frameSlotIndex > 0) {
-                    b.add(new VirtualFrameFreeNode(receiver, frameSlotIndex, runtime.getFrameSlotKindTagForJavaKind(JavaKind.Illegal)));
-                    return true;
-                }
-                return false;
             }
         });
     }

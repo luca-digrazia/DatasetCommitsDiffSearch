@@ -32,6 +32,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registratio
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.ResolvedJavaSymbol;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
+import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -49,10 +50,10 @@ public class TruffleDecodingPlugins {
 
     public static void registerInvocationPlugins(InvocationPlugins plugins, Providers providers) {
         MetaAccessProvider metaAccess = providers.getMetaAccess();
-        registerGraalCompilerDirectivesPlugins(plugins, metaAccess);
+        registerCompilerDirectivesPlugins(plugins, metaAccess);
     }
 
-    private static void registerGraalCompilerDirectivesPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
+    private static void registerCompilerDirectivesPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
         final ResolvedJavaType graalCompilerDirectivesType = getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives");
         Registration r = new Registration(plugins, new ResolvedJavaSymbol(graalCompilerDirectivesType));
         r.setAllowOverwrite(true);
