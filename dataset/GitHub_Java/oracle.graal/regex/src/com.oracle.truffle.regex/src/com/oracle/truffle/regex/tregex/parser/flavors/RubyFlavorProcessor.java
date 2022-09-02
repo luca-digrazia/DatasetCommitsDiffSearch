@@ -49,6 +49,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -1625,34 +1626,46 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     private void flags(int ch0) {
         int start = position - 3;
         int ch = ch0;
-        RubyFlags newFlags = getLocalFlags();
-        boolean negative = false;
+        RubyFlags positiveFlags = RubyFlags.EMPTY_INSTANCE;
+        while (RubyFlags.isValidFlagChar(ch)) {
+            positiveFlags = positiveFlags.addFlag(ch);
+            if (atEnd()) {
+                throw syntaxErrorHere("missing -, : or )");
+            }
+            ch = consumeChar();
+        }
         switch (ch) {
             case ')':
-                openEndedLocalFlags(newFlags);
+                setLocalFlags(getLocalFlags().addFlags(positiveFlags));
                 break;
             case ':':
-                localFlags(newFlags, start);
+                localFlags(positiveFlags, RubyFlags.EMPTY_INSTANCE, start);
                 break;
             case '-':
-                negative = true;
                 if (atEnd()) {
                     throw syntaxErrorHere("missing flag");
                 }
                 ch = consumeChar();
-                break;
-            default:
-                if (RubyFlags.isValidFlagChar(ch)) {
-                    if (negative) {
-                        newFlags = newFlags.delFlag(ch);
-                    } else {
-                        newFlags = newFlags.addFlag(ch);
-                    }
+                RubyFlags negativeFlags = RubyFlags.EMPTY_INSTANCE;
+                while (RubyFlags.isValidFlagChar(ch)) {
+                    negativeFlags = negativeFlags.addFlag(ch);
                     if (atEnd()) {
-                        throw syntaxErrorHere("missing -, : or )");
+                        throw syntaxErrorHere("missing :");
                     }
                     ch = consumeChar();
+                }
+                if (ch == ')') {
+                    setLocalFlags(getLocalFlags().addFlags(positiveFlags).delFlags(negativeFlags));
+                } else if (ch == ':') {
+                    localFlags(positiveFlags, negativeFlags, start);
                 } else if (Character.isAlphabetic(ch)) {
+                    throw syntaxErrorAtRel("unknown flag", 1);
+                } else {
+                    throw syntaxErrorAtRel("missing : or )", 1);
+                }
+                break;
+            default:
+                if (Character.isAlphabetic(ch)) {
                     throw syntaxErrorAtRel("unknown flag", 1);
                 } else {
                     throw syntaxErrorAtRel("missing -, : or )", 1);
@@ -1664,23 +1677,15 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * Parses a block with local flags, assuming that the opening parenthesis, the flags and the ':'
      * have been parsed.
      *
-     * @param newFlags - the new set of flags to be used in the block
+     * @param positiveFlags - the flags to be turned on in the block
+     * @param negativeFlags - the flags to be turned off in the block
      * @param start - the position in {@link #inPattern} where the block started, for error
      *            reporting purposes
      */
-    private void localFlags(RubyFlags newFlags, int start) {
+    private void localFlags(RubyFlags positiveFlags, RubyFlags negativeFlags, int start) {
+        RubyFlags newFlags = getLocalFlags().addFlags(positiveFlags).delFlags(negativeFlags);
         flagsStack.push(newFlags);
         group(false, Optional.empty(), start);
         flagsStack.pop();
-    }
-
-    private void openEndedLocalFlags(RubyFlags newFlags) {
-        setLocalFlags(newFlags);
-        // Using "open-ended" flag modifiers, e.g. /a(?i)b|c/, makes Ruby wrap the continuation
-        // of the flag modifier in parentheses, so that the above regex is equivalent to
-        // /a(?i:b|c)/.
-        emitSnippet("(?:");
-        disjunction();
-        emitSnippet(")");
     }
 }
