@@ -28,8 +28,6 @@ import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.annotate.DuplicatedInNativeCode;
 import com.oracle.svm.core.code.CodeInfo;
 import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.RuntimeCodeCache.CodeInfoVisitor;
@@ -57,7 +55,6 @@ final class RuntimeCodeCacheWalker implements CodeInfoVisitor {
     }
 
     @Override
-    @DuplicatedInNativeCode
     public <T extends CodeInfo> boolean visitCode(T codeInfo) {
         /*
          * Before this method is called, the GC already visited *all* CodeInfo objects that are
@@ -65,43 +62,33 @@ final class RuntimeCodeCacheWalker implements CodeInfoVisitor {
          * reachability analysis that is done below. Otherwise, we would wrongly invalidate too much
          * code.
          */
-        boolean invalidateCodeThatReferencesUnreachableObjects = SubstrateOptions.TreatRuntimeCodeInfoReferencesAsWeak.getValue();
 
         // Read the (possibly forwarded) tether object.
         Object tether = UntetheredCodeInfoAccess.getTetherUnsafe(codeInfo);
         if (tether != null && !isReachable(tether)) {
-            int state = CodeInfoAccess.getState(codeInfo);
-            if (state == CodeInfo.STATE_PARTIALLY_FREED) {
-                /*
-                 * The tether object is not reachable and the CodeInfo was already invalidated, so
-                 * we don't need to visit any references and will free the unmanaged memory during
-                 * this garbage collection.
-                 */
+            if (CodeInfoAccess.getState(codeInfo) == CodeInfo.STATE_PARTIALLY_FREED) {
+                // The tether object is not reachable and the CodeInfo was already invalidated, so
+                // we don't need to visit any references and will free the unmanaged memory during
+                // this garbage collection.
                 CodeInfoAccess.setState(codeInfo, CodeInfo.STATE_UNREACHABLE);
                 return true;
             }
 
-            /*
-             * We don't want to keep heap objects unnecessarily alive, so invalidate and free the
-             * CodeInfo if it has weak references to otherwise unreachable objects. However, we need
-             * to make sure that all the objects that are accessed during the invalidation remain
-             * reachable. Those objects can only be collected in a subsequent garbage collection.
-             */
-            if (invalidateCodeThatReferencesUnreachableObjects && state == CodeInfo.STATE_CODE_CONSTANTS_LIVE && hasWeakReferenceToUnreachableObject(codeInfo)) {
+            // We don't want to keep heap objects unnecessarily alive, so invalidate and free the
+            // CodeInfo if it references otherwise unreachable objects. However, we need to make
+            // sure that all the objects that are accessed during the invalidation remain reachable.
+            // Those objects can only be collected in a subsequent garbage collection.
+            if (referencesUnreachableObjects(codeInfo)) {
+                referencesUnreachableObjects(codeInfo);
                 RuntimeCodeInfoAccess.walkObjectFields(codeInfo, greyToBlackObjectVisitor);
                 CodeInfoAccess.setState(codeInfo, CodeInfo.STATE_READY_FOR_INVALIDATION);
                 return true;
             }
         }
 
-        /*
-         * As long as the tether object is strongly reachable, we need to keep the CodeInfo object
-         * alive (most likely, someone explicitly acquired the tether, e.g., for stack walking). If
-         * the tether is still null, then we also need to keep the CodeInfo object alive as it is
-         * not fully initialized yet. If the tether object is not strongly reachable but all weakly
-         * referenced objects are still strongly reachable via some other references, then it is
-         * safe to keep the CodeInfo object around as it might be used in the future.
-         */
+        // If the tether object is reachable, then we need to keep the CodeInfo alive. If the tether
+        // object is not reachable but all weakly referenced objects are still reachable, then we
+        // assume that the CodeInfo is still used and we keep it around.
         RuntimeCodeInfoAccess.walkStrongReferences(codeInfo, greyToBlackObjectVisitor);
         RuntimeCodeInfoAccess.walkWeakReferences(codeInfo, greyToBlackObjectVisitor);
         return true;
@@ -111,7 +98,7 @@ final class RuntimeCodeCacheWalker implements CodeInfoVisitor {
         return RuntimeCodeCacheReachabilityAnalyzer.isReachable(Word.objectToUntrackedPointer(possiblyForwardedObject));
     }
 
-    private boolean hasWeakReferenceToUnreachableObject(CodeInfo codeInfo) {
+    private boolean referencesUnreachableObjects(CodeInfo codeInfo) {
         checkForUnreachableObjectsVisitor.initialize();
         RuntimeCodeInfoAccess.walkWeakReferences(codeInfo, checkForUnreachableObjectsVisitor);
         return checkForUnreachableObjectsVisitor.hasUnreachableObjects();

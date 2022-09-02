@@ -136,7 +136,7 @@ public final class GCImpl implements GC {
 
     @Override
     public void collect(GCCause cause) {
-        UnsignedWord requestingEpoch = possibleCollectionPrologue();
+        final UnsignedWord requestingEpoch = possibleCollectionPrologue();
         collectWithoutAllocating(cause);
         possibleCollectionEpilogue(requestingEpoch);
     }
@@ -157,7 +157,7 @@ public final class GCImpl implements GC {
 
     /** The body of the VMOperation to do the collection. */
     private boolean collectOperation(GCCause cause, UnsignedWord requestingEpoch) {
-        Log trace = Log.noopLog().string("[GCImpl.collectOperation:").newline()
+        final Log trace = Log.noopLog().string("[GCImpl.collectOperation:").newline()
                         .string("  epoch: ").unsigned(getCollectionEpoch())
                         .string("  cause: ").string(cause.getName())
                         .string("  requestingEpoch: ").unsigned(requestingEpoch)
@@ -188,7 +188,7 @@ public final class GCImpl implements GC {
 
     @SuppressWarnings("try")
     private boolean collectImpl(String cause) {
-        Log trace = Log.noopLog().string("[GCImpl.collectImpl:").newline().string("  epoch: ").unsigned(getCollectionEpoch()).string("  cause: ").string(cause).newline();
+        final Log trace = Log.noopLog().string("[GCImpl.collectImpl:").newline().string("  epoch: ").unsigned(getCollectionEpoch()).string("  cause: ").string(cause).newline();
         boolean outOfMemory;
 
         precondition();
@@ -249,8 +249,8 @@ public final class GCImpl implements GC {
     }
 
     private void printGCBefore(String cause) {
-        Log verboseGCLog = Log.log();
-        HeapImpl heap = HeapImpl.getHeapImpl();
+        final Log verboseGCLog = Log.log();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
         sizeBefore = ((SubstrateOptions.PrintGC.getValue() || HeapOptions.PrintHeapShape.getValue()) ? heap.getUsedChunkBytes() : WordFactory.zero());
         if (SubstrateOptions.VerboseGC.getValue() && getCollectionEpoch().equal(1)) {
             verboseGCLog.string("[Heap policy parameters: ").newline();
@@ -266,7 +266,7 @@ public final class GCImpl implements GC {
         if (SubstrateOptions.VerboseGC.getValue()) {
             verboseGCLog.string("[");
             verboseGCLog.string("[");
-            long startTime = System.nanoTime();
+            final long startTime = System.nanoTime();
             if (HeapOptions.PrintGCTimeStamps.getValue()) {
                 verboseGCLog.unsigned(TimeUtils.roundNanosToMillis(Timer.getTimeSinceFirstAllocation(startTime))).string(" msec: ");
             } else {
@@ -281,15 +281,15 @@ public final class GCImpl implements GC {
     }
 
     private void printGCAfter(String cause) {
-        Log verboseGCLog = Log.log();
-        HeapImpl heap = HeapImpl.getHeapImpl();
+        final Log verboseGCLog = Log.log();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
         if (SubstrateOptions.PrintGC.getValue() || SubstrateOptions.VerboseGC.getValue()) {
             if (SubstrateOptions.PrintGC.getValue()) {
-                Log printGCLog = Log.log();
-                UnsignedWord sizeAfter = heap.getUsedChunkBytes();
+                final Log printGCLog = Log.log();
+                final UnsignedWord sizeAfter = heap.getUsedChunkBytes();
                 printGCLog.string("[");
                 if (HeapOptions.PrintGCTimeStamps.getValue()) {
-                    long finishNanos = timers.collection.getFinish();
+                    final long finishNanos = timers.collection.getFinish();
                     printGCLog.unsigned(TimeUtils.roundNanosToMillis(Timer.getTimeSinceFirstAllocation(finishNanos))).string(" msec: ");
                 }
                 printGCLog.string(completeCollection ? "Full GC" : "Incremental GC");
@@ -302,7 +302,7 @@ public final class GCImpl implements GC {
             }
             if (SubstrateOptions.VerboseGC.getValue()) {
                 verboseGCLog.string(" [");
-                long finishNanos = timers.collection.getFinish();
+                final long finishNanos = timers.collection.getFinish();
                 if (HeapOptions.PrintGCTimeStamps.getValue()) {
                     verboseGCLog.unsigned(TimeUtils.roundNanosToMillis(Timer.getTimeSinceFirstAllocation(finishNanos))).string(" msec: ");
                 } else {
@@ -333,25 +333,25 @@ public final class GCImpl implements GC {
     }
 
     private void postcondition() {
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        YoungGeneration youngGen = heap.getYoungGeneration();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
+        final OldGeneration oldGen = heap.getOldGeneration();
         verbosePostCondition();
         assert youngGen.getEden().isEmpty() : "youngGen.getEden() should be empty after a collection.";
         assert oldGen.getToSpace().isEmpty() : "oldGen.getToSpace() should be empty after a collection.";
     }
 
     private void verbosePostCondition() {
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        YoungGeneration youngGen = heap.getYoungGeneration();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
+        final OldGeneration oldGen = heap.getOldGeneration();
         /*
          * Note to self: I can get output similar to this *all the time* by running with
          * -R:+VerboseGC -R:+PrintHeapShape -R:+TraceHeapChunks
          */
         final boolean forceForTesting = false;
         if (runtimeAssertions() || forceForTesting) {
-            Log witness = Log.log();
+            final Log witness = Log.log();
             if ((!youngGen.getEden().isEmpty()) || forceForTesting) {
                 witness.string("[GCImpl.postcondition: Eden space should be empty after a collection.").newline();
                 /* Print raw fields before trying to walk the chunk lists. */
@@ -410,14 +410,14 @@ public final class GCImpl implements GC {
 
     @Fold
     public static GCImpl getGCImpl() {
-        GCImpl gcImpl = HeapImpl.getHeapImpl().getGCImpl();
+        final GCImpl gcImpl = HeapImpl.getHeapImpl().getGCImpl();
         assert gcImpl != null;
         return gcImpl;
     }
 
     @Override
-    public void collectCompletely(GCCause cause) {
-        CollectionPolicy oldPolicy = getPolicy();
+    public void collectCompletely(final GCCause cause) {
+        final CollectionPolicy oldPolicy = getPolicy();
         try {
             setPolicy(collectOnlyCompletelyPolicy);
             collect(cause);
@@ -434,7 +434,7 @@ public final class GCImpl implements GC {
     @SuppressWarnings("try")
     private void scavenge(boolean fromDirtyRoots) {
         try (GreyToBlackObjRefVisitor.Counters gtborv = greyToBlackObjRefVisitor.openCounters()) {
-            Log trace = Log.noopLog().string("[GCImpl.scavenge:").string("  fromDirtyRoots: ").bool(fromDirtyRoots).newline();
+            final Log trace = Log.noopLog().string("[GCImpl.scavenge:").string("  fromDirtyRoots: ").bool(fromDirtyRoots).newline();
             try (Timer rst = timers.rootScan.open()) {
                 trace.string("  Cheney scan: ");
                 if (fromDirtyRoots) {
@@ -479,7 +479,7 @@ public final class GCImpl implements GC {
 
     @SuppressWarnings("try")
     private void cheneyScanFromRoots() {
-        Log trace = Log.noopLog().string("[GCImpl.cheneyScanFromRoots:").newline();
+        final Log trace = Log.noopLog().string("[GCImpl.cheneyScanFromRoots:").newline();
 
         try (Timer csfrt = timers.cheneyScanFromRoots.open()) {
             /* Take a snapshot of the heap so that I can visit all the promoted Objects. */
@@ -533,7 +533,7 @@ public final class GCImpl implements GC {
 
     @SuppressWarnings("try")
     private void cheneyScanFromDirtyRoots() {
-        Log trace = Log.noopLog().string("[GCImpl.cheneyScanFromDirtyRoots:").newline();
+        final Log trace = Log.noopLog().string("[GCImpl.cheneyScanFromDirtyRoots:").newline();
 
         try (Timer csfdrt = timers.cheneyScanFromDirtyRoots.open()) {
             /*
@@ -604,12 +604,12 @@ public final class GCImpl implements GC {
 
     @SuppressWarnings("try")
     private void promoteIndividualPinnedObjects() {
-        Log trace = Log.noopLog().string("[GCImpl.promoteIndividualPinnedObjects:").newline();
+        final Log trace = Log.noopLog().string("[GCImpl.promoteIndividualPinnedObjects:").newline();
         try (Timer ppot = timers.promotePinnedObjects.open()) {
             PinnedObjectImpl rest = PinnedObjectImpl.claimPinnedObjectList();
             while (rest != null) {
-                PinnedObjectImpl first = rest;
-                PinnedObjectImpl next = first.getNext();
+                final PinnedObjectImpl first = rest;
+                final PinnedObjectImpl next = first.getNext();
                 if (first.isOpen()) {
                     /*
                      * Promote the chunk with the object, and put this PinnedObject on the new list
@@ -630,7 +630,7 @@ public final class GCImpl implements GC {
     @Uninterruptible(reason = "Required by called JavaStackWalker methods. We are at a safepoint during GC, so it does not change anything for this method.", calleeMustBe = false)
     @SuppressWarnings("try")
     private void blackenStackRoots() {
-        Log trace = Log.noopLog().string("[GCImpl.blackenStackRoots:").newline();
+        final Log trace = Log.noopLog().string("[GCImpl.blackenStackRoots:").newline();
         try (Timer bsr = timers.blackenStackRoots.open()) {
             Pointer sp = readCallerStackPointer();
             trace.string("[blackenStackRoots:").string("  sp: ").hex(sp);
@@ -727,7 +727,7 @@ public final class GCImpl implements GC {
 
     @SuppressWarnings("try")
     private void walkThreadLocals() {
-        Log trace = Log.noopLog().string("[walkRegisteredObjectReferences").string(":").newline();
+        final Log trace = Log.noopLog().string("[walkRegisteredObjectReferences").string(":").newline();
         if (threadLocalsWalker != null) {
             try (Timer wrm = timers.walkThreadLocals.open()) {
                 trace.string("[ThreadLocalsWalker:").newline();
@@ -752,7 +752,7 @@ public final class GCImpl implements GC {
                 try (Timer timer = timers.blackenImageHeapRoots.open()) {
                     ImageHeapInfo imageHeapInfo = HeapImpl.getImageHeapInfo();
                     Pointer cur = Word.objectToUntrackedPointer(imageHeapInfo.firstWritableReferenceObject);
-                    Pointer last = Word.objectToUntrackedPointer(imageHeapInfo.lastWritableReferenceObject);
+                    final Pointer last = Word.objectToUntrackedPointer(imageHeapInfo.lastWritableReferenceObject);
                     while (cur.belowOrEqual(last)) {
                         Object obj = cur.toObject();
                         if (obj != null) {
@@ -778,23 +778,23 @@ public final class GCImpl implements GC {
 
     @SuppressWarnings("try")
     private void blackenDirtyCardRoots() {
-        Log trace = Log.noopLog().string("[GCImpl.blackenDirtyCardRoots:").newline();
+        final Log trace = Log.noopLog().string("[GCImpl.blackenDirtyCardRoots:").newline();
         try (Timer bdcrt = timers.blackenDirtyCardRoots.open()) {
             /*
              * Walk To-Space looking for dirty cards, and within those for old-to-young pointers.
              * Promote any referenced young objects.
              */
-            HeapImpl heap = HeapImpl.getHeapImpl();
+            final HeapImpl heap = HeapImpl.getHeapImpl();
             heap.getOldGeneration().walkDirtyObjects(greyToBlackObjectVisitor, true);
         }
         trace.string("]").newline();
     }
 
     private static void prepareForPromotion(boolean isIncremental) {
-        Log trace = Log.noopLog().string("[GCImpl.prepareForPromotion:").newline();
+        final Log trace = Log.noopLog().string("[GCImpl.prepareForPromotion:").newline();
 
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final OldGeneration oldGen = heap.getOldGeneration();
         oldGen.prepareForPromotion();
         if (isIncremental) {
             heap.getYoungGeneration().prepareForPromotion();
@@ -805,9 +805,9 @@ public final class GCImpl implements GC {
 
     @SuppressWarnings("try")
     private void scanGreyObjects(boolean isIncremental) {
-        Log trace = Log.noopLog().string("[GCImpl.scanGreyObjects").newline();
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final Log trace = Log.noopLog().string("[GCImpl.scanGreyObjects").newline();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final OldGeneration oldGen = heap.getOldGeneration();
         try (Timer sgot = timers.scanGreyObjects.open()) {
             if (isIncremental) {
                 scanGreyObjectsLoop();
@@ -819,10 +819,10 @@ public final class GCImpl implements GC {
     }
 
     private static void scanGreyObjectsLoop() {
-        Log trace = Log.noopLog().string("[GCImpl.scanGreyObjectsLoop").newline();
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        YoungGeneration youngGen = heap.getYoungGeneration();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final Log trace = Log.noopLog().string("[GCImpl.scanGreyObjectsLoop").newline();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
+        final OldGeneration oldGen = heap.getOldGeneration();
         boolean hasGrey = true;
         while (hasGrey) {
             hasGrey = youngGen.scanGreyObjects();
@@ -832,11 +832,11 @@ public final class GCImpl implements GC {
     }
 
     private static void promotePinnedObject(PinnedObjectImpl pinned) {
-        Log trace = Log.noopLog().string("[GCImpl.promotePinnedObject").string("  pinned: ").object(pinned);
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final Log trace = Log.noopLog().string("[GCImpl.promotePinnedObject").string("  pinned: ").object(pinned);
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final OldGeneration oldGen = heap.getOldGeneration();
         /* Find the chunk the object is in, and if necessary, move it to To space. */
-        Object referent = pinned.getObject();
+        final Object referent = pinned.getObject();
         if (referent != null && !heap.isInImageHeap(referent)) {
             trace.string("  referent: ").object(referent);
             /*
@@ -849,17 +849,17 @@ public final class GCImpl implements GC {
     }
 
     private static void swapSpaces() {
-        Log trace = Log.noopLog().string("[GCImpl.swapSpaces:");
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final Log trace = Log.noopLog().string("[GCImpl.swapSpaces:");
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final OldGeneration oldGen = heap.getOldGeneration();
         heap.getYoungGeneration().swapSpaces();
         oldGen.swapSpaces();
         trace.string("]").newline();
     }
 
     private void releaseSpaces() {
-        Log trace = Log.noopLog().string("[GCImpl.releaseSpaces:");
-        HeapImpl heap = HeapImpl.getHeapImpl();
+        final Log trace = Log.noopLog().string("[GCImpl.releaseSpaces:");
+        final HeapImpl heap = HeapImpl.getHeapImpl();
         heap.getYoungGeneration().releaseSpaces();
         if (completeCollection) {
             heap.getOldGeneration().releaseSpaces();
@@ -938,7 +938,7 @@ public final class GCImpl implements GC {
         return policy;
     }
 
-    private void setPolicy(CollectionPolicy newPolicy) {
+    private void setPolicy(final CollectionPolicy newPolicy) {
         policy = newPolicy;
     }
 
@@ -962,13 +962,13 @@ public final class GCImpl implements GC {
         }
 
         @Override
-        public boolean visitObject(Object o) {
+        public boolean visitObject(final Object o) {
             return visitObjectInline(o);
         }
 
         @Override
         @AlwaysInline("GC performance")
-        public boolean visitObjectInline(Object o) {
+        public boolean visitObjectInline(final Object o) {
             AlignedHeapChunk.setUpRememberedSetForObject(chunk, o);
             return true;
         }
@@ -981,10 +981,10 @@ public final class GCImpl implements GC {
     /** Signals that a collection is already in progress. */
     @SuppressWarnings("serial")
     static final class CollectionInProgressError extends Error {
-        static void exitIf(boolean state) {
+        static void exitIf(final boolean state) {
             if (state) {
                 /* Throw an error to capture the stack backtrace. */
-                Log failure = Log.log();
+                final Log failure = Log.log();
                 failure.string("[CollectionInProgressError:");
                 failure.newline();
                 ThreadStackPrinter.printBacktrace();
@@ -1066,7 +1066,7 @@ public final class GCImpl implements GC {
             return;
         }
 
-        Log log = Log.log();
+        final Log log = Log.log();
         final String prefix = "PrintGCSummary: ";
 
         log.string(prefix).string("YoungGenerationSize: ").unsigned(HeapPolicy.getMaximumYoungGenerationSize()).newline();
@@ -1075,30 +1075,30 @@ public final class GCImpl implements GC {
         log.string(prefix).string("AlignedChunkSize: ").unsigned(HeapPolicy.getAlignedHeapChunkSize()).newline();
 
         JavaVMOperation.enqueueBlockingSafepoint("PrintGCSummaryShutdownHook", ThreadLocalAllocation::disableAndFlushForAllThreads);
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        Space edenSpace = heap.getYoungGeneration().getEden();
-        UnsignedWord youngChunkBytes = edenSpace.getChunkBytes();
-        UnsignedWord youngObjectBytes = edenSpace.getObjectBytes();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final Space edenSpace = heap.getYoungGeneration().getEden();
+        final UnsignedWord youngChunkBytes = edenSpace.getChunkBytes();
+        final UnsignedWord youngObjectBytes = edenSpace.getObjectBytes();
 
-        UnsignedWord allocatedNormalChunkBytes = accounting.getNormalChunkBytes().add(youngChunkBytes);
-        UnsignedWord allocatedNormalObjectBytes = accounting.getNormalObjectBytes().add(youngObjectBytes);
+        final UnsignedWord allocatedNormalChunkBytes = accounting.getNormalChunkBytes().add(youngChunkBytes);
+        final UnsignedWord allocatedNormalObjectBytes = accounting.getNormalObjectBytes().add(youngObjectBytes);
 
         log.string(prefix).string("CollectedTotalChunkBytes: ").signed(accounting.getCollectedTotalChunkBytes()).newline();
         log.string(prefix).string("CollectedTotalObjectBytes: ").signed(accounting.getCollectedTotalObjectBytes()).newline();
         log.string(prefix).string("AllocatedNormalChunkBytes: ").signed(allocatedNormalChunkBytes).newline();
         log.string(prefix).string("AllocatedNormalObjectBytes: ").signed(allocatedNormalObjectBytes).newline();
 
-        long incrementalNanos = accounting.getIncrementalCollectionTotalNanos();
+        final long incrementalNanos = accounting.getIncrementalCollectionTotalNanos();
         log.string(prefix).string("IncrementalGCCount: ").signed(accounting.getIncrementalCollectionCount()).newline();
         log.string(prefix).string("IncrementalGCNanos: ").signed(incrementalNanos).newline();
-        long completeNanos = accounting.getCompleteCollectionTotalNanos();
+        final long completeNanos = accounting.getCompleteCollectionTotalNanos();
         log.string(prefix).string("CompleteGCCount: ").signed(accounting.getCompleteCollectionCount()).newline();
         log.string(prefix).string("CompleteGCNanos: ").signed(completeNanos).newline();
 
-        long gcNanos = incrementalNanos + completeNanos;
-        long mutatorNanos = timers.mutator.getMeasuredNanos();
-        long totalNanos = gcNanos + mutatorNanos;
-        long roundedGCLoad = (0 < totalNanos ? TimeUtils.roundedDivide(100 * gcNanos, totalNanos) : 0);
+        final long gcNanos = incrementalNanos + completeNanos;
+        final long mutatorNanos = timers.mutator.getMeasuredNanos();
+        final long totalNanos = gcNanos + mutatorNanos;
+        final long roundedGCLoad = (0 < totalNanos ? TimeUtils.roundedDivide(100 * gcNanos, totalNanos) : 0);
         log.string(prefix).string("GCNanos: ").signed(gcNanos).newline();
         log.string(prefix).string("TotalNanos: ").signed(totalNanos).newline();
         log.string(prefix).string("GCLoadPercent: ").signed(roundedGCLoad).newline();

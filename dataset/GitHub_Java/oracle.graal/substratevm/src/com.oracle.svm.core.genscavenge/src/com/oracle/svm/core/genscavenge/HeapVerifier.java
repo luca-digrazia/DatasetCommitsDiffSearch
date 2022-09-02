@@ -69,7 +69,7 @@ public final class HeapVerifier {
 
     boolean verifyObjectAt(Pointer ptr) {
         VMOperation.guaranteeInProgress("Can only verify from a VMOperation.");
-        Log trace = getTraceLog();
+        final Log trace = getTraceLog();
         trace.string("[HeapVerifier.verifyObjectAt:").string("  ptr: ").hex(ptr);
 
         if (ptr.isNull()) {
@@ -80,20 +80,20 @@ public final class HeapVerifier {
             getWitnessLog().string("[HeapVerifier.verifyObjectAt:").string("  ptr: ").hex(ptr).string("  is not in heap.").string("]").newline();
             return false;
         }
-        UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointerCarefully(ptr);
+        final UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointerCarefully(ptr);
         trace.string("  header: ").hex(header);
         if (ObjectHeaderImpl.isForwardedHeader(header)) {
-            Object obj = ObjectHeaderImpl.getForwardedObject(ptr);
-            Pointer op = Word.objectToUntrackedPointer(obj);
+            final Object obj = ObjectHeaderImpl.getForwardedObject(ptr);
+            final Pointer op = Word.objectToUntrackedPointer(obj);
             trace.string("  forwards to ").hex(op).newline();
             if (!verifyObjectAt(op)) {
                 getWitnessLog().string("[HeapVerifier.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  forwarded object fails to verify").string("]").newline();
                 return false;
             }
         } else {
-            Object obj = ptr.toObject();
+            final Object obj = ptr.toObject();
             trace.string("  obj: ").hex(Word.objectToUntrackedPointer(obj)).string("  obj.getClass: ").string(obj.getClass().getName());
-            DynamicHub hub = ObjectHeaderImpl.readDynamicHubFromObjectCarefully(obj);
+            final DynamicHub hub = ObjectHeaderImpl.readDynamicHubFromObjectCarefully(obj);
             if (!(hub.getClass().getName().equals("java.lang.Class"))) {
                 getWitnessLog().string("[HeapVerifier.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  hub is not a class").string("]").newline();
                 return false;
@@ -147,7 +147,7 @@ public final class HeapVerifier {
         @Override
         @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate while verifying the heap.")
         public void operate() {
-            HeapVerifier previousVerifier = HeapImpl.getHeapImpl().getHeapVerifier();
+            final HeapVerifier previousVerifier = HeapImpl.getHeapImpl().getHeapVerifier();
             HeapImpl.getHeapImpl().setHeapVerifier(verifier);
             result = verifier.verifyOperation(cause, occasion);
             HeapImpl.getHeapImpl().setHeapVerifier(previousVerifier);
@@ -160,14 +160,14 @@ public final class HeapVerifier {
     }
 
     public boolean verify(String cause) {
-        VerifyVMOperation op = new VerifyVMOperation(cause, this, Occasion.BEFORE_COLLECTION);
+        final VerifyVMOperation op = new VerifyVMOperation(cause, this, Occasion.BEFORE_COLLECTION);
         op.enqueue();
         return op.getResult();
     }
 
     boolean verifyOperation(String cause, Occasion occasion) {
         VMOperation.guaranteeInProgress("Can only verify from a VMOperation.");
-        Log trace = getTraceLog();
+        final Log trace = getTraceLog();
         trace.string("[HeapVerifier.verify ").string(" occasion: ").string(occasion.name()).string(" cause: ").string(cause).string(":");
         trace.newline();
 
@@ -208,19 +208,19 @@ public final class HeapVerifier {
 
     private boolean verifyBootImageObjects() {
         ImageHeapInfo info = HeapImpl.getImageHeapInfo();
-        boolean ropResult = verifyBootImageObjects(info.firstReadOnlyPrimitiveObject, info.lastReadOnlyPrimitiveObject);
-        boolean rorResult = verifyBootImageObjects(info.firstReadOnlyReferenceObject, info.lastReadOnlyReferenceObject);
-        boolean rwpResult = verifyBootImageObjects(info.firstWritablePrimitiveObject, info.lastWritablePrimitiveObject);
-        boolean rwrResult = verifyBootImageObjects(info.firstWritableReferenceObject, info.lastWritableReferenceObject);
+        final boolean ropResult = verifyBootImageObjects(info.firstReadOnlyPrimitiveObject, info.lastReadOnlyPrimitiveObject);
+        final boolean rorResult = verifyBootImageObjects(info.firstReadOnlyReferenceObject, info.lastReadOnlyReferenceObject);
+        final boolean rwpResult = verifyBootImageObjects(info.firstWritablePrimitiveObject, info.lastWritablePrimitiveObject);
+        final boolean rwrResult = verifyBootImageObjects(info.firstWritableReferenceObject, info.lastWritableReferenceObject);
         return ropResult && rorResult && rwpResult && rwrResult;
     }
 
     private boolean verifyBootImageObjects(Object firstObject, Object lastObject) {
-        Log trace = getTraceLog();
+        final Log trace = getTraceLog();
         trace.string("[HeapVerifier.verifyBootImageObjects:").newline();
 
-        Pointer firstPointer = Word.objectToUntrackedPointer(firstObject);
-        Pointer lastPointer = Word.objectToUntrackedPointer(lastObject);
+        final Pointer firstPointer = Word.objectToUntrackedPointer(firstObject);
+        final Pointer lastPointer = Word.objectToUntrackedPointer(lastObject);
         trace.string("  [ firstPointer: ").hex(firstPointer).string("  .. lastPointer: ").hex(lastPointer).string(" ]").newline();
 
         if ((firstObject == null) || (lastObject == null)) {
@@ -230,7 +230,7 @@ public final class HeapVerifier {
         boolean result = true;
         Pointer currentPointer = firstPointer;
         while (currentPointer.belowOrEqual(lastPointer)) {
-            Object currentObject = currentPointer.toObject();
+            final Object currentObject = currentPointer.toObject();
             if (!HeapImpl.getHeapImpl().isInImageHeap(currentObject)) {
                 result = false;
                 try (Log witness = getWitnessLog()) {
@@ -252,12 +252,12 @@ public final class HeapVerifier {
     }
 
     private static boolean verifyYoungGeneration(Occasion occasion) {
-        Generation youngGeneration = HeapImpl.getHeapImpl().getYoungGeneration();
+        final Generation youngGeneration = HeapImpl.getHeapImpl().getYoungGeneration();
         return youngGeneration.verify(occasion);
     }
 
     private static boolean verifyOldGeneration(Occasion occasion) {
-        OldGeneration oldGeneration = HeapImpl.getHeapImpl().getOldGeneration();
+        final OldGeneration oldGeneration = HeapImpl.getHeapImpl().getOldGeneration();
         return oldGeneration.verify(occasion);
     }
 
@@ -267,14 +267,14 @@ public final class HeapVerifier {
      * That includes: references that are to zapped objects, and references that aren't to the heap.
      */
     private boolean noReferencesOutsideHeap(Object obj) {
-        Log trace = getTraceLog();
+        final Log trace = getTraceLog();
         trace.string("[HeapVerifier.noReferencesOutsideHeap:");
         trace.string("  obj: ").object(obj).string("  obj.getClass: ").string(obj.getClass().getName());
 
-        UnsignedWord header = ObjectHeaderImpl.readHeaderFromObjectCarefully(obj);
+        final UnsignedWord header = ObjectHeaderImpl.readHeaderFromObjectCarefully(obj);
         trace.string("  header: ").hex(header);
 
-        Pointer objPointer = Word.objectToUntrackedPointer(obj);
+        final Pointer objPointer = Word.objectToUntrackedPointer(obj);
         trace.string("  objPointer: ").hex(objPointer);
 
         boolean result = InteriorObjRefWalker.walkObject(obj, noReferencesOutsideHeapVisitor);
@@ -294,8 +294,8 @@ public final class HeapVerifier {
     private static class NoReferencesOutsideHeapVisitor implements ObjectReferenceVisitor {
         @Override
         public boolean visitObjectReference(Pointer objRef, boolean compressed) {
-            HeapVerifier verifier = HeapImpl.getHeapImpl().getHeapVerifier();
-            Pointer objPointer = ReferenceAccess.singleton().readObjectAsUntrackedPointer(objRef, compressed);
+            final HeapVerifier verifier = HeapImpl.getHeapImpl().getHeapVerifier();
+            final Pointer objPointer = ReferenceAccess.singleton().readObjectAsUntrackedPointer(objRef, compressed);
             if (objPointer.isNull()) {
                 return true;
             }
@@ -311,15 +311,15 @@ public final class HeapVerifier {
                     witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
                     witness.string("  at: ").hex(objRef).string("  contains fieldPointer: ").hex(objPointer).string("  that is not a reference to the heap").newline();
                     witness.string("    Foolishly trying to look at the object pointed to by the fieldPointer:");
-                    UnsignedWord fieldHeader = ObjectHeaderImpl.readHeaderFromPointerCarefully(objPointer);
+                    final UnsignedWord fieldHeader = ObjectHeaderImpl.readHeaderFromPointerCarefully(objPointer);
                     witness.string("  fieldHeader: ").hex(fieldHeader);
-                    Object fieldObject = objPointer.toObject();
+                    final Object fieldObject = objPointer.toObject();
                     witness.string("  fieldObject: ").object(fieldObject).string("]").newline();
                 }
                 return false;
             }
             /* It is probably safe to look at the referenced object. */
-            Word readWord = objPointer.readWord(0);
+            final Word readWord = objPointer.readWord(0);
             if (readWord.equal(HeapPolicy.getProducedHeapChunkZapWord()) || readWord.equal(HeapPolicy.getConsumedHeapChunkZapWord())) {
                 try (Log witness = verifier.getWitnessLog()) {
                     witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
@@ -334,13 +334,13 @@ public final class HeapVerifier {
     private static final HeapVerifier.NoReferencesOutsideHeapVisitor noReferencesOutsideHeapVisitor = new NoReferencesOutsideHeapVisitor();
 
     private boolean noReferencesToForwardedObjectsVerifier(Object obj) {
-        Log trace = getTraceLog();
+        final Log trace = getTraceLog();
         trace.string("[HeapVerifier.noReferencesToForwardedObjectsVerifier:");
         trace.string("  obj: ").object(obj);
-        UnsignedWord header = ObjectHeaderImpl.readHeaderFromObjectCarefully(obj);
+        final UnsignedWord header = ObjectHeaderImpl.readHeaderFromObjectCarefully(obj);
         trace.string("  header: ").hex(header);
 
-        Pointer objPointer = Word.objectToUntrackedPointer(obj);
+        final Pointer objPointer = Word.objectToUntrackedPointer(obj);
         trace.string("  objPointer: ").hex(objPointer);
 
         boolean result = InteriorObjRefWalker.walkObject(obj, noReferencesToForwardedObjectsVisitor);
@@ -357,9 +357,9 @@ public final class HeapVerifier {
     private static class NoReferencesToForwardedObjectsVisitor implements ObjectReferenceVisitor {
         @Override
         public boolean visitObjectReference(Pointer objRef, boolean compressed) {
-            HeapImpl heap = HeapImpl.getHeapImpl();
-            HeapVerifier verifier = heap.getHeapVerifier();
-            Pointer objPointer = ReferenceAccess.singleton().readObjectAsUntrackedPointer(objRef, compressed);
+            final HeapImpl heap = HeapImpl.getHeapImpl();
+            final HeapVerifier verifier = heap.getHeapVerifier();
+            final Pointer objPointer = ReferenceAccess.singleton().readObjectAsUntrackedPointer(objRef, compressed);
             if (objPointer.isNull()) {
                 return true;
             }
@@ -394,14 +394,14 @@ public final class HeapVerifier {
     }
 
     private static boolean slowlyFindPointerInYoungGeneration(Pointer p) {
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        YoungGeneration youngGen = heap.getYoungGeneration();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
         return youngGen.slowlyFindPointer(p);
     }
 
     private static boolean slowlyFindPointerInOldGeneration(Pointer p) {
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final OldGeneration oldGen = heap.getOldGeneration();
         return oldGen.slowlyFindPointer(p);
     }
 
@@ -412,7 +412,7 @@ public final class HeapVerifier {
     static boolean slowlyFindPointerInSpace(Space space, Pointer p) {
         AlignedHeapChunk.AlignedHeader aChunk = space.getFirstAlignedHeapChunk();
         while (aChunk.isNonNull()) {
-            Pointer start = AlignedHeapChunk.getObjectsStart(aChunk);
+            final Pointer start = AlignedHeapChunk.getObjectsStart(aChunk);
             if (start.belowOrEqual(p) && p.belowThan(aChunk.getTop())) {
                 return true;
             }
@@ -420,7 +420,7 @@ public final class HeapVerifier {
         }
         UnalignedHeapChunk.UnalignedHeader uChunk = space.getFirstUnalignedHeapChunk();
         while (uChunk.isNonNull()) {
-            Pointer start = UnalignedHeapChunk.getObjectStart(uChunk);
+            final Pointer start = UnalignedHeapChunk.getObjectStart(uChunk);
             if (start.belowOrEqual(p) && p.belowThan(uChunk.getTop())) {
                 return true;
             }
@@ -435,9 +435,9 @@ public final class HeapVerifier {
 
     /* This could return an enum, but I want to be able to examine it easily from a debugger. */
     static int classifyPointer(Pointer p) {
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        YoungGeneration youngGen = heap.getYoungGeneration();
-        OldGeneration oldGen = heap.getOldGeneration();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
+        final OldGeneration oldGen = heap.getOldGeneration();
         if (p.isNull()) {
             return 0;
         }

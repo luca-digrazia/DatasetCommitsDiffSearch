@@ -130,12 +130,12 @@ public final class HeapPolicy {
     private static UnsignedWord maximumHeapSize;
 
     public static UnsignedWord getMaximumYoungGenerationSize() {
-        Log trace = Log.noopLog().string("[HeapPolicy.getMaximumYoungGenerationSize:");
+        final Log trace = Log.noopLog().string("[HeapPolicy.getMaximumYoungGenerationSize:");
         if (maximumYoungGenerationSize.aboveThan(WordFactory.zero())) {
             trace.string("  returns maximumYoungGenerationSize: ").unsigned(maximumYoungGenerationSize).string(" ]").newline();
             return maximumYoungGenerationSize;
         }
-        XOptions.XFlag xmn = XOptions.getXmn();
+        final XOptions.XFlag xmn = XOptions.getXmn();
         if (xmn.getEpoch() > 0) {
             trace.string("  -Xmn.epoch: ").unsigned(xmn.getEpoch()).string("  -Xmn.value: ").unsigned(xmn.getValue());
             setMaximumYoungGenerationSize(WordFactory.unsigned(xmn.getValue()));
@@ -150,11 +150,11 @@ public final class HeapPolicy {
         }
 
         /* If none of those is set, use fraction of the maximum heap size. */
-        UnsignedWord maxHeapSize = getMaximumHeapSize();
-        UnsignedWord youngSizeAsFraction = maxHeapSize.unsignedDivide(100).multiply(getMaximumYoungGenerationSizePercent());
+        final UnsignedWord maxHeapSize = getMaximumHeapSize();
+        final UnsignedWord youngSizeAsFraction = maxHeapSize.unsignedDivide(100).multiply(getMaximumYoungGenerationSizePercent());
         /* But not more than 256MB. */
-        UnsignedWord maxSize = m(256);
-        UnsignedWord youngSize = (youngSizeAsFraction.belowOrEqual(maxSize) ? youngSizeAsFraction : maxSize);
+        final UnsignedWord maxSize = m(256);
+        final UnsignedWord youngSize = (youngSizeAsFraction.belowOrEqual(maxSize) ? youngSizeAsFraction : maxSize);
         trace.string("  youngSize: ").unsigned(youngSize)
                         .string(" ]").newline();
         /* But do not cache the result as it is based on values that might change. */
@@ -162,14 +162,14 @@ public final class HeapPolicy {
     }
 
     private static int getMaximumYoungGenerationSizePercent() {
-        int result = HeapPolicyOptions.MaximumYoungGenerationSizePercent.getValue();
+        final int result = HeapPolicyOptions.MaximumYoungGenerationSizePercent.getValue();
         VMError.guarantee((result >= 0) && (result <= 100), "MaximumYoungGenerationSizePercent should be in [0 ..100]");
         return result;
     }
 
     /** Set the maximum young generation size, returning the previous value. */
     public static UnsignedWord setMaximumYoungGenerationSize(UnsignedWord value) {
-        UnsignedWord result = maximumYoungGenerationSize;
+        final UnsignedWord result = maximumYoungGenerationSize;
         maximumYoungGenerationSize = value;
         return result;
     }
@@ -179,7 +179,7 @@ public final class HeapPolicy {
         if (maximumHeapSize.aboveThan(WordFactory.zero())) {
             return maximumHeapSize;
         }
-        XOptions.XFlag xmx = XOptions.getXmx();
+        final XOptions.XFlag xmx = XOptions.getXmx();
         if (xmx.getEpoch() > 0) {
             HeapPolicy.setMaximumHeapSize(WordFactory.unsigned(xmx.getValue()));
             return maximumHeapSize;
@@ -193,8 +193,8 @@ public final class HeapPolicy {
          * of the physical memory.
          */
         if (PhysicalMemory.hasSize()) {
-            UnsignedWord physicalMemorySize = PhysicalMemory.size();
-            int maximumHeapSizePercent = getMaximumHeapSizePercent();
+            final UnsignedWord physicalMemorySize = PhysicalMemory.size();
+            final int maximumHeapSizePercent = getMaximumHeapSizePercent();
             /* Do not cache because `-Xmx` option parsing may not have happened yet. */
             return physicalMemorySize.unsignedDivide(100).multiply(maximumHeapSizePercent);
         }
@@ -203,28 +203,28 @@ public final class HeapPolicy {
     }
 
     private static int getMaximumHeapSizePercent() {
-        int result = HeapPolicyOptions.MaximumHeapSizePercent.getValue();
+        final int result = HeapPolicyOptions.MaximumHeapSizePercent.getValue();
         VMError.guarantee((result >= 0) && (result <= 100), "MaximumHeapSizePercent should be in [0 ..100]");
         return result;
     }
 
     /** Set the maximum heap size, returning the previous value. */
     public static UnsignedWord setMaximumHeapSize(UnsignedWord value) {
-        Log trace = Log.noopLog().string("[HeapPolicy.setMaximumHeapSize:");
-        UnsignedWord result = maximumHeapSize;
+        final Log trace = Log.noopLog().string("[HeapPolicy.setMaximumHeapSize:");
+        final UnsignedWord result = maximumHeapSize;
         maximumHeapSize = value;
         trace.string("  old: ").unsigned(result).string("  new: ").unsigned(maximumHeapSize).string(" ]").newline();
         return result;
     }
 
     public static UnsignedWord getMinimumHeapSize() {
-        Log trace = Log.noopLog().string("[HeapPolicy.getMinimumHeapSize:");
+        final Log trace = Log.noopLog().string("[HeapPolicy.getMinimumHeapSize:");
         if (minimumHeapSize.aboveThan(WordFactory.zero())) {
             /* If someone has set the minimum heap size, use that value. */
             trace.string("  returns: ").unsigned(minimumHeapSize).string(" ]").newline();
             return minimumHeapSize;
         }
-        XOptions.XFlag xms = XOptions.getXms();
+        final XOptions.XFlag xms = XOptions.getXms();
         if (xms.getEpoch() > 0) {
             /* If `-Xms` has been parsed from the command line, use that value. */
             trace.string("  -Xms.epoch: ").unsigned(xms.getEpoch()).string("  -Xms.value: ").unsigned(xms.getValue());
@@ -250,7 +250,7 @@ public final class HeapPolicy {
 
     /** Set the minimum heap size, returning the previous value. */
     public static UnsignedWord setMinimumHeapSize(UnsignedWord value) {
-        UnsignedWord result = minimumHeapSize;
+        final UnsignedWord result = minimumHeapSize;
         minimumHeapSize = value;
         return result;
     }

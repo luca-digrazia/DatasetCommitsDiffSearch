@@ -77,7 +77,7 @@ final class MemoryWalkerImpl extends MemoryWalker {
 class MemoryWalkerFeature implements Feature {
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.UseSerialGC.getValue();
+        return SubstrateOptions.UseCardRememberedSetHeap.getValue();
     }
 
     @Override

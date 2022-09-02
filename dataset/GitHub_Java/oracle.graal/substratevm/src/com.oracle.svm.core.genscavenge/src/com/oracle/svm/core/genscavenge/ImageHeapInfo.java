@@ -90,25 +90,25 @@ public final class ImageHeapInfo {
      */
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInReadOnlyPrimitivePartition(Pointer ptr) {
+    public boolean isInReadOnlyPrimitivePartition(final Pointer ptr) {
         assert ptr.isNonNull();
         return Word.objectToUntrackedPointer(firstReadOnlyPrimitiveObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastReadOnlyPrimitiveObject));
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInWritablePrimitivePartition(Pointer ptr) {
+    public boolean isInWritablePrimitivePartition(final Pointer ptr) {
         assert ptr.isNonNull();
         return Word.objectToUntrackedPointer(firstWritablePrimitiveObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastWritablePrimitiveObject));
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInReadOnlyReferencePartition(Pointer ptr) {
+    public boolean isInReadOnlyReferencePartition(final Pointer ptr) {
         assert ptr.isNonNull();
         return Word.objectToUntrackedPointer(firstReadOnlyReferenceObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastReadOnlyReferenceObject));
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInWritableReferencePartition(Pointer ptr) {
+    public boolean isInWritableReferencePartition(final Pointer ptr) {
         assert ptr.isNonNull();
         return Word.objectToUntrackedPointer(firstWritableReferenceObject).belowOrEqual(ptr) && ptr.belowOrEqual(Word.objectToUntrackedPointer(lastWritableReferenceObject));
     }

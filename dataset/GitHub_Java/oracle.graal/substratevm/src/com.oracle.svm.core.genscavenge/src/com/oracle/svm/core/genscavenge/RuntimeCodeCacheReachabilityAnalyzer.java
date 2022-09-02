@@ -73,7 +73,7 @@ final class RuntimeCodeCacheReachabilityAnalyzer implements ObjectReferenceVisit
             return true;
         }
 
-        Space space = HeapChunk.getSpace(HeapChunk.getEnclosingHeapChunk(ptrToObj, header));
+        Space space = HeapChunk.getEnclosingHeapChunk(ptrToObj, header).getSpace();
         if (!space.isFromSpace()) {
             return true;
         }

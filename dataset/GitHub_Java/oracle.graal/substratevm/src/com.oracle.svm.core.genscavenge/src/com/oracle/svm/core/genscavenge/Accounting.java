@@ -111,13 +111,13 @@ final class Accounting {
     }
 
     void beforeCollection() {
-        Log trace = Log.noopLog().string("[GCImpl.Accounting.beforeCollection:").newline();
+        final Log trace = Log.noopLog().string("[GCImpl.Accounting.beforeCollection:").newline();
         /* Gather some space statistics. */
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        YoungGeneration youngGen = heap.getYoungGeneration();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
         youngChunkBytesBefore = youngGen.getChunkUsedBytes();
         /* This is called before the collection, so OldSpace is FromSpace. */
-        Space oldSpace = heap.getOldGeneration().getFromSpace();
+        final Space oldSpace = heap.getOldGeneration().getFromSpace();
         oldChunkBytesBefore = oldSpace.getChunkBytes();
         /* Objects are allocated in the young generation. */
         normalChunkBytes = normalChunkBytes.add(youngChunkBytesBefore);
@@ -140,7 +140,7 @@ final class Accounting {
     }
 
     private void afterIncrementalCollection(Timer collectionTimer) {
-        Log trace = Log.noopLog().string("[GCImpl.Accounting.afterIncrementalCollection:");
+        final Log trace = Log.noopLog().string("[GCImpl.Accounting.afterIncrementalCollection:");
         /*
          * Aggregating collection information is needed because any given collection policy may not
          * be called for all collections, but may want to make decisions based on the aggregate
@@ -160,7 +160,7 @@ final class Accounting {
     }
 
     private void afterCompleteCollection(Timer collectionTimer) {
-        Log trace = Log.noopLog().string("[GCImpl.Accounting.afterCompleteCollection:");
+        final Log trace = Log.noopLog().string("[GCImpl.Accounting.afterCompleteCollection:");
         completeCollectionCount += 1;
         afterCollectionCommon();
         /* Complete collections only copy, and they copy everything. */
@@ -172,21 +172,21 @@ final class Accounting {
     }
 
     void afterCollectionCommon() {
-        HeapImpl heap = HeapImpl.getHeapImpl();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
         // This is called after the collection, after the space flip, so OldSpace is FromSpace.
-        YoungGeneration youngGen = heap.getYoungGeneration();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
         youngChunkBytesAfter = youngGen.getChunkUsedBytes();
-        Space oldSpace = heap.getOldGeneration().getFromSpace();
+        final Space oldSpace = heap.getOldGeneration().getFromSpace();
         oldChunkBytesAfter = oldSpace.getChunkBytes();
-        UnsignedWord beforeChunkBytes = youngChunkBytesBefore.add(oldChunkBytesBefore);
-        UnsignedWord afterChunkBytes = oldChunkBytesAfter.add(youngChunkBytesAfter);
-        UnsignedWord collectedChunkBytes = beforeChunkBytes.subtract(afterChunkBytes);
+        final UnsignedWord beforeChunkBytes = youngChunkBytesBefore.add(oldChunkBytesBefore);
+        final UnsignedWord afterChunkBytes = oldChunkBytesAfter.add(youngChunkBytesAfter);
+        final UnsignedWord collectedChunkBytes = beforeChunkBytes.subtract(afterChunkBytes);
         collectedTotalChunkBytes = collectedTotalChunkBytes.add(collectedChunkBytes);
         if (HeapOptions.PrintGCSummary.getValue()) {
             UnsignedWord youngObjectBytesAfter = youngGen.getObjectBytes();
             UnsignedWord oldObjectBytesAfter = oldSpace.getObjectBytes();
-            UnsignedWord beforeObjectBytes = youngObjectBytesBefore.add(oldObjectBytesBefore);
-            UnsignedWord collectedObjectBytes = beforeObjectBytes.subtract(oldObjectBytesAfter).subtract(youngObjectBytesAfter);
+            final UnsignedWord beforeObjectBytes = youngObjectBytesBefore.add(oldObjectBytesBefore);
+            final UnsignedWord collectedObjectBytes = beforeObjectBytes.subtract(oldObjectBytesAfter).subtract(youngObjectBytesAfter);
             collectedTotalObjectBytes = collectedTotalObjectBytes.add(collectedObjectBytes);
         }
     }

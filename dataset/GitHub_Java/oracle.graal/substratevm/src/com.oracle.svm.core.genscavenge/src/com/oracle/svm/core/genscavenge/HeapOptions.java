@@ -77,9 +77,6 @@ public final class HeapOptions {
                     "for which a soft reference will keep its referent alive after its last access.", type = OptionType.Expert) //
     public static final HostedOptionKey<Integer> SoftRefLRUPolicyMSPerMB = new HostedOptionKey<>(1000);
 
-    @Option(help = "Layout the image heap in chunks rather than as a continuous sequence of objects.", type = OptionType.Expert) //
-    public static final HostedOptionKey<Boolean> ChunkedImageHeapLayout = new HostedOptionKey<>(false);
-
     private HeapOptions() {
     }
 }

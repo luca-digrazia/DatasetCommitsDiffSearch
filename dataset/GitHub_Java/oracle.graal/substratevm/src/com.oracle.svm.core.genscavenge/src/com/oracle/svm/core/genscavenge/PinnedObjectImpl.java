@@ -47,8 +47,8 @@ final class PinnedObjectImpl implements PinnedObject {
     static class PinnedObjectSupportImpl implements PinnedObjectSupport {
         @Override
         public PinnedObject create(Object object) {
-            Log trace = Log.noopLog().string("[PinnedObject.open:").string(" object: ").object(object).newline();
-            PinnedObjectImpl result = new PinnedObjectImpl(object);
+            final Log trace = Log.noopLog().string("[PinnedObject.open:").string(" object: ").object(object).newline();
+            final PinnedObjectImpl result = new PinnedObjectImpl(object);
             PinnedObjectImpl.pushPinnedObject(result);
             trace.string("  returns: ]").object(result).newline();
             return result;
@@ -69,9 +69,9 @@ final class PinnedObjectImpl implements PinnedObject {
     }
 
     static void pushPinnedObject(PinnedObjectImpl newHead) {
-        Log trace = Log.noopLog().string("[PinnedObject.pushPinnedObject:").string("  newHead: ").object(newHead);
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = heap.getPinHead();
+        final Log trace = Log.noopLog().string("[PinnedObject.pushPinnedObject:").string("  newHead: ").object(newHead);
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = heap.getPinHead();
         PinnedObjectImpl sampleHead;
         do {
             sampleHead = pinHead.get();
@@ -82,10 +82,10 @@ final class PinnedObjectImpl implements PinnedObject {
 
     /** Clears the list head reference and returns the former head object. */
     static PinnedObjectImpl claimPinnedObjectList() {
-        Log trace = Log.noopLog().string("[PinnedObject.claimPinnedObjectList:").newline();
-        HeapImpl heap = HeapImpl.getHeapImpl();
-        UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = heap.getPinHead();
-        PinnedObjectImpl result = pinHead.getAndSet(null);
+        final Log trace = Log.noopLog().string("[PinnedObject.claimPinnedObjectList:").newline();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = heap.getPinHead();
+        final PinnedObjectImpl result = pinHead.getAndSet(null);
         trace.string("  returns: ").object(result);
         return result;
     }
@@ -126,8 +126,8 @@ final class PinnedObjectImpl implements PinnedObject {
         if (referent == null) {
             throw new NullPointerException("null PinnedObject");
         }
-        DynamicHub hub = ObjectHeader.readDynamicHubFromObject(referent);
-        UnsignedWord offsetOfArrayElement = LayoutEncoding.getArrayElementOffset(hub.getLayoutEncoding(), index);
+        final DynamicHub hub = ObjectHeader.readDynamicHubFromObject(referent);
+        final UnsignedWord offsetOfArrayElement = LayoutEncoding.getArrayElementOffset(hub.getLayoutEncoding(), index);
         return (T) addressOfObject().add(offsetOfArrayElement);
     }
 

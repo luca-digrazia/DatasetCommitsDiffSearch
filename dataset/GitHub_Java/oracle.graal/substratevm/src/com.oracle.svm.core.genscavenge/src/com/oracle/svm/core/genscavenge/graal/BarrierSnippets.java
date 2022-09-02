@@ -90,13 +90,13 @@ public class BarrierSnippets extends SubstrateTemplates implements Snippets {
     public static void postWriteBarrierSnippet(Object object, @ConstantParameter boolean verifyOnly) {
         counters().postWriteBarrier.inc();
 
-        Object fixedObject = FixedValueAnchorNode.getObject(object);
-        UnsignedWord objectHeader = ObjectHeaderImpl.readHeaderFromObject(fixedObject);
-        boolean needsBarrier = ObjectHeaderImpl.hasRememberedSet(objectHeader);
+        final Object fixedObject = FixedValueAnchorNode.getObject(object);
+        final UnsignedWord objectHeader = ObjectHeaderImpl.readHeaderFromObject(fixedObject);
+        final boolean needsBarrier = ObjectHeaderImpl.hasRememberedSet(objectHeader);
         if (BranchProbabilityNode.probability(BranchProbabilityNode.FREQUENT_PROBABILITY, !needsBarrier)) {
             return;
         }
-        boolean aligned = ObjectHeaderImpl.isAlignedHeaderUnsafe(objectHeader);
+        final boolean aligned = ObjectHeaderImpl.isAlignedHeaderUnsafe(objectHeader);
         if (BranchProbabilityNode.probability(BranchProbabilityNode.LIKELY_PROBABILITY, aligned)) {
             counters().postWriteBarrierAligned.inc();
             AlignedHeapChunk.dirtyCardForObject(fixedObject, verifyOnly);

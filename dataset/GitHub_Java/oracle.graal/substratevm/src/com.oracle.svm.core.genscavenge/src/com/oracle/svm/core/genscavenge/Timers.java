@@ -36,7 +36,7 @@ final class Timer implements AutoCloseable {
     private long closeNanos;
     private long collectedNanos;
 
-    Timer(String name) {
+    Timer(final String name) {
         this.name = name;
     }
 
@@ -83,7 +83,7 @@ final class Timer implements AutoCloseable {
         return closeNanos - openNanos;
     }
 
-    static long getTimeSinceFirstAllocation(long nanos) {
+    static long getTimeSinceFirstAllocation(final long nanos) {
         return nanos - HeapChunkProvider.getFirstAllocationTime();
     }
 }
@@ -112,7 +112,7 @@ final class Timers {
     }
 
     void resetAllExceptMutator() {
-        Log trace = Log.noopLog();
+        final Log trace = Log.noopLog();
         trace.string("[Timers.resetAllExceptMutator:");
         verifyBefore.reset();
         collection.reset();
@@ -134,7 +134,7 @@ final class Timers {
         trace.string("]").newline();
     }
 
-    void logAfterCollection(Log log) {
+    void logAfterCollection(final Log log) {
         if (log.isEnabled()) {
             log.newline();
             log.string("  [GC nanoseconds:");
@@ -159,7 +159,7 @@ final class Timers {
         }
     }
 
-    static void logOneTimer(Log log, String prefix, Timer timer) {
+    static void logOneTimer(final Log log, final String prefix, final Timer timer) {
         if (timer.getMeasuredNanos() > 0) {
             log.newline().string(prefix).string(timer.getName()).string(": ").signed(timer.getMeasuredNanos());
         }
@@ -172,10 +172,10 @@ final class Timers {
      * multi-threaded.
      */
     private static void logGCLoad(Log log, String prefix, String label, Timer cTimer, Timer mTimer) {
-        long collectionNanos = cTimer.getLastIntervalNanos();
-        long mutatorNanos = mTimer.getLastIntervalNanos();
-        long intervalNanos = mutatorNanos + collectionNanos;
-        long intervalGCPercent = (((100 * collectionNanos) + (intervalNanos / 2)) / intervalNanos);
+        final long collectionNanos = cTimer.getLastIntervalNanos();
+        final long mutatorNanos = mTimer.getLastIntervalNanos();
+        final long intervalNanos = mutatorNanos + collectionNanos;
+        final long intervalGCPercent = (((100 * collectionNanos) + (intervalNanos / 2)) / intervalNanos);
         log.newline().string(prefix).string(label).string(": ").signed(intervalGCPercent).string("%");
     }
 }
