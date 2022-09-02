@@ -62,24 +62,6 @@ final class AlignedChunkRememberedSet {
         return UnsignedUtils.roundUp(headerSize, alignment);
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public static void enableRememberedSet(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects) {
-        // Completely clean the card table and the first object table.
-        CardTable.cleanTable(getCardTableStart(chunk), getCardTableSize());
-        FirstObjectTable.initializeTable(getFirstObjectTableStart(chunk), getFirstObjectTableSize());
-
-        Pointer fotStart = getFirstObjectTableStart(chunk);
-        for (ImageHeapObject obj : objects) {
-            long offsetWithinChunk = obj.getOffset() - chunkPosition;
-            assert offsetWithinChunk > 0 && WordFactory.unsigned(offsetWithinChunk).aboveOrEqual(AlignedHeapChunk.getObjectsStartOffset());
-
-            UnsignedWord startOffset = WordFactory.unsigned(offsetWithinChunk).subtract(AlignedHeapChunk.getObjectsStartOffset());
-            UnsignedWord endOffset = startOffset.add(WordFactory.unsigned(obj.getSize()));
-            FirstObjectTable.setTableForObject(fotStart, startOffset, endOffset);
-            // The remembered set bit in the header will be set by the code that writes the objects.
-        }
-    }
-
     @AlwaysInline("GC performance")
     public static void enableRememberedSetForObject(AlignedHeader chunk, Object obj) {
         assert VMOperation.isGCInProgress() : "Should only be called from the collector.";
@@ -108,8 +90,22 @@ final class AlignedChunkRememberedSet {
         }
     }
 
-    public static void clearRememberedSet(AlignedHeader chunk) {
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public static void enableRememberedSet(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects) {
+        // Completely clean the card table and the first object table.
         CardTable.cleanTable(getCardTableStart(chunk), getCardTableSize());
+        FirstObjectTable.initializeTable(getFirstObjectTableStart(chunk), getFirstObjectTableSize());
+
+        Pointer fotStart = getFirstObjectTableStart(chunk);
+        for (ImageHeapObject obj : objects) {
+            long offsetWithinChunk = obj.getOffset() - chunkPosition;
+            assert offsetWithinChunk > 0 && WordFactory.unsigned(offsetWithinChunk).aboveOrEqual(AlignedHeapChunk.getObjectsStartOffset());
+
+            UnsignedWord startOffset = WordFactory.unsigned(offsetWithinChunk).subtract(AlignedHeapChunk.getObjectsStartOffset());
+            UnsignedWord endOffset = startOffset.add(WordFactory.unsigned(obj.getSize()));
+            FirstObjectTable.setTableForObject(fotStart, startOffset, endOffset);
+            // The remembered set bit in the header will be set by the code that writes the objects.
+        }
     }
 
     /**
@@ -152,11 +148,15 @@ final class AlignedChunkRememberedSet {
         }
     }
 
-    public static boolean verify(AlignedHeader chunk) {
-        boolean success = true;
-        success &= CardTable.verify(getCardTableStart(chunk), AlignedHeapChunk.getObjectsStart(chunk), HeapChunk.getTopPointer(chunk));
-        success &= FirstObjectTable.verify(getFirstObjectTableStart(chunk), AlignedHeapChunk.getObjectsStart(chunk), HeapChunk.getTopPointer(chunk));
-        return success;
+    public static boolean verify(AlignedHeader chunk, boolean allCardsMustBeClean) {
+        if (allCardsMustBeClean) {
+            return CardTable.verifyAllCardsClean(getCardTableStart(chunk), getCardTableSize());
+        } else {
+            boolean success = true;
+            success &= CardTable.verify(getCardTableStart(chunk), AlignedHeapChunk.getObjectsStart(chunk), HeapChunk.getTopPointer(chunk));
+            success &= FirstObjectTable.verify(getFirstObjectTableStart(chunk), AlignedHeapChunk.getObjectsStart(chunk), HeapChunk.getTopPointer(chunk));
+            return success;
+        }
     }
 
     /** Return the index of an object within the tables of a chunk. */
