@@ -127,7 +127,7 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
     }
 
     @Override
-    public boolean updateSwitchData(QuickQueryKeyData keyData, QuickQueryList<AbstractBeginNode> successors, double[] cumulative, List<AbstractBeginNode> duplicates) {
+    public boolean updateSwitchData(QuickQueryKeyData keyData, List<AbstractBeginNode> successors, double[] cumulative, List<AbstractBeginNode> duplicates) {
         double keyProbability = 0.0d;
         long key = ((IntegerEqualsNode) condition()).getY().asJavaConstant().asInt();
         if (SwitchFoldable.isDuplicateKey((int) key, keyData)) {
@@ -141,7 +141,7 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
         // Link the two nodes, but do not add them to the graph yet, so we do not need to remove
         // them on an abort.
         begin.next = deopt;
-        successors.addUnique(begin);
+        successors.add(-1, begin);
         return true;
     }
 
@@ -161,9 +161,9 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
     }
 
     @Override
-    public int addDefault(QuickQueryList<AbstractBeginNode> successors) {
+    public int addDefault(List<AbstractBeginNode> successors) {
         FixedNode defaultNode = next();
-        setNext(null);
+        clearSuccessors();
         successors.add(BeginNode.begin(defaultNode));
         return successors.size() - 1;
     }
