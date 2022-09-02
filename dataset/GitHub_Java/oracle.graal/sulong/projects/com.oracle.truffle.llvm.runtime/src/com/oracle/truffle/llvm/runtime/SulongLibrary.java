@@ -72,18 +72,8 @@ public final class SulongLibrary implements TruffleObject {
         this.context = context;
     }
 
-    /**
-     * Get a function descriptor for a function called {@code symbolName}.
-     *
-     * @param symbolName Function name.
-     * @return Function descriptor for the function called {@code symbolName} and {@code null} if
-     *         the function name cannot be found.
-     */
     private LLVMFunctionDescriptor lookupFunctionDescriptor(String symbolName) {
         LLVMFunction function = scope.getFunction(symbolName);
-        if (function == null) {
-            return null;
-        }
         int index = function.getSymbolIndex(false);
         AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(function.getBitcodeID(false));
         LLVMPointer pointer = symbols[index].get();
@@ -158,7 +148,11 @@ public final class SulongLibrary implements TruffleObject {
     @ExportMessage(name = "isMemberInvocable")
     boolean memberExists(String member,
                     @Shared("lookup") @Cached LookupNode lookup) {
-        return lookup.execute(this, member) != null;
+        try {
+            return lookup.execute(this, member) != null;
+        } catch (IllegalStateException e) {
+            return false;
+        }
     }
 
     @ExportMessage
