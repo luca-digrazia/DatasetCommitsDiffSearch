@@ -295,8 +295,8 @@ public final class HostAccessPolicy {
             return this;
         }
 
-        HostAccessPolicy.Builder name(String givenName) {
-            this.name = givenName;
+        HostAccessPolicy.Builder name(String name) {
+            this.name = name;
             return this;
         }
 
