@@ -70,7 +70,7 @@ public class StaticObject implements TruffleObject, Cloneable {
 
     private final boolean isForeign;
 
-    private EspressoLock lock;
+    private volatile EspressoLock lock;
 
     // region Constructors
 
