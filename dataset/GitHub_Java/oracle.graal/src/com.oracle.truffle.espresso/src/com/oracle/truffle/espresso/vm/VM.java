@@ -1106,7 +1106,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @TruffleBoundary
-    public static EspressoRootNode getEspressoRootFromFrame(FrameInstance frameInstance) {
+    private static EspressoRootNode getEspressoRootFromFrame(FrameInstance frameInstance) {
         if (frameInstance.getCallTarget() instanceof RootCallTarget) {
             RootCallTarget callTarget = (RootCallTarget) frameInstance.getCallTarget();
             RootNode rootNode = callTarget.getRootNode();
@@ -1118,7 +1118,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @TruffleBoundary
-    static Method getMethodFromFrame(FrameInstance frameInstance) {
+    private static Method getMethodFromFrame(FrameInstance frameInstance) {
         EspressoRootNode root = getEspressoRootFromFrame(frameInstance);
         if (root != null) {
             return root.getMethod();
@@ -2683,21 +2683,6 @@ public final class VM extends NativeEnv implements ContextAccess {
          */
     }
 
-    /**
-     * Return the temporary directory that the VM uses for the attach and perf data files.
-     *
-     * It is important that this directory is well-known and the same for all VM instances. It
-     * cannot be affected by configuration variables such as java.io.tmpdir.
-     */
-    @VmImpl
-    @JniImpl
-    @TruffleBoundary
-    public @Host(String.class) StaticObject JVM_GetTemporaryDirectory() {
-        // TODO: use host VMSupport.getVMTemporaryDirectory(). Not implemented by SVM.
-        // host application temporary directory
-        return getMeta().toGuestString(System.getProperty("java.io.tmpdir"));
-    }
-
     private static final long ONE_BILLION = 1_000_000_000;
     private static final long MAX_DIFF = 0x0100000000L;
 
@@ -2710,8 +2695,6 @@ public final class VM extends NativeEnv implements ContextAccess {
      * of precision.
      */
     public static long JVM_GetNanoTimeAdjustment(@Host(Class.class) StaticObject ignored, long offset) {
-        // Instant.now() uses System.currentTimeMillis() on a host Java 8. This might produce some
-        // loss of precision.
         Instant now = Instant.now();
         long secs = now.getEpochSecond();
         long nanos = now.getNano();
@@ -2734,22 +2717,8 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     @SuppressWarnings("unused")
-    public void JVM_InitStackTraceElement(@Host(StackTraceElement.class) StaticObject element, @Host(typeName = "Ljava/lang/StackFrameInfo;") StaticObject info,
-                    @GuestCall(target = "java_lang_Class_getName") DirectCallNode classGetName) {
-        if (StaticObject.isNull(element) || StaticObject.isNull(info)) {
-            throw Meta.throwException(getMeta().java_lang_NullPointerException);
-        }
-        StaticObject mname = info.getField(getMeta().java_lang_StackFrameInfo_memberName);
-        if (StaticObject.isNull(mname)) {
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_InternalError, "uninitialized StackFrameInfo !");
-        }
-        StaticObject clazz = mname.getField(getMeta().java_lang_invoke_MemberName_clazz);
-        Method m = (Method) mname.getHiddenField(getMeta().HIDDEN_VMTARGET);
-        if (m == null) {
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_InternalError, "uninitialized StackFrameInfo !");
-        }
-        int bci = info.getIntField(getMeta().java_lang_StackFrameInfo_bci);
-        fillInElement(element, new VM.StackElement(m, bci), classGetName);
+    public void JVM_InitStackTraceElement(@Host(StackTraceElement.class) StaticObject element, @Host(typeName = "Ljava/lang/StackFrameInfo;") StaticObject info) {
+        // TODO: this
     }
 
     @VmImpl
@@ -2809,41 +2778,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         // Fill in source information
         ste.setField(getMeta().java_lang_StackTraceElement_fileName, getMeta().toGuestString(m.getSourceFile()));
         ste.setIntField(getMeta().java_lang_StackTraceElement_lineNumber, m.bciToLineNumber(element.getBCI()));
-    }
-
-    private final StackWalk stackWalk = new StackWalk();
-
-    private void checkStackWalkArguments(int batchSize, int startIndex, @Host(Object[].class) StaticObject frames) {
-        if (StaticObject.isNull(frames)) {
-            throw Meta.throwException(getMeta().java_lang_NullPointerException);
-        }
-        assert frames.isArray();
-        int limit = startIndex + batchSize;
-        if (frames.length() < limit) {
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "Not enough space in buffers");
-        }
-    }
-
-    @VmImpl
-    @JniImpl
-    @TruffleBoundary
-    public @Host(Object.class) StaticObject JVM_CallStackWalk(
-                    @Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream, long mode, int skipframes,
-                    int batchSize, int startIndex,
-                    @Host(Object[].class) StaticObject frames) {
-        checkStackWalkArguments(batchSize, startIndex, frames);
-        return stackWalk.walk(stackStream, mode, skipframes, batchSize, startIndex, frames, getMeta());
-    }
-
-    @VmImpl
-    @JniImpl
-    @TruffleBoundary
-    public int JVM_MoreStackWalk(
-                    @Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream, long mode, long anchor,
-                    int batchSize, int startIndex,
-                    @Host(Object[].class) StaticObject frames) {
-        checkStackWalkArguments(batchSize, startIndex, frames);
-        return stackWalk.fetchNextBatch(stackStream, mode, anchor, batchSize, startIndex, frames, getMeta());
     }
     // Checkstyle: resume method name check
 }
