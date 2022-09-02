@@ -22,33 +22,34 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public final class MHInvokeBasicNode extends HandleIntrinsicNode {
+public class MHInvokeBasicNode extends EspressoBaseNode {
 
-    private final int form;
-    private final int vmentry;
-    private final int hiddenVmtarget;
-    private @Child IndirectCallNode callNode;
+    final int form;
+    final int vmentry;
+    final int hidden_vmtarget;
+    @Child IndirectCallNode callNode;
 
     public MHInvokeBasicNode(Method method) {
         super(method);
         Meta meta = getMeta();
-        this.form = meta.MethodHandle_form.getFieldIndex();
-        this.vmentry = meta.LambdaForm_vmentry.getFieldIndex();
-        this.hiddenVmtarget = meta.HIDDEN_VMTARGET.getFieldIndex();
+        this.form = meta.form.getFieldIndex();
+        this.vmentry = meta.vmentry.getFieldIndex();
+        this.hidden_vmtarget = meta.HIDDEN_VMTARGET.getFieldIndex();
         this.callNode = IndirectCallNode.create();
     }
 
     @Override
-    public Object call(Object[] args) {
-        StaticObject mh = (StaticObject) args[0];
+    public Object invokeNaked(VirtualFrame frame) {
+        StaticObject mh = (StaticObject) frame.getArguments()[0];
         StaticObject lform = (StaticObject) mh.getUnsafeField(form);
         StaticObject mname = (StaticObject) lform.getUnsafeField(vmentry);
-        Method target = (Method) mname.getUnsafeField(hiddenVmtarget);
-        return callNode.call(target.getCallTarget(), args);
+        Method target = (Method) mname.getUnsafeField(hidden_vmtarget);
+        return callNode.call(target.getCallTarget(), frame.getArguments());
     }
 }

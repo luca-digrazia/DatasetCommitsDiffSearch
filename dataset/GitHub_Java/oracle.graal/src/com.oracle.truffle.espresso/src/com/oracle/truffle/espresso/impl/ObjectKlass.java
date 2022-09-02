@@ -23,6 +23,9 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -32,16 +35,13 @@ import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Resolved non-primitive, non-array types in Espresso.
@@ -175,12 +175,9 @@ public final class ObjectKlass extends Klass {
         return initState == PREPARED;
     }
 
-    private boolean isInitializedOrPrepared() {
-        return isPrepared() || isInitialized();
-    }
-
     private synchronized void actualInit() {
-        if (!(isInitializedOrPrepared())) { // Check under lock
+        if (!isInitialized()) { // Check under lock
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             if (getSuperKlass() != null) {
                 getSuperKlass().initialize();
             }
@@ -263,8 +260,10 @@ public final class ObjectKlass extends Klass {
 
     @Override
     public void initialize() {
-        if (!isInitialized()) { // Skip synchronization and locks if already init.
+        if (isPrepared()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
+            synchronized (this) {}
+        } else if (!isInitialized()) { // Skip synchronization in this case
             actualInit();
         }
     }
