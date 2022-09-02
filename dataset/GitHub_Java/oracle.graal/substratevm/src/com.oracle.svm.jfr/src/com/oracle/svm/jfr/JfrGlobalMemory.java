@@ -55,7 +55,7 @@ public class JfrGlobalMemory {
         this.bufferSize = globalBufferSize;
 
         // Allocate all buffers eagerly.
-        buffers = UnmanagedMemory.calloc(SizeOf.unsigned(JfrBuffers.class).multiply(WordFactory.unsigned(bufferCount)));
+        buffers = UnmanagedMemory.calloc(SizeOf.unsigned(JfrBuffer.class).multiply(WordFactory.unsigned(bufferCount)));
         for (int i = 0; i < bufferCount; i++) {
             JfrBuffer buffer = JfrBufferAccess.allocate(WordFactory.unsigned(bufferSize));
             buffers.addressOf(i).write(buffer);
@@ -86,7 +86,7 @@ public class JfrGlobalMemory {
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
     public boolean write(JfrBuffer threadLocalBuffer, UnsignedWord unflushedSize) {
-        JfrBuffer promotionBuffer = acquireBufferWithRetry(unflushedSize, PROMOTION_RETRY_COUNT);
+        JfrBuffer promotionBuffer = acquirePromotionBuffer(unflushedSize);
         if (promotionBuffer.isNull()) {
             return false;
         }
@@ -99,7 +99,7 @@ public class JfrGlobalMemory {
             JfrBufferAccess.increasePos(promotionBuffer, unflushedSize);
             shouldSignal = recorderThread.shouldSignal(promotionBuffer);
         } finally {
-            releasePromotionBuffer(promotionBuffer);
+             releasePromotionBuffer(promotionBuffer);
         }
         JfrBufferAccess.increaseTop(threadLocalBuffer, unflushedSize);
         // Notify the thread that writes the global memory to disk.
@@ -107,6 +107,18 @@ public class JfrGlobalMemory {
             recorderThread.signal();
         }
         return true;
+    }
+
+    @Uninterruptible(reason = "Epoch must not change while in this method.")
+    private JfrBuffer acquirePromotionBuffer(UnsignedWord size) {
+        while (true) {
+            JfrBuffer buffer = acquireBufferWithRetry(size, PROMOTION_RETRY_COUNT);
+            if (buffer.isNull() && shouldDiscard()) {
+                discardOldest();
+                continue;
+            }
+            return buffer;
+        }
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
@@ -131,5 +143,16 @@ public class JfrGlobalMemory {
     private static void releasePromotionBuffer(JfrBuffer buffer) {
         assert JfrBufferAccess.isAcquired(buffer);
         JfrBufferAccess.release(buffer);
+    }
+
+    @Uninterruptible(reason = "Epoch must not change while in this method.")
+    private static void discardOldest() {
+        // TODO: implement
+    }
+
+    @Uninterruptible(reason = "Epoch must not change while in this method.")
+    private static boolean shouldDiscard() {
+        // TODO: implement
+        return false;
     }
 }

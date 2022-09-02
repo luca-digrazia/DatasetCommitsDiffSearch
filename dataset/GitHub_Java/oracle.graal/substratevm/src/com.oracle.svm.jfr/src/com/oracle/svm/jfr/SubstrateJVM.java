@@ -34,31 +34,30 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.thread.ThreadListener;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.jfr.logging.JfrLogging;
 
-import jdk.jfr.internal.LogTag;
 import jdk.jfr.internal.EventWriter;
 import jdk.jfr.internal.JVM;
+import jdk.jfr.internal.LogLevel;
+import jdk.jfr.internal.LogTag;
 
-/**
- * Manager class that handles most JFR Java API {@see Target_jdk_jfr_internal_JVM}.
- */
 class SubstrateJVM {
     private final JfrOptionSet options;
     private final JfrNativeEventSetting[] eventSettings;
+    private final JfrStringRepository stringRepo;
     private final JfrSymbolRepository symbolRepo;
     private final JfrTypeRepository typeRepo;
-    private final JfrConstantPool[] repositories;
+    private final JfrMethodRepository methodRepo;
+    private final JfrStackTraceRepository stackTraceRepo;
+    private final JfrRepository[] repositories;
 
     private final JfrThreadLocal threadLocal;
     private final JfrGlobalMemory globalMemory;
     private final JfrUnlockedChunkWriter unlockedChunkWriter;
     private final JfrRecorderThread recorderThread;
-
-    private final JfrLogging jfrLogging;
 
     private boolean initialized;
     // We can't reuse the field JVM.recording because it does not get set in all the cases that we
@@ -76,18 +75,20 @@ class SubstrateJVM {
             eventSettings[i] = new JfrNativeEventSetting();
         }
 
+        stringRepo = new JfrStringRepository();
         symbolRepo = new JfrSymbolRepository();
         typeRepo = new JfrTypeRepository();
-        // The ordering in the array dictates the order in which the constant pools will be written
-        // in the recording.
-        repositories = new JfrConstantPool[]{typeRepo, symbolRepo};
+        methodRepo = new JfrMethodRepository(typeRepo, symbolRepo);
+        stackTraceRepo = new JfrStackTraceRepository(methodRepo);
+        JfrFrameTypeSerializer frameTypeSerializer = new JfrFrameTypeSerializer();
+        // NOTE: The ordering of repositories in the array dictates the order in which the repositories
+        // (constant pools) will be written in the recording.
+        repositories = new JfrRepository[]{frameTypeSerializer, stringRepo, typeRepo, methodRepo, stackTraceRepo, symbolRepo};
 
         threadLocal = new JfrThreadLocal();
         globalMemory = new JfrGlobalMemory();
         unlockedChunkWriter = new JfrChunkWriter(globalMemory);
         recorderThread = new JfrRecorderThread(globalMemory, unlockedChunkWriter);
-
-        jfrLogging = new JfrLogging();
 
         initialized = false;
         recording = false;
@@ -125,8 +126,8 @@ class SubstrateJVM {
     }
 
     @Fold
-    public static JfrLogging getJfrLogging() {
-        return get().jfrLogging;
+    public static JfrMethodRepository getMethodRepository() {
+        return get().methodRepo;
     }
 
     public static boolean isInitialized() {
@@ -181,6 +182,7 @@ class SubstrateJVM {
         }
 
         globalMemory.teardown();
+        stackTraceRepo.teardown();
         symbolRepo.teardown();
 
         initialized = false;
@@ -189,8 +191,7 @@ class SubstrateJVM {
 
     /** See {@link JVM#getStackTraceId}. */
     public long getStackTraceId(int skipCount) {
-        // Stack traces are not supported at the moment.
-        return 0;
+        return stackTraceRepo.recordStackTrace(skipCount);
     }
 
     /** See {@link JVM#getThreadId}. */
@@ -356,7 +357,7 @@ class SubstrateJVM {
 
     /** See {@link JVM#setRepositoryLocation}. */
     public void setRepositoryLocation(String dirText) {
-        // Would only be used in case of an emergency dump, which is not supported at the moment.
+        // TODO: implement
     }
 
     /** See {@link JVM#abort}. */
@@ -376,18 +377,35 @@ class SubstrateJVM {
 
     /** See {@link JVM#addStringConstant}. */
     public boolean addStringConstant(boolean expectedEpoch, long id, String value) {
-        // This 'implementation' will cause the EventWriter to always write strings by value.
-        return !expectedEpoch;
+        return stringRepo.add(expectedEpoch, id, value);
     }
 
     /** See {@link JVM#log}. */
     public void log(int tagSetId, int level, String message) {
-        jfrLogging.log(tagSetId, level, message);
+        if (level < LogLevel.WARN.ordinal() + 1) {
+            return;
+        }
+
+        Log log = Log.log();
+        log.string(getLogTag(tagSetId).toString());
+        log.spaces(1);
+        log.string(getLogLevel(level).toString());
+        log.spaces(1);
+        log.string(message);
+        log.newline();
     }
 
     /** See {@link JVM#subscribeLogLevel}. */
     public void subscribeLogLevel(LogTag lt, int tagSetId) {
-        // Currently unused because logging support is minimal.
+        // TODO: implement
+    }
+
+    private static LogLevel getLogLevel(int level) {
+        return LogLevel.values()[level - 1];
+    }
+
+    private static LogTag getLogTag(int tagSetId) {
+        return LogTag.values()[tagSetId];
     }
 
     /** See {@link JVM#getEventWriter}. */

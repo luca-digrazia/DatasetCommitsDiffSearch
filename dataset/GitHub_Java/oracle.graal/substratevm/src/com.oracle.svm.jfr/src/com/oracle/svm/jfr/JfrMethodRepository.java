@@ -25,6 +25,7 @@
 package com.oracle.svm.jfr;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.nativeimage.Platform;
@@ -75,8 +76,10 @@ public class JfrMethodRepository implements JfrRepository {
     }
 
     @Override
-    public void write(JfrChunkWriter writer) throws IOException {
-        assert VMOperation.isInProgressAtSafepoint();
+    public int write(JfrChunkWriter writer) {
+        if (count == 0) {
+            return 0;
+        }
         writer.writeCompressedLong(JfrTypes.Method.getId());
         writer.writeCompressedLong(count);
 
@@ -85,21 +88,22 @@ public class JfrMethodRepository implements JfrRepository {
             if (usedMethods[id]) {
                 usedMethods[id] = false;
                 writer.writeCompressedLong(classRepo.getClassId(method.getParentClass()));
-                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getName()));
-                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getSignature()));
+                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getName(), false));
+                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getSignature(), false));
                 writer.writeCompressedInt(0); // package id
                 writer.writeBoolean(false); // hidden
             }
         }
+        return 1;
     }
 
     // TODO: just a dummy implementation
     private static List<MethodInfo> getMethodList() {
-        return null;
+        return Collections.emptyList();
     }
 
-    // TODO: just a dummy implementation - for each method, one info object must live in
-    // the image heap.
+    // TODO: just a dummy implementation - for each method, one info object must live in the image
+    // heap.
     public static class MethodInfo {
         public int getId() {
             return 0;

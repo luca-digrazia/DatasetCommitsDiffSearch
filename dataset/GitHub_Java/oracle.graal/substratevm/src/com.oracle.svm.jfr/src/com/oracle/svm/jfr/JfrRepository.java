@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.jfr;
 
-import java.io.IOException;
-
 import com.oracle.svm.core.annotate.Uninterruptible;
 
 /**
@@ -36,7 +34,8 @@ import com.oracle.svm.core.annotate.Uninterruptible;
  */
 public interface JfrRepository {
     /**
-     * Persists the data of the previous epoch. May only be called at a safepoint.
+     * Persists the data of the previous epoch. May only be called at a safepoint, after the epoch
+     * changed.
      */
-    void write(JfrChunkWriter writer) throws IOException;
+    int write(JfrChunkWriter writer);
 }

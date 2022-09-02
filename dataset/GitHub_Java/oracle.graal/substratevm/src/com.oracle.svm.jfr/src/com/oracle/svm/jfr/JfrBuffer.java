@@ -64,6 +64,9 @@ public interface JfrBuffer extends PointerBase {
     @RawField
     void setPos(Pointer value);
 
+    /**
+     * Returns the offset to the committed position pointer.
+     */
     @RawFieldOffset
     static int offsetOfPos() {
         throw VMError.unimplemented(); // replaced
@@ -71,7 +74,6 @@ public interface JfrBuffer extends PointerBase {
 
     /**
      * Gets the acquired value. Used to control concurrent access to the buffer.
-     *
      * @see JfrBufferAccess#acquire(JfrBuffer)
      * @see JfrBufferAccess#release(JfrBuffer)
      */
@@ -86,13 +88,15 @@ public interface JfrBuffer extends PointerBase {
 
     /**
      * Sets the acquired value.
-     *
      * @see JfrBufferAccess#acquire(JfrBuffer)
      * @see JfrBufferAccess#release(JfrBuffer)
      */
     @RawField
     void setAcquired(int value);
 
+    /**
+     * Returns the offset to the acquired integer.
+     */
     @RawFieldOffset
     static int offsetOfAcquired() {
         throw VMError.unimplemented(); // replaced

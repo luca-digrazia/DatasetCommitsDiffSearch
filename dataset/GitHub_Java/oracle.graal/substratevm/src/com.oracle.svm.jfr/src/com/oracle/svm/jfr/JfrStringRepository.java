@@ -24,16 +24,18 @@
  */
 package com.oracle.svm.jfr;
 
-import java.io.IOException;
-
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.thread.VMOperation;
+import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
 
 /**
- * This class is only used for Java-level JFR events.
+ * This class is only used for Java-level JFR events. Therefore, we can use Java heap memory for the
+ * storage. This has the benefit that it automatically creates GC-visible references to the String
+ * objects, so we don't need any GC-specific handling. The actual operation that modifies the data
+ * structure and inserts the String value must be uninterruptible though (see
+ * {@link JfrRepository}).
  */
 public class JfrStringRepository implements JfrRepository {
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -42,20 +44,22 @@ public class JfrStringRepository implements JfrRepository {
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
     public boolean add(boolean expectedEpoch, long id, String value) {
-        boolean currentEpoch = SubstrateJVM.get().getEpoch();
+        boolean currentEpoch = JfrTraceIdEpoch.getInstance().currentEpoch();
         if (currentEpoch == expectedEpoch) {
-            // TODO: insert the string into an uninterruptible datastructure.
+            // TODO: uninterruptibly insert the string into a datastructure.
         }
         return currentEpoch;
     }
 
     @Override
-    public void write(JfrChunkWriter writer) throws IOException {
-        assert VMOperation.isInProgressAtSafepoint();
-        writer.writeCompressedLong(JfrTypes.String.getId());
-        writer.writeCompressedLong(0);
+    public int write(JfrChunkWriter writer) {
+        return 0;
+
+        // writer.writeCompressedLong(JfrTypes.String.getId());
+        // writer.writeCompressedLong(0);
 
         // TODO: write encoding (null and empty String have special values as well)
         // TODO: write string data in the correct encoding
+        // return 1;
     }
 }

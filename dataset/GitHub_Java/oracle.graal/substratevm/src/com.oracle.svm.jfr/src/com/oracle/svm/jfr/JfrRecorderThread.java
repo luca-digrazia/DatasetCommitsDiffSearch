@@ -32,8 +32,9 @@ import com.oracle.svm.core.locks.VMMutex;
 import com.oracle.svm.core.util.VMError;
 
 /**
- * A daemon thread that is created during JFR startup and torn down by the JFR shutdown hook. It is
- * used for persisting the {@link JfrGlobalMemory} buffers to a file.
+ * A daemon thread that is created during JFR startup and torn down by
+ * {@link SubstrateJVM#destroyJFR}. It is used for persisting the {@link JfrGlobalMemory} buffers to
+ * a file.
  */
 public class JfrRecorderThread extends Thread {
     private static final int BUFFER_FULL_ENOUGH_PERCENTAGE = 50;
@@ -95,16 +96,31 @@ public class JfrRecorderThread extends Thread {
         JfrBuffers buffers = globalMemory.getBuffers();
         for (int i = 0; i < globalMemory.getBufferCount(); i++) {
             JfrBuffer buffer = buffers.addressOf(i).read();
-            if (isFullEnough(buffer) && JfrBufferAccess.acquire(buffer)) {
-                boolean shouldNotify = chunkWriter.write(buffer);
-                JfrBufferAccess.reinitialize(buffer);
-                JfrBufferAccess.release(buffer);
-
+            if (isFullEnough(buffer)) {
+                boolean shouldNotify = persistBuffer(chunkWriter, buffer);
                 if (shouldNotify) {
-                    Target_jdk_jfr_internal_JVM.FILE_DELTA_CHANGE.notify();
+                    //Checkstyle: stop
+                    synchronized (Target_jdk_jfr_internal_JVM.FILE_DELTA_CHANGE) {
+                        Target_jdk_jfr_internal_JVM.FILE_DELTA_CHANGE.notifyAll();
+                    }
+                    //Checkstyle: resume
                 }
             }
         }
+    }
+
+    @Uninterruptible(reason = "Epoch must not change while in this method.")
+    private boolean persistBuffer(JfrChunkWriter chunkWriter, JfrBuffer buffer) {
+        if (JfrBufferAccess.acquire(buffer)) {
+            try {
+                boolean shouldNotify = chunkWriter.write(buffer);
+                JfrBufferAccess.reinitialize(buffer);
+                return shouldNotify;
+            } finally {
+                JfrBufferAccess.release(buffer);
+            }
+        }
+        return false;
     }
 
     /**

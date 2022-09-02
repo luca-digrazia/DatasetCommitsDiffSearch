@@ -25,9 +25,11 @@
 package com.oracle.svm.core.posix;
 
 import java.io.File;
-import java.util.Objects;
+import java.nio.ByteOrder;
 
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.Pointer;
@@ -38,13 +40,20 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.CErrorNumber;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.os.RawFileOperationSupport;
+import com.oracle.svm.core.os.AbstractRawFileOperationSupport;
+import com.oracle.svm.core.os.AbstractRawFileOperationSupport.RawFileOperationSupportHolder;
 import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Fcntl;
 import com.oracle.svm.core.posix.headers.Unistd;
+import com.oracle.svm.core.util.VMError;
 
-public class PosixRawFileOperationSupport extends RawFileOperationSupport {
+public class PosixRawFileOperationSupport extends AbstractRawFileOperationSupport {
     private static final int DEFAULT_PERMISSIONS = 0666;
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public PosixRawFileOperationSupport(boolean useNativeByteOrder) {
+        super(useNativeByteOrder);
+    }
 
     @Override
     public RawFileDescriptor open(File file, FileAccessMode mode) {
@@ -56,10 +65,12 @@ public class PosixRawFileOperationSupport extends RawFileOperationSupport {
         }
     }
 
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     @Override
     public boolean isValid(RawFileDescriptor fd) {
         int posixFd = getPosixFileDescriptor(fd);
-        return posixFd >= 0;
+        // > 0 to ensure the default value 0 is invalid on all platforms
+        return posixFd > 0;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -100,12 +111,12 @@ public class PosixRawFileOperationSupport extends RawFileOperationSupport {
         Pointer position = data;
         UnsignedWord remaining = size;
         while (remaining.aboveThan(0)) {
-            SignedWord writtenBytes;
-            do {
-                writtenBytes = Unistd.NoTransitions.write(posixFd, position, remaining);
-            } while (writtenBytes.equal(-1) && CErrorNumber.getCErrorNumber() == Errno.EINTR());
-
+            SignedWord writtenBytes = Unistd.NoTransitions.write(posixFd, position, remaining);
             if (writtenBytes.equal(-1)) {
+                if (CErrorNumber.getCErrorNumber() == Errno.EINTR()) {
+                    // Retry the write if it was interrupted before any bytes were written.
+                    continue;
+                }
                 return false;
             }
             position = position.add((UnsignedWord) writtenBytes);
@@ -135,15 +146,16 @@ public class PosixRawFileOperationSupport extends RawFileOperationSupport {
     }
 
     private static int parseMode(FileAccessMode mode) {
-        if (mode == FileAccessMode.READ) {
-            return Fcntl.O_RDONLY();
-        } else if (mode == FileAccessMode.READ_WRITE) {
-            return Fcntl.O_RDWR() | Fcntl.O_CREAT();
-        } else if (mode == FileAccessMode.WRITE) {
-            return Fcntl.O_WRONLY() | Fcntl.O_CREAT();
+        switch (mode) {
+            case READ:
+                return Fcntl.O_RDONLY();
+            case READ_WRITE:
+                return Fcntl.O_RDWR() | Fcntl.O_CREAT();
+            case WRITE:
+                return Fcntl.O_WRONLY() | Fcntl.O_CREAT();
+            default:
+                throw VMError.shouldNotReachHere();
         }
-
-        throw new IllegalArgumentException("Illegal file access mode '" + Objects.toString(mode) + "'.");
     }
 }
 
@@ -151,6 +163,13 @@ public class PosixRawFileOperationSupport extends RawFileOperationSupport {
 class PosixRawFileOperationFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
-        ImageSingletons.add(RawFileOperationSupport.class, new PosixRawFileOperationSupport());
+        ByteOrder nativeByteOrder = ByteOrder.nativeOrder();
+        assert nativeByteOrder == ByteOrder.LITTLE_ENDIAN || nativeByteOrder == ByteOrder.BIG_ENDIAN;
+
+        PosixRawFileOperationSupport littleEndianSupport = new PosixRawFileOperationSupport(ByteOrder.LITTLE_ENDIAN == nativeByteOrder);
+        PosixRawFileOperationSupport bigEndianSupport = new PosixRawFileOperationSupport(ByteOrder.BIG_ENDIAN == nativeByteOrder);
+        PosixRawFileOperationSupport nativeByteOrderSupport = nativeByteOrder == ByteOrder.LITTLE_ENDIAN ? littleEndianSupport : bigEndianSupport;
+
+        ImageSingletons.add(RawFileOperationSupportHolder.class, new RawFileOperationSupportHolder(littleEndianSupport, bigEndianSupport, nativeByteOrderSupport));
     }
 }

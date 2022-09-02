@@ -26,8 +26,6 @@ package com.oracle.svm.jfr;
 
 import java.nio.charset.StandardCharsets;
 
-import com.oracle.svm.core.jdk.UninterruptibleEntry;
-import com.oracle.svm.core.jdk.UninterruptibleHashtable;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
@@ -50,7 +48,7 @@ import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
 /**
  * In Native Image, we use {@link java.lang.String} objects that live in the image heap as symbols.
  */
-public class JfrSymbolRepository implements JfrConstantPool {
+public class JfrSymbolRepository implements JfrRepository {
     private final JfrSymbolHashtable table0;
     private final JfrSymbolHashtable table1;
 
@@ -65,6 +63,12 @@ public class JfrSymbolRepository implements JfrConstantPool {
         table1.teardown();
     }
 
+
+    @Uninterruptible(reason = "Called by uninterruptible code.")
+    private JfrSymbolHashtable getTable() {
+        return getTable(false);
+    }
+
     @Uninterruptible(reason = "Called by uninterruptible code.")
     private JfrSymbolHashtable getTable(boolean previousEpoch) {
         boolean epoch = previousEpoch ? JfrTraceIdEpoch.getInstance().previousEpoch() : JfrTraceIdEpoch.getInstance().currentEpoch();
@@ -76,12 +80,18 @@ public class JfrSymbolRepository implements JfrConstantPool {
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
+    public long getSymbolId(Class<?> clazz, boolean previousEpoch) {
+        return getSymbolId(clazz.getName(), previousEpoch, true);
+    }
+
+    @Uninterruptible(reason = "Epoch must not change while in this method.")
     public long getSymbolId(String imageHeapString, boolean previousEpoch) {
         return getSymbolId(imageHeapString, previousEpoch, false);
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
     public long getSymbolId(String imageHeapString, boolean previousEpoch, boolean replaceDotWithSlash) {
+
         if (imageHeapString == null) {
             return 0;
         }

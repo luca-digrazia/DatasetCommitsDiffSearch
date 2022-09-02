@@ -27,7 +27,9 @@ package com.oracle.svm.jfr;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.oracle.svm.core.thread.VMOperation;
 import org.graalvm.compiler.api.replacements.Fold;
+
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
@@ -39,10 +41,11 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.os.RawFileOperationSupport;
 import com.oracle.svm.core.thread.JavaVMOperation;
-import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.thread.VMOperationControl;
 import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
+
+import jdk.jfr.internal.Logger;
 
 /**
  * This class is used when writing the in-memory JFR data to a file. For all operations, except
@@ -86,7 +89,6 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
 
     @Override
     public JfrChunkWriter lock() {
-        assert !VMOperation.isInProgressAtSafepoint() : "could cause deadlocks";
         lock.lock();
         return this;
     }
@@ -120,6 +122,7 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         filename = outputFile;
         fd = getFileSupport().open(filename, RawFileOperationSupport.FileAccessMode.READ_WRITE);
         writeFileHeader();
+        // TODO: this should probably also write all live threads
         return true;
     }
 
@@ -134,7 +137,9 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         boolean success = getFileSupport().write(fd, buffer.getTop(), unflushedSize);
         JfrBufferAccess.increaseTop(buffer, unflushedSize);
         if (!success) {
-            // We lost some data because the write failed.
+            // TODO Write failed, but data can be for a specific epoch
+            // At the moment, that data is lost. Error handling needs
+            // to be investigated
             return false;
         }
         return getFileSupport().position(fd).greaterThan(WordFactory.signed(notificationThreshold));
@@ -143,10 +148,12 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
     /**
      * We are writing all the in-memory data to the file. However, even though we are at a
      * safepoint, further JFR events can still be triggered by the current thread at any time. This
-     * includes allocation and GC events. Therefore, it is necessary that we switch to a new epoch
-     * in uninterruptible code at a safepoint.
+     * includes allocation and GC events. Therefore, it is necessary that we switch
+     * to a new epoch in uninterruptible code at a safepoint.
      */
-    public void closeFile(byte[] metadataDescriptor, JfrConstantPool[] repositories) {
+    // TODO: add more logic to all JfrRepositories so that it is possible to switch the epoch. The
+    // global JFR memory must also support different epochs.
+    public void closeFile(byte[] metadataDescriptor, JfrRepository[] repositories) {
         assert lock.isHeldByCurrentThread();
         JfrCloseFileOperation op = new JfrCloseFileOperation();
         op.enqueue();
@@ -158,6 +165,7 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         SignedWord metadataPosition = writeMetadataEvent(metadataDescriptor);
         patchFileHeader(constantPoolPosition, metadataPosition);
         getFileSupport().close(fd);
+
 
         filename = null;
         fd = WordFactory.nullPointer();
@@ -190,7 +198,7 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         getFileSupport().writeLong(fd, durationNanos);
     }
 
-    private SignedWord writeCheckpointEvent(JfrConstantPool[] repositories) {
+    private SignedWord writeCheckpointEvent(JfrRepository[] repositories) {
         SignedWord start = beginEvent();
         writeCompressedLong(CONSTANT_POOL_TYPE_ID);
         writeCompressedLong(JfrTicks.elapsedTicks());
@@ -199,9 +207,9 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         writeBoolean(true); // flush
 
         SignedWord poolCountPos = getFileSupport().position(fd);
-        getFileSupport().writeInt(fd, 0); // We'll patch this later.
-        JfrConstantPool[] serializers = JfrSerializerSupport.get().getSerializers();
-        int poolCount = writeConstantPools(serializers) + writeConstantPools(repositories);
+        getFileSupport().writeInt(fd, 0); // We'll fix this later.
+        // TODO: This should be simplified, serializers and repositories can probably go under the same structure.
+        int poolCount = writeRepositories(repositories);
         SignedWord currentPos = getFileSupport().position(fd);
         getFileSupport().seek(fd, poolCountPos);
         getFileSupport().writeInt(fd, makePaddedInt(poolCount));
@@ -211,9 +219,9 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         return start;
     }
 
-    private int writeConstantPools(JfrConstantPool[] constantPools) {
+    private int writeRepositories(JfrRepository[] constantPools) {
         int count = 0;
-        for (JfrConstantPool constantPool : constantPools) {
+        for (JfrRepository constantPool : constantPools) {
             int poolCount = constantPool.write(this);
             count += poolCount;
         }
@@ -242,6 +250,7 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         getFileSupport().writeInt(fd, 0);
         return start;
     }
+
 
     public void endEvent(SignedWord start) {
         SignedWord end = getFileSupport().position(fd);
@@ -330,7 +339,21 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         return RawFileOperationSupport.bigEndian();
     }
 
+    public enum StringEncoding {
+        NULL(0),
+        EMPTY_STRING(1),
+        CONSTANT_POOL(2),
+        UTF8_BYTE_ARRAY(3),
+        CHAR_ARRAY(4),
+        LATIN1_BYTE_ARRAY(5);
+        public byte byteValue;
+        StringEncoding(int byteValue) {
+            this.byteValue = (byte) byteValue;
+        }
+    }
+
     public void writeString(String str) {
+        // TODO: Implement writing strings in the other encodings
         if (str.isEmpty()) {
             getFileSupport().writeByte(fd, StringEncoding.EMPTY_STRING.byteValue);
         } else {
@@ -345,26 +368,12 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         return JfrNativeEventWriter.makePaddedInt(NumUtil.safeToInt(sizeWritten));
     }
 
-    public enum StringEncoding {
-        NULL(0),
-        EMPTY_STRING(1),
-        CONSTANT_POOL(2),
-        UTF8_BYTE_ARRAY(3),
-        CHAR_ARRAY(4),
-        LATIN1_BYTE_ARRAY(5);
-
-        public byte byteValue;
-
-        StringEncoding(int byteValue) {
-            this.byteValue = (byte) byteValue;
-        }
-    }
-
     private class JfrCloseFileOperation extends JavaVMOperation {
+
         protected JfrCloseFileOperation() {
             // Some of the JDK code that deals with files uses Java synchronization. So, we need to
             // allow Java synchronization for this VM operation.
-            super("JFR close file", SystemEffect.SAFEPOINT);
+            super("JFR close file", SystemEffect.SAFEPOINT, true);
         }
 
         @Override
@@ -373,10 +382,13 @@ public final class JfrChunkWriter implements JfrUnlockedChunkWriter {
         }
 
         /**
-         * We need to ensure that all JFR events that are triggered by the current thread are
-         * recorded for the next epoch. Otherwise, those JFR events could pollute the data that we
-         * currently try to persist. To ensure that, we must uninterruptibly flush all data that is
-         * currently in-flight.
+         * We need to ensure that all JFR events that are triggered by the current thread
+         * are recorded for the next epoch. Otherwise, those JFR events could pollute the data
+         * that we currently try to persist. To ensure that, we must execute the following steps
+         * uninterruptibly:
+         * - Flush all buffers (native, Java and global) to disk
+         * - Set all Java EventWriter.notified values
+         * - Change the epoch
          */
         @Uninterruptible(reason = "Prevent pollution of the current thread's thread local JFR buffer.")
         private void changeEpoch() {
