@@ -116,7 +116,7 @@ final class HostInteropReflect {
     }
 
     @TruffleBoundary
-    static boolean isReadable(Class<?> clazz, String name, boolean onlyStatic, boolean isClass) {
+    static boolean isReadable(Class<?> clazz, String name, boolean onlyStatic) {
         HostClassDesc classDesc = HostClassDesc.forClass(clazz);
         HostMethodDesc foundMethod = classDesc.lookupMethod(name, onlyStatic);
         if (foundMethod != null) {
@@ -134,16 +134,11 @@ final class HostInteropReflect {
         }
 
         if (onlyStatic) {
-            if (STATIC_TO_CLASS.equals(name)) {
+            if ("class".equals(name)) {
                 return true;
             }
             Class<?> innerClass = findInnerClass(clazz, name);
             if (innerClass != null) {
-                return true;
-            }
-        }
-        if (isClass) {
-            if (CLASS_TO_STATIC.equals(name)) {
                 return true;
             }
         }

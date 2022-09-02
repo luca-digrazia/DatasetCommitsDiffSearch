@@ -175,7 +175,7 @@ final class HostObject implements TruffleObject {
             if (receiver.isNull()) {
                 return false;
             }
-            return HostInteropReflect.isReadable(receiver.getLookupClass(), name, receiver.isStaticClass(), receiver.isClass());
+            return HostInteropReflect.isReadable(receiver.getLookupClass(), name, receiver.isStaticClass());
         }
 
     }
@@ -185,7 +185,7 @@ final class HostObject implements TruffleObject {
         if (isNull()) {
             throw UnsupportedMessageException.create();
         }
-        String[] fields = HostInteropReflect.findUniquePublicMemberNames(getLookupClass(), isStaticClass(), isClass(), includeInternal);
+        String[] fields = HostInteropReflect.findUniquePublicMemberNames(getLookupClass(), isStaticClass(), includeInternal);
         return HostObject.forObject(fields, languageContext);
     }
 
@@ -208,18 +208,15 @@ final class HostObject implements TruffleObject {
         if (foundMethod != null) {
             return new HostFunction(foundMethod, this.obj, this.languageContext);
         }
-
         if (isStatic) {
             LookupInnerClassNode lookupInnerClassNode = lookupInnerClass;
-            if (HostInteropReflect.STATIC_TO_CLASS.equals(name)) {
-                return HostObject.forClass(lookupClass, languageContext);
+            if ("class".equals(name)) {
+                return HostObject.forClass(lookupClass, this.languageContext);
             }
             Class<?> innerclass = lookupInnerClassNode.execute(lookupClass, name);
             if (innerclass != null) {
-                return HostObject.forStaticClass(innerclass, languageContext);
+                return HostObject.forStaticClass(innerclass, this.languageContext);
             }
-        } else if (isClass() && HostInteropReflect.CLASS_TO_STATIC.equals(name)) {
-            return HostObject.forStaticClass(asClass(), languageContext);
         }
         throw UnknownIdentifierException.create(name);
     }
@@ -280,7 +277,7 @@ final class HostObject implements TruffleObject {
                     @Shared("lookupField") @Cached LookupFieldNode lookupField,
                     @Cached WriteFieldNode writeField)
                     throws UnsupportedMessageException, UnknownIdentifierException, UnsupportedTypeException {
-        if (isNull()) {
+        if (TruffleOptions.AOT || isNull()) {
             throw UnsupportedMessageException.create();
         }
         HostFieldDesc f = lookupField.execute(getLookupClass(), member, isStaticClass());
@@ -324,7 +321,7 @@ final class HostObject implements TruffleObject {
                     @Shared("lookupField") @Cached LookupFieldNode lookupField,
                     @Shared("readField") @Cached ReadFieldNode readField,
                     @CachedLibrary(limit = "5") InteropLibrary fieldValues) throws UnsupportedTypeException, ArityException, UnsupportedMessageException, UnknownIdentifierException {
-        if (isNull()) {
+        if (TruffleOptions.AOT || isNull()) {
             throw UnsupportedMessageException.create();
         }
 

@@ -57,7 +57,7 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.ResolvedLibrary;
+import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -80,16 +80,16 @@ public abstract class InteropLibraryBaseTest {
     public /* NOT private */ TestRun run;
 
     protected final <T extends Library> T createLibrary(Class<T> library, Object receiver) {
-        ResolvedLibrary<T> lib = ResolvedLibrary.resolve(library);
+        LibraryFactory<T> lib = LibraryFactory.resolve(library);
         switch (run) {
             case CACHED:
-                return adopt(lib.createCached(receiver));
+                return adopt(lib.create(receiver));
             case UNCACHED:
                 return lib.getUncached(receiver);
             case DISPATCHED_CACHED:
-                return adopt(lib.createCachedDispatch(2));
+                return adopt(lib.createDispatched(2));
             case DISPATCHED_UNCACHED:
-                return lib.getUncachedDispatch();
+                return lib.getUncached();
         }
 
         throw new AssertionError();
@@ -117,32 +117,32 @@ public abstract class InteropLibraryBaseTest {
 
     protected final void assertNoArray(Object value) {
         InteropLibrary lib = createLibrary(InteropLibrary.class, value);
-        assertFalse(lib.isArray(value));
-        assertFalse(lib.isElementInsertable(value, 0L));
-        assertFalse(lib.isElementModifiable(value, 0L));
-        assertFalse(lib.isElementReadable(value, 0L));
-        assertFalse(lib.isElementRemovable(value, 0L));
-        assertUnsupported(() -> lib.readElement(value, 0));
+        assertFalse(lib.hasArrayElements(value));
+        assertFalse(lib.isArrayElementInsertable(value, 0L));
+        assertFalse(lib.isArrayElementModifiable(value, 0L));
+        assertFalse(lib.isArrayElementReadable(value, 0L));
+        assertFalse(lib.isArrayElementRemovable(value, 0L));
+        assertUnsupported(() -> lib.readArrayElement(value, 0));
         assertUnsupported(() -> lib.getArraySize(value));
-        assertUnsupported(() -> lib.removeElement(value, 0));
-        assertUnsupported(() -> lib.writeElement(value, 0, ""));
+        assertUnsupported(() -> lib.removeArrayElement(value, 0));
+        assertUnsupported(() -> lib.writeArrayElement(value, 0, ""));
     }
 
     protected final void assertNoNative(Object value) {
         InteropLibrary lib = createLibrary(InteropLibrary.class, value);
         assertFalse(lib.isPointer(value));
         assertUnsupported(() -> lib.asPointer(value));
-        assertUnsupported(() -> lib.toNative(value));
+        lib.toNative(value); // must not fail.
     }
 
     protected final void assertNoObject(Object value) {
         InteropLibrary lib = createLibrary(InteropLibrary.class, value);
-        assertFalse(lib.isObject(value));
+        assertFalse(lib.hasMembers(value));
         assertFalse(lib.isMemberReadable(value, "foo"));
         assertFalse(lib.isMemberModifiable(value, "foo"));
         assertFalse(lib.isMemberInsertable(value, "foo"));
         assertFalse(lib.isMemberRemovable(value, "foo"));
-        assertFalse(lib.isMemberInvokable(value, "foo"));
+        assertFalse(lib.isMemberInvocable(value, "foo"));
         assertFalse(lib.isMemberInternal(value, "foo"));
         assertUnsupported(() -> lib.getMembers(value));
         assertUnsupported(() -> lib.readMember(value, "foo"));

@@ -105,7 +105,6 @@ final class PolyglotProxy implements TruffleObject {
         }
 
         @Override
-        @TruffleBoundary
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyInstantiable) proxy).newInstance((Value[]) arguments[ARGUMENT_OFFSET]);
         }
@@ -136,7 +135,6 @@ final class PolyglotProxy implements TruffleObject {
         }
 
         @Override
-        @TruffleBoundary
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyExecutable) proxy).execute((Value[]) arguments[ARGUMENT_OFFSET]);
         }
@@ -167,7 +165,6 @@ final class PolyglotProxy implements TruffleObject {
         }
 
         @Override
-        @TruffleBoundary
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyNativeObject) proxy).asPointer();
         }
@@ -199,17 +196,12 @@ final class PolyglotProxy implements TruffleObject {
         protected Object executeImpl(Object proxy, Object[] arguments) throws InvalidArrayIndexException, UnsupportedMessageException {
             long index = (long) arguments[ARGUMENT_OFFSET];
             try {
-                return boundaryGet((ProxyArray) proxy, index);
+                return ((ProxyArray) proxy).get(index);
             } catch (ArrayIndexOutOfBoundsException e) {
                 throw InvalidArrayIndexException.create(index);
             } catch (UnsupportedOperationException e) {
                 throw UnsupportedMessageException.create();
             }
-        }
-
-        @TruffleBoundary
-        private static Object boundaryGet(ProxyArray proxy, long index) {
-            return proxy.get(index);
         }
     }
 
@@ -236,18 +228,13 @@ final class PolyglotProxy implements TruffleObject {
         protected Object executeImpl(Object proxy, Object[] arguments) throws InvalidArrayIndexException, UnsupportedMessageException {
             long index = (long) arguments[ARGUMENT_OFFSET];
             try {
-                boundarySet((ProxyArray) proxy, index, (Value) arguments[ARGUMENT_OFFSET + 1]);
+                ((ProxyArray) proxy).set(index, (Value) arguments[ARGUMENT_OFFSET + 1]);
             } catch (ArrayIndexOutOfBoundsException e) {
                 throw InvalidArrayIndexException.create(index);
             } catch (UnsupportedOperationException e) {
                 throw UnsupportedMessageException.create();
             }
             return null;
-        }
-
-        @TruffleBoundary
-        private static void boundarySet(ProxyArray proxy, long index, Value value) {
-            proxy.set(index, value);
         }
     }
 
@@ -274,17 +261,12 @@ final class PolyglotProxy implements TruffleObject {
         protected Object executeImpl(Object proxy, Object[] arguments) throws InvalidArrayIndexException, UnsupportedMessageException {
             long index = (long) arguments[ARGUMENT_OFFSET];
             try {
-                return boundaryRemove((ProxyArray) proxy, index);
+                return ((ProxyArray) proxy).remove(index);
             } catch (ArrayIndexOutOfBoundsException e) {
                 throw InvalidArrayIndexException.create(index);
             } catch (UnsupportedOperationException e) {
                 throw UnsupportedMessageException.create();
             }
-        }
-
-        @TruffleBoundary
-        private static boolean boundaryRemove(ProxyArray proxy, long index) {
-            return proxy.remove(index);
         }
     }
 
@@ -310,7 +292,6 @@ final class PolyglotProxy implements TruffleObject {
         }
 
         @Override
-        @TruffleBoundary
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyArray) proxy).getSize();
         }
@@ -364,7 +345,6 @@ final class PolyglotProxy implements TruffleObject {
         }
 
         @Override
-        @TruffleBoundary
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyObject) proxy).getMemberKeys();
         }
@@ -401,15 +381,10 @@ final class PolyglotProxy implements TruffleObject {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
             try {
-                return boundaryGetMember((ProxyObject) proxy, (String) arguments[ARGUMENT_OFFSET]);
+                return ((ProxyObject) proxy).getMember((String) arguments[ARGUMENT_OFFSET]);
             } catch (UnsupportedOperationException e) {
                 throw UnsupportedMessageException.create();
             }
-        }
-
-        @TruffleBoundary
-        private static Object boundaryGetMember(ProxyObject proxy, String argument) {
-            return proxy.getMember(argument);
         }
     }
 
@@ -438,16 +413,11 @@ final class PolyglotProxy implements TruffleObject {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
             try {
-                boundaryPutMember((ProxyObject) proxy, (String) arguments[ARGUMENT_OFFSET], (Value) arguments[ARGUMENT_OFFSET + 1]);
+                ((ProxyObject) proxy).putMember((String) arguments[ARGUMENT_OFFSET], (Value) arguments[ARGUMENT_OFFSET + 1]);
             } catch (UnsupportedOperationException e) {
                 throw UnsupportedMessageException.create();
             }
             return null;
-        }
-
-        @TruffleBoundary
-        private static void boundaryPutMember(ProxyObject proxy, String member, Value value) {
-            proxy.putMember(member, value);
         }
     }
 
@@ -515,15 +485,10 @@ final class PolyglotProxy implements TruffleObject {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
             try {
-                return removeBoundary((ProxyObject) proxy, (String) arguments[ARGUMENT_OFFSET]);
+                return ((ProxyObject) proxy).removeMember((String) arguments[ARGUMENT_OFFSET]);
             } catch (UnsupportedOperationException e) {
                 throw UnsupportedMessageException.create();
             }
-        }
-
-        @TruffleBoundary
-        private static boolean removeBoundary(ProxyObject proxy, String member) {
-            return proxy.removeMember(member);
         }
     }
 
@@ -552,7 +517,6 @@ final class PolyglotProxy implements TruffleObject {
         }
 
         @Override
-        @TruffleBoundary
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyObject) proxy).hasMember((String) arguments[ARGUMENT_OFFSET]);
         }
