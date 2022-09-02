@@ -703,7 +703,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     @Override
     public void initialize() {
         if (!wrapped.isInitialized()) {
-            throw GraalError.shouldNotReachHere("Classes can only be initialized using methods in ClassInitializationFeature: " + toClassName());
+            throw GraalError.shouldNotReachHere("Classes can only be initialized using methods in ClassInitializationFeature");
         }
     }
 
