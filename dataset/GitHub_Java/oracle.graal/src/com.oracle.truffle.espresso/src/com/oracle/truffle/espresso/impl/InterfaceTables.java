@@ -265,21 +265,14 @@ class InterfaceTables {
                 continue;
             }
             Method interfMethod = interfMethods[i];
-            if (interfMethod.identity() == virtualMethod.identity()) {
+            if (interfMethod == virtualMethod) {
                 continue;
             }
             Method result = resolveMaximallySpecific(virtualMethod, interfMethod);
             if (result != virtualMethod) {
-                updateEntry(vtable, mirandas, entry, index, virtualMethod, virtualize(result, virtualMethod.getVTableIndex()));
+                updateEntry(vtable, mirandas, entry, index, virtualMethod, result);
             }
         }
-    }
-
-    private static Method virtualize(Method m, int index) {
-        if (m.getVTableIndex() != index) {
-            return new Method(m);
-        }
-        return m;
     }
 
     private static void updateEntry(Method[] vtable, Method[] mirandas, Entry entry, int index, Method virtualMethod, Method toPut) {
@@ -329,16 +322,13 @@ class InterfaceTables {
 
     private Entry lookupLocation(Method im, Symbol<Name> mname, Symbol<Signature> sig) {
         Method m = null;
-        int index = -1;
         if (superKlass != null) {
-            index = superKlass.lookupVirtualMethod(mname, sig, thisKlass);
+            m = superKlass.lookupVirtualMethod(mname, sig, thisKlass);
         }
-        if (index != -1) {
-            m = superKlass.vtableLookup(index);
-            assert index == m.getVTableIndex();
-            return new Entry(Location.SUPERVTABLE, index);
+        if (m != null) {
+            return new Entry(Location.SUPERVTABLE, m.getVTableIndex());
         }
-        index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), mname, sig);
+        int index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), mname, sig);
         if (index != -1) {
             return new Entry(Location.DECLARED, index);
         }
