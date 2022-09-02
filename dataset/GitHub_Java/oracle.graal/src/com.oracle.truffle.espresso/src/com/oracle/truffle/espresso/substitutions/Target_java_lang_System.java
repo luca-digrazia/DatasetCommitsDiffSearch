@@ -45,6 +45,7 @@ public final class Target_java_lang_System {
 
     @Substitution
     public static void arraycopy(@Host(Object.class) StaticObject src, int srcPos, @Host(Object.class) StaticObject dest, int destPos, int length) {
+        // TODO(tg): inject meta
         SYSTEM_ARRAYCOPY_COUNT.inc();
         try {
             doArrayCopy(src, srcPos, dest, destPos, length);
@@ -53,12 +54,12 @@ public final class Target_java_lang_System {
             throw meta.throwNullPointerException();
         } catch (ArrayStoreException e) {
             Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-            throw meta.throwException(meta.java_lang_ArrayStoreException);
+            throw Meta.throwException(meta.java_lang_ArrayStoreException);
         } catch (ArrayIndexOutOfBoundsException e) {
             // System.arraycopy javadoc states it throws IndexOutOfBoundsException, the
             // actual implementation throws ArrayIndexOutOfBoundsException (IooBE subclass).
             Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+            throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
     }
 
@@ -82,7 +83,7 @@ public final class Target_java_lang_System {
                 Klass srcType = srcKlass.getComponentType();
                 if (destType.isPrimitive() && srcType.isPrimitive()) {
                     if (srcType != destType) {
-                        throw meta.throwException(meta.java_lang_ArrayStoreException);
+                        throw Meta.throwException(meta.java_lang_ArrayStoreException);
                     }
                     boundsCheck(meta, src, srcPos, dest, destPos, length);
                     System.arraycopy(src.unwrap(), srcPos, dest.unwrap(), destPos, length);
@@ -106,23 +107,33 @@ public final class Target_java_lang_System {
                             if (StaticObject.isNull(cpy) || destType.isAssignableFrom(cpy.getKlass())) {
                                 d[destPos + i] = cpy;
                             } else {
-                                throw meta.throwException(meta.java_lang_ArrayStoreException);
+                                throw Meta.throwException(meta.java_lang_ArrayStoreException);
                             }
                         }
                     }
                 } else {
-                    throw meta.throwException(meta.java_lang_ArrayStoreException);
+                    throw Meta.throwException(meta.java_lang_ArrayStoreException);
                 }
             }
         } else {
-            throw meta.throwException(meta.java_lang_ArrayStoreException);
+            throw Meta.throwException(meta.java_lang_ArrayStoreException);
         }
     }
 
     private static void boundsCheck(Meta meta, @Host(Object.class) StaticObject src, int srcPos, @Host(Object.class) StaticObject dest, int destPos, int length) {
         if (srcPos < 0 || destPos < 0 || length < 0 || srcPos > src.length() - length || destPos > dest.length() - length) {
             // Other checks are caught during execution without side effects.
-            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+            throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
+    }
+
+    @Substitution
+    public static long currentTimeMillis() {
+        return System.currentTimeMillis();
+    }
+
+    @Substitution
+    public static long nanoTime() {
+        return System.nanoTime();
     }
 }
