@@ -77,7 +77,7 @@ public final class ExportMessageElement extends MessageContainer {
 
     public TypeMirror getReceiverType() {
         if (element == null || export.getExportsLibrary().isExplicitReceiver()) {
-            return export.getExportsLibrary().getReceiverType();
+            return export.getExportsLibrary().getReceiverClass();
         }
         if (element instanceof ExecutableElement) {
             ExecutableElement method = ((ExecutableElement) element);
