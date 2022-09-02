@@ -48,6 +48,7 @@ import org.graalvm.options.OptionValues;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.nodes.BlockNode;
 import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 
 final class DefaultRuntimeAccessor extends Accessor {
@@ -69,6 +70,11 @@ final class DefaultRuntimeAccessor extends Accessor {
 
         DefaultRuntimeSupport(Object permission) {
             super(permission);
+        }
+
+        @Override
+        public IndirectCallNode createUncachedIndirectCall() {
+            return DefaultIndirectCallNode.createUncached();
         }
 
         @Override

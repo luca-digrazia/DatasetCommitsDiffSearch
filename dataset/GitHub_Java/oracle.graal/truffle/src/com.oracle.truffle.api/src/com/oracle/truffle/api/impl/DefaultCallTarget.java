@@ -45,7 +45,6 @@ import static com.oracle.truffle.api.impl.DefaultTruffleRuntime.getRuntime;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.impl.DefaultTruffleRuntime.DefaultFrameInstance;
-import com.oracle.truffle.api.nodes.EncapsulatingNodeReference;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -92,17 +91,7 @@ public final class DefaultCallTarget implements RootCallTarget {
 
     @Override
     public Object call(Object... args) {
-        /*
-         * Clear encapsulating node for uncached indirect call boundary. The encapsulating
-         * node is not longer needed if a call boundary is crossed.
-         */
-        EncapsulatingNodeReference encapsulating = EncapsulatingNodeReference.getCurrent();
-        Node parent = encapsulating.set(null);
-        try {
-            return callDirectOrIndirect(parent, args);
-        } finally {
-            encapsulating.set(parent);
-        }
+        return callDirectOrIndirect(null, args);
     }
 
     private void initialize() {
