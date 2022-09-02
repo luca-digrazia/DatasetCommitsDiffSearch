@@ -27,7 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -84,8 +83,8 @@ public final class Method implements ModifiersProvider, ContextAccess {
     @CompilationFinal(dimensions = 1) //
     private final Symbol<Type>[] parsedSignature;
 
-    @CompilationFinal int vtableIndex = -1;
-    @CompilationFinal int itableIndex = -1;
+    @CompilationFinal int vtableIndex;
+    @CompilationFinal int itableIndex;
 
     private final ExceptionsAttribute exceptionsAttribute;
     private final CodeAttribute codeAttribute;
@@ -476,7 +475,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
         if (method != null) {
             return method;
         }
-        CompilerAsserts.neverPartOfCompilation();
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         method = new Method(declaringKlass, linkedMethod, signature);
         EspressoRootNode rootNode = new EspressoRootNode(method, baseNodeFactory.apply(method));
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
@@ -490,7 +489,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
         if (method != null) {
             return method;
         }
-        CompilerAsserts.neverPartOfCompilation();
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         method = new Method(declaringKlass, linkedMethod, signature);
         EspressoRootNode rootNode = new EspressoRootNode(method, baseNodeFactory.apply(method));
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
@@ -504,7 +503,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
         if (method != null) {
             return method;
         }
-        CompilerAsserts.neverPartOfCompilation();
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         method = new Method(declaringKlass, linkedMethod, signature);
         EspressoRootNode rootNode = new EspressoRootNode(method, baseNodeFactory.apply(method));
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
