@@ -340,11 +340,6 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public Object getHostContext(Object polyglotContext) {
-            return ((PolyglotContextImpl) polyglotContext).getHostContextImpl();
-        }
-
-        @Override
         public TruffleContext getCurrentCreatorTruffleContext() {
             PolyglotContextImpl context = PolyglotContextImpl.currentNotEntered();
             return context != null ? context.creatorTruffleContext : null;
@@ -667,7 +662,7 @@ final class EngineAccessor extends Accessor {
         @Override
         public Object toGuestValue(Object obj, Object languageContext) {
             PolyglotContextImpl context = ((PolyglotLanguageContext) languageContext).context;
-            return context.toGuestValue(obj);
+            return context.toGuestValue(null, obj);
         }
 
         @Override

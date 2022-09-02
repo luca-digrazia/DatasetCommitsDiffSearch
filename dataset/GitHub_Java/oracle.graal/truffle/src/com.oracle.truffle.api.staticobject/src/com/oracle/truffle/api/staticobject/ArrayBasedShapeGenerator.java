@@ -129,14 +129,17 @@ final class ArrayBasedShapeGenerator<T> extends ShapeGenerator<T> {
     }
 
     // Invoked also from TruffleFeature.StaticObjectSupport
-    @SuppressWarnings("unchecked")
     static <T> ArrayBasedShapeGenerator<T> getShapeGenerator(TruffleLanguage<?> language, GeneratorClassLoader gcl, Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
-        ConcurrentHashMap<Pair<Class<?>, Class<?>>, Object> cache;
         if (TruffleOptions.AOT) {
-            cache = generatorCache;
-        } else {
-            cache = SomAccessor.ENGINE.getGeneratorCache(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language));
+            return getShapeGenerator(generatorCache, gcl, storageSuperClass, storageFactoryInterface);
         }
+        ConcurrentHashMap<Pair<Class<?>, Class<?>>, Object> cache = SomAccessor.ENGINE.getGeneratorCache(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language));
+        return getShapeGenerator(cache, gcl, storageSuperClass, storageFactoryInterface);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> ArrayBasedShapeGenerator<T> getShapeGenerator(ConcurrentHashMap<Pair<Class<?>, Class<?>>, Object> cache, GeneratorClassLoader gcl, Class<?> storageSuperClass,
+                    Class<T> storageFactoryInterface) {
         Pair<Class<?>, Class<?>> pair = Pair.create(storageSuperClass, storageFactoryInterface);
         ArrayBasedShapeGenerator<T> sg = (ArrayBasedShapeGenerator<T>) cache.get(pair);
         if (sg == null) {
