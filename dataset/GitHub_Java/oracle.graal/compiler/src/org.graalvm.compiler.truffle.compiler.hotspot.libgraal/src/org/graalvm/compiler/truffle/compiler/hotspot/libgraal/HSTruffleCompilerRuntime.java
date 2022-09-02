@@ -62,7 +62,6 @@ import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.Get
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.ReleaseLongArrayElements;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.getInternalName;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HotSpotToSVMScope.env;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HotSpotToSVMScope.scope;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -84,7 +83,6 @@ import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JLongArray;
 import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JNIEnv;
 import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JObject;
 import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JString;
-import org.graalvm.libgraal.LibGraal;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.word.WordFactory;
 
@@ -150,7 +148,7 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
         if (scope == null) {
             return null;
         }
-        long constantHandle = LibGraal.translate(runtime(), constant);
+        long constantHandle = runtime().translate(constant);
         JObject hsCompilable = callAsCompilableTruffleAST(scope.getEnv(), getHandle(), constantHandle);
         if (hsCompilable.isNull()) {
             return null;
@@ -162,7 +160,7 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
     @SVMToHotSpot(OnCodeInstallation)
     @Override
     public void onCodeInstallation(CompilableTruffleAST compilable, InstalledCode installedCode) {
-        long installedCodeHandle = LibGraal.translate(runtime(), installedCode);
+        long installedCodeHandle = runtime().translate(installedCode);
         JNIEnv env = env();
         callOnCodeInstallation(env, getHandle(), ((HSCompilableTruffleAST) compilable).getHandle(), installedCodeHandle);
     }
@@ -170,38 +168,38 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
     @SVMToHotSpot(RegisterOptimizedAssumptionDependency)
     @Override
     public Consumer<OptimizedAssumptionDependency> registerOptimizedAssumptionDependency(JavaConstant optimizedAssumption) {
-        long optimizedAssumptionHandle = LibGraal.translate(runtime(), optimizedAssumption);
+        long optimizedAssumptionHandle = runtime().translate(optimizedAssumption);
         JNIEnv env = env();
         JObject assumptionConsumer = callRegisterOptimizedAssumptionDependency(env, getHandle(), optimizedAssumptionHandle);
-        return assumptionConsumer.isNull() ? null : new HSConsumer(scope(), assumptionConsumer);
+        return assumptionConsumer.isNull() ? null : new HSConsumer(env, assumptionConsumer);
     }
 
     @SVMToHotSpot(GetCallTargetForCallNode)
     @Override
     public JavaConstant getCallTargetForCallNode(JavaConstant callNode) {
         HotSpotJVMCIRuntime jvmciRuntime = HotSpotJVMCIRuntime.runtime();
-        long callNodeHandle = LibGraal.translate(jvmciRuntime, callNode);
+        long callNodeHandle = jvmciRuntime.translate(callNode);
         JNIEnv env = env();
         long callTargetHandle = callGetCallTargetForCallNode(env, getHandle(), callNodeHandle);
-        return LibGraal.unhand(jvmciRuntime, JavaConstant.class, callTargetHandle);
+        return jvmciRuntime.unhand(JavaConstant.class, callTargetHandle);
     }
 
     @SVMToHotSpot(IsTruffleBoundary)
     @Override
     public boolean isTruffleBoundary(ResolvedJavaMethod method) {
-        return callIsTruffleBoundary(env(), getHandle(), LibGraal.translate(runtime(), method));
+        return callIsTruffleBoundary(env(), getHandle(), runtime().translate(method));
     }
 
     @SVMToHotSpot(IsValueType)
     @Override
     public boolean isValueType(ResolvedJavaType type) {
-        return callIsValueType(env(), getHandle(), LibGraal.translate(runtime(), type));
+        return callIsValueType(env(), getHandle(), runtime().translate(type));
     }
 
     @SVMToHotSpot(GetInlineKind)
     @Override
     public InlineKind getInlineKind(ResolvedJavaMethod original, boolean duringPartialEvaluation) {
-        long methodHandle = LibGraal.translate(HotSpotJVMCIRuntime.runtime(), original);
+        long methodHandle = HotSpotJVMCIRuntime.runtime().translate(original);
         int inlineKindOrdinal = callGetInlineKind(env(), getHandle(), methodHandle, duringPartialEvaluation);
         return InlineKind.values()[inlineKindOrdinal];
     }
@@ -209,7 +207,7 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
     @SVMToHotSpot(GetLoopExplosionKind)
     @Override
     public LoopExplosionKind getLoopExplosionKind(ResolvedJavaMethod method) {
-        long methodHandle = LibGraal.translate(HotSpotJVMCIRuntime.runtime(), method);
+        long methodHandle = HotSpotJVMCIRuntime.runtime().translate(method);
         int loopExplosionKindOrdinal = callGetLoopExplosionKind(env(), getHandle(), methodHandle);
         return LoopExplosionKind.values()[loopExplosionKindOrdinal];
     }
@@ -235,7 +233,7 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
                             enclosingType,
                             Arrays.toString(declaredFields)));
         }
-        long typeHandle = LibGraal.translate(HotSpotJVMCIRuntime.runtime(), enclosingType);
+        long typeHandle = HotSpotJVMCIRuntime.runtime().translate(enclosingType);
         int fieldInfoDimension = callGetConstantFieldInfo(env(), getHandle(), typeHandle, isStatic, fieldIndex);
         switch (fieldInfoDimension) {
             case Integer.MIN_VALUE:
@@ -273,7 +271,7 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
         CLongPointer longs = GetLongArrayElements(env, handles, WordFactory.nullPointer());
         try {
             for (int i = 0; i < len; i++) {
-                res.add(LibGraal.unhand(runtime, ResolvedJavaMethod.class, longs.read(i)));
+                res.add(runtime.unhand(ResolvedJavaMethod.class, longs.read(i)));
             }
         } finally {
             ReleaseLongArrayElements(env, handles, longs, JArray.MODE_RELEASE);
@@ -355,8 +353,8 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
 
     private static class HSConsumer extends HSObject implements Consumer<OptimizedAssumptionDependency> {
 
-        HSConsumer(HotSpotToSVMScope scope, JObject handle) {
-            super(scope, handle);
+        HSConsumer(JNIEnv env, JObject handle) {
+            super(env, handle);
         }
 
         @SVMToHotSpot(ConsumeOptimizedAssumptionDependency)
