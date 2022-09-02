@@ -44,18 +44,6 @@ public final class NoRememberedSet implements RememberedSet {
     }
 
     @Override
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void enableRememberedSetForAlignedChunk(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects) {
-        // Nothing to do.
-    }
-
-    @Override
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void enableRememberedSetForUnalignedChunk(HostedByteBufferPointer chunk) {
-        // Nothing to do.
-    }
-
-    @Override
     public void enableRememberedSetForChunk(AlignedHeader chunk) {
         // Nothing to do.
     }
@@ -71,18 +59,20 @@ public final class NoRememberedSet implements RememberedSet {
     }
 
     @Override
-    public void clearRememberedSet(AlignedHeader chunk) {
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void enableRememberedSetForAlignedChunk(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects) {
         // Nothing to do.
     }
 
     @Override
-    public void clearRememberedSet(UnalignedHeader chunk) {
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void enableRememberedSetForUnalignedChunk(HostedByteBufferPointer chunk) {
         // Nothing to do.
     }
 
     @Override
     @AlwaysInline("GC performance")
-    public boolean isRememberedSetEnabled(UnsignedWord header) {
+    public boolean hasRememberedSet(UnsignedWord header) {
         return false;
     }
 
@@ -118,12 +108,12 @@ public final class NoRememberedSet implements RememberedSet {
     }
 
     @Override
-    public boolean verify(AlignedHeader firstAlignedHeapChunk) {
+    public boolean verify(AlignedHeader firstAlignedHeapChunk, boolean allCardsMustBeClean) {
         return true;
     }
 
     @Override
-    public boolean verify(UnalignedHeader firstUnalignedHeapChunk) {
+    public boolean verify(UnalignedHeader firstUnalignedHeapChunk, boolean allCardsMustBeClean) {
         return true;
     }
 }

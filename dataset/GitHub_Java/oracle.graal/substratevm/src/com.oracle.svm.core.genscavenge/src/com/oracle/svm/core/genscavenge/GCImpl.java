@@ -226,8 +226,6 @@ public final class GCImpl implements GC {
                 scavenge(false);
             } else if (policy.collectIncrementally()) {
                 scavenge(true);
-            } else {
-                VMError.shouldNotReachHere("A GC was triggered, so why did the policy decide to do nothing?");
             }
         } finally {
             collectionTimer.close();
@@ -1028,13 +1026,13 @@ public final class GCImpl implements GC {
     }
 
     @Fold
-    public static CollectionPolicy getPolicy() {
-        return GCImpl.getGCImpl().policy;
+    public CollectionPolicy getPolicy() {
+        return policy;
     }
 
     @Fold
-    public static boolean hasNeverCollectPolicy() {
-        return getPolicy() instanceof NeverCollect;
+    public boolean hasNeverCollectPolicy() {
+        return policy instanceof NeverCollect;
     }
 
     GreyToBlackObjectVisitor getGreyToBlackObjectVisitor() {

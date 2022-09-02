@@ -46,18 +46,6 @@ public class CardTableBasedRememberedSet implements RememberedSet {
     }
 
     @Override
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void enableRememberedSetForAlignedChunk(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects) {
-        AlignedChunkRememberedSet.enableRememberedSet(chunk, chunkPosition, objects);
-    }
-
-    @Override
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void enableRememberedSetForUnalignedChunk(HostedByteBufferPointer chunk) {
-        UnalignedChunkRememberedSet.enableRememberedSet(chunk);
-    }
-
-    @Override
     public void enableRememberedSetForChunk(AlignedHeader chunk) {
         AlignedChunkRememberedSet.enableRememberedSet(chunk);
     }
@@ -73,18 +61,20 @@ public class CardTableBasedRememberedSet implements RememberedSet {
     }
 
     @Override
-    public void clearRememberedSet(AlignedHeader chunk) {
-        AlignedChunkRememberedSet.clearRememberedSet(chunk);
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void enableRememberedSetForAlignedChunk(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects) {
+        AlignedChunkRememberedSet.enableRememberedSet(chunk, chunkPosition, objects);
     }
 
     @Override
-    public void clearRememberedSet(UnalignedHeader chunk) {
-        UnalignedChunkRememberedSet.clearRememberedSet(chunk);
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void enableRememberedSetForUnalignedChunk(HostedByteBufferPointer chunk) {
+        UnalignedChunkRememberedSet.enableRememberedSet(chunk);
     }
 
     @Override
     @AlwaysInline("GC performance")
-    public boolean isRememberedSetEnabled(UnsignedWord header) {
+    public boolean hasRememberedSet(UnsignedWord header) {
         return ObjectHeaderImpl.hasRememberedSet(header);
     }
 
@@ -109,7 +99,7 @@ public class CardTableBasedRememberedSet implements RememberedSet {
         }
 
         UnsignedWord objectHeader = ObjectHeaderImpl.readHeaderFromObject(holderObject);
-        if (isRememberedSetEnabled(objectHeader)) {
+        if (ObjectHeaderImpl.hasRememberedSet(objectHeader)) {
             if (ObjectHeaderImpl.isAlignedObject(holderObject)) {
                 AlignedChunkRememberedSet.dirtyCardForObject(holderObject, false);
             } else {
@@ -145,22 +135,22 @@ public class CardTableBasedRememberedSet implements RememberedSet {
     }
 
     @Override
-    public boolean verify(AlignedHeader firstAlignedHeapChunk) {
+    public boolean verify(AlignedHeader firstAlignedHeapChunk, boolean allCardsMustBeClean) {
         boolean success = true;
         AlignedHeader aChunk = firstAlignedHeapChunk;
         while (aChunk.isNonNull()) {
-            success &= AlignedChunkRememberedSet.verify(aChunk);
+            success &= AlignedChunkRememberedSet.verify(aChunk, allCardsMustBeClean);
             aChunk = HeapChunk.getNext(aChunk);
         }
         return success;
     }
 
     @Override
-    public boolean verify(UnalignedHeader firstUnalignedHeapChunk) {
+    public boolean verify(UnalignedHeader firstUnalignedHeapChunk, boolean allCardsMustBeClean) {
         boolean success = true;
         UnalignedHeader uChunk = firstUnalignedHeapChunk;
         while (uChunk.isNonNull()) {
-            success &= UnalignedChunkRememberedSet.verify(uChunk);
+            success &= UnalignedChunkRememberedSet.verify(uChunk, allCardsMustBeClean);
             uChunk = HeapChunk.getNext(uChunk);
         }
         return success;

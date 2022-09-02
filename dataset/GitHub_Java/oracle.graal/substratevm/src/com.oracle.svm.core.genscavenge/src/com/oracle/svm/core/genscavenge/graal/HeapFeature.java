@@ -42,6 +42,7 @@ import com.oracle.svm.core.genscavenge.ChunkedImageHeapLayouter;
 import com.oracle.svm.core.genscavenge.CompleteGarbageCollectorMXBean;
 import com.oracle.svm.core.genscavenge.HeapImpl;
 import com.oracle.svm.core.genscavenge.HeapImplMemoryMXBean;
+import com.oracle.svm.core.genscavenge.HeapOptions;
 import com.oracle.svm.core.genscavenge.ImageHeapInfo;
 import com.oracle.svm.core.genscavenge.IncrementalGarbageCollectorMXBean;
 import com.oracle.svm.core.genscavenge.LinearImageHeapLayouter;
@@ -64,7 +65,7 @@ class HeapFeature implements GraalFeature {
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.UseSerialGC.getValue();
+        return SubstrateOptions.UseCardRememberedSetHeap.getValue();
     }
 
     @Override
@@ -76,7 +77,7 @@ class HeapFeature implements GraalFeature {
     public void afterRegistration(AfterRegistrationAccess access) {
         ImageSingletons.add(Heap.class, new HeapImpl(access));
         ImageSingletons.add(SubstrateAllocationSnippets.class, new GenScavengeAllocationSnippets());
-        ImageSingletons.add(RememberedSet.class, createRememberedSet());
+        registerRememberedSet();
 
         ManagementSupport managementSupport = ManagementSupport.getSingleton();
         managementSupport.addPlatformManagedObjectSingleton(java.lang.management.MemoryMXBean.class, new HeapImplMemoryMXBean());
@@ -86,7 +87,7 @@ class HeapFeature implements GraalFeature {
     @Override
     public void registerLowerings(RuntimeConfiguration runtimeConfig, OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers,
                     SnippetReflectionProvider snippetReflection, Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings, boolean hosted) {
-        if (SubstrateOptions.useRememberedSet()) {
+        if (HeapOptions.useRememberedSet()) {
             // Even though I don't hold on to this instance, it is preserved because it becomes the
             // enclosing instance for the lowerings registered within it.
             BarrierSnippets barrierSnippets = new BarrierSnippets(options, factories, providers, snippetReflection);
@@ -124,11 +125,11 @@ class HeapFeature implements GraalFeature {
         GenScavengeAllocationSnippets.registerForeignCalls(providers, foreignCalls);
     }
 
-    private static RememberedSet createRememberedSet() {
-        if (SubstrateOptions.useRememberedSet()) {
-            return new CardTableBasedRememberedSet();
+    private static void registerRememberedSet() {
+        if (HeapOptions.useRememberedSet()) {
+            ImageSingletons.add(RememberedSet.class, new CardTableBasedRememberedSet());
         } else {
-            return new NoRememberedSet();
+            ImageSingletons.add(RememberedSet.class, new NoRememberedSet());
         }
     }
 }
