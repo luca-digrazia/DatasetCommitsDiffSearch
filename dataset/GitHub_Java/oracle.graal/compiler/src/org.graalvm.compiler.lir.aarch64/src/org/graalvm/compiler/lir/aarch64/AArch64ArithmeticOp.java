@@ -78,9 +78,9 @@ public enum AArch64ArithmeticOp {
     BIC,
     ORN,
     EON,
-    LSL(SHIFT),
-    LSR(SHIFT),
-    ASR(SHIFT),
+    SHL(SHIFT),
+    LSHR(SHIFT),
+    ASHR(SHIFT),
     ROR(SHIFT),
     RORV(SHIFT),
     ABS,
@@ -236,13 +236,13 @@ public enum AArch64ArithmeticOp {
                 case XOR:
                     masm.eor(size, dst, src, b.asLong());
                     break;
-                case LSL:
+                case SHL:
                     masm.lsl(size, dst, src, b.asLong());
                     break;
-                case LSR:
+                case LSHR:
                     masm.lsr(size, dst, src, b.asLong());
                     break;
-                case ASR:
+                case ASHR:
                     masm.asr(size, dst, src, b.asLong());
                     break;
                 case ROR:
@@ -334,13 +334,13 @@ public enum AArch64ArithmeticOp {
                 case EON:
                     masm.eon(size, dst, src1, src2);
                     break;
-                case LSL:
+                case SHL:
                     masm.lsl(size, dst, src1, src2);
                     break;
-                case LSR:
+                case LSHR:
                     masm.lsr(size, dst, src1, src2);
                     break;
-                case ASR:
+                case ASHR:
                     masm.asr(size, dst, src1, src2);
                     break;
                 case RORV:
@@ -655,17 +655,17 @@ public enum AArch64ArithmeticOp {
                 case SUB:
                     masm.neon.subVVV(size, eSize, dst, src1, src2);
                     break;
-                case LSL:
+                case SHL:
                     masm.neon.ushlVVV(size, eSize, dst, src1, src2);
                     break;
-                case LSR:
+                case LSHR:
                     /*
                      * On AArch64 right shifts are actually left shifts by a negative value.
                      */
                     masm.neon.negVV(size, eSize, dst, src2);
                     masm.neon.ushlVVV(size, eSize, dst, src1, dst);
                     break;
-                case ASR:
+                case ASHR:
                     /*
                      * On AArch64 right shifts are actually left shifts by a negative value.
                      */
@@ -734,13 +734,13 @@ public enum AArch64ArithmeticOp {
                     masm.neon.moveVV(size, dst, src);
                     masm.neon.bicVI(size, eSize, dst, immValue);
                     break;
-                case LSL:
+                case SHL:
                     masm.neon.shlVVI(size, eSize, dst, src, clampedShift);
                     break;
-                case LSR:
+                case LSHR:
                     masm.neon.ushrVVI(size, eSize, dst, src, clampedShift);
                     break;
-                case ASR:
+                case ASHR:
                     masm.neon.sshrVVI(size, eSize, dst, src, clampedShift);
                     break;
 
