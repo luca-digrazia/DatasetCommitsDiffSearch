@@ -41,6 +41,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.substitutions.Host;
 
 /**
@@ -151,7 +152,7 @@ public final class ObjectKlass extends Klass {
     public StaticObject getStatics() {
         if (statics == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            statics = new StaticObject(this, true);
+            statics = new StaticObjectImpl(this, true);
         }
         return statics;
     }
