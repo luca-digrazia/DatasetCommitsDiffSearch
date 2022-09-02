@@ -400,9 +400,9 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         // previous pass is essential because JCC erratum padding may not trigger without the
         // displacement alignment.
         emitAlignmentForDirectCall(align, callDisplacementOffset, wordSize);
-        int beforeCall = position();
+        int before = position();
         call();
-        return beforeCall;
+        return before;
     }
 
     private void emitAlignmentForDirectCall(boolean align, int callDisplacementOffset, int wordSize) {
@@ -418,32 +418,42 @@ public class AMD64MacroAssembler extends AMD64Assembler {
     }
 
     public final int indirectCall(Register callReg) {
-        int bytesToEmit = needsRex(callReg) ? 3 : 2;
-        testAndAlignNextOp(bytesToEmit);
-        int beforeCall = position();
+        int before = position();
         call(callReg);
-        assert beforeCall + bytesToEmit == position();
-        return beforeCall;
+        int bytesShifted = testAndAlignLastOp(before);
+        return before + bytesShifted;
     }
 
     public final int directCall(long address, Register scratch) {
-        int bytesToEmit = needsRex(scratch) ? 13 : 12;
-        testAndAlignNextOp(bytesToEmit);
-        int beforeCall = position();
+        int beforeMov = position();
         movq(scratch, address);
+        int beforeCall = position();
         call(scratch);
-        assert beforeCall + bytesToEmit == position();
-        return beforeCall;
+        if (useBranchesWithin32ByteBoundary) {
+            int afterCall = position();
+            if (mayCrossBoundary(beforeCall, afterCall)) {
+                int bytesToShift = bytesUntilBoundary(beforeCall);
+                shiftAndFillWithNop(beforeMov, afterCall, bytesToShift);
+                return beforeMov + bytesToShift;
+            }
+        }
+        return beforeMov;
     }
 
     public final int directJmp(long address, Register scratch) {
-        int bytesToEmit = needsRex(scratch) ? 13 : 12;
-        testAndAlignNextOp(bytesToEmit);
-        int beforeJmp = position();
+        int beforeMov = position();
         movq(scratch, address);
-        jmpWithoutAlignment(scratch);
-        assert beforeJmp + bytesToEmit == position();
-        return beforeJmp;
+        int beforeJmp = position();
+        jmp(scratch);
+        if (useBranchesWithin32ByteBoundary) {
+            int afterJmp = position();
+            if (mayCrossBoundary(beforeJmp, afterJmp)) {
+                int bytesToShift = bytesUntilBoundary(beforeJmp);
+                shiftAndFillWithNop(beforeMov, afterJmp, bytesToShift);
+                return beforeMov + bytesToShift;
+            }
+        }
+        return beforeMov;
     }
 
     private int jcc(ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
@@ -497,12 +507,12 @@ public class AMD64MacroAssembler extends AMD64Assembler {
 
     public final void testbAndJcc(Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
         AMD64RMOp.TESTB.emit(this, OperandSize.BYTE, src1, src2);
-        jcc(cc, branchTarget, isShortJmp);
+        jcc(cc, branchTarget);
     }
 
     public final void testbAndJcc(Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
         AMD64RMOp.TESTB.emit(this, OperandSize.BYTE, src1, src2);
-        jcc(cc, branchTarget, isShortJmp);
+        jcc(cc, branchTarget);
     }
 
     public final int cmpAndJcc(OperandSize size, Register src, int imm32, VMConstant inlinedConstant, ConditionFlag cc, Label branchTarget, boolean isShortJmp, CompilationResultBuilder crb) {
@@ -571,41 +581,49 @@ public class AMD64MacroAssembler extends AMD64Assembler {
     }
 
     public final void andlAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         andl(dst, imm32);
         jcc(cc, branchTarget, isShortJmp);
     }
 
     public final void addqAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         addq(dst, imm32);
         jcc(cc, branchTarget, isShortJmp);
     }
 
     public final void sublAndJcc(Register dst, Register src, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         subl(dst, src);
         jcc(cc, branchTarget, isShortJmp);
     }
 
     public final void sublAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         subl(dst, imm32);
         jcc(cc, branchTarget, isShortJmp);
     }
 
     public final void subqAndJcc(Register dst, Register src, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         subq(dst, src);
         jcc(cc, branchTarget, isShortJmp);
     }
 
     public final void subqAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         subq(dst, imm32);
         jcc(cc, branchTarget, isShortJmp);
     }
 
     public final void incqAndJcc(Register dst, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         incq(dst);
         jcc(cc, branchTarget, isShortJmp);
     }
 
     public final void decqAndJcc(Register dst, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+        markJCCPrecedingInstruction();
         decq(dst);
         jcc(cc, branchTarget, isShortJmp);
     }
