@@ -78,8 +78,6 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
     private final Map<Field, EnumSet<FieldFlag>> reflectionFields = new ConcurrentHashMap<>();
     private final Set<Field> analyzedFinalFields = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    private final Set<Field> preregisteredAsWritable = ConcurrentHashMap.newKeySet();
-
     /* Keep track of classes already processed for reflection. */
     private final Set<Class<?>> processedClasses = new HashSet<>();
 
@@ -137,7 +135,7 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         checkNotSealed();
         for (Field field : fields) {
             EnumSet<FieldFlag> flags = EnumSet.noneOf(FieldFlag.class);
-            if (finalIsWritable || preregisteredAsWritable.contains(field)) {
+            if (finalIsWritable) {
                 flags.add(FieldFlag.FINAL_BUT_WRITABLE);
             }
             if (allowUnsafeAccess) {
@@ -436,20 +434,11 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         return result.toArray(EMPTY_CLASSES);
     }
 
-    @Override
-    public boolean inspectFinalFieldWritableForAnalysis(Field field) {
-        if (field == null || !Modifier.isFinal(field.getModifiers())) {
-            return false;
-        }
+    boolean inspectFinalFieldWritableForAnalysis(Field field) {
+        assert Modifier.isFinal(field.getModifiers());
         EnumSet<FieldFlag> flags = reflectionFields.get(field);
         analyzedFinalFields.add(field);
-        return (flags != null && flags.contains(FieldFlag.FINAL_BUT_WRITABLE)) || preregisteredAsWritable.contains(field);
-    }
-
-    @Override
-    public void preregisterAsWritableForAnalysis(Field field) {
-        UserError.guarantee(!analyzedFinalFields.contains(field), "A field that was already processed by the analysis cannot be preregistered as writable: %s", field);
-        preregisteredAsWritable.add(field);
+        return flags != null && flags.contains(FieldFlag.FINAL_BUT_WRITABLE);
     }
 
     static final class ReflectionDataAccessors {
