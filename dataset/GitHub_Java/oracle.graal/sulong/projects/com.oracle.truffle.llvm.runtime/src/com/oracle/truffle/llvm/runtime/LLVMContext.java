@@ -709,17 +709,14 @@ public final class LLVMContext {
         return globalsReverseMap.get(pointer);
     }
 
-    @TruffleBoundary
     public void registerReadOnlyGlobals(LLVMPointer nonPointerStore) {
         globalsReadOnlyStore.add(nonPointerStore);
     }
 
-    @TruffleBoundary
     public void registerGlobals(LLVMPointer nonPointerStore) {
         globalsNonPointerStore.add(nonPointerStore);
     }
 
-    @TruffleBoundary
     public void registerGlobalReverseMap(LLVMGlobal global, LLVMPointer target) {
         globalsReverseMap.put(target, global);
     }
@@ -728,7 +725,6 @@ public final class LLVMContext {
         cleanupNecessary = value;
     }
 
-    @TruffleBoundary
     public LLVMInteropType getInteropType(LLVMSourceType sourceType) {
         return interopTypeRegistry.get(sourceType);
     }
