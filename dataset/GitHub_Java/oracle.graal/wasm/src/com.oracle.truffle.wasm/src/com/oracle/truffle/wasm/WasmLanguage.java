@@ -51,15 +51,19 @@ public final class WasmLanguage extends TruffleLanguage<WasmContext> {
 
     @Override
     protected CallTarget parse(ParsingRequest request) {
-        final WasmContext context = getContextReference().get();
+        final WasmContext context = getCurrentContext();
         final String moduleName = request.getSource().getName();
         final byte[] data = request.getSource().getBytes().toByteArray();
         final WasmModule module = new WasmModule(moduleName, data);
         final BinaryParser reader = new BinaryParser(this, module, data);
         reader.readModule();
         context.registerModule(module);
-        // TODO: Should this return an initialization function? Or a start function?
-        return Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootNode(this));
+        final WasmFunction startFunction = module.symbolTable().startFunction();
+        if (startFunction != null) {
+            return startFunction.resolveCallTarget();
+        } else {
+            return Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootNode(this));
+        }
     }
 
     @Override
