@@ -385,16 +385,11 @@ final class Runner {
             super(function);
         }
 
+        @Override
         @TruffleBoundary
-        private LLVMFunctionDescriptor createAndResolve(LLVMContext context) {
+        LLVMPointer allocate(LLVMContext context) {
             LLVMFunctionDescriptor functionDescriptor = context.createFunctionDescriptor(function);
             functionDescriptor.getFunctionCode().resolveIfLazyLLVMIRFunction();
-            return functionDescriptor;
-        }
-
-        @Override
-        LLVMPointer allocate(LLVMContext context) {
-            LLVMFunctionDescriptor functionDescriptor = createAndResolve(context);
             return LLVMManagedPointer.create(functionDescriptor);
         }
     }
@@ -408,22 +403,16 @@ final class Runner {
             this.nodeFactory = nodeFactory;
         }
 
-        @TruffleBoundary
-        private LLVMFunctionDescriptor createAndDefine(LLVMContext context) {
+        @Override
+        LLVMPointer allocate(LLVMContext context) {
             LLVMFunctionDescriptor functionDescriptor = context.createFunctionDescriptor(function);
             LLVMIntrinsicProvider intrinsicProvider = context.getLanguage().getCapability(LLVMIntrinsicProvider.class);
 
             if (intrinsicProvider.isIntrinsified(function.getName())) {
                 functionDescriptor.getFunctionCode().define(intrinsicProvider, nodeFactory);
-                return functionDescriptor;
+                return LLVMManagedPointer.create(functionDescriptor);
             }
             throw new IllegalStateException("Failed to allocate intrinsic function " + function.getName());
-        }
-
-        @Override
-        LLVMPointer allocate(LLVMContext context) {
-            LLVMFunctionDescriptor functionDescriptor = createAndDefine(context);
-            return LLVMManagedPointer.create(functionDescriptor);
         }
     }
 
