@@ -629,7 +629,7 @@ public class FixReadsPhase extends BasePhase<CoreProviders> {
 
             }
         }
-        graph.setAfterFixReadPhase();
+        graph.setAfterFixReadPhase(true);
         if (!ec.getNodes().isEmpty()) {
             canonicalizerPhase.applyIncremental(graph, context, ec.getNodes());
         }
