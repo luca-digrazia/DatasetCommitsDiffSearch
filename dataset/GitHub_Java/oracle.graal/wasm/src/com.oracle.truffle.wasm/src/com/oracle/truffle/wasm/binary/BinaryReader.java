@@ -49,13 +49,11 @@ public class BinaryReader extends BinaryStreamReader {
 
     private WasmLanguage wasmLanguage;
     private WasmModule wasmModule;
-    private byte[] bytesConsumed;
 
     public BinaryReader(WasmLanguage wasmLanguage, String moduleName, byte[] data) {
         super(data);
         this.wasmLanguage = wasmLanguage;
         this.wasmModule = new WasmModule(moduleName);
-        this.bytesConsumed = new byte[1];
     }
 
     public void readModule() {
