@@ -431,11 +431,6 @@ public final class Arguments {
         public boolean isExperimental() {
             return isExperimental;
         }
-
-        @Override
-        public synchronized Throwable fillInStackTrace() {
-            return this;
-        }
     }
 
     static ArgumentException abort(String message) {
