@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -43,7 +43,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
@@ -53,19 +52,14 @@ import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropReadNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropWriteNode;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMReadFromForeignObjectNode.ForeignReadDoubleNode;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMReadFromForeignObjectNode.ForeignReadFloatNode;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMReadFromForeignObjectNode.ForeignReadI16Node;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMReadFromForeignObjectNode.ForeignReadI32Node;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMReadFromForeignObjectNode.ForeignReadI64Node;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMReadFromForeignObjectNode.ForeignReadI8Node;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMReadFromForeignObjectNode.ForeignReadPointerNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ToLLVMNodeGen;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedAccessDefaultsFactory.GetWriteIdentifierNodeGen;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToPointerNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypesGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -80,56 +74,51 @@ abstract class LLVMManagedAccessDefaults {
         @ExportMessage
         static boolean isReadable(Object obj,
                         @CachedLibrary("obj") InteropLibrary interop) {
-            // TODO
             return interop.accepts(obj);
         }
 
         @ExportMessage
         static byte readI8(Object obj, long offset,
-                        @Cached ForeignReadI8Node readNode) {
-            return readNode.execute(obj, offset);
+                        @Shared("read") @Cached ManagedReadNode read) {
+            return LLVMTypesGen.asByte(read.executeRead(obj, offset, ForeignToLLVMType.I8));
         }
 
         @ExportMessage
         static short readI16(Object obj, long offset,
-                        @Cached ForeignReadI16Node readNode) {
-            return readNode.execute(obj, offset);
+                        @Shared("read") @Cached ManagedReadNode read) {
+            ForeignToLLVMType type = ForeignToLLVMType.I16;
+            return LLVMTypesGen.asShort(read.executeRead(obj, offset, type));
         }
 
         @ExportMessage
         static int readI32(Object obj, long offset,
-                        @Cached ForeignReadI32Node readNode) {
-            return readNode.execute(obj, offset);
-        }
-
-        @ExportMessage
-        static long readI64(Object obj, long offset,
-                        @Shared("readI64") @Cached ForeignReadI64Node readNode) throws UnexpectedResultException {
-            return readNode.executeLong(obj, offset);
+                        @Shared("read") @Cached ManagedReadNode read) {
+            return LLVMTypesGen.asInteger(read.executeRead(obj, offset, ForeignToLLVMType.I32));
         }
 
         @ExportMessage
         static Object readGenericI64(Object obj, long offset,
-                        @Shared("readI64") @Cached ForeignReadI64Node readNode) {
-            return readNode.execute(obj, offset);
+                        @Shared("read") @Cached ManagedReadNode read) {
+            return read.executeRead(obj, offset, ForeignToLLVMType.I64);
         }
 
         @ExportMessage
         static float readFloat(Object obj, long offset,
-                        @Cached ForeignReadFloatNode readNode) {
-            return readNode.execute(obj, offset);
+                        @Shared("read") @Cached ManagedReadNode read) {
+            return LLVMTypesGen.asFloat(read.executeRead(obj, offset, ForeignToLLVMType.FLOAT));
         }
 
         @ExportMessage
         static double readDouble(Object obj, long offset,
-                        @Cached ForeignReadDoubleNode readNode) {
-            return readNode.execute(obj, offset);
+                        @Shared("read") @Cached ManagedReadNode read) {
+            return LLVMTypesGen.asDouble(read.executeRead(obj, offset, ForeignToLLVMType.DOUBLE));
         }
 
         @ExportMessage
         static LLVMPointer readPointer(Object obj, long offset,
-                        @Cached ForeignReadPointerNode readNode) {
-            return readNode.execute(obj, offset);
+                        @Cached LLVMToPointerNode toPointer,
+                        @Shared("read") @Cached ManagedReadNode read) {
+            return toPointer.executeWithTarget(read.executeRead(obj, offset, ForeignToLLVMType.POINTER));
         }
     }
 
@@ -137,8 +126,8 @@ abstract class LLVMManagedAccessDefaults {
 
         /**
          * Annotation helper for guards to check whether {@code obj} is an auto-deref handle (e.g. a
-         * wrapped pointer). This helper assumes that an isPointer call returns true for {@code obj}
-         * .
+         * wrapped pointer). This helper assumes that an isPointer call returns true for
+         * {@code obj}.
          */
         static boolean isWrappedAutoDerefHandle(LLVMLanguage language, LLVMNativeLibrary nativeLibrary, Object obj) {
             try {
@@ -149,6 +138,119 @@ abstract class LLVMManagedAccessDefaults {
             }
         }
 
+    }
+
+    @GenerateUncached
+    abstract static class ManagedReadNode extends ManagedAccessNode {
+
+        abstract Object executeRead(Object obj, long offset, ForeignToLLVMType type);
+
+        @Specialization(guards = {"nativeLibrary.isPointer(receiver)", "!isWrappedAutoDerefHandle(language, nativeLibrary, receiver)"})
+        Object doPointer(Object receiver, long offset, @SuppressWarnings("unused") ForeignToLLVMType type,
+                        @CachedLanguage LLVMLanguage language,
+                        @CachedLibrary(limit = "3") LLVMNativeLibrary nativeLibrary,
+                        @Cached("createIdentityProfile()") ValueProfile typeProfile) {
+            try {
+                long addr = nativeLibrary.asPointer(receiver) + offset;
+                switch (typeProfile.profile(type)) {
+                    case I8:
+                        return language.getLLVMMemory().getI8(this, addr);
+                    case I16:
+                        return language.getLLVMMemory().getI16(this, addr);
+                    case I32:
+                        return language.getLLVMMemory().getI32(this, addr);
+                    case I64:
+                        return language.getLLVMMemory().getI64(this, addr);
+                    case FLOAT:
+                        return language.getLLVMMemory().getFloat(this, addr);
+                    case DOUBLE:
+                        return language.getLLVMMemory().getDouble(this, addr);
+                    case POINTER:
+                        return language.getLLVMMemory().getPointer(this, addr);
+                    default:
+                        CompilerDirectives.transferToInterpreter();
+                        throw new IllegalStateException("Unsupported type " + type);
+                }
+
+            } catch (UnsupportedMessageException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(ex);
+            }
+        }
+
+        @Specialization(guards = {"natives.isPointer(receiver)", "isWrappedAutoDerefHandle(language, natives, receiver)"})
+        static Object doHandle(Object receiver, long offset, ForeignToLLVMType type,
+                        @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
+                        @Shared("read") @Cached LLVMInteropReadNode read,
+                        @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
+                        @CachedLibrary(limit = "3") LLVMNativeLibrary natives,
+                        @Cached LLVMDerefHandleGetReceiverNode receiverNode,
+                        @Cached LLVMAsForeignNode asForeignNode,
+                        @Shared("fallbackRead") @Cached(value = "create()", uncached = "createUncached()") FallbackReadNode fallbackRead,
+                        @Cached("createBinaryProfile()") ConditionProfile typedReadProfile) {
+            try {
+                LLVMManagedPointer recv = receiverNode.execute(natives.asPointer(receiver));
+                Object nativeType = nativeTypes.getNativeType(receiver);
+                if (typedReadProfile.profile(nativeType == null || nativeType instanceof LLVMInteropType.Structured)) {
+                    return read.execute((LLVMInteropType.Structured) nativeType, asForeignNode.execute(recv), recv.getOffset() + offset, type);
+                } else {
+                    return fallbackRead.executeRead(recv.getObject(), offset, type);
+                }
+            } catch (UnsupportedMessageException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException(ex);
+            }
+        }
+
+        @Specialization(guards = {"!natives.isPointer(receiver)"})
+        static Object doValue(Object receiver, long offset, ForeignToLLVMType type,
+                        @Shared("read") @Cached LLVMInteropReadNode read,
+                        @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
+                        @SuppressWarnings("unused") @CachedLibrary(limit = "3") LLVMNativeLibrary natives,
+                        @Shared("fallbackRead") @Cached(value = "create()", uncached = "createUncached()") FallbackReadNode fallbackRead,
+                        @Cached("createBinaryProfile()") ConditionProfile typedReadProfile) {
+            Object nativeType = nativeTypes.getNativeType(receiver);
+            if (typedReadProfile.profile(nativeType == null || nativeType instanceof LLVMInteropType.Structured)) {
+                return read.execute((LLVMInteropType.Structured) nativeType, receiver, offset, type);
+            } else {
+                return fallbackRead.executeRead(receiver, offset, type);
+            }
+        }
+
+    }
+
+    static final class FallbackReadNode extends LLVMNode {
+
+        @Child private InteropLibrary interop;
+        @Child private ToLLVM toLLVM;
+
+        private FallbackReadNode(boolean uncached) {
+            if (uncached) {
+                interop = InteropLibrary.getFactory().getUncached();
+                toLLVM = ToLLVMNodeGen.getUncached();
+            } else {
+                interop = InteropLibrary.getFactory().createDispatched(5);
+                toLLVM = ToLLVMNodeGen.create();
+            }
+        }
+
+        public static FallbackReadNode create() {
+            return new FallbackReadNode(false);
+        }
+
+        public static FallbackReadNode createUncached() {
+            return new FallbackReadNode(true);
+        }
+
+        public Object executeRead(Object obj, long offset, ForeignToLLVMType type) {
+            try {
+                Object foreign = interop.readArrayElement(obj, offset / type.getSizeInBytes());
+                return toLLVM.executeWithType(foreign, null, type);
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new LLVMPolyglotException(this, "Error reading from foreign array.");
+            }
+        }
     }
 
     @ExportLibrary(value = LLVMManagedWriteLibrary.class, receiverType = Object.class)
