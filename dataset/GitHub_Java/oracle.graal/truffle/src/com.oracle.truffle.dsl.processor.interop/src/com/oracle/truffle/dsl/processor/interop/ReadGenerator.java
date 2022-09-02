@@ -45,22 +45,21 @@ import java.io.Writer;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 
-import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.TruffleTypes;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
+@SuppressWarnings("deprecation")
 final class ReadGenerator extends MessageGenerator {
 
     private static final int NUMBER_OF_READ = 2; // TruffleObject receiver,
                                                  // Object identifier
     private final String targetablePropReadNode;
 
-    ReadGenerator(ProcessingEnvironment processingEnv, AnnotationMirror resolveAnnotation, AnnotationMirror messageResolutionAnnotation,
+    ReadGenerator(ProcessingEnvironment processingEnv, com.oracle.truffle.api.interop.Resolve resolveAnnotation, com.oracle.truffle.api.interop.MessageResolution messageResolutionAnnotation,
                     TypeElement element,
                     ForeignAccessFactoryGenerator containingForeignAccessFactory) {
         super(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, containingForeignAccessFactory);
@@ -106,8 +105,7 @@ final class ReadGenerator extends MessageGenerator {
         final List<? extends VariableElement> params = method.getParameters();
         boolean hasFrameArgument = false;
         if (params.size() >= 1) {
-            TruffleTypes types = ProcessorContext.getInstance().getTypes();
-            hasFrameArgument = ElementUtils.areTypesCompatible(params.get(0).asType(), types.VirtualFrame);
+            hasFrameArgument = ElementUtils.areTypesCompatible(params.get(0).asType(), Utils.getTypeMirror(processingEnv, VirtualFrame.class));
         }
         int expectedNumberOfArguments = hasFrameArgument ? getParameterCount() + 1 : getParameterCount();
 
