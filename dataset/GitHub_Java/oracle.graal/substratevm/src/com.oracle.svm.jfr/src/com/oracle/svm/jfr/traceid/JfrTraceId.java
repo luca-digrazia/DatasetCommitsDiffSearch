@@ -89,13 +89,15 @@ public class JfrTraceId {
 
     public static long getTraceIdRaw(Object key) {
         JfrTraceIdMap map = getTraceIdMap();
-        assert map != null;
+        if (map == null) {
+            throw new AssertionError();
+        };
         return getTraceIdMap().getId(key);
     }
 
     public static long getTraceId(Object key) {
         long traceid = getTraceIdRaw(key);
-        return traceid >>> TRACE_ID_SHIFT;
+        return traceid >> TRACE_ID_SHIFT;
     }
 
     public static long load(Class<?> clazz) {

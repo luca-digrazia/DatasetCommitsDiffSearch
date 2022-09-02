@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2021, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,54 +26,62 @@
 
 package com.oracle.svm.jfr.traceid;
 
-import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.UnknownObjectField;
 import com.oracle.svm.core.hub.DynamicHub;
+import com.oracle.svm.core.jdk.Target_java_lang_ClassLoader;
+import com.oracle.svm.core.jdk.Target_java_lang_Module;
+import com.oracle.svm.core.jdk.Target_java_lang_Package;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import java.util.Arrays;
-
 public class JfrTraceIdMap {
     @UnknownObjectField(types = {long[].class})
-    private long[] traceIDs;
+    private final long[] traceIDs;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public JfrTraceIdMap() {
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void initialize(int size) {
+    public JfrTraceIdMap(int size) {
         traceIDs = new long[size];
-        Arrays.fill(traceIDs, -1);
+        for (int i = 0; i < size; i++) {
+            traceIDs[i] = -1;
+        }
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private int getIndex(Class<?> clazz) {
-        DynamicHub hub = DynamicHub.fromClass(clazz);
-        return hub.getTypeID() + 1; // Off-set by 1 for error-catcher
+    private int getIndex(Object key) {
+        int index;
+        if (key instanceof Class<?>) {
+            DynamicHub hub = DynamicHub.fromClass((Class<?>) key);
+            index = hub.getTypeID() + 1; // Off-set by 1 for error-catcher
+        } else if (key instanceof ClassLoader) {
+            Target_java_lang_ClassLoader classLoader = SubstrateUtil.cast(key, Target_java_lang_ClassLoader.class);
+            index = classLoader.jfrID;
+        } else if (key instanceof Package) {
+            Target_java_lang_Package pkg = SubstrateUtil.cast(key, Target_java_lang_Package.class);
+            index = pkg.jfrID;
+        } else if (key instanceof Module) {
+            Target_java_lang_Module module = SubstrateUtil.cast(key, Target_java_lang_Module.class);
+            index = module.jfrID;
+        } else {
+            throw new IllegalArgumentException("Unexpected type: " + key.getClass());
+        }
+        assert index > 0;
+        return index;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    long getId(Class<?> clazz) {
-        long id = traceIDs[getIndex(clazz)];
-        assert id != -1;
-        return id;
+    long getId(Object key) {
+        return traceIDs[getIndex(key)];
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     long getId(int index) {
         return traceIDs[index];
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    void setId(Class<?> clazz, long id) {
-        traceIDs[getIndex(clazz)] = id;
+    void setId(Object key, long id) {
+        traceIDs[getIndex(key)] = id;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
     void setId(int index, long id) {
-        assert traceIDs[index] == -1;
         traceIDs[index] = id;
     }
 }
