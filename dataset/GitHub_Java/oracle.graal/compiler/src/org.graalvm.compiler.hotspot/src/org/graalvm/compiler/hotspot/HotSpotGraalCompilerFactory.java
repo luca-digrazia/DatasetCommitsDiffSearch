@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,10 +25,12 @@
 package org.graalvm.compiler.hotspot;
 
 import static jdk.vm.ci.common.InitTimer.timer;
+import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
 import static org.graalvm.compiler.hotspot.HotSpotGraalOptionValues.GRAAL_OPTION_PROPERTY_PREFIX;
 
 import java.io.PrintStream;
 
+import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.debug.MethodFilter;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
@@ -47,6 +51,8 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
     private static MethodFilter[] graalCompileOnlyFilter;
     private static boolean compileGraalWithC1Only;
 
+    private IsGraalPredicate isGraalPredicate;
+
     private final HotSpotGraalJVMCIServiceLocator locator;
 
     HotSpotGraalCompilerFactory(HotSpotGraalJVMCIServiceLocator locator) {
@@ -65,16 +71,21 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
 
     @Override
     public void onSelection() {
-        JVMCIVersionCheck.check(false);
+        JVMCIVersionCheck.check(Services.getSavedProperties(), false);
         assert options == null : "cannot select " + getClass() + " service more than once";
-        options = HotSpotGraalOptionValues.HOTSPOT_OPTIONS;
+        options = HotSpotGraalOptionValues.defaultOptions();
         initializeGraalCompilePolicyFields(options);
+        isGraalPredicate = compileGraalWithC1Only ? new IsGraalPredicate() : null;
         /*
          * Exercise this code path early to encourage loading now. This doesn't solve problem of
          * deadlock during class loading but seems to eliminate it in practice.
          */
         adjustCompilationLevelInternal(Object.class, "hashCode", "()I", CompilationLevel.FullOptimization);
         adjustCompilationLevelInternal(Object.class, "hashCode", "()I", CompilationLevel.Simple);
+        if (IS_BUILDING_NATIVE_IMAGE) {
+            // Triggers initialization of all option descriptors
+            Options.CompileGraalWithC1Only.getName();
+        }
     }
 
     private static void initializeGraalCompilePolicyFields(OptionValues options) {
@@ -101,7 +112,9 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
         @Option(help = "In tiered mode compile Graal and JVMCI using optimized first tier code.", type = OptionType.Expert)
         public static final OptionKey<Boolean> CompileGraalWithC1Only = new OptionKey<>(true);
 
-        @Option(help = "A method filter selecting what should be compiled by Graal.  All other requests will be reduced to CompilationLevel.Simple.", type = OptionType.Expert)
+        @Option(help = "A filter applied to a method the VM has selected for compilation by Graal. " +
+                       "A method not matching the filter is redirected to a lower tier compiler. " +
+                       "The filter format is the same as for the MethodFilter option.", type = OptionType.Expert)
         public static final OptionKey<String> GraalCompileOnly = new OptionKey<>(null);
         // @formatter:on
 
@@ -109,7 +122,11 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
 
     @Override
     public HotSpotGraalCompiler createCompiler(JVMCIRuntime runtime) {
-        HotSpotGraalCompiler compiler = createCompiler(runtime, options, CompilerConfigurationFactory.selectFactory(null, options));
+        CompilerConfigurationFactory factory = CompilerConfigurationFactory.selectFactory(null, options);
+        if (isGraalPredicate != null) {
+            isGraalPredicate.onCompilerConfigurationFactorySelection(factory);
+        }
+        HotSpotGraalCompiler compiler = createCompiler("VM", runtime, options, factory);
         // Only the HotSpotGraalRuntime associated with the compiler created via
         // jdk.vm.ci.runtime.JVMCIRuntime.getCompiler() is registered for receiving
         // VM events.
@@ -121,15 +138,18 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
      * Creates a new {@link HotSpotGraalRuntime} object and a new {@link HotSpotGraalCompiler} and
      * returns the latter.
      *
+     * @param runtimeNameQualifier a qualifier to be added to the {@linkplain GraalRuntime#getName()
+     *            name} of the {@linkplain HotSpotGraalCompiler#getGraalRuntime() runtime} created
+     *            by this method
      * @param runtime the JVMCI runtime on which the {@link HotSpotGraalRuntime} is built
      * @param compilerConfigurationFactory factory for the {@link CompilerConfiguration}
      */
     @SuppressWarnings("try")
-    public static HotSpotGraalCompiler createCompiler(JVMCIRuntime runtime, OptionValues options, CompilerConfigurationFactory compilerConfigurationFactory) {
+    public static HotSpotGraalCompiler createCompiler(String runtimeNameQualifier, JVMCIRuntime runtime, OptionValues options, CompilerConfigurationFactory compilerConfigurationFactory) {
         HotSpotJVMCIRuntime jvmciRuntime = (HotSpotJVMCIRuntime) runtime;
         try (InitTimer t = timer("HotSpotGraalRuntime.<init>")) {
-            HotSpotGraalRuntime graalRuntime = new HotSpotGraalRuntime(jvmciRuntime, compilerConfigurationFactory, options);
-            return new HotSpotGraalCompiler(jvmciRuntime, graalRuntime);
+            HotSpotGraalRuntime graalRuntime = new HotSpotGraalRuntime(runtimeNameQualifier, jvmciRuntime, compilerConfigurationFactory, options);
+            return new HotSpotGraalCompiler(jvmciRuntime, graalRuntime, graalRuntime.getOptions());
         }
     }
 
@@ -148,24 +168,37 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
     }
 
     @Override
-    public CompilationLevel adjustCompilationLevel(Class<?> declaringClass, String name, String signature, boolean isOsr, CompilationLevel level) {
+    public CompilationLevel adjustCompilationLevel(Object declaringClassObject, String name, String signature, boolean isOsr, CompilationLevel level) {
+        if (declaringClassObject instanceof String) {
+            // This must be SVM mode in which case only GraalCompileC1Only matters since Graal and
+            // JVMCI are already compiled.
+            return checkGraalCompileOnlyFilter((String) declaringClassObject, name, signature, level);
+        }
+        Class<?> declaringClass = (Class<?>) declaringClassObject;
         return adjustCompilationLevelInternal(declaringClass, name, signature, level);
     }
 
     static {
         // Fail-fast detection for package renaming to guard use of package
         // prefixes in adjustCompilationLevelInternal.
-        assert Services.class.getName().equals("jdk.vm.ci.services.Services");
+        assert jdk.vm.ci.services.Services.class.getName().equals("jdk.vm.ci.services.Services");
         assert HotSpotGraalCompilerFactory.class.getName().equals("org.graalvm.compiler.hotspot.HotSpotGraalCompilerFactory");
     }
 
-    /*
-     * This method is static so it can be exercised during initialization.
-     */
-    private static CompilationLevel adjustCompilationLevelInternal(Class<?> declaringClass, String name, String signature, CompilationLevel level) {
+    private CompilationLevel adjustCompilationLevelInternal(Class<?> declaringClass, String name, String signature, CompilationLevel level) {
+        if (compileGraalWithC1Only) {
+            if (level.ordinal() > CompilationLevel.Simple.ordinal()) {
+                if (isGraalPredicate.apply(declaringClass)) {
+                    return CompilationLevel.Simple;
+                }
+            }
+        }
+        return checkGraalCompileOnlyFilter(declaringClass.getName(), name, signature, level);
+    }
+
+    public static CompilationLevel checkGraalCompileOnlyFilter(String declaringClassName, String name, String signature, CompilationLevel level) {
         if (graalCompileOnlyFilter != null) {
             if (level == CompilationLevel.FullOptimization) {
-                String declaringClassName = declaringClass.getName();
                 HotSpotSignature sig = null;
                 for (MethodFilter filter : graalCompileOnlyFilter) {
                     if (filter.hasSignature() && sig == null) {
@@ -176,14 +209,6 @@ public final class HotSpotGraalCompilerFactory extends HotSpotJVMCICompilerFacto
                     }
                 }
                 return CompilationLevel.Simple;
-            }
-        }
-        if (compileGraalWithC1Only) {
-            if (level.ordinal() > CompilationLevel.Simple.ordinal()) {
-                String declaringClassName = declaringClass.getName();
-                if (declaringClassName.startsWith("jdk.vm.ci") || declaringClassName.startsWith("org.graalvm") || declaringClassName.startsWith("com.oracle.graal")) {
-                    return CompilationLevel.Simple;
-                }
             }
         }
         return level;

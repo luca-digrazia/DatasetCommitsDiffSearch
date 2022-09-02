@@ -27,9 +27,6 @@ package org.graalvm.compiler.debug;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 /**
  * A utility for printing compiler debug and informational output to an output stream.
@@ -66,14 +63,14 @@ public class LogStream {
     });
 
     private LogStream() {
-        this.consumer = null;
+        this.ps = null;
         this.lineBuffer = null;
     }
 
     /**
      * The output stream to which this log stream writes.
      */
-    private final Consumer<? super String> consumer;
+    private final PrintStream ps;
 
     private final StringBuilder lineBuffer;
     private int indentationLevel;
@@ -81,13 +78,10 @@ public class LogStream {
     private boolean indentationDisabled;
 
     public final PrintStream out() {
-        if (consumer == null) {
+        if (ps == null) {
             return SINK_PS;
-        } else if (consumer instanceof PrintStreamConsumer) {
-            return ((PrintStreamConsumer) consumer).printStream;
-        } else {
-            return ((ForwardingConsumer) consumer).getPrintStream();
         }
+        return ps;
     }
 
     /**
@@ -101,28 +95,18 @@ public class LogStream {
      * @param os the underlying output stream to which prints are sent
      */
     public LogStream(OutputStream os) {
-        consumer = new PrintStreamConsumer(os instanceof PrintStream ? (PrintStream) os : new PrintStream(os));
+        ps = os instanceof PrintStream ? (PrintStream) os : new PrintStream(os);
         lineBuffer = new StringBuilder(100);
     }
 
     /**
-     * Creates a new log stream.
-     *
-     * @param sink the {@link Consumer} to which prints are sent
-     */
-    public LogStream(Consumer<? super String> sink) {
-        this.consumer = new ForwardingConsumer(this, sink);
-        lineBuffer = new StringBuilder(100);
-    }
-
-    /**
-     * Creates a new log stream that shares the same {@linkplain #consumer output stream} as a given
+     * Creates a new log stream that shares the same {@linkplain #ps output stream} as a given
      * {@link LogStream}.
      *
      * @param log a LogStream whose output stream is shared with this one
      */
     public LogStream(LogStream log) {
-        consumer = log.consumer;
+        ps = log.ps;
         lineBuffer = new StringBuilder(100);
     }
 
@@ -131,7 +115,7 @@ public class LogStream {
      * the current {@linkplain #indentationLevel()} level.
      */
     private void indent() {
-        if (consumer != null) {
+        if (ps != null) {
             if (!indentationDisabled && indentationLevel != 0) {
                 while (lineBuffer.length() < indentationLevel) {
                     lineBuffer.append(indentation);
@@ -141,11 +125,12 @@ public class LogStream {
     }
 
     private LogStream flushLine(boolean withNewline) {
-        if (consumer != null) {
+        if (ps != null) {
             if (withNewline) {
                 lineBuffer.append(LINE_SEPARATOR);
             }
-            consumer.accept(lineBuffer.toString());
+            ps.print(lineBuffer.toString());
+            ps.flush();
             lineBuffer.setLength(0);
         }
         return this;
@@ -156,8 +141,11 @@ public class LogStream {
      * and then flushing the underlying output stream.
      */
     public void flush() {
-        if (consumer != null) {
-            flushLine(false);
+        if (ps != null) {
+            if (lineBuffer.length() != 0) {
+                flushLine(false);
+            }
+            ps.flush();
         }
     }
 
@@ -223,7 +211,7 @@ public class LogStream {
      * @param filler the character used to pad the stream
      */
     public LogStream fillTo(int position, char filler) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             while (lineBuffer.length() < position) {
                 lineBuffer.append(filler);
@@ -239,7 +227,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream print(boolean b) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(b);
         }
@@ -254,7 +242,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream println(boolean b) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(b);
             return flushLine(true);
@@ -269,7 +257,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream print(char c) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(c);
             if (c == '\n') {
@@ -289,7 +277,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream println(char c) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(c);
             flushLine(true);
@@ -304,7 +292,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream print(int i) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(i);
         }
@@ -318,7 +306,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream println(int i) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(i);
             return flushLine(true);
@@ -333,7 +321,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream print(float f) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(f);
         }
@@ -348,7 +336,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream println(float f) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(f);
             return flushLine(true);
@@ -363,7 +351,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream print(long l) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(l);
         }
@@ -377,7 +365,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream println(long l) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(l);
             return flushLine(true);
@@ -392,7 +380,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream print(double d) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(d);
         }
@@ -407,7 +395,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream println(double d) {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             lineBuffer.append(d);
             return flushLine(true);
@@ -424,7 +412,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream print(String s) {
-        if (consumer != null) {
+        if (ps != null) {
             if (s == null) {
                 indent();
                 lineBuffer.append(s);
@@ -457,7 +445,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream println(String s) {
-        if (consumer != null) {
+        if (ps != null) {
             print(s);
             flushLine(true);
         }
@@ -472,7 +460,7 @@ public class LogStream {
      * @return this {@link LogStream} instance
      */
     public LogStream printf(String format, Object... args) {
-        if (consumer != null) {
+        if (ps != null) {
             print(String.format(format, args));
         }
         return this;
@@ -484,197 +472,10 @@ public class LogStream {
      * @return this {@code LogStream} instance
      */
     public LogStream println() {
-        if (consumer != null) {
+        if (ps != null) {
             indent();
             flushLine(true);
         }
         return this;
-    }
-
-    private static final class PrintStreamConsumer implements Consumer<String> {
-
-        private final PrintStream printStream;
-
-        PrintStreamConsumer(PrintStream printStream) {
-            this.printStream = Objects.requireNonNull(printStream, "PrintStream must be non null.");
-        }
-
-        @Override
-        public void accept(String t) {
-            printStream.print(t);
-            printStream.flush();
-        }
-    }
-
-    private static final class ForwardingConsumer implements Consumer<String> {
-
-        private final LogStream owner;
-        private final Consumer<? super String> delegate;
-        private final AtomicReference<PrintStream> printStreamRef;
-
-        ForwardingConsumer(LogStream owner, Consumer<? super String> delegate) {
-            this.owner = Objects.requireNonNull(owner, "Owner must be non null.");
-            this.delegate = Objects.requireNonNull(delegate, "Delegate must be non null.");
-            this.printStreamRef = new AtomicReference<>();
-        }
-
-        @Override
-        public void accept(String t) {
-            delegate.accept(t);
-        }
-
-        PrintStream getPrintStream() {
-            PrintStream res = printStreamRef.get();
-            if (res == null) {
-                res = new DelegatingPrintStream(owner);
-                if (!printStreamRef.compareAndSet(null, res)) {
-                    res = printStreamRef.get();
-                }
-            }
-            assert res != null : "PrintStream must exist";
-            return res;
-        }
-
-        private static final class DelegatingPrintStream extends PrintStream {
-
-            private final LogStream owner;
-
-            DelegatingPrintStream(LogStream owner) {
-                super(new OutputStream() {
-                    @Override
-                    public void write(int b) throws IOException {
-                        throw new IllegalStateException("Should not reach here.");
-                    }
-                });
-                this.owner = owner;
-            }
-
-            @Override
-            public PrintStream append(CharSequence csq, int start, int end) {
-                owner.print(csq == null ? "null" : csq.subSequence(start, end).toString());
-                return this;
-            }
-
-            @Override
-            public void print(Object obj) {
-                print(String.valueOf(obj));
-            }
-
-            @Override
-            public void print(String s) {
-                owner.print(s);
-            }
-
-            @Override
-            public void print(char[] s) {
-                for (int i = 0; i < s.length; i++) {
-                    owner.print(s[i]);
-                }
-            }
-
-            @Override
-            public void print(double d) {
-                owner.print(d);
-            }
-
-            @Override
-            public void print(float f) {
-                owner.print(f);
-            }
-
-            @Override
-            public void print(long l) {
-                owner.print(l);
-            }
-
-            @Override
-            public void print(int i) {
-                owner.print(i);
-            }
-
-            @Override
-            public void print(char c) {
-                owner.print(c);
-            }
-
-            @Override
-            public void print(boolean b) {
-                owner.print(b);
-            }
-
-            @Override
-            public void println(char[] s) {
-                print(s);
-                owner.println();
-            }
-
-            @Override
-            public void println(char c) {
-                print(c);
-                owner.println();
-            }
-
-            @Override
-            public void println(Object o) {
-                print(o);
-                owner.println();
-            }
-
-            @Override
-            public void println(String s) {
-                print(s);
-                owner.println();
-            }
-
-            @Override
-            public void println(double s) {
-                print(s);
-                owner.println();
-            }
-
-            @Override
-            public void println(float f) {
-                print(f);
-                owner.println();
-            }
-
-            @Override
-            public void println(long l) {
-                print(l);
-                owner.println();
-            }
-
-            @Override
-            public void println(int i) {
-                print(i);
-                owner.println();
-            }
-
-            @Override
-            public void println(boolean b) {
-                print(b);
-                owner.println();
-            }
-
-            @Override
-            public void println() {
-                owner.println();
-            }
-
-            @Override
-            public void write(byte[] buf, int off, int len) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void write(int b) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void flush() {
-                owner.flush();
-            }
-        }
     }
 }

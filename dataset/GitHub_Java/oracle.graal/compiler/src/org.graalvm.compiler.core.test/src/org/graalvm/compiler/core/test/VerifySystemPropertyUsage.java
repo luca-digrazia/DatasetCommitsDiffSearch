@@ -65,7 +65,7 @@ public class VerifySystemPropertyUsage extends VerifyPhase<PhaseContext> {
     }
 
     @Override
-    protected void verify(StructuredGraph graph, PhaseContext context) {
+    protected boolean verify(StructuredGraph graph, PhaseContext context) {
         MetaAccessProvider metaAccess = context.getMetaAccess();
         final ResolvedJavaType systemType = metaAccess.lookupJavaType(System.class);
         final ResolvedJavaType[] boxTypes = new ResolvedJavaType[BOXES.length];
@@ -76,26 +76,26 @@ public class VerifySystemPropertyUsage extends VerifyPhase<PhaseContext> {
         ResolvedJavaMethod caller = graph.method();
         String holderQualified = caller.format("%H");
         String holderUnqualified = caller.format("%h");
-        String packageName = holderQualified.equals(holderUnqualified) ? "" : holderQualified.substring(0, holderQualified.length() - holderUnqualified.length() - 1);
+        String packageName = holderQualified.substring(0, holderQualified.length() - holderUnqualified.length() - 1);
         if (packageName.startsWith("jdk.vm.ci")) {
             if (JVMCI_VERSION_MAJOR >= 0 && JVMCI_VERSION_MINOR > 56) {
                 // This JVMCI version should not use non-saved system properties
             } else {
                 // This JVMCI version still has some calls that need to be removed
-                return;
+                return true;
             }
         } else if (holderQualified.equals("org.graalvm.compiler.hotspot.JVMCIVersionCheck") && caller.getName().equals("main")) {
             // The main method in JVMCIVersionCheck is only called from the shell
-            return;
+            return true;
         } else if (packageName.startsWith("com.oracle.truffle") || packageName.startsWith("org.graalvm.polyglot")) {
             // Truffle and Polyglot do not depend on JVMCI so cannot use
             // Services.getSavedProperties()
-            return;
+            return true;
         } else if (packageName.startsWith("com.oracle.svm")) {
             // SVM must read system properties in:
             // * its JDK substitutions to mimic required JDK semantics
             // * native-image for config info
-            return;
+            return true;
         }
         for (MethodCallTargetNode t : graph.getNodes(MethodCallTargetNode.TYPE)) {
             ResolvedJavaMethod callee = t.targetMethod();
@@ -120,6 +120,7 @@ public class VerifySystemPropertyUsage extends VerifyPhase<PhaseContext> {
                 }
             }
         }
+        return true;
     }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,10 +50,6 @@ public class NodeSourcePosition extends BytecodePosition implements Iterable<Nod
     private final int hashCode;
     private final Marker marker;
     private final SourceLanguagePosition sourceLanguagePosition;
-
-    public Marker getMarker() {
-        return marker;
-    }
 
     /**
      * Remove marker frames.
@@ -230,7 +226,7 @@ public class NodeSourcePosition extends BytecodePosition implements Iterable<Nod
             assert !isSubstitution || marker == None;
             return new NodeSourcePosition(newSourceLanguagePosition, link, getMethod(), getBCI(), isSubstitution ? Substitution : None);
         } else {
-            return new NodeSourcePosition(newSourceLanguagePosition, getCaller().addCaller(getSourceLanguage(), link, isSubstitution), getMethod(), getBCI(), marker);
+            return new NodeSourcePosition(getCaller().addCaller(newSourceLanguagePosition, link, isSubstitution), getMethod(), getBCI(), marker);
         }
     }
 

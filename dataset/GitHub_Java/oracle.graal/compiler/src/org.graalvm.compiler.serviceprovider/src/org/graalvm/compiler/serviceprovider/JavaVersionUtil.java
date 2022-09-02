@@ -43,7 +43,17 @@ public final class JavaVersionUtil {
      * The integer value corresponding to the value of the {@code java.specification.version} system
      * property after any leading {@code "1."} has been stripped.
      */
-    public static final int JAVA_SPEC = getJavaSpecificationVersion();
+    public static final int JAVA_SPECIFICATION_VERSION = getJavaSpecificationVersion();
+
+    /**
+     * Determines if the Java runtime is version 8 or earlier.
+     */
+    public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
+
+    /**
+     * Determines if the Java runtime is version 11 or earlier.
+     */
+    public static final boolean Java11OrEarlier = JAVA_SPECIFICATION_VERSION <= 11;
 
     private JavaVersionUtil() {
     }
