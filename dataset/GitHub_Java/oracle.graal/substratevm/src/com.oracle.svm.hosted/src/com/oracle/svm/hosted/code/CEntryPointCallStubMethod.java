@@ -195,6 +195,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
         UniverseMetaAccess metaAccess = (UniverseMetaAccess) providers.getMetaAccess();
         NativeLibraries nativeLibraries = CEntryPointCallStubSupport.singleton().getNativeLibraries();
         HostedGraphKit kit = new HostedGraphKit(debug, providers, method);
+        StructuredGraph graph = kit.getGraph();
 
         JavaType[] parameterTypes = method.toParameterTypes();
         JavaType[] parameterLoadTypes = Arrays.copyOf(parameterTypes, parameterTypes.length);
@@ -234,7 +235,8 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
 
         inlinePrologueAndEpilogue(kit, prologueInvoke, epilogueInvoke, invoke.getStackKind());
 
-        return kit.finalizeGraph();
+        assert graph.verify();
+        return graph;
     }
 
     private StructuredGraph buildBuiltinGraph(DebugContext debug, ResolvedJavaMethod method, HostedProviders providers) {
@@ -313,7 +315,8 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
 
         kit.createReturn(invoke, universeTargetMethod.getSignature().getReturnKind());
 
-        return kit.finalizeGraph();
+        assert kit.getGraph().verify();
+        return kit.getGraph();
     }
 
     private EnumInfo[] adaptParameterTypes(HostedProviders providers, NativeLibraries nativeLibraries, HostedGraphKit kit,

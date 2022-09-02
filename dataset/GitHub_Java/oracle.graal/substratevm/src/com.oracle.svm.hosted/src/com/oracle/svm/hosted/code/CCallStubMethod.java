@@ -86,7 +86,8 @@ public abstract class CCallStubMethod extends CustomSubstitutionMethod {
         returnValue = adaptReturnValue(method, providers, nativeLibraries, kit, returnValue);
         kit.createReturn(returnValue, signature.getReturnKind());
 
-        return kit.finalizeGraph();
+        assert kit.getGraph().verify();
+        return kit.getGraph();
     }
 
     protected abstract ValueNode createTargetAddressNode(HostedGraphKit kit, HostedProviders providers, List<ValueNode> arguments);
