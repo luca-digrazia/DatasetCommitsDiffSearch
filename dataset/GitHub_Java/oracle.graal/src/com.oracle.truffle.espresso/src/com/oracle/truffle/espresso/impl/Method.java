@@ -422,10 +422,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     public boolean canOverride(Method other) {
-        if (other.isPrivate() || other.isStatic() || isPrivate() || isStatic()) {
+        if (isPrivate() || isStatic()) {
             return false;
         }
-        if (other.isPublic() || other.isProtected()) {
+        if (isPublic() || isProtected()) {
             return true;
         }
         return getDeclaringKlass().sameRuntimePackage(other.getDeclaringKlass());
@@ -1002,12 +1002,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         MethodVersion version = methodVersion;
         if (!version.getAssumption().isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            if (isRemovedByRedefition()) {
-                // for a removed method, we return the latest known
-                // method version in case active frames try to
-                // retrieve information for obsolete methods
-                return version;
-            }
             do {
                 version = methodVersion;
             } while (!version.getAssumption().isValid());
