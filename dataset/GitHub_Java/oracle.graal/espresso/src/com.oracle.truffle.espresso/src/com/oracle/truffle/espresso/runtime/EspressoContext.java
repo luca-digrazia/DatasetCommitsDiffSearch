@@ -167,7 +167,6 @@ public final class EspressoContext {
     public final boolean EnableSignals;
     private final String multiThreadingDisabled;
     public final boolean NativeAccessAllowed;
-    public final boolean EnableAgents;
 
     // Debug option
     public final com.oracle.truffle.espresso.jdwp.api.JDWPOptions JDWPOptions;
@@ -248,7 +247,6 @@ public final class EspressoContext {
         this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
         this.livenessAnalysisMode = env.getOptions().get(EspressoOptions.LivenessAnalysis);
         this.EnableManagement = env.getOptions().get(EspressoOptions.EnableManagement);
-        this.EnableAgents = getEnv().getOptions().get(EspressoOptions.EnableAgents);
         String multiThreadingDisabledReason = null;
         if (!env.getOptions().get(EspressoOptions.MultiThreaded)) {
             multiThreadingDisabledReason = "java.MultiThreaded option is set to false";
@@ -583,7 +581,7 @@ public final class EspressoContext {
         if (getEnv().getOptions().hasBeenSet(EspressoOptions.JavaAgent)) {
             agents.registerAgent("instrument", getEnv().getOptions().get(EspressoOptions.JavaAgent), false);
         }
-        if (EnableAgents) {
+        if (getEnv().getOptions().get(EspressoOptions.EnableAgents)) {
             agents.initialize();
         } else {
             if (!agents.isEmpty()) {
@@ -701,10 +699,7 @@ public final class EspressoContext {
     // region Agents
 
     public TruffleObject bindToAgent(Method method, String mangledName) {
-        if (EnableAgents) {
-            return agents.bind(method, mangledName);
-        }
-        return null;
+        return agents.bind(method, mangledName);
     }
 
     // endregion Agents
