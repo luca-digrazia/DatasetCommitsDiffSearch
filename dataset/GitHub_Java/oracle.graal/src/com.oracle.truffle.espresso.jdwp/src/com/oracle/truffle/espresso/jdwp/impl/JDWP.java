@@ -1638,7 +1638,7 @@ class JDWP {
         }
     }
 
-    public static void writeValue(byte tag, Object value, PacketStream reply, boolean tagged, JDWPContext context) {
+    private static void writeValue(byte tag, Object value, PacketStream reply, boolean tagged, JDWPContext context) {
         if (tagged) {
             reply.writeByte(tag);
         }
