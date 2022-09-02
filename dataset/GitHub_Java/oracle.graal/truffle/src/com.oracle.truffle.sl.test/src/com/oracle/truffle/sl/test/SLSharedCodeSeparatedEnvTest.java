@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -49,6 +49,8 @@ import java.io.IOException;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
+import org.graalvm.polyglot.PolyglotAccess;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -61,24 +63,32 @@ public class SLSharedCodeSeparatedEnvTest {
     private ByteArrayOutputStream osRuntime;
     private ByteArrayOutputStream os1;
     private ByteArrayOutputStream os2;
+    private Engine engine;
     private Context e1;
     private Context e2;
 
     @Before
     public void initializeEngines() {
         osRuntime = new ByteArrayOutputStream();
-        Engine engine = Engine.newBuilder().setOut(osRuntime).setErr(osRuntime).build();
+        engine = Engine.newBuilder().out(osRuntime).err(osRuntime).build();
 
         os1 = new ByteArrayOutputStream();
         os2 = new ByteArrayOutputStream();
 
         int instances = SLLanguage.counter;
         // @formatter:off
-        e1 = engine.getLanguage("sl").createContextBuilder().setOut(os1).build();
-        e1.exportSymbol("extra", 1);
-        e2 = engine.getLanguage("sl").createContextBuilder().setOut(os2).build();
-        e2.exportSymbol("extra", 2);
+        e1 = Context.newBuilder("sl").engine(engine).out(os1).allowPolyglotAccess(PolyglotAccess.ALL).build();
+        e1.getPolyglotBindings().putMember("extra", 1);
+        e2 = Context.newBuilder("sl").engine(engine).out(os2).allowPolyglotAccess(PolyglotAccess.ALL).build();
+        e2.getPolyglotBindings().putMember("extra", 2);
+        e1.initialize("sl");
+        e2.initialize("sl");
         assertEquals("One SLLanguage instance created", instances + 1, SLLanguage.counter);
+    }
+
+    @After
+    public void closeEngines() {
+        engine.close();
     }
 
     @Test
@@ -90,18 +100,18 @@ public class SLSharedCodeSeparatedEnvTest {
             "}";
         // @formatter:on
 
-        e1.eval(sayHello);
+        e1.eval("sl", sayHello);
         assertEquals("Ahoj1\n", os1.toString("UTF-8"));
         assertEquals("", os2.toString("UTF-8"));
 
-        e2.eval(sayHello);
+        e2.eval("sl", sayHello);
         assertEquals("Ahoj1\n", os1.toString("UTF-8"));
         assertEquals("Ahoj2\n", os2.toString("UTF-8"));
     }
 
     @Test
     public void instrumentsSeeOutputOfBoth() throws Exception {
-        Instrument outInstr = e2.getEngine().getInstrument("captureOutput");
+        Instrument outInstr = e2.getEngine().getInstruments().get("captureOutput");
         ByteArrayOutputStream outConsumer = outInstr.lookup(ByteArrayOutputStream.class);
         assertNotNull("Stream capturing is ready", outConsumer);
 
@@ -110,15 +120,15 @@ public class SLSharedCodeSeparatedEnvTest {
                         "}";
         // @formatter:on
 
-        e1.eval(sayHello);
+        e1.eval("sl", sayHello);
         assertEquals("Ahoj1\n", os1.toString("UTF-8"));
         assertEquals("", os2.toString("UTF-8"));
 
-        e2.eval(sayHello);
+        e2.eval("sl", sayHello);
         assertEquals("Ahoj1\n", os1.toString("UTF-8"));
         assertEquals("Ahoj2\n", os2.toString("UTF-8"));
 
-        e1.getEngine().close();
+        engine.close();
 
         assertEquals("Output of both contexts and instruments is capturable",
                         "initializingOutputCapture\n" +

@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.sl.builtins;
 
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -48,8 +47,8 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.sl.SLException;
 import com.oracle.truffle.sl.SLLanguage;
-import com.oracle.truffle.sl.nodes.util.SLSimplifyNode;
 import com.oracle.truffle.sl.runtime.SLContext;
 import com.oracle.truffle.sl.runtime.SLNull;
 
@@ -62,12 +61,13 @@ public abstract class SLImportBuiltin extends SLBuiltinNode {
     @Specialization
     public Object importSymbol(String symbol,
                     @CachedLibrary(limit = "3") InteropLibrary arrays,
-                    @Cached SLSimplifyNode normalize,
                     @CachedContext(SLLanguage.class) SLContext context) {
         try {
-            return normalize.executeConvert(arrays.readMember(context.getPolyglotBindings(), symbol));
+            return arrays.readMember(context.getPolyglotBindings(), symbol);
         } catch (UnsupportedMessageException | UnknownIdentifierException e) {
             return SLNull.SINGLETON;
+        } catch (SecurityException e) {
+            throw new SLException("No polyglot access allowed.", this);
         }
     }
 
