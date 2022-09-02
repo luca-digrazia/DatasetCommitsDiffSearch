@@ -273,21 +273,22 @@ public final class VMOperationControl {
     @Uninterruptible(reason = "Called from a non-Java thread.")
     public void enqueueFromNonJavaThread(NativeVMOperation operation, NativeVMOperationData data) {
         assert UseDedicatedVMOperationThread.getValue() && MultiThreaded.getValue();
-        assert CurrentIsolate.getCurrentThread().isNull() || StatusSupport.isStatusNative() || StatusSupport.isStatusSafepoint() : StatusSupport.getStatusString(CurrentIsolate.getCurrentThread());
+        assert CurrentIsolate.getCurrentThread().isNull() : "may only be called by non-Java threads";
         assert dedicatedVMOperationThread.isRunning() : "must not queue VM operations before the VM operation thread is started or after it is shut down";
 
-        mainQueues.enqueueUninterruptibly(operation, data);
+        mainQueues.enqueueAndBlockUninterruptible(operation, data);
+
+        assert operation.isFinished(data);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    protected static void markAsQueued(VMOperation operation, NativeVMOperationData data) {
-        operation.setFinished(data, false);
+    private static void markAsQueued(VMOperation operation, NativeVMOperationData data) {
         operation.setQueuingThread(data, CurrentIsolate.getCurrentThread());
+        operation.setFinished(data, false);
     }
 
     private static void markAsFinished(VMOperation operation, NativeVMOperationData data, VMCondition operationFinished) {
-        operation.setQueuingThread(data, WordFactory.nullPointer());
         operation.setFinished(data, true);
+        operation.setQueuingThread(data, WordFactory.nullPointer());
         if (operationFinished != null) {
             operationFinished.broadcast();
         }
@@ -470,12 +471,14 @@ public final class VMOperationControl {
         }
 
         @Uninterruptible(reason = "Called from a non-Java thread.")
-        void enqueueUninterruptibly(NativeVMOperation operation, NativeVMOperationData data) {
+        void enqueueAndBlockUninterruptible(NativeVMOperation operation, NativeVMOperationData data) {
             mutex.lockNoTransitionUnspecifiedOwner();
             try {
                 enqueue(operation, data);
                 operationQueued.broadcast();
-                // do not wait for the VM operation
+                while (!operation.isFinished(data)) {
+                    operationFinished.blockNoTransitionUnspecifiedOwner();
+                }
             } finally {
                 mutex.unlockNoTransitionUnspecifiedOwner();
             }
@@ -498,8 +501,10 @@ public final class VMOperationControl {
         }
 
         private void enqueue(VMOperation operation, NativeVMOperationData data) {
+            assertIsLocked();
+            markAsQueued(operation, data);
             if (operation instanceof JavaVMOperation) {
-                enqueue((JavaVMOperation) operation, data);
+                enqueue((JavaVMOperation) operation);
             } else if (operation instanceof NativeVMOperation) {
                 enqueue((NativeVMOperation) operation, data);
             } else {
@@ -510,7 +515,6 @@ public final class VMOperationControl {
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
         private void enqueue(NativeVMOperation operation, NativeVMOperationData data) {
             assert operation == data.getNativeVMOperation();
-            markAsQueued(operation, data);
             if (operation.getCausesSafepoint()) {
                 nativeSafepointOperations.push(data);
             } else {
@@ -518,8 +522,7 @@ public final class VMOperationControl {
             }
         }
 
-        private void enqueue(JavaVMOperation operation, NativeVMOperationData data) {
-            markAsQueued(operation, data);
+        private void enqueue(JavaVMOperation operation) {
             if (operation.getCausesSafepoint()) {
                 javaSafepointOperations.push(operation);
             } else {

@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,7 +24,9 @@
  */
 package com.oracle.svm.core.locks;
 
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
@@ -74,28 +78,45 @@ final class SingleThreadedVMLockFeature implements Feature {
 }
 
 final class SingleThreadedVMMutex extends VMMutex {
+    @Platforms(Platform.HOSTED_ONLY.class)
+    protected SingleThreadedVMMutex() {
+    }
 
     @Override
     public VMMutex lock() {
-        locked = true;
+        assertNotOwner("Recursive locking is not supported");
+        setOwnerToCurrentThread();
         return this;
     }
 
     @Override
-    @Uninterruptible(reason = "Called from uninterruptible code.")
-    public VMMutex lockNoTransition() {
-        return lock();
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true, callerMustBe = true)
+    public void lockNoTransition() {
+        assertNotOwner("Recursive locking is not supported");
+        setOwnerToCurrentThread();
     }
 
     @Override
-    @Uninterruptible(reason = "Called from uninterruptible code.")
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true, callerMustBe = true)
+    public void lockNoTransitionUnspecifiedOwner() {
+        setOwnerToUnspecified();
+    }
+
+    @Override
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public void unlock() {
-        locked = false;
+        clearCurrentThreadOwner();
+    }
+
+    @Override
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public void unlockNoTransitionUnspecifiedOwner() {
+        clearUnspecifiedOwner();
     }
 
     @Override
     public void unlockWithoutChecks() {
-        locked = false;
+        clearCurrentThreadOwner();
     }
 }
 
@@ -110,8 +131,15 @@ final class SingleThreadedVMCondition extends VMCondition {
         VMError.shouldNotReachHere("Cannot block in a single-threaded environment, because there is no other thread that could signal");
     }
 
+    @Uninterruptible(reason = "Called from uninterruptible code.", callerMustBe = true)
     @Override
     public void blockNoTransition() {
+        VMError.shouldNotReachHere("Cannot block in a single-threaded environment, because there is no other thread that could signal");
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", callerMustBe = true)
+    @Override
+    public void blockNoTransitionUnspecifiedOwner() {
         VMError.shouldNotReachHere("Cannot block in a single-threaded environment, because there is no other thread that could signal");
     }
 
@@ -121,6 +149,7 @@ final class SingleThreadedVMCondition extends VMCondition {
         return 0;
     }
 
+    @Uninterruptible(reason = "Called from uninterruptible code.", callerMustBe = true)
     @Override
     public long blockNoTransition(long nanos) {
         VMError.shouldNotReachHere("Cannot block in a single-threaded environment, because there is no other thread that could signal");
