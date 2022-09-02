@@ -41,7 +41,7 @@
 package org.graalvm.polyglot;
 
 import org.graalvm.polyglot.HostAccess.TargetMappingPrecedence;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueDispatch;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import java.math.BigDecimal;
@@ -117,7 +117,6 @@ import java.util.function.Function;
  * <li>{@link #hasIterator() Iterable}: This value {@link #getIterator() provides} an
  * {@link #isIterator() iterator} which can be used to {@link #getIteratorNextElement() iterate}
  * value elements. For example, Guest language arrays are iterable.
- * <li>{@link #hasHashEntries()} Hash Entries}: This value represents a map.
  * </ul>
  * <p>
  * In addition to the language agnostic types, the language specific type can be accessed using
@@ -154,10 +153,10 @@ import java.util.function.Function;
 public final class Value {
 
     final Object receiver;
-    final AbstractValueDispatch dispatch;
+    final AbstractValueImpl impl;
 
-    Value(AbstractValueDispatch dispatch, Object value) {
-        this.dispatch = dispatch;
+    Value(AbstractValueImpl impl, Object value) {
+        this.impl = impl;
         this.receiver = value;
     }
 
@@ -179,7 +178,7 @@ public final class Value {
      * @since 19.0 revised in 20.1
      */
     public Value getMetaObject() {
-        return dispatch.getMetaObject(receiver);
+        return impl.getMetaObject(receiver);
     }
 
     /**
@@ -206,7 +205,7 @@ public final class Value {
      * @since 20.1
      */
     public boolean isMetaObject() {
-        return dispatch.isMetaObject(receiver);
+        return impl.isMetaObject(receiver);
     }
 
     /**
@@ -222,7 +221,7 @@ public final class Value {
      * @since 20.1
      */
     public String getMetaQualifiedName() {
-        return dispatch.getMetaQualifiedName(receiver);
+        return impl.getMetaQualifiedName(receiver);
     }
 
     /**
@@ -236,7 +235,7 @@ public final class Value {
      * @since 20.1
      */
     public String getMetaSimpleName() {
-        return dispatch.getMetaSimpleName(receiver);
+        return impl.getMetaSimpleName(receiver);
     }
 
     /**
@@ -255,7 +254,7 @@ public final class Value {
      * @since 20.1
      */
     public boolean isMetaInstance(Object instance) {
-        return dispatch.isMetaInstance(receiver, instance);
+        return impl.isMetaInstance(receiver, instance);
     }
 
     /**
@@ -269,7 +268,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean hasArrayElements() {
-        return dispatch.hasArrayElements(receiver);
+        return impl.hasArrayElements(receiver);
     }
 
     /**
@@ -285,7 +284,7 @@ public final class Value {
      * @since 19.0
      */
     public Value getArrayElement(long index) {
-        return dispatch.getArrayElement(receiver, index);
+        return impl.getArrayElement(receiver, index);
     }
 
     /**
@@ -294,7 +293,6 @@ public final class Value {
      * described in {@link Context#asValue(Object)}.
      *
      * @throws ArrayIndexOutOfBoundsException if the array index does not exist.
-     * @throws ClassCastException if the provided value type is not allowed to be written.
      * @throws UnsupportedOperationException if the value does not have any
      *             {@link #hasArrayElements() array elements} or if the index exists but is not
      *             modifiable.
@@ -303,7 +301,7 @@ public final class Value {
      * @since 19.0
      */
     public void setArrayElement(long index, Object value) {
-        dispatch.setArrayElement(receiver, index, value);
+        impl.setArrayElement(receiver, index, value);
     }
 
     /**
@@ -319,7 +317,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean removeArrayElement(long index) {
-        return dispatch.removeArrayElement(receiver, index);
+        return impl.removeArrayElement(receiver, index);
     }
 
     /**
@@ -332,7 +330,7 @@ public final class Value {
      * @since 19.0
      */
     public long getArraySize() {
-        return dispatch.getArraySize(receiver);
+        return impl.getArraySize(receiver);
     }
 
     // region Buffer Methods
@@ -359,7 +357,7 @@ public final class Value {
      * @since 21.1
      */
     public boolean hasBufferElements() {
-        return dispatch.hasBufferElements(receiver);
+        return impl.hasBufferElements(receiver);
     }
 
     /**
@@ -378,7 +376,7 @@ public final class Value {
      * @since 21.1
      */
     public boolean isBufferWritable() throws UnsupportedOperationException {
-        return dispatch.isBufferWritable(receiver);
+        return impl.isBufferWritable(receiver);
     }
 
     /**
@@ -391,7 +389,7 @@ public final class Value {
      * @since 21.1
      */
     public long getBufferSize() throws UnsupportedOperationException {
-        return dispatch.getBufferSize(receiver);
+        return impl.getBufferSize(receiver);
     }
 
     /**
@@ -414,7 +412,7 @@ public final class Value {
      * @since 21.1
      */
     public byte readBufferByte(long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        return dispatch.readBufferByte(receiver, byteOffset);
+        return impl.readBufferByte(receiver, byteOffset);
     }
 
     /**
@@ -435,7 +433,7 @@ public final class Value {
      * @since 21.1
      */
     public void writeBufferByte(long byteOffset, byte value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        dispatch.writeBufferByte(receiver, byteOffset, value);
+        impl.writeBufferByte(receiver, byteOffset, value);
     }
 
     /**
@@ -462,7 +460,7 @@ public final class Value {
      * @since 21.1
      */
     public short readBufferShort(ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        return dispatch.readBufferShort(receiver, order, byteOffset);
+        return impl.readBufferShort(receiver, order, byteOffset);
     }
 
     /**
@@ -487,7 +485,7 @@ public final class Value {
      * @since 21.1
      */
     public void writeBufferShort(ByteOrder order, long byteOffset, short value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        dispatch.writeBufferShort(receiver, order, byteOffset, value);
+        impl.writeBufferShort(receiver, order, byteOffset, value);
     }
 
     /**
@@ -513,7 +511,7 @@ public final class Value {
      * @since 21.1
      */
     public int readBufferInt(ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        return dispatch.readBufferInt(receiver, order, byteOffset);
+        return impl.readBufferInt(receiver, order, byteOffset);
     }
 
     /**
@@ -538,7 +536,7 @@ public final class Value {
      * @since 21.1
      */
     public void writeBufferInt(ByteOrder order, long byteOffset, int value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        dispatch.writeBufferInt(receiver, order, byteOffset, value);
+        impl.writeBufferInt(receiver, order, byteOffset, value);
     }
 
     /**
@@ -564,7 +562,7 @@ public final class Value {
      * @since 21.1
      */
     public long readBufferLong(ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        return dispatch.readBufferLong(receiver, order, byteOffset);
+        return impl.readBufferLong(receiver, order, byteOffset);
     }
 
     /**
@@ -589,7 +587,7 @@ public final class Value {
      * @since 21.1
      */
     public void writeBufferLong(ByteOrder order, long byteOffset, long value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        dispatch.writeBufferLong(receiver, order, byteOffset, value);
+        impl.writeBufferLong(receiver, order, byteOffset, value);
     }
 
     /**
@@ -616,7 +614,7 @@ public final class Value {
      * @since 21.1
      */
     public float readBufferFloat(ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        return dispatch.readBufferFloat(receiver, order, byteOffset);
+        return impl.readBufferFloat(receiver, order, byteOffset);
     }
 
     /**
@@ -641,7 +639,7 @@ public final class Value {
      * @since 21.1
      */
     public void writeBufferFloat(ByteOrder order, long byteOffset, float value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        dispatch.writeBufferFloat(receiver, order, byteOffset, value);
+        impl.writeBufferFloat(receiver, order, byteOffset, value);
     }
 
     /**
@@ -668,7 +666,7 @@ public final class Value {
      * @since 21.1
      */
     public double readBufferDouble(ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        return dispatch.readBufferDouble(receiver, order, byteOffset);
+        return impl.readBufferDouble(receiver, order, byteOffset);
     }
 
     /**
@@ -693,7 +691,7 @@ public final class Value {
      * @since 21.1
      */
     public void writeBufferDouble(ByteOrder order, long byteOffset, double value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        dispatch.writeBufferDouble(receiver, order, byteOffset, value);
+        impl.writeBufferDouble(receiver, order, byteOffset, value);
     }
 
     // endregion
@@ -715,7 +713,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean hasMembers() {
-        return dispatch.hasMembers(receiver);
+        return impl.hasMembers(receiver);
     }
 
     /**
@@ -729,7 +727,7 @@ public final class Value {
      */
     public boolean hasMember(String identifier) {
         Objects.requireNonNull(identifier, "identifier");
-        return dispatch.hasMember(receiver, identifier);
+        return impl.hasMember(receiver, identifier);
     }
 
     /**
@@ -744,7 +742,7 @@ public final class Value {
      */
     public Value getMember(String identifier) {
         Objects.requireNonNull(identifier, "identifier");
-        return dispatch.getMember(receiver, identifier);
+        return impl.getMember(receiver, identifier);
     }
 
     /**
@@ -761,7 +759,7 @@ public final class Value {
      * @since 19.0
      */
     public Set<String> getMemberKeys() {
-        return dispatch.getMemberKeys(receiver);
+        return impl.getMemberKeys(receiver);
     }
 
     /**
@@ -772,14 +770,13 @@ public final class Value {
      * @throws UnsupportedOperationException if the value does not have any {@link #hasMembers()
      *             members}, the key does not exist and new members cannot be added, or the existing
      *             member is not modifiable.
-     * @throws IllegalArgumentException if the provided value type is not allowed to be written.
      * @throws PolyglotException if a guest language error occurred during execution.
      * @throws NullPointerException if the identifier is null.
      * @since 19.0
      */
     public void putMember(String identifier, Object value) {
         Objects.requireNonNull(identifier, "identifier");
-        dispatch.putMember(receiver, identifier, value);
+        impl.putMember(receiver, identifier, value);
     }
 
     /**
@@ -795,7 +792,7 @@ public final class Value {
      */
     public boolean removeMember(String identifier) {
         Objects.requireNonNull(identifier, "identifier");
-        return dispatch.removeMember(receiver, identifier);
+        return impl.removeMember(receiver, identifier);
     }
 
     // executable
@@ -808,7 +805,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean canExecute() {
-        return dispatch.canExecute(receiver);
+        return impl.canExecute(receiver);
     }
 
     /**
@@ -829,9 +826,9 @@ public final class Value {
     public Value execute(Object... arguments) {
         if (arguments.length == 0) {
             // specialized entry point for zero argument execute calls
-            return dispatch.execute(receiver);
+            return impl.execute(receiver);
         } else {
-            return dispatch.execute(receiver, arguments);
+            return impl.execute(receiver, arguments);
         }
     }
 
@@ -851,9 +848,9 @@ public final class Value {
     public void executeVoid(Object... arguments) {
         if (arguments.length == 0) {
             // specialized entry point for zero argument execute calls
-            dispatch.executeVoid(receiver);
+            impl.executeVoid(receiver);
         } else {
-            dispatch.executeVoid(receiver, arguments);
+            impl.executeVoid(receiver, arguments);
         }
     }
 
@@ -866,7 +863,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean canInstantiate() {
-        return dispatch.canInstantiate(receiver);
+        return impl.canInstantiate(receiver);
     }
 
     /**
@@ -883,7 +880,7 @@ public final class Value {
      */
     public Value newInstance(Object... arguments) {
         Objects.requireNonNull(arguments, "arguments");
-        return dispatch.newInstance(receiver, arguments);
+        return impl.newInstance(receiver, arguments);
     }
 
     /**
@@ -900,7 +897,7 @@ public final class Value {
      */
     public boolean canInvokeMember(String identifier) {
         Objects.requireNonNull(identifier, "identifier");
-        return dispatch.canInvoke(identifier, receiver);
+        return impl.canInvoke(identifier, receiver);
     }
 
     /**
@@ -922,9 +919,9 @@ public final class Value {
         Objects.requireNonNull(identifier, "identifier");
         if (arguments.length == 0) {
             // specialized entry point for zero argument invoke calls
-            return dispatch.invoke(receiver, identifier);
+            return impl.invoke(receiver, identifier);
         } else {
-            return dispatch.invoke(receiver, identifier, arguments);
+            return impl.invoke(receiver, identifier, arguments);
         }
     }
 
@@ -936,7 +933,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean isString() {
-        return dispatch.isString(receiver);
+        return impl.isString(receiver);
     }
 
     /**
@@ -949,7 +946,7 @@ public final class Value {
      * @since 19.0
      */
     public String asString() {
-        return dispatch.asString(receiver);
+        return impl.asString(receiver);
     }
 
     /**
@@ -962,7 +959,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean fitsInInt() {
-        return dispatch.fitsInInt(receiver);
+        return impl.fitsInInt(receiver);
     }
 
     /**
@@ -976,7 +973,7 @@ public final class Value {
      * @since 19.0
      */
     public int asInt() {
-        return dispatch.asInt(receiver);
+        return impl.asInt(receiver);
     }
 
     /**
@@ -988,7 +985,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean isBoolean() {
-        return dispatch.isBoolean(receiver);
+        return impl.isBoolean(receiver);
     }
 
     /**
@@ -1002,7 +999,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean asBoolean() {
-        return dispatch.asBoolean(receiver);
+        return impl.asBoolean(receiver);
     }
 
     /**
@@ -1016,7 +1013,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean isNumber() {
-        return dispatch.isNumber(receiver);
+        return impl.isNumber(receiver);
     }
 
     /**
@@ -1029,7 +1026,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean fitsInLong() {
-        return dispatch.fitsInLong(receiver);
+        return impl.fitsInLong(receiver);
     }
 
     /**
@@ -1043,7 +1040,7 @@ public final class Value {
      * @since 19.0
      */
     public long asLong() {
-        return dispatch.asLong(receiver);
+        return impl.asLong(receiver);
     }
 
     /**
@@ -1056,7 +1053,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean fitsInDouble() {
-        return dispatch.fitsInDouble(receiver);
+        return impl.fitsInDouble(receiver);
     }
 
     /**
@@ -1070,7 +1067,7 @@ public final class Value {
      * @since 19.0
      */
     public double asDouble() {
-        return dispatch.asDouble(receiver);
+        return impl.asDouble(receiver);
     }
 
     /**
@@ -1083,7 +1080,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean fitsInFloat() {
-        return dispatch.fitsInFloat(receiver);
+        return impl.fitsInFloat(receiver);
     }
 
     /**
@@ -1097,7 +1094,7 @@ public final class Value {
      * @since 19.0
      */
     public float asFloat() {
-        return dispatch.asFloat(receiver);
+        return impl.asFloat(receiver);
     }
 
     /**
@@ -1110,7 +1107,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean fitsInByte() {
-        return dispatch.fitsInByte(receiver);
+        return impl.fitsInByte(receiver);
     }
 
     /**
@@ -1124,7 +1121,7 @@ public final class Value {
      * @since 19.0
      */
     public byte asByte() {
-        return dispatch.asByte(receiver);
+        return impl.asByte(receiver);
     }
 
     /**
@@ -1137,7 +1134,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean fitsInShort() {
-        return dispatch.fitsInShort(receiver);
+        return impl.fitsInShort(receiver);
     }
 
     /**
@@ -1151,7 +1148,7 @@ public final class Value {
      * @since 19.0
      */
     public short asShort() {
-        return dispatch.asShort(receiver);
+        return impl.asShort(receiver);
     }
 
     /**
@@ -1162,7 +1159,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean isNull() {
-        return dispatch.isNull(receiver);
+        return impl.isNull(receiver);
     }
 
     /**
@@ -1174,7 +1171,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean isNativePointer() {
-        return dispatch.isNativePointer(receiver);
+        return impl.isNativePointer(receiver);
     }
 
     /**
@@ -1186,7 +1183,7 @@ public final class Value {
      * @since 19.0
      */
     public long asNativePointer() {
-        return dispatch.asNativePointer(receiver);
+        return impl.asNativePointer(receiver);
     }
 
     /**
@@ -1198,7 +1195,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean isHostObject() {
-        return dispatch.isHostObject(receiver);
+        return impl.isHostObject(receiver);
     }
 
     /**
@@ -1211,7 +1208,7 @@ public final class Value {
      */
     @SuppressWarnings("unchecked")
     public <T> T asHostObject() {
-        return (T) dispatch.asHostObject(receiver);
+        return (T) impl.asHostObject(receiver);
     }
 
     /**
@@ -1223,7 +1220,7 @@ public final class Value {
      * @since 19.0
      */
     public boolean isProxyObject() {
-        return dispatch.isProxyObject(receiver);
+        return impl.isProxyObject(receiver);
     }
 
     /**
@@ -1237,7 +1234,7 @@ public final class Value {
      */
     @SuppressWarnings("unchecked")
     public <T extends Proxy> T asProxyObject() {
-        return (T) dispatch.asProxyObject(receiver);
+        return (T) impl.asProxyObject(receiver);
     }
 
     /**
@@ -1291,14 +1288,12 @@ public final class Value {
      * target type mappings} specified in the {@link HostAccess} configuration with precedence
      * {@link TargetMappingPrecedence#LOW}.
      * <li><code>{@link Object}.class</code> is always supported. See section Object mapping rules.
-     * <li><code>{@link Map}.class</code> is supported if the value has {@link #hasHashEntries()}
-     * hash entries}, {@link #hasMembers() members} or {@link #hasArrayElements() array elements}.
-     * The returned map can be safely cast to Map<Object, Object>. For value with
-     * {@link #hasMembers() members} the key type is {@link String}. For value with
-     * {@link #hasArrayElements() array elements} the key type is {@link Long}. It is recommended to
-     * use {@link #as(TypeLiteral) type literals} to specify the expected collection component
-     * types. With type literals the value type can be restricted, for example to
-     * <code>Map<String, String></code>. If the raw <code>{@link Map}.class</code> or an Object
+     * <li><code>{@link Map}.class</code> is supported if the value has {@link #hasMembers()
+     * members} or {@link #hasArrayElements() array elements}. The returned map can be safely cast
+     * to Map<Object, Object>. The key type in such a case is either {@link String} or {@link Long}.
+     * It is recommended to use {@link #as(TypeLiteral) type literals} to specify the expected
+     * collection component types. With type literals the value type can be restricted, for example
+     * to <code>Map<String, String></code>. If the raw <code>{@link Map}.class</code> or an Object
      * component type is used, then the return types of the the list are subject to Object target
      * type mapping rules recursively.
      * <li><code>{@link List}.class</code> is supported if the value has {@link #hasArrayElements()
@@ -1369,27 +1364,18 @@ public final class Value {
      * assert context.eval("js", "42").as(Integer.class) == 42;
      * assert context.eval("js", "({foo:'bar'})").as(Map.class).get("foo").equals("bar");
      * assert context.eval("js", "[42]").as(List.class).get(0).equals(42);
-     * assert ((Map&lt;String, Object>) context.eval("js", "[{foo:'bar'}]").as(List.class).get(0)).get("foo").equals("bar");
+     * assert ((Map&lt;String, Object>)context.eval("js", "[{foo:'bar'}]").as(List.class).get(0)).get("foo").equals("bar");
      *
-     * &#64;FunctionalInterface
-     * interface IntFunction {
-     *     int foo(int value);
-     * }
+     * &#64;FunctionalInterface interface IntFunction { int foo(int value); }
      * assert context.eval("js", "(function(a){return a})").as(IntFunction.class).foo(42).asInt() == 42;
      *
-     * &#64;FunctionalInterface
-     * interface StringListFunction {
-     *     int foo(List&lt;String&gt; value);
-     * }
-     * assert context.eval("js", "(function(a){return a.length})").as(StringListFunction.class).foo(new String[]{"42"}).asInt() == 1;
+     * &#64;FunctionalInterface interface StringListFunction { int foo(List&lt;String&gt; value); }
+     * assert context.eval("js", "(function(a){return a.length})")
+     *               .as(StringListFunction.class).foo(new String[]{"42"}).asInt() == 1;
      *
-     * public abstract class AbstractClass {
-     *     public AbstractClass() {
-     *     }
-     *
-     *     int foo(int value);
-     * }
-     * assert context.eval("js", "({foo: function(a){return a}})").as(AbstractClass.class).foo(42).asInt() == 42;
+     * public abstract class AbstractClass { public AbstractClass() {} int foo(int value); }
+     * assert context.eval("js", "({foo: function(a){return a}})")
+     *               .as(AbstractClass.class).foo(42).asInt() == 42;
      * </pre>
      *
      * <h3>Object target type mapping</h3>
@@ -1411,11 +1397,6 @@ public final class Value {
      * any Number subclass including {@link BigInteger} or {@link BigDecimal}. It is recommended to
      * cast to {@link Number} and then convert to a Java primitive like with
      * {@link Number#longValue()}.
-     * <li>If the value has {@link #hasHashEntries() hash entries} then the result value will
-     * implement {@link Map}. The {@link Map#size() size} of the returned {@link Map} is equal to
-     * the {@link #getHashSize() hash entries count}. The returned value may also implement
-     * {@link Function} if the value can be {@link #canExecute() executed} or
-     * {@link #canInstantiate() instantiated}.
      * <li>If the value {@link #hasMembers() has members} then the result value will implement
      * {@link Map}. If this value {@link #hasMembers() has members} then all members are accessible
      * using {@link String} keys. The {@link Map#size() size} of the returned {@link Map} is equal
@@ -1495,7 +1476,7 @@ public final class Value {
         if (targetType == Value.class) {
             return (T) this;
         }
-        return dispatch.as(receiver, targetType);
+        return impl.as(receiver, targetType);
     }
 
     /**
@@ -1521,7 +1502,7 @@ public final class Value {
      */
     public <T> T as(TypeLiteral<T> targetType) {
         Objects.requireNonNull(targetType, "targetType");
-        return dispatch.as(receiver, targetType);
+        return impl.as(receiver, targetType);
     }
 
     /**
@@ -1535,7 +1516,7 @@ public final class Value {
      */
     @Override
     public String toString() {
-        return dispatch.toString(receiver);
+        return impl.toString(receiver);
     }
 
     /**
@@ -1545,7 +1526,7 @@ public final class Value {
      * @since 19.0
      */
     public SourceSection getSourceLocation() {
-        return dispatch.getSourceLocation(receiver);
+        return impl.getSourceLocation(receiver);
     }
 
     /**
@@ -1560,7 +1541,7 @@ public final class Value {
      * @since 19.2.0
      */
     public boolean isDate() {
-        return dispatch.isDate(receiver);
+        return impl.isDate(receiver);
     }
 
     /**
@@ -1575,7 +1556,7 @@ public final class Value {
      * @since 19.2.0
      */
     public LocalDate asDate() {
-        return dispatch.asDate(receiver);
+        return impl.asDate(receiver);
     }
 
     /**
@@ -1587,7 +1568,7 @@ public final class Value {
      * @since 19.2.0
      */
     public boolean isTime() {
-        return dispatch.isTime(receiver);
+        return impl.isTime(receiver);
     }
 
     /**
@@ -1602,7 +1583,7 @@ public final class Value {
      * @since 19.2.0
      */
     public LocalTime asTime() {
-        return dispatch.asTime(receiver);
+        return impl.asTime(receiver);
     }
 
     /**
@@ -1652,7 +1633,7 @@ public final class Value {
      * @since 19.2.0
      */
     public Instant asInstant() {
-        return dispatch.asInstant(receiver);
+        return impl.asInstant(receiver);
     }
 
     /**
@@ -1677,7 +1658,7 @@ public final class Value {
      * @since 19.2.0
      */
     public boolean isTimeZone() {
-        return dispatch.isTimeZone(receiver);
+        return impl.isTimeZone(receiver);
     }
 
     /**
@@ -1691,7 +1672,7 @@ public final class Value {
      * @since 19.2.0
      */
     public ZoneId asTimeZone() {
-        return dispatch.asTimeZone(receiver);
+        return impl.asTimeZone(receiver);
     }
 
     /**
@@ -1703,7 +1684,7 @@ public final class Value {
      * @since 19.2.0
      */
     public boolean isDuration() {
-        return dispatch.isDuration(receiver);
+        return impl.isDuration(receiver);
     }
 
     /**
@@ -1717,7 +1698,7 @@ public final class Value {
      * @since 19.2.0
      */
     public Duration asDuration() {
-        return dispatch.asDuration(receiver);
+        return impl.asDuration(receiver);
     }
 
     /**
@@ -1728,7 +1709,7 @@ public final class Value {
      * @since 19.3
      */
     public boolean isException() {
-        return dispatch.isException(receiver);
+        return impl.isException(receiver);
     }
 
     /**
@@ -1740,7 +1721,7 @@ public final class Value {
      * @since 19.3
      */
     public RuntimeException throwException() {
-        return dispatch.throwException(receiver);
+        return impl.throwException(receiver);
     }
 
     /**
@@ -1758,12 +1739,7 @@ public final class Value {
      * @since 19.3.0
      */
     public Context getContext() {
-        Context context = dispatch.getContext();
-        if (context != null && context.currentAPI != null) {
-            return context.currentAPI;
-        } else {
-            return context;
-        }
+        return impl.getContext();
     }
 
     /**
@@ -1779,7 +1755,7 @@ public final class Value {
         if (!(obj instanceof Value)) {
             return false;
         }
-        return dispatch.equalsImpl(receiver, ((Value) obj).receiver);
+        return impl.equalsImpl(receiver, ((Value) obj).receiver);
     }
 
     /**
@@ -1792,7 +1768,7 @@ public final class Value {
      */
     @Override
     public int hashCode() {
-        return dispatch.hashCodeImpl(receiver);
+        return impl.hashCodeImpl(receiver);
     }
 
     /**
@@ -1806,7 +1782,7 @@ public final class Value {
      * @since 21.1
      */
     public boolean hasIterator() {
-        return dispatch.hasIterator(receiver);
+        return impl.hasIterator(receiver);
     }
 
     /**
@@ -1821,7 +1797,7 @@ public final class Value {
      * @since 21.1
      */
     public Value getIterator() {
-        return dispatch.getIterator(receiver);
+        return impl.getIterator(receiver);
     }
 
     /**
@@ -1836,7 +1812,7 @@ public final class Value {
      * @since 21.1
      */
     public boolean isIterator() {
-        return dispatch.isIterator(receiver);
+        return impl.isIterator(receiver);
     }
 
     /**
@@ -1853,7 +1829,7 @@ public final class Value {
      * @since 21.1
      */
     public boolean hasIteratorNextElement() {
-        return dispatch.hasIteratorNextElement(receiver);
+        return impl.hasIteratorNextElement(receiver);
     }
 
     /**
@@ -1875,161 +1851,35 @@ public final class Value {
      * @since 21.1
      */
     public Value getIteratorNextElement() {
-        return dispatch.getIteratorNextElement(receiver);
+        return impl.getIteratorNextElement(receiver);
     }
 
-    /**
-     * Returns <code>true</code> if this polyglot value represents a map. In this case map entries
-     * can be accessed using {@link #getHashValue(Object)},
-     * {@link #getHashValueOrDefault(Object, Object)}, {@link #putHashEntry(Object, Object)},
-     * {@link #removeHashEntry(Object)}, {@link #getHashEntriesIterator()} and the map size can be
-     * queried using {@link #getHashSize()}.
-     *
-     * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 21.1
-     */
     public boolean hasHashEntries() {
-        return dispatch.hasHashEntries(receiver);
+        return impl.hasHashEntries(receiver);
     }
 
-    /**
-     * Returns the number of map entries for values with hash entries.
-     *
-     * @throws UnsupportedOperationException if the value does not have any
-     *             {@link #hasHashEntries()} hash entries}.
-     * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 21.1
-     */
-    public long getHashSize() throws UnsupportedOperationException {
-        return dispatch.getHashSize(receiver);
+    public long getHashSize() {
+        return impl.getHashSize(receiver);
     }
 
-    /**
-     * Returns {@code true} if mapping for the specified key exists. If the value has no
-     * {@link #hasHashEntries() hash entries} then {@link #hasHashEntry(Object)} returns
-     * {@code false}. The key is subject to polyglot value mapping rules as described in
-     * {@link Context#asValue(Object)}.
-     *
-     * @throws IllegalStateException if the context is already {@link Context#close() closed}.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 21.1
-     */
     public boolean hasHashEntry(Object key) {
-        return dispatch.hasHashEntry(receiver, key);
+        return impl.hasHashEntry(receiver, key);
     }
 
-    /**
-     * Returns the value for the specified key or {@code null} if the mapping for the specified key
-     * does not exist. The key is subject to polyglot value mapping rules as described in
-     * {@link Context#asValue(Object)}.
-     *
-     * @throws UnsupportedOperationException if the value has no {@link #hasHashEntries() hash
-     *             entries} or the mapping for given key exists but is not readable.
-     * @throws IllegalStateException if the context is already {@link Context#close() closed}.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 21.1
-     */
-    public Value getHashValue(Object key) throws UnsupportedOperationException {
-        return dispatch.getHashValue(receiver, key);
+    public Value getHashValue(Object key) throws IllegalArgumentException, UnsupportedOperationException {
+        return impl.getHashValue(receiver, key);
     }
 
-    /**
-     * Returns the value for the specified key or the default value if the mapping for the specified
-     * key does not exist or is not readable. The key and the default value are subject to polyglot
-     * value mapping rules as described in {@link Context#asValue(Object)}.
-     *
-     * @throws UnsupportedOperationException if the value has no {@link #hasHashEntries() hash
-     *             entries} at all.
-     * @throws IllegalStateException if the context is already {@link Context#close() closed}.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 21.1
-     */
-    public Value getHashValueOrDefault(Object key, Object defaultValue) throws UnsupportedOperationException {
-        return dispatch.getHashValueOrDefault(receiver, key, defaultValue);
-    }
-
-    /**
-     * Associates the specified value with the specified key. Both key and value are subject to
-     * polyglot value mapping rules as described in {@link Context#asValue(Object)}.
-     *
-     * @throws UnsupportedOperationException if the value does not have any {@link #hasHashEntries()
-     *             hash entries}, the mapping for specified key does not exist and new members
-     *             cannot be added, or the existing mapping for specified key is not modifiable.
-     * @throws IllegalArgumentException if the provided key type or value type is not allowed to be
-     *             written.
-     * @throws IllegalStateException if the context is already {@link Context#close() closed}.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 21.1
-     */
     public void putHashEntry(Object key, Object value) throws IllegalArgumentException, UnsupportedOperationException {
-        dispatch.putHashEntry(receiver, key, value);
+        impl.putHashEntry(receiver, key, value);
     }
 
-    /**
-     * Removes the mapping for a given key. Returns {@code true} if the mapping was successfully
-     * removed, {@code false} if mapping for a given key does not exist. The key is subject to
-     * polyglot value mapping rules as described in {@link Context#asValue(Object)}.
-     *
-     * @throws UnsupportedOperationException if the value does not have any {@link #hasHashEntries()
-     *             hash entries} or if mapping for specified key {@link #hasHashEntry(Object)
-     *             exists} but cannot be removed.
-     * @throws IllegalStateException if the context is already {@link Context#close() closed}.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 21.1
-     */
     public boolean removeHashEntry(Object key) throws UnsupportedOperationException {
-        return dispatch.removeHashEntry(receiver, key);
+        return impl.removeHashEntry(receiver, key);
     }
 
-    /**
-     * Creates a new hash entries iterator that allows read each map entry. The return value is
-     * always an {@link #isIterator() iterator} of {@link #hasArrayElements() array elements}. The
-     * first array element is a key, the second array element is an associated value. Even if the
-     * value array element is {@link #setArrayElement(long, Object) modifiable} writing to array may
-     * not update the mapping, always use {@link #putHashEntry(Object, Object)} to update the
-     * mapping.
-     *
-     * @throws UnsupportedOperationException if the value does not have any {@link #hasHashEntries()
-     *             hash entries}.
-     * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     *
-     * @since 21.1
-     */
     public Value getHashEntriesIterator() throws UnsupportedOperationException {
-        return dispatch.getHashEntriesIterator(receiver);
-    }
-
-    /**
-     * Creates a new hash keys iterator that allows read each map key. The return value is always an
-     * {@link #isIterator() iterator}.
-     *
-     * @throws UnsupportedOperationException if the value does not have any {@link #hasHashEntries()
-     *             hash entries}.
-     * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     *
-     * @since 21.1
-     */
-    public Value getHashKeysIterator() throws UnsupportedOperationException {
-        return dispatch.getHashKeysIterator(receiver);
-    }
-
-    /**
-     * Creates a new hash values iterator that allows read each map value. The return value is
-     * always an {@link #isIterator() iterator}.
-     *
-     * @throws UnsupportedOperationException if the value does not have any {@link #hasHashEntries()
-     *             hash entries}.
-     * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     *
-     * @since 21.1
-     */
-    public Value getHashValuesIterator() throws UnsupportedOperationException {
-        return dispatch.getHashValuesIterator(receiver);
+        return impl.getHashEntriesIterator(receiver);
     }
 
     /**

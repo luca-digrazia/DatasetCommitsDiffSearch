@@ -119,16 +119,6 @@ public final class TypeDescriptor {
      */
     public static final TypeDescriptor ITERATOR = new TypeDescriptor(new IteratorImpl(null));
 
-    /**
-     * Represents a hash map with any key type and any value type. Any hash map type, including
-     * those with specified key and value types, is assignable to this type. This hash map type is
-     * not assignable to any hash map type with specified key or value types.
-     *
-     * @see #isAssignable(org.graalvm.polyglot.tck.TypeDescriptor).
-     * @see #hash(TypeDescriptor, TypeDescriptor).
-     * @see Value#hasHashEntries()
-     * @since 21.1
-     */
     public static final TypeDescriptor HASH = new TypeDescriptor(new HashImpl(null, null));
 
     /**
@@ -619,107 +609,6 @@ public final class TypeDescriptor {
     }
 
     /**
-     * Creates a new type by removing the given type from this type. The type subtraction works in
-     * the following way:
-     * <ul>
-     * <li>If this type and the {@code toRemove} type represent the same types then no type is
-     * returned.</li>
-     * <li>If this type represents a {@link #isUnion() union} type the {@code toRemove} type is
-     * removed from the union type. When the {@code toRemove} type is also a union type then all
-     * types in the {@code toRemove} union type are removed.</li>
-     * <li>If this type represents an {@link #isIntersection() intersection} type the
-     * {@code toRemove} type is removed from the intersection type. When the {@code toRemove} type
-     * is also an intersection type then all types in the {@code toRemove} intersection type are
-     * removed.</li>
-     * <li>If this and {@code toRemove} types are parameterized types (array, iterable, iterator,
-     * hash) of the same kind the type parameter types are subtracted applying the same rules.</li>
-     * </ul>
-     * <p>
-     * Examples:
-     * <ul>
-     * <li>NUMBER.subtract(NUMBER) -> no type</li>
-     * <li>NUMBER.subtract(STRING) -> NUMBER</li>
-     * <li>UNION[NUMBER|STRING|OBJECT].subtract(NUMBER) -> UNION[STRING|OBJECT]</li>
-     * <li>UNION[NUMBER|STRING|OBJECT].subtract(UNION[NUMBER|STRING]) -> OBJECT</li>
-     * <li>INTERSECTION[NUMBER&STRING&OBJECT].subtract(NUMBER) -> INTERSECTION[STRING&OBJECT]</li>
-     * <li>INTERSECTION[NUMBER&STRING&OBJECT].subtract(INTERSECTION[NUMBER&STRING]) -> OBJECT</li>
-     * <li>ARRAY[UNION[NUMBER|STRING]].subtract(ARRAY[NUMBER]) -> ARRAY[STRING]</li>
-     * <li>ARRAY[INTERSECTION[NUMBER|STRING]].subtract(ARRAY[NUMBER]) -> ARRAY[STRING]</li>
-     * </ul>
-     * 
-     * @param toRemove the type to remove.
-     * @since 20.2
-     */
-    public TypeDescriptor subtract(TypeDescriptor toRemove) {
-        TypeDescriptorImpl res = subtractImpl(impl, toRemove.impl);
-        TypeDescriptor result = isPredefined(res);
-        return result != null ? result : new TypeDescriptor(res);
-    }
-
-    private static TypeDescriptorImpl subtractImpl(TypeDescriptorImpl originalType, TypeDescriptorImpl toRemove) {
-        if (CompositeTypeDescriptorImpl.class.isAssignableFrom(originalType.getClass())) {
-            Set<TypeDescriptorImpl> originalTypes = ((CompositeTypeDescriptorImpl) originalType).types;
-            Set<TypeDescriptorImpl> toRemoveTypes = originalType.getClass() == toRemove.getClass() ? ((CompositeTypeDescriptorImpl) toRemove).types : Collections.singleton(toRemove);
-            return ((CompositeTypeDescriptorImpl) originalType).create(subtractImpl(originalTypes, toRemoveTypes));
-        } else {
-            Set<TypeDescriptorImpl> reduced = subtractImpl(Collections.singleton(originalType), Collections.singleton(toRemove));
-            return reduced.isEmpty() ? NOTYPE.impl : reduced.iterator().next();
-        }
-    }
-
-    private static Set<TypeDescriptorImpl> subtractImpl(Set<TypeDescriptorImpl> originalTypes, Set<TypeDescriptorImpl> toRemove) {
-        Set<TypeDescriptorImpl> result = new HashSet<>(originalTypes);
-        Set<TypeDescriptorImpl> todo = new HashSet<>(toRemove);
-        // 1. Remove simple non parameterized non composite types
-        for (Iterator<TypeDescriptorImpl> it = todo.iterator(); it.hasNext();) {
-            if (result.remove(it.next())) {
-                it.remove();
-            }
-        }
-        if (todo.isEmpty()) {
-            return result;
-        }
-        // 2. Reduce composite and parameterized types
-        Map<Class<? extends TypeDescriptorImpl>, TypeDescriptorImpl> originalTypesByClz = new HashMap<>();
-        for (TypeDescriptorImpl td : result) {
-            originalTypesByClz.put(td.getClass(), td);
-        }
-        Map<Class<? extends TypeDescriptorImpl>, TypeDescriptorImpl> toRemoveByClz = new HashMap<>();
-        for (TypeDescriptorImpl td : todo) {
-            toRemoveByClz.put(td.getClass(), td);
-        }
-        for (Map.Entry<Class<? extends TypeDescriptorImpl>, TypeDescriptorImpl> typeDescriptorToRemove : toRemoveByClz.entrySet()) {
-            TypeDescriptorImpl typeDescriptorToReduce = originalTypesByClz.get(typeDescriptorToRemove.getKey());
-            if (typeDescriptorToReduce != null) {
-                if (ParameterizedTypeDescriptorImpl.class.isAssignableFrom(typeDescriptorToRemove.getKey())) {
-                    result.remove(typeDescriptorToReduce);
-                    result.add(subtractParameterized((ParameterizedTypeDescriptorImpl) typeDescriptorToReduce,
-                                    (ParameterizedTypeDescriptorImpl) typeDescriptorToRemove.getValue()));
-                } else if (CompositeTypeDescriptorImpl.class.isAssignableFrom(typeDescriptorToRemove.getKey())) {
-                    result.remove(typeDescriptorToReduce);
-                    result.add(subtractComposite((CompositeTypeDescriptorImpl) typeDescriptorToReduce,
-                                    (CompositeTypeDescriptorImpl) typeDescriptorToRemove.getValue()));
-                }
-            }
-        }
-        return result;
-    }
-
-    private static TypeDescriptorImpl subtractParameterized(ParameterizedTypeDescriptorImpl originalType, ParameterizedTypeDescriptorImpl toRemove) {
-        assert originalType.typeParameters.size() == toRemove.typeParameters.size() : "Incompatible parameterized types " + originalType + "," + toRemove;
-        List<TypeDescriptorImpl> reducedTypeParameters = new ArrayList<>();
-        for (int i = 0; i < originalType.typeParameters.size(); i++) {
-            reducedTypeParameters.add(subtractImpl(originalType.typeParameters.get(i), toRemove.typeParameters.get(i)));
-        }
-        return originalType.create(reducedTypeParameters);
-    }
-
-    private static TypeDescriptorImpl subtractComposite(CompositeTypeDescriptorImpl originalType, CompositeTypeDescriptorImpl toRemove) {
-        Set<TypeDescriptorImpl> reduced = subtractImpl(originalType.types, toRemove.types);
-        return originalType.create(reduced);
-    }
-
-    /**
      * Creates a new array type with given component type. To create a multi-dimensional array use
      * an array type as a component type.
      *
@@ -770,14 +659,6 @@ public final class TypeDescriptor {
         }
     }
 
-    /**
-     * Creates a new hash map type with given key type and value type.
-     *
-     * @param keyType the required key type.
-     * @param valueType the required value type.
-     * @return a new hash map type with given key and value types
-     * @since 21.1
-     */
     public static TypeDescriptor hash(TypeDescriptor keyType, TypeDescriptor valueType) {
         Objects.requireNonNull(keyType, "Key type must be non null");
         Objects.requireNonNull(valueType, "Value type must be non null");
@@ -1439,21 +1320,11 @@ public final class TypeDescriptor {
         }
     }
 
-    private abstract static class CompositeTypeDescriptorImpl extends TypeDescriptorImpl {
-
-        final Set<TypeDescriptorImpl> types;
-
-        CompositeTypeDescriptorImpl(Set<TypeDescriptorImpl> types) {
-            this.types = Collections.unmodifiableSet(types);
-        }
-
-        abstract TypeDescriptorImpl create(Set<TypeDescriptorImpl> subTypes);
-    }
-
-    private static final class IntersectionImpl extends CompositeTypeDescriptorImpl {
+    private static final class IntersectionImpl extends TypeDescriptorImpl {
+        private final Set<TypeDescriptorImpl> types;
 
         IntersectionImpl(Set<TypeDescriptorImpl> types) {
-            super(types);
+            this.types = Collections.unmodifiableSet(types);
         }
 
         @Override
@@ -1525,26 +1396,6 @@ public final class TypeDescriptor {
         }
 
         @Override
-        TypeDescriptorImpl create(Set<TypeDescriptorImpl> subTypes) {
-            switch (subTypes.size()) {
-                case 0:
-                    return NOTYPE.impl;
-                case 1:
-                    return subTypes.iterator().next();
-                default:
-                    Set<TypeDescriptorImpl> useSubTypes = new HashSet<>();
-                    for (TypeDescriptorImpl subType : subTypes) {
-                        if (subType.getClass() == IntersectionImpl.class) {
-                            useSubTypes.addAll(((IntersectionImpl) subType).types);
-                        } else {
-                            useSubTypes.add(subType);
-                        }
-                    }
-                    return new IntersectionImpl(useSubTypes);
-            }
-        }
-
-        @Override
         public int hashCode() {
             return types.hashCode();
         }
@@ -1566,10 +1417,11 @@ public final class TypeDescriptor {
         }
     }
 
-    private static final class UnionImpl extends CompositeTypeDescriptorImpl {
+    private static final class UnionImpl extends TypeDescriptorImpl {
+        private final Set<TypeDescriptorImpl> types;
 
         private UnionImpl(Set<TypeDescriptorImpl> types) {
-            super(types);
+            this.types = Collections.unmodifiableSet(types);
         }
 
         @Override
@@ -1622,26 +1474,6 @@ public final class TypeDescriptor {
                 return byUnion.types.equals(copy);
             } else {
                 return other.isAssignable(origType, byType);
-            }
-        }
-
-        @Override
-        TypeDescriptorImpl create(Set<TypeDescriptorImpl> subTypes) {
-            switch (subTypes.size()) {
-                case 0:
-                    return NOTYPE.impl;
-                case 1:
-                    return subTypes.iterator().next();
-                default:
-                    Set<TypeDescriptorImpl> useSubTypes = new HashSet<>();
-                    for (TypeDescriptorImpl subType : subTypes) {
-                        if (subType.getClass() == UnionImpl.class) {
-                            useSubTypes.addAll(((UnionImpl) subType).types);
-                        } else {
-                            useSubTypes.add(subType);
-                        }
-                    }
-                    return new UnionImpl(subTypes);
             }
         }
 
