@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -43,7 +43,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.oracle.truffle.llvm.tests.Platform;
-import com.oracle.truffle.llvm.tests.TestCaseCollector;
 import com.oracle.truffle.llvm.tests.pipe.CaptureNativeOutput;
 import com.oracle.truffle.llvm.tests.pipe.CaptureOutput;
 import com.oracle.truffle.llvm.tests.util.ProcessUtil;
@@ -69,7 +68,7 @@ public class BitcodeFormatTest {
 
     @ClassRule public static TruffleRunner.RunWithPolyglotRule runWithPolyglot = new TruffleRunner.RunWithPolyglotRule();
 
-    private static final Path testBase = Paths.get(TestOptions.getTestDistribution("SULONG_EMBEDDED_TEST_SUITES"), "bitcodeformat");
+    private static final Path testBase = Paths.get(TestOptions.TEST_SUITE_PATH, "bitcodeformat");
 
     protected Map<String, String> getContextOptions() {
         return Collections.emptyMap();
@@ -92,11 +91,10 @@ public class BitcodeFormatTest {
         assertEquals("Hello, World!\n", result.getStdOutput());
     }
 
-    @Parameters(name = "{1}")
+    @Parameters(name = "{0}")
     public static Collection<Object[]> data() throws IOException {
         Set<String> blacklist = getBlacklist();
-        Map<String, String> excluded = TestCaseCollector.getExcludedTests(BitcodeFormatTest.class);
-        Collection<Object[]> testlist = Files.list(testBase).map(f -> new Object[]{f, f.getFileName().toString(), excluded.get(f.getFileName().toString())}).collect(Collectors.toList());
+        Collection<Object[]> testlist = Files.list(testBase).map(f -> new Object[]{f.getFileName()}).collect(Collectors.toList());
         testlist.removeIf(t -> blacklist.contains(t[0].toString()));
         return testlist;
     }
@@ -112,19 +110,17 @@ public class BitcodeFormatTest {
         return blacklist;
     }
 
-    @Parameter(value = 0) public Path path;
-    @Parameter(value = 1) public String testName;
-    @Parameter(value = 2) public String exclusionReason;
+    @Parameter(0) public Path value;
 
     @Before
     public void checkOS() {
-        Assume.assumeTrue("Linux only test", !Platform.isDarwin() || !testName.contains("linux-link"));
-        Assume.assumeTrue("Darwin only test", Platform.isDarwin() || !testName.contains("darwin-link"));
+        Assume.assumeTrue("Linux only test", !Platform.isDarwin() || !value.toString().contains("linux-link"));
+        Assume.assumeTrue("Darwin only test", Platform.isDarwin() || !value.toString().contains("darwin-link"));
     }
 
     @Test
-    public void test() throws IOException {
-        runCandidate(path);
+    public void checkNumbers() throws IOException {
+        runCandidate(testBase.resolve(value));
     }
 
 }
