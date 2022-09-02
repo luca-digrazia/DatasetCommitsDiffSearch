@@ -1,26 +1,42 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.test.host;
 
@@ -51,7 +67,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.Callable;
 
 import org.hamcrest.CoreMatchers;
 import org.junit.Ignore;
@@ -140,6 +155,21 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
     }
 
     @Test
+    public void classToStatic() {
+        TruffleObject expected = asTruffleHostSymbol(Class.class);
+        TruffleObject computed = toJavaSymbol(asTruffleObject(Class.class));
+        assertEquals("Both host symbol objects are the same", expected, computed);
+    }
+
+    private static TruffleObject toJavaSymbol(TruffleObject obj) {
+        try {
+            return (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(), obj, "static");
+        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    @Test
     public void nullAsJavaObject() {
         TruffleObject nullObject = asTruffleObject(null);
         assertTrue(env.isHostObject(nullObject));
@@ -217,22 +247,6 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
         }
     }
 
-    static void assertThrowsExceptionWithCause(Callable<?> callable, Class<? extends Exception> exception) {
-        try {
-            callable.call();
-            fail("Expected " + exception.getSimpleName() + " but no exception was thrown");
-        } catch (Exception e) {
-            List<Class<? extends Throwable>> causes = new ArrayList<>();
-            for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-                if (cause.getClass() == exception) {
-                    return;
-                }
-                causes.add(cause.getClass());
-            }
-            fail("Expected " + exception.getSimpleName() + ", got " + causes);
-        }
-    }
-
     @Test
     public void readJavaLangObjectFields() throws InteropException {
         assertReadMethod("notify");
@@ -246,15 +260,15 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
 
     @Test
     public void invokeJavaLangObjectFields() throws InteropException {
-        Object string = ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, "toString");
+        Object string = ForeignAccess.sendInvoke(Message.INVOKE.createNode(), obj, "toString");
         assertTrue(string instanceof String && ((String) string).startsWith(Data.class.getName() + "@"));
-        Object clazz = ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, "getClass");
+        Object clazz = ForeignAccess.sendInvoke(Message.INVOKE.createNode(), obj, "getClass");
         assertTrue(clazz instanceof TruffleObject && env.asHostObject(clazz) == Data.class);
-        assertEquals(true, ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), obj, "equals", obj));
-        assertTrue(ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, "hashCode") instanceof Integer);
+        assertEquals(true, ForeignAccess.sendInvoke(Message.INVOKE.createNode(), obj, "equals", obj));
+        assertTrue(ForeignAccess.sendInvoke(Message.INVOKE.createNode(), obj, "hashCode") instanceof Integer);
 
         for (String m : new String[]{"notify", "notifyAll", "wait"}) {
-            assertThrowsExceptionWithCause(() -> ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), obj, m), IllegalMonitorStateException.class);
+            assertThrowsExceptionWithCause(() -> ForeignAccess.sendInvoke(Message.INVOKE.createNode(), obj, m), IllegalMonitorStateException.class);
         }
     }
 
@@ -339,7 +353,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
         assertTrue("Method can be executed " + readX, isExecutable);
 
         orig.writeX(10);
-        final Object value = message(Message.createExecute(0), readX);
+        final Object value = message(Message.EXECUTE, readX);
         assertEquals(10, value);
     }
 
@@ -355,7 +369,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
 
     @Test
     public void javaObjectsWrappedForTruffle() {
-        Object ret = message(Message.createInvoke(1), obj, "assertThis", obj);
+        Object ret = message(Message.INVOKE, obj, "assertThis", obj);
         assertTrue("Expecting truffle wrapper: " + ret, ret instanceof TruffleObject);
         assertEquals("Same as this obj", ret, obj);
     }
@@ -548,7 +562,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
         TruffleObject keysObject = ForeignAccess.sendKeys(Message.KEYS.createNode(), object);
         List<?> keyList = asJavaObject(List.class, keysObject);
         assertArrayEquals(new Object[]{"call"}, keyList.toArray());
-        assertEquals(42, ForeignAccess.sendExecute(Message.createExecute(1).createNode(), object, 42));
+        assertEquals(42, ForeignAccess.sendExecute(Message.EXECUTE.createNode(), object, 42));
     }
 
     @FunctionalInterface
@@ -695,44 +709,66 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
 
     @Test
     public void keyInfo() {
-        TruffleObject ipobj = new InternalPropertiesObject(-1, -1, 0, 0);
+        TruffleObject ipobj = new InternalPropertiesObject(-1, -1, -1, -1, 0, 0);
         int keyInfo = getKeyInfo(ipobj, "p1");
         assertTrue(KeyInfo.isReadable(keyInfo));
         assertTrue(KeyInfo.isWritable(keyInfo));
+        assertTrue(KeyInfo.hasReadSideEffects(keyInfo));
+        assertTrue(KeyInfo.hasWriteSideEffects(keyInfo));
         assertFalse(KeyInfo.isInvocable(keyInfo));
         assertFalse(KeyInfo.isInternal(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p6");
         assertTrue(KeyInfo.isReadable(keyInfo));
         assertTrue(KeyInfo.isWritable(keyInfo));
+        assertTrue(KeyInfo.hasReadSideEffects(keyInfo));
+        assertTrue(KeyInfo.hasWriteSideEffects(keyInfo));
         assertFalse(KeyInfo.isInvocable(keyInfo));
         assertFalse(KeyInfo.isInternal(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p7");
         assertEquals(0, keyInfo);
+        assertFalse(KeyInfo.isReadable(keyInfo));
+        assertFalse(KeyInfo.isWritable(keyInfo));
+        assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+        assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
+        assertFalse(KeyInfo.isInvocable(keyInfo));
+        assertFalse(KeyInfo.isInternal(keyInfo));
 
-        ipobj = new InternalPropertiesObject(0b0100010, 0b0100100, 0b0011000, 0);
+        ipobj = new InternalPropertiesObject(0b0100010, 0b0100100, 0b0110000, 0b0100010, 0b0011000, 0);
         keyInfo = getKeyInfo(ipobj, "p1");
         assertTrue(KeyInfo.isReadable(keyInfo));
         assertFalse(KeyInfo.isWritable(keyInfo));
+        assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+        assertTrue(KeyInfo.hasWriteSideEffects(keyInfo));
         assertFalse(KeyInfo.isInvocable(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p2");
         assertFalse(KeyInfo.isReadable(keyInfo));
         assertTrue(KeyInfo.isWritable(keyInfo));
+        assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+        assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
         assertFalse(KeyInfo.isInvocable(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p3");
         assertFalse(KeyInfo.isReadable(keyInfo));
         assertFalse(KeyInfo.isWritable(keyInfo));
+        assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+        assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
         assertTrue(KeyInfo.isInvocable(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p4");
         assertFalse(KeyInfo.isReadable(keyInfo));
         assertFalse(KeyInfo.isWritable(keyInfo));
+        assertTrue(KeyInfo.hasReadSideEffects(keyInfo));
+        assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
         assertTrue(KeyInfo.isInvocable(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p5");
         assertTrue(KeyInfo.isReadable(keyInfo));
         assertTrue(KeyInfo.isWritable(keyInfo));
+        assertTrue(KeyInfo.hasReadSideEffects(keyInfo));
+        assertTrue(KeyInfo.hasWriteSideEffects(keyInfo));
         assertFalse(KeyInfo.isInvocable(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p6");
         assertFalse(KeyInfo.isReadable(keyInfo));
         assertFalse(KeyInfo.isWritable(keyInfo));
+        assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+        assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
         assertFalse(KeyInfo.isInvocable(keyInfo));
         keyInfo = getKeyInfo(ipobj, "p7");
         assertEquals(0, keyInfo);
@@ -765,6 +801,8 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
             keyInfo = getKeyInfo(array, i);
             assertTrue(KeyInfo.isReadable(keyInfo));
             assertTrue(KeyInfo.isWritable(keyInfo));
+            assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+            assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
             assertFalse(KeyInfo.isInvocable(keyInfo));
             assertFalse(KeyInfo.isInternal(keyInfo));
             keyInfo = getKeyInfo(array, (long) i);
@@ -790,12 +828,16 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
         assertTrue(KeyInfo.isExisting(keyInfo));
         assertTrue(KeyInfo.isReadable(keyInfo));
         assertTrue(KeyInfo.isWritable(keyInfo));
+        assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+        assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
         assertFalse(KeyInfo.isInvocable(keyInfo));
         assertFalse(KeyInfo.isRemovable(keyInfo));
         keyInfo = getKeyInfo(d, "toString");
         assertTrue(KeyInfo.isExisting(keyInfo));
         assertTrue(KeyInfo.isReadable(keyInfo));
         assertFalse(KeyInfo.isWritable(keyInfo));
+        assertFalse(KeyInfo.hasReadSideEffects(keyInfo));
+        assertFalse(KeyInfo.hasWriteSideEffects(keyInfo));
         assertTrue(KeyInfo.isInvocable(keyInfo));
         assertFalse(KeyInfo.isRemovable(keyInfo));
     }
@@ -803,14 +845,14 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
     @Test
     public void testSystemMethod() throws InteropException {
         TruffleObject system = asTruffleHostSymbol(System.class);
-        Object value = ForeignAccess.sendInvoke(Message.createInvoke(1).createNode(), system, "getProperty", "file.separator");
+        Object value = ForeignAccess.sendInvoke(Message.INVOKE.createNode(), system, "getProperty", "file.separator");
         assertThat(value, CoreMatchers.instanceOf(String.class));
         assertThat(value, CoreMatchers.anyOf(CoreMatchers.equalTo("/"), CoreMatchers.equalTo("\\")));
 
         Object getProperty = ForeignAccess.sendRead(Message.READ.createNode(), system, "getProperty");
         assertThat(getProperty, CoreMatchers.instanceOf(TruffleObject.class));
         assertTrue("IS_EXECUTABLE", ForeignAccess.sendIsExecutable(Message.IS_EXECUTABLE.createNode(), (TruffleObject) getProperty));
-        value = ForeignAccess.sendExecute(Message.createExecute(1).createNode(), (TruffleObject) getProperty, "file.separator");
+        value = ForeignAccess.sendExecute(Message.EXECUTE.createNode(), (TruffleObject) getProperty, "file.separator");
         assertThat(value, CoreMatchers.instanceOf(String.class));
         assertThat(value, CoreMatchers.anyOf(CoreMatchers.equalTo("/"), CoreMatchers.equalTo("\\")));
     }
@@ -818,14 +860,14 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
     @Test
     public void testExecuteClass() {
         TruffleObject hashMapClass = asTruffleHostSymbol(HashMap.class);
-        assertThrowsExceptionWithCause(() -> ForeignAccess.sendExecute(Message.createExecute(0).createNode(), hashMapClass), UnsupportedMessageException.class);
+        assertThrowsExceptionWithCause(() -> ForeignAccess.sendExecute(Message.EXECUTE.createNode(), hashMapClass), UnsupportedMessageException.class);
         assertFalse("IS_EXECUTABLE", ForeignAccess.sendIsExecutable(Message.IS_EXECUTABLE.createNode(), hashMapClass));
     }
 
     @Test
     public void testNewClass() throws InteropException {
         TruffleObject hashMapClass = asTruffleHostSymbol(HashMap.class);
-        Object hashMap = ForeignAccess.sendNew(Message.createNew(0).createNode(), hashMapClass);
+        Object hashMap = ForeignAccess.sendNew(Message.NEW.createNode(), hashMapClass);
         assertThat(hashMap, CoreMatchers.instanceOf(TruffleObject.class));
         assertTrue(isJavaObject(HashMap.class, (TruffleObject) hashMap));
     }
@@ -833,7 +875,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
     @Test
     public void testNewObject() throws InteropException {
         TruffleObject objectClass = asTruffleHostSymbol(Object.class);
-        Object object = ForeignAccess.sendNew(Message.createNew(0).createNode(), objectClass);
+        Object object = ForeignAccess.sendNew(Message.NEW.createNode(), objectClass);
         assertThat(object, CoreMatchers.instanceOf(TruffleObject.class));
         assertTrue(isJavaObject(Object.class, (TruffleObject) object));
     }
@@ -841,7 +883,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
     @Test
     public void testNewArray() throws InteropException {
         TruffleObject longArrayClass = asTruffleHostSymbol(long[].class);
-        Object longArray = ForeignAccess.sendNew(Message.createNew(1).createNode(), longArrayClass, 4);
+        Object longArray = ForeignAccess.sendNew(Message.NEW.createNode(), longArrayClass, 4);
         assertThat(longArray, CoreMatchers.instanceOf(TruffleObject.class));
         assertTrue(isJavaObject(long[].class, (TruffleObject) longArray));
         assertEquals(4, message(Message.GET_SIZE, (TruffleObject) longArray));
@@ -851,7 +893,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
     public void testException() throws InteropException {
         TruffleObject iterator = asTruffleObject(Collections.emptyList().iterator());
         try {
-            ForeignAccess.sendInvoke(Message.createInvoke(0).createNode(), iterator, "next");
+            ForeignAccess.sendInvoke(Message.INVOKE.createNode(), iterator, "next");
             fail("expected an exception but none was thrown");
         } catch (InteropException ex) {
             throw ex;
@@ -865,7 +907,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
     public void testException2() throws InteropException {
         TruffleObject hashMapClass = asTruffleHostSymbol(HashMap.class);
         try {
-            ForeignAccess.sendNew(Message.createNew(0).createNode(), hashMapClass, -1);
+            ForeignAccess.sendNew(Message.NEW.createNode(), hashMapClass, -1);
             fail("expected an exception but none was thrown");
         } catch (InteropException ex) {
             throw ex;
@@ -875,7 +917,7 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
         }
 
         try {
-            ForeignAccess.sendNew(Message.createNew(0).createNode(), hashMapClass, "");
+            ForeignAccess.sendNew(Message.NEW.createNode(), hashMapClass, "");
             fail("expected an exception but none was thrown");
         } catch (UnsupportedTypeException ex) {
         }
@@ -1423,6 +1465,8 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
 
         private final int rBits;    // readable
         private final int wBits;    // writable
+        private final int rsBits;   // read side-effects
+        private final int wsBits;   // write side-effects
         private final int iBits;    // invocable
         private final int nBits;    // internal
 
@@ -1431,12 +1475,14 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
          *            non-internal.
          */
         InternalPropertiesObject(int iBits) {
-            this(-1, -1, -1, iBits);
+            this(-1, -1, -1, -1, -1, iBits);
         }
 
-        InternalPropertiesObject(int rBits, int wBits, int iBits, int nBits) {
+        InternalPropertiesObject(int rBits, int wBits, int rsBits, int wsBits, int iBits, int nBits) {
             this.rBits = rBits;
             this.wBits = wBits;
+            this.rsBits = rsBits;
+            this.wsBits = wsBits;
             this.iBits = iBits;
             this.nBits = nBits;
         }
@@ -1494,6 +1540,8 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
                     }
                     boolean readable = (receiver.rBits & (1 << d)) > 0;
                     boolean writable = (receiver.wBits & (1 << d)) > 0;
+                    boolean readSideEffects = (receiver.rsBits & (1 << d)) > 0;
+                    boolean writeSideEffects = (receiver.wsBits & (1 << d)) > 0;
                     boolean invocable = (receiver.iBits & (1 << d)) > 0;
                     boolean internal = (receiver.nBits & (1 << d)) > 0;
                     int info = KeyInfo.NONE;
@@ -1502,6 +1550,12 @@ public class HostInteropTest extends ProxyLanguageEnvTest {
                     }
                     if (writable) {
                         info |= KeyInfo.MODIFIABLE;
+                    }
+                    if (readSideEffects) {
+                        info |= KeyInfo.READ_SIDE_EFFECTS;
+                    }
+                    if (writeSideEffects) {
+                        info |= KeyInfo.WRITE_SIDE_EFFECTS;
                     }
                     if (invocable) {
                         info |= KeyInfo.INVOCABLE;
