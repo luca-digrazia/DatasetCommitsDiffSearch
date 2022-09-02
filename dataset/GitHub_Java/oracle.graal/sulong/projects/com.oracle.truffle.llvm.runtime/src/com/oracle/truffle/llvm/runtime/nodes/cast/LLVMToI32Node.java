@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.nodes.cast;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -56,7 +55,6 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 public abstract class LLVMToI32Node extends LLVMExpressionNode {
 
     @Specialization(guards = {"isForeignNumber(from, foreigns, interop)"})
-    @GenerateAOT.Exclude
     protected int doManagedPointer(LLVMManagedPointer from,
                     @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM,
                     @CachedLibrary(limit = "1") LLVMAsForeignLibrary foreigns,

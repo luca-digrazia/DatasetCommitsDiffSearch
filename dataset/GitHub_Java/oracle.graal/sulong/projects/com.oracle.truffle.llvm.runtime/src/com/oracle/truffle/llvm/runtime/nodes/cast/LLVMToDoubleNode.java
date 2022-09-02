@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.nodes.cast;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -66,7 +65,6 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
     }
 
     @Specialization(guards = {"isForeignNumber(from, foreigns, interop)"})
-    @GenerateAOT.Exclude
     protected double doManagedPointer(LLVMManagedPointer from,
                     @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM,
                     @Cached("createRecursive()") LLVMToDoubleNode recursive,
@@ -202,11 +200,6 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
         @Specialization
         protected double doDouble(double from) {
-            return from;
-        }
-
-        @Specialization
-        protected double doFloat(float from) {
             return from;
         }
 

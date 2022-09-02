@@ -30,6 +30,11 @@
 package com.oracle.truffle.llvm.runtime.interop;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -37,17 +42,22 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
+import com.oracle.truffle.llvm.spi.ReferenceLibrary;
 
 @ValueType
 @ExportLibrary(value = InteropLibrary.class, delegateTo = "foreign")
 @ExportLibrary(LLVMManagedReadLibrary.class)
 @ExportLibrary(LLVMManagedWriteLibrary.class)
+@ExportLibrary(ReferenceLibrary.class)
 @ExportLibrary(NativeTypeLibrary.class)
 @ExportLibrary(LLVMAsForeignLibrary.class)
 public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject {
@@ -56,6 +66,10 @@ public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject {
 
     public static LLVMTypedForeignObject create(Object foreign, LLVMInteropType.Structured type) {
         return new LLVMTypedForeignObject(foreign, type);
+    }
+
+    public static LLVMTypedForeignObject createUnknown(Object foreign) {
+        return new LLVMTypedForeignObject(foreign, null);
     }
 
     private LLVMTypedForeignObject(Object foreign, LLVMInteropType.Structured type) {
@@ -88,8 +102,8 @@ public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject {
 
     @ExportMessage
     @SuppressWarnings("static-method")
-    boolean hasNativeType(@CachedLibrary("this.foreign.delegate") NativeTypeLibrary nativeTypes) {
-        return foreign.hasNativeType(nativeTypes);
+    boolean hasNativeType() {
+        return true;
     }
 
     @ExportMessage
@@ -195,6 +209,42 @@ public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject {
         writeLibrary.writePointer(foreign, offset, value);
     }
 
+    @GenerateUncached
+    abstract static class CompareForeignNode extends LLVMNode {
+
+        protected abstract boolean execute(Object a, Object b);
+
+        @Specialization(guards = {"ctx.getEnv().isHostObject(a)", "ctx.getEnv().isHostObject(b)"})
+        static boolean doHostObjects(Object a, Object b,
+                        @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            Env env = ctx.getEnv();
+            return env.asHostObject(a) == env.asHostObject(b);
+        }
+
+        @Specialization(limit = "3", guards = "!ctx.getEnv().isHostObject(a) || !ctx.getEnv().isHostObject(b)")
+        static boolean doOther(Object a, Object b,
+                        @SuppressWarnings("unused") @CachedContext(LLVMLanguage.class) LLVMContext ctx,
+                        @CachedLibrary("a") ReferenceLibrary lib) {
+            return lib.isSame(a, b);
+        }
+    }
+
+    @ExportMessage
+    static class IsSame {
+
+        @Specialization
+        static boolean doTyped(LLVMTypedForeignObject receiver, LLVMTypedForeignObject other,
+                        @Cached CompareForeignNode compare) {
+            return compare.execute(receiver.getForeign(), other.foreign.delegate);
+        }
+
+        @Fallback
+        @SuppressWarnings("unused")
+        static boolean doGeneric(LLVMTypedForeignObject receiver, Object other) {
+            return false;
+        }
+    }
+
     @ExportMessage
     @SuppressWarnings("static-method")
     public boolean isForeign() {
@@ -209,11 +259,11 @@ public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject {
     @ExportLibrary(NativeTypeLibrary.class)
     @ExportLibrary(LLVMAsForeignLibrary.class)
     @ExportLibrary(value = InteropLibrary.class, delegateTo = "delegate")
-    public static class TypedForeignWrapper implements TruffleObject {
+    static class TypedForeignWrapper implements TruffleObject {
         final Object delegate;
         final LLVMInteropType.Structured type;
 
-        public TypedForeignWrapper(Object delegate, LLVMInteropType.Structured type) {
+        TypedForeignWrapper(Object delegate, LLVMInteropType.Structured type) {
             this.delegate = delegate;
             this.type = type;
         }
