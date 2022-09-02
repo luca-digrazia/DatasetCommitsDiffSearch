@@ -37,7 +37,6 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.ForceFixedRegisterReads;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicWord;
 import com.oracle.svm.core.locks.VMCondition;
@@ -137,12 +136,12 @@ public abstract class VMThreads {
 
     /** Is threading being torn down? */
     @Uninterruptible(reason = "Called from uninterruptible code during tear down.")
-    static boolean isTearingDown() {
+    public static boolean isTearingDown() {
         return initializationState.get() >= STATE_TEARING_DOWN;
     }
 
     /** Note that threading is being torn down. */
-    static void setTearingDown() {
+    protected static void setTearingDown() {
         initializationState.set(STATE_TEARING_DOWN);
     }
 
@@ -236,7 +235,7 @@ public abstract class VMThreads {
      * must be the first method called in every thread.
      */
     @Uninterruptible(reason = "Reason: Thread register not yet set up.")
-    public int attachThread(IsolateThread thread) {
+    public void attachThread(IsolateThread thread) {
         assert StatusSupport.isStatusCreated(thread) : "Status should be initialized on creation.";
         OSThreadIdTL.set(thread, getCurrentOSThreadId());
         OSThreadHandleTL.set(thread, getCurrentOSThreadHandle());
@@ -259,7 +258,6 @@ public abstract class VMThreads {
         } finally {
             VMThreads.THREAD_MUTEX.unlockNoTransitionUnspecifiedOwner();
         }
-        return CEntryPointErrors.NO_ERROR;
     }
 
     /**
@@ -421,31 +419,20 @@ public abstract class VMThreads {
     protected abstract OSThreadId getCurrentOSThreadId();
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public IsolateThread findIsolateThreadforCurrentOSThread(boolean inCrashHandler) {
+    public IsolateThread findIsolateThreadforCurrentOSThread() {
         OSThreadId osThreadId = getCurrentOSThreadId();
-
         /*
-         * This code can execute during the prologue of a crash handler for a thread that already
-         * owns the lock because it is the master of a safepoint. Trying to reacquire the lock here
-         * would result in deadlock.
+         * Accessing the VMThread list requires the lock, but locking must be without transitions
+         * because the IsolateThread is not set up yet.
          */
-        boolean needsLock = !(inCrashHandler && VMOperationControl.isFrozen());
-        if (needsLock) {
-            /*
-             * Accessing the VMThread list requires the lock, but locking must be without
-             * transitions because the IsolateThread is not set up yet.
-             */
-            VMThreads.THREAD_MUTEX.lockNoTransitionUnspecifiedOwner();
-        }
+        VMThreads.THREAD_MUTEX.lockNoTransitionUnspecifiedOwner();
         try {
             IsolateThread thread;
             for (thread = firstThreadUnsafe(); thread.isNonNull() && OSThreadIdTL.get(thread).notEqual(osThreadId); thread = nextThread(thread)) {
             }
             return thread;
         } finally {
-            if (needsLock) {
-                VMThreads.THREAD_MUTEX.unlockNoTransitionUnspecifiedOwner();
-            }
+            VMThreads.THREAD_MUTEX.unlockNoTransitionUnspecifiedOwner();
         }
     }
 

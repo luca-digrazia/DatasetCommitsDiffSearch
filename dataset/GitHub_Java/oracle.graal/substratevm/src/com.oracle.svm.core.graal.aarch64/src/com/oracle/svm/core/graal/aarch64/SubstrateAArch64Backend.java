@@ -39,11 +39,9 @@ import org.graalvm.compiler.asm.Assembler;
 import org.graalvm.compiler.asm.aarch64.AArch64Address;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler.PrefetchMode;
-import org.graalvm.compiler.asm.aarch64.AArch64Assembler.ShiftType;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler.ScratchRegister;
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.aarch64.AArch64AddressLoweringByUse;
 import org.graalvm.compiler.core.aarch64.AArch64ArithmeticLIRGenerator;
 import org.graalvm.compiler.core.aarch64.AArch64LIRGenerator;
 import org.graalvm.compiler.core.aarch64.AArch64LIRKindTool;
@@ -230,14 +228,12 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
         int startPos = masm.position();
         try (ScratchRegister scratch = masm.getScratchRegister()) {
             Register tempRegister = scratch.getRegister();
-            // Save PC
             masm.adr(tempRegister, 4); // Read PC + 4
             crb.recordIndirectCall(startPos, masm.position(), null, state);
             masm.str(64, tempRegister, AArch64Address.createPairUnscaledImmediateAddress(anchor, runtimeConfiguration.getJavaFrameAnchorLastIPOffset()));
-            // Save SP
-            masm.mov(64, tempRegister, sp);
-            masm.str(64, tempRegister, AArch64Address.createPairUnscaledImmediateAddress(anchor, runtimeConfiguration.getJavaFrameAnchorLastSPOffset()));
         }
+
+        masm.str(64, sp, AArch64Address.createPairUnscaledImmediateAddress(anchor, runtimeConfiguration.getJavaFrameAnchorLastSPOffset()));
 
         if (SubstrateOptions.MultiThreaded.getValue()) {
             /* Change the VMThread status from Java to Native. */
@@ -737,7 +733,7 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
             if (!constant.isCompressed()) { // the result is expected to be uncompressed
                 Register baseReg = getBaseRegister(crb);
                 assert !baseReg.equals(Register.None) || getShift() != 0 : "no compression in place";
-                masm.add(64, resultReg, baseReg, resultReg, ShiftType.LSL, getShift());
+                masm.loadAddress(resultReg, AArch64Address.createRegisterOffsetAddress(baseReg, resultReg, false), 8);
             }
         }
     }
@@ -811,7 +807,7 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
         }
     }
 
-    protected AArch64LIRKindTool createLirKindTool() {
+    protected LIRKindTool createLirKindTool() {
         return new SubstrateAArch64LIRKindTool();
     }
 
@@ -899,6 +895,6 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
 
     @Override
     public Phase newAddressLoweringPhase(CodeCacheProvider codeCache) {
-        return new AddressLoweringByUsePhase(new AArch64AddressLoweringByUse(createLirKindTool()));
+        return new AddressLoweringByUsePhase(new SubstrateAArch64AddressLowering());
     }
 }
