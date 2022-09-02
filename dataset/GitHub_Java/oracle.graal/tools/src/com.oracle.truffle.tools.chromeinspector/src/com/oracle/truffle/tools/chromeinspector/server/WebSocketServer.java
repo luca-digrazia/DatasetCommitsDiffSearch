@@ -52,18 +52,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLServerSocketFactory;
 
-import org.nanohttpd.protocols.http.ClientHandler;
-import org.nanohttpd.protocols.http.IHTTPSession;
-import org.nanohttpd.protocols.http.NanoHTTPD;
-import org.nanohttpd.protocols.http.content.ContentType;
-import org.nanohttpd.protocols.http.request.Method;
-import org.nanohttpd.protocols.http.response.Response;
-import org.nanohttpd.protocols.http.response.Status;
-import org.nanohttpd.protocols.websockets.CloseCode;
-import org.nanohttpd.protocols.websockets.NanoWSD;
-import org.nanohttpd.protocols.websockets.WebSocket;
-import org.nanohttpd.protocols.websockets.WebSocketFrame;
-import org.nanohttpd.util.IHandler;
+import fi.iki.elonen.NanoHTTPD;
+import fi.iki.elonen.NanoWSD;
 
 import org.graalvm.polyglot.io.MessageEndpoint;
 
@@ -90,7 +80,6 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
     private WebSocketServer(InetSocketAddress isa) {
         super(isa.getHostName(), isa.getPort());
         this.port = isa.getPort();
-        addHTTPInterceptor(new JSONHandler());
     }
 
     public static WebSocketServer get(InetSocketAddress isa, String path, InspectorExecutionContext context, boolean debugBrk,
@@ -113,12 +102,8 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
                 startServer = true;
                 SERVERS.put(isa, wss);
             }
-            if (wss.sessions.containsKey(path)) {
-                // We have a session with this path already
-                throw new IOException("Inspector session with the same path exists already on " + isa.getHostString() + ":" + isa.getPort());
-            }
-            wss.sessions.put(path, new ServerPathSession(context, initialSession, debugBrk, connectionWatcher));
         }
+        wss.sessions.put(path, new ServerPathSession(context, initialSession, debugBrk, connectionWatcher));
         if (startServer) {
             wss.start(Integer.MAX_VALUE);
         }
@@ -154,51 +139,48 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         }
     }
 
-    private class JSONHandler implements IHandler<IHTTPSession, Response> {
-
-        @Override
-        public Response handle(IHTTPSession session) {
-            if (Method.GET == session.getMethod()) {
-                String uri = session.getUri();
-                String responseJson = null;
-                if ("/json/version".equals(uri)) {
-                    JSONObject version = new JSONObject();
-                    version.put("Browser", "GraalVM");
-                    version.put("Protocol-Version", "1.2");
-                    responseJson = version.toString();
-                }
-                if ("/json".equals(uri)) {
-                    JSONArray json = new JSONArray();
-                    for (String path : sessions.keySet()) {
-                        JSONObject info = new JSONObject();
-                        info.put("description", "GraalVM");
-                        info.put("faviconUrl", "https://assets-cdn.github.com/images/icons/emoji/unicode/1f680.png");
-                        String ws = getHostname() + ":" + getListeningPort() + path;
-                        info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/js_app.html?ws=" + ws);
-                        info.put("id", path.substring(1));
-                        info.put("title", "GraalVM");
-                        info.put("type", "node");
-                        info.put("webSocketDebuggerUrl", "ws://" + ws);
-                        json.put(info);
-                    }
-                    responseJson = json.toString();
-                }
-                if (responseJson != null) {
-                    Response response = Response.newFixedLengthResponse(Status.OK,
-                                    "application/json; charset=UTF-8",
-                                    responseJson);
-                    response.addHeader("Cache-Control", "no-cache,no-store,must-revalidate");
-                    response.addHeader("Pragma", "no-cache");
-                    response.addHeader("X-Content-Type-Options", "nosniff");
-                    return response;
-                }
+    @Override
+    public Response serveHttp(IHTTPSession session) {
+        if (Method.GET == session.getMethod()) {
+            String uri = session.getUri();
+            String responseJson = null;
+            if ("/json/version".equals(uri)) {
+                JSONObject version = new JSONObject();
+                version.put("Browser", "GraalVM");
+                version.put("Protocol-Version", "1.2");
+                responseJson = version.toString();
             }
-            return null;
+            if ("/json".equals(uri)) {
+                JSONArray json = new JSONArray();
+                for (String path : sessions.keySet()) {
+                    JSONObject info = new JSONObject();
+                    info.put("description", "GraalVM");
+                    info.put("faviconUrl", "https://assets-cdn.github.com/images/icons/emoji/unicode/1f680.png");
+                    String ws = getHostname() + ":" + getListeningPort() + path;
+                    info.put("devtoolsFrontendUrl", "chrome-devtools://devtools/bundled/js_app.html?ws=" + ws);
+                    info.put("id", path.substring(1));
+                    info.put("title", "GraalVM");
+                    info.put("type", "node");
+                    info.put("webSocketDebuggerUrl", "ws://" + ws);
+                    json.put(info);
+                }
+                responseJson = json.toString();
+            }
+            if (responseJson != null) {
+                Response response = NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK,
+                                "application/json; charset=UTF-8",
+                                responseJson);
+                response.addHeader("Cache-Control", "no-cache,no-store,must-revalidate");
+                response.addHeader("Pragma", "no-cache");
+                response.addHeader("X-Content-Type-Options", "nosniff");
+                return response;
+            }
         }
+        return super.serveHttp(session);
     }
 
     @Override
-    protected WebSocket openWebSocket(IHTTPSession handshake) {
+    protected NanoWSD.WebSocket openWebSocket(NanoHTTPD.IHTTPSession handshake) {
         String descriptor = handshake.getUri();
         ServerPathSession session;
         session = sessions.get(descriptor);
@@ -233,37 +215,23 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
                 pbInputStream.unread(buf);
             }
             if (!"GET".equals(text)) {
-                return new ClientHandler(this, pbInputStream, finalAccept) {
-                    @Override
-                    public void run() {
-                        try (OutputStream outputStream = finalAccept.getOutputStream()) {
-                            ContentType contentType = new ContentType(NanoHTTPD.MIME_PLAINTEXT);
-                            PrintWriter pw = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream, contentType.getEncoding())), false);
-                            pw.append("HTTP/1.1 ").append(Status.BAD_REQUEST.getDescription()).append(" \r\n");
-                            String mimeType = contentType.getContentTypeHeader();
-                            if (mimeType != null) {
-                                pw.append("Content-Type: ").append(mimeType).append("\r\n");
-                            }
-                            pw.append("\r\n");
-                            pw.append("WebSockets request was expected");
-                            pw.flush();
-                        } catch (IOException ex) {
-                            // The handler is not associated with any particular session,
-                            // log to some of the sessions:
-                            Iterator<ServerPathSession> sessionIterator = sessions.values().iterator();
-                            if (sessionIterator.hasNext()) {
-                                sessionIterator.next().context.logException(ex);
-                            }
-                        } finally {
-                            NanoHTTPD.safeClose(pbInputStream);
-                            NanoHTTPD.safeClose(finalAccept);
-                        }
+                try (OutputStream outputStream = finalAccept.getOutputStream()) {
+                    ContentType contentType = new ContentType(NanoHTTPD.MIME_PLAINTEXT);
+                    PrintWriter pw = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream, contentType.getEncoding())), false);
+                    pw.append("HTTP/1.1 ").append(Response.Status.BAD_REQUEST.getDescription()).append(" \r\n");
+                    String mimeType = contentType.getContentTypeHeader();
+                    if (mimeType != null) {
+                        pw.append("Content-Type: ").append(mimeType).append("\r\n");
                     }
-                };
+                    pw.append("\r\n");
+                    pw.append("WebSockets request was expected");
+                    pw.flush();
+                }
+                return null;
             }
         } catch (IOException ex) {
         }
-        return new ClientHandler(this, pbInputStream, finalAccept);
+        return new ClientHandler(pbInputStream, finalAccept);
     }
 
     @Override
@@ -285,7 +253,7 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         if (sps != null) {
             InspectWebSocket iws = sps.activeWS;
             if (iws != null) {
-                iws.close(CloseCode.GoingAway, "", false);
+                iws.close(WebSocketFrame.CloseCode.GoingAway, "", false);
             }
         }
         if (sessions.isEmpty()) {
@@ -350,13 +318,13 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         }
     }
 
-    private class InspectWebSocket extends WebSocket {
+    private class InspectWebSocket extends NanoWSD.WebSocket {
 
         private final String descriptor;
         private final InspectServerSession iss;
         private final ConnectionWatcher connectionWatcher;
 
-        InspectWebSocket(IHTTPSession handshake, InspectServerSession iss,
+        InspectWebSocket(NanoHTTPD.IHTTPSession handshake, InspectServerSession iss,
                         ConnectionWatcher connectionWatcher) {
             super(handshake);
             this.descriptor = handshake.getUri();
@@ -390,13 +358,13 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
 
                 @Override
                 public void sendClose() throws IOException {
-                    close(CloseCode.NormalClosure, "", true);
+                    close(WebSocketFrame.CloseCode.NormalClosure, "", true);
                 }
             });
         }
 
         @Override
-        public void onClose(CloseCode code, String reason, boolean initiatedByRemote) {
+        public void onClose(NanoWSD.WebSocketFrame.CloseCode code, String reason, boolean initiatedByRemote) {
             iss.context.logMessage("CLIENT web socket connection closed.", "");
             connectionWatcher.notifyClosing();
             ServerPathSession sps = sessions.get(descriptor);
@@ -407,7 +375,7 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         }
 
         @Override
-        public void close(CloseCode code, String reason, boolean initiatedByRemote) throws IOException {
+        public void close(WebSocketFrame.CloseCode code, String reason, boolean initiatedByRemote) throws IOException {
             try {
                 super.close(code, reason, initiatedByRemote);
             } catch (SocketException ex) {
@@ -416,14 +384,14 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         }
 
         @Override
-        public void onMessage(WebSocketFrame frame) {
+        public void onMessage(NanoWSD.WebSocketFrame frame) {
             String message = frame.getTextPayload();
             iss.context.logMessage("CLIENT: ", message);
             iss.sendText(message);
         }
 
         @Override
-        protected void onPong(WebSocketFrame pong) {
+        protected void onPong(NanoWSD.WebSocketFrame pong) {
             iss.context.logMessage("CLIENT PONG: ", pong);
         }
 
@@ -434,12 +402,12 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
 
     }
 
-    private class ClosedWebSocket extends WebSocket {
+    private class ClosedWebSocket extends NanoWSD.WebSocket {
 
-        ClosedWebSocket(IHTTPSession handshakeRequest) {
+        ClosedWebSocket(NanoHTTPD.IHTTPSession handshakeRequest) {
             super(handshakeRequest);
             try {
-                close(CloseCode.UnsupportedData, "Bad path.", false);
+                close(WebSocketFrame.CloseCode.UnsupportedData, "Bad path.", false);
             } catch (IOException ioex) {
             }
         }
@@ -449,7 +417,7 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         }
 
         @Override
-        protected void onClose(CloseCode cc, String string, boolean bln) {
+        protected void onClose(WebSocketFrame.CloseCode cc, String string, boolean bln) {
         }
 
         @Override
