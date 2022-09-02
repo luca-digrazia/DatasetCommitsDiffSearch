@@ -50,7 +50,7 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo(cycles = CYCLES_2, size = SIZE_2, allowedUsageTypes = {InputType.Memory, InputType.Value})
-public final class UnboxNode extends AbstractBoxingNode implements Virtualizable, Lowerable, Canonicalizable.Unary<ValueNode> {
+public final class UnboxNode extends AbstractBoxNode implements Virtualizable, Lowerable, Canonicalizable.Unary<ValueNode> {
 
     public static final NodeClass<UnboxNode> TYPE = NodeClass.create(UnboxNode.class);
 
@@ -58,20 +58,12 @@ public final class UnboxNode extends AbstractBoxingNode implements Virtualizable
         super(TYPE, value, boxingKind, StampFactory.forKind(boxingKind.getStackKind()), location);
     }
 
-    public UnboxNode(ValueNode value, JavaKind boxingKind, MetaAccessProvider metaAccess) {
-        super(TYPE, value, boxingKind, StampFactory.forKind(boxingKind.getStackKind()), new FieldLocationIdentity(getValueField(getResultType(metaAccess, boxingKind))));
-    }
-
-    private static ResolvedJavaType getResultType(MetaAccessProvider metaAccess, JavaKind boxingKind) {
-        return metaAccess.lookupJavaType(boxingKind.toBoxedJavaClass());
-    }
-
     public static ValueNode create(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ValueNode value, JavaKind boxingKind) {
         ValueNode synonym = findSynonym(metaAccess, constantReflection, value, boxingKind);
         if (synonym != null) {
             return synonym;
         }
-        return new UnboxNode(value, boxingKind, metaAccess);
+        return new UnboxNode(value, boxingKind, AbstractBoxNode.createLocationIdentity(metaAccess, boxingKind));
     }
 
     @Override

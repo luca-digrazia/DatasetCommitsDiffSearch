@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ import static org.graalvm.compiler.core.common.GraalOptions.EscapeAnalysisIterat
 import static org.graalvm.compiler.core.common.GraalOptions.EscapeAnalyzeOnly;
 
 import org.graalvm.collections.EconomicSet;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
@@ -54,15 +53,6 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
 
     private final boolean readElimination;
     private final BasePhase<CoreProviders> cleanupPhase;
-
-    static class DisablePartialEvaluationException extends RuntimeException {
-
-        private static final long serialVersionUID = 1;
-
-        DisablePartialEvaluationException(String msg) {
-            super(msg);
-        }
-    }
 
     public PartialEscapePhase(boolean iterative, CanonicalizerPhase canonicalizer, OptionValues options) {
         this(iterative, Options.OptEarlyReadElimination.getValue(options), canonicalizer, null, options);
@@ -95,14 +85,10 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
 
     @Override
     protected void run(StructuredGraph graph, CoreProviders context) {
-        try {
-            if (VirtualUtil.matches(graph, EscapeAnalyzeOnly.getValue(graph.getOptions()))) {
-                if (readElimination || graph.hasVirtualizableAllocation()) {
-                    runAnalysis(graph, context);
-                }
+        if (VirtualUtil.matches(graph, EscapeAnalyzeOnly.getValue(graph.getOptions()))) {
+            if (readElimination || graph.hasVirtualizableAllocation()) {
+                runAnalysis(graph, context);
             }
-        } catch (DisablePartialEvaluationException e) {
-            graph.getDebug().log(DebugContext.VERY_DETAILED_LEVEL, "Disabling PEA invocation because of %s", e.getMessage());
         }
     }
 
@@ -113,9 +99,11 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
         }
         assert schedule != null;
         if (readElimination) {
-            return new PEReadEliminationClosure(schedule, context);
+            return new PEReadEliminationClosure(schedule, context.getMetaAccess(), context.getConstantReflection(), context.getConstantFieldProvider(), context.getLowerer(),
+                            context.getPlatformConfigurationProvider());
         } else {
-            return new PartialEscapeClosure.Final(schedule, context);
+            return new PartialEscapeClosure.Final(schedule, context.getMetaAccess(), context.getConstantReflection(), context.getConstantFieldProvider(), context.getLowerer(),
+                            context.getPlatformConfigurationProvider());
         }
     }
 

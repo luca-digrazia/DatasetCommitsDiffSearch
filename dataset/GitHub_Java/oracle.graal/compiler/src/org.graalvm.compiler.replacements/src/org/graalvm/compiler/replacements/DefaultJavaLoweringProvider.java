@@ -45,7 +45,6 @@ import java.util.List;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
@@ -65,7 +64,6 @@ import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
@@ -267,11 +265,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 lowerCommitAllocationNode((CommitAllocationNode) n, tool);
             } else if (n instanceof BoxNode) {
                 if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.HIGH_TIER) {
-                    /*
-                     * We do not perform box canonicalization directly in the node since want
-                     * virtualization of box nodes. Creating a boxed constant early on inhibits PEA
-                     * so we do it after PEA.
-                     */
                     FloatingNode canonical = canonicalizeBoxing((BoxNode) n, metaAccess, tool.getConstantReflection());
                     if (canonical != null) {
                         n.replaceAtUsages(InputType.Memory, (ValueNode) ((BoxNode) n).getLastLocationAccess());
@@ -310,7 +303,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     public static FloatingNode canonicalizeBoxing(BoxNode box, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
         ValueNode value = box.getValue();
-        if (value.isConstant() && !GraalOptions.ImmutableCode.getValue(box.getOptions())) {
+        if (value.isConstant()) {
             JavaConstant sourceConstant = value.asJavaConstant();
             if (sourceConstant.getJavaKind() != box.getBoxingKind() && sourceConstant.getJavaKind().isNumericInteger()) {
                 switch (box.getBoxingKind()) {
@@ -1005,7 +998,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
          * actually be used.
          */
         ArrayList<MonitorEnterNode> enters = null;
-        FrameState stateBefore = SnippetTemplate.findLastFrameState(insertionPoint);
         for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
             List<MonitorIdNode> locks = commit.getLocks(objIndex);
             if (locks.size() > 1) {
@@ -1020,7 +1012,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 lastDepth = monitorId.getLockDepth();
                 MonitorEnterNode enter = graph.add(new MonitorEnterNode(allocations[objIndex], monitorId));
                 graph.addAfterFixed(insertionPoint, enter);
-                enter.setStateAfter(stateBefore.duplicate());
                 insertionPoint = enter;
                 if (enters == null) {
                     enters = new ArrayList<>();
