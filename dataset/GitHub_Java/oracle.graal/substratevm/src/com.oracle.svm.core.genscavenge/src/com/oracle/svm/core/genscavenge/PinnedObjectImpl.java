@@ -40,14 +40,17 @@ import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
+import com.oracle.svm.core.log.Log;
 
 /** Support for pinning objects to a memory address with {@link PinnedObject}. */
 final class PinnedObjectImpl implements PinnedObject {
     static class PinnedObjectSupportImpl implements PinnedObjectSupport {
         @Override
         public PinnedObject create(Object object) {
+            Log trace = Log.noopLog().string("[PinnedObject.open:").string(" object: ").object(object).newline();
             PinnedObjectImpl result = new PinnedObjectImpl(object);
             PinnedObjectImpl.pushPinnedObject(result);
+            trace.string("  returns: ]").object(result).newline();
             return result;
         }
 
@@ -78,6 +81,7 @@ final class PinnedObjectImpl implements PinnedObject {
     }
 
     static void pushPinnedObject(PinnedObjectImpl newHead) {
+        Log trace = Log.noopLog().string("[PinnedObject.pushPinnedObject:").string("  newHead: ").object(newHead);
         HeapImpl heap = HeapImpl.getHeapImpl();
         UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = heap.getPinHead();
         PinnedObjectImpl sampleHead;
@@ -85,16 +89,17 @@ final class PinnedObjectImpl implements PinnedObject {
             sampleHead = pinHead.get();
             newHead.next = sampleHead;
         } while (!pinHead.compareAndSet(sampleHead, newHead));
+        trace.string("  returns: ").object(newHead).string("]").newline();
     }
 
-    static PinnedObjectImpl getPinnedObjects() {
-        UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = HeapImpl.getHeapImpl().getPinHead();
-        return pinHead.get();
-    }
-
-    static void setPinnedObjects(PinnedObjectImpl list) {
-        UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = HeapImpl.getHeapImpl().getPinHead();
-        pinHead.set(list);
+    /** Clears the list head reference and returns the former head object. */
+    static PinnedObjectImpl claimPinnedObjectList() {
+        Log trace = Log.noopLog().string("[PinnedObject.claimPinnedObjectList:").newline();
+        HeapImpl heap = HeapImpl.getHeapImpl();
+        UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = heap.getPinHead();
+        PinnedObjectImpl result = pinHead.getAndSet(null);
+        trace.string("  returns: ").object(result);
+        return result;
     }
 
     private final Object referent;
@@ -144,12 +149,5 @@ final class PinnedObjectImpl implements PinnedObject {
 
     public PinnedObjectImpl getNext() {
         return next;
-    }
-
-    void setNext(PinnedObjectImpl value) {
-        // Avoid useless writes as those would dirty the card table unnecessarily.
-        if (value != next) {
-            this.next = value;
-        }
     }
 }
