@@ -100,7 +100,6 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
     private int batchSize;
     private Map<String, Integer> textSymbolOffsets = new HashMap<>();
     private Map<Integer, String> offsetToSymbolMap = new TreeMap<>();
-    private final List<ObjectFile.Symbol> globalSymbols = new ArrayList<>();
 
     public LLVMNativeImageCodeCache(Map<HostedMethod, CompilationResult> compilations, NativeImageHeap imageHeap, Platform targetPlatform, Path tempDir) {
         super(compilations, imageHeap, targetPlatform);
@@ -614,10 +613,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         return new NativeTextSectionImpl(buffer, objectFile, codeCache) {
             @Override
             protected void defineMethodSymbol(String name, boolean global, Element section, HostedMethod method, CompilationResult result) {
-                ObjectFile.Symbol symbol = objectFile.createUndefinedSymbol(name, 0, true);
-                if (global) {
-                    globalSymbols.add(symbol);
-                }
+                objectFile.createUndefinedSymbol(name, 0, true);
             }
         };
     }
@@ -627,10 +623,5 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         String bitcodeFileName = getLinkedPath().toString();
         String relocatableFileName = tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()).toString();
         return new String[]{relocatableFileName, bitcodeFileName};
-    }
-
-    @Override
-    public List<ObjectFile.Symbol> getGlobalSymbols(ObjectFile objectFile) {
-        return globalSymbols;
     }
 }
