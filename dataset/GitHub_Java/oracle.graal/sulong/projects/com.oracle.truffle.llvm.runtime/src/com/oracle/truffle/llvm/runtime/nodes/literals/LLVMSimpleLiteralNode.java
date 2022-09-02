@@ -30,7 +30,7 @@
 package com.oracle.truffle.llvm.runtime.nodes.literals;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
@@ -51,7 +51,7 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
         return getShortString() + " value=" + executeGeneric(null);
     }
 
-    public abstract static class LLVMIVarBitLiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMIVarBitLiteralNode extends LLVMSimpleLiteralNode {
 
         private final LLVMIVarBit literal;
 
@@ -59,13 +59,13 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public LLVMIVarBit doIVarBit() {
+        @Override
+        public LLVMIVarBit executeGeneric(VirtualFrame frame) {
             return literal.copy();
         }
     }
 
-    public abstract static class LLVMI1LiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMI1LiteralNode extends LLVMSimpleLiteralNode {
 
         private final boolean literal;
 
@@ -73,13 +73,18 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public boolean doI1() {
+        @Override
+        public boolean executeI1(VirtualFrame frame) {
             return literal;
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeI1(frame);
         }
     }
 
-    public abstract static class LLVMI8LiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMI8LiteralNode extends LLVMSimpleLiteralNode {
 
         private final byte literal;
 
@@ -87,13 +92,18 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public byte doI8() {
+        @Override
+        public byte executeI8(VirtualFrame frame) {
             return literal;
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeI8(frame);
         }
     }
 
-    public abstract static class LLVMI16LiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMI16LiteralNode extends LLVMSimpleLiteralNode {
 
         private final short literal;
 
@@ -101,13 +111,18 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public short doI16() {
+        @Override
+        public short executeI16(VirtualFrame frame) {
             return literal;
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeI16(frame);
         }
     }
 
-    public abstract static class LLVMI32LiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMI32LiteralNode extends LLVMSimpleLiteralNode {
 
         private final int literal;
 
@@ -115,13 +130,18 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public int doI32() {
+        @Override
+        public int executeI32(VirtualFrame frame) {
             return literal;
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeI32(frame);
         }
     }
 
-    public abstract static class LLVMI64LiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMI64LiteralNode extends LLVMSimpleLiteralNode {
 
         private final long literal;
 
@@ -129,13 +149,18 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public long doI64() {
+        @Override
+        public long executeI64(VirtualFrame frame) {
             return literal;
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeI64(frame);
         }
     }
 
-    public abstract static class LLVMFloatLiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMFloatLiteralNode extends LLVMSimpleLiteralNode {
 
         private final float literal;
 
@@ -143,13 +168,18 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public float doFloat() {
+        @Override
+        public float executeFloat(VirtualFrame frame) {
             return literal;
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeFloat(frame);
         }
     }
 
-    public abstract static class LLVMDoubleLiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMDoubleLiteralNode extends LLVMSimpleLiteralNode {
 
         private final double literal;
 
@@ -157,13 +187,18 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.literal = literal;
         }
 
-        @Specialization
-        public double doDouble() {
+        @Override
+        public double executeDouble(VirtualFrame frame) {
             return literal;
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeDouble(frame);
         }
     }
 
-    public abstract static class LLVM80BitFloatLiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVM80BitFloatLiteralNode extends LLVMSimpleLiteralNode {
 
         private final boolean sign;
         private final int exponent;
@@ -175,13 +210,13 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.fraction = literal.getFraction();
         }
 
-        @Specialization
-        public LLVM80BitFloat do80BitFloat() {
+        @Override
+        public LLVM80BitFloat executeGeneric(VirtualFrame frame) {
             return new LLVM80BitFloat(sign, exponent, fraction);
         }
     }
 
-    public abstract static class LLVMManagedPointerLiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMManagedPointerLiteralNode extends LLVMSimpleLiteralNode {
 
         private final LLVMManagedPointer address;
 
@@ -200,13 +235,13 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             return getShortString() + " value=" + address;
         }
 
-        @Specialization
-        public LLVMManagedPointer doManagedPointer() {
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
             return address.copy();
         }
     }
 
-    public abstract static class LLVMNativePointerLiteralNode extends LLVMSimpleLiteralNode {
+    public static final class LLVMNativePointerLiteralNode extends LLVMSimpleLiteralNode {
 
         private final long address;
 
@@ -214,8 +249,8 @@ public abstract class LLVMSimpleLiteralNode extends LLVMExpressionNode {
             this.address = address.asNative();
         }
 
-        @Specialization
-        public LLVMNativePointer doNativePointer() {
+        @Override
+        public LLVMNativePointer executeGeneric(VirtualFrame frame) {
             return LLVMNativePointer.create(address);
         }
     }

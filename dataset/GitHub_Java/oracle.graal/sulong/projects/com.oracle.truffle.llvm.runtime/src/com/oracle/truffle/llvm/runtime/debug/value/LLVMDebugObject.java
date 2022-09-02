@@ -34,12 +34,6 @@ import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.library.ExportMessage.Ignore;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
@@ -57,7 +51,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
  * This class describes a source-level variable. Debuggers can use it to display the original
  * source-level state of an executed LLVM IR file.
  */
-@ExportLibrary(InteropLibrary.class)
 public abstract class LLVMDebugObject extends LLVMDebuggerValue {
 
     private static final String[] NO_KEYS = new String[0];
@@ -82,32 +75,13 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
      *
      * @return the type of the referenced object
      */
-    public final LLVMSourceType getType() {
+    protected LLVMSourceType getType() {
         return type;
     }
 
-    @ExportMessage
-    public final Object getMetaObject() throws UnsupportedMessageException {
-        if (type == null) {
-            throw UnsupportedMessageException.create();
-        }
-        return type;
-    }
-
-    @ExportMessage
-    public final boolean hasMetaObject() {
-        return type != null;
-    }
-
-    @ExportMessage
-    final boolean hasSourceLocation() {
-        return location != null;
-    }
-
-    @ExportMessage
-    @TruffleBoundary
-    final SourceSection getSourceLocation() {
-        return location.getSourceSection();
+    @Override
+    public LLVMSourceType getMetaObject() {
+        return getType();
     }
 
     public LLVMSourceLocation getDeclaration() {
@@ -612,7 +586,6 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
         }
     }
 
-    @Ignore
     public static LLVMDebugObject instantiate(LLVMSourceType type, long baseOffset, LLVMDebugValue value, LLVMSourceLocation declaration) {
         if (type.getActualType() == LLVMSourceType.UNKNOWN || type.getActualType() == LLVMSourceType.UNSUPPORTED) {
             return new Unsupported(value, baseOffset, LLVMSourceType.UNSUPPORTED, declaration);

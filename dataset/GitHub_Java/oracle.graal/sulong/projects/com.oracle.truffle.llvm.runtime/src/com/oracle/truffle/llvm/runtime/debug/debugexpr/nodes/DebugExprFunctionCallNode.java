@@ -33,7 +33,6 @@ import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -46,7 +45,7 @@ import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public abstract class DebugExprFunctionCallNode extends LLVMExpressionNode {
+public class DebugExprFunctionCallNode extends LLVMExpressionNode {
 
     private final String functionName;
     @Children private final LLVMExpressionNode[] arguments;
@@ -87,8 +86,8 @@ public abstract class DebugExprFunctionCallNode extends LLVMExpressionNode {
         throw DebugExprException.create(this, "no type found for function " + functionName);
     }
 
-    @Specialization
-    Object doCall(VirtualFrame frame) {
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
         InteropLibrary library = InteropLibrary.getFactory().getUncached();
         for (Scope scope : scopes) {
             Object vars = scope.getVariables();
