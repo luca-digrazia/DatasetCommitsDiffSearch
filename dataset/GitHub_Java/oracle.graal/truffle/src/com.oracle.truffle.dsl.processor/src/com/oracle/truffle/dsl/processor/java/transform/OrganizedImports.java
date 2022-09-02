@@ -45,7 +45,7 @@ import static com.oracle.truffle.dsl.processor.java.ElementUtils.getDeclaredType
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.getPackageName;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.getQualifiedName;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.getSuperTypes;
-import static com.oracle.truffle.dsl.processor.java.ElementUtils.elementEquals;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.typeEquals;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -59,7 +59,9 @@ import java.util.TreeSet;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
@@ -275,6 +277,16 @@ public final class OrganizedImports {
             current = current.getEnclosingElement();
         }
         return false;
+    }
+
+    private static boolean elementEquals(Element e1, Element e2) {
+        if ((e1.getKind().isClass() || e1.getKind().isInterface()) && (e2.getKind().isClass() || e2.getKind().isInterface())) {
+            return typeEquals(e1.asType(), e2.asType());
+        } else if (e1.getKind() == ElementKind.PACKAGE && e2.getKind() == ElementKind.PACKAGE) {
+            return ((PackageElement) e1).getQualifiedName().equals(((PackageElement) e2).getQualifiedName());
+        } else {
+            return false;
+        }
     }
 
     private Set<CodeImport> generateImports(Map<String, String> symbols) {
