@@ -209,7 +209,8 @@ public final class BigIntegerIntrinsicsTest extends GraalCompilerTest {
         private Object invokeSafe(ResolvedJavaMethod method, Object receiver, Object... args) {
             try {
                 return invoke(method, receiver, args);
-            } catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException | InstantiationException e) {
+            } catch (IllegalAccessException   | InvocationTargetException |
+                     IllegalArgumentException | InstantiationException e) {
                 throw new RuntimeException(e);
             }
         }
@@ -220,7 +221,8 @@ public final class BigIntegerIntrinsicsTest extends GraalCompilerTest {
         private InstalledCode testcode;
     }
 
-    private static GraalHotSpotVMConfig config = ((HotSpotGraalRuntimeProvider) Graal.getRequiredCapability(RuntimeProvider.class)).getVMConfig();
+    private static GraalHotSpotVMConfig config =
+        ((HotSpotGraalRuntimeProvider) Graal.getRequiredCapability(RuntimeProvider.class)).getVMConfig();
 
     private static BigInteger bigTwo = BigInteger.valueOf(2);
     private static Random rnd = new Random(17);
