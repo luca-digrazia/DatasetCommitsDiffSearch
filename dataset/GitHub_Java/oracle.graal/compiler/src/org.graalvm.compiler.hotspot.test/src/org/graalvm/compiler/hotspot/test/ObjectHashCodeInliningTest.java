@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,14 +24,18 @@
  */
 package org.graalvm.compiler.hotspot.test;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.memory.ReadNode;
-import org.junit.Assume;
 import org.junit.Test;
+
+import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.vm.ci.meta.JavaTypeProfile.ProfiledType;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.TriState;
 
 public class ObjectHashCodeInliningTest extends GraalCompilerTest {
 
@@ -40,18 +44,20 @@ public class ObjectHashCodeInliningTest extends GraalCompilerTest {
     }
 
     @Test
-    public void testInstallCodeInvalidation() {
-        for (int i = 0; i < 100000; i++) {
-            getHash(i % 1000 == 0 ? new Object() : "");
-        }
+    public void testGetHash() {
+        MetaAccessProvider metaAccess = getMetaAccess();
+        ProfiledType[] injectedProfile = {
+                        new ProfiledType(metaAccess.lookupJavaType(String.class), 0.9D),
+                        new ProfiledType(metaAccess.lookupJavaType(Object.class), 0.1D)};
 
         ResolvedJavaMethod method = getResolvedJavaMethod("getHash");
         StructuredGraph graph = parseForCompile(method);
         for (MethodCallTargetNode callTargetNode : graph.getNodes(MethodCallTargetNode.TYPE)) {
             if ("Object.hashCode".equals(callTargetNode.targetName())) {
-                Assume.assumeTrue(callTargetNode.getProfile() != null);
+                callTargetNode.setJavaTypeProfile(new JavaTypeProfile(TriState.FALSE, 0.0D, injectedProfile));
             }
         }
+
         compile(method, graph);
     }
 
@@ -74,8 +80,9 @@ public class ObjectHashCodeInliningTest extends GraalCompilerTest {
     }
 
     @Override
-    protected boolean checkHighTierGraph(StructuredGraph graph) {
-        return containsForeignCallToIdentityHashCode(graph) && containsReadStringHash(graph);
+    protected void checkHighTierGraph(StructuredGraph graph) {
+        assert containsForeignCallToIdentityHashCode(graph) : "expected a foreign call to identity_hashcode";
+        assert containsReadStringHash(graph) : "expected a read from String.hash";
     }
 
 }
