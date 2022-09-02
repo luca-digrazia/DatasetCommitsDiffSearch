@@ -55,10 +55,10 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.ffi.NativeAccess;
-import com.oracle.truffle.espresso.ffi.NativeSignature;
-import com.oracle.truffle.espresso.ffi.NativeType;
-import com.oracle.truffle.espresso.ffi.Pointer;
+import com.oracle.truffle.espresso._native.NativeAccess;
+import com.oracle.truffle.espresso._native.NativeSignature;
+import com.oracle.truffle.espresso._native.NativeType;
+import com.oracle.truffle.espresso._native.Pointer;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
@@ -651,9 +651,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
-            target = (Method) meta.HIDDEN_METHOD_KEY.getHiddenObject(curMethod);
+            target = (Method) curMethod.getHiddenField(meta.HIDDEN_METHOD_KEY);
             if (target == null) {
-                curMethod = meta.java_lang_reflect_Method_root.getObject(curMethod);
+                curMethod = (StaticObject) meta.java_lang_reflect_Method_root.get(curMethod);
             }
         }
         return target;
@@ -664,9 +664,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
-            target = (Method) meta.HIDDEN_CONSTRUCTOR_KEY.getHiddenObject(curMethod);
+            target = (Method) curMethod.getHiddenField(meta.HIDDEN_CONSTRUCTOR_KEY);
             if (target == null) {
-                curMethod = meta.java_lang_reflect_Constructor_root.getObject(curMethod);
+                curMethod = (StaticObject) meta.java_lang_reflect_Constructor_root.get(curMethod);
             }
         }
         return target;
@@ -1405,11 +1405,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                 }
             }
             return bci;
-        }
-
-        @Override
-        public String toString() {
-            return getMethod().toString();
         }
     }
 

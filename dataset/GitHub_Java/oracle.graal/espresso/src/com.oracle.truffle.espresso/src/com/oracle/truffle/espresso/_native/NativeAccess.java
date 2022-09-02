@@ -23,21 +23,15 @@
 package com.oracle.truffle.espresso._native;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 /**
  * Encapsulates minimal functionality required to interface with the native world in the JVM.
@@ -60,16 +54,6 @@ public interface NativeAccess {
      */
     @Pointer
     TruffleObject loadLibrary(Path libraryPath);
-
-    /**
-     * Returns the "default" library. Some backends may not be able to provide such functionality
-     * e.g. dlmopen-based namespaces cannot access the global namespace.
-     * 
-     * @return <code>null</code> if the library cannot be loaded, otherwise a {@link TruffleObject
-     *         handle} that can be used to lookup (and bind) symbols from the library.
-     */
-    @Pointer
-    TruffleObject loadDefaultLibrary();
 
     /**
      * Similar to dlclose. Uses the native mechanism to close, or rather decrement the reference
@@ -183,8 +167,8 @@ public interface NativeAccess {
     }
 
     /**
-     * Hook called when starting guest threads, some native backends may need to external threads
-     * (e.g. initialize TLS storage).
+     * Hook called when starting guest threads, some native backends may need to  external
+     * threads (e.g. initialize TLS storage).
      */
     void prepareThread();
 
@@ -193,7 +177,6 @@ public interface NativeAccess {
      */
     interface Provider {
         String id();
-
         NativeAccess create(TruffleLanguage.Env env);
     }
 }

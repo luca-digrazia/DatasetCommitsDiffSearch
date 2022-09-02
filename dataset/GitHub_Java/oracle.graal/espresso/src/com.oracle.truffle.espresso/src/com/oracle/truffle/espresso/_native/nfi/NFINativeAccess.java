@@ -53,7 +53,9 @@ import com.oracle.truffle.espresso._native.NativeType;
 import com.oracle.truffle.espresso._native.Pointer;
 import com.oracle.truffle.espresso._native.RawPointer;
 import com.oracle.truffle.espresso._native.TruffleByteBuffer;
+import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.UnsafeAccess;
 import com.oracle.truffle.nfi.api.SignatureLibrary;
@@ -155,32 +157,26 @@ class NFINativeAccess implements NativeAccess {
         return loadLibraryHelper(nfiSource);
     }
 
-    @Override
-    public @Pointer TruffleObject loadDefaultLibrary() {
-        return loadLibraryHelper("default");
-    }
-
     protected @Pointer TruffleObject loadLibraryHelper(String nfiSource) {
         Source source = Source.newBuilder("nfi", nfiSource, "loadLibrary").build();
         CallTarget target = env.parseInternal(source);
         try {
             return (TruffleObject) target.call();
         } catch (IllegalArgumentException e) {
-            getLogger().log(Level.SEVERE, "TruffleNFI native library isolation is not supported", e);
+            getLogger().log(Level.SEVERE, "TruffleNFI native library isolation is not supported.", e);
             throw EspressoError.shouldNotReachHere(e);
         } catch (AbstractTruffleException e) {
             // TODO(peterssen): Remove assert once GR-27045 reaches a definitive consensus.
             assert "com.oracle.truffle.nfi.impl.NFIUnsatisfiedLinkError".equals(e.getClass().getName());
             // We treat AbstractTruffleException as if it were an UnsatisfiedLinkError.
-            getLogger().fine("AbstractTruffleException while loading library though NFI (" + nfiSource + ") : " + e.getMessage());
+            TruffleLogger.getLogger(EspressoLanguage.ID, NFIIsolatedNativeAccess.class).fine(e.getMessage());
             return null;
         }
     }
 
     @Override
     public void unloadLibrary(@Pointer TruffleObject library) {
-        // TODO(peterssen): NFI does not support unloading libraries eagerly.
-        getLogger().severe(String.format("JVM_UnloadLibrary: %x was not unloaded!", NativeUtils.interopAsPointer(library)));
+        // nop
     }
 
     @Override
@@ -188,6 +184,9 @@ class NFINativeAccess implements NativeAccess {
         try {
             TruffleObject symbol = (TruffleObject) uncachedInterop.readMember(library, symbolName);
             if (InteropLibrary.getUncached().isNull(symbol)) {
+                return null;
+            }
+            if (InteropLibrary.getUncached().isPointer(symbol) && InteropLibrary.getUncached().asPointer(symbol) == 0L) {
                 return null;
             }
             return symbol;
