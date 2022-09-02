@@ -90,7 +90,6 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
 public final class Method extends Member<Signature> implements TruffleObject, ContextAccess, MethodRef {
 
@@ -336,7 +335,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     private static String buildJniNativeSignature(Method method) {
         // Prepend JNIEnv*.
-        StringBuilder sb = new StringBuilder("(").append(NativeSimpleType.POINTER);
+        StringBuilder sb = new StringBuilder("(").append(word());
         final Symbol<Type>[] signature = method.getParsedSignature();
 
         // Receiver for instance methods, class for static methods.

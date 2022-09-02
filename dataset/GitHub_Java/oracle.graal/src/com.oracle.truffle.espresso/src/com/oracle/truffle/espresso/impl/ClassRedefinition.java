@@ -198,14 +198,22 @@ public final class ClassRedefinition {
                     switch (change) {
                         case NO_CHANGE:
                             if (constantPoolChanged) {
-                                result = ClassChange.METHOD_BODY_CHANGE;
+                                result = result != ClassChange.ADD_METHOD ? ClassChange.METHOD_BODY_CHANGE : result;
                                 collectedChanges.addMethodBodyChange(newMethod);
                             }
                             break;
                         case METHOD_BODY_CHANGE:
-                            result = change;
+                            result = result != ClassChange.ADD_METHOD ? change : result;
                             collectedChanges.addMethodBodyChange(newMethod);
                             break;
+                        case ADD_METHOD:
+                            if (isAddMethodSupported()) {
+                                collectedChanges.addNewMethod(newMethod);
+                                result = change;
+                                break;
+                            } else {
+                                return change;
+                            }
                         default:
                             return change;
                     }
@@ -354,6 +362,10 @@ public final class ClassRedefinition {
         for (ParserMethod changedMethod : changedMethodBodies) {
             // find the old real method
             Method method = getDeclaredMethod(oldKlass, changedMethod);
+            if (method == null) {
+                // could not lookup old method
+                return ErrorCodes.INVALID_CLASS_FORMAT;
+            }
             method.redefine(changedMethod, parserKlass);
         }
         oldKlass.redefineClass(parserKlass);
