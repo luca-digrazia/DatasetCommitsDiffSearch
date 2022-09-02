@@ -41,6 +41,7 @@ import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.WithExceptionNode;
 import org.graalvm.compiler.nodes.memory.MemoryKill;
+import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.replacements.nodes.ArrayCopy;
 import org.graalvm.word.LocationIdentity;
@@ -147,5 +148,10 @@ public class ArrayCopyWithExceptionNode extends WithExceptionNode implements Arr
     @Override
     public AbstractBeginNode createNextBegin() {
         return KillingBeginNode.create(getKilledLocationIdentity());
+    }
+
+    @Override
+    public void deleteThisNode(VirtualizerTool tool) {
+        tool.deleteAndKillExceptionEdge();
     }
 }

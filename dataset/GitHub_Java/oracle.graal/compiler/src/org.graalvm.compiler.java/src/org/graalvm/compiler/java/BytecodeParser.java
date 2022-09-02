@@ -2434,7 +2434,7 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private boolean inline(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod, BytecodeProvider intrinsicBytecodeProvider, ValueNode[] args) {
-        try (InliningLog.RootScope scope = graph.getInliningLog().openRootScope(method, targetMethod, bci())) {
+        try (InliningLog.RootScope scope = graph.getInliningLog().openRootScope(targetMethod, bci())) {
             IntrinsicContext intrinsic = this.intrinsicContext;
 
             if (intrinsic == null && !graphBuilderConfig.insertFullInfopoints() &&
@@ -2547,11 +2547,6 @@ public class BytecodeParser implements GraphBuilderContext {
             } else {
                 Util.printInlining(inlinedMethod, bci(), getDepth(), success, "%s intrinsic for %s", msg, targetMethod.format("%h.%n(%p)"));
             }
-        }
-        if (debug.hasCompilationListener()) {
-            debug.notifyInlining(getMethod(), inlinedMethod, success,
-                            targetMethod.equals(inlinedMethod) ? msg : msg + " intrinsic for " + targetMethod.format("%h.%n(%p)"),
-                            bci());
         }
     }
 

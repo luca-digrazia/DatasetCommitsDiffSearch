@@ -28,7 +28,6 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.StructuredGraph.FrameStateVerificationFeature;
 
 /**
  * Provides an implementation of {@link StateSplit}.
@@ -67,8 +66,11 @@ public abstract class AbstractStateSplit extends FixedWithNextNode implements St
 
     @Override
     public boolean verify() {
-        assert !hasSideEffect() || !this.graph().getFrameStateVerification().implies(FrameStateVerificationFeature.STATE_SPLITS) ||
-                        this.stateAfter != null : "State split with side-effect must have a state until FSA " + this;
+        if (hasSideEffect() && !this.graph().isSubstitution()) {
+            if (this.graph().getGuardsStage().areFrameStatesAtSideEffects()) {
+                assert this.stateAfter != null : "State split with side-effect must have a state until FSA " + this;
+            }
+        }
         return super.verify();
     }
 }

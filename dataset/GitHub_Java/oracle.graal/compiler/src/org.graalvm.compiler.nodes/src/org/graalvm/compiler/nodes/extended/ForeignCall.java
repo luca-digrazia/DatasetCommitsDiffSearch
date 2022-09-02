@@ -70,7 +70,6 @@ public interface ForeignCall extends LIRLowerable, DeoptimizingNode.DeoptDuring,
 
     @Override
     default void computeStateDuring(FrameState currentStateAfter) {
-        assert stateDuring() == null;
         FrameState newStateDuring;
         if ((currentStateAfter.stackSize() > 0 && currentStateAfter.stackAt(currentStateAfter.stackSize() - 1) == this) ||
                         (currentStateAfter.stackSize() > 1 && currentStateAfter.stackAt(currentStateAfter.stackSize() - 2) == this)) {
