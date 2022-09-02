@@ -83,7 +83,6 @@ import javax.lang.model.util.Types;
 
 import com.oracle.truffle.dsl.processor.CompileErrorException;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.DeclaredCodeTypeMirror;
 
@@ -742,11 +741,10 @@ public class ElementUtils {
 
     public static List<Element> getElementHierarchy(Element e) {
         List<Element> elements = new ArrayList<>();
-        Element enclosing = null;
         if (e != null) {
             elements.add(e);
-            enclosing = e.getEnclosingElement();
         }
+        Element enclosing = e.getEnclosingElement();
         while (enclosing != null && enclosing.getKind() != ElementKind.PACKAGE) {
             elements.add(enclosing);
             enclosing = enclosing.getEnclosingElement();
@@ -942,63 +940,13 @@ public class ElementUtils {
         }
     }
 
-    /**
-     * Temporary local implementation of
-     * {@link ElementUtils#getAnnotationValue(javax.lang.model.element.AnnotationMirror, java.lang.String)}
-     * . The {@code ElementUtils.getAnnotationValue} does not work on Eclipse JDT compiler when an
-     * annotation type is nested in a generic type, see issue:
-     * https://bugs.eclipse.org/bugs/show_bug.cgi?id=544940
-     */
-    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name) {
-        return getAnnotationValue(mirror, name, true);
-    }
-
-    /**
-     * Temporary local implementation of
-     * {@link ElementUtils#getAnnotationValue(javax.lang.model.element.AnnotationMirror, java.lang.String, boolean)}
-     * . The {@code ElementUtils.getAnnotationValue} does not work on Eclipse JDT compiler when an
-     * annotation type is nested in a generic type, see issue:
-     * https://bugs.eclipse.org/bugs/show_bug.cgi?id=544940
-     */
-    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name, boolean resolveDefault) {
-        if (mirror instanceof CodeAnnotationMirror) {
-            ExecutableElement valueMethod = null;
-            for (ExecutableElement method : ElementFilter.methodsIn(mirror.getAnnotationType().asElement().getEnclosedElements())) {
-                if (method.getSimpleName().toString().equals(name)) {
-                    valueMethod = method;
-                    break;
-                }
-            }
-            if (valueMethod == null) {
-                return null;
-            }
-            AnnotationValue value = mirror.getElementValues().get(valueMethod);
-            if (resolveDefault) {
-                if (value == null) {
-                    value = valueMethod.getDefaultValue();
-                }
-            }
-
-            return value;
-        } else {
-            Map<? extends ExecutableElement, ? extends AnnotationValue> valuesMap = resolveDefault
-                            ? ProcessorContext.getInstance().getEnvironment().getElementUtils().getElementValuesWithDefaults(mirror)
-                            : mirror.getElementValues();
-            for (ExecutableElement e : valuesMap.keySet()) {
-                if (name.contentEquals(e.getSimpleName())) {
-                    return valuesMap.get(e);
-                }
-            }
-        }
-        return null;
-    }
-
     public static <T> List<T> getAnnotationValueList(Class<T> expectedListType, AnnotationMirror mirror, String name) {
-        List<?> values = ElementUtils.resolveAnnotationValue(List.class, getAnnotationValue(mirror, name));
+        List<?> values = getAnnotationValue(List.class, mirror, name);
         List<T> result = new ArrayList<>();
+
         if (values != null) {
             for (Object value : values) {
-                T annotationValue = ElementUtils.resolveAnnotationValue(expectedListType, (AnnotationValue) value);
+                T annotationValue = resolveAnnotationValue(expectedListType, (AnnotationValue) value);
                 if (annotationValue != null) {
                     result.add(annotationValue);
                 }
@@ -1030,6 +978,34 @@ public class ElementUtils {
             }
         }
         return expectedType.cast(unboxedValue);
+    }
+
+    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name, boolean resolveDefault) {
+        ExecutableElement valueMethod = null;
+        for (ExecutableElement method : ElementFilter.methodsIn(mirror.getAnnotationType().asElement().getEnclosedElements())) {
+            if (method.getSimpleName().toString().equals(name)) {
+                valueMethod = method;
+                break;
+            }
+        }
+
+        if (valueMethod == null) {
+            return null;
+        }
+
+        AnnotationValue value = mirror.getElementValues().get(valueMethod);
+        if (resolveDefault) {
+            if (value == null) {
+                value = valueMethod.getDefaultValue();
+            }
+        }
+
+        return value;
+    }
+
+    public static AnnotationValue getAnnotationValue(AnnotationMirror mirror, String name) {
+        return getAnnotationValue(mirror, name, true);
+
     }
 
     private static class AnnotationValueVisitorImpl extends AbstractAnnotationValueVisitor8<Object, Void> {
