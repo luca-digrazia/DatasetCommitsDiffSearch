@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@
 package com.oracle.svm.truffle.api;
 
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
+import static com.oracle.svm.graal.SubstrateGraalUtils.updateGraalArchitectureWithHostCPUFeatures;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,15 +33,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Consumer;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.UnmodifiableMapCursor;
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue;
 import org.graalvm.compiler.truffle.runtime.CancellableCompileTask;
@@ -50,6 +50,7 @@ import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platform.HOSTED_ONLY;
 import org.graalvm.nativeimage.Platforms;
@@ -65,6 +66,8 @@ import com.oracle.svm.core.option.RuntimeOptionParser;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.SubstrateStackIntrospection;
+import com.oracle.svm.graal.GraalSupport;
+import com.oracle.svm.graal.hosted.GraalFeature;
 import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.svm.truffle.TruffleFeature;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -114,16 +117,25 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
             }
             RuntimeOptionValues.singleton().update(Deoptimizer.Options.TraceDeoptimization, true);
         }
-
-        getTruffleCompiler().initializeAtRuntime();
+        updateGraalArchitectureWithHostCPUFeatures(getTruffleCompiler().getBackend());
         installDefaultListeners();
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public SubstrateTruffleCompiler initTruffleCompiler() {
         assert truffleCompiler == null : "Cannot re-initialize Substrate TruffleCompiler";
-        SubstrateTruffleCompiler compiler = newTruffleCompiler();
+        GraalFeature graalFeature = ImageSingletons.lookup(GraalFeature.class);
+        SnippetReflectionProvider snippetReflection = graalFeature.getHostedProviders().getSnippetReflection();
+        SubstrateTruffleCompiler compiler = new SubstrateTruffleCompiler(this, graalFeature.getHostedProviders().getGraphBuilderPlugins(),
+                        GraalSupport.getSuites(),
+                        GraalSupport.getLIRSuites(),
+                        GraalSupport.getRuntimeConfig().getBackendForNormalMethod(),
+                        GraalSupport.getFirstTierSuites(),
+                        GraalSupport.getFirstTierLirSuites(),
+                        GraalSupport.getFirstTierProviders(),
+                        snippetReflection);
         truffleCompiler = compiler;
+
         return compiler;
     }
 
@@ -143,7 +155,16 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Platforms(Platform.HOSTED_ONLY.class)
     @Override
     public SubstrateTruffleCompiler newTruffleCompiler() {
-        return TruffleFeature.getSupport().createTruffleCompiler(this);
+        GraalFeature graalFeature = ImageSingletons.lookup(GraalFeature.class);
+        SnippetReflectionProvider snippetReflectionProvider = graalFeature.getHostedProviders().getSnippetReflection();
+        return new SubstrateTruffleCompiler(this, graalFeature.getHostedProviders().getGraphBuilderPlugins(),
+                        GraalSupport.getSuites(),
+                        GraalSupport.getLIRSuites(),
+                        GraalSupport.getRuntimeConfig().getBackendForNormalMethod(),
+                        GraalSupport.getFirstTierSuites(),
+                        GraalSupport.getFirstTierLirSuites(),
+                        GraalSupport.getFirstTierProviders(),
+                        snippetReflectionProvider);
     }
 
     private void tearDown() {
@@ -363,15 +384,5 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Override
     public void log(String message) {
         TTY.println(message);
-    }
-
-    @Override
-    public Consumer<OptimizedAssumptionDependency> registerOptimizedAssumptionDependency(JavaConstant optimizedAssumptionConstant) {
-        return TruffleFeature.getSupport().registerOptimizedAssumptionDependency(optimizedAssumptionConstant);
-    }
-
-    @Override
-    public JavaConstant getCallTargetForCallNode(JavaConstant callNodeConstant) {
-        return TruffleFeature.getSupport().getCallTargetForCallNode(callNodeConstant);
     }
 }
