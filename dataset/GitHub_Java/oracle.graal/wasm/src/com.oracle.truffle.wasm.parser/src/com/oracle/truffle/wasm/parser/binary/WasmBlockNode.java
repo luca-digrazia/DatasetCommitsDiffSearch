@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-
 import com.oracle.truffle.api.frame.VirtualFrame;
+
+import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 public class WasmBlockNode extends WasmNode {
     @CompilationFinal private final int startOffset;

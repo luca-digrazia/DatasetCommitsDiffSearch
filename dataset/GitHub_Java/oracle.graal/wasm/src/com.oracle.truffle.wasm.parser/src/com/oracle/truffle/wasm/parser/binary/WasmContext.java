@@ -29,15 +29,15 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-import static com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Scope;
+import com.oracle.truffle.api.source.Source;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.source.Source;
+import static com.oracle.truffle.api.TruffleLanguage.Env;
 
 public class WasmContext {
     private Env env;

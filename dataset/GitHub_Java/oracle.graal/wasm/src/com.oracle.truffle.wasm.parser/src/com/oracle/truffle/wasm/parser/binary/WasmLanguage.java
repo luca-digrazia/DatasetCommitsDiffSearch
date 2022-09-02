@@ -29,10 +29,33 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-public class Instructions {
-    public static final int END = 0x0B;
-    public static final int I32_CONST = 0x41;
-    public static final int I64_CONST = 0x42;
-    public static final int F32_CONST = 0x43;
-    public static final int F64_CONST = 0x44;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Scope;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
+
+@TruffleLanguage.Registration(id = "wasm", name = "WebAssembly", defaultMimeType = "application/wasm", byteMimeTypes = "application/wasm", contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = WasmFileDetector.class)
+public final class WasmLanguage extends TruffleLanguage<WasmContext> {
+
+    @Override
+    protected WasmContext createContext(Env env) {
+        return new WasmContext(env, this);
+    }
+
+    @Override
+    protected boolean isObjectOfLanguage(Object object) {
+        return false;
+    }
+
+    @Override
+    protected CallTarget parse(ParsingRequest request) throws Exception {
+        BinaryReader reader = new BinaryReader(this, request.getSource().getName(), request.getSource().getBytes().toByteArray());
+        reader.readModule();
+        return Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootCallNode(this));
+    }
+
+    @Override
+    protected Iterable<Scope> findTopScopes(WasmContext context) {
+        return context.getTopScopes();
+    }
 }

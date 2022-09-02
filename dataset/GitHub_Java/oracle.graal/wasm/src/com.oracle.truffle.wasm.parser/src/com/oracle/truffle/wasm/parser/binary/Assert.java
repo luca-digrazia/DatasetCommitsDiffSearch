@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -37,6 +37,11 @@ public class Assert {
         }
     }
 
+    public static void assertEquals(long n1, long n2, String message) throws BinaryReaderException {
+        if (n1 != n2) {
+            fail(String.format("%s: should be equal: %d != %d", message, n1, n2));
+        }
+    }
     public static void assertInRange(int value, int start, int end, String message) {
         if (value < start || value > end) {
             fail(String.format("%s: value %d should be in range [%d, %d]", message, value, start, end));
