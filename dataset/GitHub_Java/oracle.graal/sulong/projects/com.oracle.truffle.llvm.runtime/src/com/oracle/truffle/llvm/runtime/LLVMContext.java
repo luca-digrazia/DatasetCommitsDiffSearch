@@ -549,20 +549,33 @@ public final class LLVMContext {
     }
 
     /**
-     * Finds an already added library. Note that this might return
-     * {@link ExternalLibrary#isInternal() internal libraries}.
-     * 
-     * @return null if not yet loaded
+     * Helper class to capture an {@link ExternalLibrary} and a flag to indicate whether the library
+     * has been added. If {@link LibraryAddResult#added} is false, the
+     * {@link LibraryAddResult#library} is the existing library.
      */
-    public ExternalLibrary findExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
-        final ExternalLibrary newLib;
-        if (isInternalLibrary(lib)) {
-            Path path = locateInternalLibrary(lib);
-            newLib = ExternalLibrary.internal(path, isNative);
-        } else {
-            newLib = createExternalLibrary(lib, isNative, reason, locator);
+    public static class LibraryAddResult {
+        public final ExternalLibrary library;
+        public final boolean added;
+
+        public LibraryAddResult(ExternalLibrary lib, boolean added) {
+            this.library = lib;
+            this.added = added;
         }
-        return getExternalLibrary(newLib);
+    }
+
+    public LibraryAddResult addOrGetExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
+        CompilerAsserts.neverPartOfCompilation();
+        if (isInternalLibrary(lib)) {
+            // Disallow loading internal libraries explicitly.
+            return null;
+        }
+        ExternalLibrary newLib = createExternalLibrary(lib, isNative, reason, locator);
+        ExternalLibrary existingLib = getOrAddExternalLibrary(newLib);
+        if (existingLib == newLib) {
+            return new LibraryAddResult(newLib, true);
+        }
+        LibraryLocator.traceAlreadyLoaded(this, existingLib.path);
+        return new LibraryAddResult(existingLib, false);
     }
 
     private ExternalLibrary createExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
@@ -607,18 +620,6 @@ public final class LLVMContext {
             }
         }
         return false;
-    }
-
-    private ExternalLibrary getExternalLibrary(ExternalLibrary externalLib) {
-        synchronized (externalLibrariesLock) {
-            int index = externalLibraries.indexOf(externalLib);
-            if (index >= 0) {
-                ExternalLibrary ret = externalLibraries.get(index);
-                assert ret.equals(externalLib);
-                return ret;
-            }
-            return null;
-        }
     }
 
     private ExternalLibrary getOrAddExternalLibrary(ExternalLibrary externalLib) {
