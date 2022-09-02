@@ -32,7 +32,6 @@ import java.util.function.Supplier;
 
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
-import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
@@ -54,72 +53,6 @@ import com.oracle.truffle.espresso.substitutions.JavaType;
  * This class is analogous to the ClassLoaderData C++ class in HotSpot.
  */
 public abstract class ClassRegistry implements ContextAccess {
-
-    public static final class ClassDefinitionInfo {
-        public static final ClassDefinitionInfo EMPTY = new ClassDefinitionInfo(null, null, null, null, null, false, false);
-
-        // Constructor for Unsafe anonymous class definition.
-        public ClassDefinitionInfo(StaticObject protectionDomain, ObjectKlass hostKlass, StaticObject[] patches) {
-            this(protectionDomain, hostKlass, patches, null, null, false, false);
-        }
-
-        // Constructor for Hidden class definition.
-        public ClassDefinitionInfo(StaticObject protectionDomain, ObjectKlass dynamicNest, StaticObject classData, boolean isStrongHidden) {
-            this(protectionDomain, null, null, dynamicNest, classData, true, isStrongHidden);
-        }
-
-        private ClassDefinitionInfo(StaticObject protectionDomain,
-                        ObjectKlass hostKlass,
-                        StaticObject[] patches,
-                        ObjectKlass dynamicNest,
-                        StaticObject classData,
-                        boolean isHidden,
-                        boolean isStrongHidden) {
-            this.protectionDomain = protectionDomain;
-            this.hostKlass = hostKlass;
-            this.patches = patches;
-            this.dynamicNest = dynamicNest;
-            this.classData = classData;
-            this.isHidden = isHidden;
-            this.isStrongHidden = isStrongHidden;
-        }
-
-        public final StaticObject protectionDomain;
-
-        // Unsafe Anonymous class
-        public final ObjectKlass hostKlass;
-        public final StaticObject[] patches;
-
-        // Hidden class
-        public final ObjectKlass dynamicNest;
-        public final StaticObject classData;
-        public final boolean isHidden;
-        public final boolean isStrongHidden;
-
-        public boolean addedToRegistry() {
-            return !isAnonymousClass() && (!isHidden() || isStrongHidden());
-        }
-
-        public boolean isAnonymousClass() {
-            return hostKlass != null;
-        }
-
-        public boolean isHidden() {
-            return isHidden;
-        }
-
-        public boolean isStrongHidden() {
-            return isStrongHidden;
-        }
-
-        public int patchFlags(int classFlags) {
-            int flags = classFlags;
-            if (isHidden()) {
-                flags |= Constants.ACC_IS_HIDDEN_CLASS;
-            }
-            return flags;
-        }
-    }
 
     private static final DebugTimer KLASS_PROBE = DebugTimer.create("klass probe");
     private static final DebugTimer KLASS_DEFINE = DebugTimer.create("klass define");
@@ -317,39 +250,29 @@ public abstract class ClassRegistry implements ContextAccess {
         return entry.klass();
     }
 
-    public final ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes) {
-        return defineKlass(typeOrNull, bytes, ClassDefinitionInfo.EMPTY);
-    }
-
     @SuppressWarnings("try")
-    public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes, ClassDefinitionInfo info) {
+    public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes) {
         Meta meta = getMeta();
         String strType = typeOrNull == null ? null : typeOrNull.toString();
         ParserKlass parserKlass;
         try (DebugCloseable parse = KLASS_PARSE.scope(getContext().getTimers())) {
-            parserKlass = getParserKlass(bytes, strType, info);
+            parserKlass = getParserKlass(bytes, strType);
         }
         Symbol<Type> type = typeOrNull == null ? parserKlass.getType() : typeOrNull;
 
-        if (info.addedToRegistry()) {
-            Klass maybeLoaded = findLoadedKlass(type);
-            if (maybeLoaded != null) {
-                throw meta.throwExceptionWithMessage(meta.java_lang_LinkageError, "Class " + type + " already defined");
-            }
+        Klass maybeLoaded = findLoadedKlass(type);
+        if (maybeLoaded != null) {
+            throw meta.throwExceptionWithMessage(meta.java_lang_LinkageError, "Class " + type + " already defined");
         }
 
         Symbol<Type> superKlassType = parserKlass.getSuperKlass();
 
-        ObjectKlass klass = createKlass(meta, parserKlass, type, superKlassType, info);
-        if (info.addedToRegistry()) {
-            registerKlass(klass, type);
-        }
-        return klass;
+        return createAndPutKlass(meta, parserKlass, type, superKlassType);
     }
 
-    private ParserKlass getParserKlass(byte[] bytes, String strType, ClassDefinitionInfo info) {
+    private ParserKlass getParserKlass(byte[] bytes, String strType) {
         // May throw guest ClassFormatError, NoClassDefFoundError.
-        ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), getClassLoader(), strType, context, info);
+        ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), getClassLoader(), strType, context);
         Meta meta = getMeta();
         if (!loaderIsBootOrPlatform(getClassLoader(), meta) && parserKlass.getName().toString().startsWith("java/")) {
             throw meta.throwExceptionWithMessage(meta.java_lang_SecurityException, "Define class in prohibited package name: " + parserKlass.getName());
@@ -363,7 +286,7 @@ public abstract class ClassRegistry implements ContextAccess {
     }
 
     @SuppressWarnings("try")
-    private ObjectKlass createKlass(Meta meta, ParserKlass parserKlass, Symbol<Type> type, Symbol<Type> superKlassType, ClassDefinitionInfo info) {
+    private ObjectKlass createAndPutKlass(Meta meta, ParserKlass parserKlass, Symbol<Type> type, Symbol<Type> superKlassType) {
         TypeStack chain = stack.get();
 
         ObjectKlass superKlass = null;
@@ -413,7 +336,7 @@ public abstract class ClassRegistry implements ContextAccess {
         try (DebugCloseable define = KLASS_DEFINE.scope(getContext().getTimers())) {
             // FIXME(peterssen): Do NOT create a LinkedKlass every time, use a global cache.
             LinkedKlass linkedKlass = LinkedKlass.create(getEspressoLanguage(), parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
-            klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader(), info);
+            klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
         }
 
         if (superKlass != null) {
@@ -436,10 +359,6 @@ public abstract class ClassRegistry implements ContextAccess {
             }
         }
 
-        return klass;
-    }
-
-    private void registerKlass(ObjectKlass klass, Symbol<Type> type) {
         ClassRegistries.RegistryEntry entry = new ClassRegistries.RegistryEntry(klass);
         ClassRegistries.RegistryEntry previous = classes.putIfAbsent(type, entry);
 
@@ -450,6 +369,7 @@ public abstract class ClassRegistry implements ContextAccess {
         if (defineKlassListener != null) {
             defineKlassListener.onKlassDefined(klass);
         }
+        return klass;
     }
 
     private ObjectKlass loadKlassRecursively(Meta meta, Symbol<Type> type, boolean notInterface) {

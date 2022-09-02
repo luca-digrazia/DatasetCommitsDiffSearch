@@ -60,7 +60,7 @@ public final class SubstitutionProcessor extends EspressoProcessor {
     private ExecutableElement hasReceiverElement;
     // @Substitution.methodName()
     private ExecutableElement methodNameElement;
-    // @Substitution.classNameProvider()
+    // @Substitution.methodName()
     private ExecutableElement substitutionClassNameProvider;
     // @Substitution.versionFilter()
     private ExecutableElement versionFilterElement;
@@ -236,7 +236,6 @@ public final class SubstitutionProcessor extends EspressoProcessor {
 
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
-                                SUBSTITUTION_PACKAGE,
                                 className,
                                 elementName,
                                 espressoTypes, helper);
@@ -287,7 +286,6 @@ public final class SubstitutionProcessor extends EspressoProcessor {
 
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
-                                SUBSTITUTION_PACKAGE,
                                 className,
                                 elementName,
                                 espressoTypes, helper);
@@ -497,7 +495,7 @@ public final class SubstitutionProcessor extends EspressoProcessor {
         }
         // Actual process
         // Initialize the collector.
-        initCollector(SUBSTITUTION_PACKAGE, COLLECTOR);
+        initCollector(COLLECTOR);
         for (Element e : env.getElementsAnnotatedWith(espressoSubstitutions)) {
             processElement(e);
         }
@@ -507,7 +505,6 @@ public final class SubstitutionProcessor extends EspressoProcessor {
     String generateImports(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         SubstitutorHelper h = (SubstitutorHelper) helper;
-        str.append("import ").append(SUBSTITUTOR_PACKAGE + "." + SUBSTITUTOR).append(";\n");
         if (parameterTypeName.contains("StaticObject") || h.returnType.equals("V")) {
             str.append(IMPORT_STATIC_OBJECT);
         }

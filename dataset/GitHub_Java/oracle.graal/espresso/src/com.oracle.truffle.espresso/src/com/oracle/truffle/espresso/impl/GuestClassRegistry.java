@@ -95,12 +95,10 @@ public final class GuestClassRegistry extends ClassRegistry {
 
     @SuppressWarnings("sync-override")
     @Override
-    public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes, ClassDefinitionInfo info) {
-        ObjectKlass klass = super.defineKlass(typeOrNull, bytes, info);
+    public ObjectKlass defineKlass(Symbol<Type> type, final byte[] bytes) {
+        ObjectKlass klass = super.defineKlass(type, bytes);
         // Register class in guest CL. Mimics HotSpot behavior.
-        if (info.addedToRegistry()) {
-            addClass.invokeDirect(classLoader, klass.mirror());
-        }
+        addClass.invokeDirect(classLoader, klass.mirror());
         return klass;
     }
 }

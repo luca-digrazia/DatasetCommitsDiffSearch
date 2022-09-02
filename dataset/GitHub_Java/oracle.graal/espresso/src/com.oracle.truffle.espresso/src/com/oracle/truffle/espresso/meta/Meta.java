@@ -23,8 +23,6 @@
 package com.oracle.truffle.espresso.meta;
 
 import static com.oracle.truffle.espresso.EspressoOptions.SpecCompliancyMode.HOTSPOT;
-import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.ALL;
-import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.VERSION_16_OR_HIGHER;
 import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.VERSION_8_OR_LOWER;
 import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.VERSION_9_OR_HIGHER;
 import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.VersionRange.higher;
@@ -313,7 +311,6 @@ public final class Meta implements ContextAccess {
         java_lang_reflect_Constructor_signature = java_lang_reflect_Constructor.requireDeclaredField(Name.signature, Type.java_lang_String);
 
         java_lang_reflect_Method = knownKlass(Type.java_lang_reflect_Method);
-        java_lang_reflect_Method_init = java_lang_reflect_Method.lookupDeclaredMethod(Name._init_, Signature.java_lang_reflect_Method_init_signature);
         HIDDEN_METHOD_KEY = java_lang_reflect_Method.requireHiddenField(Name.HIDDEN_METHOD_KEY);
         HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS = java_lang_reflect_Method.requireHiddenField(Name.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS);
         java_lang_reflect_Method_root = java_lang_reflect_Method.requireDeclaredField(Name.root, Type.java_lang_reflect_Method);
@@ -487,15 +484,10 @@ public final class Meta implements ContextAccess {
 
         java_lang_Class_classRedefinedCount = java_lang_Class.requireDeclaredField(Name.classRedefinedCount, Type._int);
         java_lang_Class_name = java_lang_Class.requireDeclaredField(Name.name, Type.java_lang_String);
-        java_lang_Class_classLoader = java_lang_Class.requireDeclaredField(Name.classLoader, Type.java_lang_ClassLoader);
-        java_lang_Class_componentType = diff() //
-                        .field(VERSION_9_OR_HIGHER, Name.componentType, Type.java_lang_Class)//
-                        .notRequiredField(java_lang_Class);
-        java_lang_Class_classData = diff() //
-                        .field(higher(15), Name.classData, Type.java_lang_Object)//
-                        .notRequiredField(java_lang_Class);
 
         // Classes and Members that differ from Java 8 to 11
+
+        java_lang_Class_classLoader = java_lang_Class.requireDeclaredField(Name.classLoader, Type.java_lang_ClassLoader);
 
         if (getJavaVersion().java9OrLater()) {
             java_lang_System_initializeSystemClass = null;
@@ -550,34 +542,6 @@ public final class Meta implements ContextAccess {
 
             java_lang_Class_module = null;
         }
-
-        java_lang_Record = diff() //
-                        .klass(VERSION_16_OR_HIGHER, Type.java_lang_Record) //
-                        .notRequiredKlass();
-        java_lang_reflect_RecordComponent = diff() //
-                        .klass(VERSION_16_OR_HIGHER, Type.java_lang_reflect_RecordComponent) //
-                        .notRequiredKlass();
-        java_lang_reflect_RecordComponent_clazz = diff() //
-                        .field(ALL, Name.clazz, Type.java_lang_Class) //
-                        .notRequiredField(java_lang_reflect_RecordComponent);
-        java_lang_reflect_RecordComponent_name = diff() //
-                        .field(ALL, Name.name, Type.java_lang_String) //
-                        .notRequiredField(java_lang_reflect_RecordComponent);
-        java_lang_reflect_RecordComponent_type = diff() //
-                        .field(ALL, Name.type, Type.java_lang_Class) //
-                        .notRequiredField(java_lang_reflect_RecordComponent);
-        java_lang_reflect_RecordComponent_accessor = diff() //
-                        .field(ALL, Name.accessor, Type.java_lang_reflect_Method) //
-                        .notRequiredField(java_lang_reflect_RecordComponent);
-        java_lang_reflect_RecordComponent_signature = diff() //
-                        .field(ALL, Name.signature, Type.java_lang_String) //
-                        .notRequiredField(java_lang_reflect_RecordComponent);
-        java_lang_reflect_RecordComponent_annotations = diff() //
-                        .field(ALL, Name.annotations, Type._byte_array) //
-                        .notRequiredField(java_lang_reflect_RecordComponent);
-        java_lang_reflect_RecordComponent_typeAnnotations = diff() //
-                        .field(ALL, Name.typeAnnotations, Type._byte_array) //
-                        .notRequiredField(java_lang_reflect_RecordComponent);
 
         sun_reflect_MagicAccessorImpl = diff() //
                         .klass(VERSION_8_OR_LOWER, Type.sun_reflect_MagicAccessorImpl) //
@@ -888,8 +852,6 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_Class_forName_String_boolean_ClassLoader;
     public final Field java_lang_Class_classRedefinedCount;
     public final Field java_lang_Class_name;
-    public final Field java_lang_Class_componentType;
-    public final Field java_lang_Class_classData;
 
     // Primitives.
     public final PrimitiveKlass _boolean;
@@ -978,16 +940,6 @@ public final class Meta implements ContextAccess {
     public final Field java_lang_Module_loader;
     public final Field HIDDEN_MODULE_ENTRY;
 
-    public final ObjectKlass java_lang_Record;
-    public final ObjectKlass java_lang_reflect_RecordComponent;
-    public final Field java_lang_reflect_RecordComponent_clazz;
-    public final Field java_lang_reflect_RecordComponent_name;
-    public final Field java_lang_reflect_RecordComponent_type;
-    public final Field java_lang_reflect_RecordComponent_accessor;
-    public final Field java_lang_reflect_RecordComponent_signature;
-    public final Field java_lang_reflect_RecordComponent_annotations;
-    public final Field java_lang_reflect_RecordComponent_typeAnnotations;
-
     public final ObjectKlass java_lang_AssertionStatusDirectives;
     public final Field java_lang_AssertionStatusDirectives_classes;
     public final Field java_lang_AssertionStatusDirectives_classEnabled;
@@ -1009,7 +961,6 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass sun_reflect_DelegatingClassLoader;
 
     public final ObjectKlass java_lang_reflect_Method;
-    public final Method java_lang_reflect_Method_init;
     public final Field HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS;
     public final Field HIDDEN_METHOD_KEY;
     public final Field java_lang_reflect_Method_root;

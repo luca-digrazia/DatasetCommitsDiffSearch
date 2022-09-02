@@ -217,15 +217,10 @@ public final class ClassRegistries {
     }
 
     @TruffleBoundary
-    public ObjectKlass defineKlass(Symbol<Type> type, byte[] bytes, StaticObject classLoader) {
-        return defineKlass(type, bytes, classLoader, ClassRegistry.ClassDefinitionInfo.EMPTY);
-    }
-
-    @TruffleBoundary
-    public ObjectKlass defineKlass(Symbol<Type> type, byte[] bytes, StaticObject classLoader, ClassRegistry.ClassDefinitionInfo info) {
+    public Klass defineKlass(Symbol<Type> type, byte[] bytes, StaticObject classLoader) {
         assert classLoader != null;
         ClassRegistry registry = getClassRegistry(classLoader);
-        return registry.defineKlass(type, bytes, info);
+        return registry.defineKlass(type, bytes);
     }
 
     public BootClassRegistry getBootClassRegistry() {

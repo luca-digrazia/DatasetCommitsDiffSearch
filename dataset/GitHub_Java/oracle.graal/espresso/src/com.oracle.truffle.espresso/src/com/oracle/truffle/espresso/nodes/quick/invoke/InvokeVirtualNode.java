@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,11 +24,14 @@ package com.oracle.truffle.espresso.nodes.quick.invoke;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
+import com.oracle.truffle.espresso.redefinition.ClassRedefinition;
+import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
@@ -37,10 +40,12 @@ import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
+@ReportPolymorphism
 public abstract class InvokeVirtualNode extends QuickNode {
 
     final Method resolutionSeed;
     final int resultAt;
+    final boolean returnsPrimitiveType;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
@@ -50,7 +55,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
     @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass", assumptions = "resolvedMethod.getAssumption()")
     Object callVirtualDirect(StaticObject receiver, Object[] args,
                     @Cached("receiver.getKlass()") Klass cachedKlass,
-                    @Cached("methodLookup(receiver, resolutionSeed)") MethodVersion resolvedMethod,
+                    @Cached("methodLookup(receiver)") MethodVersion resolvedMethod,
                     @Cached("create(resolvedMethod.getCallTargetNoInit())") DirectCallNode directCallNode) {
         // getCallTarget doesn't ensure declaring class is initialized
         // so we need the below check prior to executing the method
@@ -61,15 +66,16 @@ public abstract class InvokeVirtualNode extends QuickNode {
         return directCallNode.call(args);
     }
 
+    @ReportPolymorphism.Megamorphic
     @Specialization(replaces = "callVirtualDirect")
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // vtable lookup.
-        MethodVersion target = methodLookup(receiver, resolutionSeed);
+        MethodVersion target = methodLookup(receiver);
         if (!target.getMethod().hasCode()) {
             enterExceptionProfile();
             Meta meta = receiver.getKlass().getMeta();
-            throw Meta.throwException(meta.java_lang_AbstractMethodError);
+            throw meta.throwException(meta.java_lang_AbstractMethodError);
         }
         return indirectCallNode.call(target.getCallTarget(), arguments);
     }
@@ -79,12 +85,19 @@ public abstract class InvokeVirtualNode extends QuickNode {
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
         this.resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver;
+        this.returnsPrimitiveType = Types.isPrimitive(Signatures.returnType(resolutionSeed.getParsedSignature()));
     }
 
-    static MethodVersion methodLookup(StaticObject receiver, Method resolutionSeed) {
+    MethodVersion methodLookup(StaticObject receiver) {
         // Suprisingly, invokeVirtuals can try to invoke interface methods, even non-default
         // ones.
         // Good thing is, miranda methods are taken care of at vtable creation !
+        if (resolutionSeed.isRemovedByRedefition()) {
+            // accept a slow path once the method has been removed
+            // put method behind a boundary to avoid a deopt loop
+            return ClassRedefinition.handleRemovedMethod(resolutionSeed, receiver.getKlass(), receiver).getMethodVersion();
+        }
+
         Klass receiverKlass = receiver.getKlass();
         int vtableIndex = resolutionSeed.getVTableIndex();
         if (receiverKlass.isArray()) {
@@ -95,23 +108,22 @@ public abstract class InvokeVirtualNode extends QuickNode {
 
     @Override
     public final int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
-        // Method signature does not change across methods.
-        // Can safely use the constant signature from `resolutionSeed` instead of the non-constant
-        // signature from the lookup.
+        /*
+         * Method signature does not change across methods. Can safely use the constant signature
+         * from `resolutionSeed` instead of the non-constant signature from the lookup.
+         */
         Object[] args = BytecodeNode.popArguments(primitives, refs, top, true, resolutionSeed.getParsedSignature());
         StaticObject receiver = nullCheck((StaticObject) args[0]);
         Object result = executeVirtual(receiver, args);
+        if (!returnsPrimitiveType) {
+            getBytecodeNode().checkNoForeignObjectAssumption((StaticObject) result);
+        }
         return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, resolutionSeed.getReturnKind());
     }
 
     @Override
     public boolean removedByRedefintion() {
         return resolutionSeed.isRemovedByRedefition();
-    }
-
-    @Override
-    public final boolean producedForeignObject(Object[] refs) {
-        return resolutionSeed.getReturnKind().isObject() && BytecodeNode.peekObject(refs, getResultAt()).isForeignObject();
     }
 
     private int getResultAt() {
