@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -65,7 +64,6 @@ public abstract class DebugExprArrayElementNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    @GenerateAOT.Exclude
     public Object doIntIndex(Object baseMember, int idx,
                     @CachedLibrary(limit = "3") InteropLibrary library) {
         if (library.hasMembers(baseMember)) {
@@ -101,7 +99,6 @@ public abstract class DebugExprArrayElementNode extends LLVMExpressionNode {
     }
 
     @Specialization
-    @GenerateAOT.Exclude
     public Object doGeneric(Object baseMember, Object index,
                     @CachedLibrary(limit = "3") InteropLibrary library) {
         // in case of a complex expression as index (e.g. outerArray[innerArray[2]]), the
