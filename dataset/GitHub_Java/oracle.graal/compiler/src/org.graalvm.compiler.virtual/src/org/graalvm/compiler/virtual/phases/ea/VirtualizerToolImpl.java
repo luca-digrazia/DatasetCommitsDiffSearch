@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,9 +24,11 @@
  */
 package org.graalvm.compiler.virtual.phases.ea;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
+import static org.graalvm.compiler.core.common.GraalOptions.MaximumEscapeAnalysisArrayLength;
+
+import java.util.List;
+
+import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
@@ -38,35 +40,48 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.calc.UnpackEndianHalfNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.nodes.spi.CoreProvidersDelegate;
+import org.graalvm.compiler.nodes.spi.LoweringProvider;
+import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
 import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.options.OptionValues;
 
-import java.util.List;
-
-import static org.graalvm.compiler.core.common.GraalOptions.MaximumEscapeAnalysisArrayLength;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
  * Forwards calls from {@link VirtualizerTool} to the actual {@link PartialEscapeBlockState}.
  */
-class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTool, CanonicalizerTool {
+class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
 
+    private final MetaAccessProvider metaAccess;
+    private final ConstantReflectionProvider constantReflection;
+    private final ConstantFieldProvider constantFieldProvider;
+    private final PlatformConfigurationProvider platformConfigurationProvider;
     private final PartialEscapeClosure<?> closure;
     private final Assumptions assumptions;
     private final OptionValues options;
     private final DebugContext debug;
+    private final LoweringProvider loweringProvider;
     private ConstantNode illegalConstant;
 
-    VirtualizerToolImpl(CoreProviders providers, PartialEscapeClosure<?> closure, Assumptions assumptions, OptionValues options, DebugContext debug) {
-        super(providers);
+    VirtualizerToolImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
+                    PlatformConfigurationProvider platformConfigurationProvider, PartialEscapeClosure<?> closure, Assumptions assumptions, OptionValues options, DebugContext debug,
+                    LoweringProvider loweringProvider) {
+        this.metaAccess = metaAccess;
+        this.constantReflection = constantReflection;
+        this.constantFieldProvider = constantFieldProvider;
+        this.platformConfigurationProvider = platformConfigurationProvider;
         this.closure = closure;
         this.assumptions = assumptions;
         this.options = options;
         this.debug = debug;
+        this.loweringProvider = loweringProvider;
     }
 
     private boolean deleted;
@@ -83,6 +98,11 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     @Override
     public DebugContext getDebug() {
         return debug;
+    }
+
+    @Override
+    public ConstantFieldProvider getConstantFieldProvider() {
+        return constantFieldProvider;
     }
 
     public void reset(PartialEscapeBlockState<?> newState, ValueNode newCurrent, FixedNode newPosition, GraphEffectList newEffects) {
@@ -111,7 +131,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     public boolean setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value, JavaKind theAccessKind, long offset) {
         ObjectState obj = state.getObjectState(virtual);
         assert obj.isVirtual() : "not virtual: " + obj;
-        JavaKind entryKind = virtual.entryKind(this.getMetaAccessExtensionProvider(), index);
+        JavaKind entryKind = virtual.entryKind(index);
         JavaKind accessKind = theAccessKind != null ? theAccessKind : entryKind;
         ValueNode newValue = closure.getAliasAndResolve(state, value);
         getDebug().log(DebugContext.DETAILED_LEVEL, "Setting entry %d in virtual object %s %s results in %s", index, virtual.getObjectId(), virtual, state.getObjectState(virtual.getObjectId()));
@@ -162,7 +182,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
             if (entryKind == JavaKind.Int) {
                 if (accessKind.needsTwoSlots()) {
                     // Storing double word value two int slots
-                    assert virtual.entryKind(getMetaAccessExtensionProvider(), index + 1) == JavaKind.Int;
+                    assert virtual.entryKind(index + 1) == JavaKind.Int;
                     state.setEntry(virtual.getObjectId(), index + 1, getIllegalConstant());
                 } else if (oldValue.getStackKind() == JavaKind.Double || oldValue.getStackKind() == JavaKind.Long) {
                     // Splitting double word constant by storing over it with an int
@@ -204,7 +224,7 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     private boolean canVirtualizeLargeByteArrayUnsafeWrite(VirtualObjectNode virtual, JavaKind accessKind, long offset) {
-        return canVirtualizeLargeByteArrayUnsafeAccess() && virtual.isVirtualByteArrayAccess(this.getMetaAccessExtensionProvider(), accessKind) &&
+        return canVirtualizeLargeByteArrayUnsafeAccess() && virtual.isVirtualByteArrayAccess(accessKind) &&
                         /*
                          * Require aligned writes. Some architectures do not support recovering
                          * writes to unaligned offsets. Since most use cases for this optimization
@@ -342,9 +362,19 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
     }
 
     @Override
+    public MetaAccessProvider getMetaAccess() {
+        return metaAccess;
+    }
+
+    @Override
+    public ConstantReflectionProvider getConstantReflection() {
+        return constantReflection;
+    }
+
+    @Override
     public boolean canVirtualizeLargeByteArrayUnsafeAccess() {
-        if (getPlatformConfigurationProvider() != null) {
-            return getPlatformConfigurationProvider().canVirtualizeLargeByteArrayAccess();
+        if (platformConfigurationProvider != null) {
+            return platformConfigurationProvider.canVirtualizeLargeByteArrayAccess();
         }
         return false;
     }
@@ -366,15 +396,10 @@ class VirtualizerToolImpl extends CoreProvidersDelegate implements VirtualizerTo
 
     @Override
     public Integer smallestCompareWidth() {
-        if (getLowerer() != null) {
-            return getLowerer().smallestCompareWidth();
+        if (loweringProvider != null) {
+            return loweringProvider.smallestCompareWidth();
         } else {
             return null;
         }
-    }
-
-    @Override
-    public boolean supportsRounding() {
-        return getLowerer().supportsRounding();
     }
 }

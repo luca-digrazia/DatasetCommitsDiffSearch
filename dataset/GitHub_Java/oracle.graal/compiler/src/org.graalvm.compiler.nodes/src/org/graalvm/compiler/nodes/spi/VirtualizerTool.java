@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +35,10 @@ import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.options.OptionValues;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
  * This tool can be used to query the current state (normal/virtualized/re-materialized) of values
@@ -43,7 +46,18 @@ import jdk.vm.ci.meta.JavaKind;
  *
  * See also {@link Virtualizable}.
  */
-public interface VirtualizerTool extends CoreProviders {
+public interface VirtualizerTool {
+
+    /**
+     * @return the {@link MetaAccessProvider} associated with the current compilation.
+     */
+    MetaAccessProvider getMetaAccess();
+
+    /**
+     * @return the {@link ConstantReflectionProvider} associated with the current compilation, which
+     *         can be used to access {@link JavaConstant}s.
+     */
+    ConstantReflectionProvider getConstantReflection();
 
     /**
      * This method should be used to query the maximum size of virtualized objects before attempting
@@ -82,7 +96,7 @@ public interface VirtualizerTool extends CoreProviders {
      * @param index the index to be set.
      * @param value the new value for the given index.
      * @param accessKind the kind of the store which might be different than
-     *            {@link VirtualObjectNode#entryKind}.
+     *            {@link VirtualObjectNode#entryKind(int)}.
      * @return true if the operation was permitted
      */
     boolean setVirtualEntry(VirtualObjectNode virtualObject, int index, ValueNode value, JavaKind accessKind, long offset);

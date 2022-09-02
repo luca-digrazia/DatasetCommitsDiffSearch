@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,6 +39,7 @@ import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.code.SourceStackTraceBailoutException;
+import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Graph;
@@ -73,15 +74,13 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.ValueProxyNode;
 import org.graalvm.compiler.nodes.WithExceptionNode;
-import org.graalvm.compiler.nodes.extended.MultiGuardNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
 import org.graalvm.compiler.nodes.spi.ArrayLengthProvider.FindLengthMode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.nodes.spi.CoreProvidersDelegate;
 import org.graalvm.compiler.nodes.spi.LimitedValueProxy;
+import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.ValueProxy;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.type.StampTool;
@@ -98,6 +97,7 @@ import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -125,7 +125,7 @@ public class GraphUtil {
         debug.dump(DebugContext.DETAILED_LEVEL, node.graph(), "After fixing merges (killCFG %s)", node);
 
         // Mark non-fixed nodes
-        markUsagesForKill(markedNodes);
+        markUsages(markedNodes);
 
         // Detach marked nodes from non-marked nodes
         for (Node marked : markedNodes) {
@@ -224,38 +224,19 @@ public class GraphUtil {
         }
     }
 
-    private static void markUsagesForKill(EconomicSet<Node> markedNodes) {
+    private static void markUsages(EconomicSet<Node> markedNodes) {
         NodeStack workStack = new NodeStack(markedNodes.size() + 4);
         for (Node marked : markedNodes) {
             workStack.push(marked);
         }
-        EconomicSet<MultiGuardNode> unmarkedMultiGuards = EconomicSet.create();
         while (!workStack.isEmpty()) {
             Node marked = workStack.pop();
             for (Node usage : marked.usages()) {
-                boolean doMark = true;
-                if (usage instanceof MultiGuardNode) {
-                    // Only mark a MultiGuardNode for deletion if all of its guards are marked for
-                    // deletion. Otherwise, we would kill nodes outside the path to be killed.
-                    MultiGuardNode multiGuard = (MultiGuardNode) usage;
-                    for (Node guard : multiGuard.inputs()) {
-                        if (!markedNodes.contains(guard)) {
-                            doMark = false;
-                            unmarkedMultiGuards.add(multiGuard);
-                            break;
-                        }
-                    }
-                }
-                if (doMark && !markedNodes.contains(usage)) {
+                if (!markedNodes.contains(usage)) {
                     workStack.push(usage);
                     markedNodes.add(usage);
                 }
             }
-            // Detach unmarked multi guards from the marked node
-            for (MultiGuardNode multiGuard : unmarkedMultiGuards) {
-                multiGuard.replaceFirstInput(marked, null);
-            }
-            unmarkedMultiGuards.clear();
         }
     }
 
@@ -947,16 +928,39 @@ public class GraphUtil {
         };
     }
 
-    private static final class DefaultSimplifierTool extends CoreProvidersDelegate implements SimplifierTool {
+    private static final class DefaultSimplifierTool implements SimplifierTool {
+        private final MetaAccessProvider metaAccess;
+        private final ConstantReflectionProvider constantReflection;
+        private final ConstantFieldProvider constantFieldProvider;
         private final boolean canonicalizeReads;
         private final Assumptions assumptions;
         private final OptionValues options;
+        private final LoweringProvider loweringProvider;
 
-        DefaultSimplifierTool(CoreProviders providers, boolean canonicalizeReads, Assumptions assumptions, OptionValues options) {
-            super(providers);
+        DefaultSimplifierTool(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, boolean canonicalizeReads,
+                        Assumptions assumptions, OptionValues options, LoweringProvider loweringProvider) {
+            this.metaAccess = metaAccess;
+            this.constantReflection = constantReflection;
+            this.constantFieldProvider = constantFieldProvider;
             this.canonicalizeReads = canonicalizeReads;
             this.assumptions = assumptions;
             this.options = options;
+            this.loweringProvider = loweringProvider;
+        }
+
+        @Override
+        public MetaAccessProvider getMetaAccess() {
+            return metaAccess;
+        }
+
+        @Override
+        public ConstantReflectionProvider getConstantReflection() {
+            return constantReflection;
+        }
+
+        @Override
+        public ConstantFieldProvider getConstantFieldProvider() {
+            return constantFieldProvider;
         }
 
         @Override
@@ -1001,16 +1005,22 @@ public class GraphUtil {
 
         @Override
         public Integer smallestCompareWidth() {
-            if (getLowerer() != null) {
-                return getLowerer().smallestCompareWidth();
+            if (loweringProvider != null) {
+                return loweringProvider.smallestCompareWidth();
             } else {
                 return null;
             }
         }
     }
 
-    public static SimplifierTool getDefaultSimplifier(CoreProviders providers, boolean canonicalizeReads, Assumptions assumptions, OptionValues options) {
-        return new DefaultSimplifierTool(providers, canonicalizeReads, assumptions, options);
+    public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
+                    boolean canonicalizeReads, Assumptions assumptions, OptionValues options) {
+        return getDefaultSimplifier(metaAccess, constantReflection, constantFieldProvider, canonicalizeReads, assumptions, options, null);
+    }
+
+    public static SimplifierTool getDefaultSimplifier(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
+                    boolean canonicalizeReads, Assumptions assumptions, OptionValues options, LoweringProvider loweringProvider) {
+        return new DefaultSimplifierTool(metaAccess, constantReflection, constantFieldProvider, canonicalizeReads, assumptions, options, loweringProvider);
     }
 
     public static Constant foldIfConstantAndRemove(ValueNode node, ValueNode constant) {
