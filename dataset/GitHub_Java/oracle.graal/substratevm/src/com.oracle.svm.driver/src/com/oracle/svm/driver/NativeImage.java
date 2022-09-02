@@ -263,8 +263,6 @@ public class NativeImage {
     final Registry optionRegistry;
     private LinkedHashSet<EnabledOption> enabledLanguages;
 
-    private final List<ExcludeConfig> excludedConfigs = new ArrayList<>();
-
     public static final String nativeImagePropertiesFilename = "native-image.properties";
     public static final String nativeImageMetaInf = "META-INF/native-image";
 
@@ -980,11 +978,6 @@ public class NativeImage {
                                 .filter(p -> p.endsWith(fileType.fileName))
                                 .collect(Collectors.toList());
                 for (Path nativeImageMetaInfFile : nativeImageMetaInfFiles) {
-                    boolean excluded = isExcluded(nativeImageMetaInfFile, classpathEntry);
-                    if (excluded) {
-                        continue;
-                    }
-
                     Path resourceRoot = nativeImageMetaInfBase.getParent().getParent();
                     Function<String, String> resolver = str -> {
                         Path componentDirectory = resourceRoot.relativize(nativeImageMetaInfFile).getParent();
@@ -1005,16 +998,6 @@ public class NativeImage {
                 }
             }
         }
-    }
-
-    public void addExcludeConfig(Pattern jarPattern, Pattern resourcePattern) {
-        excludedConfigs.add(new ExcludeConfig(jarPattern, resourcePattern));
-    }
-
-    private boolean isExcluded(Path resourcePath, Path classpathEntry) {
-        return excludedConfigs.stream()
-                        .filter(e -> e.jarPattern.matcher(classpathEntry.toString()).find())
-                        .anyMatch(e -> e.resourcePattern.matcher(resourcePath.toString()).find());
     }
 
     static String injectHostedOptionOrigin(String option, String origin) {
@@ -1938,18 +1921,13 @@ public class NativeImage {
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler.management", true);
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("com.oracle.graal.graal_enterprise", true);
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("java.xml", false);
+                if (JavaVersionUtil.JAVA_SPEC >= 16) {
+                    ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "sun.reflect.annotation", false);
+                    ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "sun.security.jca", false);
+                    ModuleSupport.exportAndOpenPackageToUnnamed("jdk.jdeps", "com.sun.tools.classfile", false);
+                }
             }
             NativeImage.main(args);
-        }
-    }
-
-    private static final class ExcludeConfig {
-        final Pattern jarPattern;
-        final Pattern resourcePattern;
-
-        private ExcludeConfig(Pattern jarPattern, Pattern resourcePattern) {
-            this.jarPattern = jarPattern;
-            this.resourcePattern = resourcePattern;
         }
     }
 }

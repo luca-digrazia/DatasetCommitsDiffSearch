@@ -33,7 +33,6 @@ import java.util.Date;
 import java.util.TimeZone;
 import java.util.function.BooleanSupplier;
 
-import com.oracle.svm.core.thread.JavaThreads;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
@@ -52,6 +51,7 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.stack.ThreadStackPrinter.StackFramePrintVisitor;
+import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.thread.VMThreads;
 
@@ -87,10 +87,10 @@ public class VMInspection implements Feature {
         return VMInspectionOptions.AllowVMInspection.getValue();
     }
 
-    public static class IsEnabled implements BooleanSupplier {
+    public static final class IsEnabled implements BooleanSupplier {
         @Override
         public boolean getAsBoolean() {
-            return VMInspectionOptions.AllowVMInspection.getValue();
+            return VMInspection.isEnabled();
         }
     }
 }

@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,32 +26,38 @@ package com.oracle.svm.hosted.server;
 
 import static com.oracle.svm.hosted.NativeImageGeneratorRunner.verifyValidJavaVersionAndPlatform;
 
-import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.io.PrintStream;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
-import java.net.URLClassLoader;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.ResourceBundle;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -62,12 +70,17 @@ import java.util.logging.LogManager;
 import java.util.stream.Collectors;
 
 import org.graalvm.collections.EconomicSet;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
-import com.oracle.shadowed.com.google.gson.Gson;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ImageBuildTask;
+import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageGeneratorRunner;
+import com.oracle.svm.hosted.server.SubstrateServerMessage.ServerCommand;
+import com.oracle.svm.util.ModuleSupport;
+import com.oracle.svm.util.ReflectionUtil;
 
 /**
  * A server for SVM image building that keeps the classpath and JIT compiler code caches warm over
@@ -75,42 +88,44 @@ import com.oracle.svm.hosted.NativeImageGeneratorRunner;
  */
 public final class NativeImageBuildServer {
 
-    public static final String IMAGE_CLASSPATH_PREFIX = "-imagecp";
-    private static final String TASK_PREFIX = "-task=";
-    static final String PORT_PREFIX = "-port=";
-    private static final String LOG_PREFIX = "-logFile=";
+    public static final String PORT_LOG_MESSAGE_PREFIX = "Started image build server on port: ";
+    public static final String TASK_PREFIX = "-task=";
+    public static final String PORT_PREFIX = "-port=";
+    public static final String LOG_PREFIX = "-logFile=";
     private static final int TIMEOUT_MINUTES = 240;
-    private static final String SOCKET_CHARSET = "UTF-8";
-    private static final String SUBSTRATEVM_VERSION_PROPERTY = "substratevm.version";
-    private static final int SERVER_THREAD_POOL_SIZE = 2;
+    private static final String GRAALVM_VERSION_PROPERTY = "org.graalvm.version";
+    private static final int SERVER_THREAD_POOL_SIZE = 4;
     private static final int FAILED_EXIT_STATUS = -1;
+
+    private static Set<ImageBuildTask> tasks = Collections.synchronizedSet(new HashSet<>());
 
     private boolean terminated;
     private final int port;
-    private PrintStream out;
+    private PrintStream logOutput;
 
     /*
-     * This is done as System.err and System.out are replaced by reference during analysis.
+     * This is done as System.err and System.logOutput are replaced by reference during analysis.
      */
-    private final StreamingJSONOutputStream outJSONStream = new StreamingJSONOutputStream("o", null);
-    private final StreamingJSONOutputStream errorJSONStream = new StreamingJSONOutputStream("e", null);
+    private final StreamingServerMessageOutputStream outJSONStream = new StreamingServerMessageOutputStream(ServerCommand.WRITE_OUT, null);
+    private final StreamingServerMessageOutputStream errorJSONStream = new StreamingServerMessageOutputStream(ServerCommand.WRITE_ERR, null);
     private final PrintStream serverStdout = new PrintStream(outJSONStream, true);
     private final PrintStream serverStderr = new PrintStream(errorJSONStream, true);
 
-    private final Gson gson = new Gson();
     private final AtomicLong activeBuildTasks = new AtomicLong();
     private Instant lastKeepAliveAction = Instant.now();
     private ThreadPoolExecutor threadPoolExecutor;
 
-    private NativeImageBuildServer(int port, PrintStream out) {
+    private NativeImageBuildServer(int port, PrintStream logOutput) {
         this.port = port;
-        this.out = out;
-        initThreadPool();
+        this.logOutput = logOutput;
+        threadPoolExecutor = new ThreadPoolExecutor(SERVER_THREAD_POOL_SIZE, SERVER_THREAD_POOL_SIZE, Long.MAX_VALUE, TimeUnit.DAYS, new LinkedBlockingQueue<>());
 
         /*
          * Set the right classloader in the process reaper
          */
-        withGlobalStaticField("java.lang.UNIXProcess", "processReaperExecutor", f -> {
+        String executorClassHolder = JavaVersionUtil.JAVA_SPEC <= 8 ? "java.lang.UNIXProcess" : "java.lang.ProcessHandleImpl";
+
+        withGlobalStaticField(executorClassHolder, "processReaperExecutor", f -> {
             ThreadPoolExecutor executor = (ThreadPoolExecutor) f.get(null);
             final ThreadFactory factory = executor.getThreadFactory();
             executor.setThreadFactory(r -> {
@@ -127,13 +142,9 @@ public final class NativeImageBuildServer {
         }
     }
 
-    private void initThreadPool() {
-        threadPoolExecutor = new ThreadPoolExecutor(SERVER_THREAD_POOL_SIZE, SERVER_THREAD_POOL_SIZE, Long.MAX_VALUE, TimeUnit.DAYS, new LinkedBlockingQueue<>());
-    }
-
     private void log(String commandLine, Object... args) {
-        out.printf(commandLine, args);
-        out.flush();
+        logOutput.printf(commandLine, args);
+        logOutput.flush();
     }
 
     private static void printUsageAndExit() {
@@ -143,6 +154,19 @@ public final class NativeImageBuildServer {
     }
 
     public static void main(String[] argsArray) {
+        ModuleSupport.exportAndOpenAllPackagesToUnnamed("org.graalvm.truffle", false);
+        ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler", false);
+        ModuleSupport.exportAndOpenAllPackagesToUnnamed("com.oracle.graal.graal_enterprise", true);
+        ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "sun.text.spi", false);
+        if (JavaVersionUtil.JAVA_SPEC >= 14) {
+            ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "jdk.internal.loader", false);
+        }
+        if (JavaVersionUtil.JAVA_SPEC >= 16) {
+            ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "sun.reflect.annotation", false);
+            ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "sun.security.jca", false);
+            ModuleSupport.exportAndOpenPackageToUnnamed("jdk.jdeps", "com.sun.tools.classfile", false);
+        }
+
         if (!verifyValidJavaVersionAndPlatform()) {
             System.exit(FAILED_EXIT_STATUS);
         }
@@ -202,14 +226,22 @@ public final class NativeImageBuildServer {
     @SuppressWarnings("InfiniteLoopStatement")
     private void serve() {
         threadPoolExecutor.purge();
-        log((port == 0 ? "Server selects port" : "Try binding server to port " + port) + "...");
+        if (port == 0) {
+            log("Server selects ephemeral port\n");
+        } else {
+            log("Try binding server to port " + port + "...\n");
+        }
         try (ServerSocket serverSocket = new ServerSocket()) {
             serverSocket.setReuseAddress(true);
             serverSocket.setSoTimeout((int) TimeUnit.MINUTES.toMillis(TIMEOUT_MINUTES));
             serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
 
-            /* NOTE: the following command lines are parsed externally */
-            log(" Started image build server on port:\n%d\nAccepting requests...\n", serverSocket.getLocalPort());
+            /* NOTE: the following command line gets parsed externally */
+            String portLogMessage = PORT_LOG_MESSAGE_PREFIX + serverSocket.getLocalPort();
+            System.out.println(portLogMessage);
+            System.out.flush();
+            log(portLogMessage);
+
             while (true) {
                 Socket socket = serverSocket.accept();
 
@@ -223,19 +255,26 @@ public final class NativeImageBuildServer {
         } catch (SocketTimeoutException ste) {
             log("Compilation server timed out. Shutting down...\n");
         } catch (SocketException se) {
+            log("Terminated: " + se.getMessage() + "\n");
             if (!terminated) {
                 log("Server error: " + se.getMessage() + "\n");
             }
         } catch (IOException e) {
-            throw VMError.shouldNotReachHere(e);
+            log("IOException in the socket operation.", e);
         } finally {
             log("Shutting down server...\n");
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             threadPoolExecutor.shutdownNow();
         }
     }
 
     private void closeServerSocket(ServerSocket serverSocket) {
         try {
+            log("Terminating...");
             terminated = true;
             serverSocket.close();
         } catch (IOException e) {
@@ -245,13 +284,13 @@ public final class NativeImageBuildServer {
 
     private boolean processRequest(Socket socket) {
         try {
-            OutputStreamWriter output = new OutputStreamWriter(socket.getOutputStream(), SOCKET_CHARSET);
-            BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+            DataInputStream input = new DataInputStream(socket.getInputStream());
             try {
-                return processCommand(socket, input.readLine());
+                return processCommand(socket, SubstrateServerMessage.receive(input));
             } catch (Throwable t) {
-                log("Execution failed: " + t.getMessage() + "\n");
-                t.printStackTrace();
+                log("Execution failed: " + t + "\n");
+                t.printStackTrace(logOutput);
                 sendExitStatus(output, 1);
             }
         } catch (IOException ioe) {
@@ -263,7 +302,7 @@ public final class NativeImageBuildServer {
             System.gc();
             System.runFinalization();
             System.gc();
-            log("Available Memory: " + Runtime.getRuntime().freeMemory());
+            log("Available Memory: " + Runtime.getRuntime().freeMemory() + "\n");
         }
         return true;
     }
@@ -276,58 +315,67 @@ public final class NativeImageBuildServer {
         }
     }
 
-    private boolean processCommand(Socket socket, String commandLine) throws IOException {
-        SubstrateServerMessage serverCommand = gson.fromJson(commandLine, SubstrateServerMessage.class);
-        OutputStreamWriter output = new OutputStreamWriter(socket.getOutputStream(), SOCKET_CHARSET);
+    private boolean processCommand(Socket socket, SubstrateServerMessage serverCommand) throws IOException {
+        DataOutputStream output = new DataOutputStream(socket.getOutputStream());
         switch (serverCommand.command) {
-            case stop:
+            case STOP_SERVER:
                 log("Received 'stop' request. Shutting down server.\n");
                 sendExitStatus(output, 0);
                 return false;
-            case version:
-                log("Received 'version' request. Responding with " + System.getProperty(SUBSTRATEVM_VERSION_PROPERTY) + ".\n");
-                SubstrateServerMessage.send(new SubstrateServerMessage(serverCommand.command.toString(), System.getProperty(SUBSTRATEVM_VERSION_PROPERTY)), output);
+            case GET_VERSION:
+                log("Received 'version' request. Responding with " + System.getProperty(GRAALVM_VERSION_PROPERTY) + ".\n");
+                SubstrateServerMessage.send(new SubstrateServerMessage(serverCommand.command, System.getProperty(GRAALVM_VERSION_PROPERTY).getBytes()), output);
                 return Instant.now().isBefore(lastKeepAliveAction.plus(Duration.ofMinutes(TIMEOUT_MINUTES)));
-            case build:
-                if (activeBuildTasks.incrementAndGet() > 1) {
-                    String message = "Can not build image: tasks are already running in the server.\n";
-                    log(message);
-                    sendError(output, message);
-                    sendExitStatus(output, -1);
-                    activeBuildTasks.decrementAndGet();
-                } else {
-                    log("Starting compilation for request:\n%s\n", serverCommand.payload);
-                    final ArrayList<String> arguments = new ArrayList<>(Arrays.asList(serverCommand.payload.split("\\s+?")));
-                    final Properties compilationProperties = parseProperties(arguments);
-                    errorJSONStream.setOriginal(socket.getOutputStream());
-                    outJSONStream.setOriginal(socket.getOutputStream());
-                    int exitStatus = 0;
-                    boolean success = false;
-                    try {
-                        exitStatus = withJVMContext(
-                                        compilationProperties,
+            case BUILD_IMAGE:
+                try {
+                    long activeTasks = activeBuildTasks.incrementAndGet();
+                    if (activeTasks > 1) {
+                        String message = "Can not build image: tasks are already running in the server.\n";
+                        log(message);
+                        sendError(output, message);
+                        sendExitStatus(output, -1);
+                    } else {
+                        log("Starting compilation for request:\n%s\n", serverCommand.payloadString());
+                        final ArrayList<String> arguments = new ArrayList<>(Arrays.asList(serverCommand.payloadString().split("\n")));
+
+                        errorJSONStream.writingInterrupted(false);
+                        errorJSONStream.setOriginal(socket.getOutputStream());
+                        outJSONStream.writingInterrupted(false);
+                        outJSONStream.setOriginal(socket.getOutputStream());
+
+                        int exitStatus = withJVMContext(
                                         serverStdout,
                                         serverStderr,
                                         () -> executeCompilation(arguments));
-                        success = true;
+                        sendExitStatus(output, exitStatus);
                         log("Image building completed.\n");
+
                         lastKeepAliveAction = Instant.now();
-                    } finally {
-                        activeBuildTasks.decrementAndGet();
-                        if (success) {
-                            /*
-                             * Unexpected failures are handled outside. We don't want to send exit
-                             * status twice.
-                             */
-                            sendExitStatus(output, exitStatus);
-                        }
                     }
+                } finally {
+                    activeBuildTasks.decrementAndGet();
                 }
                 return true;
-            case abort:
-                log("Abort request submitted: " + serverCommand.payload + "\n");
-                threadPoolExecutor.shutdownNow();
-                initThreadPool();
+            case ABORT_BUILD:
+                log("Received 'abort' request. Interrupting all image build tasks.\n");
+                /*
+                 * Busy wait for all writing to complete, otherwise JSON messages are malformed.
+                 */
+                errorJSONStream.writingInterrupted(true);
+                outJSONStream.writingInterrupted(true);
+
+                // Checkstyle: stop
+                // noinspection StatementWithEmptyBody
+                while (errorJSONStream.isWriting() || outJSONStream.isWriting()) {
+                }
+                // Checkstyle: start
+
+                outJSONStream.flush();
+                errorJSONStream.flush();
+                for (ImageBuildTask task : tasks) {
+                    threadPoolExecutor.submit(task::interruptBuild);
+                }
+                sendExitStatus(output, 0);
                 return true;
             default:
                 log("Invalid command: " + serverCommand.command);
@@ -336,56 +384,49 @@ public final class NativeImageBuildServer {
         }
     }
 
-    private static Properties parseProperties(ArrayList<String> arguments) {
-        Properties props = new Properties(System.getProperties());
-        new ArrayList<>(arguments).stream().filter(v -> v.startsWith("-D")).forEach(arg -> {
-            arguments.remove(arg);
-            String value = arg.substring("-D".length());
-            int eq = value.indexOf('=');
-            props.setProperty(value.substring(0, eq), value.substring(eq + 1));
-        });
-        return props;
-    }
-
-    private static void sendExitStatus(OutputStreamWriter output, int exitStatus) {
+    private static void sendExitStatus(DataOutputStream output, int exitStatus) {
         try {
-            SubstrateServerMessage.send(new SubstrateServerMessage("s", Integer.toString(exitStatus)), output);
+            SubstrateServerMessage.send(new SubstrateServerMessage(ServerCommand.SEND_STATUS, ByteBuffer.allocate(4).putInt(exitStatus).array()), output);
         } catch (IOException e) {
             throw VMError.shouldNotReachHere(e);
         }
     }
 
-    private static void sendError(OutputStreamWriter output, String message) {
+    private static void sendError(DataOutputStream output, String message) {
         try {
-            SubstrateServerMessage.send(new SubstrateServerMessage("e", message), output);
+            SubstrateServerMessage.send(new SubstrateServerMessage(ServerCommand.WRITE_ERR, message.getBytes()), output);
         } catch (IOException e) {
             throw VMError.shouldNotReachHere(e);
         }
     }
 
     private static Integer executeCompilation(ArrayList<String> arguments) {
-        final String[] classpath = NativeImageGeneratorRunner.extractImageClassPath(arguments);
-        URLClassLoader imageClassLoader;
+        String[] classpath = NativeImageGeneratorRunner.extractImagePathEntries(arguments, SubstrateOptions.IMAGE_CLASSPATH_PREFIX);
         ClassLoader applicationClassLoader = Thread.currentThread().getContextClassLoader();
         try {
-            imageClassLoader = NativeImageGeneratorRunner.installURLClassLoader(classpath);
-            final ImageBuildTask task = loadCompilationTask(arguments, imageClassLoader);
-            return task.build(arguments.toArray(new String[arguments.size()]), classpath, imageClassLoader);
+            ImageClassLoader imageClassLoader = NativeImageGeneratorRunner.installNativeImageClassLoader(classpath, new String[0]);
+            ImageBuildTask task = loadCompilationTask(arguments, imageClassLoader.getClassLoader());
+            try {
+                tasks.add(task);
+                return task.build(arguments.toArray(new String[0]), imageClassLoader);
+            } finally {
+                tasks.remove(task);
+            }
         } finally {
+            NativeImageGeneratorRunner.uninstallNativeImageClassLoader();
             Thread.currentThread().setContextClassLoader(applicationClassLoader);
         }
     }
 
-    private static int withJVMContext(Properties properties, PrintStream out, PrintStream err, Supplier<Integer> body) {
-        Properties previousProperties = System.getProperties();
+    private static int withJVMContext(PrintStream out, PrintStream err, Supplier<Integer> body) {
+        Properties previousProperties = (Properties) System.getProperties().clone();
         PrintStream previousOut = System.out;
         PrintStream previousErr = System.err;
-        System.setProperties(properties);
+
         System.setOut(out);
         System.setErr(err);
         ResourceBundle.clearCache();
         try {
-            verifyConsistentcyOf("substratevm.version", previousProperties);
             return body.get();
         } catch (Throwable t) {
             t.printStackTrace();
@@ -395,7 +436,9 @@ public final class NativeImageBuildServer {
             System.setOut(previousOut);
             System.setErr(previousErr);
             resetGlobalStateInLoggers();
+            resetGlobalStateMXBeanLookup();
             resetResourceBundle();
+            resetJarFileFactoryCaches();
             resetGlobalStateInGraal();
             withGlobalStaticField("java.lang.ApplicationShutdownHooks", "hooks", f -> {
                 @SuppressWarnings("unchecked")
@@ -406,6 +449,27 @@ public final class NativeImageBuildServer {
                 });
             });
         }
+    }
+
+    private static void resetGlobalStateMXBeanLookup() {
+        withGlobalStaticField("com.sun.jmx.mbeanserver.MXBeanLookup", "currentLookup", f -> {
+            ThreadLocal<?> currentLookup = (ThreadLocal<?>) f.get(null);
+            currentLookup.remove();
+        });
+        withGlobalStaticField("com.sun.jmx.mbeanserver.MXBeanLookup", "mbscToLookup", f -> {
+            try {
+                Object mbscToLookup = f.get(null);
+                Map<?, ?> map = ReflectionUtil.readField(Class.forName("com.sun.jmx.mbeanserver.WeakIdentityHashMap"), "map", mbscToLookup);
+                map.clear();
+                ReferenceQueue<?> refQueue = ReflectionUtil.readField(Class.forName("com.sun.jmx.mbeanserver.WeakIdentityHashMap"), "refQueue", mbscToLookup);
+                Reference<?> ref;
+                do {
+                    ref = refQueue.poll();
+                } while (ref != null);
+            } catch (ClassNotFoundException e) {
+                throw VMError.shouldNotReachHere(e);
+            }
+        });
     }
 
     private static void resetGlobalStateInLoggers() {
@@ -424,20 +488,22 @@ public final class NativeImageBuildServer {
     }
 
     private static boolean isSystemLoaderLogLevelEntry(Entry<?, ?> e) {
-        return ((List<?>) e.getValue()).stream()
-                        .map(x -> getFieldValueOfObject("java.util.logging.Level$KnownLevel", "levelObject", x))
-                        .allMatch(NativeImageBuildServer::isSystemClassLoader);
+        if (JavaVersionUtil.JAVA_SPEC <= 8) {
+            return ((List<?>) e.getValue()).stream()
+                            .map(x -> getFieldValueOfObject("java.util.logging.Level$KnownLevel", "levelObject", x))
+                            .allMatch(NativeImageBuildServer::isSystemClassLoader);
+        } else {
+            return ((List<?>) e.getValue()).stream()
+                            .map(x -> getFieldValueOfObject("java.util.logging.Level$KnownLevel", "mirroredLevel", x))
+                            .allMatch(NativeImageBuildServer::isSystemClassLoader);
+        }
     }
 
     private static Object getFieldValueOfObject(String className, String fieldName, Object o) {
         try {
-            Field field = Class.forName(className).getDeclaredField(fieldName);
-            field.setAccessible(true);
-            Object res = field.get(o);
-            field.setAccessible(false);
-            return res;
-        } catch (NoSuchFieldException | ClassNotFoundException | IllegalAccessException e) {
-            throw VMError.shouldNotReachHere("Static field " + fieldName + " of class " + className + " can't be reset. Underlying exception: " + e.getMessage());
+            return ReflectionUtil.readField(Class.forName(className), fieldName, o);
+        } catch (ClassNotFoundException ex) {
+            throw VMError.shouldNotReachHere(ex);
         }
     }
 
@@ -453,12 +519,10 @@ public final class NativeImageBuildServer {
 
     private static void withGlobalStaticField(String className, String fieldName, FieldAction action) {
         try {
-            Field field = Class.forName(className).getDeclaredField(fieldName);
-            field.setAccessible(true);
+            Field field = ReflectionUtil.lookupField(Class.forName(className), fieldName);
             action.perform(field);
-            field.setAccessible(false);
-        } catch (NoSuchFieldException | ClassNotFoundException | IllegalAccessException e) {
-            throw VMError.shouldNotReachHere("Static field " + fieldName + " of class " + className + " can't be reset. Underlying exception: " + e.getMessage());
+        } catch (ClassNotFoundException | IllegalAccessException ex) {
+            throw VMError.shouldNotReachHere(ex);
         }
     }
 
@@ -476,31 +540,25 @@ public final class NativeImageBuildServer {
         withGlobalStaticField("java.util.ResourceBundle", "cacheList", list -> ((ConcurrentHashMap<?, ?>) list.get(null)).clear());
     }
 
-    private static void verifyConsistentcyOf(String key, Properties previousProperties) {
-        if (!previousProperties.containsKey(key)) {
-            previousProperties.setProperty(key, System.getProperty(key));
-        }
-        if (!previousProperties.getProperty(key).equals(System.getProperty(key))) {
-            throw UserError.abort("attempted to change `" + key + "` from " +
-                            previousProperties.getProperty(key) + " to " + System.getProperty(key) + "." +
-                            "To use the desired property value restart the image build server with the new value provided.");
-        }
+    private static void resetJarFileFactoryCaches() {
+        withGlobalStaticField("sun.net.www.protocol.jar.JarFileFactory", "fileCache", list -> ((HashMap<?, ?>) list.get(null)).clear());
+        withGlobalStaticField("sun.net.www.protocol.jar.JarFileFactory", "urlCache", list -> ((HashMap<?, ?>) list.get(null)).clear());
     }
 
     private static ImageBuildTask loadCompilationTask(ArrayList<String> arguments, ClassLoader classLoader) {
         Optional<String> taskParameter = arguments.stream().filter(arg -> arg.startsWith(TASK_PREFIX)).findFirst();
         if (!taskParameter.isPresent()) {
-            throw UserError.abort("image building task not specified. Provide the fully qualified task name after the \"" + TASK_PREFIX + "\" argument.");
+            throw UserError.abort("Image building task not specified. Provide the fully qualified task name after the \"%s\" argument.", TASK_PREFIX);
         }
         arguments.removeAll(arguments.stream().filter(arg -> arg.startsWith(TASK_PREFIX)).collect(Collectors.toList()));
         final String task = taskParameter.get().substring(TASK_PREFIX.length());
         try {
             Class<?> imageTaskClass = Class.forName(task, true, classLoader);
-            return (ImageBuildTask) imageTaskClass.newInstance();
+            return (ImageBuildTask) imageTaskClass.getDeclaredConstructor().newInstance();
         } catch (ClassNotFoundException e) {
-            throw UserError.abort("image building task " + task + " can not be found. Make sure that " + task + " is present on the classpath.");
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw UserError.abort("image building task " + task + " must have a public constructor without parameters.");
+            throw UserError.abort("Image building task %1$s can not be found. Make sure that %1$s is present on the classpath.", task);
+        } catch (IllegalArgumentException | InstantiationException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+            throw UserError.abort("Image building task %s must have a public constructor without parameters.", task);
         }
     }
 }
