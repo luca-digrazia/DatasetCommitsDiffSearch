@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core.option;
 
-import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 
@@ -43,11 +42,6 @@ public class RuntimeOptionKey<T> extends OptionKey<T> {
      * Returns the value of this option in the {@link RuntimeOptionValues}.
      */
     public T getValue() {
-        return getValue(RuntimeOptionValues.singleton());
-    }
-
-    @Fold
-    public T getHostedValue() {
         return getValue(RuntimeOptionValues.singleton());
     }
 }
