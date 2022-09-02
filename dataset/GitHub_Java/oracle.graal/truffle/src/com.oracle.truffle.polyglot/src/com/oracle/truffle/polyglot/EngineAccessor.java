@@ -1131,11 +1131,6 @@ final class EngineAccessor extends Accessor {
             }
             return targetLanguageContext.ensureInitialized(accessingPolyglotLanguage);
         }
-
-        @Override
-        public boolean isHostToGuestRootNode(RootNode rootNode) {
-            return rootNode instanceof HostToGuestRootNode;
-        }
     }
 
     abstract static class AbstractClassLoaderSupplier implements Supplier<ClassLoader> {
