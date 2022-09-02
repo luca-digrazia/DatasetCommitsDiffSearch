@@ -517,7 +517,6 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.BR_TABLE: {
-                    state.pop();
                     int numLabels = readVectorLength();
                     // We need to save three tables here, to maintain the mapping target -> state
                     // mapping:
@@ -542,6 +541,8 @@ public class BinaryParser extends BinaryStreamParser {
                         }
                     }
                     branchTable[0] = returnLength;
+                    // TODO: Maybe move this pop up for consistency.
+                    state.pop();
                     // The offset to the branch table.
                     state.saveBranchTable(branchTable);
                     break;

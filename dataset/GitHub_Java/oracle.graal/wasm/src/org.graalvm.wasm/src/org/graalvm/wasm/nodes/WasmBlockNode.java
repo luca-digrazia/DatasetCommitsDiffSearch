@@ -495,15 +495,15 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     // but since we are returning, it does not really matter.
 
                     int returnTypeLength = table[0];
-                    int unwindCounterValue = table[1 + 2 * index];
+                    int targetOffsetValue = table[1 + 2 * index];
                     int continuationStackPointer = table[1 + 2 * index + 1];
-                    trace("br_table, target = %d", unwindCounterValue);
+                    trace("br_table, target = %d", targetOffsetValue);
 
                     // Populate the stack with the return values of the current block (the one we
                     // are escaping from).
                     unwindStack(frame, stackPointer, continuationStackPointer, returnTypeLength);
 
-                    return TargetOffset.createOrCached(unwindCounterValue);
+                    return TargetOffset.createOrCached(targetOffsetValue);
                 }
                 case RETURN: {
                     // A return statement causes the termination of the current function, i.e.
