@@ -23,8 +23,6 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +30,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.EspressoOptions.VerifyMode;
 import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
@@ -511,12 +508,11 @@ public final class ObjectKlass extends Klass {
         return null;
     }
 
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     private void verifyKlass() {
-        VerifyMode mode = getContext().getEnv().getOptions().get(EspressoOptions.Verify);
-        if (mode != VerifyMode.NONE) {
+        if (EspressoOptions.ENABLE_VERIFICATION) {
             // Do not verify BootClassLoader classes, they are trusted.
-            if (mode == VerifyMode.ALL || !StaticObject.isNull(getDefiningClassLoader())) {
+            if (!StaticObject.isNull(getDefiningClassLoader())) {
                 for (Method m : declaredMethods) {
                     try {
                         MethodVerifier.verify(m);

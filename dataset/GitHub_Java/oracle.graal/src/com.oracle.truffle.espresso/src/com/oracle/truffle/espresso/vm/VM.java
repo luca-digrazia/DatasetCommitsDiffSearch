@@ -47,7 +47,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
@@ -640,10 +639,8 @@ public final class VM extends NativeEnv implements ContextAccess {
         // TODO(peterssen): Name is in binary form, but separator can be either / or . .
         Symbol<Type> type = getTypes().fromClassGetName(name);
 
-        StaticObject clazz = getContext().getRegistries().defineKlass(type, bytes, loader).mirror();
-        assert pd != null;
-        clazz.setHiddenField(getMeta().HIDDEN_PROTECTION_DOMAIN, pd);
-        return clazz;
+        StaticObject klass = getContext().getRegistries().defineKlass(type, bytes, loader).mirror();
+        return klass;
     }
 
     @VmImpl
@@ -738,11 +735,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static long JVM_TotalMemory() {
         // TODO(peterssen): What to report here?
         return Runtime.getRuntime().totalMemory();
-    }
-
-    @VmImpl
-    public static long JVM_MaxMemory() {
-        return Runtime.getRuntime().maxMemory();
     }
 
     @VmImpl
@@ -849,45 +841,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
 
         throw EspressoError.shouldNotReachHere();
-    }
-
-    @VmImpl
-    @JniImpl
-    public @Host(Class[].class) StaticObject JVM_GetClassContext() {
-        // TODO(garcia) This must only be called from SecurityManager.getClassContext
-        ArrayList<StaticObject> result = new ArrayList<>();
-        Truffle.getRuntime().iterateFrames(
-                        new FrameInstanceVisitor<Object>() {
-                            @Override
-                            public Object visitFrame(FrameInstance frameInstance) {
-                                if (frameInstance.getCallTarget() instanceof RootCallTarget) {
-                                    RootCallTarget callTarget = (RootCallTarget) frameInstance.getCallTarget();
-                                    RootNode rootNode = callTarget.getRootNode();
-                                    if (rootNode instanceof EspressoRootNode) {
-                                        Method m = ((EspressoRootNode) rootNode).getMethod();
-                                        if (!isIgnoredBySecurityStackWalk(m, getMeta()) && !m.isNative()) {
-                                            result.add(m.getDeclaringKlass().mirror());
-                                        }
-                                    }
-                                }
-                                return null;
-                            }
-                        });
-        return new StaticObject(getMeta().Class_Array, result.toArray(StaticObject.EMPTY_ARRAY));
-    }
-
-    private static boolean isIgnoredBySecurityStackWalk(Method m, Meta meta) {
-        Klass holderKlass = m.getDeclaringKlass();
-        if (holderKlass == meta.Method && m.getName() == Name.invoke) {
-            return true;
-        }
-        if (meta.MethodAccessorImpl.isAssignableFrom(holderKlass)) {
-            return true;
-        }
-        if (MethodHandleIntrinsics.isMethodHandleIntrinsic(m, meta)) {
-            return true;
-        }
-        return false;
     }
 
     @VmImpl
@@ -1084,22 +1037,5 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
         String fileName = getRegistries().getBootClassRegistry().getPackagePath(hostPkgName);
         return getMeta().toGuestString(fileName);
-    }
-
-    @VmImpl
-    @JniImpl
-    public @Host(String[].class) StaticObject JVM_GetSystemPackages() {
-        String[] packages = getRegistries().getBootClassRegistry().getPackagePaths();
-        StaticObject[] array = new StaticObject[packages.length];
-        for (int i = 0; i < packages.length; i++) {
-            array[i] = getMeta().toGuestString(packages[i]);
-        }
-        StaticObject result = new StaticObject(getMeta().String.getArrayClass(), array);
-        return result;
-    }
-
-    @VmImpl
-    public static long JVM_FreeMemory() {
-        return Runtime.getRuntime().freeMemory();
     }
 }
