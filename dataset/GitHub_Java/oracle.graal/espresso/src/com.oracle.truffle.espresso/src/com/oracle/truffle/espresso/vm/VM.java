@@ -54,6 +54,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -62,6 +63,7 @@ import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 
+import org.graalvm.options.OptionMap;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -2263,31 +2265,32 @@ public final class VM extends NativeEnv implements ContextAccess {
         });
     }
 
-    /**
-     * Returns all values declared to the {@link EspressoOptions#VMArguments} option during context
-     * creation.
-     * <p>
-     * In practice, this should be the list of arguments passed to the context, but depending on who
-     * built it, it may be any arbitrary list of Strings.
-     * <p>
-     * Note that even if that's the case, it may differs slightly from the expected list of
-     * arguments. The Java world expects this to be the arguments passed to the VM creation, which
-     * is expected to have passed through the regular java launcher, and have been de-sugarified
-     * (/ex: '-m [module]' -> '-Djdk.module.main=[module]').
-     * <p>
-     * In the Java-on-Truffle case, the VM arguments and the context builder options are equivalent,
-     * but that is not true in the regular Espresso launcher case, or in an embedding scenario.
-     */
     @JniImpl
     @VmImpl
     @TruffleBoundary
     public @Host(String[].class) StaticObject JVM_GetVmArguments() {
-        String[] vmArgs = getContext().getVmArguments();
-        StaticObject array = getMeta().java_lang_String.allocateReferenceArray(vmArgs.length);
-        for (int i = 0; i < vmArgs.length; i++) {
-            getInterpreterToVM().setArrayObject(getMeta().toGuestString(vmArgs[i]), i, array);
+        OptionMap<String> argsMap = getContext().getEnv().getOptions().get(EspressoOptions.VMArguments);
+        if (argsMap == null) {
+            return getMeta().java_lang_String.allocateReferenceArray(0);
         }
+        Set<Map.Entry<String, String>> set = argsMap.entrySet();
+        int length = set.size();
+        StaticObject array = getMeta().java_lang_String.allocateReferenceArray(length);
+        for (Map.Entry<String, String> entry : set) {
+            String key = entry.getKey();
+            int idx = Integer.parseInt(key.substring(key.lastIndexOf('.') + 1));
+            StaticObject str = getMeta().toGuestString(entry.getValue());
+            getInterpreterToVM().setArrayObject(str, idx, array);
+        }
+        assert noNullEntry(array);
         return array;
+    }
+
+    private static boolean noNullEntry(StaticObject array) {
+        for (Object entry : (Object[]) array.unwrap()) {
+            assert entry != null;
+        }
+        return true;
     }
 
     // region Management
@@ -2563,8 +2566,12 @@ public final class VM extends NativeEnv implements ContextAccess {
         return 0; // always 0
     }
 
+    /**
+     * Returns known.
+     */
     @JniImpl
     @VmImpl
+    @TruffleBoundary
     public @Host(String[].class) StaticObject GetInputArgumentArray() {
         return JVM_GetVmArguments();
     }
@@ -2572,7 +2579,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     @VmImpl
     public @Host(String[].class) StaticObject GetInputArguments() {
-        return JVM_GetVmArguments();
+        return GetInputArgumentArray();
     }
 
     @JniImpl
