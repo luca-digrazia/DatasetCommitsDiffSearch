@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -42,7 +42,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.model.target.TargetInformation;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceFileReference;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
 import com.oracle.truffle.llvm.runtime.types.Type;
@@ -64,7 +63,6 @@ public final class ModelModule {
     private final HashMap<FunctionDefinition, LazyFunctionParser> lazyFunctionParsers = new HashMap<>();
     private TargetDataLayout targetDataLayout = defaultLayout;
     private DebugInfoFunctionProcessor functionProcessor = null;
-    private final ArrayList<LLVMSourceFileReference> sourceFiles = new ArrayList<>();
 
     public ModelModule() {
     }
@@ -144,13 +142,5 @@ public final class ModelModule {
     @Override
     public String toString() {
         return String.format("Model (%d defines, %d declares, %d global variables, %d aliases, %d types)", defines.size(), declares.size(), globalVariables.size(), aliases.size(), types.size());
-    }
-
-    public void addSourceFileReference(LLVMSourceFileReference sourceFile) {
-        sourceFiles.add(sourceFile);
-    }
-
-    public ArrayList<LLVMSourceFileReference> getSourceFileReferences() {
-        return sourceFiles;
     }
 }
