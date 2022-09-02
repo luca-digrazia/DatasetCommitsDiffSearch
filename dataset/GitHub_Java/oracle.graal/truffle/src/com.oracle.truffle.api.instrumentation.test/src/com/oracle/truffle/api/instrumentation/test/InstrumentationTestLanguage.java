@@ -1567,6 +1567,11 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
             this.loop = Truffle.getRuntime().createLoopNode(new LoopConditionNode(loopCount, children));
         }
 
+        @Override
+        public boolean isInstrumentable() {
+            return false;
+        }
+
         FrameSlot getLoopIndex() {
             if (loopIndexSlot == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -1863,9 +1868,9 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
     }
 
     @ExportLibrary(InteropLibrary.class)
-    public static final class Null implements TruffleObject {
+    static final class Null implements TruffleObject {
 
-        public static final Null INSTANCE = new Null();
+        static final Null INSTANCE = new Null();
 
         private Null() {
         }

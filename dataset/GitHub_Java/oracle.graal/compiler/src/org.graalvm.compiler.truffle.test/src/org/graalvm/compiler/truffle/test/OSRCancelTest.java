@@ -89,6 +89,7 @@ public class OSRCancelTest {
             future.get();
         } catch (ExecutionException e) {
             PolyglotException pe = (PolyglotException) e.getCause();
+            pe.printStackTrace();
             assertTrue(pe.isCancelled());
         }
     }
