@@ -117,24 +117,24 @@ public final class RedefinitionPluginHandler implements RedefineListener, Define
     }
 
     @Override
-    public boolean shouldRerunClassInitializer(ObjectKlass klass, boolean changed) {
+    public boolean rerunClinit(ObjectKlass klass, boolean changed) {
         boolean rerun = false;
         // internal plugins
         for (InternalRedefinitionPlugin plugin : internalPlugins) {
-            if (plugin.shouldRerunClassInitializer(klass, changed)) {
+            if (plugin.reRunClinit(klass, changed)) {
                 rerun = true;
                 break;
             }
         }
         // external plugins
         if (externalPluginHandler != null) {
-            rerun |= externalPluginHandler.shouldRerunClassInitializer(klass, changed);
+            rerun |= externalPluginHandler.rerunClassInit(klass, changed);
         }
         return rerun;
     }
 
     @Override
-    public void postRedefinition(ObjectKlass[] changedKlasses) {
+    public void postRedefition(ObjectKlass[] changedKlasses) {
         // internal plugins
         for (InternalRedefinitionPlugin plugin : internalPlugins) {
             try {
@@ -151,10 +151,10 @@ public final class RedefinitionPluginHandler implements RedefineListener, Define
     }
 
     @Override
-    public void collectExtraClassesToReload(List<RedefineInfo> redefineInfos, List<RedefineInfo> additional) {
+    public void addExtraReloadClasses(List<RedefineInfo> redefineInfos, List<RedefineInfo> additional) {
         // internal plugins
         for (InternalRedefinitionPlugin plugin : internalPlugins) {
-            plugin.collectExtraClassesToReload(redefineInfos, additional);
+            plugin.fillExtraReloadClasses(redefineInfos, additional);
         }
     }
 }
