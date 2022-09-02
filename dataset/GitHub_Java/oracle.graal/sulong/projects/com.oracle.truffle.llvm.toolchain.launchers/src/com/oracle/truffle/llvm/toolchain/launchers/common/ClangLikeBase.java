@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,6 +38,7 @@ import java.util.Objects;
 
 import com.oracle.truffle.llvm.toolchain.launchers.darwin.DarwinLinker;
 import com.oracle.truffle.llvm.toolchain.launchers.linux.LinuxLinker;
+import com.oracle.truffle.llvm.toolchain.launchers.windows.WindowsLinker;
 
 public abstract class ClangLikeBase extends Driver {
 
@@ -153,8 +154,6 @@ public abstract class ClangLikeBase extends Driver {
         List<String> sulongArgs = new ArrayList<>();
         if (os == OS.DARWIN && Files.isExecutable(Paths.get(XCRUN)) && Files.isExecutable(Paths.get(exe))) {
             sulongArgs.add(XCRUN);
-            sulongArgs.add("--sdk");
-            sulongArgs.add("macosx");
         }
         sulongArgs.add(exe);
 
@@ -170,12 +169,20 @@ public abstract class ClangLikeBase extends Driver {
     }
 
     protected void getCompilerArgs(List<String> sulongArgs) {
-        sulongArgs.addAll(Arrays.asList("-flto=full", "-g", "-O1"));
+        // use -gdwarf-5 instead of -g to enable source file checksums
+        sulongArgs.addAll(Arrays.asList("-flto=full", "-gdwarf-5", "-O1"));
     }
 
     protected void getLinkerArgs(List<String> sulongArgs) {
         if (os == OS.LINUX) {
             sulongArgs.addAll(Arrays.asList("-fuse-ld=" + getLLVMExecutable(LinuxLinker.LLD), "-Wl," + String.join(",", LinuxLinker.getLinkerFlags())));
+        } else if (os == OS.WINDOWS) {
+            /*
+             * This should rather be `"-fuse-ld=" + getLLVMExecutable(WindowsLinker.LLD_LINK)` to be
+             * sure to pick up the right executable, but for some reason using absolute paths for
+             * `-fuse-ld` does not work on Windows.
+             */
+            sulongArgs.addAll(Arrays.asList("-fuse-ld=" + WindowsLinker.LLD_LINK, "-Wl," + String.join(",", WindowsLinker.getLinkerFlags())));
         } else if (os == OS.DARWIN) {
             sulongArgs.add("-fuse-ld=" + DarwinLinker.LD);
         }
