@@ -56,7 +56,6 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
@@ -126,14 +125,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
     PolyglotValue(PolyglotImpl polyglot, PolyglotLanguageContext languageContext) {
         super(polyglot);
         this.languageContext = languageContext;
-    }
-
-    @Override
-    public final Context getContext() {
-        if (languageContext == null) {
-            return null;
-        }
-        return languageContext.context.currentApi;
     }
 
     @Override
@@ -433,12 +424,12 @@ abstract class PolyglotValue extends AbstractValueImpl {
     }
 
     private static Object enter(PolyglotLanguageContext languageContext) {
-        return languageContext != null ? languageContext.context.engine.enterIfNeeded(languageContext.context) : null;
+        return languageContext != null ? languageContext.context.enterIfNeeded() : null;
     }
 
     private static void leave(PolyglotLanguageContext languageContext, Object prev) {
         if (languageContext != null) {
-            languageContext.context.engine.leaveIfNeeded(prev, languageContext.context);
+            languageContext.context.leaveIfNeeded(prev);
         }
     }
 
