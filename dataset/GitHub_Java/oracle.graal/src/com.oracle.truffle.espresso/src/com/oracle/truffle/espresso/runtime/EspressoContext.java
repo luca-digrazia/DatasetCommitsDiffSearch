@@ -79,6 +79,7 @@ public final class EspressoContext {
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
 
+    private volatile int threadIncrement = 0;
     private StaticObject mainThreadGroup;
 
     public int getNewId() {
@@ -368,10 +369,10 @@ public final class EspressoContext {
         threadManager.registerThread(hostThread, guestThread);
 
         meta.Thread // public Thread(ThreadGroup group, String name)
-                        .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_Runnable) //
+                        .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
                         .invokeDirect(guestThread,
                                         /* group */ mainThreadGroup,
-                                        /* runnable */ StaticObject.NULL);
+                                        /* name */ meta.toGuestString("Thread-" + ++threadIncrement));
         guestThread.setIntField(meta.Thread_threadStatus, Target_java_lang_Thread.State.RUNNABLE.value);
 
         // now add to the main thread group
