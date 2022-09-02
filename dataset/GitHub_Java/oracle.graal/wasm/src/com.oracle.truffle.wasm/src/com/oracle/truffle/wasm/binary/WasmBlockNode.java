@@ -31,122 +31,121 @@ package com.oracle.truffle.wasm.binary;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import static com.oracle.truffle.wasm.binary.Assert.format;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.BLOCK;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.BR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.BR_IF;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.CALL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.DROP;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.ELSE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.END;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_ABS;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_ADD;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_CEIL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_CONST;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_COPYSIGN;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_DIV;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_EQ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_FLOOR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_GE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_GT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_LE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_LT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_MAX;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_MIN;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_MUL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_NE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_NEAREST;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_NEG;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_SQRT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_SUB;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_TRUNC;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_ABS;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_ADD;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_CEIL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_CONST;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_COPYSIGN;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_DIV;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_EQ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_FLOOR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_GE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_GT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_LE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_LT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_MAX;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_MIN;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_MUL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_NE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_NEAREST;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_NEG;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_SQRT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_SUB;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_TRUNC;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_ADD;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_AND;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_CLZ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_CONST;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_CTZ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_DIV_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_DIV_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_EQ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_EQZ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_GE_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_GE_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_GT_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_GT_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LE_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LE_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LT_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LT_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_MUL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_NE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_OR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_POPCNT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_REM_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_REM_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_ROTL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_ROTR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHR_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHR_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SUB;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_XOR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_ADD;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_AND;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_CLZ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_CONST;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_CTZ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_DIV_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_DIV_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_EQ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_EQZ;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_GE_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_GE_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_GT_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_GT_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LE_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LE_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LT_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LT_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_MUL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_NE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_OR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_POPCNT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_REM_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_REM_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_ROTL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_ROTR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SHL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SHR_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SHR_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SUB;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_XOR;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.IF;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_GET;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_SET;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_TEE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.LOOP;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.NOP;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
+import static com.oracle.truffle.wasm.binary.Instructions.BLOCK;
+import static com.oracle.truffle.wasm.binary.Instructions.BR;
+import static com.oracle.truffle.wasm.binary.Instructions.BR_IF;
+import static com.oracle.truffle.wasm.binary.Instructions.DROP;
+import static com.oracle.truffle.wasm.binary.Instructions.ELSE;
+import static com.oracle.truffle.wasm.binary.Instructions.END;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_ABS;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_ADD;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_CEIL;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_CONST;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_COPYSIGN;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_DIV;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_EQ;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_FLOOR;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_GE;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_GT;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_LE;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_LT;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_MAX;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_MIN;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_MUL;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_NE;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_NEAREST;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_NEG;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_SQRT;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_SUB;
+import static com.oracle.truffle.wasm.binary.Instructions.F32_TRUNC;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_ABS;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_ADD;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_CEIL;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_CONST;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_COPYSIGN;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_DIV;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_EQ;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_FLOOR;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_GE;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_GT;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_LE;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_LT;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_MAX;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_MIN;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_MUL;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_NE;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_NEAREST;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_NEG;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_SQRT;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_SUB;
+import static com.oracle.truffle.wasm.binary.Instructions.F64_TRUNC;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_ADD;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_AND;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_CLZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_CONST;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_CTZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_DIV_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_DIV_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_EQ;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_EQZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GT_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LT_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_MUL;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_NE;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_OR;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_POPCNT;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_ROTL;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_ROTR;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_SHL;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_XOR;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_ADD;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_AND;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_CLZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_CONST;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_CTZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_DIV_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_DIV_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_EQ;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_EQZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GT_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_MUL;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_NE;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_OR;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_POPCNT;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_REM_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_REM_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_ROTL;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_ROTR;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_SHL;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_SHR_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_SHR_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_SUB;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_XOR;
+import static com.oracle.truffle.wasm.binary.Instructions.IF;
+import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_GET;
+import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_SET;
+import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_TEE;
+import static com.oracle.truffle.wasm.binary.Instructions.LOOP;
+import static com.oracle.truffle.wasm.binary.Instructions.NOP;
+import static com.oracle.truffle.wasm.binary.Instructions.UNREACHABLE;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -161,8 +160,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int initialIntConstantOffset;
     @CompilationFinal(dimensions = 1) WasmNode[] nestedControlTable;
 
-    public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset) {
-        super(wasmModule, codeEntry, -1, -1);
+    public WasmBlockNode(WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset) {
+        super(codeEntry, -1, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
         this.initialStackPointer = initialStackPointer;
@@ -272,66 +271,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
-                    break;
-                }
-                case CALL: {
-                    int functionIndex = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
-                    byte constantLength = codeEntry().byteConstant(byteConstantOffset);
-                    byteConstantOffset++;
-                    offset += constantLength;
-
-                    WasmFunction function = wasmModule().symbolTable().function(functionIndex);
-                    byte returnType = function.returnType();
-                    int numArgs = function.numArguments();
-
-                    Object[] args = new Object[numArgs];
-                    for (int i = 0; i != numArgs; ++i) {
-                        stackPointer--;
-                        byte type = wasmModule().symbolTable().getFunctionTypeArgumentTypeAt(function.typeIndex(), i);
-                        switch (type) {
-                            case ValueTypes.I32_TYPE:
-                                args[i] = popInt(frame, stackPointer);
-                                break;
-                            case ValueTypes.I64_TYPE:
-                                args[i] = pop(frame, stackPointer);
-                                break;
-                            case ValueTypes.F32_TYPE:
-                                args[i] = popAsFloat(frame, stackPointer);
-                                break;
-                            case ValueTypes.F64_TYPE:
-                                args[i] = popAsDouble(frame, stackPointer);
-                                break;
-                        }
-                    }
-
-                    switch (returnType) {
-                        case ValueTypes.I32_TYPE: {
-                            int result = (int) function.execute(args);
-                            pushInt(frame, stackPointer, result);
-                            break;
-                        }
-                        case ValueTypes.I64_TYPE: {
-                            long result = (long) function.execute(args);
-                            push(frame, stackPointer, result);
-                            break;
-                        }
-                        case ValueTypes.F32_TYPE: {
-                            float result = (float) function.execute(args);
-                            pushFloat(frame, stackPointer, result);
-                            break;
-                        }
-                        case ValueTypes.F64_TYPE: {
-                            double result = (double) function.execute(args);
-                            pushDouble(frame, stackPointer, result);
-                            break;
-                        }
-                        default: {
-                            // Void return type - do nothing.
-                            break;
-                        }
-                    }
-
-                    stackPointer++;
                     break;
                 }
                 case DROP: {
@@ -1337,7 +1276,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @Override
     public boolean executeRepeating(VirtualFrame frame) {
-        return execute(WasmContext.getCurrent(), frame) != -1;
+        WasmContext context = null; // TODO: Read the context from a thread-local.
+        return execute(context, frame) != -1;
     }
 
     @Override

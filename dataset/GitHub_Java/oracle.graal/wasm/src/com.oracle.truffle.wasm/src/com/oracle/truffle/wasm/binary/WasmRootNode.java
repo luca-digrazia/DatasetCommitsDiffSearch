@@ -31,13 +31,9 @@ package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 
-@NodeInfo(language = "wasm", description = "The root node of all WebAssembly functions")
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
     @CompilationFinal private WasmCodeEntry codeEntry;
     @Child private WasmBlockNode body;
@@ -50,22 +46,13 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        /*
-         * WebAssembly structure dictates that a function's arguments are provided to the function
-         * as local variables, followed by any additional local variables that the function declares.
-         * A VirtualFrame contains a special array for the arguments, so we need to move them to the locals.
-         */
-        argumentsToLocals(frame);
-
-        body.execute(WasmContext.getCurrent(), frame);
+        WasmContext context = null; // TODO: Read from the thread-local that holds the context.
+        body.execute(context, frame);
         long returnValue = pop(frame, 0);
         switch (body.returnTypeId()) {
-            case 0x00:
-            case ValueTypes.VOID_TYPE:
-                return WasmVoidResult.getInstance();
             case ValueTypes.I32_TYPE:
                 Assert.assertEquals(returnValue >>> 32, 0, "Expected i32 value, popped value was larger than 32 bits.");
-                return (int) returnValue;
+                return (int) (returnValue & 0xffffffff);
             case ValueTypes.I64_TYPE:
                 return returnValue;
             case ValueTypes.F32_TYPE:
@@ -76,28 +63,6 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
             default:
                 Assert.fail(String.format("Unknown type: 0x%02X", body.returnTypeId()));
                 return null;
-        }
-    }
-
-    private void argumentsToLocals(VirtualFrame frame) {
-        Object[] args = frame.getArguments();
-        for (int i = 0; i != args.length; ++i) {
-            FrameSlot slot = codeEntry.localSlot(i);
-            FrameSlotKind kind = frame.getFrameDescriptor().getFrameSlotKind(slot);
-            switch (kind) {
-                case Int:
-                    frame.setInt(slot, (int) args[i]);
-                    break;
-                case Long:
-                    frame.setLong(slot, (long) args[i]);
-                    break;
-                case Float:
-                    frame.setFloat(slot, (float) args[i]);
-                    break;
-                case Double:
-                    frame.setDouble(slot, (double) args[i]);
-                    break;
-            }
         }
     }
 

@@ -35,7 +35,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 
 public abstract class WasmNode extends Node implements WasmNodeInterface {
-    @CompilationFinal private WasmModule wasmModule;
     @CompilationFinal private WasmCodeEntry codeEntry;
 
     /**
@@ -50,21 +49,14 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
     @CompilationFinal private int byteConstantLength;
 
     /**
-     * The number of integers in the int constant table used by this node.
+     * The number of bytes in the int constant table used by this node.
      */
     @CompilationFinal private int intConstantLength;
 
-    /**
-     * The number of literals in the numeric literals table used by this node.
-     */
-    @CompilationFinal private int numericLiteralLength;
-
-    public WasmNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int byteLength, int byteConstantLength, int numericLiteralLength) {
-        this.wasmModule = wasmModule;
+    public WasmNode(WasmCodeEntry codeEntry, int byteLength, int byteConstantLength) {
         this.codeEntry = codeEntry;
         this.byteLength = byteLength;
         this.byteConstantLength = byteConstantLength;
-        this.numericLiteralLength = numericLiteralLength;
     }
 
     /**
@@ -93,9 +85,6 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
     public WasmCodeEntry codeEntry() {
         return codeEntry;
     }
-    public WasmModule wasmModule() {
-        return wasmModule;
-    }
 
     public int byteLength() {
         return byteLength;
@@ -119,13 +108,5 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
 
     public void setIntConstantLength(int intConstantLength) {
         this.intConstantLength = intConstantLength;
-    }
-
-    public int numericLiteralLength() {
-        return numericLiteralLength;
-    }
-
-    public void setNumericLiteralLength(int numericLiteralLength) {
-        this.numericLiteralLength = numericLiteralLength;
     }
 }
