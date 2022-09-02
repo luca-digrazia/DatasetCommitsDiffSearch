@@ -156,13 +156,7 @@ final class OptionValuesImpl implements OptionValues {
                 suffix = suffix.substring(1);
             }
         }
-        Object convertedValue;
-        try {
-            convertedValue = optionKey.getType().convert(previousValue, suffix, value);
-        } catch (IllegalArgumentException e) {
-            throw PolyglotEngineException.illegalArgument(e);
-        }
-        values.put(descriptor.getKey(), convertedValue);
+        values.put(descriptor.getKey(), optionKey.getType().convert(previousValue, suffix, value));
         if (unparsedValues != null) {
             unparsedValues.put(descriptor.getKey(), value);
         }

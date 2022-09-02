@@ -47,7 +47,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.polyglot.PolyglotLanguage.ContextProfile;
 
 abstract class HostToGuestRootNode extends RootNode {
@@ -60,7 +59,6 @@ abstract class HostToGuestRootNode extends RootNode {
     @CompilationFinal private boolean seenNonEnter;
 
     @CompilationFinal private volatile ContextProfile profile;
-    private final BranchProfile exceptionBranch = BranchProfile.create();
 
     private final PolyglotEngineImpl engine;
 
@@ -107,7 +105,7 @@ abstract class HostToGuestRootNode extends RootNode {
                 }
             }
         } catch (Throwable e) {
-            exceptionBranch.enter();
+            CompilerDirectives.transferToInterpreter();
             throw PolyglotImpl.guestToHostException((languageContext), e);
         }
     }

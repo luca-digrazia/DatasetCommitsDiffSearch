@@ -26,7 +26,6 @@
 
 package org.graalvm.compiler.core.test;
 
-import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -179,11 +178,7 @@ public class LateMembarInsertionTest extends GraalCompilerTest {
 
     @Test
     public void test07() {
-        verifyMembars("volatileFieldLoad", membarsExpected());
-    }
-
-    private boolean membarsExpected() {
-        return !(getTarget().arch instanceof AArch64);
+        verifyMembars("volatileFieldLoad", true);
     }
 
     public static void volatileFieldStore(int v) {
@@ -192,7 +187,7 @@ public class LateMembarInsertionTest extends GraalCompilerTest {
 
     @Test
     public void test08() {
-        verifyMembars("volatileFieldStore", membarsExpected());
+        verifyMembars("volatileFieldStore", true);
     }
 
     // Unused field load should be optimized out and leave no barrier behind
@@ -213,7 +208,7 @@ public class LateMembarInsertionTest extends GraalCompilerTest {
         Assert.assertEquals(accesses.get(1).getType(), volatileAccess2Type);
         Assert.assertTrue(accesses.get(0).isWrite());
         Assert.assertTrue(accesses.get(1).isWrite());
-        Assert.assertEquals(membarsExpected() ? 4 : 0, getMembars(graph).size());
+        Assert.assertEquals(4, getMembars(graph).size());
     }
 
     // Unused field load should be optimized out and leave no barrier behind
@@ -231,7 +226,7 @@ public class LateMembarInsertionTest extends GraalCompilerTest {
         Assert.assertEquals(accesses.size(), 1);
         Assert.assertEquals(accesses.get(0).getType(), volatileAccess2Type);
         Assert.assertTrue(accesses.get(0).isWrite());
-        Assert.assertEquals(membarsExpected() ? 2 : 0, getMembars(graph).size());
+        Assert.assertEquals(2, getMembars(graph).size());
     }
 
     public static int unsafeVolatileFieldLoad(Object o, long offset) {
@@ -240,7 +235,7 @@ public class LateMembarInsertionTest extends GraalCompilerTest {
 
     @Test
     public void test11() {
-        verifyMembars("unsafeVolatileFieldLoad", membarsExpected());
+        verifyMembars("unsafeVolatileFieldLoad", true);
     }
 
     public static void unsafeVolatileFieldStore(Object o, long offset, int v) {
@@ -249,7 +244,7 @@ public class LateMembarInsertionTest extends GraalCompilerTest {
 
     @Test
     public void test12() {
-        verifyMembars("unsafeVolatileFieldStore", membarsExpected());
+        verifyMembars("unsafeVolatileFieldStore", true);
     }
 
     private void verifyMembars(String method, boolean expectsMembar) {

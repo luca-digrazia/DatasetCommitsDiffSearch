@@ -58,7 +58,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -73,7 +72,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.api.utilities.TriState;
 import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValueNode;
 
 @ExportLibrary(InteropLibrary.class)
@@ -1140,25 +1138,6 @@ final class HostObject implements TruffleObject {
 
     HostClassCache getHostClassCache() {
         return HostClassCache.forInstance(this);
-    }
-
-    @ExportMessage
-    static final class IsIdenticalOrUndefined {
-        @Specialization
-        static TriState doHostObject(HostObject receiver, HostObject other) {
-            return receiver.obj == other.obj ? TriState.TRUE : TriState.FALSE;
-        }
-
-        @Fallback
-        static TriState doOther(HostObject receiver, Object other) {
-            return TriState.UNDEFINED;
-        }
-    }
-
-    @ExportMessage
-    @TruffleBoundary
-    static int identityHashCode(HostObject receiver) {
-        return System.identityHashCode(receiver.obj);
     }
 
     @Override

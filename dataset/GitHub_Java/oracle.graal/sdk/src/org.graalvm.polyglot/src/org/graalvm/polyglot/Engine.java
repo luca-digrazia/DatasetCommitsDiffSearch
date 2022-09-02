@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -53,6 +53,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -83,7 +84,6 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractStackFrameImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
 import org.graalvm.polyglot.io.ByteSequence;
-import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
 import org.graalvm.polyglot.management.ExecutionEvent;
 
@@ -781,7 +781,7 @@ public final class Engine implements AutoCloseable {
         }
 
         @Override
-        public Object buildLimits(long statementLimit, Predicate<Source> statementLimitSourceFilter, Consumer<ResourceLimitEvent> onLimit) {
+        public Object buildLimits(long statementLimit, Predicate<Source> statementLimitSourceFilter, Duration timeLimit, Duration timeLimitAccuracy, Consumer<ResourceLimitEvent> onLimit) {
             throw noPolyglotImplementationFound();
         }
 
@@ -892,11 +892,6 @@ public final class Engine implements AutoCloseable {
             throw noPolyglotImplementationFound();
         }
 
-        @Override
-        public FileSystem newDefaultFileSystem() {
-            throw noPolyglotImplementationFound();
-        }
-
         static class EmptySource extends AbstractSourceImpl {
 
             protected EmptySource(AbstractPolyglotImpl engineImpl) {
@@ -980,12 +975,12 @@ public final class Engine implements AutoCloseable {
             }
 
             @Override
-            public CharSequence getCharacters(Object impl) {
+            public CharSequence getCode(Object impl) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            public CharSequence getCharacters(Object impl, int lineNumber) {
+            public CharSequence getCode(Object impl, int lineNumber) {
                 throw new UnsupportedOperationException();
             }
 

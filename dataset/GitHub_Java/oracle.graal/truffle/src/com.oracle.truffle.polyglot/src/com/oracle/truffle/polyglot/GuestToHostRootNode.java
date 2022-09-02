@@ -43,6 +43,7 @@ package com.oracle.truffle.polyglot;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.impl.Accessor.CallInlined;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
@@ -53,6 +54,8 @@ abstract class GuestToHostRootNode extends RootNode {
     protected static final int ARGUMENT_OFFSET = 2;
 
     private final String boundaryName;
+
+    static final CallInlined CALL_INLINED = EngineAccessor.ACCESSOR.getCallInlined();
 
     protected GuestToHostRootNode(Class<?> targetType, String methodName) {
         super(null);
@@ -107,7 +110,7 @@ abstract class GuestToHostRootNode extends RootNode {
         } else {
             encapsulatingNode = NodeUtil.getCurrentEncapsulatingNode();
         }
-        return EngineAccessor.RUNTIME.callInlined(encapsulatingNode, target, arguments);
+        return CALL_INLINED.call(encapsulatingNode, target, arguments);
     }
 
 }

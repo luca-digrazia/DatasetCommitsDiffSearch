@@ -511,18 +511,15 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @since 0.8 or earlier
      */
     public final RootNode getRootNode() {
-        Node node = this;
-        Node prev;
-        do {
-            prev = node;
-            node = node.getParent();
-        } while (node != null);
-
-        if (prev instanceof RootNode) {
-            return (RootNode) prev;
-        } else {
-            return null;
+        Node rootNode = this;
+        while (rootNode.getParent() != null) {
+            assert !(rootNode instanceof RootNode) : "root node must not have a parent";
+            rootNode = rootNode.getParent();
         }
+        if (rootNode instanceof RootNode) {
+            return (RootNode) rootNode;
+        }
+        return null;
     }
 
     /**
