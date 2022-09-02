@@ -126,13 +126,10 @@ public final class LLVMContext {
     // we are not able to clean up ThreadLocals properly, so we are using maps instead
     private final Map<Thread, Object> tls = new ConcurrentHashMap<>();
 
-    // The symbol table for storing the symbols of each bitcode library.
-    // These two fields contain the same value, but have different CompilationFinal annotations:
+    // The symbol table for storing the symbols of each bitcode library
+    @CompilationFinal(dimensions = 2) private Assumption[][] symbolAssumptions;
     @CompilationFinal(dimensions = 2) private LLVMPointer[][] symbolFinalStorage;
     @CompilationFinal(dimensions = 1) private LLVMPointer[][] symbolDynamicStorage;
-    // Assumptions that get invalidated whenever an entry in the above array changes:
-    @CompilationFinal(dimensions = 2) private Assumption[][] symbolAssumptions;
-
     private boolean[] libraryLoaded;
 
     // signals
@@ -208,8 +205,8 @@ public final class LLVMContext {
         pThreadContext = new LLVMPThreadContext(getEnv(), getLanguage(), getLibsulongDataLayout());
 
         symbolAssumptions = new Assumption[10][];
-        // These two fields contain the same value, but have different CompilationFinal annotations:
-        symbolFinalStorage = symbolDynamicStorage = new LLVMPointer[10][];
+        symbolDynamicStorage = new LLVMPointer[10][];
+        symbolFinalStorage = symbolDynamicStorage;
         libraryLoaded = new boolean[10];
     }
 
