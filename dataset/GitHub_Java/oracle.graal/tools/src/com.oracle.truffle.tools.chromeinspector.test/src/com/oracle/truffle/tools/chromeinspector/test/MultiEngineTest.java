@@ -140,9 +140,9 @@ public class MultiEngineTest {
             try {
                 for (int i = 0; i < isUp.length; i++) {
                     isUp[i].await();
-                    String path = "MTest" + (i + 1) + ".sl." + SecureInspectorPathGenerator.getToken();
-                    checkInfo(path);
-                    checkSuspendAndResume(path);
+                    String sourceName = "MTest" + (i + 1) + ".sl";
+                    checkInfo(sourceName);
+                    checkSuspendAndResume(sourceName);
                 }
             } catch (Throwable thr) {
                 thr.printStackTrace();
@@ -205,25 +205,23 @@ public class MultiEngineTest {
         List<Throwable> errors = Collections.synchronizedList(new LinkedList<>());
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         CountDownLatch isUp = new CountDownLatch(1);
-        final String samePath = "samePath" + SecureInspectorPathGenerator.getToken();
         Thread t = new Thread(() -> {
             try {
-                runEngine(sources[0], samePath, out, isUp);
+                runEngine(sources[0], "samePath", out, isUp);
             } catch (Throwable thr) {
                 errors.add(thr);
-                isUp.countDown();
             }
         }, sources[0].getName());
         t.start();
         isUp.await();
         try {
-            runEngine(sources[1], samePath, out, isUp);
+            runEngine(sources[1], "samePath", out, isUp);
             fail();
         } catch (Throwable thr) {
             String message = thr.getMessage();
             assertTrue(message, message.contains("Inspector session with the same path exists already"));
         }
-        checkSuspendAndResume(samePath);
+        checkSuspendAndResume("samePath");
         t.join();
         if (!errors.isEmpty()) {
             AssertionError err = new AssertionError();
@@ -240,16 +238,16 @@ public class MultiEngineTest {
                 for (int i = 0; i < isUp.length; i++) {
                     isUp[i].await();
                 }
-                String[] paths = new String[isUp.length];
-                for (int i = 0; i < paths.length; i++) {
-                    paths[i] = "MTest" + (i + 1) + ".sl." + SecureInspectorPathGenerator.getToken();
+                String[] sourceNames = new String[isUp.length];
+                for (int i = 0; i < sourceNames.length; i++) {
+                    sourceNames[i] = "MTest" + (i + 1) + ".sl";
                 }
-                checkInfo(paths);
-                for (int i = 0; i < paths.length; i++) {
+                checkInfo(sourceNames);
+                for (int i = 0; i < sourceNames.length; i++) {
                     int index = i;
                     new Thread(() -> {
                         try {
-                            checkSuspendAndResume(paths[index]);
+                            checkSuspendAndResume(sourceNames[index]);
                         } catch (Throwable thr) {
                             thr.printStackTrace();
                             errors.add(thr);
@@ -264,7 +262,7 @@ public class MultiEngineTest {
     }
 
     private static String runEngine(Source src, OutputStream out, CountDownLatch isUp) {
-        return runEngine(src, src.getName() + "." + SecureInspectorPathGenerator.getToken(), out, isUp);
+        return runEngine(src, src.getName(), out, isUp);
     }
 
     private static String runEngine(Source src, String path, OutputStream out, CountDownLatch isUp) {
@@ -300,7 +298,7 @@ public class MultiEngineTest {
         }
         for (int i = 0; i < paths.length; i++) {
             JSONObject info = (JSONObject) infos.get(i);
-            final String ws = info.getString("webSocketDebuggerUrl");
+            String ws = info.getString("webSocketDebuggerUrl");
             for (String end : endWs) {
                 if (ws.endsWith(end)) {
                     endWs.remove(end);
@@ -318,8 +316,7 @@ public class MultiEngineTest {
         CountDownLatch closed = new CountDownLatch(1);
         AtomicBoolean paused = new AtomicBoolean(false);
         AtomicReference<Exception> exception = new AtomicReference<>(null);
-        final String url = "ws://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + PORT + "/" + path;
-        WebSocketClient wsc = new WebSocketClient(new URI(url)) {
+        WebSocketClient wsc = new WebSocketClient(new URI("ws://" + InetAddress.getLoopbackAddress().getHostAddress() + ":" + PORT + "/" + path)) {
             @Override
             public void onOpen(ServerHandshake sh) {
             }
@@ -344,8 +341,7 @@ public class MultiEngineTest {
                 exception.set(excptn);
             }
         };
-        final boolean connectionSucceeded = wsc.connectBlocking();
-        assertTrue("Connection has not succeeded: " + url, connectionSucceeded);
+        assertTrue(wsc.connectBlocking());
         for (String message : INITIAL_MESSAGES) {
             wsc.send(message);
         }
