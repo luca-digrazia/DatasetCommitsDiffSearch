@@ -340,7 +340,7 @@ public final class VMOperationControl {
      */
     public static class VMOperationThread implements Runnable {
         private volatile IsolateThread isolateThread;
-        private boolean stopped;
+        private boolean running;
 
         @Platforms(Platform.HOSTED_ONLY.class)
         VMOperationThread() {
@@ -349,13 +349,14 @@ public final class VMOperationControl {
         @Override
         public void run() {
             this.isolateThread = CurrentIsolate.getCurrentThread();
+            this.running = true;
 
             VMOperationControl control = VMOperationControl.get();
             WorkQueues queues = control.mainQueues;
 
             queues.mutex.lock();
             try {
-                while (!stopped) {
+                while (running) {
                     try {
                         queues.waitForWorkAndExecute();
                     } catch (Throwable e) {
@@ -365,8 +366,9 @@ public final class VMOperationControl {
                 }
             } finally {
                 queues.mutex.unlock();
-                stopped = true;
             }
+
+            running = false;
 
             /*
              * When this method returns, some more code is executed before the execution really
@@ -388,12 +390,12 @@ public final class VMOperationControl {
 
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
         public boolean isRunning() {
-            return isolateThread.isNonNull() && !stopped;
+            return running;
         }
 
         void shutdown() {
             VMOperation.guaranteeInProgress("must only be called from a VM operation");
-            this.stopped = true;
+            this.running = false;
         }
     }
 
