@@ -92,13 +92,12 @@ public abstract class LocationImpl extends Location {
     @Override
     public void set(DynamicObject store, Object value, Shape oldShape, Shape newShape) throws IncompatibleLocationException {
         if (canStore(value)) {
-            LayoutImpl.ACCESS.grow(store, oldShape, newShape);
+            LayoutImpl.ACCESS.growAndSetShape(store, oldShape, newShape);
             try {
                 setInternal(store, value);
             } catch (IncompatibleLocationException ex) {
-                throw DynamicObjectLibraryImpl.shouldNotHappen(ex);
+                throw new IllegalStateException();
             }
-            LayoutImpl.ACCESS.setShape(store, newShape);
         } else {
             throw incompatibleLocation();
         }
