@@ -394,5 +394,11 @@ public class TestDebugBuggyLanguage extends ProxyLanguage {
         TestTruffleException() {
             super("A TruffleException");
         }
+
+        @Override
+        public Node getLocation() {
+            return null;
+        }
+
     }
 }

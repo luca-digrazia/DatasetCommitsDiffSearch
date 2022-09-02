@@ -97,7 +97,7 @@ public class InliningLog {
         }
     }
 
-    class Callsite {
+    private class Callsite {
         public final List<Decision> decisions;
         public final List<Callsite> children;
         public Callsite parent;
@@ -492,15 +492,8 @@ public class InliningLog {
         return leaves.containsKey(invokable);
     }
 
-    public Callsite removeLeafCallsite(Invokable invokable) {
-        return leaves.removeKey(invokable);
-    }
-
-    /**
-     * This method must be called during graph compression, or other node-id changes.
-     */
-    public void addLeafCallsite(Invokable invokable, Callsite callsite) {
-        leaves.put(invokable, callsite);
+    public void removeLeafCallsite(Invokable invokable) {
+        leaves.removeKey(invokable);
     }
 
     public void trackNewCallsite(Invokable invoke) {

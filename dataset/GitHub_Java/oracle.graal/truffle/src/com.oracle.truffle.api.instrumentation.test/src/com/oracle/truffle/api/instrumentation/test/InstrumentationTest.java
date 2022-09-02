@@ -1924,7 +1924,6 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
             this.location = location;
         }
 
-        @Override
         public Node getLocation() {
             return location;
         }
@@ -2483,13 +2482,11 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
         }
 
         @ExportMessage
-        @SuppressWarnings("static-method")
         public boolean isExceptionUnwind() {
             return true;
         }
 
         @ExportMessage
-        @SuppressWarnings("static-method")
         public ExceptionType getExceptionType() {
             return ExceptionType.CANCEL;
         }
