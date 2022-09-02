@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,39 +26,46 @@ package org.graalvm.compiler.truffle.compiler.hotspot.libgraal;
 
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.CreateException;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetStackTrace;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetClassName;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetStackTraceElementClassName;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetStackTraceElementFileName;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetStackTraceElementLineNumber;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetStackTraceElementMethodName;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetThrowableMessage;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.UpdateStackTrace;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callCreateException;
+import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callGetClassName;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callGetStackTrace;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callGetStackTraceElementClassName;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callGetStackTraceElementFileName;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callGetStackTraceElementLineNumber;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callGetStackTraceElementMethodName;
+import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callGetThrowableMessage;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIExceptionWrapperGen.callUpdateStackTrace;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.SVMToHotSpotUtil.isHotSpotCall;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.ExceptionCheck;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.ExceptionClear;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.ExceptionDescribe;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.ExceptionOccurred;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.GetArrayLength;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.GetObjectArrayElement;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.NewObjectArray;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.SetObjectArrayElement;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.Throw;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.createHSString;
-import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.createString;
+import static org.graalvm.libgraal.jni.JNIUtil.ExceptionCheck;
+import static org.graalvm.libgraal.jni.JNIUtil.ExceptionClear;
+import static org.graalvm.libgraal.jni.JNIUtil.ExceptionDescribe;
+import static org.graalvm.libgraal.jni.JNIUtil.ExceptionOccurred;
+import static org.graalvm.libgraal.jni.JNIUtil.GetArrayLength;
+import static org.graalvm.libgraal.jni.JNIUtil.GetObjectArrayElement;
+import static org.graalvm.libgraal.jni.JNIUtil.GetObjectClass;
+import static org.graalvm.libgraal.jni.JNIUtil.NewObjectArray;
+import static org.graalvm.libgraal.jni.JNIUtil.SetObjectArrayElement;
+import static org.graalvm.libgraal.jni.JNIUtil.Throw;
+import static org.graalvm.libgraal.jni.JNIUtil.createHSString;
+import static org.graalvm.libgraal.jni.JNIUtil.createString;
 
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot;
 import org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM;
-import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JNIEnv;
-import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JObject;
-import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JObjectArray;
-import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JString;
-import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JThrowable;
+import org.graalvm.libgraal.jni.JNI.JClass;
+import org.graalvm.libgraal.jni.JNI.JNIEnv;
+import org.graalvm.libgraal.jni.JNI.JObject;
+import org.graalvm.libgraal.jni.JNI.JObjectArray;
+import org.graalvm.libgraal.jni.JNI.JString;
+import org.graalvm.libgraal.jni.JNI.JThrowable;
+import org.graalvm.libgraal.jni.JNIUtil;
 import org.graalvm.word.WordFactory;
 
 /**
@@ -73,6 +80,7 @@ final class JNIExceptionWrapper extends RuntimeException {
     private final boolean throwableRequiresStackTraceUpdate;
 
     private JNIExceptionWrapper(JNIEnv env, JThrowable throwableHandle) {
+        super(formatExceptionMessage(getClassName(env, throwableHandle), getMessage(env, throwableHandle)));
         this.throwableHandle = throwableHandle;
         this.throwableRequiresStackTraceUpdate = createMergedStackTrace(env);
     }
@@ -116,12 +124,14 @@ final class JNIExceptionWrapper extends RuntimeException {
 
     /**
      * If there is a pending JNI exception, this method wraps it in a {@link JNIExceptionWrapper},
-     * clears the pending exception and throws the {@link JNIExceptionWrapper} wrapper.
+     * clears the pending exception and throws the {@link JNIExceptionWrapper} wrapper. The
+     * {@link JNIExceptionWrapper} message is composed of the JNI exception class name and the JNI
+     * exception message
      */
     static void wrapAndThrowPendingJNIException(JNIEnv env) {
         if (ExceptionCheck(env)) {
             JThrowable exception = ExceptionOccurred(env);
-            if (HotSpotToSVMEntryPoints.tracingAt(1) && exception.isNonNull()) {
+            if (JNIUtil.tracingAt(1) && exception.isNonNull()) {
                 ExceptionDescribe(env);
             }
             ExceptionClear(env);
@@ -144,18 +154,14 @@ final class JNIExceptionWrapper extends RuntimeException {
      */
     @SVMToHotSpot(CreateException)
     static void throwInHotSpot(JNIEnv env, Throwable original) {
-        if (HotSpotToSVMEntryPoints.tracingAt(1)) {
+        if (JNIUtil.tracingAt(1)) {
             original.printStackTrace(TTY.out);
         }
         if (original.getClass() == JNIExceptionWrapper.class) {
             ((JNIExceptionWrapper) original).throwInHotSpot(env);
         } else {
-            StringBuilder message = new StringBuilder(original.getClass().getName());
-            String originalMessage = original.getMessage();
-            if (originalMessage != null) {
-                message.append(": ").append(originalMessage);
-            }
-            JString hsMessage = createHSString(env, message.toString());
+            String message = formatExceptionMessage(original.getClass().getName(), original.getMessage());
+            JString hsMessage = createHSString(env, message);
             JThrowable hsThrowable = callCreateException(env, hsMessage);
             StackTraceElement[] hsStack = getJNIExceptionStackTrace(env, hsThrowable);
             StackTraceElement[] svmStack = original.getStackTrace();
@@ -278,11 +284,32 @@ final class JNIExceptionWrapper extends RuntimeException {
         return callUpdateStackTrace(env, throwableHandle, stackTraceHandle);
     }
 
+    @SVMToHotSpot(GetThrowableMessage)
+    private static String getMessage(JNIEnv env, JThrowable throwableHandle) {
+        JString message = callGetThrowableMessage(env, throwableHandle);
+        return createString(env, message);
+    }
+
+    @SVMToHotSpot(GetClassName)
+    private static String getClassName(JNIEnv env, JThrowable throwableHandle) {
+        JClass classHandle = GetObjectClass(env, throwableHandle);
+        JString className = callGetClassName(env, classHandle);
+        return createString(env, className);
+    }
+
+    private static String formatExceptionMessage(String className, String message) {
+        StringBuilder builder = new StringBuilder(className);
+        if (message != null) {
+            builder.append(": ").append(message);
+        }
+        return builder.toString();
+    }
+
     /**
      * Gets the index of the first frame denoting the caller of
      * {@link #wrapAndThrowPendingJNIException(JNIEnv)} in {@code stackTrace}.
      *
-     * @returns {@code stackTrace.length} if no caller found
+     * @returns {@code 0} if no caller found
      */
     private static int getIndexOfPropagateJNIExceptionFrame(StackTraceElement[] stackTrace) {
         for (int i = 0; i < stackTrace.length; i++) {
@@ -291,6 +318,6 @@ final class JNIExceptionWrapper extends RuntimeException {
                 return i + 1;
             }
         }
-        return stackTrace.length;
+        return 0;
     }
 }
