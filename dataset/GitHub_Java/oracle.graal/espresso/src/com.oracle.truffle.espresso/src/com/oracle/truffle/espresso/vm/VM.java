@@ -1131,8 +1131,10 @@ public final class VM extends NativeEnv implements ContextAccess {
 
         Symbol<Type> type = namePtrToInternal(namePtr); // can be null
 
-        StaticObject clazz = getContext().getRegistries().defineKlass(type, bytes, loader, new ClassRegistry.ClassDefinitionInfo(pd)).mirror();
+        StaticObject clazz = getContext().getRegistries().defineKlass(type, bytes, loader).mirror();
         assert clazz != null;
+        assert pd != null;
+        getMeta().HIDDEN_PROTECTION_DOMAIN.setHiddenObject(clazz, pd);
         return clazz;
     }
 

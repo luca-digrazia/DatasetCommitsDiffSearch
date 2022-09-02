@@ -39,9 +39,10 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.redefinition.DefineKlassListener;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Host;
+import com.oracle.truffle.espresso.substitutions.JavaType;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 public final class ClassRegistries {
@@ -61,6 +62,8 @@ public final class ClassRegistries {
     // specify it as volatile.
     private int totalClassLoadersSet = 0;
 
+    private DefineKlassListener defineKlassListener;
+
     public ClassRegistries(EspressoContext context) {
         this.context = context;
         this.bootClassRegistry = new BootClassRegistry(context);
@@ -71,13 +74,13 @@ public final class ClassRegistries {
         this.javaBaseModule = bootClassRegistry.modules().createAndAddEntry(Symbol.Name.java_base, bootClassRegistry);
     }
 
-    public ClassRegistry getClassRegistry(@Host(ClassLoader.class) StaticObject classLoader) {
+    public ClassRegistry getClassRegistry(@JavaType(ClassLoader.class) StaticObject classLoader) {
         if (StaticObject.isNull(classLoader)) {
             return bootClassRegistry;
         }
 
         // Double-checked locking to attach class registry to guest instance.
-        ClassRegistry classRegistry = (ClassRegistry) classLoader.getHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY);
+        ClassRegistry classRegistry = (ClassRegistry) context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY.getHiddenObject(classLoader, true);
         if (classRegistry == null) {
             // Synchronizing on the classLoader instance would be the natural choice here, but:
             // On SubstrateVM, synchronizing on a StaticObject instance will add an extra slot/field
@@ -86,7 +89,7 @@ public final class ClassRegistries {
             // Setting the class registry happens only once, for such rare operations, no contention
             // is expected.
             synchronized (weakClassLoaderSet) {
-                classRegistry = (ClassRegistry) classLoader.getHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY);
+                classRegistry = (ClassRegistry) context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY.getHiddenObject(classLoader, true);
                 if (classRegistry == null) {
                     classRegistry = registerRegistry(classLoader);
                 }
@@ -98,11 +101,11 @@ public final class ClassRegistries {
     }
 
     @TruffleBoundary
-    private ClassRegistry registerRegistry(@Host(ClassLoader.class) StaticObject classLoader) {
+    private ClassRegistry registerRegistry(@JavaType(ClassLoader.class) StaticObject classLoader) {
         assert Thread.holdsLock(weakClassLoaderSet);
         ClassRegistry classRegistry;
         classRegistry = new GuestClassRegistry(context, classLoader);
-        classLoader.setHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY, classRegistry);
+        context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY.setHiddenObject(classLoader, classRegistry, true);
         // Register the class loader in the weak set.
         weakClassLoaderSet.add(classLoader);
         totalClassLoadersSet++;
@@ -123,7 +126,7 @@ public final class ClassRegistries {
     }
 
     @TruffleBoundary
-    public Klass findLoadedClass(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
+    public Klass findLoadedClass(Symbol<Type> type, @JavaType(ClassLoader.class) StaticObject classLoader) {
         assert classLoader != null : "use StaticObject.NULL for BCL";
 
         if (Types.isArray(type)) {
@@ -199,7 +202,7 @@ public final class ClassRegistries {
      * .
      */
     @TruffleBoundary
-    public Klass loadKlass(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader, StaticObject protectionDomain) {
+    public Klass loadKlass(Symbol<Type> type, @JavaType(ClassLoader.class) StaticObject classLoader, StaticObject protectionDomain) {
         assert classLoader != null : "use StaticObject.NULL for BCL";
 
         if (Types.isArray(type)) {
@@ -214,10 +217,15 @@ public final class ClassRegistries {
     }
 
     @TruffleBoundary
-    public Klass defineKlass(Symbol<Type> type, byte[] bytes, StaticObject classLoader) {
+    public ObjectKlass defineKlass(Symbol<Type> type, byte[] bytes, StaticObject classLoader) {
+        return defineKlass(type, bytes, classLoader, ClassRegistry.ClassDefinitionInfo.EMPTY);
+    }
+
+    @TruffleBoundary
+    public ObjectKlass defineKlass(Symbol<Type> type, byte[] bytes, StaticObject classLoader, ClassRegistry.ClassDefinitionInfo info) {
         assert classLoader != null;
         ClassRegistry registry = getClassRegistry(classLoader);
-        return registry.defineKlass(type, bytes);
+        return registry.defineKlass(type, bytes, info);
     }
 
     public BootClassRegistry getBootClassRegistry() {
@@ -270,10 +278,10 @@ public final class ClassRegistries {
 
     public void processFixupList(StaticObject javaBase) {
         for (PrimitiveKlass k : context.getMeta().PRIMITIVE_KLASSES) {
-            k.mirror().setField(context.getMeta().java_lang_Class_module, javaBase);
+            context.getMeta().java_lang_Class_module.setObject(k.mirror(), javaBase);
         }
         for (Klass k : fixupModuleList) {
-            k.mirror().setField(context.getMeta().java_lang_Class_module, javaBase);
+            context.getMeta().java_lang_Class_module.setObject(k.mirror(), javaBase);
         }
         fixupModuleList = null;
     }
@@ -296,6 +304,17 @@ public final class ClassRegistries {
             loaders[i++] = INVALID_LOADER_ID;
         }
         return loaders;
+    }
+
+    public void registerListener(DefineKlassListener listener) {
+        this.defineKlassListener = listener;
+    }
+
+    @TruffleBoundary
+    public void onKlassDefined(ObjectKlass klass) {
+        if (defineKlassListener != null) {
+            defineKlassListener.onKlassDefined(klass);
+        }
     }
 
     static class RegistryEntry {
