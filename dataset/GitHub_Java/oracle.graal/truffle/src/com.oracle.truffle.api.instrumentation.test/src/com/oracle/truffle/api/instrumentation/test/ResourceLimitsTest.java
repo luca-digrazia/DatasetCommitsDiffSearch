@@ -47,8 +47,6 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -69,15 +67,13 @@ import org.graalvm.polyglot.ResourceLimits;
 import org.graalvm.polyglot.Source;
 import org.junit.Test;
 
-import com.oracle.truffle.api.test.ReflectionUtils;
-
 public class ResourceLimitsTest {
 
     @Test
     public void testBoundContextTimeLimit() {
-        ResourceLimits limits = cpuTimeLimit(ResourceLimits.newBuilder(), //
-                        Duration.ofMillis(10), Duration.ofMillis(1)).//
-                                        build();
+        ResourceLimits limits = ResourceLimits.newBuilder().//
+                        cpuTimeLimit(Duration.ofMillis(10), Duration.ofMillis(1)).//
+                        build();
 
         try (Context context = Context.newBuilder().resourceLimits(limits).build()) {
             context.initialize(InstrumentationTestLanguage.ID);
@@ -92,9 +88,9 @@ public class ResourceLimitsTest {
 
     @Test
     public void testSharedContextTimeLimitSynchronous() {
-        ResourceLimits limits = cpuTimeLimit(ResourceLimits.newBuilder(), //
-                        Duration.ofMillis(3), Duration.ofMillis(1)).//
-                                        build();
+        ResourceLimits limits = ResourceLimits.newBuilder().//
+                        cpuTimeLimit(Duration.ofMillis(3), Duration.ofMillis(1)).//
+                        build();
 
         Engine engine = Engine.create();
 
@@ -112,10 +108,11 @@ public class ResourceLimitsTest {
 
     @Test
     public void testSharedContextTimeLimitParallel() throws InterruptedException, ExecutionException {
-        ResourceLimits limits = cpuTimeLimit(ResourceLimits.newBuilder(), //
-                        Duration.ofMillis(5), Duration.ofMillis(1)).//
-                                        onLimit((e) -> {
-                                        }).build();
+        ResourceLimits limits = ResourceLimits.newBuilder().//
+                        cpuTimeLimit(Duration.ofMillis(5), Duration.ofMillis(1)).//
+                        onLimit((e) -> {
+
+                        }).build();
 
         Engine engine = Engine.create();
         ExecutorService executorService = Executors.newFixedThreadPool(5);
@@ -139,24 +136,11 @@ public class ResourceLimitsTest {
         executorService.awaitTermination(100, TimeUnit.SECONDS);
     }
 
-    private static ResourceLimits.Builder cpuTimeLimit(ResourceLimits.Builder builder, Duration timeLimit, Duration accuracy) {
-        try {
-            Method m = builder.getClass().getDeclaredMethod("cpuTimeLimit", Duration.class, Duration.class);
-            ReflectionUtils.setAccessible(m, true);
-            m.invoke(builder, timeLimit, accuracy);
-        } catch (InvocationTargetException e) {
-            throw (RuntimeException) e.getCause();
-        } catch (NoSuchMethodException | SecurityException | IllegalAccessException | IllegalArgumentException e) {
-            throw new AssertionError(e);
-        }
-        return builder;
-    }
-
     @Test
     public void testSharedContextTimeLimitResetParallel() throws InterruptedException, ExecutionException {
-        ResourceLimits limits = cpuTimeLimit(ResourceLimits.newBuilder(), //
-                        Duration.ofMillis(30), Duration.ofMillis(10)).//
-                                        build();
+        ResourceLimits limits = ResourceLimits.newBuilder().//
+                        cpuTimeLimit(Duration.ofMillis(30), Duration.ofMillis(10)).//
+                        build();
 
         Engine engine = Engine.create();
         ExecutorService executorService = Executors.newFixedThreadPool(10);
@@ -201,11 +185,7 @@ public class ResourceLimitsTest {
     }
 
     private static void assertTimeout(Context c, PolyglotException e) {
-        if (!e.isCancelled()) {
-            // not expected exception
-            throw e;
-        }
-        assertTrue(e.toString(), e.isCancelled());
+        assertTrue(e.isCancelled());
         assertTrue(e.getMessage(), e.getMessage().startsWith("Time resource limit"));
         try {
             c.eval(InstrumentationTestLanguage.ID, "EXPRESSION");
@@ -516,7 +496,6 @@ public class ResourceLimitsTest {
         ExecutorService executorService = Executors.newFixedThreadPool(20);
         List<Future<?>> futures = new ArrayList<>();
         try (Context c = Context.newBuilder().resourceLimits(limits).build()) {
-            forceMultiThreading(executorService, c);
             for (int i = 0; i < limit; i++) {
                 futures.add(executorService.submit(() -> {
                     c.eval(statements(1));
@@ -556,11 +535,8 @@ public class ResourceLimitsTest {
                         build();
         ExecutorService executorService = Executors.newFixedThreadPool(threads);
         List<Future<?>> testFutures = new ArrayList<>();
-
         for (int contextIndex = 0; contextIndex < contexts; contextIndex++) {
             Context c = Context.newBuilder().engine(engine).resourceLimits(limits).build();
-            forceMultiThreading(executorService, c);
-
             List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < executions; i++) {
                 futures.add(executorService.submit(() -> {
@@ -604,17 +580,6 @@ public class ResourceLimitsTest {
         executorService.awaitTermination(100, TimeUnit.SECONDS);
     }
 
-    private static void forceMultiThreading(ExecutorService executorService, Context c) throws InterruptedException, ExecutionException {
-        c.enter();
-        executorService.submit(new Runnable() {
-            public void run() {
-                c.enter();
-                c.leave();
-            }
-        }).get();
-        c.leave();
-    }
-
     @Test
     public void testParallelMultiContextStatementResetLimit() throws InterruptedException, ExecutionException {
         Engine engine = Engine.create();
@@ -632,7 +597,6 @@ public class ResourceLimitsTest {
         List<Future<?>> testFutures = new ArrayList<>();
         for (int contextIndex = 0; contextIndex < contexts; contextIndex++) {
             Context c = Context.newBuilder().engine(engine).resourceLimits(limits).build();
-            forceMultiThreading(executorService, c);
             List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < executions; i++) {
                 futures.add(executorService.submit(() -> {
@@ -683,13 +647,13 @@ public class ResourceLimitsTest {
     @Test
     public void testTimeLimitErrors() {
         ResourceLimits.Builder builder = ResourceLimits.newBuilder();
-        assertFails(() -> cpuTimeLimit(builder, Duration.ofMillis(-1), Duration.ofMillis(1)), IllegalArgumentException.class);
-        assertFails(() -> cpuTimeLimit(builder, Duration.ofMillis(0), Duration.ofMillis(1)), IllegalArgumentException.class);
-        assertFails(() -> cpuTimeLimit(builder, Duration.ofMillis(1), Duration.ofMillis(-1)), IllegalArgumentException.class);
-        assertFails(() -> cpuTimeLimit(builder, Duration.ofMillis(1), Duration.ofMillis(0)), IllegalArgumentException.class);
-        assertFails(() -> cpuTimeLimit(builder, null, Duration.ofMillis(0)), IllegalArgumentException.class);
-        assertFails(() -> cpuTimeLimit(builder, Duration.ofMillis(0), null), IllegalArgumentException.class);
-        cpuTimeLimit(builder, null, null); // allowed to reset
+        assertFails(() -> builder.cpuTimeLimit(Duration.ofMillis(-1), Duration.ofMillis(1)), IllegalArgumentException.class);
+        assertFails(() -> builder.cpuTimeLimit(Duration.ofMillis(0), Duration.ofMillis(1)), IllegalArgumentException.class);
+        assertFails(() -> builder.cpuTimeLimit(Duration.ofMillis(1), Duration.ofMillis(-1)), IllegalArgumentException.class);
+        assertFails(() -> builder.cpuTimeLimit(Duration.ofMillis(1), Duration.ofMillis(0)), IllegalArgumentException.class);
+        assertFails(() -> builder.cpuTimeLimit(null, Duration.ofMillis(0)), IllegalArgumentException.class);
+        assertFails(() -> builder.cpuTimeLimit(Duration.ofMillis(0), null), IllegalArgumentException.class);
+        builder.cpuTimeLimit(null, null); // allowed to reset
     }
 
     @Test
