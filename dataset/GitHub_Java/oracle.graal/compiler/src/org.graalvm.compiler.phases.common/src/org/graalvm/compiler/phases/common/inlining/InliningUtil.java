@@ -589,6 +589,9 @@ public class InliningUtil extends ValueMergeUtil {
             GraphUtil.killCFG(invoke.next());
         }
 
+        // Copy assumptions from inlinee to caller
+        graph.recordAssumptions(inlineGraph);
+
         // Copy inlined methods from inlinee to caller
         graph.updateMethods(inlineGraph);
 
