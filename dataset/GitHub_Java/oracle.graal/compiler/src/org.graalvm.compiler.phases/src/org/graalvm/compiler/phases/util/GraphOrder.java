@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +35,6 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.GraalGraphError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeBitMap;
-import org.graalvm.compiler.graph.Position;
 import org.graalvm.compiler.nodes.AbstractEndNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -52,7 +51,8 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.VirtualState.NodePositionClosure;
+import org.graalvm.compiler.nodes.VirtualState;
+import org.graalvm.compiler.nodes.VirtualState.NodeClosure;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.phases.graph.ReentrantBlockIterator;
@@ -188,16 +188,11 @@ public final class GraphOrder {
                             }
 
                             if (pendingStateAfter != null && node instanceof FixedNode) {
-
-                                pendingStateAfter.applyToNonVirtual(new NodePositionClosure<Node>() {
-
+                                pendingStateAfter.applyToNonVirtual(new NodeClosure<Node>() {
                                     @Override
-                                    public void apply(Node from, Position p) {
-                                        Node usage = from;
-                                        Node nonVirtualNode = p.get(from);
+                                    public void apply(Node usage, Node nonVirtualNode) {
                                         assert currentState.isMarked(nonVirtualNode) || nonVirtualNode instanceof VirtualObjectNode || nonVirtualNode instanceof ConstantNode : nonVirtualNode +
                                                         " not available at virtualstate " + usage + " before " + node + " in block " + block + " \n" + list;
-
                                     }
                                 });
                                 pendingStateAfter = null;
@@ -233,11 +228,9 @@ public final class GraphOrder {
                                 for (Node input : node.inputs()) {
                                     if (input != stateAfter) {
                                         if (input instanceof FrameState) {
-                                            ((FrameState) input).applyToNonVirtual(new NodePositionClosure<Node>() {
-
+                                            ((FrameState) input).applyToNonVirtual(new VirtualState.NodeClosure<Node>() {
                                                 @Override
-                                                public void apply(Node from, Position p) {
-                                                    Node nonVirtual = p.get(from);
+                                                public void apply(Node usage, Node nonVirtual) {
                                                     assert currentState.isMarked(nonVirtual) : nonVirtual + " not available at " + node + " in block " + block + "\n" + list;
                                                 }
                                             });
@@ -264,11 +257,9 @@ public final class GraphOrder {
                         }
                     }
                     if (pendingStateAfter != null) {
-                        pendingStateAfter.applyToNonVirtual(new NodePositionClosure<Node>() {
+                        pendingStateAfter.applyToNonVirtual(new NodeClosure<Node>() {
                             @Override
-                            public void apply(Node from, Position p) {
-                                Node usage = from;
-                                Node nonVirtualNode = p.get(from);
+                            public void apply(Node usage, Node nonVirtualNode) {
                                 assert currentState.isMarked(nonVirtualNode) || nonVirtualNode instanceof VirtualObjectNode || nonVirtualNode instanceof ConstantNode : nonVirtualNode +
                                                 " not available at virtualstate " + usage + " at end of block " + block + " \n" + list;
                             }
