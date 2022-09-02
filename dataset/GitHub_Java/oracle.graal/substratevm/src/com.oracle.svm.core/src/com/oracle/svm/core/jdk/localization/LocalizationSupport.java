@@ -27,7 +27,6 @@ package com.oracle.svm.core.jdk.localization;
 
 import java.nio.charset.Charset;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.PropertyResourceBundle;
@@ -39,27 +38,29 @@ import com.oracle.svm.core.configure.ResourcesRegistry;
 import com.oracle.svm.core.util.VMError;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 
 /**
  * Holder for localization information that is computed during image generation and used at run
  * time.
+ *
+ * @see LocalizationFeature
  */
 public class LocalizationSupport {
 
-    final Map<String, Charset> charsets = new HashMap<>();
+    public final Map<String, Charset> charsets = new HashMap<>();
 
-    final Locale defaultLocale;
-    /**
-     * All available locales configured during image build time.
-     */
-    final Locale[] allLocales;
+    public final Locale defaultLocale;
 
-    final Set<String> supportedLanguageTags;
+    public final Locale[] allLocales;
 
-    final ResourceBundle.Control control = ResourceBundle.Control.getControl(ResourceBundle.Control.FORMAT_DEFAULT);
+    public final Set<String> supportedLanguageTags;
 
-    protected LocalizationSupport(Locale defaultLocale, List<Locale> locales) {
+    public final ResourceBundle.Control control = ResourceBundle.Control.getControl(ResourceBundle.Control.FORMAT_DEFAULT);
+
+    public LocalizationSupport(Locale defaultLocale, Set<Locale> locales) {
         this.defaultLocale = defaultLocale;
         this.allLocales = locales.toArray(new Locale[0]);
         this.supportedLanguageTags = locales.stream().map(Locale::toString).collect(Collectors.toSet());
@@ -70,10 +71,11 @@ public class LocalizationSupport {
         return ((OptimizedLocalizationSupport) this);
     }
 
-    public Map<String, Object> getBundleContentOf(Class<?> bundleClass) {
-        throw VMError.unsupportedFeature("Resource bundle lookup must be loaded during native image generation: " + bundleClass.getTypeName());
+    public Map<String, Object> getBundleContentOf(Object bundle) {
+        throw VMError.unsupportedFeature("Resource bundle lookup must be loaded during native image generation: " + bundle.getClass());
     }
 
+    @Platforms(Platform.HOSTED_ONLY.class)
     public void prepareBundle(String bundleName, ResourceBundle bundle, Locale locale) {
         if (bundle instanceof PropertyResourceBundle) {
             String withLocale = control.toBundleName(bundleName, locale);
@@ -86,9 +88,21 @@ public class LocalizationSupport {
     }
 
     /**
-     * Template method for subclasses to do perform additional tasks.
+     * Template method for subclasses to perform additional tasks.
      */
+    @Platforms(Platform.HOSTED_ONLY.class)
     protected void onBundlePrepared(@SuppressWarnings("unused") ResourceBundle bundle) {
 
+    }
+
+    @SuppressWarnings("unused")
+    public boolean shouldSubstituteLoadLookup(String className) {
+        /*- By default, keep the original code */
+        return false;
+    }
+
+    @SuppressWarnings("unused")
+    public void prepareNonCompliant(Class<?> clazz) {
+        /*- By default, there is nothing to do */
     }
 }

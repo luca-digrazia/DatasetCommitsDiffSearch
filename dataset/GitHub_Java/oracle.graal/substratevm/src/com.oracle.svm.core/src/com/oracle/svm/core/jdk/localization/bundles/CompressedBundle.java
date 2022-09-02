@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +30,7 @@ import java.util.function.Function;
 public final class CompressedBundle implements StoredBundle {
     private final byte[] content;
     private final Function<byte[], Map<String, Object>> decompressionAlgorithm;
+    private Map<String, Object> extracted;
 
     public CompressedBundle(byte[] content, Function<byte[], Map<String, Object>> decompressionAlgorithm) {
         this.content = content;
@@ -37,7 +38,10 @@ public final class CompressedBundle implements StoredBundle {
     }
 
     @Override
-    public Map<String, Object> getContent() {
-        return decompressionAlgorithm.apply(content);
+    public Map<String, Object> getContent(Object bundle) {
+        if (extracted == null) {
+            extracted = decompressionAlgorithm.apply(content);
+        }
+        return extracted;
     }
 }

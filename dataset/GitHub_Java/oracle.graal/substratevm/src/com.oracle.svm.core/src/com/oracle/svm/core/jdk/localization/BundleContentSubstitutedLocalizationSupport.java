@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,20 +24,28 @@
  */
 package com.oracle.svm.core.jdk.localization;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.ListResourceBundle;
 import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ForkJoinPool;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
+import com.oracle.svm.core.jdk.localization.bundles.DelayedBundle;
 import com.oracle.svm.core.jdk.localization.bundles.ExtractedBundle;
 import com.oracle.svm.core.jdk.localization.bundles.StoredBundle;
-import com.oracle.svm.core.jdk.localization.compression.BundleCompressionAlgorithm;
 import com.oracle.svm.core.jdk.localization.compression.GzipBundleCompression;
+import com.oracle.svm.core.util.UserError;
 import org.graalvm.compiler.debug.GraalError;
 
 // Checkstyle: stop
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import sun.util.resources.OpenListResourceBundle;
 import sun.util.resources.ParallelListResourceBundle;
 // Checkstyle: resume
@@ -46,56 +54,91 @@ import static com.oracle.svm.core.jdk.localization.compression.utils.BundleSeria
 
 public class BundleContentSubstitutedLocalizationSupport extends LocalizationSupport {
 
+    @Platforms(Platform.HOSTED_ONLY.class)//
+    private static final String INTERNAL_BUNDLES_PATTERN = "sun\\..*";
+
+    @Platforms(Platform.HOSTED_ONLY.class)//
+    private final List<Pattern> compressBundlesPatterns;
+
+    @Platforms(Platform.HOSTED_ONLY.class)//
+    private final ForkJoinPool pool;
+
     private final Map<Class<?>, StoredBundle> storedBundles = new ConcurrentHashMap<>();
 
-    private final BundleCompressionAlgorithm compressionAlgorithm = new GzipBundleCompression();
-
-    public BundleContentSubstitutedLocalizationSupport(Locale defaultLocale, List<Locale> locales) {
+    public BundleContentSubstitutedLocalizationSupport(Locale defaultLocale, Set<Locale> locales, List<String> requestedPatterns, ForkJoinPool pool) {
         super(defaultLocale, locales);
+        this.pool = pool;
+        this.compressBundlesPatterns = parseCompressBundlePatterns(requestedPatterns);
     }
 
     @Override
+    @Platforms(Platform.HOSTED_ONLY.class)
     protected void onBundlePrepared(ResourceBundle bundle) {
         if (isBundleSupported(bundle)) {
-            storeBundleContentOf(bundle);
+            if (pool != null) {
+                pool.execute(() -> storeBundleContentOf(bundle));
+            } else {
+                storeBundleContentOf(bundle);
+            }
         }
     }
 
+    @Platforms(Platform.HOSTED_ONLY.class)
     private void storeBundleContentOf(ResourceBundle bundle) {
         GraalError.guarantee(isBundleSupported(bundle), "Unsupported bundle %s of type %s", bundle, bundle.getClass());
         storedBundles.put(bundle.getClass(), processBundle(bundle));
     }
 
+    @Platforms(Platform.HOSTED_ONLY.class)
     private StoredBundle processBundle(ResourceBundle bundle) {
         boolean isInDefaultLocale = bundle.getLocale().equals(defaultLocale);
-        if (!isInDefaultLocale) {
-            StoredBundle compressed = compressionAlgorithm.compress(bundle);
-            if (compressed != null) {
-                return compressed;
-            }
+        if (!isInDefaultLocale && shouldCompressBundle(bundle) && GzipBundleCompression.canCompress(bundle)) {
+            return GzipBundleCompression.compress(bundle);
         }
         Map<String, Object> content = extractContent(bundle);
         return new ExtractedBundle(content);
     }
 
     @Override
-    public Map<String, Object> getBundleContentOf(Class<?> bundleClass) {
-        StoredBundle bundle = storedBundles.get(bundleClass);
-        if (bundle != null) {
-            try {
-                return bundle.getContent();
-            } catch (Exception ex) {
-                // todo remove
-// System.err.println("!!!" + bundleClass);
-// ex.printStackTrace();
-                System.exit(1);
-                throw GraalError.shouldNotReachHere(ex, "Decompressing a resource bundle " + bundleClass.getName() + " failed.");
-            }
+    public Map<String, Object> getBundleContentOf(Object bundle) {
+        StoredBundle storedBundle = storedBundles.get(bundle.getClass());
+        if (storedBundle != null) {
+            return storedBundle.getContent(bundle);
         }
-        return super.getBundleContentOf(bundleClass);
+        return super.getBundleContentOf(bundle);
     }
 
+    @Platforms(Platform.HOSTED_ONLY.class)
     public boolean isBundleSupported(ResourceBundle bundle) {
         return bundle instanceof ListResourceBundle || bundle instanceof OpenListResourceBundle || bundle instanceof ParallelListResourceBundle;
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    private static List<Pattern> parseCompressBundlePatterns(List<String> userPatterns) {
+        List<Pattern> compiled = new ArrayList<>();
+        List<String> invalid = new ArrayList<>();
+        compiled.add(Pattern.compile(INTERNAL_BUNDLES_PATTERN));
+        for (String pattern : userPatterns) {
+            try {
+                compiled.add(Pattern.compile(pattern));
+            } catch (PatternSyntaxException ex) {
+                invalid.add(pattern);
+            }
+        }
+        if (!invalid.isEmpty()) {
+            throw UserError.abort("Invalid patterns specified: %s", invalid);
+        }
+        return compiled;
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public boolean shouldCompressBundle(ResourceBundle bundle) {
+        String className = bundle.getClass().getName();
+        return compressBundlesPatterns.stream().anyMatch(pattern -> pattern.matcher(className).matches());
+    }
+
+    @Override
+    public void prepareNonCompliant(Class<?> clazz) {
+        storedBundles.put(clazz, new DelayedBundle(clazz));
     }
 }
