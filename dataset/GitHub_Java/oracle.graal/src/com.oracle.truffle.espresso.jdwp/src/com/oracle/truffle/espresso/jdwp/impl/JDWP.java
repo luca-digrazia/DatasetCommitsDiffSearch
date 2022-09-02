@@ -23,6 +23,7 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
+import com.oracle.truffle.espresso.jdwp.api.JDWPConstantPool;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.CallFrame;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
@@ -41,6 +42,12 @@ final class JDWP {
 
     public static final String JAVA_LANG_OBJECT = "Ljava/lang/Object;";
     public static final Object INVALID_VALUE = new Object();
+
+    private static final boolean CAN_REDEFINE_CLASSES = false;
+    private static final boolean CAN_GET_INSTANCE_INFO = false;
+
+    private static final int ACC_SYNTHETIC = 0x00001000;
+    private static final int JDWP_SYNTHETIC = 0xF0000000;
 
     private JDWP() {
     }
@@ -66,20 +73,45 @@ final class JDWP {
             public static final int ID = 2;
 
             static CommandResult createReply(Packet packet, JDWPContext context) {
-                // get the requested classes
                 PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
                 String signature = input.readString();
-                // we know it's a class type in the format Lsomething;
-                String slashName = signature.substring(1, signature.length() - 1);
+                String slashName = signature;
+
+                if (!signature.startsWith("[") && signature.length() != 1) {
+                    // we know it's a class type in the format Lsomething;
+                    slashName = signature.substring(1, signature.length() - 1);
+                }
+
                 KlassRef[] loaded = context.findLoadedClass(slashName);
 
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeInt(loaded.length);
                 for (KlassRef klass : loaded) {
                     reply.writeByte(TypeTag.getKind(klass));
                     reply.writeLong(context.getIds().getIdAsLong(klass));
                     reply.writeInt(klass.getStatus());
                 }
+                return new CommandResult(reply);
+            }
+        }
+
+        static class ALL_CLASSES {
+            public static final int ID = 3;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                KlassRef[] allLoadedClasses = context.getAllLoadedClasses();
+                reply.writeInt(allLoadedClasses.length);
+
+                for (KlassRef klass : allLoadedClasses) {
+                    reply.writeByte(TypeTag.getKind(klass));
+                    reply.writeLong(context.getIds().getIdAsLong(klass));
+                    reply.writeString(klass.getTypeAsString());
+                    reply.writeInt(klass.getStatus());
+                }
+
                 return new CommandResult(reply);
             }
         }
@@ -229,7 +261,7 @@ final class JDWP {
                 reply.writeBoolean(false); // canGetOwnedMonitorInfo
                 reply.writeBoolean(false); // canGetCurrentContendedMonitor
                 reply.writeBoolean(false); // canGetMonitorInfo
-                reply.writeBoolean(false); // canRedefineClasses
+                reply.writeBoolean(CAN_REDEFINE_CLASSES); // canRedefineClasses
                 reply.writeBoolean(false); // canAddMethod
                 reply.writeBoolean(false); // canUnrestrictedlyRedefineClasses
                 reply.writeBoolean(false); // canPopFrames
@@ -237,11 +269,11 @@ final class JDWP {
                 reply.writeBoolean(false); // canGetSourceDebugExtension
                 reply.writeBoolean(true); // canRequestVMDeathEvent
                 reply.writeBoolean(false); // canSetDefaultStratum
-                reply.writeBoolean(false); // canGetInstanceInfo
+                reply.writeBoolean(CAN_GET_INSTANCE_INFO); // canGetInstanceInfo
                 reply.writeBoolean(false); // canRequestMonitorEvents
                 reply.writeBoolean(false); // canGetMonitorFrameInfo
                 reply.writeBoolean(false); // canUseSourceNameFilters
-                reply.writeBoolean(false); // canGetConstantPool
+                reply.writeBoolean(true); // canGetConstantPool
                 reply.writeBoolean(false); // canForceEarlyReturn
                 reply.writeBoolean(false); // reserved for future
                 reply.writeBoolean(false); // reserved for future
@@ -280,9 +312,7 @@ final class JDWP {
                     reply.writeByte(TypeTag.getKind(klass));
                     reply.writeLong(context.getIds().getIdAsLong(klass));
                     reply.writeString(klass.getTypeAsString());
-                    // TODO(Gregersen) - generic signature if any
-                    // tracked by /browse/GR-19818
-                    reply.writeString("");
+                    reply.writeString(klass.getGenericTypeAsString());
                     reply.writeInt(klass.getStatus());
                 }
 
@@ -390,7 +420,8 @@ final class JDWP {
                     reply.writeLong(context.getIds().getIdAsLong(field));
                     reply.writeString(field.getNameAsString());
                     reply.writeString(field.getTypeAsString());
-                    reply.writeInt(field.getModifiers());
+                    int modBits = checkSyntheticFlag(field.getModifiers());
+                    reply.writeInt(modBits);
                 }
                 return new CommandResult(reply);
             }
@@ -423,7 +454,8 @@ final class JDWP {
                     reply.writeLong(context.getIds().getIdAsLong(method));
                     reply.writeString(method.getNameAsString());
                     reply.writeString(method.getSignatureAsString());
-                    reply.writeInt(method.getModifiers());
+                    int modBits = checkSyntheticFlag(method.getModifiers());
+                    reply.writeInt(modBits);
                 }
                 return new CommandResult(reply);
             }
@@ -457,7 +489,7 @@ final class JDWP {
                     // if not, we're probably suspended in <clinit>
                     // and should not try to read static field values
                     Object value;
-                    if (field.getDeclaringKlass().getStatus() != ClassStatusConstants.INITIALIZED) {
+                    if (field.getDeclaringKlass().getStatus() == ClassStatusConstants.ERROR || field.getDeclaringKlass().getStatus() < ClassStatusConstants.INITIALIZED) {
                         value = null;
                     } else {
                         value = context.getStaticFieldValue(field);
@@ -504,6 +536,33 @@ final class JDWP {
                 reply.writeString(sourceFile);
                 return new CommandResult(reply);
             }
+        }
+
+        static class NESTED_TYPES {
+            public static final int ID = 8;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                long klassRef = input.readLong();
+                KlassRef klass = verifyRefType(klassRef, reply, context);
+
+                if (klass == null) {
+                    return new CommandResult(reply);
+                }
+
+                KlassRef[] nestedTypes = context.getNestedTypes(klass);
+
+                reply.writeInt(nestedTypes.length);
+                for (KlassRef nestedType : nestedTypes) {
+                    reply.writeByte(TypeTag.getKind(nestedType));
+                    reply.writeLong(context.getIds().getIdAsLong(nestedType));
+                }
+
+                return new CommandResult(reply);
+            }
+
         }
 
         static class STATUS {
@@ -586,9 +645,7 @@ final class JDWP {
                 }
 
                 reply.writeString(klass.getTypeAsString());
-                // TODO(Gregersen) - generic signature
-                // tracked by /browse/GR-19818
-                reply.writeString("");
+                reply.writeString(klass.getGenericTypeAsString());
                 return new CommandResult(reply);
             }
         }
@@ -619,9 +676,17 @@ final class JDWP {
                 for (FieldRef field : declaredFields) {
                     reply.writeLong(context.getIds().getIdAsLong(field));
                     reply.writeString(field.getNameAsString());
-                    reply.writeString(field.getTypeAsString());
-                    reply.writeString(field.getGenericSignatureAsString());
-                    reply.writeInt(field.getModifiers());
+                    String signature = field.getTypeAsString();
+                    reply.writeString(signature);
+                    String genericSignature = field.getGenericSignatureAsString();
+                    // only return a generic signature if the type has generics
+                    if (genericSignature.equals(signature)) {
+                        reply.writeString("");
+                    } else {
+                        reply.writeString(field.getGenericSignatureAsString());
+                    }
+                    int modBits = checkSyntheticFlag(field.getModifiers());
+                    reply.writeInt(modBits);
                 }
                 return new CommandResult(reply);
             }
@@ -654,11 +719,98 @@ final class JDWP {
                     reply.writeLong(context.getIds().getIdAsLong(method));
                     reply.writeString(method.getNameAsString());
                     reply.writeString(method.getSignatureAsString());
-                    // TODO(Gregersen) - get the generic signature
-                    // tracked by /browse/GR-19818
-                    reply.writeString("");
-                    reply.writeInt(method.getModifiers());
+                    reply.writeString(method.getGenericSignatureAsString());
+                    int modBits = checkSyntheticFlag(method.getModifiers());
+                    reply.writeInt(modBits);
                 }
+                return new CommandResult(reply);
+            }
+        }
+
+        static class INSTANCES {
+            public static final int ID = 16;
+
+            static CommandResult createReply(Packet packet) {
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+                if (!CAN_GET_INSTANCE_INFO) {
+                    // tracked by: /browse/GR-20325
+                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
+                    return new CommandResult(reply);
+                } else {
+                    throw new RuntimeException("Not implemented!");
+                }
+            }
+        }
+
+        static class CLASS_FILE_VERSION {
+            public static final int ID = 17;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                long typeId = input.readLong();
+
+                KlassRef klassRef = verifyRefType(typeId, reply, context);
+
+                if (klassRef == null) {
+                    // input could be a classObjectId
+                    Object object = context.getIds().fromId((int) typeId);
+                    klassRef = context.getReflectedType(object);
+                }
+
+                if (klassRef == null) {
+                    return new CommandResult(reply);
+                }
+
+                if (klassRef.isArray() || klassRef.isPrimitive()) {
+                    reply.errorCode(ErrorCodes.ABSENT_INFORMATION);
+                    return new CommandResult(reply);
+                }
+
+                reply.writeInt(klassRef.getMajorVersion());
+                reply.writeInt(klassRef.getMinorVersion());
+
+                return new CommandResult(reply);
+            }
+        }
+
+        static class CONSTANT_POOL {
+
+            public static final int ID = 18;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                long typeId = input.readLong();
+                KlassRef klass = verifyRefType(typeId, reply, context);
+
+                if (klass == null) {
+                    // input could be a classObjectId
+                    Object object = context.getIds().fromId((int) typeId);
+                    klass = context.getReflectedType(object);
+                }
+
+                if (klass == null) {
+                    return new CommandResult(reply);
+                }
+
+                if (klass.isPrimitive() || klass.isArray()) {
+                    reply.errorCode(ErrorCodes.ABSENT_INFORMATION);
+                    return new CommandResult(reply);
+                }
+
+                JDWPConstantPool constantPool = klass.getJDWPConstantPool();
+
+                int count = constantPool.getCount() + 1;
+
+                reply.writeInt(count);
+
+                byte[] poolBytes = constantPool.getBytes();
+                reply.writeInt(poolBytes.length);
+                reply.writeByteArray(poolBytes);
+
                 return new CommandResult(reply);
             }
         }
@@ -1033,40 +1185,8 @@ final class JDWP {
             }
         }
 
-        // TODO(Gregersen) - current disabled by Capabilities.
-        // tracked by /browse/GR-19817
-        // Enabling causes the NetBeans debugger to send wrong stepping
-        // events for step into/over so disabled for now. Perhaps the bytecode
-        // returned from method.getCode() is incorrect?
-        static class BYTECODES {
-            public static final int ID = 3;
-
-            static CommandResult createReply(Packet packet, JDWPContext context) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                KlassRef klassRef = verifyRefType(input.readLong(), reply, context); // ref type
-                if (klassRef == null) {
-                    return new CommandResult(reply);
-                }
-
-                long methodId = input.readLong();
-                MethodRef method = verifyMethodRef(methodId, reply, context);
-                if (method == null) {
-                    return new CommandResult(reply);
-                }
-
-                byte[] code = method.getCode();
-
-                reply.writeInt(code.length);
-                reply.writeByteArray(code);
-
-                return new CommandResult(reply);
-            }
-        }
-
-        static class VARIABLE_TABLE_WITH_GENERIC {
-            public static final int ID = 5;
+        static class VARIABLE_TABLE {
+            public static final int ID = 2;
 
             static CommandResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
@@ -1103,9 +1223,108 @@ final class JDWP {
                     reply.writeLong(local.getStartBCI());
                     reply.writeString(local.getNameAsString());
                     reply.writeString(local.getTypeAsString());
-                    // TODO(Gregersen) - generic signature
-                    // tracked by /browse/GR-19818
-                    reply.writeString("");
+                    reply.writeInt(local.getEndBCI() - local.getStartBCI());
+                    reply.writeInt(local.getSlot());
+                }
+                return new CommandResult(reply);
+            }
+        }
+
+        // TODO(Gregersen) - current disabled by Capabilities.
+        // tracked by /browse/GR-19817
+        // Enabling causes the NetBeans debugger to send wrong stepping
+        // events for step into/over so disabled for now. Perhaps the bytecode
+        // returned from method.getCode() is incorrect?
+        static class BYTECODES {
+            public static final int ID = 3;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                KlassRef klassRef = verifyRefType(input.readLong(), reply, context); // ref type
+                if (klassRef == null) {
+                    return new CommandResult(reply);
+                }
+
+                long methodId = input.readLong();
+                MethodRef method = verifyMethodRef(methodId, reply, context);
+                if (method == null) {
+                    return new CommandResult(reply);
+                }
+
+                byte[] code = method.getCode();
+
+                reply.writeInt(code.length);
+                reply.writeByteArray(code);
+
+                return new CommandResult(reply);
+            }
+        }
+
+        static class IS_OBSOLETE {
+            public static final int ID = 4;
+
+            static CommandResult createReply(Packet packet) {
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                // always return false until we have canRedefineMethod support
+                if (!CAN_REDEFINE_CLASSES) {
+                    reply.writeBoolean(false);
+                } else {
+                    throw new RuntimeException("Not implemented");
+                }
+                return new CommandResult(reply);
+            }
+        }
+
+        static class VARIABLE_TABLE_WITH_GENERIC {
+            public static final int ID = 5;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                KlassRef klassRef = verifyRefType(input.readLong(), reply, context); // ref type
+                if (klassRef == null) {
+                    return new CommandResult(reply);
+                }
+
+                long methodId = input.readLong();
+                MethodRef method = verifyMethodRef(methodId, reply, context);
+                if (method == null) {
+                    return new CommandResult(reply);
+                }
+
+                KlassRef[] params = method.getParameters();
+                int argCnt = 0; // the number of words in the frame used by the arguments
+                for (KlassRef klass : params) {
+                    if (klass.isPrimitive()) {
+                        byte tag = klass.getTagConstant();
+                        if (tag == TagConstants.DOUBLE || tag == TagConstants.LONG) {
+                            argCnt += 2;
+                        } else {
+                            argCnt++;
+                        }
+                    }
+                }
+                LocalRef[] locals = method.getLocalVariableTable().getLocals();
+                LocalRef[] genericLocals = method.getLocalVariableTypeTable().getLocals();
+
+                reply.writeInt(argCnt);
+                reply.writeInt(locals.length);
+                for (LocalRef local : locals) {
+                    reply.writeLong(local.getStartBCI());
+                    reply.writeString(local.getNameAsString());
+                    reply.writeString(local.getTypeAsString());
+                    String genericSignature = "";
+                    for (LocalRef genericLocal : genericLocals) {
+                        if (genericLocal.getNameAsString().equals(local.getNameAsString())) {
+                            // found a generic local
+                            genericSignature = genericLocal.getTypeAsString();
+                        }
+                    }
+                    reply.writeString(genericSignature);
                     reply.writeInt(local.getEndBCI() - local.getStartBCI());
                     reply.writeInt(local.getSlot());
                 }
@@ -1336,6 +1555,21 @@ final class JDWP {
 
                 reply.writeBoolean(object == context.getNullObject());
                 return new CommandResult(reply);
+            }
+        }
+
+        static class REFERRING_OBJECTS {
+            public static final int ID = 10;
+
+            static CommandResult createReply(Packet packet) {
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+                if (!CAN_GET_INSTANCE_INFO) {
+                    // tracked by: /browse/GR-20325
+                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
+                    return new CommandResult(reply);
+                } else {
+                    throw new RuntimeException("Not implemented!");
+                }
             }
         }
     }
@@ -1622,6 +1856,49 @@ final class JDWP {
             }
         }
 
+        static class STOP {
+            public static final int ID = 10;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                long threadId = input.readLong();
+                Object thread = verifyThread(threadId, reply, context);
+
+                if (thread == null) {
+                    return new CommandResult(reply);
+                }
+
+                long throwableId = input.readLong();
+                Object throwable = context.getIds().fromId((int) throwableId);
+
+                context.stopThread(thread, throwable);
+
+                return new CommandResult(reply);
+            }
+        }
+
+        static class INTERRUPT {
+            public static final int ID = 11;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                long threadId = input.readLong();
+                Object thread = verifyThread(threadId, reply, context);
+
+                if (thread == null) {
+                    return new CommandResult(reply);
+                }
+
+                context.interruptThread(thread);
+
+                return new CommandResult(reply);
+            }
+        }
+
         static class SUSPEND_COUNT {
             public static final int ID = 12;
 
@@ -1711,6 +1988,30 @@ final class JDWP {
                 return new CommandResult(reply);
             }
         }
+
+        static class CHILDREN {
+            public static final int ID = 3;
+
+            static CommandResult createReply(Packet packet, JDWPContext context) {
+                PacketStream input = new PacketStream(packet);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                long threadGroupId = input.readLong();
+                Object threadGroup = verifyThreadGroup(threadGroupId, reply, context);
+
+                if (threadGroup == null) {
+                    return new CommandResult(reply);
+                }
+
+                Object[] children = context.getChildrenThreds(threadGroup);
+                reply.writeInt(children.length);
+                for (Object child : children) {
+                    reply.writeLong(context.getIds().getIdAsLong(child));
+                }
+                reply.writeInt(0); // no children thread groups
+                return new CommandResult(reply);
+            }
+        }
     }
 
     static class ArrayReference {
@@ -1761,7 +2062,8 @@ final class JDWP {
                 reply.writeInt(length);
                 for (int i = index; i < index + length; i++) {
                     Object theValue = context.getArrayValue(array, i);
-                    writeValue(tag, theValue, reply, !isPrimitive, context);
+                    byte valueTag = context.getTag(theValue);
+                    writeValue(valueTag, theValue, reply, !isPrimitive, context);
                 }
                 return new CommandResult(reply);
             }
@@ -1890,6 +2192,10 @@ final class JDWP {
 
         static class CLEAR {
             public static final int ID = 2;
+        }
+
+        static class CLEAR_ALL_BREAKPOINTS {
+            public static final int ID = 3;
         }
     }
 
@@ -2189,6 +2495,20 @@ final class JDWP {
             reply.writeByte(TagConstants.OBJECT);
             reply.writeLong(0);
         }
+    }
+
+    static boolean isSynthetic(int mod) {
+        return (mod & ACC_SYNTHETIC) != 0;
+    }
+
+    private static int checkSyntheticFlag(int modBits) {
+        int mod = modBits;
+        if (isSynthetic(modBits)) {
+            // JDWP has a different bit for synthetic
+            mod &= ~ACC_SYNTHETIC;
+            mod |= JDWP_SYNTHETIC;
+        }
+        return mod;
     }
 
     private static KlassRef verifyRefType(long refTypeId, PacketStream reply, JDWPContext context) {
