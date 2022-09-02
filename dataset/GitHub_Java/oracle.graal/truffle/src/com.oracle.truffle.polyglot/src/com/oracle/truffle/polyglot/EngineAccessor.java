@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,7 +44,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;
 import java.time.ZoneId;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -76,7 +75,6 @@ import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.impl.TruffleLocator;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.instrumentation.ThreadsListener;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -96,20 +94,8 @@ final class EngineAccessor extends Accessor {
     static final InstrumentSupport INSTRUMENT = ACCESSOR.instrumentSupport();
     static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
 
-    private static List<ClassLoader> locatorLoaders() {
-        return TruffleOptions.AOT ? Collections.emptyList() : TruffleLocator.loaders();
-    }
-
-    private static List<ClassLoader> defaultLoaders() {
-        return Arrays.<ClassLoader> asList(EngineAccessor.class.getClassLoader(), ClassLoader.getSystemClassLoader(), Thread.currentThread().getContextClassLoader());
-    }
-
-    static List<ClassLoader> locatorOrDefaultLoaders() {
-        List<ClassLoader> loaders = locatorLoaders();
-        if (loaders == null) {
-            loaders = defaultLoaders();
-        }
-        return loaders;
+    static Collection<ClassLoader> allLoaders() {
+        return TruffleOptions.AOT ? Collections.emptyList() : ACCESSOR.loaders();
     }
 
     private EngineAccessor() {
@@ -133,11 +119,6 @@ final class EngineAccessor extends Accessor {
     @Override
     protected CallInlined getCallInlined() {
         return super.getCallInlined();
-    }
-
-    @Override
-    protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
-        super.reloadEngineOptions(runtimeData, optionValues);
     }
 
     @Override
@@ -671,8 +652,8 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public Set<? extends Class<?>> getProvidedTags(LanguageInfo language) {
-            return ((PolyglotLanguage) NODES.getEngineObject(language)).cache.getProvidedTags();
+        public Class<? extends TruffleLanguage<?>> getLanguageClass(LanguageInfo language) {
+            return ((PolyglotLanguage) NODES.getEngineObject(language)).cache.getLanguageClass();
         }
 
         @SuppressWarnings("unchecked")
@@ -752,7 +733,7 @@ final class EngineAccessor extends Accessor {
             if (language == null) {
                 return LanguageCache.languageMimes().keySet();
             } else {
-                LanguageCache lang = LanguageCache.languages().get(language);
+                LanguageCache lang = LanguageCache.languages(null).get(language);
                 if (lang != null) {
                     return lang.getMimeTypes();
                 } else {
@@ -763,7 +744,7 @@ final class EngineAccessor extends Accessor {
 
         @Override
         public boolean isCharacterBasedSource(String language, String mimeType) {
-            LanguageCache cache = LanguageCache.languages().get(language);
+            LanguageCache cache = LanguageCache.languages(null).get(language);
             if (cache == null) {
                 return true;
             }
@@ -841,7 +822,7 @@ final class EngineAccessor extends Accessor {
         @Override
         public <T extends TruffleLanguage<C>, C> TruffleLanguage.ContextReference<C> getDirectContextReference(Object sourceVM, TruffleLanguage<?> sourceLanguageSPI, Class<T> targetLanguageClass) {
             assert sourceLanguageSPI == null || sourceLanguageSPI.getClass() == targetLanguageClass;
-            return (TruffleLanguage.ContextReference<C>) resolveLanguageInstance(sourceLanguageSPI).getDirectContextSupplier();
+            return (TruffleLanguage.ContextReference<C>) resolveLanguage(sourceLanguageSPI).getDirectContextSupplier();
         }
 
         @SuppressWarnings("unchecked")
@@ -849,7 +830,7 @@ final class EngineAccessor extends Accessor {
         public <T extends TruffleLanguage<?>> TruffleLanguage.LanguageReference<T> getDirectLanguageReference(Object polyglotEngineImpl, TruffleLanguage<?> sourceLanguageSPI,
                         Class<T> targetLanguageClass) {
             assert sourceLanguageSPI == null || sourceLanguageSPI.getClass() == targetLanguageClass;
-            return (TruffleLanguage.LanguageReference<T>) resolveLanguageInstance(sourceLanguageSPI).getDirectLanguageReference();
+            return (TruffleLanguage.LanguageReference<T>) resolveLanguage(sourceLanguageSPI).getDirectLanguageReference();
         }
 
         @SuppressWarnings("unchecked")
@@ -862,18 +843,8 @@ final class EngineAccessor extends Accessor {
             return (TruffleLanguage.LanguageReference<T>) instance.lookupLanguageSupplier(resolveLanguage(sourceLanguageSPI));
         }
 
-        private static PolyglotLanguageInstance resolveLanguageInstance(TruffleLanguage<?> sourceLanguageSPI) {
-            if (sourceLanguageSPI == null) {
-                return null;
-            }
-            return ((PolyglotLanguageInstance) EngineAccessor.LANGUAGE.getLanguageInstance(sourceLanguageSPI));
-        }
-
-        private static PolyglotLanguage resolveLanguage(TruffleLanguage<?> sourceLanguageSPI) {
-            if (sourceLanguageSPI == null) {
-                return null;
-            }
-            return ((PolyglotLanguageInstance) EngineAccessor.LANGUAGE.getLanguageInstance(sourceLanguageSPI)).language;
+        private static PolyglotLanguageInstance resolveLanguage(TruffleLanguage<?> sourceLanguageSPI) {
+            return (PolyglotLanguageInstance) EngineAccessor.LANGUAGE.getLanguageInstance(sourceLanguageSPI);
         }
 
         @Override

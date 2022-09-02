@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -594,17 +594,15 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     }
 
     boolean patch(PolyglotContextConfig newConfig) {
-        if (isCreated()) {
+        if (isInitialized()) {
             try {
                 final OptionValuesImpl newOptionValues = newConfig.getOptionValues(language);
                 final Env newEnv = LANGUAGE.patchEnvContext(env, newConfig.out, newConfig.err, newConfig.in,
                                 Collections.emptyMap(), newOptionValues, newConfig.getApplicationArguments(language),
                                 newConfig.fileSystem, newConfig.internalFileSystem, context.engine.getFileTypeDetectorsSupplier());
                 if (newEnv != null) {
-                    synchronized (context.engine) {
-                        env = newEnv;
-                        lazy.languageInstance.patchFirstOptions(newOptionValues);
-                    }
+                    env = newEnv;
+                    lazy.languageInstance.patchFirstOptions(newOptionValues);
                     LOG.log(Level.FINE, "Successfully patched context of language: {0}", this.language.getId());
                     return true;
                 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -95,7 +95,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         @CompilationFinal private volatile PolyglotContextImpl singleContext;
 
         /** Copy constructor that keeps the previous state. */
-
         SingleContextState() {
             this(singleContextState.singleContext);
             // called by TruffleFeature
@@ -260,6 +259,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         }
         this.contextImpls = new Object[engine.contextLength];
         this.contexts = createContextArray();
+
         this.subProcesses = new HashSet<>();
         // notifyContextCreated() is called after spiContext.impl is set to this.
         this.engine.noInnerContexts.invalidate();
@@ -816,7 +816,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             languageContext.checkAccess(null);
             languageContext.ensureInitialized(null);
             com.oracle.truffle.api.source.Source source = (com.oracle.truffle.api.source.Source) sourceImpl;
-            CallTarget target = languageContext.parseCached(null, source, null, false);
+            CallTarget target = languageContext.parseCached(null, source, null);
             Object result = target.call(PolyglotImpl.EMPTY_ARGS);
             Value hostValue;
             try {
@@ -1232,13 +1232,14 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     return false;
                 }
             }
+            replayInstrumentationEvents();
         } finally {
             engine.leave(prev, this);
         }
         return true;
     }
 
-    void replayInstrumentationEvents() {
+    private void replayInstrumentationEvents() {
         notifyContextCreated();
         for (PolyglotLanguageContext lc : contexts) {
             LanguageInfo language = lc.language.info;
