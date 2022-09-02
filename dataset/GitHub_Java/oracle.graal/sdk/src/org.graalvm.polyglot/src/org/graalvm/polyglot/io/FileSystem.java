@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,6 +40,7 @@
  */
 package org.graalvm.polyglot.io;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.channels.SeekableByteChannel;
@@ -62,12 +63,13 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileAttributeView;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
  * Service-provider for {@code Truffle} files.
  *
- * @since 1.0
+ * @since 19.0
  */
 public interface FileSystem {
 
@@ -77,7 +79,7 @@ public interface FileSystem {
      * @param uri the {@link URI} to be converted to {@link Path}
      * @return the {@link Path} representing given {@link URI}
      * @throws UnsupportedOperationException when {@link URI} scheme is not supported
-     * @since 1.0
+     * @since 19.0
      */
     Path parsePath(URI uri);
 
@@ -88,7 +90,7 @@ public interface FileSystem {
      * @param path the string path to be converted to {@link Path}
      * @return the {@link Path}
      * @throws UnsupportedOperationException when the {@link FileSystem} supports only {@link URI}
-     * @since 1.0
+     * @since 19.0
      */
     Path parsePath(String path);
 
@@ -101,7 +103,7 @@ public interface FileSystem {
      * @throws NoSuchFileException if the file denoted by the path does not exist
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     void checkAccess(Path path, Set<? extends AccessMode> modes, LinkOption... linkOptions) throws IOException;
 
@@ -115,7 +117,7 @@ public interface FileSystem {
      * @throws UnsupportedOperationException if the attributes contain an attribute which cannot be
      *             set atomically
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     void createDirectory(Path dir, FileAttribute<?>... attrs) throws IOException;
 
@@ -127,7 +129,7 @@ public interface FileSystem {
      * @throws DirectoryNotEmptyException if the path denotes a non empty directory
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     void delete(Path path) throws IOException;
 
@@ -145,7 +147,7 @@ public interface FileSystem {
      *             set atomically
      * @throws IllegalArgumentException in case of invalid options combination
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException;
 
@@ -158,7 +160,7 @@ public interface FileSystem {
      * @throws NotDirectoryException when given path does not denote a directory
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     DirectoryStream<Path> newDirectoryStream(Path dir, DirectoryStream.Filter<? super Path> filter) throws IOException;
 
@@ -168,7 +170,7 @@ public interface FileSystem {
      * @param path the path to resolve, may be a non normalized path
      * @return an absolute {@link Path}
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     Path toAbsolutePath(Path path);
 
@@ -180,7 +182,7 @@ public interface FileSystem {
      * @return an absolute canonical path
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     Path toRealPath(Path path, LinkOption... linkOptions) throws IOException;
 
@@ -196,14 +198,16 @@ public interface FileSystem {
      *            attributes from given view are read.
      * @param options the options determining how the symbolic links should be handled
      * @return the {@link Map} containing the file attributes. The map's keys are attribute names,
-     *         map's values are the attribute values
+     *         map's values are the attribute values. The map may contain a subset of required
+     *         attributes in case when the {@code FileSystem} does not support some of the required
+     *         attributes.
      * @throws UnsupportedOperationException if the attribute view is not supported. At least the
      *             {@code "basic"} attribute view has to be supported by the file system.
      * @throws IllegalArgumentException is the {@code attribute-list} is empty or contains an
      *             unknown attribute
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     Map<String, Object> readAttributes(Path path, String attributes, LinkOption... options) throws IOException;
 
@@ -224,7 +228,7 @@ public interface FileSystem {
      *             {@code value} has an inappropriate value
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     default void setAttribute(Path path, String attribute, Object value, LinkOption... options) throws IOException {
         throw new UnsupportedOperationException("Setting attributes is not supported");
@@ -245,7 +249,7 @@ public interface FileSystem {
      *             directory
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     default void copy(Path source, Path target, CopyOption... options) throws IOException {
         IOHelper.copy(source, target, this, options);
@@ -268,7 +272,7 @@ public interface FileSystem {
      *             {@link StandardCopyOption#ATOMIC_MOVE} but file cannot be moved atomically
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     default void move(Path source, Path target, CopyOption... options) throws IOException {
         IOHelper.move(source, target, this, options);
@@ -283,7 +287,7 @@ public interface FileSystem {
      * @throws FileAlreadyExistsException if a file on given link path already exists
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     default void createLink(Path link, Path existing) throws IOException {
         throw new UnsupportedOperationException("Links are not supported");
@@ -299,7 +303,7 @@ public interface FileSystem {
      * @throws FileAlreadyExistsException if a file on given link path already exists
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     default void createSymbolicLink(Path link, Path target, FileAttribute<?>... attrs) throws IOException {
         throw new UnsupportedOperationException("Links are not supported");
@@ -314,7 +318,7 @@ public interface FileSystem {
      * @throws NotLinkException if the {@code link} does not denote a symbolic link
      * @throws IOException in case of IO error
      * @throws SecurityException if this {@link FileSystem} denied the operation
-     * @since 1.0
+     * @since 19.0
      */
     default Path readSymbolicLink(Path link) throws IOException {
         throw new UnsupportedOperationException("Links are not supported");
@@ -330,7 +334,7 @@ public interface FileSystem {
      * @throws IllegalArgumentException if the {@code currentWorkingDirectory} is not a valid
      *             current working directory
      * @throws SecurityException if {@code currentWorkingDirectory} is not readable
-     * @since 1.0
+     * @since 19.0
      */
     default void setCurrentWorkingDirectory(Path currentWorkingDirectory) {
         throw new UnsupportedOperationException("Setting current working directory is not supported.");
@@ -341,10 +345,21 @@ public interface FileSystem {
      * when creating path strings by invoking the {@link Path#toString() toString()} method.
      *
      * @return the name separator
-     * @since 1.0
+     * @since 19.0
      */
     default String getSeparator() {
         return parsePath("").getFileSystem().getSeparator();
+    }
+
+    /**
+     * Returns the path separator used to separate filenames in a path list. On UNIX the path
+     * separator is {@code ':'}. On Windows it's {@code ';'}.
+     *
+     * @return the path separator
+     * @since 19.1.0
+     */
+    default String getPathSeparator() {
+        return File.pathSeparator;
     }
 
     /**
@@ -354,9 +369,10 @@ public interface FileSystem {
      * @param path the file to find a MIME type for
      * @return the MIME type or {@code null} if the MIME type is not recognized or the
      *         {@link FileSystem filesystem} does not support MIME type detection
-     * @since 1.0
+     * @since 19.0
      */
     default String getMimeType(Path path) {
+        Objects.requireNonNull(path);
         return null;
     }
 
@@ -367,9 +383,80 @@ public interface FileSystem {
      * @param path the file to find an file encoding for
      * @return the file encoding or {@code null} if the file encoding is not detected or the
      *         {@link FileSystem filesystem} does not support file encoding detection
-     * @since 1.0
+     * @since 19.0
      */
     default Charset getEncoding(Path path) {
+        Objects.requireNonNull(path);
         return null;
+    }
+
+    /**
+     * Returns the default temporary directory.
+     *
+     * @since 19.3.0
+     */
+    default Path getTempDirectory() {
+        throw new UnsupportedOperationException("Temporary directories not supported");
+    }
+
+    /**
+     * Creates a {@link FileSystem} implementation based on the host Java NIO. The returned instance
+     * can be used as a delegate by a decorating {@link FileSystem}.
+     * <p>
+     * The following example shows a {@link FileSystem} restricting an IO access only to a given
+     * folder.
+     *
+     * <pre>
+     * class RestrictedFileSystem implements FileSystem {
+     *
+     *     private final FileSystem delegate;
+     *     private final Path allowedFolder;
+     *
+     *     RestrictedFileSystem(String allowedFolder) throws IOException {
+     *         this.delegate = FileSystem.newDefaultFileSystem();
+     *         this.allowedFolder = delegate.toRealPath(
+     *                         delegate.parsePath(allowedFolder));
+     *     }
+     *
+     *     &#64;Override
+     *     public Path parsePath(String path) {
+     *         return delegate.parsePath(path);
+     *     }
+     *
+     *     &#64;Override
+     *     public Path parsePath(URI uri) {
+     *         return delegate.parsePath(uri);
+     *     }
+     *
+     *     &#64;Override
+     *     public SeekableByteChannel newByteChannel(Path path,
+     *                     Set&lt;? extends OpenOption&gt; options,
+     *                     FileAttribute&lt;?&gt;... attrs) throws IOException {
+     *         verifyAccess(path);
+     *         return delegate.newByteChannel(path, options, attrs);
+     *     }
+     *
+     *     private void verifyAccess(Path path) {
+     *         Path realPath = null;
+     *         for (Path c = path; c != null; c = c.getParent()) {
+     *             try {
+     *                 realPath = delegate.toRealPath(c);
+     *                 break;
+     *             } catch (IOException ioe) {
+     *             }
+     *         }
+     *         if (realPath == null || !realPath.startsWith(allowedFolder)) {
+     *             throw new SecurityException("Access to " + path + " is denied.");
+     *         }
+     *     }
+     * }
+     * </pre>
+     *
+     * @see org.graalvm.polyglot.Context.Builder#fileSystem(org.graalvm.polyglot.io.FileSystem)
+     *
+     * @since 20.2.0
+     */
+    static FileSystem newDefaultFileSystem() {
+        return IOHelper.IMPL.newDefaultFileSystem();
     }
 }
