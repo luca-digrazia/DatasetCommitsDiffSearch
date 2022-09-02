@@ -34,7 +34,6 @@ import static org.graalvm.compiler.phases.OptimisticOptimizations.Optimization.U
 import static org.graalvm.compiler.phases.OptimisticOptimizations.Optimization.UseTypeCheckedInlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilationFailureAction;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExcludeAssertions;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.FirstTierUseEconomy;
 
 import java.io.PrintStream;
 import java.nio.BufferOverflowException;
@@ -110,9 +109,9 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
     protected final Suites lastTierSuites;
     protected final GraphBuilderConfiguration config;
     protected final LIRSuites lastTierLirSuites;
-    protected Providers firstTierProviders;
-    protected Suites firstTierSuites;
-    protected LIRSuites firstTierLirSuites;
+    protected final Providers firstTierProviders;
+    protected final Suites firstTierSuites;
+    protected final LIRSuites firstTierLirSuites;
     protected final PartialEvaluator partialEvaluator;
     protected final Backend backend;
     protected final SnippetReflectionProvider snippetReflection;
@@ -271,18 +270,11 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         if (!initialized) {
             synchronized (this) {
                 if (!initialized) {
-                    final org.graalvm.options.OptionValues options = TruffleCompilerOptions.getOptionsForCompiler(optionsMap);
-                    partialEvaluator.initialize(options);
+                    partialEvaluator.initialize(TruffleCompilerOptions.getOptionsForCompiler(optionsMap));
                     if (firstInitialization) {
                         TruffleCompilerOptions.checkDeprecation(compilable);
                     }
                     initialized = true;
-
-                    if (!FirstTierUseEconomy.getValue(options)) {
-                        firstTierSuites = lastTierSuites;
-                        firstTierLirSuites = lastTierLirSuites;
-                        firstTierProviders = lastTierProviders;
-                    }
                 }
             }
         }
