@@ -32,8 +32,4 @@ final class HeapException extends AbstractTruffleException {
     HeapException(String message) {
         super(message);
     }
-
-    HeapException(Throwable cause) {
-        super(cause.getMessage(), cause, UNLIMITED_STACK_TRACE, null);
-    }
 }

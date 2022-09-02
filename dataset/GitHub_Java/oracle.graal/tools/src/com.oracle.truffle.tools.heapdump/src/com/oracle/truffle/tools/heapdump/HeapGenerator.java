@@ -87,11 +87,11 @@ final class HeapGenerator {
                         d.dump();
                     }
                 } catch (InteropException ex) {
-                    throw new HeapException(ex);
+                    throw raise(RuntimeException.class, ex);
                 }
             });
         } catch (IOException ex) {
-            throw new HeapException(ex);
+            throw raise(RuntimeException.class, ex);
         }
     }
 
@@ -166,7 +166,7 @@ final class HeapGenerator {
         throw new HeapException(sb.toString());
     }
 
-    private void dumpStack(HeapDump seg, InteropLibrary iop, Object stack, int depth) throws IOException, UnsupportedMessageException, InvalidArrayIndexException {
+    private void dumpStack(HeapDump seg, InteropLibrary iop, Object stack, int depth) throws UnsupportedMessageException, InvalidArrayIndexException, UnknownIdentifierException, IOException {
         ThreadBuilder threadBuilder = null;
         long frameCount = iop.getArraySize(stack);
         for (long i = 0; i < frameCount; i++) {
@@ -296,7 +296,7 @@ final class HeapGenerator {
         return id;
     }
 
-    private int dumpSource(InteropLibrary iop, HeapDump seg, Object source, String srcName) throws IOException, UnsupportedMessageException {
+    private int dumpSource(InteropLibrary iop, HeapDump seg, Object source, String srcName) throws IOException, UnknownIdentifierException, UnsupportedMessageException, UnknownIdentifierException {
         String mimeType = asStringOrNull(iop, source, "mimeType");
         String uri = asStringOrNull(iop, source, "uri");
         String characters = asStringOrNull(iop, source, "characters");
@@ -322,6 +322,11 @@ final class HeapGenerator {
 
     private interface Dump {
         void dump() throws UnknownIdentifierException, IOException, UnsupportedMessageException;
+    }
+
+    @SuppressWarnings({"unchecked", "unused"})
+    private static <E extends Throwable> E raise(Class<E> type, Throwable t) throws E {
+        throw (E) t;
     }
 
     private static final class SourceKey {
