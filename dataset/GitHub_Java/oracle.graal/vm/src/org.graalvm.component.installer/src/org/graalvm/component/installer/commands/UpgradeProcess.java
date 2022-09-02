@@ -533,8 +533,7 @@ public class UpgradeProcess implements AutoCloseable {
         }
         migrated.clear();
         // if the result GraalVM is identical to current, do not migrate anything.
-        if (result != null && (!input.getLocalRegistry().getGraalVersion().equals(result.getVersion()) ||
-                        input.hasOption(Commands.OPTION_USE_EDITION))) {
+        if (result != null && !input.getLocalRegistry().getGraalVersion().equals(result.getVersion())) {
             migrated.addAll(installables);
             targetInfo = result;
         }
@@ -578,7 +577,7 @@ public class UpgradeProcess implements AutoCloseable {
                         CommonConstants.PATH_COMPONENT_STORAGE + "/gds");
         if (Files.isDirectory(gdsSettings)) {
             Path targetGdsSettings = SystemUtils.resolveRelative(
-                            newInstallPath,
+                            newInstallPath.resolve(SystemUtils.getGraalVMJDKRoot(newGraalRegistry)),
                             CommonConstants.PATH_COMPONENT_STORAGE + "/gds");
             try {
                 SystemUtils.copySubtree(gdsSettings, targetGdsSettings);
