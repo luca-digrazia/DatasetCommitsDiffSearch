@@ -110,12 +110,54 @@ final class HostClassDesc {
             Map<String, HostMethodDesc> staticMethodMap = new LinkedHashMap<>();
             Map<String, HostFieldDesc> fieldMap = new LinkedHashMap<>();
             Map<String, HostFieldDesc> staticFieldMap = new LinkedHashMap<>();
+            HostMethodDesc ctor = null;
             HostMethodDesc functionalInterfaceMethod = null;
 
             collectPublicMethods(hostAccess, type, methodMap, staticMethodMap);
-            collectPublicFields(hostAccess, type, fieldMap, staticFieldMap);
 
-            HostMethodDesc ctor = collectPublicConstructors(hostAccess, type);
+            boolean isPublicType = isClassAccessible(type, hostAccess);
+            if (isPublicType) {
+                boolean inheritedPublicInstanceFields = false;
+                boolean inheritedPublicInaccessibleFields = false;
+                for (Field f : type.getFields()) {
+                    if (!Modifier.isStatic(f.getModifiers())) {
+                        if (f.getDeclaringClass() == type) {
+                            assert !fieldMap.containsKey(f.getName());
+                            if (hostAccess.allowsAccess(f)) {
+                                fieldMap.put(f.getName(), HostFieldDesc.unreflect(f));
+                            }
+                        } else {
+                            if (isClassAccessible(f.getDeclaringClass(), hostAccess)) {
+                                inheritedPublicInstanceFields = true;
+                            } else {
+                                inheritedPublicInaccessibleFields = true;
+                            }
+                        }
+                    } else {
+                        // do not inherit static fields
+                        if (f.getDeclaringClass() == type && hostAccess.allowsAccess(f)) {
+                            staticFieldMap.put(f.getName(), HostFieldDesc.unreflect(f));
+                        }
+                    }
+                }
+                if (inheritedPublicInstanceFields) {
+                    collectPublicInstanceFields(hostAccess, type, fieldMap, inheritedPublicInaccessibleFields);
+                }
+            } else {
+                if (!Modifier.isInterface(type.getModifiers())) {
+                    collectPublicInstanceFields(hostAccess, type, fieldMap, true);
+                }
+            }
+
+            if (isPublicType) {
+                for (Constructor<?> c : type.getConstructors()) {
+                    if (!hostAccess.allowsAccess(c)) {
+                        continue;
+                    }
+                    SingleMethod overload = SingleMethod.unreflect(c);
+                    ctor = ctor == null ? overload : merge(ctor, overload);
+                }
+            }
 
             if (!Modifier.isInterface(type.getModifiers()) && !Modifier.isAbstract(type.getModifiers())) {
                 String functionalInterfaceMethodName = findFunctionalInterfaceMethodName(type);
@@ -134,20 +176,6 @@ final class HostClassDesc {
 
         private static boolean isClassAccessible(Class<?> declaringClass, HostClassCache hostAccess) {
             return Modifier.isPublic(declaringClass.getModifiers()) && EngineAccessor.JDKSERVICES.verifyModuleVisibility(hostAccess.getUnnamedModule(), declaringClass);
-        }
-
-        private static HostMethodDesc collectPublicConstructors(HostClassCache hostAccess, Class<?> type) {
-            HostMethodDesc ctor = null;
-            if (isClassAccessible(type, hostAccess)) {
-                for (Constructor<?> c : type.getConstructors()) {
-                    if (!hostAccess.allowsAccess(c)) {
-                        continue;
-                    }
-                    SingleMethod overload = SingleMethod.unreflect(c);
-                    ctor = ctor == null ? overload : merge(ctor, overload);
-                }
-            }
-            return ctor;
         }
 
         private static void collectPublicMethods(HostClassCache hostAccess, Class<?> type, Map<String, HostMethodDesc> methodMap, Map<String, HostMethodDesc> staticMethodMap) {
@@ -268,41 +296,6 @@ final class HostClassDesc {
                 SingleMethod[] newOverloads = Arrays.copyOf(oldOverloads, oldOverloads.length + 1);
                 newOverloads[oldOverloads.length] = (SingleMethod) other;
                 return new OverloadedMethod(newOverloads);
-            }
-        }
-
-        private static void collectPublicFields(HostClassCache hostAccess, Class<?> type, Map<String, HostFieldDesc> fieldMap, Map<String, HostFieldDesc> staticFieldMap) {
-            if (isClassAccessible(type, hostAccess)) {
-                boolean inheritedPublicInstanceFields = false;
-                boolean inheritedPublicInaccessibleFields = false;
-                for (Field f : type.getFields()) {
-                    if (!Modifier.isStatic(f.getModifiers())) {
-                        if (f.getDeclaringClass() == type) {
-                            assert !fieldMap.containsKey(f.getName());
-                            if (hostAccess.allowsAccess(f)) {
-                                fieldMap.put(f.getName(), HostFieldDesc.unreflect(f));
-                            }
-                        } else {
-                            if (isClassAccessible(f.getDeclaringClass(), hostAccess)) {
-                                inheritedPublicInstanceFields = true;
-                            } else {
-                                inheritedPublicInaccessibleFields = true;
-                            }
-                        }
-                    } else {
-                        // do not inherit static fields
-                        if (f.getDeclaringClass() == type && hostAccess.allowsAccess(f)) {
-                            staticFieldMap.put(f.getName(), HostFieldDesc.unreflect(f));
-                        }
-                    }
-                }
-                if (inheritedPublicInstanceFields) {
-                    collectPublicInstanceFields(hostAccess, type, fieldMap, inheritedPublicInaccessibleFields);
-                }
-            } else {
-                if (!Modifier.isInterface(type.getModifiers())) {
-                    collectPublicInstanceFields(hostAccess, type, fieldMap, true);
-                }
             }
         }
 
