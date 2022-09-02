@@ -43,10 +43,10 @@ public final class ClassInfo {
     private String newName;
 
     // below fields constitute the "fingerprint" of the class relevant for matching
-    private String classFingerprint;
+    private final String classFingerprint;
     private String methodFingerprint;
     private String fieldFingerprint;
-    private String enclosingMethodFingerprint;
+    private final String enclosingMethodFingerprint;
 
     private final ArrayList<ClassInfo> innerClasses;
     private ClassInfo outerClassInfo;
@@ -153,10 +153,7 @@ public final class ClassInfo {
         }
 
         return new ClassInfo(klass, name, definingLoader, hierarchy.toString(), methods.toString(), fields.toString(), enclosing.toString(), new ArrayList<>(1), bytes);
-    }
 
-    public static ClassInfo copyFrom(ClassInfo info) {
-        return new ClassInfo(info.getKlass(), info.getNewName(), info.getClassLoader(), info.classFingerprint, info.methodFingerprint, info.fieldFingerprint, info.enclosingMethodFingerprint, new ArrayList<>(1), info.getBytes());
     }
 
     public String getOriginalName() {
@@ -186,6 +183,10 @@ public final class ClassInfo {
 
     public String getNewName() {
         return newName != null ? newName : originalName;
+    }
+
+    public StaticObject[] getPatches() {
+        return new StaticObject[0];
     }
 
     public void addInnerClass(ClassInfo inner) {
@@ -227,35 +228,18 @@ public final class ClassInfo {
             // always mark super hierachy changes as incompatible
             return 0;
         }
-        if (!fieldFingerprint.equals(other.fieldFingerprint)) {
-            // field changed not supported yet
-            // Remove this restriction when supported
-            return 0;
-        }
         int score = 0;
         score += methodFingerprint.equals(other.methodFingerprint) ? InnerClassRedefiner.METHOD_FINGERPRINT_EQUALS : 0;
         score += enclosingMethodFingerprint.equals(other.enclosingMethodFingerprint) ? InnerClassRedefiner.ENCLOSING_METHOD_FINGERPRINT_EQUALS : 0;
         score += fieldFingerprint.equals(other.fieldFingerprint) ? InnerClassRedefiner.FIELD_FINGERPRINT_EQUALS : 0;
-        score += innerClasses.size() == other.innerClasses.size() ? InnerClassRedefiner.NUMBER_INNER_CLASSES : 0;
         return score;
     }
 
     public String generateNextUniqueInnerName() {
-        return getNewName() + InnerClassRedefiner.HOT_CLASS_MARKER + nextNewClass++;
+        return getNewName() + "$hot" + nextNewClass++;
     }
 
     public void patchBytes(byte[] patchedBytes) {
         this.bytes = patchedBytes;
-    }
-
-    public void removeInner(ClassInfo removed) {
-        innerClasses.remove(removed);
-    }
-
-    public void update(ClassInfo info) {
-        this.classFingerprint = info.classFingerprint;
-        this.methodFingerprint = info.methodFingerprint;
-        this.fieldFingerprint = info.fieldFingerprint;
-        this.enclosingMethodFingerprint = info.enclosingMethodFingerprint;
     }
 }

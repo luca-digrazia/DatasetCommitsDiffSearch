@@ -94,7 +94,7 @@ public class ConstantPoolPatcher {
     }
 
     public static byte[] patchConstantPool(byte[] bytes, Map<String, String> rules) {
-        byte[] result = Arrays.copyOf(bytes, bytes.length);
+        byte[] result = bytes;
         ClassfileStream stream = new ClassfileStream(bytes, null);
 
         // skip magic and version - 8 bytes
