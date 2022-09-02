@@ -77,7 +77,6 @@ final class TrustStoreManagerFeature implements Feature {
          * for security we spell it out explicitly.
          */
         RuntimeClassInitialization.initializeAtBuildTime(sun.security.util.UntrustedCertificates.class);
-        RuntimeClassInitialization.initializeAtBuildTime(org.jcp.xml.dsig.internal.dom.XMLDSigRI.class);
     }
 }
 
