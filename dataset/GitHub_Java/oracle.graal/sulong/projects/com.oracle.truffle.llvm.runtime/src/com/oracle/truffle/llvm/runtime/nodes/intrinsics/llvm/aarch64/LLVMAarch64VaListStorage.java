@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates.
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification, are
- * permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this list of
- * conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided
- * with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to
- * endorse or promote products derived from this software without specific prior written
- * permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.aarch64;
 
 import java.util.ArrayList;
@@ -35,13 +6,8 @@ import java.util.Arrays;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Exclusive;
-import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -54,35 +20,26 @@ import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMVarArgCompoundValue;
-import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMSourceTypeFactory;
 import com.oracle.truffle.llvm.runtime.except.LLVMMemoryException;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMCopyTargetLibrary;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.LLVMGetStackSpaceInstruction;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypes;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMRootNode;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVAEnd;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVAStart;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVaListLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVaListStorage;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativeVarargsAreaStackAllocationNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativeVarargsAreaStackAllocationNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VaListStorage;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VaListStorage.AbstractOverflowArgArea;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VaListStorage.NativeAllocaInstruction;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VaListStorage.VarArgArea;
 import com.oracle.truffle.llvm.runtime.nodes.memory.NativeProfiledMemMove;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNode.LLVMI32OffsetLoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMPointerLoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMPointerLoadNode.LLVMPointerOffsetLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVM80BitFloatStoreNode.LLVM80BitFloatOffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI32StoreNode.LLVMI32OffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI64StoreNode.LLVMI64OffsetStoreNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMPointerStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMPointerStoreNode.LLVMPointerOffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -98,7 +55,6 @@ import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
 @ExportLibrary(LLVMVaListLibrary.class)
 @ExportLibrary(NativeTypeLibrary.class)
 @ExportLibrary(InteropLibrary.class)
-@ExportLibrary(LLVMCopyTargetLibrary.class)
 public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
 
     // %struct.__va_list = type { i8*, i8*, i8*, i32, i32 }
@@ -120,7 +76,7 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
     private RegSaveArea fpSaveArea;
     private LLVMPointer fpSaveAreaPtr;
 
-    protected OverflowArgArea overflowArgArea;
+    private OverflowArgArea overflowArgArea;
 
     public LLVMAarch64VaListStorage(RootNode rootNode) {
         assert rootNode instanceof LLVMRootNode;
@@ -136,7 +92,7 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
 
         int usedFpArea = 0;
         for (int i = 0; i < numberOfExplicitArguments && usedFpArea < Aarch64BitVarArgs.FP_LIMIT; i++) {
-            if (getVarArgArea(realArguments[i]) == VarArgArea.FP_AREA) {
+            if (LLVMX86_64VaListStorage.getVarArgArea(realArguments[i]) == VarArgArea.FP_AREA) {
                 usedFpArea += Aarch64BitVarArgs.FP_STEP;
             }
         }
@@ -148,51 +104,12 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
 
         int usedGpArea = 0;
         for (int i = 0; i < numberOfExplicitArguments && usedGpArea < Aarch64BitVarArgs.GP_LIMIT; i++) {
-            if (getVarArgArea(realArguments[i]) == VarArgArea.GP_AREA) {
+            if (LLVMX86_64VaListStorage.getVarArgArea(realArguments[i]) == VarArgArea.GP_AREA) {
                 usedGpArea += Aarch64BitVarArgs.GP_STEP;
             }
         }
 
         return usedGpArea;
-    }
-
-    // LLVMCopyTargetLibrary
-
-    @ExportMessage
-    public boolean canCopyFrom(Object source) {
-        return source instanceof LLVMAarch64VaListStorage || LLVMNativePointer.isInstance(source);
-    }
-
-    @ExportMessage
-    static class CopyFrom {
-
-        @Specialization
-        static void copyFromManaged(LLVMAarch64VaListStorage dest, LLVMAarch64VaListStorage source, @CachedLibrary(value = "dest") LLVMVaListLibrary vaListLibrary) {
-            vaListLibrary.copy(source, dest);
-        }
-
-        @Specialization
-        @TruffleBoundary
-        static void copyFromNative(LLVMAarch64VaListStorage dest, LLVMNativePointer source,
-                        @Cached NativeVAListWrapperFactory wrapperFactory,
-                        @CachedLibrary(limit = "1") LLVMVaListLibrary vaListLibrary) {
-            Object nativeVAListWrapper = wrapperFactory.execute(source);
-            vaListLibrary.copy(nativeVAListWrapper, dest);
-        }
-
-    }
-
-    // TODO: move it to the super class
-    @GenerateUncached
-    abstract static class NativeVAListWrapperFactory extends LLVMNode {
-
-        public abstract Object execute(LLVMNativePointer p);
-
-        @Specialization
-        protected Object createWrapper(LLVMNativePointer p, @CachedLanguage LanguageReference<LLVMLanguage> lang) {
-            return lang.get().getCapability(PlatformCapability.class).createNativeVAListWrapper(p, getRootNode());
-        }
-
     }
 
     // NativeTypeLibrary library
@@ -208,7 +125,7 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
     @TruffleBoundary
     Object getNativeType(@CachedLanguage LLVMLanguage language) {
         // This method should never be invoked
-        return language.getInteropType(LLVMSourceTypeFactory.resolveType(VA_LIST_TYPE, getDataLayout()));
+        return language.getInteropType(LLVMSourceTypeFactory.resolveType(VA_LIST_TYPE, LLVMX86_64VaListStorage.getDataLayout()));
     }
 
     // LLVMManagedReadLibrary implementation
@@ -251,9 +168,8 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
         }
 
         @Specialization(guards = "vaList.isNativized()")
-        static int readNativeI32(LLVMAarch64VaListStorage vaList, long offset,
-                        @Cached LLVMI32LoadNode.LLVMI32OffsetLoadNode offsetLoad) {
-            return offsetLoad.executeWithTarget(vaList.nativized, offset);
+        static int readNativeI32(LLVMAarch64VaListStorage vaList, long offset, @CachedLibrary(limit = "1") LLVMManagedReadLibrary nativeReadLibrary) {
+            return nativeReadLibrary.readI32(vaList.nativized, offset);
         }
     }
 
@@ -277,8 +193,8 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
 
         @Specialization(guards = "vaList.isNativized()")
         static LLVMPointer readNativePointer(LLVMAarch64VaListStorage vaList, long offset,
-                        @Cached LLVMPointerLoadNode.LLVMPointerOffsetLoadNode offsetLoad) {
-            return offsetLoad.executeWithTarget(vaList.nativized, offset);
+                        @CachedLibrary(limit = "1") LLVMManagedReadLibrary nativeReadLibrary) {
+            return nativeReadLibrary.readPointer(vaList.nativized, offset);
         }
     }
 
@@ -332,8 +248,8 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
 
         @Specialization(guards = "vaList.isNativized()")
         static void writeNative(LLVMAarch64VaListStorage vaList, long offset, int value,
-                        @Cached LLVMI32OffsetStoreNode offsetStore) {
-            offsetStore.executeWithTarget(vaList.nativized, offset, value);
+                        @CachedLibrary(limit = "1") LLVMManagedWriteLibrary nativeWriteLibrary) {
+            nativeWriteLibrary.writeI32(vaList.nativized, offset, value);
         }
     }
 
@@ -367,8 +283,8 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
 
         @Specialization(guards = "vaList.isNativized()")
         static void writeNative(LLVMAarch64VaListStorage vaList, long offset, LLVMPointer value,
-                        @Cached LLVMPointerStoreNode.LLVMPointerOffsetStoreNode offsetStore) {
-            offsetStore.executeWithTarget(vaList.nativized, offset, value);
+                        @CachedLibrary(limit = "1") LLVMManagedWriteLibrary nativeWriteLibrary) {
+            nativeWriteLibrary.writePointer(vaList.nativized, offset, value);
         }
     }
 
@@ -383,14 +299,12 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
             vaList.numberOfExplicitArguments = numOfExpArgs;
             assert numOfExpArgs <= realArgs.length;
 
-            int gpUsage = calculateUsedGpArea(realArgs, numOfExpArgs);
-            vaList.gpOffset = gpUsage - Aarch64BitVarArgs.GP_LIMIT;
-            int fpUsage = calculateUsedFpArea(realArgs, numOfExpArgs);
-            vaList.fpOffset = fpUsage - Aarch64BitVarArgs.FP_LIMIT;
+            int namedGPUsage = calculateUsedGpArea(realArgs, numOfExpArgs);
+            vaList.gpOffset = namedGPUsage - Aarch64BitVarArgs.GP_LIMIT;
+            int namedFPUsage = calculateUsedFpArea(realArgs, numOfExpArgs);
+            vaList.fpOffset = namedFPUsage - Aarch64BitVarArgs.FP_LIMIT;
 
-            // the length of the gp index is doubled to accommodate potential
-            // LLVMVarArgCompoundValue args spanning over 2 cells in GP area.
-            int[] gpIdx = new int[realArgs.length * 2];
+            int[] gpIdx = new int[realArgs.length];
             Arrays.fill(gpIdx, -1);
             int[] fpIdx = new int[realArgs.length];
             Arrays.fill(fpIdx, -1);
@@ -408,25 +322,13 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
             for (int i = numOfExpArgs; i < realArgs.length; i++) {
                 final Object arg = realArgs[i];
 
-                final VarArgArea area = getVarArgArea(arg);
-                if (area == VarArgArea.GP_AREA) {
-                    if (gp < 0) {
-                        gpIdx[(Aarch64BitVarArgs.GP_LIMIT + gp) / Aarch64BitVarArgs.GP_STEP] = i;
-                        gp += Aarch64BitVarArgs.GP_STEP;
-                    } else {
-                        overflowAreaArgOffsets[oi] = overflowArea;
-                        overflowArea += Aarch64BitVarArgs.STACK_STEP;
-                        overflowArgs[oi++] = arg;
-                    }
-                } else if (area == VarArgArea.FP_AREA) {
-                    if (fp < 0) {
-                        fpIdx[(Aarch64BitVarArgs.FP_LIMIT + fp) / Aarch64BitVarArgs.FP_STEP] = i;
-                        fp += Aarch64BitVarArgs.FP_STEP;
-                    } else {
-                        overflowAreaArgOffsets[oi] = overflowArea;
-                        overflowArea += Aarch64BitVarArgs.STACK_STEP;
-                        overflowArgs[oi++] = arg;
-                    }
+                final LLVMX86_64VaListStorage.VarArgArea area = LLVMX86_64VaListStorage.getVarArgArea(arg);
+                if (area == VarArgArea.GP_AREA && gp < 0) {
+                    gpIdx[(Aarch64BitVarArgs.GP_LIMIT + gp) / Aarch64BitVarArgs.GP_STEP] = i;
+                    gp += Aarch64BitVarArgs.GP_STEP;
+                } else if (area == VarArgArea.FP_AREA && fp < 0) {
+                    fpIdx[(Aarch64BitVarArgs.FP_LIMIT + fp) / Aarch64BitVarArgs.FP_STEP] = i;
+                    fp += Aarch64BitVarArgs.FP_STEP;
                 } else if (area != VarArgArea.OVERFLOW_AREA) {
                     overflowAreaArgOffsets[oi] = overflowArea;
                     overflowArea += Aarch64BitVarArgs.STACK_STEP;
@@ -471,8 +373,6 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
             vaList.fpSaveArea = new RegSaveArea(realArgs, fpIdx, numOfExpArgs, Aarch64BitVarArgs.FP_STEP, Aarch64BitVarArgs.FP_LIMIT);
             vaList.fpSaveAreaPtr = LLVMManagedPointer.create(vaList.fpSaveArea);
             vaList.overflowArgArea = new OverflowArgArea(overflowArgs, overflowAreaArgOffsets, overflowArea, oi);
-            vaList.overflowArgAreaBaseNativePtr = null;
-            vaList.nativized = null;
         }
 
         @Specialization(guards = {"vaList.isNativized()"})
@@ -508,12 +408,12 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
 
     @SuppressWarnings("static-method")
     LLVMExpressionNode createAllocaNode(LLVMLanguage language) {
-        DataLayout dataLayout = getDataLayout();
+        DataLayout dataLayout = LLVMX86_64VaListStorage.getDataLayout();
         return language.getActiveConfiguration().createNodeFactory(language, dataLayout).createAlloca(VA_LIST_TYPE, 16);
     }
 
     LLVMExpressionNode createAllocaNodeUncached(LLVMLanguage language) {
-        DataLayout dataLayout = getDataLayout();
+        DataLayout dataLayout = LLVMX86_64VaListStorage.getDataLayout();
         LLVMExpressionNode alloca = language.getActiveConfiguration().createNodeFactory(language, dataLayout).createAlloca(VA_LIST_TYPE, 16);
         if (alloca instanceof LLVMGetStackSpaceInstruction) {
             ((LLVMGetStackSpaceInstruction) alloca).setStackAccess(rootNode.getStackAccess());
@@ -623,41 +523,28 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
             // about the arguments
             for (int i = 0; i < vaLength; i++) {
                 final Object object = realArguments[numberOfExplicitArguments + i];
-                final VarArgArea area = getVarArgArea(object);
+                final VarArgArea area = LLVMX86_64VaListStorage.getVarArgArea(object);
 
-                if (area == VarArgArea.GP_AREA) {
-                    if (gp < 0) {
-                        storeArgument(gpSaveAreaNativePtr, gp, memMove, i64RegSaveAreaStore, i32RegSaveAreaStore, fp80bitRegSaveAreaStore, pointerRegSaveAreaStore, object,
-                                        Aarch64BitVarArgs.STACK_STEP);
-                        gp += Aarch64BitVarArgs.GP_STEP;
-                    } else {
-                        storeArgument(overflowArgAreaBaseNativePtr, overflowOffset, memMove,
-                                        i64OverflowArgAreaStore, i32OverflowArgAreaStore,
-                                        fp80bitOverflowArgAreaStore, pointerOverflowArgAreaStore, object, Aarch64BitVarArgs.STACK_STEP);
-                        overflowOffset += Aarch64BitVarArgs.STACK_STEP;
-                    }
-                } else if (area == VarArgArea.FP_AREA) {
-                    if (fp < 0) {
-                        storeArgument(fpSaveAreaNativePtr, fp, memMove, i64RegSaveAreaStore, i32RegSaveAreaStore, fp80bitRegSaveAreaStore, pointerRegSaveAreaStore, object,
-                                        Aarch64BitVarArgs.STACK_STEP);
-                        fp += Aarch64BitVarArgs.FP_STEP;
-                    } else {
-                        storeArgument(overflowArgAreaBaseNativePtr, overflowOffset, memMove,
-                                        i64OverflowArgAreaStore, i32OverflowArgAreaStore,
-                                        fp80bitOverflowArgAreaStore, pointerOverflowArgAreaStore, object, Aarch64BitVarArgs.STACK_STEP);
-                        overflowOffset += Aarch64BitVarArgs.STACK_STEP;
-                    }
+                if (area == VarArgArea.GP_AREA && gp < Aarch64BitVarArgs.GP_LIMIT) {
+                    LLVMX86_64VaListStorage.storeArgument(gpSaveAreaNativePtr, gp, memMove, i64RegSaveAreaStore, i32RegSaveAreaStore,
+                                    fp80bitRegSaveAreaStore, pointerRegSaveAreaStore, object);
+                    gp += Aarch64BitVarArgs.GP_STEP;
+                } else if (area == VarArgArea.FP_AREA && fp < Aarch64BitVarArgs.FP_LIMIT) {
+                    LLVMX86_64VaListStorage.storeArgument(fpSaveAreaNativePtr, fp, memMove, i64RegSaveAreaStore, i32RegSaveAreaStore,
+                                    fp80bitRegSaveAreaStore, pointerRegSaveAreaStore, object);
+                    fp += Aarch64BitVarArgs.FP_STEP;
                 } else if ((object instanceof LLVMVarArgCompoundValue) && (gp + ((LLVMVarArgCompoundValue) object).getSize()) <= 0 &&
                                 ((LLVMVarArgCompoundValue) object).getSize() <= 2 * Aarch64BitVarArgs.GP_STEP) {
                     long sz = ((LLVMVarArgCompoundValue) object).getSize();
                     assert sz % Aarch64BitVarArgs.GP_STEP == 0;
-                    storeArgument(gpSaveAreaNativePtr, gp, memMove, i64RegSaveAreaStore, i32RegSaveAreaStore, fp80bitRegSaveAreaStore, pointerRegSaveAreaStore, object, Aarch64BitVarArgs.STACK_STEP);
+                    LLVMX86_64VaListStorage.storeArgument(gpSaveAreaNativePtr, gp, memMove, i64RegSaveAreaStore, i32RegSaveAreaStore,
+                                    fp80bitRegSaveAreaStore, pointerRegSaveAreaStore, object);
                     gp += sz;
                 } else {
                     gp = 0; // Terminate the GP save area
-                    overflowOffset += storeArgument(overflowArgAreaBaseNativePtr, overflowOffset, memMove,
+                    overflowOffset += LLVMX86_64VaListStorage.storeArgument(overflowArgAreaBaseNativePtr, overflowOffset, memMove,
                                     i64OverflowArgAreaStore, i32OverflowArgAreaStore,
-                                    fp80bitOverflowArgAreaStore, pointerOverflowArgAreaStore, object, Aarch64BitVarArgs.STACK_STEP);
+                                    fp80bitOverflowArgAreaStore, pointerOverflowArgAreaStore, object);
                 }
             }
         }
@@ -672,7 +559,7 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
     static class Copy {
 
         @Specialization(guards = {"!source.isNativized()"})
-        static void copyManaged(LLVMAarch64VaListStorage source, LLVMAarch64VaListStorage dest) {
+        static void copyManaged(LLVMAarch64VaListStorage source, LLVMAarch64VaListStorage dest, @SuppressWarnings("unused") int numberOfExplicitArguments) {
             dest.realArguments = source.realArguments;
             dest.numberOfExplicitArguments = source.numberOfExplicitArguments;
             dest.fpOffset = source.fpOffset;
@@ -686,35 +573,17 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
             dest.overflowArgAreaBaseNativePtr = null;
         }
 
-        @Specialization(guards = {"source.isNativized()", "source.overflowArgArea != null"})
-        static void copyNativeToManaged(LLVMAarch64VaListStorage source, LLVMAarch64VaListStorage dest,
-                        @CachedLibrary("source") LLVMManagedReadLibrary srcReadLib) {
+        @Specialization(guards = {"source.isNativized()"})
+        static void copyNative(LLVMAarch64VaListStorage source, LLVMAarch64VaListStorage dest, int numberOfExplicitArguments, @CachedLibrary("source") LLVMManagedReadLibrary srcReadLib) {
+
             // The destination va_list will be in the managed state, even if the source has been
             // nativized. We need to read some state from the native memory, though.
 
-            copyManaged(source, dest);
+            copyManaged(source, dest, numberOfExplicitArguments);
 
             dest.fpOffset = srcReadLib.readI32(source, Aarch64BitVarArgs.FP_OFFSET);
             dest.gpOffset = srcReadLib.readI32(source, Aarch64BitVarArgs.GP_OFFSET);
             dest.overflowArgArea.setOffset(getArgPtrFromNativePtr(source, srcReadLib));
-        }
-
-        @Specialization(guards = {"source.isNativized()", "source.overflowArgArea == null"})
-        static void copyNative(LLVMAarch64VaListStorage source, LLVMAarch64VaListStorage dest,
-                        @Cached NativeVAListWrapperFactory wrapperFactory,
-
-                        @CachedLibrary(limit = "1") LLVMVaListLibrary vaListLibrary) {
-            // The source valist is just a holder of the native counterpart and thus the destination
-            // will not be set up as a managed va_list as it would be too complicated to restore the
-            // managed state from the native one.
-            vaListLibrary.copy(wrapperFactory.execute(source.nativized), dest);
-        }
-
-        @Specialization
-        static void copyManagedToNative(LLVMAarch64VaListStorage source, LLVMNativePointer dest, @CachedLibrary(limit = "1") LLVMVaListLibrary vaListLibrary) {
-            LLVMAarch64VaListStorage dummyClone = new LLVMAarch64VaListStorage(source.rootNode);
-            dummyClone.nativized = dest;
-            vaListLibrary.initialize(dummyClone, source.realArguments, source.numberOfExplicitArguments);
         }
     }
 
@@ -752,7 +621,7 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
         int regSaveStep = 0;
         boolean lookIntoRegSaveArea = true;
 
-        VarArgArea varArgArea = getVarArgArea(type);
+        VarArgArea varArgArea = LLVMX86_64VaListStorage.getVarArgArea(type);
         RegSaveArea regSaveArea = null;
         switch (varArgArea) {
             case GP_AREA:
@@ -780,8 +649,8 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
                 // The va shift logic for GP/FP regsave areas is done by updating the gp/fp offset
                 // field in va_list
                 writeLib.writeI32(this, regSaveOffs, offs + regSaveStep);
-                assert regSaveArea != null;
                 long n = regSaveArea.offsetToIndex(offs);
+                assert regSaveArea != null;
                 if (n >= 0) {
                     int i = (int) ((n << 32) >> 32);
                     return regSaveArea.args[i];
@@ -809,199 +678,8 @@ public class LLVMAarch64VaListStorage extends LLVMVaListStorage {
         }
     }
 
-    /**
-     * A helper implementation of {@link LLVMVaListLibrary} for native <code>va_list</code>
-     * instances. It allows for {@link LLVMVAStart} and others to treat native LLVM pointers to
-     * <code>va_list</code> just as the managed <code>va_list</code> objects and thus to remain
-     * platform independent.
-     *
-     * @see LLVMVAStart
-     * @see LLVMVAEnd
-     */
-    @ExportLibrary(LLVMVaListLibrary.class)
-    @ImportStatic(LLVMVaListStorage.class)
-    public static final class NativeVAListWrapper {
-
-        final LLVMNativePointer nativeVAListPtr;
-        private final LLVMRootNode rootNode;
-
-        public NativeVAListWrapper(LLVMNativePointer nativeVAListPtr, RootNode rootNode) {
-            this.nativeVAListPtr = nativeVAListPtr;
-            assert rootNode instanceof LLVMRootNode;
-            this.rootNode = (LLVMRootNode) rootNode;
-        }
-
-        @SuppressWarnings("static-method")
-        LLVMNativeVarargsAreaStackAllocationNode createLLVMNativeVarargsAreaStackAllocationNode() {
-            return LLVMNativeVarargsAreaStackAllocationNodeGen.create();
-        }
-
-        @SuppressWarnings("static-method")
-        LLVMNativeVarargsAreaStackAllocationNode createLLVMNativeVarargsAreaStackAllocationNodeUncached() {
-            LLVMNativeVarargsAreaStackAllocationNode node = LLVMNativeVarargsAreaStackAllocationNodeGen.create();
-            node.setStackAccess(rootNode.getStackAccess());
-            return node;
-        }
-
-        @ExportMessage
-        public void initialize(Object[] arguments, int numberOfExplicitArguments,
-                        @Cached(value = "this.createLLVMNativeVarargsAreaStackAllocationNode()", uncached = "this.createLLVMNativeVarargsAreaStackAllocationNodeUncached()") LLVMNativeVarargsAreaStackAllocationNode stackAllocationNode,
-                        @Shared("gpOffsetStore") @Cached LLVMI32OffsetStoreNode gpOffsetStore,
-                        @Shared("fpOffsetStore") @Cached LLVMI32OffsetStoreNode fpOffsetStore,
-                        @Exclusive @Cached LLVMI64OffsetStoreNode i64RegSaveAreaStore,
-                        @Exclusive @Cached LLVMI32OffsetStoreNode i32RegSaveAreaStore,
-                        @Exclusive @Cached LLVM80BitFloatOffsetStoreNode fp80bitRegSaveAreaStore,
-                        @Exclusive @Cached LLVMPointerOffsetStoreNode pointerRegSaveAreaStore,
-                        @Exclusive @Cached LLVMI64OffsetStoreNode i64OverflowArgAreaStore,
-                        @Exclusive @Cached LLVMI32OffsetStoreNode i32OverflowArgAreaStore,
-                        @Exclusive @Cached LLVM80BitFloatOffsetStoreNode fp80bitOverflowArgAreaStore,
-                        @Exclusive @Cached LLVMPointerOffsetStoreNode pointerOverflowArgAreaStore,
-                        @Shared("overflowAreaStore") @Cached LLVMPointerOffsetStoreNode overflowArgAreaStore,
-                        @Shared("gpSaveAreaStore") @Cached LLVMPointerOffsetStoreNode gpSaveAreaStore,
-                        @Shared("fpSaveAreaStore") @Cached LLVMPointerOffsetStoreNode fpSaveAreaStore,
-                        @Cached NativeProfiledMemMove memMove) {
-
-            VirtualFrame frame = (VirtualFrame) Truffle.getRuntime().getCurrentFrame().getFrame(FrameAccess.READ_WRITE);
-
-            int gpNamedUsage = calculateUsedGpArea(arguments, numberOfExplicitArguments);
-            int initGPOffset = gpNamedUsage - Aarch64BitVarArgs.GP_LIMIT;
-            int gp = initGPOffset;
-            int fpNamedUsage = calculateUsedFpArea(arguments, numberOfExplicitArguments);
-            int initFPOffset = fpNamedUsage - Aarch64BitVarArgs.FP_LIMIT;
-            int fp = initFPOffset;
-
-            int overflowArea = 0;
-            for (int i = numberOfExplicitArguments; i < arguments.length; i++) {
-                final Object arg = arguments[i];
-                final VarArgArea area = getVarArgArea(arg);
-
-                if (area == VarArgArea.GP_AREA) {
-                    if (gp < 0) {
-                        gp += Aarch64BitVarArgs.GP_STEP;
-                    } else {
-                        overflowArea += Aarch64BitVarArgs.STACK_STEP;
-                    }
-                } else if (area == VarArgArea.FP_AREA) {
-                    if (fp < 0) {
-                        fp += Aarch64BitVarArgs.FP_STEP;
-                    } else {
-                        overflowArea += Aarch64BitVarArgs.STACK_STEP;
-                    }
-                } else if (arg instanceof LLVM80BitFloat) {
-                    overflowArea += 16;
-                } else if (arg instanceof LLVMVarArgCompoundValue) {
-                    LLVMVarArgCompoundValue obj = (LLVMVarArgCompoundValue) arg;
-                    if ((gp + ((LLVMVarArgCompoundValue) arg).getSize()) <= 0 &&
-                                    ((LLVMVarArgCompoundValue) arg).getSize() <= 2 * Aarch64BitVarArgs.GP_STEP) {
-                        long sz = ((LLVMVarArgCompoundValue) arg).getSize();
-                        assert sz % Aarch64BitVarArgs.GP_STEP == 0;
-                        gp += sz;
-                    } else {
-                        gp = 0; // Terminate the GP save area
-                        overflowArea += obj.getSize();
-                    }
-                } else {
-                    CompilerDirectives.transferToInterpreter();
-                    throw new AssertionError(arg);
-                }
-            }
-
-            LLVMPointer gpSaveAreaNativePtr = stackAllocationNode.executeWithTarget(frame, Aarch64BitVarArgs.GP_LIMIT);
-            // GP area pointer points to the top
-            gpSaveAreaNativePtr = gpSaveAreaNativePtr.increment(Aarch64BitVarArgs.GP_LIMIT);
-
-            LLVMPointer fpSaveAreaNativePtr = stackAllocationNode.executeWithTarget(frame, Aarch64BitVarArgs.FP_LIMIT);
-            // FP area pointer points to the top
-            fpSaveAreaNativePtr = fpSaveAreaNativePtr.increment(Aarch64BitVarArgs.FP_LIMIT);
-
-            LLVMPointer overflowArgAreaBaseNativePtr = LLVMNativePointer.cast(stackAllocationNode.executeWithTarget(frame, overflowArea));
-
-            gpOffsetStore.executeWithTarget(nativeVAListPtr, Aarch64BitVarArgs.GP_OFFSET, initGPOffset);
-            fpOffsetStore.executeWithTarget(nativeVAListPtr, Aarch64BitVarArgs.FP_OFFSET, initFPOffset);
-            overflowArgAreaStore.executeWithTarget(nativeVAListPtr, Aarch64BitVarArgs.OVERFLOW_ARG_AREA, overflowArgAreaBaseNativePtr);
-            gpSaveAreaStore.executeWithTarget(nativeVAListPtr, Aarch64BitVarArgs.GP_SAVE_AREA, gpSaveAreaNativePtr);
-            fpSaveAreaStore.executeWithTarget(nativeVAListPtr, Aarch64BitVarArgs.FP_SAVE_AREA, fpSaveAreaNativePtr);
-
-            initNativeAreas(arguments, numberOfExplicitArguments, initGPOffset, initFPOffset, gpSaveAreaNativePtr, fpSaveAreaNativePtr, overflowArgAreaBaseNativePtr, i64RegSaveAreaStore,
-                            i32RegSaveAreaStore, fp80bitRegSaveAreaStore, pointerRegSaveAreaStore, i64OverflowArgAreaStore, i32OverflowArgAreaStore, fp80bitOverflowArgAreaStore,
-                            pointerOverflowArgAreaStore, memMove);
-        }
-
-        @ExportMessage
-        public void cleanup() {
-            // nop
-        }
-
-        @ExportMessage
-        @ImportStatic(LLVMTypes.class)
-        static class Copy {
-
-            static LLVMExpressionNode createAllocaNode(LLVMLanguage language) {
-                DataLayout dataLayout = getDataLayout();
-                return language.getActiveConfiguration().createNodeFactory(language, dataLayout).createAlloca(VA_LIST_TYPE, 16);
-            }
-
-            @Specialization
-            @TruffleBoundary
-            static void copyToManagedObject(NativeVAListWrapper source, LLVMAarch64VaListStorage dest,
-                            @SuppressWarnings("unused") @CachedLanguage() LLVMLanguage language,
-                            @Cached(value = "createAllocaNode(language)", allowUncached = true) LLVMExpressionNode allocaNode,
-                            @CachedLibrary("source") LLVMVaListLibrary vaListLibrary) {
-                VirtualFrame frame = (VirtualFrame) Truffle.getRuntime().getCurrentFrame().getFrame(FrameAccess.MATERIALIZE);
-                LLVMNativePointer nativeDestPtr = LLVMNativePointer.cast(allocaNode.executeGeneric(frame));
-                dest.nativized = nativeDestPtr;
-                vaListLibrary.copy(source, nativeDestPtr);
-            }
-
-            @Specialization(guards = "isManagedPointer(dest)")
-            @TruffleBoundary
-            static void copyToManagedPointer(NativeVAListWrapper source, LLVMManagedPointer dest,
-                            @SuppressWarnings("unused") @CachedLanguage() LLVMLanguage language,
-                            @Cached(value = "createAllocaNode(language)", allowUncached = true) LLVMExpressionNode allocaNode,
-                            @CachedLibrary("source") LLVMVaListLibrary vaListLibrary) {
-                assert dest.getObject() instanceof LLVMAarch64VaListStorage;
-                copyToManagedObject(source, (LLVMAarch64VaListStorage) dest.getObject(), language, allocaNode, vaListLibrary);
-            }
-
-            @Specialization(guards = "isNativePointer(dest)")
-            static void copyToNative(NativeVAListWrapper source, LLVMNativePointer dest,
-                            @Shared("gpOffsetStore") @Cached LLVMI32OffsetStoreNode gpOffsetStore,
-                            @Shared("fpOffsetStore") @Cached LLVMI32OffsetStoreNode fpOffsetStore,
-                            @Shared("gpSaveAreaStore") @Cached LLVMPointerOffsetStoreNode gpSaveAreaStore,
-                            @Shared("fpSaveAreaStore") @Cached LLVMPointerOffsetStoreNode fpSaveAreaStore,
-                            @Shared("overflowAreaStore") @Cached LLVMPointerOffsetStoreNode overflowAreaStore,
-                            @Cached LLVMI32OffsetLoadNode gpOffsetLoad,
-                            @Cached LLVMI32OffsetLoadNode fpOffsetLoad,
-                            @Cached LLVMPointerOffsetLoadNode gpSaveAreaLoad,
-                            @Cached LLVMPointerOffsetLoadNode fpSaveAreaLoad,
-                            @Cached LLVMPointerOffsetLoadNode overflowAreaLoad) {
-
-                // read fields from the source native va_list
-                int gp = gpOffsetLoad.executeWithTarget(source.nativeVAListPtr, Aarch64BitVarArgs.GP_OFFSET);
-                int fp = fpOffsetLoad.executeWithTarget(source.nativeVAListPtr, Aarch64BitVarArgs.FP_OFFSET);
-                LLVMPointer gpSaveAreaPtr = gpSaveAreaLoad.executeWithTarget(source.nativeVAListPtr, Aarch64BitVarArgs.GP_SAVE_AREA);
-                LLVMPointer fpSaveAreaPtr = fpSaveAreaLoad.executeWithTarget(source.nativeVAListPtr, Aarch64BitVarArgs.FP_SAVE_AREA);
-                LLVMPointer overflowSaveAreaPtr = overflowAreaLoad.executeWithTarget(source.nativeVAListPtr, Aarch64BitVarArgs.OVERFLOW_ARG_AREA);
-
-                // write fields to the destination native va_list
-                gpOffsetStore.executeWithTarget(dest, Aarch64BitVarArgs.GP_OFFSET, gp);
-                fpOffsetStore.executeWithTarget(dest, Aarch64BitVarArgs.FP_OFFSET, fp);
-                gpSaveAreaStore.executeWithTarget(dest, Aarch64BitVarArgs.GP_SAVE_AREA, gpSaveAreaPtr);
-                fpSaveAreaStore.executeWithTarget(dest, Aarch64BitVarArgs.FP_SAVE_AREA, fpSaveAreaPtr);
-                overflowAreaStore.executeWithTarget(dest, Aarch64BitVarArgs.OVERFLOW_ARG_AREA, overflowSaveAreaPtr);
-            }
-        }
-
-        @SuppressWarnings("static-method")
-        @ExportMessage
-        public Object shift(@SuppressWarnings("unused") Type type) {
-            CompilerDirectives.transferToInterpreter();
-            throw new UnsupportedOperationException("TODO");
-        }
-    }
-
     @ExportLibrary(NativeTypeLibrary.class)
-    public static final class RegSaveArea extends ArgsArea {
+    public static final class RegSaveArea extends LLVMX86_64VaListStorage.ArgsArea {
 
         private final int[] idx;
         private final int numOfExpArgs;
