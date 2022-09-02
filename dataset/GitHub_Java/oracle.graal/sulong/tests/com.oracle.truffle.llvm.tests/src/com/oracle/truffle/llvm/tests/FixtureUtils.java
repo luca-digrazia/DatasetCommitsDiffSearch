@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.tests;
 
+import com.oracle.truffle.llvm.tests.options.TestOptions;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,12 +42,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.oracle.truffle.llvm.tests.options.TestOptions;
-
-public final class FixtureUtils {
-
-    public static final String COMMENT_LINE_PREFIX = "#";
-
+final class FixtureUtils {
     public static Collection<Object[]> getFixtureObjects(Class<?> testSuiteClass, Path suitesPath, Predicate<? super Path> predicate) {
         try {
             Set<String> excludedTests = getExcludedTests(testSuiteClass);
@@ -72,7 +69,7 @@ public final class FixtureUtils {
 
     private static Stream<String> readAllLines(Path path) {
         try {
-            return Files.readAllLines(path).stream().filter(line -> !line.trim().isEmpty() && !line.startsWith(COMMENT_LINE_PREFIX));
+            return Files.readAllLines(path).stream().filter(line -> !line.trim().isEmpty());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
