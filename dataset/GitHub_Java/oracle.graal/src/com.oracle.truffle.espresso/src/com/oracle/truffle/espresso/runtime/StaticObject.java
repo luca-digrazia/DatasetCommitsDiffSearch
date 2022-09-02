@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.runtime;
 
 import static com.oracle.truffle.api.CompilerDirectives.castExact;
-import static com.oracle.truffle.espresso.impl.Klass.STATIC_TO_CLASS;
 import static com.oracle.truffle.espresso.vm.InterpreterToVM.instanceOf;
 
 import java.lang.reflect.Array;
@@ -139,21 +138,14 @@ public final class StaticObject implements TruffleObject {
         return thisKlass.getTypeAsString() + "@" + Integer.toHexString(System.identityHashCode(this));
     }
     
-    public static final String CLASS_TO_STATIC = "static";
+    private static final String CLASS_TO_STATIC = "static";
 
     @ExportMessage
     Object readMember(String member) throws UnknownIdentifierException {
         if (notNull(this)) {
-            // Class<T>.static == Klass<T>
             if (CLASS_TO_STATIC.equals(member)) {
                 if (getKlass() == getKlass().getMeta().java_lang_Class) {
                     return getMirrorKlass();
-                }
-            }
-            // Class<T>.class == Class<T>
-            if (STATIC_TO_CLASS.equals(member)) {
-                if (getKlass() == getKlass().getMeta().java_lang_Class) {
-                    return this;
                 }
             }
         }
@@ -167,15 +159,14 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isMemberReadable(String member) {
-        return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class //
-                        && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
+        return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class && CLASS_TO_STATIC.equals(member);
     }
-
-    private static final KeysArray CLASS_MEMBERS = new KeysArray(new String[]{CLASS_TO_STATIC, STATIC_TO_CLASS});
 
     @ExportMessage
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-        return isNull(this) ? KeysArray.EMPTY : CLASS_MEMBERS; // .static and .class
+        return isNull(this)
+                        ? KeysArray.EMPTY
+                        : new KeysArray(new String[]{CLASS_TO_STATIC});
     }
 
     // endregion Interop
