@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.nodes.vars;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
@@ -209,9 +208,8 @@ public abstract class LLVMReadNode extends LLVMExpressionNode {
             return ForeignAttachInteropTypeNodeGen.create();
         }
 
-        @Specialization(guards = {"foreigns.isForeign(object)", "!nativeTypes.hasNativeType(object)"})
-        @GenerateAOT.Exclude
-        protected Object doForeignNoNativeType(Object object, LLVMInteropType.Structured type,
+        @Specialization(guards = {"foreigns.isForeign(object)"})
+        protected Object doForeign(Object object, LLVMInteropType.Structured type,
                         @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns,
                         @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes) {
             return LLVMTypedForeignObject.create(foreigns.asForeign(object), type);

@@ -39,7 +39,6 @@ import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ToPointer.Dummy;
 import com.oracle.truffle.llvm.runtime.interop.convert.ToPointer.InteropTypeNode;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -125,17 +124,15 @@ public abstract class ToPointer extends ForeignToLLVM {
         return pointer;
     }
 
-    @Specialization(guards = {"foreigns.isForeign(obj)", "nativeTypes.hasNativeType(obj)", "type == null"})
+    @Specialization(guards = {"notLLVM(obj)", "nativeTypes.hasNativeType(obj)", "type == null"})
     protected LLVMManagedPointer fromTypedTruffleObjectNoAttachedType(Object obj, @SuppressWarnings("unused") LLVMInteropType.Structured type,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns) {
+                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes) {
         return LLVMManagedPointer.create(obj);
     }
 
-    @Specialization(guards = {"foreigns.isForeign(obj)", "!nativeTypes.hasNativeType(obj) || type != null"})
+    @Specialization(guards = {"notLLVM(obj)", "!nativeTypes.hasNativeType(obj) || type != null"})
     protected LLVMManagedPointer fromNonTypedTruffleObject(Object obj, LLVMInteropType.Structured type,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns) {
+                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes) {
         return LLVMManagedPointer.create(LLVMTypedForeignObject.create(obj, type));
     }
 
@@ -158,7 +155,7 @@ public abstract class ToPointer extends ForeignToLLVM {
             return value;
         } else if (value instanceof LLVMInternalTruffleObject) {
             return LLVMManagedPointer.create(value);
-        } else if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(value)) {
+        } else if (notLLVM(value)) {
             return LLVMManagedPointer.create(LLVMTypedForeignObject.create(value, type));
         } else {
             throw UnsupportedTypeException.create(new Object[]{value});
