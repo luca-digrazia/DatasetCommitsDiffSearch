@@ -122,27 +122,14 @@ final class AgentObject implements TruffleObject {
                         List<Class<? extends Tag>> allTags = new ArrayList<>();
                         if (args.length > 2) {
                             final InteropLibrary iop = InteropLibrary.getFactory().getUncached();
-                            final Object config = args[2];
-
-                            if (isSet(iop, config, "expressions")) {
+                            if (isSet(iop, args[2], "expressions")) {
                                 allTags.add(StandardTags.ExpressionTag.class);
                             }
-                            if (isSet(iop, config, "statements")) {
+                            if (isSet(iop, args[2], "statements")) {
                                 allTags.add(StandardTags.StatementTag.class);
                             }
-                            if (isSet(iop, config, "roots")) {
-                                allTags.add(StandardTags.RootBodyTag.class);
-                            }
-                            try {
-                                Object rootNameFilter = iop.readMember(config, "rootNameFilter");
-                                if (rootNameFilter != null && !iop.isNull(rootNameFilter)) {
-                                    if (!iop.isExecutable(rootNameFilter)) {
-                                        throw new IllegalArgumentException("rootNameFilter has to be a function!");
-                                    }
-                                    builder.rootNameIs(new RootNameFilter(rootNameFilter, obj.initializationFinished));
-                                }
-                            } catch (UnknownIdentifierException ex) {
-                                // OK
+                            if (isSet(iop, args[2], "roots")) {
+                                allTags.add(StandardTags.RootTag.class);
                             }
                         }
                         if (allTags.isEmpty()) {
