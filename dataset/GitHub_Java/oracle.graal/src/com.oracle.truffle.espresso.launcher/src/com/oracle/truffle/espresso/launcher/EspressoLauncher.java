@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,8 +55,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
         String classpath = null;
         String jarFileName = null;
         ArrayList<String> unrecognized = new ArrayList<>();
-        int i = 0;
-        while (i < arguments.size()) {
+        for (int i = 0; i < arguments.size(); i++) {
             String arg = arguments.get(i);
             switch (arg) {
                 case "-cp":
@@ -174,7 +173,6 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                 }
                 break;
             }
-            i++;
         }
 
         // classpath provenance order:

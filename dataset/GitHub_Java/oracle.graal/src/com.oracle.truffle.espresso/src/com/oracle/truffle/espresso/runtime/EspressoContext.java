@@ -109,8 +109,7 @@ public final class EspressoContext {
 
         this.InlineFieldAccessors = env.getOptions().get(EspressoOptions.InlineFieldAccessors);
         this.Verify = env.getOptions().get(EspressoOptions.Verify);
-        this.JDWPOptions = env.getOptions().get(EspressoOptions.JDWPOptions); // null if not
-                                                                              // specified
+        this.RunJDWP = !env.getOptions().get(EspressoOptions.JDWPOptions).isEmpty();
     }
 
     public ClassRegistries getRegistries() {
@@ -385,7 +384,7 @@ public final class EspressoContext {
 
     public final boolean InlineFieldAccessors;
     public final EspressoOptions.VerifyMode Verify;
-    public final EspressoOptions.JDWPOptions JDWPOptions;
+    public final boolean RunJDWP;
 
     // endregion Options
 }
