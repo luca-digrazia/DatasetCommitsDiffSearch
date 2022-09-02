@@ -843,8 +843,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     public int getCompilationQueueSize() {
-        BackgroundCompileQueue compileQueue = getCompileQueue();
-        return compileQueue == null ? 0 : compileQueue.getQueueSize();
+        return getCompileQueue().getQueueSize();
     }
 
     /**
