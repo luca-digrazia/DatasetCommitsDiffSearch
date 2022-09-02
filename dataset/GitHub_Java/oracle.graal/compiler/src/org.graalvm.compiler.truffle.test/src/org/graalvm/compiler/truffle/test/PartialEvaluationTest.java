@@ -236,6 +236,7 @@ public abstract class PartialEvaluationTest extends TruffleCompilerImplTest {
             frameState.replaceAtUsages(null);
             frameState.safeDelete();
         }
+        createCanonicalizerPhase().apply(graph, getProviders());
         new DeadCodeEliminationPhase().apply(graph);
     }
 
