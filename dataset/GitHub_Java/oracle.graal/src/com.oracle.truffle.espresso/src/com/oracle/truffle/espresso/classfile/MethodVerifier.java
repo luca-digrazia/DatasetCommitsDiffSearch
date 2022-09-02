@@ -244,7 +244,6 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 
 /**
  * Extremely light-weight java bytecode verifier. Performs only very basic verifications.
@@ -257,7 +256,6 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
  * does not replace a complete bytecode verifier.
  */
 public class MethodVerifier implements ContextAccess {
-    private final boolean USE_STACK_MAP_FRAMES;
     private final Klass thisKlass;
     private final BytecodeStream code;
     private final RuntimeConstantPool pool;
@@ -321,13 +319,7 @@ public class MethodVerifier implements ContextAccess {
             return false;
         }
 
-        boolean isNull() {
-            return false;
-        }
-
         abstract boolean canMerge(Operand other);
-
-        abstract Operand mergeInto(Operand other);
     }
 
     static class PrimitiveOperand extends Operand {
@@ -346,11 +338,6 @@ public class MethodVerifier implements ContextAccess {
         }
 
         @Override
-        Operand mergeInto(Operand other) {
-            return this == other ? this : null;
-        }
-
-        @Override
         public String toString() {
             return kind.toString();
         }
@@ -358,7 +345,7 @@ public class MethodVerifier implements ContextAccess {
 
     static class ReferenceOperand extends Operand {
         protected Symbol<Type> type;
-        Klass thisKlass;
+        protected Klass thisKlass;
 
         // Load if needed.
         protected Klass klass = null;
@@ -391,10 +378,7 @@ public class MethodVerifier implements ContextAccess {
         @Override
         Klass getKlass() {
             if (klass == null) {
-                try {
-                    klass = thisKlass.getMeta().loadKlass(type, thisKlass.getDefiningClassLoader());
-                } catch (Exception e) {
-                }
+                klass = thisKlass.getMeta().loadKlass(type, thisKlass.getDefiningClassLoader());
                 if (klass == null) {
                     throw new NoClassDefFoundError(type.toString());
                 }
@@ -405,30 +389,12 @@ public class MethodVerifier implements ContextAccess {
         @Override
         boolean canMerge(Operand other) {
             if (other.isReference()) {
-                if (type == null || other.getType() == this.type || other.getType() == Type.Object) {
+                if (type == null || other.getType() == this.type) {
                     return true;
-                }
-                if (other.getType() == null) {
-                    return false;
                 }
                 return other.getKlass().isAssignableFrom(getKlass());
             }
             return false;
-        }
-
-        @Override
-        Operand mergeInto(Operand other) {
-            if (!other.isReference()) {
-                return null;
-            }
-            if (other.isArrayType()) {
-                return jlObject;
-            }
-            if (other.isNull()) {
-                return this;
-            }
-            Klass result = getKlass().getClosestCommonSupertype(other.getKlass());
-            return result == null ? null : new ReferenceOperand(result, thisKlass);
         }
 
         @Override
@@ -464,42 +430,6 @@ public class MethodVerifier implements ContextAccess {
                 return false;
             }
             return other.isReference() && other.getType() == Type.Object;
-        }
-
-        @Override
-        Operand mergeInto(Operand other) {
-            if (!other.isReference()) {
-                return null;
-            }
-            if (other.isNull()) {
-                return this;
-            }
-            if (!other.isArrayType()) {
-                return jlObject;
-            }
-            Operand thisElemental = getElemental();
-            Operand otherElemental = other.getElemental();
-            int otherDim = other.getDimensions();
-            int thisDim = getDimensions();
-            if (otherDim == thisDim) {
-                if (thisElemental.isPrimitive() || otherElemental.isPrimitive()) {
-                    return new ArrayOperand(jlObject, thisDim);
-                }
-                return new ArrayOperand(thisElemental.mergeInto(otherElemental), thisDim);
-            }
-            Operand smallestElemental;
-            if (thisDim < otherDim) {
-                smallestElemental = thisElemental;
-            } else {
-                smallestElemental = otherElemental;
-            }
-            if (smallestElemental.isPrimitive()) {
-                return new ArrayOperand(jlObject, Math.min(thisDim, otherDim));
-            }
-            if (smallestElemental.getType() == Type.Cloneable || smallestElemental.getType() == Type.Serializable) {
-                return new ArrayOperand(smallestElemental, Math.min(thisDim, otherDim));
-            }
-            return new ArrayOperand(jlObject, Math.min(thisDim, otherDim));
         }
 
         @Override
@@ -580,19 +510,6 @@ public class MethodVerifier implements ContextAccess {
     static private final PrimitiveOperand Void = new PrimitiveOperand(JavaKind.Void);
     static private final PrimitiveOperand Invalid = new PrimitiveOperand(JavaKind.Illegal);
 
-    private static final ReferenceOperand jlObject = new ReferenceOperand(Type.Object, null) {
-        @Override
-        Klass getKlass() {
-            if (klass == null) {
-                klass = thisKlass.getMeta().loadKlass(type, StaticObject.NULL);
-                if (klass == null) {
-                    throw new NoClassDefFoundError(type.toString());
-                }
-            }
-            return klass;
-        }
-    };
-
     static private final Operand ReturnAddress = new PrimitiveOperand(JavaKind.ReturnAddress);
 
     static private final Operand Null = new Operand(JavaKind.Object) {
@@ -602,20 +519,7 @@ public class MethodVerifier implements ContextAccess {
         }
 
         @Override
-        Operand mergeInto(Operand other) {
-            if (!other.isReference()) {
-                return null;
-            }
-            return other;
-        }
-
-        @Override
         boolean isReference() {
-            return true;
-        }
-
-        @Override
-        boolean isNull() {
             return true;
         }
 
@@ -644,7 +548,6 @@ public class MethodVerifier implements ContextAccess {
     static private final byte UNREACHABLE = 0;
     static private final byte UNSEEN = 1;
     static private final byte DONE = 2;
-    static private final byte JUMP_TARGET = 3;
 
     /**
      * Instantiates a MethodVerifier for the given method
@@ -664,7 +567,6 @@ public class MethodVerifier implements ContextAccess {
         this.isStatic = isStatic;
         this.thisKlass = thisKlass;
         this.methodName = methodName;
-        this.USE_STACK_MAP_FRAMES = false;
 
         jlClass = new ReferenceOperand(Type.Class, thisKlass);
         jlString = new ReferenceOperand(Type.String, thisKlass);
@@ -688,8 +590,32 @@ public class MethodVerifier implements ContextAccess {
                         m.getDeclaringKlass(), m.getName()).verify();
     }
 
-    private void initVerifier() {
-        Arrays.fill(verified, UNREACHABLE);
+    /**
+     * Performs the verification for the method associated with this MethodVerifier.
+     *
+     * @return true or throws ClassFormatError or VerifyError
+     */
+    private synchronized boolean verify() {
+        clear();
+        if (code.endBCI() == 0) {
+            throw new VerifyError("Control flow falls through code end");
+        }
+        int nextBCI = 0;
+        Stack stack = new Stack(maxStack);
+        Locals locals = new Locals(this, maxLocals, sig, isStatic);
+        while (verified[nextBCI] != DONE) {
+            nextBCI = verifySafe(nextBCI, stack, locals);
+            if (nextBCI >= code.endBCI()) {
+                throw new VerifyError("Control flow falls through code end");
+            }
+        }
+        return true;
+    }
+
+    private void clear() {
+        for (int i = 0; i < verified.length; i++) {
+            verified[i] = UNREACHABLE;
+        }
         int bci = 0;
         while (bci < code.endBCI()) {
             int bc = code.currentBC(bci);
@@ -699,98 +625,23 @@ public class MethodVerifier implements ContextAccess {
             verified[bci] = UNSEEN;
             bci = code.nextBCI(bci);
         }
-        bci = 0;
-        if (!USE_STACK_MAP_FRAMES) {
-            while (bci < code.endBCI()) {
-                int bc = code.currentBC(bci);
-                if (Bytecodes.isBranch(bc)) {
-                    int target = code.readBranchDest(bci);
-                    if (verified[target] == UNREACHABLE) {
-                        throw new VerifyError("Jump to the middle of an instruction: " + target);
-                    }
-                    verified[target] = JUMP_TARGET;
-                }
-                if (bc == TABLESWITCH || bc == LOOKUPSWITCH) {
-                    initSwitch(bci, bc);
-                }
-                bci = code.nextBCI(bci);
-            }
-        }
-    }
-
-    private void initSwitch(int bci, int opCode) {
-        switch (opCode) {
-            case LOOKUPSWITCH: {
-                BytecodeLookupSwitch switchHelper = code.getBytecodeLookupSwitch();
-                int low = 0;
-                int high = switchHelper.numberOfCases(bci) - 1;
-                for (int i = low; i <= high; i++) {
-                    verified[switchHelper.targetAt(bci, i - low)] = JUMP_TARGET;
-                }
-                verified[switchHelper.defaultTarget(bci)] = JUMP_TARGET;
-            }
-                return;
-            case TABLESWITCH: {
-                BytecodeTableSwitch switchHelper = code.getBytecodeTableSwitch();
-                int low = switchHelper.lowKey(bci);
-                int high = switchHelper.highKey(bci);
-                for (int i = low; i < high; i++) {
-                    verified[switchHelper.targetAt(bci, i - low)] = JUMP_TARGET;
-                }
-                verified[switchHelper.defaultTarget(bci)] = JUMP_TARGET;
-            }
-                return;
-            default:
-                throw EspressoError.shouldNotReachHere();
-        }
-    }
-
-    // TODO(garcia) implement instruction stack to visit.
-
-    /**
-     * Performs the verification for the method associated with this MethodVerifier.
-     *
-     * @return true or throws ClassFormatError or VerifyError
-     */
-    private synchronized boolean verify() {
-        initVerifier();
-        if (code.endBCI() == 0) {
-            throw new VerifyError("Control flow falls through code end");
-        }
-        int nextBCI = 0;
-        Stack stack = new Stack(maxStack);
-        Locals locals = new Locals(this);
-        while (verified[nextBCI] != DONE) {
-            if (stackFrames[nextBCI] != null || verified[nextBCI] == JUMP_TARGET) {
-                StackFrame frame = mergeStackFrames(stack, stackFrames[nextBCI]);
-                if (!(frame == stackFrames[nextBCI])) {
-                    stackFrames[nextBCI] = frame;
-                }
-                stack = frame.extractStack(maxStack);
-                nextBCI = verifySafe(nextBCI, stack, locals);
-            } else {
-                nextBCI = verifySafe(nextBCI, stack, locals);
-            }
-            if (nextBCI >= code.endBCI()) {
-                throw new VerifyError("Control flow falls through code end");
-            }
-        }
-        return true;
     }
 
     private boolean branch(int BCI, Stack stack, Locals locals) {
         if (verified[BCI] == UNREACHABLE) {
             throw new VerifyError("Jump to the middle of an instruction: " + BCI);
         }
-        StackFrame frame = mergeStackFrames(stack, stackFrames[BCI]);
-        if (!(frame == stackFrames[BCI])) {
-            verified[BCI] = JUMP_TARGET;
-            stackFrames[BCI] = frame;
-        }
         if (verified[BCI] == DONE) {
             return true;
         }
-        Stack newStack = frame.extractStack(maxStack);
+        if (stackFrames[BCI] != null) {
+            if (!stack.mergeInto(stackFrames[BCI])) {
+                throw new VerifyError();
+            }
+        } else {
+            stackFrames[BCI] = stack.toStackFrame();
+        }
+        Stack newStack = stack.copy();
         Locals newLocals = locals.copy();
         int nextBCI = BCI;
         if (nextBCI >= code.endBCI()) {
@@ -923,7 +774,7 @@ public class MethodVerifier implements ContextAccess {
                 case AALOAD: {
                     stack.popInt();
                     Operand op = stack.popArray();
-                    if (op != Null && !op.getComponent().isReference()) {
+                    if (!op.getComponent().isReference()) {
                         throw new VerifyError("Loading reference from " + op + " array.");
                     }
                     stack.push(op.getComponent());
@@ -975,7 +826,7 @@ public class MethodVerifier implements ContextAccess {
                     Operand toStore = stack.popRef();
                     stack.popInt();
                     Operand array = stack.popArray();
-                    if (array != Null && !array.getComponent().isReference()) {
+                    if (!array.getComponent().isReference()) {
                         throw new VerifyError("Trying to store " + toStore + " in " + array);
                     }
                     break;
@@ -1165,9 +1016,6 @@ public class MethodVerifier implements ContextAccess {
                     Symbol<Type> fieldType = frc.getType(pool);
                     Operand op = kindToOperand(fieldType);
                     stack.pop(op);
-                    if (op.isUninit()) {
-                        throw new VerifyError("Storing uninitialized reference in a field.");
-                    }
                     if (curOpcode == PUTFIELD) {
                         Symbol<Type> holderType = getTypes().fromName(frc.getHolderKlassName(pool));
                         Operand receiver = checkInit(stack, stack.popRef(kindToOperand(holderType)));
@@ -1449,7 +1297,7 @@ public class MethodVerifier implements ContextAccess {
     private static void xaload(Stack stack, PrimitiveOperand kind) {
         stack.popInt();
         Operand op = stack.popArray();
-        if (op != Null && op.getComponent() != kind) {
+        if (op.getComponent() != kind) {
             throw new VerifyError("Loading " + kind + " from " + op + " array.");
         }
         stack.push(kind);
@@ -1459,7 +1307,7 @@ public class MethodVerifier implements ContextAccess {
         stack.pop(kind);
         stack.popInt();
         Operand array = stack.popArray();
-        if (array != Null && array.getComponent() != kind) {
+        if (array.getComponent() != kind) {
             throw new VerifyError("got array of type: " + array + ", while storing a " + kind);
         }
     }
@@ -1471,15 +1319,15 @@ public class MethodVerifier implements ContextAccess {
     private static class Locals {
         Operand[] registers;
 
-        Locals(MethodVerifier mv) {
-            Operand[] parsedSig = mv.getOperandSig(mv.sig);
-            if (parsedSig.length - (mv.isStatic ? 1 : 0) > mv.maxLocals) {
+        Locals(MethodVerifier mv, int maxLocals, Symbol<Symbol.Signature> m, boolean isStatic) {
+            Operand[] parsedSig = mv.getOperandSig(m);
+            if (parsedSig.length - (isStatic ? 1 : 0) > maxLocals) {
                 throw new VerifyError("Too much method arguments for the number of locals !");
             }
-            this.registers = new Operand[mv.maxLocals];
+            this.registers = new Operand[maxLocals];
             Arrays.fill(registers, Invalid);
             int index = 0;
-            if (!mv.isStatic) {
+            if (!isStatic) {
                 if (mv.methodName == Name.INIT) {
                     registers[index++] = new UninitReferenceOperand(mv.thisKlass, mv.thisKlass);
                 } else {
@@ -1523,7 +1371,7 @@ public class MethodVerifier implements ContextAccess {
         Operand loadRef(int index) {
             Operand op = registers[index];
             if (!op.isReference()) {
-                throw new VerifyError("Incompatible register type. Expected a reference, found: " + op);
+                throw new VerifyError("Incompatible register type. Expected a reference" + ", found: " + op);
             }
             return op;
         }
@@ -1542,20 +1390,19 @@ public class MethodVerifier implements ContextAccess {
         StackFrame(Operand[] stack) {
             this.stack = stack;
         }
-
-        Stack extractStack(int maxStack) {
-            Stack res = new Stack(maxStack);
-            for (Operand op : stack) {
-                res.push(op);
-            }
-            return res;
-        }
     }
 
     private static class Stack {
         private final Operand[] stack;
         private int top;
         private int size;
+
+        private Stack(Stack copy) {
+            this.stack = new Operand[copy.stack.length];
+            this.top = copy.top;
+            this.size = copy.size;
+            System.arraycopy(copy.stack, 0, this.stack, 0, top);
+        }
 
         Stack(int maxStack) {
             this.stack = new Operand[maxStack];
@@ -1571,6 +1418,10 @@ public class MethodVerifier implements ContextAccess {
             if (size < 0) {
                 throw new VerifyError("invalid stack access: " + size);
             }
+        }
+
+        Stack copy() {
+            return new Stack(this);
         }
 
         void pushInt() {
@@ -1832,17 +1683,16 @@ public class MethodVerifier implements ContextAccess {
             throw new VerifyError("Type 2 operand for SWAP");
         }
 
-        private int mergeInto(StackFrame stackFrame) {
+        private boolean mergeInto(StackFrame stackFrame) {
             if (top != stackFrame.stack.length) {
                 throw new VerifyError("Incompatible stack size.");
             }
             for (int i = 0; i < top; i++) {
                 if (!stack[i].canMerge(stackFrame.stack[i])) {
-                    return i;
-                    // throw new VerifyError("Incompatible stack types.");
+                    throw new VerifyError("Incompatible stack types.");
                 }
             }
-            return -1;
+            return true;
         }
 
         private StackFrame toStackFrame() {
@@ -1860,37 +1710,6 @@ public class MethodVerifier implements ContextAccess {
             }
             return init;
         }
-
-    }
-
-    public StackFrame mergeStackFrames(Stack stack, StackFrame stackMap) {
-        if (stackMap == null) {
-            if (USE_STACK_MAP_FRAMES) {
-                throw new VerifyError("No stack frame on jump target");
-            }
-            return stack.toStackFrame();
-        }
-        int mergeIndex = stack.mergeInto(stackMap);
-        if (mergeIndex != -1) {
-            if (USE_STACK_MAP_FRAMES) {
-                throw new VerifyError("Wrong stack map frames in class file.");
-            }
-            Operand[] merged = new Operand[stackMap.stack.length];
-            System.arraycopy(stackMap.stack, 0, merged, 0, mergeIndex);
-            for (int i = mergeIndex; i < merged.length; i++) {
-                Operand stackOp = stack.stack[i];
-                Operand frameOp = stackMap.stack[i];
-                if (!stackOp.canMerge(frameOp)) {
-                    Operand result = stackOp.mergeInto(frameOp);
-                    if (result == null) {
-                        throw new VerifyError("Cannot merge " + stackOp + " with " + frameOp);
-                    }
-                    merged[i] = result;
-                }
-            }
-            return new StackFrame(merged);
-        }
-        return stackMap;
     }
 
 }
