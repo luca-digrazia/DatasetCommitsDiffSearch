@@ -82,11 +82,6 @@ import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.polyglot.host.HostContext;
-import com.oracle.truffle.polyglot.host.HostException;
-import com.oracle.truffle.polyglot.host.HostFunction;
-import com.oracle.truffle.polyglot.host.HostObject;
-import com.oracle.truffle.polyglot.host.HostProxy;
 
 final class ObjectSizeCalculator {
     private static volatile int staticObjectAlignment = -1;
@@ -260,13 +255,13 @@ final class ObjectSizeCalculator {
             return true;
         }
 
-        assert (!(obj instanceof PolyglotImpl.VMObject) || obj instanceof PolyglotLanguageContext || obj instanceof PolyglotContextImpl) &&
+        assert !(obj instanceof PolyglotImpl.VMObject) &&
                         !(obj instanceof PolyglotContextConfig) &&
                         !(obj instanceof TruffleLanguage.Provider) &&
                         !(obj instanceof ExecutionEventListener) &&
                         !(obj instanceof ClassValue) &&
                         !(obj instanceof ClassLoader) &&
-                        !(obj instanceof PolyglotWrapper) &&
+                        !(obj instanceof HostWrapper) &&
                         !(obj instanceof Value) &&
                         !(obj instanceof Context) &&
                         !(obj instanceof Engine) &&
@@ -279,8 +274,8 @@ final class ObjectSizeCalculator {
                         (obj instanceof HostObject) ||
                         (obj instanceof HostFunction) ||
                         (obj instanceof HostException) ||
-                        (obj instanceof HostContext) ||
-                        (obj instanceof HostProxy) ||
+                        (obj instanceof HostLanguage.HostContext) ||
+                        (obj instanceof PolyglotProxy) ||
 
                         (obj instanceof Class) ||
                         (obj instanceof OptionValues) ||
@@ -307,25 +302,7 @@ final class ObjectSizeCalculator {
                         (obj instanceof TruffleContext) ||
 
                         (obj instanceof ContextLocal) ||
-                        (obj instanceof ContextThreadLocal) ||
-
-                        /*
-                         * For safety, copy the asserts here in case asserts are disabled.
-                         */
-                        (obj instanceof PolyglotImpl.VMObject) ||
-                        (obj instanceof PolyglotContextConfig) ||
-                        (obj instanceof TruffleLanguage.Provider) ||
-                        (obj instanceof ExecutionEventListener) ||
-                        (obj instanceof ClassValue) ||
-                        (obj instanceof ClassLoader) ||
-                        (obj instanceof PolyglotWrapper) ||
-                        (obj instanceof Value) ||
-                        (obj instanceof Context) ||
-                        (obj instanceof Engine) ||
-                        (obj instanceof Language) ||
-                        (obj instanceof Instrument) ||
-                        (obj instanceof org.graalvm.polyglot.Source) ||
-                        (obj instanceof org.graalvm.polyglot.SourceSection);
+                        (obj instanceof ContextThreadLocal);
     }
 
     private static ClassInfo canProceed(Map<Class<?>, ClassInfo> classInfos, Object obj) {
