@@ -26,10 +26,6 @@ package com.oracle.svm.core;
 
 import java.util.EnumSet;
 
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-
-import com.oracle.svm.core.code.RuntimeCodeCache;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 
 import jdk.vm.ci.amd64.AMD64;
@@ -37,30 +33,20 @@ import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.TargetDescription;
 
 public class SubstrateTargetDescription extends TargetDescription {
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public static boolean shouldInlineObjectsInImageCode() {
-        return SubstrateOptions.SpawnIsolates.getValue();
-    }
-
-    public static boolean shouldInlineObjectsInRuntimeCode() {
-        return SubstrateOptions.SpawnIsolates.getValue() && RuntimeCodeCache.Options.WriteableCodeCache.getValue();
-    }
-
     private final int deoptScratchSpace;
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public SubstrateTargetDescription(Architecture arch, boolean isMP, int stackAlignment, int implicitNullCheckLimit, int deoptScratchSpace) {
-        super(arch, isMP, stackAlignment, implicitNullCheckLimit, shouldInlineObjectsInImageCode());
+    public SubstrateTargetDescription(Architecture arch, boolean isMP, int stackAlignment, int implicitNullCheckLimit, boolean inlineObjects, int deoptScratchSpace) {
+        super(arch, isMP, stackAlignment, implicitNullCheckLimit, inlineObjects);
         this.deoptScratchSpace = deoptScratchSpace;
     }
 
     /**
-     * We include all flags that enable AMD64 CPU instructions as we want best possible performance
-     * for the code.
+     * We include all flags that enable CPU instructions as we want best possible performance for
+     * the code.
      *
-     * @return All the flags that enable AMD64 CPU instructions.
+     * @return All the flags that enable CPU instructions.
      */
-    public static EnumSet<AMD64.Flag> allAMD64Flags() {
+    public static EnumSet<AMD64.Flag> allFlags() {
         return EnumSet.of(AMD64.Flag.UseCountLeadingZerosInstruction, AMD64.Flag.UseCountTrailingZerosInstruction);
     }
 
