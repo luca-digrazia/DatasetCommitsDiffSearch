@@ -699,7 +699,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         blacklistAllMethods(metaAccess, ListIterator.class);
         blacklistAllMethods(metaAccess, ReentrantLock.class);
 
-        whitelistMethod(metaAccess, BigInteger.class, "signum");
         whitelistMethod(metaAccess, ReentrantLock.class, "isLocked");
         whitelistMethod(metaAccess, ReentrantLock.class, "isHeldByCurrentThread");
 
@@ -887,15 +886,19 @@ final class Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget {
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
     long initializedTimestamp;
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
-    Class<?>[] profiledArgumentTypes;
+    Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ArgumentsProfile argumentsProfile;
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
-    OptimizedAssumption profiledArgumentTypesAssumption;
-    @Alias @RecomputeFieldValue(kind = Kind.Reset) //
-    Class<?> profiledReturnType;
-    @Alias @RecomputeFieldValue(kind = Kind.Reset) //
-    OptimizedAssumption profiledReturnTypeAssumption;
+    Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ReturnProfile returnProfile;
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
     Class<? extends Throwable> profiledExceptionType;
+}
+
+@TargetClass(className = "org.graalvm.compiler.truffle.runtime.OptimizedCallTarget$ArgumentsProfile", onlyWith = TruffleFeature.IsEnabled.class)
+final class Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ArgumentsProfile {
+}
+
+@TargetClass(className = "org.graalvm.compiler.truffle.runtime.OptimizedCallTarget$ReturnProfile", onlyWith = TruffleFeature.IsEnabled.class)
+final class Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ReturnProfile {
 }
 
 // Checkstyle: stop
