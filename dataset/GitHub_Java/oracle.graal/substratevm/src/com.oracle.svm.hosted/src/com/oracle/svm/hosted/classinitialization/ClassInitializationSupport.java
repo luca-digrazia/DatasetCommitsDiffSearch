@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.hosted.classinitialization;
 
+import java.util.List;
 import java.util.Set;
 
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
@@ -78,7 +79,9 @@ public interface ClassInitializationSupport extends RuntimeClassInitializationSu
 
     void setUnsupportedFeatures(UnsupportedFeatures o);
 
+    List<ClassOrPackageConfig> getClassInitializationConfiguration();
+
     void setConfigurationSealed(boolean sealed);
 
-    String objectInstantiationTraceMessage(Object obj, String action);
+    String objectInstantiationTraceMessage(Object obj);
 }

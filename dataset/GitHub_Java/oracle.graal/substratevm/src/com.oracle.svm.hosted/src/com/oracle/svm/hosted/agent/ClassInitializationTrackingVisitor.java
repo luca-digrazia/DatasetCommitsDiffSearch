@@ -32,10 +32,7 @@ import static org.objectweb.asm.Opcodes.IFEQ;
 import static org.objectweb.asm.Opcodes.INVOKESTATIC;
 import static org.objectweb.asm.Opcodes.RETURN;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
@@ -44,7 +41,6 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.hosted.NativeImageClassLoader;
 
 public class ClassInitializationTrackingVisitor extends ClassVisitor {
 
@@ -70,7 +66,7 @@ public class ClassInitializationTrackingVisitor extends ClassVisitor {
 
     @Override
     public void visitEnd() {
-        if (!hasClinit && instrumentationSupported()) {
+        if (!hasClinit) {
             MethodVisitor mv = visitMethod(ACC_STATIC, "<clinit>", "()V", null, null);
             mv.visitCode();
             mv.visitInsn(RETURN);
@@ -86,9 +82,9 @@ public class ClassInitializationTrackingVisitor extends ClassVisitor {
         boolean isClinitMethod = "<clinit>".equals(name);
         hasClinit = hasClinit || isClinitMethod;
         if (instrumentationSupported()) {
-            if (isClinitMethod && clinitInstrumentationSupported()) {
+            if (isClinitMethod) {
                 return new ClassInitializerMethod(methodVisitor);
-            } else if (initInstrumentationSupported(name)) {
+            } else if ("<init>".equals(name) && !className.startsWith("com/oracle/svm")) {
                 return new ClassConstructorMethod(methodVisitor);
             } else {
                 return methodVisitor;
@@ -98,55 +94,15 @@ public class ClassInitializationTrackingVisitor extends ClassVisitor {
         }
     }
 
-    private boolean clinitInstrumentationSupported() {
-        return ldcClassLiteralSupported;
-    }
-
-    private static Set<String> trackedJDKClasses = new HashSet<>(Arrays.asList("java.lang.Thread", "java.util.zip.ZipFile", "java.nio.MappedByteBuffer", "java.io.FileDescriptor"));
-
-    private static int getJavaVersion() {
-        String version = System.getProperty("java.version");
-        if (version.startsWith("1.")) {
-            version = version.substring(2, 3);
-        } else {
-            int dot = version.indexOf(".");
-            if (dot != -1) {
-                version = version.substring(0, dot);
-            }
-        }
-        return Integer.parseInt(version);
-    }
-
-    private boolean initInstrumentationSupported(String name) {
-        if (!"<init>".equals(name)) {
-            return false;
-        }
-
-        /*
-         * JDK 9+ not supported. Our instrumentation is not visible from the JDK modules.
-         */
-        if (getJavaVersion() > 8) {
-            return false;
-        }
-
-        /* We track all user classes and JDK classes that must not end up in the image heap. */
-        if (loader instanceof NativeImageClassLoader) {
-            return true;
-        } else {
-            if (trackedJDKClasses.contains(className)) {
-                return true;
-            } else {
-                return className.contains("java/nio") && className.contains("Buffer");
-            }
-        }
-    }
-
     private boolean instrumentationSupported() {
-        if (getJavaVersion() == 8) {
+        if (!ldcClassLiteralSupported) {
+            return false;
+        }
+        if (JavaVersionUtil.JAVA_SPEC == 8) {
             return loader != null && className != null &&
                             /* The class literal throws a NoClassDefFound error. */
                             !className.startsWith("sun/reflect/Generated");
-        } else if (getJavaVersion() > 8) {
+        } else if (JavaVersionUtil.JAVA_SPEC > 8) {
             return !(moduleName == null ||
                             moduleName.startsWith("java.") ||
                             moduleName.startsWith("jdk."));
