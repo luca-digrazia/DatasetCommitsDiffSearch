@@ -61,7 +61,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.function.Supplier;
 
-import com.oracle.truffle.llvm.tests.interop.values.TestCallback;
 import org.graalvm.polyglot.Value;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -72,15 +71,18 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropReadNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.tests.interop.values.ArrayObject;
 import com.oracle.truffle.llvm.tests.interop.values.DoubleArrayObject;
 import com.oracle.truffle.llvm.tests.interop.values.LongArrayObject;
+import com.oracle.truffle.llvm.tests.interop.values.TestCallback;
 import com.oracle.truffle.llvm.tests.interop.values.TypedArrayObject;
 import com.oracle.truffle.tck.TruffleRunner;
 
 /**
- * Test and document which values can be read from polyglot arrays.
+ * Test and document which values can be read from polyglot arrays. This mainly tests
+ * {@link LLVMInteropReadNode}.
  */
 @RunWith(Parameterized.class)
 @Parameterized.UseParametersRunnerFactory(TruffleRunner.ParametersFactory.class)
@@ -198,7 +200,6 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         ReadPointer.fromI16(c);
         ReadPointer.fromI32(c);
         ReadPointer.fromI64(c);
-        ReadPointer.fromPointer(c);
         ReadPointer.fromFloatingPoint(c);
         ReadPointer.fromPointer(c);
         return c;
@@ -245,7 +246,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI16(ArrayList<Object[]> c) {
@@ -255,7 +256,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI32(ArrayList<Object[]> c) {
@@ -265,7 +266,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI64(ArrayList<Object[]> c) {
@@ -328,51 +329,55 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         private static void fromI8(ArrayList<Object[]> c) {
             // typed arrays, no casts
 
-            /*
-             * Cannot read more than one element from the supplied array.
-             */
-            addUnsupported(c, "read_i16", TYPED_I8_INT_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i16", TYPED_I8_INT_ARRAY_1, 0, resultEquals(toNativeEndian((short) 0xED00)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i16", TYPED_I8_INT_ARRAY_4, 2, expectPolyglotException("Invalid array index 4"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 16 bit result in 2 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i16", TYPED_I8_INT_ARRAY_4, 0, resultEquals((short) 0xED78));
+            addSupported(c, "read_i16", TYPED_I8_INT_ARRAY_4, 0, resultEquals(toNativeEndian((short) 0xED78)));
 
             // untyped arrays, explicit casts
 
-            /* Cannot read more than one element from the supplied array. */
-            addUnsupported(c, "read_i16_from_i8_array", BOXED_INT_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i16_from_i8_array", BOXED_INT_ARRAY_1, 0, resultEquals(toNativeEndian((short) 0xED00)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i16_from_i8_array", BOXED_INT_ARRAY_4, 2, expectPolyglotException("Invalid array index 4"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 32 bit result in 4 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i16_from_i8_array", BOXED_INT_ARRAY_4, 0, resultNotEquals((short) 0xCAFE));
+            addSupported(c, "read_i16_from_i8_array", BOXED_INT_ARRAY_4, 0, resultNotEquals(toNativeEndian((short) 0xCAFE)));
             /*
              * Read the second i16 from a "byte array".
              */
-            addSupported(c, "read_i16_from_i8_array", BOXED_BYTE_ARRAY_8, 1, resultEquals((short) 0xFEED));
+            addSupported(c, "read_i16_from_i8_array", BOXED_BYTE_ARRAY_8, 1, resultEquals(toNativeEndian((short) 0xFEED)));
 
             // typed arrays, explicit casts
 
-            /* Cannot read more than one element from the supplied array. */
-            addUnsupported(c, "read_i16_from_i8_array", TYPED_I8_INT_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i16_from_i8_array", TYPED_I8_INT_ARRAY_1, 0, resultEquals(toNativeEndian((short) 0xED00)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i16_from_i8_array", TYPED_I8_INT_ARRAY_4, 2, expectPolyglotException("Invalid array index 4"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 32 bit result in 4 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i16_from_i8_array", TYPED_I8_INT_ARRAY_4, 0, resultEquals((short) 0xED78));
+            addSupported(c, "read_i16_from_i8_array", TYPED_I8_INT_ARRAY_4, 0, resultEquals(toNativeEndian((short) 0xED78)));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_i16_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals((short) 0xCAFE));
+            addSupported(c, "read_i16_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(toNativeEndian((short) 0xCAFE)));
             /*
              * Read the second i16 from a "byte array".
              */
-            addSupported(c, "read_i16_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals((short) 0xFEED));
+            addSupported(c, "read_i16_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(toNativeEndian((short) 0xFEED)));
         }
 
         /**
@@ -385,7 +390,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI32(ArrayList<Object[]> c) {
@@ -395,7 +400,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI64(ArrayList<Object[]> c) {
@@ -451,65 +456,69 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         private static void fromI8(ArrayList<Object[]> c) {
             // typed arrays, no casts
 
-            /*
-             * Cannot read more than one element from the supplied array.
-             */
-            addUnsupported(c, "read_i32", TYPED_I8_INT_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i32", TYPED_I8_INT_ARRAY_1, 0, resultEquals(toNativeEndian(0xED000000)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i32", TYPED_I8_INT_ARRAY_4, 1, expectPolyglotException("Invalid array index 4"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 32 bit result in 4 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i32", TYPED_I8_INT_ARRAY_4, 0, resultNotEquals(0xCAFEFEED));
+            addSupported(c, "read_i32", TYPED_I8_INT_ARRAY_4, 0, resultNotEquals(toNativeEndian(0xCAFEFEED)));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_i32", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(0xCAFEFEED));
+            addSupported(c, "read_i32", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(toNativeEndian(0xCAFEFEED)));
 
             // untyped arrays, explicit casts
 
-            /* Cannot read more than one element from the supplied array. */
-            addUnsupported(c, "read_i32_from_i8_array", BOXED_INT_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i32_from_i8_array", BOXED_INT_ARRAY_1, 0, resultEquals(toNativeEndian(0xED000000)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i32_from_i8_array", BOXED_INT_ARRAY_4, 1, expectPolyglotException("Invalid array index 4"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 32 bit result in 4 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i32_from_i8_array", BOXED_INT_ARRAY_4, 0, resultNotEquals(0xCAFEFEED));
+            addSupported(c, "read_i32_from_i8_array", BOXED_INT_ARRAY_4, 0, resultNotEquals(toNativeEndian(0xCAFEFEED)));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_i32_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(0xCAFEFEED));
+            addSupported(c, "read_i32_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(toNativeEndian(0xCAFEFEED)));
             /*
              * Read the second i32 from a "byte array".
              */
-            addSupported(c, "read_i32_from_i8_array", BOXED_BYTE_ARRAY_8, 1, resultEquals(0x12345678));
+            addSupported(c, "read_i32_from_i8_array", BOXED_BYTE_ARRAY_8, 1, resultEquals(toNativeEndian(0x12345678)));
 
             // typed arrays, explicit casts
 
-            /* Cannot read more than one element from the supplied array. */
-            addUnsupported(c, "read_i32_from_i8_array", TYPED_I8_INT_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i32_from_i8_array", TYPED_I8_INT_ARRAY_1, 0, resultEquals(toNativeEndian(0xED000000)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i32_from_i8_array", TYPED_I8_INT_ARRAY_4, 1, expectPolyglotException("Invalid array index 4"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 32 bit result in 4 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i32_from_i8_array", TYPED_I8_INT_ARRAY_4, 0, resultNotEquals(0xCAFEFEED));
+            addSupported(c, "read_i32_from_i8_array", TYPED_I8_INT_ARRAY_4, 0, resultNotEquals(toNativeEndian(0xCAFEFEED)));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_i32_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(0xCAFEFEED));
+            addSupported(c, "read_i32_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(toNativeEndian(0xCAFEFEED)));
             /*
              * Read the second i32 from a "byte array".
              */
-            addSupported(c, "read_i32_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(0x12345678));
+            addSupported(c, "read_i32_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(toNativeEndian(0x12345678)));
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI16(ArrayList<Object[]> c) {
@@ -531,7 +540,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI64(ArrayList<Object[]> c) {
@@ -598,65 +607,69 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         private static void fromI8(ArrayList<Object[]> c) {
             // typed arrays, no casts
 
-            /*
-             * Cannot read more than four elements from the supplied array.
-             */
-            addUnsupported(c, "read_i64", TYPED_I8_LONG_ARRAY_4, 0, expectPolyglotException("Invalid array index 4"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i64", TYPED_I8_LONG_ARRAY_4, 0, resultEquals(toNativeEndian(0x78458800_00000000L)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i64", TYPED_I8_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i64", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(0xCAFEFEED_12345678L));
+            addSupported(c, "read_i64", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(toNativeEndian(0xCAFEFEED_12345678L)));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_i64", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(0xCAFEFEED_12345678L));
+            addSupported(c, "read_i64", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(toNativeEndian(0xCAFEFEED_12345678L)));
 
             // untyped arrays, explicit casts
 
-            /* Cannot read more than for elements from the supplied array. */
-            addUnsupported(c, "read_i64_from_i8_array", BOXED_LONG_ARRAY_4, 0, expectPolyglotException("Invalid array index 4"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i64_from_i8_array", BOXED_LONG_ARRAY_4, 0, resultEquals(toNativeEndian(0x78458800_00000000L)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i64_from_i8_array", BOXED_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i64_from_i8_array", BOXED_LONG_ARRAY_8, 0, resultNotEquals(0xCAFEFEED_12345678L));
+            addSupported(c, "read_i64_from_i8_array", BOXED_LONG_ARRAY_8, 0, resultNotEquals(toNativeEndian(0xCAFEFEED_12345678L)));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_i64_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(0xCAFEFEED_12345678L));
+            addSupported(c, "read_i64_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(toNativeEndian(0xCAFEFEED_12345678L)));
             /*
              * Read the second i64 from a "byte array".
              */
-            addSupported(c, "read_i64_from_i8_array", BOXED_BYTE_ARRAY_16, 1, resultEquals(0x11223344_55667788L));
+            addSupported(c, "read_i64_from_i8_array", BOXED_BYTE_ARRAY_16, 1, resultEquals(toNativeEndian(0x11223344_55667788L)));
 
             // typed arrays, explicit casts
 
-            /* Cannot read more than one element from the supplied array. */
-            addUnsupported(c, "read_i64_from_i8_array", TYPED_I8_LONG_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_i64_from_i8_array", TYPED_I8_LONG_ARRAY_1, 0, resultEquals(toNativeEndian(0x78000000_00000000L)));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_i64_from_i8_array", TYPED_I8_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_i64_from_i8_array", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(0xCAFEFEED_12345678L));
+            addSupported(c, "read_i64_from_i8_array", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(toNativeEndian(0xCAFEFEED_12345678L)));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_i64_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(0xCAFEFEED_12345678L));
+            addSupported(c, "read_i64_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(toNativeEndian(0xCAFEFEED_12345678L)));
             /*
              * Read the second i64 from a "byte array".
              */
-            addSupported(c, "read_i64_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(0x11223344_55667788L));
+            addSupported(c, "read_i64_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(toNativeEndian(0x11223344_55667788L)));
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI16(ArrayList<Object[]> c) {
@@ -669,7 +682,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI32(ArrayList<Object[]> c) {
@@ -738,15 +751,19 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
          */
         private static void fromI8(ArrayList<Object[]> c) {
             // typed arrays, no casts
-            addUnsupported(c, "read_float", TYPED_I8_INT_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
-            addSupported(c, "read_float", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(Float.intBitsToFloat(0xCAFEFEED)));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_float", TYPED_I8_INT_ARRAY_1, 0, resultEquals(Float.intBitsToFloat(toNativeEndian(0xED000000))));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_float", TYPED_I8_INT_ARRAY_4, 1, expectPolyglotException("Invalid array index 4"));
+            addSupported(c, "read_float", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(Float.intBitsToFloat(toNativeEndian(0xCAFEFEED))));
+
             // untyped arrays, explicit casts
-            addSupported(c, "read_float_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(Float.intBitsToFloat(0xCAFEFEED)));
-            addSupported(c, "read_float_from_i8_array", BOXED_BYTE_ARRAY_8, 1, resultEquals(Float.intBitsToFloat(0x12345678)));
+            addSupported(c, "read_float_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(Float.intBitsToFloat(toNativeEndian(0xCAFEFEED))));
+            addSupported(c, "read_float_from_i8_array", BOXED_BYTE_ARRAY_8, 1, resultEquals(Float.intBitsToFloat(toNativeEndian(0x12345678))));
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI16(ArrayList<Object[]> c) {
@@ -768,7 +785,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI64(ArrayList<Object[]> c) {
@@ -823,65 +840,69 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         private static void fromI8(ArrayList<Object[]> c) {
             // typed arrays, no casts
 
-            /*
-             * Cannot read more than four elements from the supplied array.
-             */
-            addUnsupported(c, "read_double", TYPED_I8_LONG_ARRAY_4, 0, expectPolyglotException("Invalid array index 4"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_double", TYPED_I8_LONG_ARRAY_4, 0, resultEquals(Double.longBitsToDouble(toNativeEndian(0x78458800_00000000L))));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_double", TYPED_I8_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_double", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(Double.longBitsToDouble(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_double", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(Double.longBitsToDouble(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_double", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(Double.longBitsToDouble(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_double", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(Double.longBitsToDouble(toNativeEndian(0xCAFEFEED_12345678L))));
 
             // untyped arrays, explicit casts
 
-            /* Cannot read more than for elements from the supplied array. */
-            addUnsupported(c, "read_double_from_i8_array", BOXED_LONG_ARRAY_4, 0, expectPolyglotException("Invalid array index 4"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_double_from_i8_array", BOXED_LONG_ARRAY_4, 0, resultEquals(Double.longBitsToDouble(toNativeEndian(0x78458800_00000000L))));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_double_from_i8_array", BOXED_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_double_from_i8_array", BOXED_LONG_ARRAY_8, 0, resultNotEquals(Double.longBitsToDouble(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_double_from_i8_array", BOXED_LONG_ARRAY_8, 0, resultNotEquals(Double.longBitsToDouble(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_double_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(Double.longBitsToDouble(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_double_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(Double.longBitsToDouble(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read the second double from a "byte array".
              */
-            addSupported(c, "read_double_from_i8_array", BOXED_BYTE_ARRAY_16, 1, resultEquals(Double.longBitsToDouble(0x11223344_55667788L)));
+            addSupported(c, "read_double_from_i8_array", BOXED_BYTE_ARRAY_16, 1, resultEquals(Double.longBitsToDouble(toNativeEndian(0x11223344_55667788L))));
 
             // typed arrays, explicit casts
 
-            /* Cannot read more than one element from the supplied array. */
-            addUnsupported(c, "read_double_from_i8_array", TYPED_I8_LONG_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_double_from_i8_array", TYPED_I8_LONG_ARRAY_1, 0, resultEquals(Double.longBitsToDouble(toNativeEndian(0x78000000_00000000L))));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_double_from_i8_array", TYPED_I8_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_double_from_i8_array", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(Double.longBitsToDouble(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_double_from_i8_array", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(Double.longBitsToDouble(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_double_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(Double.longBitsToDouble(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_double_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(Double.longBitsToDouble(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read the second double from a "byte array".
              */
-            addSupported(c, "read_double_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(Double.longBitsToDouble(0x11223344_55667788L)));
+            addSupported(c, "read_double_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(Double.longBitsToDouble(toNativeEndian(0x11223344_55667788L))));
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI16(ArrayList<Object[]> c) {
@@ -894,7 +915,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI32(ArrayList<Object[]> c) {
@@ -980,65 +1001,69 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         private static void fromI8(ArrayList<Object[]> c) {
             // typed arrays, no casts
 
-            /*
-             * Cannot read more than four elements from the supplied array.
-             */
-            addUnsupported(c, "read_pointer", TYPED_I8_LONG_ARRAY_4, 0, expectPolyglotException("Invalid array index 4"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_pointer", TYPED_I8_LONG_ARRAY_4, 0, resultEquals(LLVMNativePointer.create(toNativeEndian(0x78458800_00000000L))));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_pointer", TYPED_I8_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_pointer", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(LLVMNativePointer.create(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_pointer", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(LLVMNativePointer.create(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_pointer", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(LLVMNativePointer.create(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_pointer", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(LLVMNativePointer.create(toNativeEndian(0xCAFEFEED_12345678L))));
 
             // untyped arrays, explicit casts
 
-            /* Cannot read more than for elements from the supplied array. */
-            addUnsupported(c, "read_pointer_from_i8_array", BOXED_LONG_ARRAY_4, 0, expectPolyglotException("Invalid array index 4"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_pointer_from_i8_array", BOXED_LONG_ARRAY_4, 0, resultEquals(LLVMNativePointer.create(toNativeEndian(0x78458800_00000000L))));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_pointer_from_i8_array", BOXED_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_pointer_from_i8_array", BOXED_LONG_ARRAY_8, 0, resultNotEquals(LLVMNativePointer.create(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_pointer_from_i8_array", BOXED_LONG_ARRAY_8, 0, resultNotEquals(LLVMNativePointer.create(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_pointer_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(LLVMNativePointer.create(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_pointer_from_i8_array", BOXED_BYTE_ARRAY_8, 0, resultEquals(LLVMNativePointer.create(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read the second pointer from a "byte array".
              */
-            addSupported(c, "read_pointer_from_i8_array", BOXED_BYTE_ARRAY_16, 1, resultEquals(LLVMNativePointer.create(0x11223344_55667788L)));
+            addSupported(c, "read_pointer_from_i8_array", BOXED_BYTE_ARRAY_16, 1, resultEquals(LLVMNativePointer.create(toNativeEndian(0x11223344_55667788L))));
 
             // typed arrays, explicit casts
 
-            /* Cannot read more than one element from the supplied array. */
-            addUnsupported(c, "read_pointer_from_i8_array", TYPED_I8_LONG_ARRAY_1, 0, expectPolyglotException("Invalid array index 1"));
+            /* Out of bounds reads are ok as long as we are in the aligned bounds. */
+            addSupported(c, "read_pointer_from_i8_array", TYPED_I8_LONG_ARRAY_1, 0, resultEquals(LLVMNativePointer.create(toNativeEndian(0x78000000_00000000L))));
+            /* Cannot read out of (aligned) bounds of the supplied array. */
+            addUnsupported(c, "read_pointer_from_i8_array", TYPED_I8_LONG_ARRAY_8, 1, expectPolyglotException("Invalid array index 8"));
             /*
              * The result might be unexpected. The interop value is interpreted as an byte array,
              * thus reading 64 bit result in 8 byte reads. Only the least significant byte of every
              * element is read.
              */
-            addSupported(c, "read_pointer_from_i8_array", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(LLVMNativePointer.create(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_pointer_from_i8_array", TYPED_I8_LONG_ARRAY_8, 0, resultNotEquals(LLVMNativePointer.create(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read from a "byte array". The supplied objects is in fact not a byte array but an
              * object array of Integers, but it does not really matter.
              */
-            addSupported(c, "read_pointer_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(LLVMNativePointer.create(0xCAFEFEED_12345678L)));
+            addSupported(c, "read_pointer_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 0, resultEquals(LLVMNativePointer.create(toNativeEndian(0xCAFEFEED_12345678L))));
             /*
              * Read the second pointer from a "byte array".
              */
-            addSupported(c, "read_pointer_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(LLVMNativePointer.create(0x11223344_55667788L)));
+            addSupported(c, "read_pointer_from_i8_array", TYPED_I8_BYTE_ARRAY_16, 1, resultEquals(LLVMNativePointer.create(toNativeEndian(0x11223344_55667788L))));
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI16(ArrayList<Object[]> c) {
@@ -1051,7 +1076,7 @@ public class ReadPolyglotArrayTest extends ReadPolyglotArrayTestBase {
         }
 
         /**
-         * These calls all fails since we to not issue multiple reads unless the receiver is a i8
+         * These calls all fail since we to not issue multiple reads unless the receiver is a i8
          * array.
          */
         private static void fromI32(ArrayList<Object[]> c) {
