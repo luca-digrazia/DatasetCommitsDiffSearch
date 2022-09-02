@@ -109,10 +109,6 @@ public final class HotSpotGraalManagement implements HotSpotGraalManagementRegis
         if (jniEnvOffset == 0) {
             synchronized (HotSpotGraalManagement.class) {
                 if (jniEnvOffset == 0) {
-                    if (config.jniEnvironmentOffset == Integer.MIN_VALUE) {
-                        // Old unsupported JVMCI version.
-                        return;
-                    }
                     jniEnvOffset = config.jniEnvironmentOffset;
                     defineClassesInHotSpot(getCurrentJNIEnv());
                 }
