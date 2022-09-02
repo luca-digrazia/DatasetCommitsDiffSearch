@@ -1183,10 +1183,8 @@ public class LLVMIRBuilder implements AutoCloseable {
         return LLVM.LLVMBuildAlloca(builder, type, DEFAULT_INSTR_NAME);
     }
 
-    public LLVMValueRef buildArrayAlloca(LLVMTypeRef type, int slots, int alignmentInBytes) {
-        LLVMValueRef alloca = LLVM.LLVMBuildArrayAlloca(builder, type, constantInt(slots), DEFAULT_INSTR_NAME);
-        LLVM.LLVMSetAlignment(alloca, alignmentInBytes);
-        return alloca;
+    public LLVMValueRef buildArrayAlloca(LLVMTypeRef type, int slots) {
+        return LLVM.LLVMBuildArrayAlloca(builder, type, constantInt(slots), DEFAULT_INSTR_NAME);
     }
 
     public void buildPrefetch(LLVMValueRef address) {

@@ -816,9 +816,9 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
     }
 
     @Override
-    public VirtualStackSlot allocateStackMemory(int sizeInBytes, int alignmentInBytes) {
+    public VirtualStackSlot allocateStackSlots(int slots) {
         builder.positionAtStart();
-        LLVMValueRef alloca = builder.buildArrayAlloca(builder.byteType(), sizeInBytes, alignmentInBytes);
+        LLVMValueRef alloca = builder.buildArrayAlloca(builder.wordType(), slots);
         builder.positionAtEnd(getBlockEnd(currentBlock));
 
         return new LLVMStackSlot(alloca);
