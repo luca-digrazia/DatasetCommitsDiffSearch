@@ -55,7 +55,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -83,6 +82,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.ContextLocal;
 import com.oracle.truffle.api.ContextThreadLocal;
 import com.oracle.truffle.api.InstrumentInfo;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleFile;
@@ -100,7 +100,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeInterface;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -120,7 +119,6 @@ final class EngineAccessor extends Accessor {
     static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
     static final JDKSupport JDKSERVICES = ACCESSOR.jdkSupport();
     static final InteropSupport INTEROP = ACCESSOR.interopSupport();
-    static final ExceptionSupport EXCEPTION = ACCESSOR.exceptionSupport();
     static final RuntimeSupport RUNTIME = ACCESSOR.runtimeSupport();
 
     private static List<AbstractClassLoaderSupplier> locatorLoaders() {
@@ -333,12 +331,6 @@ final class EngineAccessor extends Accessor {
         public TruffleContext getTruffleContext(Object polyglotLanguageContext) {
             PolyglotLanguageContext languageContext = (PolyglotLanguageContext) polyglotLanguageContext;
             return languageContext.context.currentTruffleContext;
-        }
-
-        @Override
-        public TruffleContext getCreatorTruffleContext(Object polyglotLanguageContext) {
-            PolyglotLanguageContext languageContext = (PolyglotLanguageContext) polyglotLanguageContext;
-            return languageContext.context.creatorTruffleContext;
         }
 
         @SuppressWarnings("unchecked")
@@ -684,25 +676,13 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        @SuppressWarnings("deprecation")
-        public Iterable<com.oracle.truffle.api.Scope> createDefaultLexicalScope(Node node, Frame frame, Class<? extends TruffleLanguage<?>> language) {
-            return LegacyDefaultScope.lexicalScope(node, frame, language);
+        public Iterable<Scope> createDefaultLexicalScope(Node node, Frame frame) {
+            return DefaultScope.lexicalScope(node, frame);
         }
 
         @Override
-        @SuppressWarnings("deprecation")
-        public Iterable<com.oracle.truffle.api.Scope> createDefaultTopScope(Object global) {
-            return LegacyDefaultScope.topScope(global);
-        }
-
-        @Override
-        public Object getDefaultVariables(RootNode root, Frame frame, Class<? extends TruffleLanguage<?>> language) {
-            return DefaultScope.getVariables(root, frame, language);
-        }
-
-        @Override
-        public Object getDefaultArguments(Object[] frameArguments, Class<? extends TruffleLanguage<?>> language) {
-            return DefaultScope.getArguments(frameArguments, language);
+        public Iterable<Scope> createDefaultTopScope(Object global) {
+            return DefaultScope.topScope(global);
         }
 
         @Override
@@ -947,13 +927,8 @@ final class EngineAccessor extends Accessor {
         @Override
         public Object asHostObject(Object obj) {
             assert isHostObject(obj);
-            if (obj instanceof HostException) {
-                HostException javaException = (HostException) obj;
-                return javaException.getOriginal();
-            } else {
-                HostObject javaObject = (HostObject) obj;
-                return javaObject.obj;
-            }
+            HostObject javaObject = (HostObject) obj;
+            return javaObject.obj;
         }
 
         @Override
@@ -1260,30 +1235,6 @@ final class EngineAccessor extends Accessor {
                 }
                 context.closeImpl(false, false, true);
             }
-        }
-
-        @Override
-        @SuppressWarnings("deprecation")
-        public Iterable<com.oracle.truffle.api.Scope> findLibraryLocalScopesToLegacy(Node node, Frame frame) {
-            return LegacyScopesBridge.findLibraryLocalScopesToLegacy(node, frame);
-        }
-
-        @Override
-        @SuppressWarnings("deprecation")
-        public Iterable<com.oracle.truffle.api.Scope> topScopesToLegacy(Object scope) {
-            return LegacyScopesBridge.topScopesToLegacy(scope);
-        }
-
-        @Override
-        @SuppressWarnings("deprecation")
-        public boolean legacyScopesHasScope(NodeInterface node, Iterator<com.oracle.truffle.api.Scope> legacyScopes) {
-            return LegacyScopesBridge.legacyScopesHasScope(node, legacyScopes);
-        }
-
-        @Override
-        @SuppressWarnings("deprecation")
-        public Object legacyScopes2ScopeObject(NodeInterface node, Iterator<com.oracle.truffle.api.Scope> legacyScopes, Class<? extends TruffleLanguage<?>> language) {
-            return LegacyScopesBridge.legacyScopes2ScopeObject(node, legacyScopes, language);
         }
 
     }
