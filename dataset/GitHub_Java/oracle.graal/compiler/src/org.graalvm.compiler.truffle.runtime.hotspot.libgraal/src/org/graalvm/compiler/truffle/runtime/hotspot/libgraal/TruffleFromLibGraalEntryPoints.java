@@ -56,6 +56,8 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLi
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetLanguage;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetLineNumber;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetLoopExplosionKind;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetNodeClassName;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetNodeId;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetNodeRewritingAssumption;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetNodeRewritingAssumptionConstant;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetNonTrivialNodeCount;
@@ -70,6 +72,7 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLi
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsInliningForced;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsLastTier;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsSameOrSplit;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsSpecializationMethod;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsTargetStable;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsTruffleBoundary;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsValueType;
@@ -90,8 +93,11 @@ import java.lang.reflect.Modifier;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Formatter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -126,7 +132,14 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  */
 final class TruffleFromLibGraalEntryPoints {
 
+    private static final Map<Integer, JavaKind> JAVA_KINDS;
     static {
+        Map<Integer, JavaKind> m = new HashMap<>();
+        for (JavaKind jk : JavaKind.values()) {
+            m.put(jk.getBasicType(), jk);
+        }
+        JAVA_KINDS = Collections.unmodifiableMap(m);
+
         assert checkHotSpotCalls();
     }
 
@@ -146,6 +159,12 @@ final class TruffleFromLibGraalEntryPoints {
     static boolean isTruffleBoundary(Object truffleRuntime, long methodHandle) {
         ResolvedJavaMethod method = LibGraal.unhand(ResolvedJavaMethod.class, methodHandle);
         return ((HotSpotTruffleCompilerRuntime) truffleRuntime).isTruffleBoundary(method);
+    }
+
+    @TruffleFromLibGraal(IsSpecializationMethod)
+    static boolean isSpecializationMethod(Object truffleRuntime, long methodHandle) {
+        ResolvedJavaMethod method = LibGraal.unhand(ResolvedJavaMethod.class, methodHandle);
+        return ((HotSpotTruffleCompilerRuntime) truffleRuntime).isSpecializationMethod(method);
     }
 
     @TruffleFromLibGraal(IsValueType)
@@ -188,17 +207,13 @@ final class TruffleFromLibGraalEntryPoints {
 
     @TruffleFromLibGraal(Id.GetJavaKindForFrameSlotKind)
     static int getJavaKindForFrameSlotKind(Object truffleRuntime, int frameSlotKindTag) {
-        return ((HotSpotTruffleCompilerRuntime) truffleRuntime).getJavaKindForFrameSlotKind(frameSlotKindTag).ordinal();
+        JavaKind kind = ((HotSpotTruffleCompilerRuntime) truffleRuntime).getJavaKindForFrameSlotKind(frameSlotKindTag);
+        return kind.getBasicType();
     }
 
     @TruffleFromLibGraal(Id.GetFrameSlotKindTagsCount)
     static int getFrameSlotKindTagsCount(Object truffleRuntime) {
         return ((HotSpotTruffleCompilerRuntime) truffleRuntime).getFrameSlotKindTagsCount();
-    }
-
-    @TruffleFromLibGraal(GetFrameSlotKindTagForJavaKind)
-    static int getFrameSlotKindTagForJavaKind(Object truffleRuntime, int ordinal) {
-        return ((HotSpotTruffleCompilerRuntime) truffleRuntime).getFrameSlotKindTagForJavaKind(JavaKind.values()[ordinal]);
     }
 
     @TruffleFromLibGraal(GetTruffleCallBoundaryMethods)
@@ -219,6 +234,12 @@ final class TruffleFromLibGraalEntryPoints {
             res[i++] = LibGraal.translate(m);
         }
         return res;
+    }
+
+    @TruffleFromLibGraal(GetFrameSlotKindTagForJavaKind)
+    static int getFrameSlotKindTagForJavaKind(Object truffleRuntime, int basicType) {
+        JavaKind kind = getJavaKind(basicType);
+        return ((HotSpotTruffleCompilerRuntime) truffleRuntime).getFrameSlotKindTagForJavaKind(kind);
     }
 
     @TruffleFromLibGraal(Log)
@@ -292,6 +313,14 @@ final class TruffleFromLibGraalEntryPoints {
         return LibGraal.getFailedSpeculationsAddress(log);
     }
 
+    private static JavaKind getJavaKind(int basicType) {
+        JavaKind javaKind = JAVA_KINDS.get(basicType);
+        if (javaKind == null) {
+            throw new IllegalArgumentException("Unknown JavaKind basic type: " + basicType);
+        }
+        return javaKind;
+    }
+
     @TruffleFromLibGraal(CreateStringSupplier)
     static Supplier<String> createStringSupplier(long handle) {
         return new LibGraalStringSupplier(handle);
@@ -350,6 +379,16 @@ final class TruffleFromLibGraalEntryPoints {
     @TruffleFromLibGraal(GetTargetName)
     static String getTargetName(Object decision) {
         return ((Decision) decision).getTargetName();
+    }
+
+    @TruffleFromLibGraal(GetNodeClassName)
+    static String getNodeClassName(Object pos) {
+        return ((TruffleSourceLanguagePosition) pos).getNodeClassName();
+    }
+
+    @TruffleFromLibGraal(GetNodeId)
+    static int getNodeId(Object pos) {
+        return ((TruffleSourceLanguagePosition) pos).getNodeId();
     }
 
     @TruffleFromLibGraal(IsTargetStable)
