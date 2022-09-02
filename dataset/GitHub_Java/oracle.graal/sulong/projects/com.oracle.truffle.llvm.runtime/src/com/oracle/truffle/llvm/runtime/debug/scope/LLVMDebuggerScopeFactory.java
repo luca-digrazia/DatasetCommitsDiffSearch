@@ -49,7 +49,6 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 import java.util.ArrayList;
 
@@ -101,7 +100,7 @@ public final class LLVMDebuggerScopeFactory {
             if (symbol.isGlobalVariable()) {
                 final LLVMGlobal global = symbol.asGlobalVariable();
                 final TruffleObject value = wrapperFactory.toGenericDebuggerValue(global.getPointeeType(), global.getTarget());
-                entries.add(LLVMIdentifier.toGlobalIdentifier(global.getName()), value);
+                entries.add("@" + global.getName(), value);
             }
         }
         return entries;
@@ -113,7 +112,7 @@ public final class LLVMDebuggerScopeFactory {
         final LLVMDebuggerScopeEntries entries = new LLVMDebuggerScopeEntries();
         for (LLVMGlobal global : irScope) {
             final TruffleObject value = wrapperFactory.toGenericDebuggerValue(new PointerType(global.getPointeeType()), global.getTarget());
-            entries.add(LLVMIdentifier.toGlobalIdentifier(global.getName()), value);
+            entries.add("@" + global.getName(), value);
         }
         return entries;
     }
@@ -284,12 +283,12 @@ public final class LLVMDebuggerScopeFactory {
 
     private static String convertIdentifier(String identifier, LLVMContext context) {
         if (context.getEnv().getOptions().get(SulongEngineOption.LL_DEBUG)) {
-            // IR-level debugging always expects "%" prefix
-            return LLVMIdentifier.toLocalIdentifier(identifier);
+            // IT-level debugging always expects "%" prefix
+            return "%" + identifier;
         }
         try {
             Integer.parseInt(identifier);
-            return LLVMIdentifier.toLocalIdentifier(identifier);
+            return "%" + identifier;
         } catch (NumberFormatException e) {
             // don't prepend "%" for custom names
             return identifier;
