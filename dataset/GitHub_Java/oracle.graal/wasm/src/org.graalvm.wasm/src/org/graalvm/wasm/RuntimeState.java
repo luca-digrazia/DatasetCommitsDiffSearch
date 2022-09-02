@@ -41,10 +41,11 @@
 package org.graalvm.wasm;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
+import org.graalvm.wasm.exception.WasmExecutionException;
+import org.graalvm.wasm.exception.WasmValidationException;
 import org.graalvm.wasm.memory.WasmMemory;
+
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
 /**
  * Represents the state of a WebAssembly module.
@@ -116,20 +117,20 @@ public class RuntimeState {
     private void checkNotLinked() {
         // The symbol table must be read-only after the module gets linked.
         if (linkState == Linker.LinkState.linked) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "The engine tried to modify the instance after linking.");
+            throw new WasmValidationException("The engine tried to modify the instance after linking.");
         }
     }
 
     public void setLinkInProgress() {
         if (linkState != Linker.LinkState.nonLinked) {
-            throw WasmException.create(Failure.UNSPECIFIED_UNLINKABLE, "Can only switch to in-progress state when not linked.");
+            throw new WasmExecutionException(null, "Can only switch to in-progress state when not linked.");
         }
         this.linkState = Linker.LinkState.inProgress;
     }
 
     public void setLinkCompleted() {
         if (linkState != Linker.LinkState.inProgress) {
-            throw WasmException.create(Failure.UNSPECIFIED_UNLINKABLE, "Can only switch to linked state when linking is in-progress.");
+            throw new WasmExecutionException(null, "Can only switch to linked state when linking is in-progress.");
         }
         this.linkState = Linker.LinkState.linked;
     }

@@ -90,14 +90,7 @@ public class Instance extends Dictionary {
     }
 
     private WasmInstance instantiateModule(WasmContext context) {
-        final HashMap<String, ImportModule> importModules;
-        // Import object comes from the parent context
-        Object prev = truffleContext.getParent().enter(null);
-        try {
-            importModules = readImportModules();
-        } finally {
-            truffleContext.getParent().leave(null, prev);
-        }
+        final HashMap<String, ImportModule> importModules = readImportModules();
         return instantiateCore(context, importModules);
     }
 
@@ -246,11 +239,11 @@ public class Instance extends Dictionary {
             WasmFunction function = entry.getValue();
             final CallTarget target = instance.target(function.index());
             e.addMember(name, new Executable(args -> {
-                final Object prev = truffleContext.enter(null);
+                final Object prev = truffleContext.enter();
                 try {
                     return target.call(args);
                 } finally {
-                    truffleContext.leave(null, prev);
+                    truffleContext.leave(prev);
                 }
             }));
         }

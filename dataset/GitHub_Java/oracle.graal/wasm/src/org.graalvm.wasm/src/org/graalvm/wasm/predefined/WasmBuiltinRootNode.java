@@ -45,12 +45,8 @@ import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.nodes.WasmRootNode;
 
 public abstract class WasmBuiltinRootNode extends WasmRootNode {
-    protected final WasmInstance module;
-
-    public WasmBuiltinRootNode(WasmLanguage language, WasmInstance module) {
-        super(language, null);
-
-        this.module = module;
+    public WasmBuiltinRootNode(WasmLanguage language, WasmInstance instance) {
+        super(language, instance, null);
     }
 
     public abstract String builtinNodeName();
