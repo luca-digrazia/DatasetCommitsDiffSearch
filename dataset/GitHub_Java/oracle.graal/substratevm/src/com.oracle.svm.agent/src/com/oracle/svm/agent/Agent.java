@@ -42,7 +42,6 @@ import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DateFormat;
@@ -54,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
-import java.util.function.Function;
 
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.nativeimage.CurrentIsolate;
@@ -78,8 +76,6 @@ import com.oracle.svm.agent.restrict.JniAccessVerifier;
 import com.oracle.svm.agent.restrict.ProxyAccessVerifier;
 import com.oracle.svm.agent.restrict.ReflectAccessVerifier;
 import com.oracle.svm.agent.restrict.ResourceAccessVerifier;
-import com.oracle.svm.agent.restrict.TypeAccessChecker;
-import com.oracle.svm.configure.config.ConfigurationSet;
 import com.oracle.svm.configure.json.JsonWriter;
 import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.configure.trace.TraceProcessor;
@@ -194,15 +190,8 @@ public final class Agent {
                 if (!Files.isDirectory(configOutputDirPath)) {
                     Files.createDirectory(configOutputDirPath);
                 }
-                Function<IOException, Exception> handler = e -> {
-                    if (e instanceof NoSuchFileException) {
-                        System.err.println(Agent.MESSAGE_PREFIX + "warning: file " + ((NoSuchFileException) e).getFile() + " for merging could not be found, skipping");
-                        return null;
-                    }
-                    return e; // rethrow
-                };
-                TraceProcessor processor = new TraceProcessor(mergeConfigs.loadJniConfig(handler), mergeConfigs.loadReflectConfig(handler),
-                                mergeConfigs.loadProxyConfig(handler), mergeConfigs.loadResourceConfig(handler));
+                TraceProcessor processor = new TraceProcessor(mergeConfigs.loadJniConfig(true), mergeConfigs.loadReflectConfig(true),
+                                mergeConfigs.loadProxyConfig(true), mergeConfigs.loadResourceConfig(true));
                 processor.setFilterEnabled(!noFilter);
                 traceWriter = new TraceProcessorWriterAdapter(processor);
             } catch (Throwable t) {
@@ -234,31 +223,29 @@ public final class Agent {
         callbacks.setThreadEnd(onThreadEndLiteral.getFunctionPointer());
 
         accessAdvisor = new AccessAdvisor();
-        TypeAccessChecker reflectAccessChecker = null;
         try {
             ReflectAccessVerifier verifier = null;
             if (!restrictConfigs.getReflectConfigPaths().isEmpty()) {
-                reflectAccessChecker = new TypeAccessChecker(restrictConfigs.loadReflectConfig(ConfigurationSet.FAIL_ON_EXCEPTION));
-                verifier = new ReflectAccessVerifier(reflectAccessChecker, accessAdvisor);
+                verifier = new ReflectAccessVerifier(restrictConfigs.loadReflectConfig(false), accessAdvisor);
             }
             ProxyAccessVerifier proxyVerifier = null;
             if (!restrictConfigs.getProxyConfigPaths().isEmpty()) {
-                proxyVerifier = new ProxyAccessVerifier(restrictConfigs.loadProxyConfig(ConfigurationSet.FAIL_ON_EXCEPTION), accessAdvisor);
+                proxyVerifier = new ProxyAccessVerifier(restrictConfigs.loadProxyConfig(false), accessAdvisor);
             }
             ResourceAccessVerifier resourceVerifier = null;
             if (!restrictConfigs.getResourceConfigPaths().isEmpty()) {
-                resourceVerifier = new ResourceAccessVerifier(restrictConfigs.loadResourceConfig(ConfigurationSet.FAIL_ON_EXCEPTION), accessAdvisor);
+                resourceVerifier = new ResourceAccessVerifier(restrictConfigs.loadResourceConfig(false), accessAdvisor);
             }
             BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, verifier, proxyVerifier, resourceVerifier);
         } catch (Throwable t) {
             System.err.println(MESSAGE_PREFIX + t);
             return 3;
         }
+
         try {
             JniAccessVerifier verifier = null;
             if (!restrictConfigs.getJniConfigPaths().isEmpty()) {
-                TypeAccessChecker accessChecker = new TypeAccessChecker(restrictConfigs.loadJniConfig(ConfigurationSet.FAIL_ON_EXCEPTION));
-                verifier = new JniAccessVerifier(accessChecker, reflectAccessChecker, accessAdvisor);
+                verifier = new JniAccessVerifier(restrictConfigs.loadJniConfig(false), accessAdvisor);
             }
             JniCallInterceptor.onLoad(traceWriter, verifier);
         } catch (Throwable t) {
