@@ -265,7 +265,6 @@ public class LateMembarInsertionTest extends GraalCompilerTest {
                     Assert.assertNull(mem);
                     preBarrier = node;
                 } else {
-                    Assert.assertNull(postBarrier);
                     Assert.assertNotNull(mem);
                     postBarrier = node;
                 }
