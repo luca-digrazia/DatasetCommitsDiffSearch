@@ -185,11 +185,6 @@ public abstract class CustomSubstitutionMethod implements ResolvedJavaMethod, Gr
     }
 
     @Override
-    public Parameter[] getParameters() {
-        return original.getParameters();
-    }
-
-    @Override
     public Annotation[][] getParameterAnnotations() {
         return original.getParameterAnnotations();
     }

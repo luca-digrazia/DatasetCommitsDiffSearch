@@ -174,9 +174,6 @@ public final class Meta implements ContextAccess {
 
         Field = knownKlass(Type.Field);
         Field_root = Field.lookupDeclaredField(Name.root, Field.getType());
-        Field_class = Field.lookupDeclaredField(Name.clazz, Type.Class);
-        Field_name = Field.lookupDeclaredField(Name.name, Type.String);
-        Field_type = Field.lookupDeclaredField(Name.type, Type.Class);
 
         Shutdown = knownKlass(Type.Shutdown);
         Shutdown_shutdown = Shutdown.lookupDeclaredMethod(Name.shutdown, Signature._void);
@@ -201,15 +198,14 @@ public final class Meta implements ContextAccess {
         MethodType = knownKlass(Type.MethodType);
         toMethodDescriptorString = MethodType.lookupMethod(Name.toMethodDescriptorString, Signature.String);
         fromMethodDescriptorString = MethodType.lookupMethod(Name.fromMethodDescriptorString, Signature.fromMethodDescriptorString_signature);
-        // MethodType_cons = MethodType.lookupDeclaredMethod(Name.MethodType,
-        // Signature.MethodType_cons);
+        //MethodType_cons = MethodType.lookupDeclaredMethod(Name.MethodType, Signature.MethodType_cons);
 
         MemberName = knownKlass(Type.MemberName);
         getSignature = MemberName.lookupMethod(Name.getSignature, Signature.String);
-        MNclazz = MemberName.lookupField(Name.clazz, Type.Class);
-        MNname = MemberName.lookupField(Name.name, Type.String);
-        MNtype = MemberName.lookupField(Name.type, Type.MethodType);
-        MNflags = MemberName.lookupField(Name.flags, Type._int);
+        MNclazz =  MemberName.lookupField(Name.clazz, Type.Class);
+        MNname =  MemberName.lookupField(Name.name, Type.String);
+        MNtype =  MemberName.lookupField(Name.type, Type.MethodType);
+        MNflags =  MemberName.lookupField(Name.flags, Type._int);
 
         MethodHandle = knownKlass(Type.MethodHandle);
         invokeExact = MethodHandle.lookupDeclaredMethod(Name.invokeExact, Signature.Object_ObjectArray);
@@ -327,9 +323,6 @@ public final class Meta implements ContextAccess {
 
     public final ObjectKlass Field;
     public final Field Field_root;
-    public final Field Field_class;
-    public final Field Field_name;
-    public final Field Field_type;
 
     public final Method Shutdown_shutdown;
     public final ObjectKlass Shutdown;

@@ -23,6 +23,28 @@ public class MHLinkToNode extends EspressoBaseNode {
         Object[] args = frame.getArguments();
         return executeLinkTo(args);
     }
+//        switch(id) {
+//            case Target_java_lang_invoke_MethodHandleNatives._linkToInterface:
+//                return getMeta().linkToInterface.invokeDirect(null, args);
+//            case Target_java_lang_invoke_MethodHandleNatives._linkToStatic:
+//                return getMeta().linkToStatic.invokeDirect(null, args);
+//            case Target_java_lang_invoke_MethodHandleNatives._linkToVirtual:
+//                return getMeta().linkToVirtual.invokeDirect(null, args);
+//            case Target_java_lang_invoke_MethodHandleNatives._linkToSpecial:
+//                return getMeta().linkToSpecial.invokeDirect(null, args);
+//            default:
+//                throw EspressoError.shouldNotReachHere();
+//        }
+//
+//    @ExplodeLoop
+//    private static Object[] copyOfRange(Object[] src, int from, int toExclusive) {
+//        int len = toExclusive - from;
+//        Object[] dst = new Object[len];
+//        for (int i = 0; i < len; ++i) {
+//            dst[i] = src[i + from];
+//        }
+//        return dst;
+//    }
 
     private static Object executeLinkTo(Object[] args) {
         assert args.length > 0;
@@ -33,13 +55,13 @@ public class MHLinkToNode extends EspressoBaseNode {
         if (target.hasReceiver()) {
             StaticObject receiver = (StaticObject) args[0];
             Object[] trueArgs = new Object[args.length - 2];
-            for (int i = 1; i < args.length - 1; i++) {
-                trueArgs[i-1] = args[i];
+            for (int i = 1; i < trueArgs.length; i++) {
+                trueArgs[i] = args[i];
             }
             return target.invokeDirect(receiver, trueArgs);
         } else {
             Object[] trueArgs = new Object[args.length - 1];
-            for (int i = 0; i < args.length - 1; i++) {
+            for (int i = 0; i < trueArgs.length; i++) {
                 trueArgs[i] = args[i];
             }
             return target.invokeDirect(null, trueArgs);

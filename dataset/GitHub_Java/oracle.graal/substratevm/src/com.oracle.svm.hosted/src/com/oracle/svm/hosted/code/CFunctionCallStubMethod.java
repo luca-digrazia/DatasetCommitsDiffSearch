@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.hosted.code;
 
-import java.util.Arrays;
 import java.util.List;
 
 import org.graalvm.compiler.debug.DebugContext;
@@ -35,14 +34,9 @@ import org.graalvm.nativeimage.c.function.CFunction;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.graal.code.CGlobalDataInfo;
 import com.oracle.svm.core.graal.nodes.CGlobalDataLoadAddressNode;
-import com.oracle.svm.core.thread.VMThreads.StatusSupport;
-import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.phases.HostedGraphKit;
 
-import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.Signature;
 
 /**
  * Call stub for invoking C functions via methods annotated with {@link CFunction}.
@@ -50,22 +44,14 @@ import jdk.vm.ci.meta.Signature;
 public final class CFunctionCallStubMethod extends CCallStubMethod {
     private final CGlobalDataInfo linkage;
 
-    CFunctionCallStubMethod(ResolvedJavaMethod original, CGlobalDataInfo linkage, int newThreadStatus) {
-        super(original, newThreadStatus);
+    CFunctionCallStubMethod(ResolvedJavaMethod original, CGlobalDataInfo linkage, boolean needsTransition) {
+        super(original, needsTransition);
         this.linkage = linkage;
     }
 
     @Override
     protected String getCorrespondingAnnotationName() {
-        return getAnnotationClass().getSimpleName();
-    }
-
-    private Class<?> getAnnotationClass() {
-        if (original.getAnnotation(CFunction.class) != null) {
-            return CFunction.class;
-        } else {
-            throw VMError.shouldNotReachHere("Method is not annotated with @" + CFunction.class.getSimpleName());
-        }
+        return CFunction.class.getSimpleName();
     }
 
     @Override
@@ -76,7 +62,6 @@ public final class CFunctionCallStubMethod extends CCallStubMethod {
          * native code, which means the deoptimization stub would need to do the native-to-Java
          * transition.
          */
-        boolean needsTransition = StatusSupport.isValidStatus(newThreadStatus);
         return !needsTransition;
     }
 
@@ -90,22 +75,5 @@ public final class CFunctionCallStubMethod extends CCallStubMethod {
     @Override
     protected ValueNode createTargetAddressNode(HostedGraphKit kit, HostedProviders providers, List<ValueNode> arguments) {
         return kit.unique(new CGlobalDataLoadAddressNode(linkage));
-    }
-
-    @Override
-    protected JavaType[] getParameterTypesForLoad(ResolvedJavaMethod method) {
-        return method.toParameterTypes(); // include a potential receiver
-    }
-
-    @Override
-    protected Signature adaptSignatureAndConvertArguments(HostedProviders providers, NativeLibraries nativeLibraries,
-                    HostedGraphKit kit, ResolvedJavaMethod method, JavaType returnType, JavaType[] paramTypes, List<ValueNode> arguments) {
-        JavaType[] adaptedParamTypes = paramTypes;
-        if (method.hasReceiver()) {
-            // For non-static methods, we ignore the receiver.
-            arguments.remove(0);
-            adaptedParamTypes = Arrays.copyOfRange(adaptedParamTypes, 1, adaptedParamTypes.length);
-        }
-        return super.adaptSignatureAndConvertArguments(providers, nativeLibraries, kit, method, returnType, adaptedParamTypes, arguments);
     }
 }

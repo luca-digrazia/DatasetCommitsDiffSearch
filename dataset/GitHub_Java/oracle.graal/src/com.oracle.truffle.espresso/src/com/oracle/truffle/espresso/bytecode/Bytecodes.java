@@ -769,10 +769,6 @@ public final class Bytecodes {
         return (flagsArray[opcode & 0xff] & BRANCH) != 0;
     }
 
-    public static boolean isReturn(byte opcode) {
-        return opcode >= (byte) IRETURN && opcode <= (byte) RETURN;
-    }
-
     /**
      * Determines if a given opcode denotes a conditional branch.
      *

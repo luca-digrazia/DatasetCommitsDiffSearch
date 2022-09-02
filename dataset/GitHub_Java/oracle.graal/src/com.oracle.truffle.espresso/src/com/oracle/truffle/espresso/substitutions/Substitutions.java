@@ -22,6 +22,15 @@
  */
 package com.oracle.truffle.espresso.substitutions;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.graalvm.collections.EconomicMap;
+
 import com.oracle.truffle.espresso.descriptors.StaticSymbols;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -33,14 +42,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.IntrinsicReflectionRootNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import org.graalvm.collections.EconomicMap;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Substitutions/intrinsics for Espresso.
@@ -80,8 +81,6 @@ public final class Substitutions implements ContextAccess {
                     // Target_java_lang_Runtime.class,
                     Target_java_lang_System.class,
                     Target_java_lang_Thread.class,
-                    Target_java_lang_ref_Finalizer$FinalizerThread.class,
-                    Target_java_lang_ref_Reference$ReferenceHandler.class,
                     Target_java_lang_reflect_Array.class,
                     Target_java_security_AccessController.class,
                     Target_sun_awt_SunToolkit.class,
@@ -170,8 +169,7 @@ public final class Substitutions implements ContextAccess {
                 continue;
             }
 
-            final EspressoRootNodeFactory factory;
-            factory = new EspressoRootNodeFactory() {
+            final EspressoRootNodeFactory factory = new EspressoRootNodeFactory() {
                 @Override
                 public EspressoRootNode spawnNode(Method espressoMethod) {
                     return new EspressoRootNode(espressoMethod, new IntrinsicReflectionRootNode(method, espressoMethod));
