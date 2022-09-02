@@ -95,11 +95,6 @@ public interface CompilableTruffleAST {
     boolean cancelCompilation(CharSequence reason);
 
     /**
-     * Cancel the compilation of this truffle ast.
-     */
-    void dequeueInlined();
-
-    /**
      * @param ast the ast to compare to
      * @return true if this ast and the argument are the same, one is a split of the other or they
      *         are both splits of the same ast. False otherwise.
@@ -147,8 +142,7 @@ public interface CompilableTruffleAST {
     }
 
     /**
-     * @return <code>true</code> is the root nodes of this AST trivial, <code>false</code>
-     *         otherwise.
+     * @return TODO
      */
     boolean isTrivial();
 }
