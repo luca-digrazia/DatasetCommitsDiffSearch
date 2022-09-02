@@ -330,7 +330,6 @@ public final class DebugException extends RuntimeException {
      * @since 20.1
      */
     public Throwable getRawException(Class<? extends TruffleLanguage<?>> languageClass) {
-        Objects.requireNonNull(languageClass);
         RootNode rootNode = getThrowLocationNode().getRootNode();
         if (rootNode == null) {
             return null;
