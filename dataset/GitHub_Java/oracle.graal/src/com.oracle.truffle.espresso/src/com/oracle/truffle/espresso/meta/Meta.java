@@ -925,7 +925,7 @@ public final class Meta implements ContextAccess {
             return hostObject;
         }
         if (hostObject instanceof StaticObject[]) {
-            return StaticObject.wrap((StaticObject[]) hostObject);
+            return hostObject;
         }
 
         if (hostObject instanceof Boolean ||
