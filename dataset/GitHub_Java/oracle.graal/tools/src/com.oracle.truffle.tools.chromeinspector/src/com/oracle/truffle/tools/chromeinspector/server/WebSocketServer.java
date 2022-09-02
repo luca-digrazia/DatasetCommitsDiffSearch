@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,9 +31,9 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.PushbackInputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -48,7 +48,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLServerSocketFactory;
 
@@ -76,12 +75,15 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
 
     private final int port;
     private final Map<String, ServerPathSession> sessions = new ConcurrentHashMap<>();
+    private final PrintStream log;
 
-    private WebSocketServer(InetSocketAddress isa) {
+    private WebSocketServer(InetSocketAddress isa, PrintStream log) {
         super(isa.getHostName(), isa.getPort());
         this.port = isa.getPort();
-        if (InspectorExecutionContext.LOG.isLoggable(Level.FINE)) {
-            InspectorExecutionContext.LOG.fine("New WebSocketServer at " + isa);
+        this.log = log;
+        if (log != null) {
+            log.println("New WebSocketServer at " + isa);
+            log.flush();
         }
     }
 
@@ -93,7 +95,7 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         synchronized (SERVERS) {
             wss = SERVERS.get(isa);
             if (wss == null) {
-                wss = new WebSocketServer(isa);
+                wss = new WebSocketServer(isa, context.getLogger());
                 if (secure) {
                     if (TruffleOptions.AOT) {
                         throw new IOException("Secure connection is not available in the native-image yet.");
@@ -125,9 +127,7 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
                 }
                 KeyStore keystore = KeyStore.getInstance(keystoreType);
                 File keyFile = new File(keyStoreFile);
-                try (FileInputStream keyIn = new FileInputStream(keyFile)) {
-                    keystore.load(keyIn, filePassword);
-                }
+                keystore.load(new FileInputStream(keyFile), filePassword);
                 String keyRecoverPasswordProperty = keyStoreOptions.getKeyPassword();
                 char[] keyRecoverPassword = keyRecoverPasswordProperty == null ? filePassword : keyRecoverPasswordProperty.toCharArray();
                 final KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -168,14 +168,16 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
                 }
                 responseJson = json.toString();
             }
-            if (InspectorExecutionContext.LOG.isLoggable(Level.FINE)) {
-                InspectorExecutionContext.LOG.fine("serverHttp(" + uri + "): response = '" + responseJson + "'");
+            if (log != null) {
+                log.println("serverHttp(" + uri + "): response = '" + responseJson + "'");
             }
             if (responseJson != null) {
                 Response response = NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK,
                                 "application/json; charset=UTF-8",
                                 responseJson);
-                response.addHeader("Cache-Control", "no-cache");
+                response.addHeader("Cache-Control", "no-cache,no-store,must-revalidate");
+                response.addHeader("Pragma", "no-cache");
+                response.addHeader("X-Content-Type-Options", "nosniff");
                 return response;
             }
         }
@@ -187,6 +189,10 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         String descriptor = handshake.getUri();
         ServerPathSession session;
         session = sessions.get(descriptor);
+        if (log != null) {
+            log.println("CLIENT ws connection opened, resource = " + descriptor + ", context = " + session);
+            log.flush();
+        }
         if (session != null) {
             InspectServerSession iss = session.getServerSession();
             if (iss == null) {
@@ -194,14 +200,10 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
                 boolean debugBreak = Boolean.TRUE.equals(session.getDebugBrkAndReset());
                 iss = InspectServerSession.create(session.getContext(), debugBreak, session.getConnectionWatcher());
             }
-            InspectWebSocket iws = new InspectWebSocket(handshake, iss, session.getConnectionWatcher());
+            InspectWebSocket iws = new InspectWebSocket(handshake, iss, session.getConnectionWatcher(), log);
             session.activeWS = iws;
-            iss.context.logMessage("CLIENT ws connection opened, descriptor = ", descriptor);
             return iws;
         } else {
-            if (InspectorExecutionContext.LOG.isLoggable(Level.FINE)) {
-                InspectorExecutionContext.LOG.fine("No session for descriptor " + descriptor);
-            }
             return new ClosedWebSocket(handshake);
         }
     }
@@ -212,14 +214,8 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         try {
             byte[] buf = new byte[3];
             pbInputStream.read(buf);
-            String text;
-            try {
-                text = new String(buf, "US-ASCII");
-            } catch (UnsupportedEncodingException ex) {
-                text = null;
-            } finally {
-                pbInputStream.unread(buf);
-            }
+            String text = new String(buf);
+            pbInputStream.unread(buf);
             if (!"GET".equals(text)) {
                 try (OutputStream outputStream = finalAccept.getOutputStream()) {
                     ContentType contentType = new ContentType(NanoHTTPD.MIME_PLAINTEXT);
@@ -329,23 +325,31 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         private final String descriptor;
         private final InspectServerSession iss;
         private final ConnectionWatcher connectionWatcher;
+        private final PrintStream log;
 
         InspectWebSocket(NanoHTTPD.IHTTPSession handshake, InspectServerSession iss,
-                        ConnectionWatcher connectionWatcher) {
+                        ConnectionWatcher connectionWatcher, PrintStream log) {
             super(handshake);
             this.descriptor = handshake.getUri();
             this.iss = iss;
             this.connectionWatcher = connectionWatcher;
+            this.log = log;
         }
 
         @Override
         public void onOpen() {
-            iss.context.logMessage("CLIENT web socket connection opened.", "");
+            if (log != null) {
+                log.println("CLIENT web socket connection opened.");
+                log.flush();
+            }
             connectionWatcher.notifyOpen();
             iss.setMessageListener(new MessageEndpoint() {
                 @Override
                 public void sendText(String message) throws IOException {
-                    iss.context.logMessage("SERVER: ", message);
+                    if (log != null) {
+                        log.println("SERVER: " + message);
+                        log.flush();
+                    }
                     send(message);
                 }
 
@@ -371,7 +375,10 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
 
         @Override
         public void onClose(NanoWSD.WebSocketFrame.CloseCode code, String reason, boolean initiatedByRemote) {
-            iss.context.logMessage("CLIENT web socket connection closed.", "");
+            if (log != null) {
+                log.println("CLIENT web socket connection closed.");
+                log.flush();
+            }
             connectionWatcher.notifyClosing();
             ServerPathSession sps = sessions.get(descriptor);
             if (sps != null) {
@@ -383,18 +390,27 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
         @Override
         public void onMessage(NanoWSD.WebSocketFrame frame) {
             String message = frame.getTextPayload();
-            iss.context.logMessage("CLIENT: ", message);
+            if (log != null) {
+                log.println("CLIENT: " + message);
+                log.flush();
+            }
             iss.sendText(message);
         }
 
         @Override
         protected void onPong(NanoWSD.WebSocketFrame pong) {
-            iss.context.logMessage("CLIENT PONG: ", pong.toString());
+            if (log != null) {
+                log.println("CLIENT PONG: " + pong.toString());
+                log.flush();
+            }
         }
 
         @Override
         protected void onException(IOException exception) {
-            iss.context.logException("CLIENT: ", exception);
+            if (log != null) {
+                exception.printStackTrace(log);
+                log.flush();
+            }
         }
 
     }
