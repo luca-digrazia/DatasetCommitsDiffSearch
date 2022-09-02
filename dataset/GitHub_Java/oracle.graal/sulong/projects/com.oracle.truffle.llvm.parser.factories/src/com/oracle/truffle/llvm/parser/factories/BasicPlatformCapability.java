@@ -31,8 +31,6 @@ package com.oracle.truffle.llvm.parser.factories;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.oracle.truffle.llvm.runtime.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
@@ -92,38 +90,15 @@ public abstract class BasicPlatformCapability<S extends Enum<S> & LLVMSyscallEnt
     }
 
     @Override
-    public List<String> preprocessDependencies(LLVMContext ctx, ExternalLibrary library, List<String> dependencies) {
-        List<String> newDeps = null;
-        // inject libsulong++ dependency
+    public String injectDependency(LLVMContext ctx, ExternalLibrary library) {
         if (ctx.isInternalLibrary(library) && library.hasFile()) {
             Path path = Paths.get(library.getFile().getPath());
             String remainder = ctx.getInternalLibraryPath().relativize(path).toString();
             if (remainder.startsWith(LIBCXXABI_PREFIX)) {
-                newDeps = new ArrayList<>(dependencies);
-                newDeps.add(LIBSULONGXX_FILENAME);
+                return LIBSULONGXX_FILENAME;
             }
         }
-        // replace absolute dependencies to libc++* to relative ones (in the llvm home)
-        for (int i = 0; i < dependencies.size(); i++) {
-            String dep = dependencies.get(i);
-            if (dep.startsWith("/usr/lib/libc++")) {
-                Path namePath = Paths.get(dep).getFileName();
-                if (namePath != null) {
-                    String filename = namePath.toString();
-                    if (filename.startsWith("libc++.") || filename.startsWith("libc++abi.")) {
-                        if (newDeps == null) {
-                            newDeps = new ArrayList<>(dependencies);
-                        }
-                        // replace with file name
-                        newDeps.set(i, filename);
-                    }
-                }
-            }
-        }
-        if (newDeps != null) {
-            return newDeps;
-        }
-        return dependencies;
+        return null;
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime;
 
 import java.lang.reflect.Array;
 import java.nio.file.Path;
-import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.llvm.runtime.config.LLVMCapability;
@@ -87,13 +86,12 @@ public abstract class PlatformCapability<S extends Enum<S> & LLVMSyscallEntry> i
     }
 
     /**
-     * Inject implicit or modify explicit dependencies for a {@code library}.
-     * 
+     * Inject implicit dependency for a {@code library}.
+     *
      * @param context the {@link LLVMContext}
      * @param library the library for which dependencies might be injected
-     * @param dependencies (unmodifiable) list of dependencies specified by the library
      */
-    public List<String> preprocessDependencies(LLVMContext context, ExternalLibrary library, List<String> dependencies) {
-        return dependencies;
+    public String injectDependency(LLVMContext context, ExternalLibrary library) {
+        return null;
     }
 }
