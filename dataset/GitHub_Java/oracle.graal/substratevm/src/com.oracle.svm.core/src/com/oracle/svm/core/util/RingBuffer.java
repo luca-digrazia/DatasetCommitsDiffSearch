@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core.util;
 
-import java.util.function.Supplier;
-
 import com.oracle.svm.core.annotate.Uninterruptible;
 
 /**
@@ -51,43 +49,19 @@ public final class RingBuffer<T> {
         this.entries = (T[]) new Object[numEntries];
     }
 
-    public RingBuffer(int numEntries, Supplier<T> supplier) {
-        this(numEntries);
-        for (int i = 0; i < entries.length; i++) {
-            entries[i] = supplier.get();
-        }
-    }
-
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public int size() {
-        return entries.length;
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private int nextIndex(int p) {
+    private int advance(int p) {
         return (p + 1) % entries.length;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public void append(T entry) {
         entries[pos] = entry;
-        advance();
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private void advance() {
-        int posNext = nextIndex(pos);
+        int posNext = advance(pos);
         if (posNext <= pos) {
             wrapped = true;
         }
         pos = posNext;
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public T next() {
-        T result = entries[pos];
-        advance();
-        return result;
     }
 
     public void foreach(Consumer<T> consumer) {
@@ -99,7 +73,7 @@ public final class RingBuffer<T> {
             int i = pos;
             do {
                 consumer.accept(context, entries[i]);
-                i = nextIndex(i);
+                i = advance(i);
             } while (i != pos);
         } else {
             for (int i = 0; i < pos; i += 1) {

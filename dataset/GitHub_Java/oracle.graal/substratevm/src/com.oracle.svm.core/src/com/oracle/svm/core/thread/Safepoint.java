@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,10 +46,10 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.NeverInline;
-import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
+import com.oracle.svm.core.locks.VMMutex;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
 import com.oracle.svm.core.nodes.CFunctionPrologueNode;
@@ -86,7 +86,7 @@ import com.oracle.svm.core.util.VMError;
  * accumulated. When the VMOperation queues are empty, the master will change the status of each
  * slave back to being in native code. Once a slave is back in native code, it might return to Java
  * code, though any slaves that noticed the safepoint request will be blocked on the mutex. Then the
- * master drops the mutex, and the slaves that were blocked on the mutex are free to continue their
+ * master drops the mutex, and the slaves that were blocked on the mutex are free continue their
  * execution.
  * <p>
  * CFunctionSnippets.epilogueSnippet() tries to do an atomic compare-and-set of the thread status
@@ -178,35 +178,67 @@ public final class Safepoint {
         }
     }
 
+    @Uninterruptible(reason = "Called during safepointing.")
+    protected static VMMutex getMutex() {
+        return VMThreads.THREAD_MUTEX;
+    }
+
     /** Stop at a safepoint. */
     @Uninterruptible(reason = "Must not contain safepoint checks.")
     private static void slowPathSafepointCheck(boolean callerHasJavaFrameAnchor) {
         final IsolateThread myself = CurrentIsolate.getCurrentThread();
 
-        if (Master.singleton().getRequestingThread() == myself) {
-            /* the safepoint master thread must not stop at a safepoint nor trigger a callback */
-            assert !ThreadingSupportImpl.isRecurringCallbackRegistered(myself) || ThreadingSupportImpl.isRecurringCallbackPaused();
-        } else {
-            do {
-                if (Master.singleton().getRequestingThread().isNonNull()) {
-                    Statistics.incFrozen();
-                    freezeAtSafepoint(callerHasJavaFrameAnchor);
-                    Statistics.incThawed();
-                    VMError.guarantee(VMThreads.StatusSupport.isStatusJava(), "Must back in Java state");
-                }
-
-                /*
-                 * If we entered this code as slow path for a native-to-Java transition and no
-                 * safepoint is actually pending, we have to do the transition to Java before
-                 * continuing. However, the CAS can fail if another thread is currently initiating a
-                 * safepoint and already brought us into state IN_SAFEPOINT, in which case we have
-                 * to start over.
-                 */
-            } while (!VMThreads.StatusSupport.isStatusJava() && !VMThreads.StatusSupport.compareAndSetNativeToJava());
+        if (VMOperationControl.isLockOwner()) {
+            /*
+             * This can happen when a VM operation executes so many safepoint checks that
+             * safepointRequested reaches zero and enters this slow path, so we just reset the
+             * counter and return. The counter is re-initialized after the safepoint is over and
+             * normal execution continues.
+             */
+            setSafepointRequested(myself, SafepointRequestValues.RESET);
+            return;
         }
 
+        boolean needsCallback = ThreadingSupportImpl.singleton().needsCallbackOnSafepointCheckSlowpath();
+        boolean wasFrozen = false;
+        long callbackTime = 0;
+        int callbackValue = 0;
+        do {
+            IsolateThread requestingThread = Master.singleton().getRequestingThread();
+            if (requestingThread.isNonNull()) {
+                VMError.guarantee(requestingThread != myself, "Must be the LockOwner");
+
+                if (needsCallback && !wasFrozen) {
+                    callbackTime = System.nanoTime();
+                    callbackValue = getSafepointRequestedValueBeforeSafepoint(myself);
+                    wasFrozen = true;
+                }
+
+                Statistics.incFrozen();
+                freezeAtSafepoint(callerHasJavaFrameAnchor);
+                Statistics.incThawed();
+
+                VMError.guarantee(VMThreads.StatusSupport.isStatusJava(), "Must back in Java state");
+            }
+
+            /*
+             * If we entered this code as slow path for a native-to-Java transition and no safepoint
+             * is actually pending, we have to do the transition to Java before continuing. However,
+             * the CAS can fail if another thread is currently initiating a safepoint and already
+             * brought us into state IN_SAFEPOINT, in which case we have to start over.
+             */
+        } while (!VMThreads.StatusSupport.isStatusJava() && !VMThreads.StatusSupport.compareAndSetNativeToJava());
+
         VMError.guarantee(VMThreads.StatusSupport.isStatusJava(), "Must be back in Java state");
-        ThreadingSupportImpl.onSafepointCheckSlowpath();
+
+        if (needsCallback) {
+            if (!wasFrozen) {
+                callbackTime = System.nanoTime();
+                callbackValue = getSafepointRequested(myself);
+                // NOTE: a concurrent safepoint request can have overwritten safepointRequested
+            }
+            ThreadingSupportImpl.singleton().onSafepointCheckSlowpath(callbackTime, callbackValue);
+        }
     }
 
     @NeverInline("Must not be inlined in a caller that has an exception handler: We only support InvokeNode and not InvokeWithExceptionNode between a CFunctionPrologueNode and CFunctionEpilogueNode")
@@ -227,7 +259,7 @@ public final class Safepoint {
              * exactly one call between the prologue and epilogue, therefore we call a helper method
              * that is marked as @NeverInline.
              */
-            notInlinedLockNoTransition();
+            lock();
             /*
              * Remove the JavaFrameAnchor and transition the thread state back into the Java state.
              * The transition must not fail: because we are holding the safepoint mutex, no
@@ -252,12 +284,8 @@ public final class Safepoint {
              */
             VMError.guarantee(callerHasJavaFrameAnchor);
 
-            /*
-             * Grab the safepoint mutex before trying to change the thread status. This is necessary
-             * to avoid races between the safepoint logic and this code (the safepoint could end any
-             * time).
-             */
-            notInlinedLockNoTransition();
+            /* Graph the safepoint mutex. */
+            lock();
 
             boolean result = VMThreads.StatusSupport.compareAndSetNativeToJava();
             if (!result) {
@@ -266,16 +294,16 @@ public final class Safepoint {
         }
 
         /*
-         * Release the mutex. This does not block, so it does not matter that we no longer have a
+         * Release the mutex. This does not block, it does not matter that we no longer have a
          * JavaFrameAnchor.
          */
-        VMThreads.THREAD_MUTEX.unlock();
+        getMutex().unlock();
     }
 
     @NeverInline("CFunctionPrologue and CFunctionEpilogue are placed around call to this function")
     @Uninterruptible(reason = "Must not contain safepoint checks.")
-    private static void notInlinedLockNoTransition() {
-        VMThreads.THREAD_MUTEX.lockNoTransition();
+    private static void lock() {
+        getMutex().lockNoTransition();
     }
 
     /** Specific values for {@link #safepointRequested}. */
@@ -293,7 +321,7 @@ public final class Safepoint {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static int getSafepointRequested(IsolateThread vmThread) {
+    protected static int getSafepointRequested(IsolateThread vmThread) {
         return safepointRequested.get(vmThread); // need not be volatile
     }
 
@@ -310,7 +338,7 @@ public final class Safepoint {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static int getSafepointRequestedValueBeforeSafepoint(IsolateThread vmThread) {
+    private static int getSafepointRequestedValueBeforeSafepoint(IsolateThread vmThread) {
         return safepointRequestedValueBeforeSafepoint.get(vmThread);
     }
 
@@ -382,7 +410,7 @@ public final class Safepoint {
      */
     public static void transitionNativeToJava() {
         // Transition from C to Java, checking for safepoint.
-        boolean needSlowPath = ThreadingSupportImpl.needsNativeToJavaSlowpath() || !VMThreads.StatusSupport.compareAndSetNativeToJava();
+        boolean needSlowPath = ThreadingSupportImpl.singleton().needsNativeToJavaSlowpath() || !VMThreads.StatusSupport.compareAndSetNativeToJava();
         if (BranchProbabilityNode.probability(BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY, needSlowPath)) {
             callSlowPathNativeToJava(Safepoint.ENTER_SLOW_PATH_NATIVE_TO_JAVA);
         }
@@ -439,25 +467,18 @@ public final class Safepoint {
             this.safepointState = NOT_AT_SAFEPOINT;
         }
 
-        /**
-         * Have each of the threads (except myself!) stop at a safepoint.
-         *
-         * Locking {@linkplain VMThreads#THREAD_MUTEX} in this method is fine because the method is
-         * only executed by the VM operation thread. Therefore, no other thread can initiate a
-         * safepoint and Java allocations are disabled as well.
-         */
-        @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, mayBeInlined = true, reason = "The safepoint logic must not allocate.")
-        protected boolean freeze(String reason) {
+        /** Have each of the threads (except myself!) stop at a safepoint. */
+        public void freeze(String reason) {
             assert SubstrateOptions.MultiThreaded.getValue() : "Should only freeze for a safepoint when multi-threaded.";
-            assert VMOperationControl.mayExecuteVmOperations();
-
-            /* the current thread may already own the lock for non-safepoint reasons */
-            boolean lock = !VMThreads.THREAD_MUTEX.isOwner();
-            if (lock) {
-                VMThreads.THREAD_MUTEX.lock();
-            }
+            /*
+             * Since I am *sharing* the VMThreads.THREAD_MUTEX between the VMOperation code and the
+             * Safepoint code, all I can do here is verify that <em>someone</em> has the mutex held,
+             * rather than locking it. I can not even verify who is holding the mutex.
+             */
+            getMutex().assertIsLocked("Should hold mutex when freezing for a safepoint.");
 
             requestingThread = CurrentIsolate.getCurrentThread();
+
             Statistics.reset();
             Statistics.setStartNanos();
             ImageSingletons.lookup(Heap.class).prepareForSafepoint();
@@ -466,41 +487,31 @@ public final class Safepoint {
             waitForSafepoints(reason);
             Statistics.setFrozenNanos();
             safepointState = AT_SAFEPOINT;
-            return lock;
         }
 
         /** Let all of the threads proceed from their safepoint. */
-        @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, mayBeInlined = true, reason = "The safepoint logic must not allocate.")
-        protected void thaw(String reason, boolean unlock) {
+        public void thaw(String reason) {
             assert SubstrateOptions.MultiThreaded.getValue() : "Should only thaw from a safepoint when multi-threaded.";
-            assert VMOperationControl.mayExecuteVmOperations();
-
+            requestingThread = WordFactory.nullPointer();
             safepointState = NOT_AT_SAFEPOINT;
             releaseSafepoints(reason);
             ImageSingletons.lookup(Heap.class).endSafepoint();
             Statistics.setThawedNanos();
-            requestingThread = WordFactory.nullPointer();
-
-            if (unlock) {
-                VMThreads.THREAD_MUTEX.unlock();
-            }
-
-            // this can take a moment, so we do it after letting all other threads proceed
-            VMThreads.singleton().cleanupExitedOsThreads();
+            getMutex().assertIsLocked("Should hold mutex when thawing from a safepoint.");
         }
 
-        private static boolean isMyself(IsolateThread thread) {
-            return thread == CurrentIsolate.getCurrentThread();
+        private static boolean isMyself(IsolateThread vmThread) {
+            return vmThread == CurrentIsolate.getCurrentThread();
         }
 
         /** Send each of the threads (except myself) a request to come to a safepoint. */
         private static void requestSafepoints(String reason) {
-            VMThreads.THREAD_MUTEX.assertIsOwner("Must hold mutex while requesting a safepoint.");
             final Log trace = Log.noopLog().string("[Safepoint.Master.requestSafepoints:  reason: ").string(reason);
+            Safepoint.getMutex().assertIsLocked("Lock should be held by the time I request a safepoint.");
 
             // Walk the threads list and ask each thread (except myself) to come to a safepoint.
             // TODO: Do I always bring *all* threads to a safepoint? Could I stop some of them?
-            for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+            for (IsolateThread vmThread = VMThreads.firstThread(); VMThreads.isNonNullThread(vmThread); vmThread = VMThreads.nextThread(vmThread)) {
                 if (isMyself(vmThread)) {
                     continue;
                 }
@@ -511,10 +522,10 @@ public final class Safepoint {
                      */
                     continue;
                 }
-                // Request that the thread comes to a safepoint.
+                // Request that the thread come to a safepoint.
                 int saved = getSafepointRequested(vmThread);
-                setSafepointRequestedValueBeforeSafepoint(vmThread, saved);
                 setSafepointRequested(vmThread, SafepointRequestValues.ENTER);
+                setSafepointRequestedValueBeforeSafepoint(vmThread, saved);
                 Statistics.incRequested();
             }
             trace.string("  returns");
@@ -525,9 +536,10 @@ public final class Safepoint {
         }
 
         /** Wait for there to be no threads (except myself) still waiting to reach a safepoint. */
+
         private static void waitForSafepoints(String reason) {
             final Log trace = Log.noopLog().string("[Safepoint.Master.waitForSafepoints:  reason: ").string(reason).newline();
-            VMThreads.THREAD_MUTEX.assertIsOwner("Must hold mutex while waiting for safepoints.");
+            Safepoint.getMutex().assertIsLocked("Should hold mutex while waiting for safepoints.");
             final long startNanos = System.nanoTime();
             long loopNanos = startNanos;
 
@@ -536,7 +548,7 @@ public final class Safepoint {
                 int inNative = 0;
                 int ignoreSafepoints = 0;
                 int notAtSafepoint = 0;
-                for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+                for (IsolateThread vmThread = VMThreads.firstThread(); VMThreads.isNonNullThread(vmThread); vmThread = VMThreads.nextThread(vmThread)) {
                     if (isMyself(vmThread)) {
                         /* Don't wait for myself. */
                     } else if (VMThreads.StatusSupport.isStatusIgnoreSafepoints(vmThread)) {
@@ -549,8 +561,10 @@ public final class Safepoint {
                         int status = VMThreads.StatusSupport.getStatusVolatile(vmThread);
                         switch (status) {
                             case VMThreads.StatusSupport.STATUS_IN_JAVA: {
-                                /* Re-request the safepoint in case of a lost update. */
-                                if (Integer.compareUnsigned(getSafepointRequested(vmThread), SafepointRequestValues.ENTER) > 0 && !VMThreads.StatusSupport.isStatusIgnoreSafepoints(vmThread)) {
+                                /*
+                                 * Re-request the safepoint in case of a lost update of the variable
+                                 */
+                                if (getSafepointRequested(vmThread) != SafepointRequestValues.ENTER && !VMThreads.StatusSupport.isStatusIgnoreSafepoints(vmThread)) {
                                     setSafepointRequested(vmThread, SafepointRequestValues.ENTER);
                                     Statistics.incRequested();
                                 }
@@ -609,17 +623,13 @@ public final class Safepoint {
         /** Release each thread at a safepoint. */
         private static void releaseSafepoints(String reason) {
             final Log trace = Log.noopLog().string("[Safepoint.Master.releaseSafepoints:").string("  reason: ").string(reason).newline();
-            VMThreads.THREAD_MUTEX.assertIsOwner("Must hold mutex when releasing safepoints.");
+            Safepoint.getMutex().assertIsLocked("Should hold mutex when releasing safepoints.");
             // Set all the thread statuses that are at safepoint back to being in native code.
-            for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+            for (IsolateThread vmThread = VMThreads.firstThread(); VMThreads.isNonNullThread(vmThread); vmThread = VMThreads.nextThread(vmThread)) {
                 if (!isMyself(vmThread)) {
                     if (trace.isEnabled()) {
                         trace.string("  vmThread status: ").string(VMThreads.StatusSupport.getStatusString(vmThread));
                     }
-
-                    /* Reset the safepointRequested values to the values before the safepoint. */
-                    setSafepointRequested(vmThread, getSafepointRequestedValueBeforeSafepoint(vmThread));
-                    setSafepointRequestedValueBeforeSafepoint(vmThread, Safepoint.SafepointRequestValues.RESET);
 
                     /*
                      * Release the thread back to native code. Most threads will transition from
@@ -688,13 +698,12 @@ public final class Safepoint {
 
             public static int countingVMOperation() {
                 final Log trace = Log.log().string("[Safepoint.Master.TestingBackdoor.countingVMOperation:").newline();
+                VMOperation.guaranteeInProgress("Should hold mutex while simulating safepoint operation.");
                 int atSafepoint = 0;
                 int inNative = 0;
                 int ignoreSafepoints = 0;
                 int notAtSafepoint = 0;
-
-                VMThreads.guaranteeOwnsThreadMutex("Must own the threads mutex while iterating the threads.");
-                for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+                for (IsolateThread vmThread = VMThreads.firstThread(); vmThread != VMThreads.nullThread(); vmThread = VMThreads.nextThread(vmThread)) {
                     // Check if the thread is at a safepoint or in native code.
                     if (VMThreads.StatusSupport.isStatusSafepoint(vmThread)) {
                         atSafepoint += 1;

@@ -49,7 +49,6 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.c.NonmovableArray;
 import com.oracle.svm.core.code.CodeInfo;
 import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.CodeInfoEncoder;
@@ -57,7 +56,6 @@ import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.DeoptimizationSourcePositionEncoder;
 import com.oracle.svm.core.code.FrameInfoEncoder;
 import com.oracle.svm.core.code.InstalledCodeObserver;
-import com.oracle.svm.core.code.InstalledCodeObserver.InstalledCodeObserverHandle;
 import com.oracle.svm.core.code.InstalledCodeObserverSupport;
 import com.oracle.svm.core.code.RuntimeMethodInfoAccess;
 import com.oracle.svm.core.config.ConfigurationValues;
@@ -72,7 +70,7 @@ import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.os.CommittedMemoryProvider;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
-import com.oracle.svm.core.thread.JavaVMOperation;
+import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.code.TargetDescription;
@@ -306,12 +304,12 @@ public class InstalledCodeBuilder {
 
         createCodeChunkInfos();
 
-        NonmovableArray<InstalledCodeObserverHandle> observerHandles = InstalledCodeObserverSupport.installObservers(codeObservers);
+        InstalledCodeObserver.InstalledCodeObserverHandle[] observerHandles = InstalledCodeObserverSupport.installObservers(codeObservers);
 
         RuntimeMethodInfoAccess.setData(runtimeMethodInfo, installedCode, tier, observerHandles);
 
         Throwable[] errorBox = {null};
-        JavaVMOperation.enqueueBlockingSafepoint("Install code", () -> {
+        VMOperation.enqueueBlockingSafepoint("Install code", () -> {
             try {
                 CodeInfoTable.getRuntimeCodeCache().addMethod(runtimeMethodInfo);
                 /*

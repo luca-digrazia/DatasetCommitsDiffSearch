@@ -26,15 +26,43 @@ package com.oracle.svm.core.heap;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownClass;
+import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
 
+/* @formatter:off */
 /**
+ *
  * A feeble substitute for java.lang.ref.Reference.
  *
  * This is missing the notification methods, but has list methods.
  *
  * Fields for putting an instance on a list is here in the instance, because space can't be
  * allocated during a collection. But they should only be used by list-manipulating classes.
+ *
+ * <p>
+ * The lifecycle of a FeebleReference:
+ * <ul>
+ *   <li>If the FeebleReference does not have a list:
+ *     <table>
+ *       <tr>  <th align=left>Stage</th>  <th>.referent</th>      <th>.list</th>  <th>.next</th>  </tr>
+ *       <tr>  <td>At construction</td>   <td>referent</td>       <td>null</td>   <td>this</td>   </tr>
+ *       <tr>  <td>At discovery</td>      <td><em>null</em></td>  <td>null</td>   <td>this</td>   </tr>
+ *     </table>
+ *   </li>
+ *   <li>If the FeebleReference does have a list:</li>
+ *     <table>
+ *       <tr>  <th align=left>Stage</th>  <th>.referent</th>      <th>.list</th>           <th>.next</th>           </tr>
+ *       <tr>  <td>At construction</td>   <td>referent</td>       <td>list</td>            <td>this</td>            </tr>
+ *       <tr>  <td>At discovery</td>      <td><em>null</em></td>  <td>list</td>            <td>this</td>            </tr>
+ *       <tr>  <td>Before pushing</td>    <td>null</td>           <td><em>null</em></td>   <td>this</td>            </tr>
+ *       <tr>  <td>After pushing</td>     <td>null</td>           <td>null</td>            <td><em>next</em></td>   </tr>
+ *       <tr>  <td>After popping</td>     <td>null</td>           <td>null</td>            <td><em>this</em></td>   </tr>
+ *     </table>
+ *     Note that after being pushed and popped a FeebleReference with a list
+ *     is in the same state as a discovered FeebleReference without a list.
+ *   </li>
+ * </ul>
  */
+ /* @formatter:on */
 @UnknownClass
 public class FeebleReference<T> extends DiscoverableReference {
 
@@ -53,8 +81,8 @@ public class FeebleReference<T> extends DiscoverableReference {
     }
 
     /** Is this FeebleReference on the list? */
-    @Uninterruptible(reason = "Called from uninterruptible code.")
-    boolean isEnlisted() {
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public boolean isEnlisted() {
         return (next != this);
     }
 
@@ -62,12 +90,25 @@ public class FeebleReference<T> extends DiscoverableReference {
      * Access methods.
      */
 
-    public FeebleReferenceList<T> getList() {
-        return list;
+    /* For GR-14335 */
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public boolean hasList() {
+        return (list != null);
     }
 
-    public void clearList() {
-        list = null;
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public FeebleReferenceList<T> getList() {
+        return list.get();
+    }
+
+    /** Clears the list, returning the previous value, which might be null. */
+    public FeebleReferenceList<T> clearList() {
+        return list.getAndSet(null);
+    }
+
+    /** For GR-14335. */
+    public boolean isFeeblReferenceInitialized() {
+        return feebleReferenceInitialized;
     }
 
     /*
@@ -75,30 +116,41 @@ public class FeebleReference<T> extends DiscoverableReference {
      */
 
     /** Follow the next pointer. */
-    @Uninterruptible(reason = "Called from uninterruptible code.")
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     FeebleReference<? extends T> listGetNext() {
         return (isEnlisted() ? next : null);
     }
 
     /** Prepend this element to a list element. */
-    @SuppressWarnings("unchecked")
-    void listPrepend(FeebleReference<?> value) {
-        assert value != this;
-        assert !isEnlisted();
-        next = (FeebleReference<? extends T>) value;
+    void listPrepend(FeebleReference<?> newNext) {
+        assert newNext != this : "Creating self-loop.";
+        next = uncheckedNarrow(newNext);
     }
 
     /** Remove this element from a list. */
-    @Uninterruptible(reason = "Called from uninterruptible code.")
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     void listRemove() {
         next = this;
     }
 
     /** Constructor for subclasses. */
-    protected FeebleReference(final T referent, final FeebleReferenceList<T> list) {
+    protected FeebleReference(T referent, FeebleReferenceList<T> list) {
+        /* Allocate the AtomicReference for the constructor before I become uninterruptible. */
+        this(referent, new AtomicReference<>(list));
+    }
+
+    @Uninterruptible(reason = "The initialization of the fields must be atomic with respect to collection.")
+    private FeebleReference(T referent, AtomicReference<FeebleReferenceList<T>> list) {
         super(referent);
         this.list = list;
         FeebleReferenceList.clean(this);
+        this.feebleReferenceInitialized = true;
+    }
+
+    /** Narrow a FeebleReference<?> to a FeebleReference<S>. */
+    @SuppressWarnings("unchecked")
+    static <S> FeebleReference<S> uncheckedNarrow(FeebleReference<?> fr) {
+        return (FeebleReference<S>) fr;
     }
 
     /*
@@ -109,7 +161,7 @@ public class FeebleReference<T> extends DiscoverableReference {
      * The list to which this FeebleReference is added when the referent is unreachable. This is
      * initialized and then becomes null when the FeebleReference is put on its list.
      */
-    private FeebleReferenceList<T> list;
+    private final AtomicReference<FeebleReferenceList<T>> list;
 
     /*
      * Instance state for FeebleReferenceList.
@@ -121,4 +173,7 @@ public class FeebleReference<T> extends DiscoverableReference {
      * If this field points to this instance, then this instance is not on any list.
      */
     private FeebleReference<? extends T> next;
+
+    /** For GR-14355: Whether this instance has been initialized. */
+    private final boolean feebleReferenceInitialized;
 }

@@ -36,7 +36,6 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.annotate.ForceFixedRegisterReads;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
-import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicWord;
 import com.oracle.svm.core.locks.VMCondition;
 import com.oracle.svm.core.locks.VMMutex;
 import com.oracle.svm.core.threadlocal.FastThreadLocalFactory;
@@ -53,52 +52,14 @@ public abstract class VMThreads {
         return ImageSingletons.lookup(VMThreads.class);
     }
 
-    /**
-     * Only use this mutex if it is absolutely necessary to operate on the linked list of
-     * {@link IsolateThread}s. This mutex is especially dangerous because it is used by the
-     * application, the GC, and the safepoint mechanism. To avoid potential deadlocks, all places
-     * that acquire this mutex must do one of the following:
-     *
-     * <ol type="a">
-     * <li>Acquire the mutex within a VM operation: this is safe because it fixes the order in which
-     * the mutexes are acquired (VMOperation queue mutex first, {@link #THREAD_MUTEX} second). If
-     * the VM operation causes a safepoint, then it is possible that the {@link #THREAD_MUTEX} was
-     * already acquired for safepoint reasons.</li>
-     * <li>Acquire the mutex outside of a VM operation but only execute uninterruptible code. This
-     * is safe as the uninterruptible code cannot trigger a safepoint.</li>
-     * <li>Acquire the mutex from a thread that previously called
-     * {@link StatusSupport#setStatusIgnoreSafepoints()}.</li>
-     * </ol>
-     *
-     * Deadlock example 1:
-     * <ul>
-     * <li>Thread A acquires the {@link #THREAD_MUTEX}.</li>
-     * <li>Thread B queues a VM operation and therefore holds the corresponding VM operation queue
-     * mutex.</li>
-     * <li>Thread A allocates an object and the allocation wants to trigger a GC. So, a VM operation
-     * needs to be queued, and thread A tries to acquire the VM operation queue mutex. Thread A is
-     * blocked because thread B holds that mutex.</li>
-     * <li>Thread B needs to initiate a safepoint before executing the VM operation. So, it tries to
-     * acquire the {@link #THREAD_MUTEX} and is blocked because thread A holds that mutex.</li>
-     * </ul>
-     *
-     * Deadlock example 2:
-     * <ul>
-     * <li>Thread A acquires the {@link #THREAD_MUTEX}.</li>
-     * <li>Thread A allocates an object and the allocation wants to trigger a GC. So, a VM operation
-     * is queued and thread A blocks until the VM operation is completed.</li>
-     * <li>The dedicated VM operation thread needs to initiate a safepoint for the execution of the
-     * VM operation. So, it tries to acquire {@link #THREAD_MUTEX} and is blocked because thread A
-     * still holds that mutex.</li>
-     * </ul>
-     */
-    protected static final VMMutex THREAD_MUTEX = new VMMutex();
+    /** A mutex for operations on {@link IsolateThread}s. */
+    public static final VMMutex THREAD_MUTEX = new VMMutex();
 
     /**
      * A condition variable for waiting for and notifying on changes to the {@link IsolateThread}
      * list.
      */
-    protected static final VMCondition THREAD_LIST_CONDITION = new VMCondition(THREAD_MUTEX);
+    public static final VMCondition THREAD_LIST_CONDITION = new VMCondition(THREAD_MUTEX);
 
     /** The first element in the linked list of {@link IsolateThread}s. */
     private static IsolateThread head;
@@ -179,6 +140,24 @@ public abstract class VMThreads {
     @Uninterruptible(reason = "Unknown thread state.")
     public abstract void failFatally(int code, CCharPointer message);
 
+    /** The value of a {@code null} {@link IsolateThread}. */
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static IsolateThread nullThread() {
+        return WordFactory.nullPointer();
+    }
+
+    /** A predicate for the {@code null} {@link IsolateThread}. */
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static boolean isNullThread(IsolateThread vmThread) {
+        return vmThread.isNull();
+    }
+
+    /** A predicate for the {@code non-null} {@link IsolateThread}. */
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static boolean isNonNullThread(IsolateThread vmThread) {
+        return vmThread.isNonNull();
+    }
+
     /**
      * Iteration of all {@link IsolateThread}s that are currently running. VMThreads.THREAD_MUTEX
      * should be held when iterating the list.
@@ -187,7 +166,7 @@ public abstract class VMThreads {
      * therefore be used during GC:
      *
      * <pre>
-     * for (VMThread thread = VMThreads.firstThread(); thread.isNonNull(); thread = VMThreads.nextThread(thread)) {
+     * for (VMThread thread = VMThreads.firstThread(); VMThreads.isNonNullThread(thread); thread = VMThreads.nextThread(thread)) {
      * </pre>
      */
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -213,24 +192,17 @@ public abstract class VMThreads {
         assert StatusSupport.isStatusCreated(thread) : "Status should be initialized on creation.";
         OSThreadIdTL.set(thread, getCurrentOSThreadId());
 
-        /* Set initial values for safepointRequested before making the thread visible. */
-        assert !ThreadingSupportImpl.isRecurringCallbackRegistered(thread);
-        Safepoint.setSafepointRequested(thread, Safepoint.SafepointRequestValues.RESET);
-        Safepoint.setSafepointRequestedValueBeforeSafepoint(thread, Safepoint.SafepointRequestValues.RESET);
-
-        /*
-         * Manipulating the VMThread list requires the lock, but the IsolateThread is not set up
-         * yet, so the locking must be without transitions. Not using try-with-resources to avoid
-         * implicitly calling addSuppressed(), which is not uninterruptible.
-         */
-        VMThreads.THREAD_MUTEX.lockNoTransitionUnspecifiedOwner();
+        // Manipulating the VMThread list requires the lock, but the IsolateThread is not set up
+        // yet, so the locking must be without transitions. Not using try-with-resources to avoid
+        // implicitly calling addSuppressed(), which is not uninterruptible.
+        VMThreads.THREAD_MUTEX.lockNoTransition();
         try {
             nextTL.set(thread, head);
             head = thread;
             StatusSupport.setStatusNative(thread);
             VMThreads.THREAD_LIST_CONDITION.broadcast();
         } finally {
-            VMThreads.THREAD_MUTEX.unlockNoTransitionUnspecifiedOwner();
+            VMThreads.THREAD_MUTEX.unlock();
         }
     }
 
@@ -265,13 +237,13 @@ public abstract class VMThreads {
         detachJavaThread(thread);
 
         // Run down the current list and remove the given VMThread.
-        IsolateThread previous = WordFactory.nullPointer();
+        IsolateThread previous = nullThread();
         IsolateThread current = head;
-        while (current.isNonNull()) {
+        while (isNonNullThread(current)) {
             IsolateThread next = nextTL.get(current);
             if (current == thread) {
                 // Splice the current element out of the list.
-                if (previous.isNull()) {
+                if (isNullThread(previous)) {
                     head = next;
                 } else {
                     nextTL.set(previous, next);
@@ -284,7 +256,6 @@ public abstract class VMThreads {
         }
         // Signal that the VMThreads list has changed.
         THREAD_LIST_CONDITION.broadcast();
-        // At this point, it is guaranteed that all other threads were detached.
 
         singleton().freeIsolateThread(thread);
     }
@@ -295,7 +266,7 @@ public abstract class VMThreads {
     }
 
     public static void detachThreads(IsolateThread[] threads) {
-        JavaVMOperation.enqueueBlockingSafepoint("detachThreads", () -> {
+        VMOperation.enqueueBlockingSafepoint("detachThreads", () -> {
             for (IsolateThread thread : threads) {
                 assert !thread.equal(CurrentIsolate.getCurrentThread()) : "Cannot detach current thread with this method";
                 detachThreadInSafeContext(thread);
@@ -309,23 +280,19 @@ public abstract class VMThreads {
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public IsolateThread findIsolateThreadforCurrentOSThread() {
         ComparableWord id = getCurrentOSThreadId();
+        IsolateThread thread;
         /*
          * Accessing the VMThread list requires the lock, but locking must be without transitions
          * because the IsolateThread is not set up yet.
          */
-        VMThreads.THREAD_MUTEX.lockNoTransitionUnspecifiedOwner();
+        VMThreads.THREAD_MUTEX.lockNoTransition();
         try {
-            IsolateThread thread;
-            for (thread = firstThread(); thread.isNonNull() && OSThreadIdTL.get(thread).notEqual(id); thread = nextThread(thread)) {
+            for (thread = firstThread(); isNonNullThread(thread) && OSThreadIdTL.get(thread).notEqual(id); thread = nextThread(thread)) {
             }
-            return thread;
         } finally {
-            VMThreads.THREAD_MUTEX.unlockNoTransitionUnspecifiedOwner();
+            VMThreads.THREAD_MUTEX.unlock();
         }
-    }
-
-    public static void guaranteeOwnsThreadMutex(String message) {
-        THREAD_MUTEX.guaranteeIsOwner(message);
+        return thread;
     }
 
     /*

@@ -106,9 +106,6 @@ public class SubstrateUtil {
             case "x86_64":
                 arch = "amd64";
                 break;
-            case "arm64":
-                arch = "aarch64";
-                break;
             case "sparcv9":
                 arch = "sparc";
                 break;
@@ -327,8 +324,7 @@ public class SubstrateUtil {
         }
 
         if (VMOperationControl.isFrozen()) {
-            /* Only used for diagnostics - iterate all threads without locking the threads mutex. */
-            for (IsolateThread vmThread = VMThreads.firstThreadUnsafe(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+            for (IsolateThread vmThread = VMThreads.firstThread(); vmThread != VMThreads.nullThread(); vmThread = VMThreads.nextThread(vmThread)) {
                 if (vmThread == CurrentIsolate.getCurrentThread()) {
                     continue;
                 }
@@ -436,8 +432,7 @@ public class SubstrateUtil {
     private static void dumpVMThreads(Log log) {
         log.string("VMThreads info:").newline();
         log.indent(true);
-        /* Only used for diagnostics - iterate all threads without locking the threads mutex. */
-        for (IsolateThread vmThread = VMThreads.firstThreadUnsafe(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
+        for (IsolateThread vmThread = VMThreads.firstThread(); vmThread != VMThreads.nullThread(); vmThread = VMThreads.nextThread(vmThread)) {
             log.string("VMThread ").zhex(vmThread.rawValue()).spaces(2).string(VMThreads.StatusSupport.getStatusString(vmThread))
                             .spaces(2).object(JavaThreads.fromVMThread(vmThread)).newline();
         }
