@@ -52,19 +52,19 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
 abstract class HostFieldDesc {
 
-    private final boolean isFinal;
     private final Class<?> type;
     private final Type genericType;
-    private final String name;
+    private final boolean isFinal;
 
-    private HostFieldDesc(Class<?> type, Type genericType, String name, boolean isFinal) {
-        this.isFinal = isFinal;
+    private HostFieldDesc(Class<?> type, Type genericType, boolean isFinal) {
         this.type = type;
         this.genericType = genericType;
-        this.name = name;
+        this.isFinal = isFinal;
     }
 
     public final boolean isFinal() {
@@ -79,13 +79,9 @@ abstract class HostFieldDesc {
         return genericType;
     }
 
-    public final String getName() {
-        return name;
-    }
-
     public abstract Object get(Object receiver);
 
-    public abstract void set(Object receiver, Object value) throws ClassCastException, NullPointerException, IllegalArgumentException;
+    public abstract void set(Object receiver, Object value) throws UnsupportedTypeException, UnknownIdentifierException;
 
     static HostFieldDesc unreflect(Field reflectionField) {
         assert isAccessible(reflectionField);
@@ -104,7 +100,7 @@ abstract class HostFieldDesc {
         private final Field field;
 
         ReflectImpl(Field field) {
-            super(field.getType(), field.getGenericType(), field.getName(), Modifier.isFinal(field.getModifiers()));
+            super(field.getType(), field.getGenericType(), Modifier.isFinal(field.getModifiers()));
             this.field = field;
         }
 
@@ -119,12 +115,19 @@ abstract class HostFieldDesc {
         }
 
         @Override
-        public void set(Object receiver, Object value) {
+        public void set(Object receiver, Object value) throws UnsupportedTypeException, UnknownIdentifierException {
             try {
                 reflectSet(field, receiver, value);
+            } catch (IllegalArgumentException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
             } catch (IllegalAccessException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                if (Modifier.isFinal(field.getModifiers())) {
+                    throw UnknownIdentifierException.create(field.getName());
+                } else {
+                    throw new IllegalStateException(e);
+                }
             }
         }
 
@@ -150,7 +153,7 @@ abstract class HostFieldDesc {
         @CompilationFinal private MethodHandle setHandle;
 
         MHImpl(Field field) {
-            super(field.getType(), field.getGenericType(), field.getName(), Modifier.isFinal(field.getModifiers()));
+            super(field.getType(), field.getGenericType(), Modifier.isFinal(field.getModifiers()));
             this.field = field;
         }
 
@@ -168,13 +171,16 @@ abstract class HostFieldDesc {
         }
 
         @Override
-        public void set(Object receiver, Object value) {
+        public void set(Object receiver, Object value) throws UnsupportedTypeException, UnknownIdentifierException {
             if (setHandle == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 setHandle = makeSetMethodHandle();
             }
             try {
                 invokeSetHandle(setHandle, receiver, value);
+            } catch (Exception e) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
             } catch (Throwable e) {
                 throw HostInteropReflect.rethrow(e);
             }
@@ -204,7 +210,7 @@ abstract class HostFieldDesc {
             }
         }
 
-        private MethodHandle makeSetMethodHandle() {
+        private MethodHandle makeSetMethodHandle() throws UnknownIdentifierException {
             CompilerAsserts.neverPartOfCompilation();
             try {
                 MethodHandle setter = MethodHandles.publicLookup().unreflectSetter(field);
@@ -214,7 +220,11 @@ abstract class HostFieldDesc {
                     return setter.asType(MethodType.methodType(void.class, Object.class, Object.class));
                 }
             } catch (IllegalAccessException e) {
-                throw new IllegalStateException(e);
+                if (Modifier.isFinal(field.getModifiers())) {
+                    throw UnknownIdentifierException.create(field.getName());
+                } else {
+                    throw new IllegalStateException(e);
+                }
             }
         }
 
