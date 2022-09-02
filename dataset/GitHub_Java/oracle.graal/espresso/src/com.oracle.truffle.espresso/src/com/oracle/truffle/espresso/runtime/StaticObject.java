@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import static com.oracle.truffle.api.CompilerDirectives.castExact;
 import static com.oracle.truffle.espresso.impl.Klass.STATIC_TO_CLASS;
 import static com.oracle.truffle.espresso.runtime.InteropUtils.inSafeIntegerRange;
 import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostByte;
@@ -312,10 +311,10 @@ public final class StaticObject implements TruffleObject {
     // endregion Constructors
 
     // region Accessors for field accesses of non-array, non-foreign objects
-    public Object[] getObjectFieldStorage() {
+    public Object getObjectFieldStorage() {
         assert !isArray();
         checkNotForeign();
-        return castExact(fields, Object[].class);
+        return fields;
     }
 
     public byte[] getPrimitiveFieldStorage() {
