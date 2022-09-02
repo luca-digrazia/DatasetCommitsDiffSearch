@@ -37,6 +37,11 @@ public final class StaticShapeBuilder {
         if (extendedProperties.containsKey(name)) {
             throw new IllegalArgumentException("This builder already contains a property named '" + name + "'");
         }
+        for (ExtendedProperty extendedProperty : extendedProperties.values()) {
+            if (extendedProperty.property.equals(property)) {
+                throw new IllegalArgumentException("This builder already contains this property");
+            }
+        }
         extendedProperties.put(name, new ExtendedProperty(property, name, isFinal));
         return this;
     }
@@ -50,19 +55,19 @@ public final class StaticShapeBuilder {
 
     public <T> StaticShape<T> build(StaticShape<T> parentShape) {
         Objects.requireNonNull(parentShape);
-        ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(parentShape, extendedProperties.values());
-        return build(sg);
+        ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(parentShape);
+        return build(sg, parentShape);
 
     }
 
     public <T> StaticShape<T> build(Class<?> superClass, Class<T> factoryInterface) {
         validate(factoryInterface, superClass);
-        ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(superClass, factoryInterface, extendedProperties.values());
-        return build(sg);
+        ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(superClass, factoryInterface);
+        return build(sg, null);
     }
 
-    private <T> StaticShape<T> build(ShapeGenerator<T> sg) {
-        StaticShape<T> shape = sg.generateShape();
+    private <T> StaticShape<T> build(ShapeGenerator<T> sg, StaticShape<T> parentShape) {
+        StaticShape<T> shape = sg.generateShape(parentShape, extendedProperties.values());
         for (ExtendedProperty extendedProperty : extendedProperties.values()) {
             extendedProperty.property.initShape(shape);
         }
