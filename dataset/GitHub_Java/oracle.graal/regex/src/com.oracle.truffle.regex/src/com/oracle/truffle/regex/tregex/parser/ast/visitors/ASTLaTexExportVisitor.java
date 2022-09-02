@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 package com.oracle.truffle.regex.tregex.parser.ast.visitors;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.regex.tregex.parser.ast.BackReference;
 import com.oracle.truffle.regex.tregex.parser.ast.CharacterClass;
 import com.oracle.truffle.regex.tregex.parser.ast.Group;
@@ -40,7 +39,8 @@ import com.oracle.truffle.regex.tregex.util.LaTexExport;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,8 +57,8 @@ public final class ASTLaTexExportVisitor extends DepthFirstTraversalRegexASTVisi
     }
 
     @CompilerDirectives.TruffleBoundary
-    public static void exportLatex(RegexAST ast, TruffleFile path) {
-        try (BufferedWriter writer = path.newBufferedWriter(StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+    public static void exportLatex(RegexAST ast, String path) {
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(path))) {
             ASTLaTexExportVisitor visitor = new ASTLaTexExportVisitor(ast, writer);
             visitor.writeln("\\documentclass{standalone}");
             visitor.writeln("\\usepackage[utf8]{inputenc}");
