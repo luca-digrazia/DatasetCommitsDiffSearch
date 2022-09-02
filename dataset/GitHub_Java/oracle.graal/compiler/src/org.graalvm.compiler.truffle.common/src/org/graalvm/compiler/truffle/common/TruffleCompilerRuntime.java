@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,15 +24,12 @@
  */
 package org.graalvm.compiler.truffle.common;
 
+import static org.graalvm.compiler.truffle.common.TruffleCompilerRuntimeInstance.truffleCompilerRuntime;
+
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-import org.graalvm.compiler.api.runtime.GraalRuntime;
-import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo;
-import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
-import org.graalvm.compiler.options.OptionValues;
-
-import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -46,10 +45,27 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public interface TruffleCompilerRuntime {
 
     /**
+     * Gets the singleton runtime instance if it is available other returns {@code null}.
+     */
+    static TruffleCompilerRuntime getRuntimeIfAvailable() {
+        return truffleCompilerRuntime;
+    }
+
+    /**
      * Gets the singleton runtime instance.
+     *
+     * @throws IllegalStateException if the singleton instance has not been initialized
      */
     static TruffleCompilerRuntime getRuntime() {
-        return TruffleCompilerRuntimeInstance.RUNTIME;
+        if (truffleCompilerRuntime != null) {
+            return truffleCompilerRuntime;
+        }
+        Object truffleRuntime = TruffleCompilerRuntimeInstance.TRUFFLE_RUNTIME;
+        if (truffleRuntime != null) {
+            throw new InternalError(String.format("Truffle runtime %s (loader: %s) is not a %s (loader: %s)", truffleRuntime, truffleRuntime.getClass().getClassLoader(),
+                            TruffleCompilerRuntime.class.getName(), TruffleCompilerRuntime.class.getClassLoader()));
+        }
+        throw new IllegalStateException("TruffleCompilerRuntime singleton not initialized");
     }
 
     /**
@@ -112,6 +128,103 @@ public interface TruffleCompilerRuntime {
     }
 
     /**
+     * Controls behavior of {@code ExplodeLoop} annotation.
+     *
+     */
+    enum LoopExplosionKind {
+        /**
+         * No loop explosion.
+         */
+        NONE,
+        /**
+         * Fully unroll all loops. The loops must have a known finite number of iterations. If a
+         * loop has multiple loop ends, they are merged so that the subsequent loop iteration is
+         * processed only once. For example, a loop with 4 iterations and 2 loop ends leads to
+         * 1+1+1+1 = 4 copies of the loop body.
+         *
+         * @since 0.15
+         */
+        FULL_UNROLL,
+        /**
+         * Like {@link #FULL_UNROLL}, but in addition loop unrolling duplicates loop exits in every
+         * iteration instead of merging them. Code after a loop exit is duplicated for every loop
+         * exit and every loop iteration. For example, a loop with 4 iterations and 2 loop exits
+         * (exit1 and exit2, where exit1 is an early return inside a loop) leads to 4 copies of the
+         * loop body and 4 copies of exit1 and 1 copy if exit2. After each exit all code until a
+         * return is duplicated per iteration. Beware of break statements inside loops since they
+         * cause additional loop exits leading to code duplication along exit2.
+         */
+        FULL_UNROLL_UNTIL_RETURN,
+        /**
+         * Fully explode all loops. The loops must have a known finite number of iterations. If a
+         * loop has multiple loop ends, they are not merged so that subsequent loop iterations are
+         * processed multiple times. For example, a loop with 4 iterations and 2 loop ends leads to
+         * 1+2+4+8 = 15 copies of the loop body.
+         *
+         * @since 0.15
+         */
+        FULL_EXPLODE,
+        /**
+         * Like {@link #FULL_EXPLODE}, but in addition explosion does not stop at loop exits. Code
+         * after the loop is duplicated for every loop exit of every loop iteration. For example, a
+         * loop with 4 iterations and 2 loop exits leads to 4 * 2 = 8 copies of the code after the
+         * loop.
+         *
+         * @since 0.15
+         */
+        FULL_EXPLODE_UNTIL_RETURN,
+        /**
+         * like {@link #FULL_EXPLODE}, but copies of the loop body that have the exact same state
+         * (all local variables have the same value) are merged. This reduces the number of copies
+         * necessary, but can introduce loops again. This kind is useful for bytecode interpreter
+         * loops.
+         *
+         * @since 0.15
+         */
+        MERGE_EXPLODE
+    }
+
+    enum InlineKind {
+        /**
+         * Denotes a call site that must can be inlined.
+         */
+        INLINE(true),
+        /**
+         * Denotes a call site that must not be inlined and should be implemented by a node that
+         * does not speculate on the call not raising an exception.
+         */
+        DO_NOT_INLINE_WITH_EXCEPTION(false),
+
+        /**
+         * Denotes a call site must not be inlined and can be implemented by a node that speculates
+         * the call will not throw an exception.
+         */
+        DO_NOT_INLINE_NO_EXCEPTION(false),
+
+        /**
+         * Denotes a call site must not be inlined and the execution should be transferred to
+         * interpreter in case of an exception.
+         */
+        DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION(false),
+
+        /**
+         * Denotes a call site must not be inlined and the execution should be speculatively
+         * transferred to interpreter in case of an exception, unless the speculation has failed.
+         */
+        DO_NOT_INLINE_WITH_SPECULATIVE_EXCEPTION(false);
+
+        private final boolean allowsInlining;
+
+        InlineKind(final boolean allowsInlining) {
+            this.allowsInlining = allowsInlining;
+        }
+
+        public boolean allowsInlining() {
+            return allowsInlining;
+        }
+    }
+
+    /**
      * Gets an object describing how a read of {@code field} can be constant folded based on Truffle
      * annotations.
      *
@@ -123,92 +236,145 @@ public interface TruffleCompilerRuntime {
     /**
      * Queries how loops in {@code method} with constant number of invocations should be unrolled.
      */
-    LoopExplosionPlugin.LoopExplosionKind getLoopExplosionKind(ResolvedJavaMethod method);
+    LoopExplosionKind getLoopExplosionKind(ResolvedJavaMethod method);
 
     /**
-     * Gets the primary {@link TruffleCompiler} instance associated with this runtime, creating it
-     * in a thread-safe manner first if necessary.
+     * Gets the primary {@link TruffleCompiler} instance associated with this runtime, creating and
+     * initializing it in a thread-safe manner first if necessary.
      */
-    TruffleCompiler getTruffleCompiler();
+    TruffleCompiler getTruffleCompiler(CompilableTruffleAST compilable);
 
     /**
-     * Gets a new {@link TruffleCompiler} instance.
+     * Gets the {@link CompilableTruffleAST} represented by {@code constant}.
      *
-     * @throws UnsupportedOperationException if this runtime does not support creating
-     *             {@link TruffleCompiler} instances apart from the one returned by
-     *             {@link #getTruffleCompiler()}
+     * @return {@code null} if {@code constant} does not represent a {@link CompilableTruffleAST} or
+     *         it cannot be converted to a {@link CompilableTruffleAST} in the calling context
      */
-    TruffleCompiler newTruffleCompiler();
-
-    /**
-     * Gets a plan for inlining in terms of a Truffle AST call graph.
-     */
-    TruffleInliningPlan createInliningPlan(CompilableTruffleAST compilable);
-
     CompilableTruffleAST asCompilableTruffleAST(JavaConstant constant);
-
-    boolean enableInfopoints();
-
-    GraalRuntime getGraalRuntime();
 
     /**
      * Gets the compiler constant representing the target of {@code callNode}.
      */
     JavaConstant getCallTargetForCallNode(JavaConstant callNode);
 
-    Consumer<InstalledCode> registerInstalledCodeEntryForAssumption(JavaConstant optimizedAssumptionConstant);
+    /**
+     * Registers some dependent code on an assumption.
+     *
+     * As the dependent code may not yet be available, a {@link Consumer} is returned that must be
+     * {@linkplain Consumer#accept(Object) notified} when the code becomes available. If there is an
+     * error while compiling or installing the code, the returned consumer must be called with a
+     * {@code null} argument.
+     *
+     * If the assumption is already invalid, then {@code null} is returned in which case the caller
+     * (e.g., the compiler) must ensure the dependent code is never executed.
+     *
+     * @param optimizedAssumption compiler constant representing an {@code OptimizedAssumption}
+     */
+    Consumer<OptimizedAssumptionDependency> registerOptimizedAssumptionDependency(JavaConstant optimizedAssumption);
 
     /**
-     * Formats a message and some extra properties into a single line of text and writes it to the
-     * Truffle log output stream. A representative trace line is shown below:
+     * {@linkplain #formatEvent(int, String, int, String, int, Map, int) Formats} a Truffle event
+     * and writes it to the {@linkplain #log(CompilableTruffleAST, String) log output}.
+     *
+     * @param compilable the currently compiled AST used as a subject
+     * @param depth nesting depth of the event
+     * @param event a short description of the event being traced
+     * @param properties name/value pairs describing properties relevant to the event
+     * @since 20.1.0
+     */
+    default void logEvent(CompilableTruffleAST compilable, int depth, String event, Map<String, Object> properties) {
+        logEvent(compilable, depth, event, compilable.toString(), properties, null);
+    }
+
+    /**
+     * {@linkplain #formatEvent(int, String, int, String, int, Map, int) Formats} a Truffle event
+     * and writes it to the {@linkplain #log(CompilableTruffleAST, String) log output}.
+     *
+     * @param compilable the currently compiled AST
+     * @param depth nesting depth of the event
+     * @param event a short description of the event being traced
+     * @param subject a description of the event's subject
+     * @param properties name/value pairs describing properties relevant to the event
+     * @param message optional additional message appended to the formatted event
+     * @since 20.1.0
+     */
+    default void logEvent(CompilableTruffleAST compilable, int depth, String event, String subject, Map<String, Object> properties, String message) {
+        String formattedMessage = formatEvent(depth, event, 12, subject, 60, properties, 0);
+        if (message != null) {
+            formattedMessage = String.format("%s%n%s", formattedMessage, message);
+        }
+        log(compilable, formattedMessage);
+    }
+
+    /**
+     * Writes {@code message} followed by a new line to the Truffle logger.
+     *
+     * @param compilable the currently compiled AST
+     * @param message message to log
+     */
+    default void log(CompilableTruffleAST compilable, String message) {
+        log("engine", compilable, message);
+    }
+
+    void log(String loggerId, CompilableTruffleAST compilable, String message);
+
+    /**
+     * Formats a message describing a Truffle event as a single line of text. A representative event
+     * trace line is shown below:
      *
      * <pre>
-     * [truffle] opt queued       :anonymous <split-1563da5>                                  |ASTSize      20/   20 |Calls/Thres    7723/    3 |CallsAndLoop/Thres    7723/ 1000 |Inval#              0
+     * opt queued       :anonymous <split-1563da5>                                  |ASTSize      20/   20 |Calls/Thres    7723/    3 |CallsAndLoop/Thres    7723/ 1000 |Inval#              0
      * </pre>
      *
-     * @param indent amount of indentation to prepend to the line ({@code indent * 2} space
-     *            characters)
-     * @param msg a short description of the event being traced (e.g., "opt done")
-     * @param details a more detailed description of the event (e.g., name of a Truffle AST)
+     * @param depth nesting depth of the event (subject column is indented @{code depth * 2})
+     * @param event a short description of the event being traced (e.g., "opt done")
+     * @param eventWidth the minimum width of the event column
+     * @param subject a description of the event's subject (e.g., name of a Truffle AST)
+     * @param subjectWidth the minimum width of the subject column
      * @param properties name/value pairs describing properties relevant to the event
+     * @param propertyWidth the minimum width of the column for each property
      */
-    default void log(int indent, String msg, String details, Map<String, Object> properties) {
-        int spaceIndent = indent * 2;
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("[truffle] %-16s ", msg));
-        for (int i = 0; i < spaceIndent; i++) {
-            sb.append(' ');
+    default String formatEvent(int depth, String event, int eventWidth, String subject, int subjectWidth, Map<String, Object> properties, int propertyWidth) {
+        if (depth < 0) {
+            throw new IllegalArgumentException("depth is negative: " + depth);
         }
-        sb.append(String.format("%-" + (60 - spaceIndent) + "s", details));
+        if (eventWidth < 0) {
+            throw new IllegalArgumentException("eventWidth is negative: " + eventWidth);
+        }
+        if (subjectWidth < 0) {
+            throw new IllegalArgumentException("subjectWidth is negative: " + subjectWidth);
+        }
+        if (propertyWidth < 0) {
+            throw new IllegalArgumentException("propertyWidth is negative: " + propertyWidth);
+        }
+        int subjectIndent = depth * 2;
+        StringBuilder sb = new StringBuilder();
+        String format = "%-" + eventWidth + "s%" + (1 + subjectIndent) + "s%-" + Math.max(1, subjectWidth - subjectIndent) + "s";
+        sb.append(String.format(format, event, "", subject));
         if (properties != null) {
             for (String property : properties.keySet()) {
                 Object value = properties.get(property);
                 if (value == null) {
                     continue;
                 }
-                sb.append('|');
+                sb.append("|");
                 sb.append(property);
 
-                StringBuilder propertyBuilder = new StringBuilder();
+                String valueString;
                 if (value instanceof Integer) {
-                    propertyBuilder.append(String.format("%6d", value));
+                    valueString = String.format("%6d", value);
                 } else if (value instanceof Double) {
-                    propertyBuilder.append(String.format("%8.2f", value));
+                    valueString = String.format("%8.2f", value);
                 } else {
-                    propertyBuilder.append(value);
+                    valueString = String.valueOf(value);
                 }
 
-                int length = Math.max(1, 20 - property.length());
-                sb.append(String.format(" %" + length + "s ", propertyBuilder.toString()));
+                int length = Math.max(1, propertyWidth - property.length());
+                sb.append(String.format(" %" + length + "s", valueString));
             }
         }
-        log(sb.toString());
+        return sb.toString();
     }
-
-    /**
-     * Writes {@code message} followed by a new line to the Truffle log stream.
-     */
-    void log(String message);
 
     /**
      * Looks up a type in this runtime.
@@ -233,15 +399,22 @@ public interface TruffleCompilerRuntime {
     ResolvedJavaType resolveType(MetaAccessProvider metaAccess, String className, boolean required);
 
     /**
-     * Gets the initial option values for this runtime.
+     * Gets the Graal option values for this runtime in an instance of {@code type}.
+     *
+     * @throws IllegalArgumentException if this runtime does not support {@code type}
      */
-    OptionValues getInitialOptions();
+    default <T> T getGraalOptions(Class<T> type) {
+        throw new IllegalArgumentException(getClass().getName() + " can not return option values of type " + type.getName());
+    }
 
     /**
      * Gets an object describing whether and how a method can be inlined based on Truffle
      * directives.
+     *
+     * @param original candidate for inlining
+     * @param duringPartialEvaluation whether the inlining context is partial evaluation
      */
-    InlineInfo getInlineInfo(ResolvedJavaMethod original);
+    InlineKind getInlineKind(ResolvedJavaMethod original, boolean duringPartialEvaluation);
 
     /**
      * Determines if {@code type} is a value type. Reference comparisons (==) between value type
@@ -269,4 +442,26 @@ public interface TruffleCompilerRuntime {
      * Determines if {@code method} is annotated by {@code TruffleBoundary}.
      */
     boolean isTruffleBoundary(ResolvedJavaMethod method);
+
+    /**
+     * Determines if {@code method} is annotated by {@code Specialization}.
+     */
+    boolean isSpecializationMethod(ResolvedJavaMethod method);
+
+    /**
+     * Determines if {@code method} is annotated by {@code BytecodeInterpreterSwitch}.
+     */
+    boolean isBytecodeInterpreterSwitch(ResolvedJavaMethod method);
+
+    /**
+     * Determines if {@code method} is annotated by {@code BytecodeInterpreterSwitchBoundary}.
+     */
+    boolean isBytecodeInterpreterSwitchBoundary(ResolvedJavaMethod method);
+
+    /**
+     * Determines if the exception which happened during the compilation is suppressed and should be
+     * silent.
+     */
+    boolean isSuppressedFailure(CompilableTruffleAST compilable, Supplier<String> serializedException);
+
 }
