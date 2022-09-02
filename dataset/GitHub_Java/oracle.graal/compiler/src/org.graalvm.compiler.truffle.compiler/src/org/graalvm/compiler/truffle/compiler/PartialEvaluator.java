@@ -26,10 +26,12 @@ package org.graalvm.compiler.truffle.compiler;
 
 import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExcludeAssertions;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.FirstTierInlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InlineAcrossTruffleBoundary;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.IterativePartialEscape;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.LanguageAgnosticInlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumGraalNodeCount;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MultiTier;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.NodeSourcePositions;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PrintExpansionHistogram;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TracePerformanceWarnings;
@@ -50,6 +52,7 @@ import org.graalvm.compiler.graph.SourceLanguagePositionProvider;
 import org.graalvm.compiler.java.ComputeLoopFrequenciesClosure;
 import org.graalvm.compiler.loop.phases.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.EncodedGraph;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
@@ -80,6 +83,7 @@ import org.graalvm.compiler.replacements.InlineDuringParsingPlugin;
 import org.graalvm.compiler.replacements.PEGraphDecoder;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
@@ -104,6 +108,8 @@ import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 import org.graalvm.options.OptionValues;
 
 import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -291,12 +297,12 @@ public abstract class PartialEvaluator {
         public final TruffleInliningPlan inliningPlan;
         public final CompilationIdentifier compilationId;
         public final SpeculationLog log;
-        public final CancellableTruffleCompilationTask task;
+        public final CancellableTruffleCompilationTask cancellable;
         public final StructuredGraph graph;
         final HighTierContext highTierContext;
 
         public Request(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, ResolvedJavaMethod method, TruffleInliningPlan inliningPlan,
-                        CompilationIdentifier compilationId, SpeculationLog log, CancellableTruffleCompilationTask task) {
+                        CompilationIdentifier compilationId, SpeculationLog log, CancellableTruffleCompilationTask cancellable) {
             Objects.requireNonNull(options);
             Objects.requireNonNull(debug);
             Objects.requireNonNull(compilable);
@@ -308,7 +314,7 @@ public abstract class PartialEvaluator {
             this.inliningPlan = inliningPlan;
             this.compilationId = compilationId;
             this.log = log;
-            this.task = task;
+            this.cancellable = cancellable;
             // @formatter:off
             StructuredGraph.Builder builder = new StructuredGraph.Builder(this.debug.getOptions(), this.debug, AllowAssumptions.YES).
                     name(this.compilable.toString()).
@@ -316,7 +322,7 @@ public abstract class PartialEvaluator {
                     speculationLog(this.log).
                     compilationId(this.compilationId).
                     trackNodeSourcePosition(configForParsing.trackNodeSourcePosition()).
-                    cancellable(this.task);
+                    cancellable(this.cancellable);
             // @formatter:on
             builder = customizeStructuredGraphBuilder(builder);
             this.graph = builder.build();
@@ -324,8 +330,12 @@ public abstract class PartialEvaluator {
             highTierContext = new HighTierContext(providers, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
         }
 
-        public boolean isFirstTier() {
-            return task.isFirstTier();
+        public boolean useLanguageAgnosticInlining() {
+            if (getPolyglotOptionValue(options, MultiTier) && cancellable.isFirstTier()) {
+                return getPolyglotOptionValue(options, LanguageAgnosticInlining) && getPolyglotOptionValue(options, FirstTierInlining);
+            } else {
+                return getPolyglotOptionValue(options, LanguageAgnosticInlining);
+            }
         }
     }
 
@@ -353,7 +363,7 @@ public abstract class PartialEvaluator {
                 ComputeLoopFrequenciesClosure.compute(request.graph);
                 applyInstrumentationPhases(request);
                 handler.reportPerformanceWarnings(request.compilable, request.graph);
-                if (request.task != null && request.task.isCancelled()) {
+                if (request.cancellable != null && request.cancellable.isCancelled()) {
                     return null;
                 }
                 new VerifyFrameDoesNotEscapePhase().apply(request.graph, false);
@@ -552,11 +562,25 @@ public abstract class PartialEvaluator {
         GraphBuilderConfiguration newConfig = config.copy();
         InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
         registerTruffleInvocationPlugins(invocationPlugins, canDelayIntrinsification);
+        appendParsingNodePlugins(newConfig.getPlugins());
         return newConfig;
     }
 
     protected NodePlugin[] createNodePlugins(Plugins plugins) {
         return plugins.getNodePlugins();
+    }
+
+    protected void appendParsingNodePlugins(Plugins plugins) {
+        if (JavaVersionUtil.JAVA_SPEC >= 15) {
+            ResolvedJavaType type = TruffleCompilerRuntime.getRuntime().resolveType(providers.getMetaAccess(), "jdk.internal.access.foreign.MemorySegmentProxy");
+            ResolvedJavaMethod[] declaredMethods = type.getDeclaredMethods();
+            for (ResolvedJavaMethod m : declaredMethods) {
+                if (m.getName().equals("checkValidState")) {
+                    plugins.appendNodePlugin(new MemorySegmentCheckPlugin(m));
+                    break;
+                }
+            }
+        }
     }
 
     protected void registerTruffleInvocationPlugins(InvocationPlugins invocationPlugins, boolean canDelayIntrinsification) {
@@ -578,7 +602,7 @@ public abstract class PartialEvaluator {
     @SuppressWarnings({"unused", "try"})
     private void inliningGraphPE(Request request) {
         try (DebugCloseable a = PartialEvaluationTimer.start(request.debug)) {
-            if (getPolyglotOptionValue(request.options, LanguageAgnosticInlining)) {
+            if (request.useLanguageAgnosticInlining()) {
                 AgnosticInliningPhase agnosticInlining = new AgnosticInliningPhase(this, request);
                 agnosticInlining.apply(request.graph, providers);
             } else {
@@ -671,6 +695,28 @@ public abstract class PartialEvaluator {
             }
             // Continue onto other plugins.
             return null;
+        }
+    }
+
+    private static final class MemorySegmentCheckPlugin implements NodePlugin {
+
+        private final ResolvedJavaMethod checkValidStateMethod;
+
+        MemorySegmentCheckPlugin(ResolvedJavaMethod checkValidStateMethod) {
+            this.checkValidStateMethod = checkValidStateMethod;
+        }
+
+        @Override
+        public boolean handleInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
+            if (checkValidStateMethod.equals(method)) {
+                if (b.needsExplicitException()) {
+                    return false;
+                } else {
+                    b.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException));
+                    return true;
+                }
+            }
+            return NodePlugin.super.handleInvoke(b, method, args);
         }
     }
 }
