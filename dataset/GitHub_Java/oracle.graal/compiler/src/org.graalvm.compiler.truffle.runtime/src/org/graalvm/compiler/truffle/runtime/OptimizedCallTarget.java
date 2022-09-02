@@ -37,6 +37,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime.LazyFrameBoxingQuery;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
 
@@ -366,15 +367,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     public final OptionValues getOptionValues() {
-        return engineData.engineOptions;
-    }
-
-    public <T> T getOptionValue(OptionKey<T> key) {
-        return PolyglotCompilerOptions.getValue(getOptionValues(), key);
+        return runtime().getTvmci().getCompilerOptionValues(rootNode);
     }
 
     private OptimizedCompilationProfile createCompilationProfile() {
-        return OptimizedCompilationProfile.create(getOptionValues());
+        return OptimizedCompilationProfile.create(PolyglotCompilerOptions.getPolyglotValues(rootNode));
     }
 
     /**
@@ -615,7 +612,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * Intrinsifiable compiler directive for creating a frame.
      */
     public static VirtualFrame createFrame(FrameDescriptor descriptor, Object[] args) {
-        return new FrameWithoutBoxing(descriptor, args);
+        if (LazyFrameBoxingQuery.useFrameWithoutBoxing) {
+            return new FrameWithoutBoxing(descriptor, args);
+        } else {
+            return new FrameWithBoxing(descriptor, args);
+        }
     }
 
     final void onLoopCount(int count) {
@@ -748,6 +749,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             assert this.compilationTask != null;
             this.compilationTask = null;
         }
+    }
+
+    public <T> T getOptionValue(OptionKey<T> key) {
+        return PolyglotCompilerOptions.getValue(rootNode, key);
     }
 
     synchronized void addKnownCallNode(OptimizedDirectCallNode directCallNode) {
