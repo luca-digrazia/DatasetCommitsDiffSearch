@@ -535,8 +535,6 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(currentFrame.getClassId());
         stream.writeLong(currentFrame.getMethodId());
         stream.writeLong(currentFrame.getCodeIndex());
-        JDWPLogger.log("Sending step completed event", JDWPLogger.LogLevel.STEPPING);
-
         if (holdEvents) {
             heldEvents.add(stream);
         } else {
