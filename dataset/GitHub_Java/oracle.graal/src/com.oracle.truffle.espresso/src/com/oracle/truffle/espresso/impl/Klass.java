@@ -228,7 +228,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      * </ul>
      * <h3>Java 11
      * <ul>
-     * <li>C is public, and a member of the same run-time module as D (&sect;5.3.6).
+     * <li>C is public, and a member of the same run-time module as D (§5.3.6).
      * <li>C is public, and a member of a different run-time module than D, and C's run-time module
      * is read by D's run-time module, and C's run-time module exports C's run-time package to D's
      * run-time module.
@@ -1056,30 +1056,13 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return mirror();
     }
 
-    /**
-     * Returns an identifier for the nest this klass is in. In practice, the nest is identified by
-     * its nest host.
-     * 
-     * @return The nest host of this klass.
-     */
     public Klass nest() {
         return this;
     }
 
-    /**
-     * Checks that the given klass k is a nest member of {@code this} as a nest host. This does NOT
-     * check whether this and k are in the same nest.
-     */
     @SuppressWarnings("unused")
     public boolean nestMembersCheck(Klass k) {
         return false;
-    }
-
-    /**
-     * Returns an array containing the nest members of {@code this} as a nest host.
-     */
-    public Klass[] getNestMembers() {
-        return EMPTY_ARRAY;
     }
 
     @Override

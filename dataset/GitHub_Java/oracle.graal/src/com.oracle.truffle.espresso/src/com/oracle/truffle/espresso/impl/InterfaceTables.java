@@ -140,7 +140,9 @@ final class InterfaceTables {
         CompilerAsserts.neverPartOfCompilation();
         ArrayList<Method> tmpMethodTable = new ArrayList<>();
         for (Method method : declared) {
-            if (!method.isStatic() && !method.isPrivate()) {
+            if (!method.isStatic() &&
+                            // Since Java 9, invokeinterface can call private interface methods.
+                            (thisInterfKlass.getJavaVersion().java9OrLater() || !method.isPrivate())) {
                 method.setITableIndex(tmpMethodTable.size());
                 tmpMethodTable.add(method);
             }
@@ -341,11 +343,11 @@ final class InterfaceTables {
             assert index == m.getVTableIndex();
             return new Entry(Location.SUPERVTABLE, index);
         }
-        index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), im, mname, sig);
+        index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), mname, sig);
         if (index != -1) {
             return new Entry(Location.DECLARED, index);
         }
-        index = lookupMirandas(im, mname, sig);
+        index = lookupMirandas(mname, sig);
         if (index != -1) {
             return new Entry(Location.MIRANDAS, index);
         }
@@ -356,20 +358,20 @@ final class InterfaceTables {
 
     }
 
-    private static int getDeclaredMethodIndex(Method[] declaredMethod, Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
+    private static int getDeclaredMethodIndex(Method[] declaredMethod, Symbol<Name> mname, Symbol<Signature> sig) {
         for (int i = 0; i < declaredMethod.length; i++) {
             Method m = declaredMethod[i];
-            if (m.canOverride(interfMethod) && mname == m.getName() && sig == m.getRawSignature()) {
+            if (!m.isStatic() && mname == m.getName() && sig == m.getRawSignature()) {
                 return i;
             }
         }
         return -1;
     }
 
-    private int lookupMirandas(Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
+    private int lookupMirandas(Symbol<Name> mname, Symbol<Signature> sig) {
         int pos = 0;
         for (Method m : mirandas) {
-            if (m.canOverride(interfMethod) && m.getName() == mname && sig == m.getRawSignature()) {
+            if (!m.isStatic() && m.getName() == mname && sig == m.getRawSignature()) {
                 return pos;
             }
             pos++;

@@ -1221,43 +1221,43 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     // region New*Array
 
     @JniImpl
-    public @Host(boolean[].class) StaticObject NewBooleanArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Boolean.getBasicType(), len, getMeta());
+    public static @Host(boolean[].class) StaticObject NewBooleanArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Boolean.getBasicType(), len);
     }
 
     @JniImpl
-    public @Host(byte[].class) StaticObject NewByteArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Byte.getBasicType(), len, getMeta());
+    public static @Host(byte[].class) StaticObject NewByteArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Byte.getBasicType(), len);
     }
 
     @JniImpl
-    public @Host(char[].class) StaticObject NewCharArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Char.getBasicType(), len, getMeta());
+    public static @Host(char[].class) StaticObject NewCharArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Char.getBasicType(), len);
     }
 
     @JniImpl
-    public @Host(short[].class) StaticObject NewShortArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Short.getBasicType(), len, getMeta());
+    public static @Host(short[].class) StaticObject NewShortArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Short.getBasicType(), len);
     }
 
     @JniImpl
-    public @Host(int[].class) StaticObject NewIntArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Int.getBasicType(), len, getMeta());
+    public static @Host(int[].class) StaticObject NewIntArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Int.getBasicType(), len);
     }
 
     @JniImpl
-    public @Host(long[].class) StaticObject NewLongArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Long.getBasicType(), len, getMeta());
+    public static @Host(long[].class) StaticObject NewLongArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Long.getBasicType(), len);
     }
 
     @JniImpl
-    public @Host(float[].class) StaticObject NewFloatArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Float.getBasicType(), len, getMeta());
+    public static @Host(float[].class) StaticObject NewFloatArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Float.getBasicType(), len);
     }
 
     @JniImpl
-    public @Host(double[].class) StaticObject NewDoubleArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Double.getBasicType(), len, getMeta());
+    public static @Host(double[].class) StaticObject NewDoubleArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Double.getBasicType(), len);
     }
 
     @JniImpl

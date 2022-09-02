@@ -1003,7 +1003,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                     case INVOKEINTERFACE: top += quickenInvoke(frame, top, curBCI, curOpcode); break;
 
                     case NEW: putObject(frame, top, InterpreterToVM.newObject(resolveType(curOpcode, bs.readCPI(curBCI)), true)); break;
-                    case NEWARRAY: putObject(frame, top - 1, InterpreterToVM.allocatePrimitiveArray(bs.readByte(curBCI), peekInt(frame, top - 1), getMeta())); break;
+                    case NEWARRAY: putObject(frame, top - 1, InterpreterToVM.allocatePrimitiveArray(bs.readByte(curBCI), peekInt(frame, top - 1))); break;
                     case ANEWARRAY: putObject(frame, top - 1, allocateArray(resolveType(curOpcode, bs.readCPI(curBCI)), peekInt(frame, top - 1))); break;
                     case ARRAYLENGTH: putInt(frame, top - 1, InterpreterToVM.arrayLength(nullCheck(peekAndReleaseObject(frame, top - 1)))); break;
 
@@ -1593,13 +1593,8 @@ public final class BytecodeNode extends EspressoMethodNode {
         } else if (resolved.isPolySignatureIntrinsic()) {
             invoke = new InvokeHandleNode(resolved, getMethod().getDeclaringKlass(), top, curBCI);
         } else if (opcode == INVOKEINTERFACE && resolved.getITableIndex() < 0) {
-            if (getJavaVersion().java9OrLater() && resolved.isPrivate()) {
-                // Interface private methods do not appear in itables.
-                invoke = new InvokeSpecialNode(resolved, top, curBCI);
-            } else {
-                // Can happen in old classfiles that calls j.l.Object on interfaces.
-                invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI);
-            }
+            // Can happen in old classfiles that calls j.l.Object on interfaces.
+            invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI);
         } else if (opcode == INVOKEVIRTUAL && (resolved.isFinalFlagSet() || resolved.getDeclaringKlass().isFinalFlagSet() || resolved.isPrivate())) {
             invoke = new InvokeSpecialNode(resolved, top, curBCI);
         } else {
