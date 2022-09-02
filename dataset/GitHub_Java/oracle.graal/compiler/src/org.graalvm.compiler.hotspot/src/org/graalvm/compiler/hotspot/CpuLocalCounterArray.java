@@ -196,13 +196,13 @@ public class CpuLocalCounterArray<T> {
         final ValueNode increment = graph.addOrUniqueWithInputs(ConstantNode.forLong(1L));
         final ReadNode memoryRead = graph.add(new ReadNode(counterAddress, LocationIdentity.any(), StampFactory.forKind(JavaKind.Long), OnHeapMemoryAccess.BarrierType.NONE));
         final ValueNode addNode = graph.addOrUniqueWithInputs(AddNode.create(memoryRead, increment, NodeView.DEFAULT));
-        final WriteNode memoryWrite = graph.add(new WriteNode(counterAddress, LocationIdentity.any(), addNode, OnHeapMemoryAccess.BarrierType.NONE, false));
+        final WriteNode memoryWrite = graph.add(new WriteNode(counterAddress, LocationIdentity.any(), addNode, OnHeapMemoryAccess.BarrierType.NONE));
         graph.addAfterFixed(memoryRead, memoryWrite);
         return Pair.create(memoryRead, memoryWrite);
     }
 
     public Pair<FixedWithNextNode, FixedWithNextNode> createIncrementCounter(StructuredGraph graph, T key, int counterIndex) {
-        final ValueNode indexNode = graph.addOrUnique(ConstantNode.forLong(counterIndex));
+        final ValueNode indexNode = graph.addOrUniqueWithInputs(ConstantNode.forLong(counterIndex));
         return createIncrementCounter(graph, key, indexNode);
     }
 
@@ -251,12 +251,8 @@ public class CpuLocalCounterArray<T> {
         }
     }
 
-    public void printStatistics() {
-        TTY.println("Counter '%s'", name);
-        TTY.println("---------------");
-
+    public Statistics<T> computeStatistics() {
         final long numberOfAllocatedCounters = (nextCounterAddress - counterArrayAddress) / bytesPerCounter;
-        TTY.println("Number of counters allocated: %d", numberOfAllocatedCounters);
 
         double averageNumberOfCountersPerKey;
         int maxNumberOfCountersPerKey = 0;
@@ -274,11 +270,8 @@ public class CpuLocalCounterArray<T> {
         } else {
             averageNumberOfCountersPerKey = numberOfAllocatedCounters / (double) keys.size();
         }
-        TTY.println("Average number of counters per key: %f", averageNumberOfCountersPerKey);
-        TTY.println("Max number of counters allocated for a key: %d (key: %s)", maxNumberOfCountersPerKey, keyWithMaxNumberOfCounters);
 
-        TTY.println("Number of keys: %d", keys.size());
-        TTY.println();
+        return new Statistics<>(numberOfAllocatedCounters, averageNumberOfCountersPerKey, maxNumberOfCountersPerKey, keyWithMaxNumberOfCounters, keys.size());
     }
 
     /**
@@ -325,7 +318,7 @@ public class CpuLocalCounterArray<T> {
         // The number 11 has been determined empirically.
         final ValueNode shiftValue = graph.addOrUniqueWithInputs(ConstantNode.forInt(11));
 
-        return graph.addOrUnique(RightShiftNode.create(thread, shiftValue, NodeView.DEFAULT));
+        return graph.addOrUniqueWithInputs(RightShiftNode.create(thread, shiftValue, NodeView.DEFAULT));
     }
 
     /**
@@ -354,7 +347,7 @@ public class CpuLocalCounterArray<T> {
         final ValueNode multiplier = graph.addOrUniqueWithInputs(ConstantNode.forLong(knuthMethodMultiplier));
         final ValueNode mulNode = graph.addOrUniqueWithInputs(MulNode.create(threadIdentifier, multiplier, NodeView.DEFAULT));
         final ValueNode mask = graph.addOrUniqueWithInputs(ConstantNode.forLong(cpuLocalsPerCounter - 1));
-        return graph.addOrUnique(AndNode.create(mulNode, mask, NodeView.DEFAULT));
+        return graph.addOrUniqueWithInputs(AndNode.create(mulNode, mask, NodeView.DEFAULT));
     }
 
     /**
@@ -404,5 +397,54 @@ public class CpuLocalCounterArray<T> {
         y |= y >> 16;
         y += 1;
         return y;
+    }
+
+    public class Statistics<T> {
+        private final long numberOfAllocatedCounters;
+        private final double averageNumberOfCountersPerKey;
+        private final int maxNumberOfCountersPerKey;
+        private final T keyWithMaxNumberOfCounters;
+        private final int numberOfKeys;
+
+        public Statistics(long numberOfAllocatedCounters, double averageNumberOfCountersPerKey, int maxNumberOfCountersPerKey, T keyWithMaxNumberOfCounters, int numberOfKeys) {
+            this.numberOfAllocatedCounters = numberOfAllocatedCounters;
+            this.averageNumberOfCountersPerKey = averageNumberOfCountersPerKey;
+            this.maxNumberOfCountersPerKey = maxNumberOfCountersPerKey;
+            this.keyWithMaxNumberOfCounters = keyWithMaxNumberOfCounters;
+            this.numberOfKeys = numberOfKeys;
+        }
+
+        public long getNumberOfAllocatedCounters() {
+            return numberOfAllocatedCounters;
+        }
+
+        public double getAverageNumberOfCountersPerKey() {
+            return averageNumberOfCountersPerKey;
+        }
+
+        public int getMaxNumberOfCountersPerKey() {
+            return maxNumberOfCountersPerKey;
+        }
+
+        public T getKeyWithMaxNumberOfCounters() {
+            return keyWithMaxNumberOfCounters;
+        }
+
+        public int getNumberOfKeys() {
+            return numberOfKeys;
+        }
+
+        public String dump() {
+            final StringBuilder dump = new StringBuilder();
+            dump.append("Counter '").append(name).append("'").append(System.lineSeparator());
+            dump.append("---------------").append(System.lineSeparator());
+            dump.append("Number of counters allocated: ").append(numberOfAllocatedCounters).append(System.lineSeparator());
+            dump.append("Average number of counters per key: ").append(averageNumberOfCountersPerKey).append(System.lineSeparator());
+            dump.append("Max number of counters allocated for a key: ").append(maxNumberOfCountersPerKey).append("(key: ").append(keyWithMaxNumberOfCounters).append(")").append(System.lineSeparator());
+            dump.append("Number of keys: ").append(keys.size()).append(System.lineSeparator());
+            dump.append(System.lineSeparator());
+
+            return dump.toString();
+        }
     }
 }
