@@ -27,13 +27,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.ReferenceQueue;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_ref_Reference;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.Assumption;
@@ -45,6 +48,7 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
+import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.descriptors.Names;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -61,19 +65,17 @@ import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.EspressoReference;
-import com.oracle.truffle.espresso.substitutions.JavaVersionUtil;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_ref_Reference;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
+
+import static com.oracle.truffle.espresso.EspressoLanguage.EspressoLogger;
 
 public final class EspressoContext {
 
     public static final int DEFAULT_STACK_SIZE = 32;
     public static final StackTraceElement[] EMPTY_STACK = new StackTraceElement[0];
-
-    private final TruffleLogger logger = TruffleLogger.getLogger(EspressoLanguage.ID);
 
     private final EspressoLanguage language;
     private final TruffleLanguage.Env env;
@@ -90,10 +92,6 @@ public final class EspressoContext {
     private JDWPContextImpl jdwpContext;
     private VMListener eventListener;
     private boolean contextReady;
-
-    public TruffleLogger getLogger() {
-        return logger;
-    }
 
     public int getNewId() {
         return klassIdProvider.getAndIncrement();
@@ -113,6 +111,7 @@ public final class EspressoContext {
 
     @CompilationFinal private EspressoException stackOverflow;
     @CompilationFinal private EspressoException outOfMemory;
+    @CompilationFinal private ArrayList<Method> frames;
 
     // Set on calling guest Thread.stop0(), or when closing context.
     @CompilationFinal private Assumption noThreadStop = Truffle.getRuntime().createAssumption();
@@ -350,7 +349,7 @@ public final class EspressoContext {
         // Create application (system) class loader.
         meta.java_lang_ClassLoader_getSystemClassLoader.invokeDirect(null);
 
-        getLogger().log(Level.FINE, "VM booted in {0} ms", System.currentTimeMillis() - ticks);
+        EspressoLogger.log(Level.FINE, "VM booted in {0} ms", System.currentTimeMillis() - ticks);
         initVMDoneMs = System.currentTimeMillis();
     }
 
@@ -460,33 +459,35 @@ public final class EspressoContext {
                         t.join();
                     }
                 } catch (InterruptedException e) {
-                    getLogger().warning("Thread interrupted while stopping thread in closing context.");
+                    System.err.println("Interrupted while stopping thread in closing context.");
                 }
             }
         }
 
-        if (getEnv().getOptions().get(EspressoOptions.MultiThreaded)) {
-            hostToGuestReferenceDrainThread.interrupt();
-            try {
-                hostToGuestReferenceDrainThread.join();
-            } catch (InterruptedException e) {
-                // ignore
-            }
-        } else {
-            assert !hostToGuestReferenceDrainThread.isAlive();
+        hostToGuestReferenceDrainThread.interrupt();
+        try {
+            hostToGuestReferenceDrainThread.join();
+        } catch (InterruptedException e) {
+            // ignore
         }
-
         initiatingThread.interrupt();
     }
 
     private void initVmProperties() {
-        final EspressoProperties.Builder builder = EspressoProperties.newPlatformBuilder();
-        // Only use host VM java.home matching Espresso version (8).
-        // Must explicitly pass '--java.JavaHome=/path/to/java8/home/jre' otherwise.
-        if (JavaVersionUtil.JAVA_SPEC == 8) {
-            builder.javaHome(Engine.findHome().resolve("jre"));
+        EspressoProperties.Builder builder;
+        if (EspressoOptions.RUNNING_ON_SVM) {
+            builder = EspressoProperties.newPlatformBuilder() //
+                            .javaHome(Engine.findHome().resolve("jre")) //
+                            .espressoLibraryPath(Collections.singletonList(Paths.get(getLanguage().getEspressoHome()).resolve("lib")));
+        } else {
+            builder = EspressoProperties.inheritFromHostVM();
+            String espressoLibraryPath = System.getProperty("espresso.library.path");
+            if (espressoLibraryPath != null) {
+                builder.espressoLibraryPath(Utils.parsePaths(espressoLibraryPath));
+            }
         }
         vmProperties = EspressoProperties.processOptions(getLanguage(), builder, getEnv().getOptions()).build();
+
     }
 
     private void initializeKnownClass(Symbol<Type> type) {
