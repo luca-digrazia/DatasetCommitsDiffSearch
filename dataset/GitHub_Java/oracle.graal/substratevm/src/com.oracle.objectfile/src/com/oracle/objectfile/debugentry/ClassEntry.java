@@ -213,7 +213,7 @@ public class ClassEntry {
         return cuIndex;
     }
 
-    public void setDeoptCUIndex(int deoptCUIndex) {
+    public void setDeoptCUIndex(int cuIndex) {
         // Should only get set once to a non-negative value.
         assert deoptCUIndex >= 0;
         assert this.deoptCUIndex == -1;
