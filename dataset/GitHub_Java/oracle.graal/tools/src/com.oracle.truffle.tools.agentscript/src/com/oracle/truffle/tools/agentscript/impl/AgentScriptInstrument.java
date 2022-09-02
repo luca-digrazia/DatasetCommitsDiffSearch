@@ -29,6 +29,7 @@ import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
+import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -36,6 +37,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tools.agentscript.AgentScript;
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptors;
@@ -59,6 +61,7 @@ public final class AgentScriptInstrument extends TruffleInstrument implements Ag
     @Option(stability = OptionStability.EXPERIMENTAL, name = "", help = "Use provided agent script", category = OptionCategory.USER) //
     static final OptionKey<String> SCRIPT = new OptionKey<>("");
 
+    private EventBinding<?> rootsBinding = null;
     private Env env;
 
     @Override
@@ -67,8 +70,8 @@ public final class AgentScriptInstrument extends TruffleInstrument implements Ag
     }
 
     @Override
-    protected void onCreate(Env tmp) {
-        this.env = tmp;
+    protected void onCreate(Env env) {
+        this.env = env;
         env.registerService(this);
         final String path = env.getOptions().get(SCRIPT);
         if (path != null && path.length() > 0) {
@@ -98,9 +101,8 @@ public final class AgentScriptInstrument extends TruffleInstrument implements Ag
 
     private void registerAgentScript(final Supplier<Source> src) {
         final Instrumenter instrumenter = env.getInstrumenter();
-        instrumenter.attachContextsListener(new ContextsListener() {
-            private AgentObject agent;
-
+        final AtomicReference<EventBinding<?>> ctxListenerBinding = new AtomicReference<>();
+        ctxListenerBinding.set(instrumenter.attachContextsListener(new ContextsListener() {
             @Override
             public void onContextCreated(TruffleContext context) {
             }
@@ -111,25 +113,24 @@ public final class AgentScriptInstrument extends TruffleInstrument implements Ag
 
             @Override
             public void onLanguageContextInitialized(TruffleContext context, LanguageInfo language) {
-                if (agent != null) {
-                    return;
-                }
                 try {
                     Source script = src.get();
-                    agent = new AgentObject(env);
+                    AgentObject agent = new AgentObject(env, null, language);
                     CallTarget target = env.parse(script, "agent");
                     target.call(agent);
                     agent.initializationFinished();
                 } catch (IOException ex) {
                     throw AgentObject.raise(RuntimeException.class, ex);
+                } finally {
+                    final EventBinding<?> onceIsEnough = ctxListenerBinding.getAndSet(null);
+                    if (onceIsEnough != null) {
+                        onceIsEnough.dispose();
+                    }
                 }
             }
 
             @Override
             public void onLanguageContextFinalized(TruffleContext context, LanguageInfo language) {
-                if (agent != null) {
-                    agent.onClosed();
-                }
             }
 
             @Override
@@ -139,10 +140,13 @@ public final class AgentScriptInstrument extends TruffleInstrument implements Ag
             @Override
             public void onContextClosed(TruffleContext context) {
             }
-        }, true);
+        }, true));
     }
 
     @Override
-    protected void onDispose(Env tmp) {
+    protected void onDispose(Env env) {
+        if (rootsBinding != null && !rootsBinding.isDisposed()) {
+            rootsBinding.dispose();
+        }
     }
 }
