@@ -27,7 +27,6 @@ package com.oracle.svm.jfr;
 import static com.oracle.svm.jfr.PredefinedJFCSubstitition.DEFAULT_JFC;
 import static com.oracle.svm.jfr.PredefinedJFCSubstitition.PROFILE_JFC;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,11 +34,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.jdk.Target_java_lang_ClassLoader;
 import com.oracle.svm.core.jdk.Target_java_lang_Module;
 import com.oracle.svm.core.jdk.Target_java_lang_Package;
-import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.jfr.traceid.JfrTraceId;
 import com.oracle.svm.jfr.traceid.JfrTraceIdMap;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -94,7 +91,7 @@ public class JfrFeature implements Feature {
         ImageSingletons.add(SubstrateJVM.class, new SubstrateJVM());
         ImageSingletons.add(JfrManager.class, new JfrManager());
         ImageSingletons.add(JfrSerializerSupport.class, new JfrSerializerSupport());
-        ImageSingletons.add(JfrRuntimeAccess.class, new JfrRuntimeAccess());
+        ImageSingletons.add(JfrRuntimeAccess.class, new JfrRuntimeAccessImpl());
 
         JfrSerializerSupport.get().register(new JfrFrameTypeSerializer());
         ThreadListenerSupport.get().register(SubstrateJVM.getThreadLocal());
@@ -129,7 +126,7 @@ public class JfrFeature implements Feature {
         final Set<Package> packages = new HashSet<>();
         final Set<Module> modules = new HashSet<>();
         final Set<ClassLoader> classLoaders = new HashSet<>();
-        int mapSize = 1; // First field is error-catcher
+        int mapSize = 0;
     }
 
     private void assignClass(JfrMetadataCollection metadata, Class<?> clazz, int id) {
@@ -158,24 +155,20 @@ public class JfrFeature implements Feature {
         final JfrMetadataCollection metadata = new JfrMetadataCollection();
 
         // Scan all classes and build sets of packages, modules and class-loaders. Count all items.
-        Collection<? extends SharedType> types = ((FeatureImpl.CompilationAccessImpl)a).getTypes();
-        for (SharedType type : types) {
-            DynamicHub hub = type.getHub();
-            assignClass(metadata, hub.getHostedJavaClass(), hub.getTypeID());
-        }
+        ((FeatureImpl.CompilationAccessImpl)a).compiledTypes((clazz, typeID) -> assignClass(metadata, clazz, typeID));
 
         // Create trace-ID map with fixed size.
         JfrTraceIdMap map = new JfrTraceIdMap(metadata.mapSize);
         ImageSingletons.lookup(JfrRuntimeAccess.class).setTraceIdMap(map);
 
         // Assign each class, package, module and class-loader a unique index.
-        int idx = metadata.classToIndex.size() + 1;
+        int idx = metadata.classToIndex.size();
         for (Class<?> clazz : metadata.classToIndex.keySet()) {
-            if (metadata.classToIndex.get(clazz) + 1 >= idx) {
-                throw new ArrayIndexOutOfBoundsException();
-            }
             if (!clazz.isPrimitive()) {
                 JfrTraceId.assign(clazz, metadata.classToIndex);
+            }
+            if (metadata.classToIndex.get(clazz) >= idx) {
+                throw new ArrayIndexOutOfBoundsException();
             }
         }
         long traceId = 0;
