@@ -153,7 +153,6 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
      *
      * @return the value of the referenced variable
      */
-    @TruffleBoundary
     public Object getValue() {
         if (value == null) {
             return "";
@@ -696,6 +695,7 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
         }
 
         @Override
+        @TruffleBoundary
         protected Object getValueSafe() {
             if (isPointerToForeign()) {
                 long o = offset + value.getManagedPointerOffset();
