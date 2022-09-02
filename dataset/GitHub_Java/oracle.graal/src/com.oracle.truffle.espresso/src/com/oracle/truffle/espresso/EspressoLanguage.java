@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.logging.Level;
 
@@ -59,7 +58,6 @@ import com.oracle.truffle.espresso.nodes.interop.DestroyVMNode;
 import com.oracle.truffle.espresso.nodes.interop.LoadKlassNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 
 @ProvidedTags({StandardTags.RootTag.class, StandardTags.RootBodyTag.class, StandardTags.StatementTag.class})
@@ -68,12 +66,13 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
 
     public static final String ID = "java";
     public static final String NAME = "Java";
-    public static final String VERSION = "1.8|11";
+    public static final String VERSION = "1.8";
 
     // Espresso VM info
+    public static final String VM_SPECIFICATION_VERSION = "1.8";
     public static final String VM_SPECIFICATION_NAME = "Java Virtual Machine Specification";
     public static final String VM_SPECIFICATION_VENDOR = "Oracle Corporation";
-    public static final String VM_VERSION = /* 1.8|11 */ "espresso-20.3-b01";
+    public static final String VM_VERSION = "1.8.0_241";
     public static final String VM_VENDOR = "Oracle Corporation";
     public static final String VM_NAME = "Espresso 64-Bit VM";
     public static final String VM_INFO = "mixed mode";
@@ -213,11 +212,7 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         }
 
         context.prepareDispose();
-        try {
-            context.doExit(0);
-        } catch (EspressoExitException e) {
-            // Expected. Suppress. We do not want to throw during context closing.
-        }
+        context.doExit(0);
     }
 
     @Override
