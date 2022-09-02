@@ -175,7 +175,7 @@ public final class LLVMContext {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     LLVMContext(LLVMLanguage language, Env env, Toolchain toolchain) {
         this.language = language;
         this.libsulongDatalayout = null;
@@ -774,7 +774,7 @@ public final class LLVMContext {
         return id < symbolStorage.length && symbolStorage[id] != null;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     @TruffleBoundary
     public void registerSymbolTable(int index, AssumedValue<LLVMPointer>[] target) {
         synchronized (this) {
