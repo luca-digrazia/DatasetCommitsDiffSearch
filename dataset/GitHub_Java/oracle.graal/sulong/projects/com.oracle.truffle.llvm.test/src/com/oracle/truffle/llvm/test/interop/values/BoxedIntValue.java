@@ -37,7 +37,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
 @ExportLibrary(InteropLibrary.class)
-@SuppressWarnings("static-method")
 public final class BoxedIntValue implements TruffleObject {
 
     final int value;
@@ -51,12 +50,12 @@ public final class BoxedIntValue implements TruffleObject {
         return true;
     }
 
-    @ExportMessage
+    @ExportMessage(limit = "1")
     boolean fitsInByte(@CachedLibrary("this.value") InteropLibrary interop) {
         return interop.fitsInByte(value);
     }
 
-    @ExportMessage
+    @ExportMessage(limit = "1")
     boolean fitsInShort(@CachedLibrary("this.value") InteropLibrary interop) {
         return interop.fitsInShort(value);
     }
@@ -71,7 +70,7 @@ public final class BoxedIntValue implements TruffleObject {
         return true;
     }
 
-    @ExportMessage
+    @ExportMessage(limit = "1")
     boolean fitsInFloat(@CachedLibrary("this.value") InteropLibrary interop) {
         return interop.fitsInFloat(value);
     }
@@ -81,12 +80,12 @@ public final class BoxedIntValue implements TruffleObject {
         return true;
     }
 
-    @ExportMessage
+    @ExportMessage(limit = "1")
     byte asByte(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
         return interop.asByte(value);
     }
 
-    @ExportMessage
+    @ExportMessage(limit = "1")
     short asShort(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
         return interop.asShort(value);
     }
@@ -101,7 +100,7 @@ public final class BoxedIntValue implements TruffleObject {
         return value;
     }
 
-    @ExportMessage
+    @ExportMessage(limit = "1")
     float asFloat(@CachedLibrary("this.value") InteropLibrary interop) throws UnsupportedMessageException {
         return interop.asFloat(value);
     }

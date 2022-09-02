@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.runtime.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -38,6 +39,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObjectFactory.ForeignGetTypeNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropReadNode;
@@ -52,7 +54,7 @@ import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
 @ExportLibrary(InteropLibrary.class)
 public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInternalTruffleObject {
 
-    final TruffleObject foreign;
+    private final TruffleObject foreign;
     private final LLVMInteropType.Structured type;
 
     public static LLVMTypedForeignObject create(TruffleObject foreign, LLVMInteropType.Structured type) {
@@ -120,7 +122,7 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
 
         @Specialization(limit = "3", guards = "!typeLibrary.hasNativeType(object.getForeign())")
         public LLVMInteropType.Structured doFallback(LLVMTypedForeignObject object,
-                        @SuppressWarnings("unused") @CachedLibrary("object.getForeign()") NativeTypeLibrary typeLibrary) {
+                        @CachedLibrary("object.getForeign()") NativeTypeLibrary typeLibrary) {
             return object.getType();
         }
     }
@@ -161,23 +163,25 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
         }
     }
 
-    @ExportMessage
-    boolean isNull(@CachedLibrary("this.foreign") InteropLibrary interop) {
+    @ExportMessage(limit = "5")
+    final boolean isNull(@CachedLibrary("this.getForeign()") InteropLibrary interop) {
         return interop.isNull(getForeign());
     }
 
-    @ExportMessage
-    boolean isPointer(@CachedLibrary("this.foreign") InteropLibrary interop) {
+    @ExportMessage(limit = "5")
+    final boolean isPointer(@CachedLibrary("this.getForeign()") InteropLibrary interop) {
         return interop.isPointer(getForeign());
     }
 
-    @ExportMessage
-    long asPointer(@CachedLibrary("this.foreign") InteropLibrary interop) throws UnsupportedMessageException {
+    @ExportMessage(limit = "5")
+    final long asPointer(@CachedLibrary("this.getForeign()") InteropLibrary interop) throws UnsupportedMessageException {
         return interop.asPointer(getForeign());
     }
 
-    @ExportMessage
-    void toNative(@CachedLibrary("this.foreign") InteropLibrary interop) {
+    @ExportMessage(limit = "5")
+    final void toNative(
+                    @Cached BranchProfile allocProfile,
+                    @CachedLibrary("this.getForeign()") InteropLibrary interop) {
         interop.toNative(getForeign());
     }
 }

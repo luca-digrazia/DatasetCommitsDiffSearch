@@ -43,13 +43,17 @@ import com.oracle.truffle.api.profiles.BranchProfile;
 @SuppressWarnings("static-method")
 public final class ErrnoMirror implements TruffleObject {
 
-    public static final FastThreadLocalBytes<CIntPointer> errnoMirror = FastThreadLocalFactory.createBytes(() -> SizeOf.get(CIntPointer.class));
+    private static final FastThreadLocalBytes<CIntPointer> errnoMirror = FastThreadLocalFactory.createBytes(() -> SizeOf.get(CIntPointer.class));
 
     private static final KeysArray KEYS = new KeysArray(new String[]{"bind"});
 
+    public static CIntPointer getErrnoMirrorLocation() {
+        return errnoMirror.getAddress();
+    }
+
     @ExportMessage
     Object execute(@SuppressWarnings("unused") Object[] args) {
-        return new Target_com_oracle_truffle_nfi_impl_NativePointer(errnoMirror.getAddress().rawValue());
+        return new Target_com_oracle_truffle_nfi_impl_NativePointer(ErrnoMirror.getErrnoMirrorLocation().rawValue());
     }
 
     @ExportMessage
