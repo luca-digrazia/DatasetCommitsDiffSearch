@@ -1096,10 +1096,10 @@ public final class ObjectKlass extends Klass {
             JDWPLogger.log("Redefining method %s.%s", JDWPLogger.LogLevel.REDEFINE, method.getDeclaringKlass().getName(), method.getName());
 
             // look in iTable for copied methods that also needs to be invalidated
-            if (!method.isStatic() && !method.isPrivate() && !"<init>".equals(method.getNameAsString())) {
+            if (!method.isStatic() && !method.isPrivate() && !"<init>".equals(method.getName())) {
                 for (Method[] methods : itable) {
                     for (Method m : methods) {
-                        if (m.identity() == method.identity()) {
+                        if (m.getRawSignature().equals(method.getRawSignature()) && m.getName().equals(method.getName()) && m.getDeclaringKlass().equals(method.getDeclaringKlass())) {
                             m.redefine(newMethod, packet.parserKlass, ids);
                         }
                     }
