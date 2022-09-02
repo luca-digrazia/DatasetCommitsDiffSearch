@@ -42,7 +42,6 @@ import org.graalvm.collections.Pair;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.impl.clinit.ClassInitializationTracking;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
@@ -165,19 +164,9 @@ public class ClassInitializationFeature implements Feature {
          * that the user cannot later manually register it as RERUN or RUN_TIME.
          */
         if (obj != null && classInitializationSupport.shouldInitializeAtRuntime(obj.getClass())) {
-            String msg = "No instances of " + obj.getClass().getTypeName() + " are allowed in the image heap as this class should be initialized at image runtime.";
-            if (SubstrateOptions.TraceClassInitialization.getValue()) {
-                msg += classInitializationSupport.objectInstantiationTraceMessage(obj);
-            } else {
-                msg += " To see how this object got instantiated use " + SubstrateOptionsParser.commandArgument(SubstrateOptions.TraceClassInitialization, "+") + ".";
-            }
-
-            msg += "Either mark this class for build-time initialization with " +
-                            SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time") +
-                            " or use the the information above and " +
-                            SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-run-time") +
-                            " to prevent its instantiation.\n";
-            throw new UnsupportedFeatureException(msg);
+            throw new UnsupportedFeatureException("No instances are allowed in the image heap for a class that is initialized or reinitialized at image runtime: " + obj.getClass().getTypeName() +
+                            ". Try marking this class for build-time initialization with " +
+                            SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time"));
         }
         return obj;
     }
@@ -241,6 +230,7 @@ public class ClassInitializationFeature implements Feature {
                 reportMethodInitializationInfo(path);
             }
         }
+
     }
 
     private static void reportSafeTypeInitiazliation(AnalysisUniverse universe, TypeInitializerGraph initGraph, String path, Set<AnalysisType> provenSafe) {
@@ -289,7 +279,6 @@ public class ClassInitializationFeature implements Feature {
      */
     private Set<AnalysisType> initializeSafeDelayedClasses(TypeInitializerGraph initGraph) {
         Set<AnalysisType> provenSafe = new HashSet<>();
-        classInitializationSupport.setConfigurationSealed(false);
         classInitializationSupport.classesWithKind(RUN_TIME).stream()
                         .filter(t -> metaAccess.optionalLookupJavaType(t).isPresent())
                         .filter(t -> metaAccess.lookupJavaType(t).isInTypeCheck())
@@ -393,11 +382,5 @@ public class ClassInitializationFeature implements Feature {
             }
         }
         return false;
-    }
-
-    @Override
-    public void cleanup() {
-        /* we clean all classes from the non-system class loaders. */
-        ClassInitializationTracking.initializedClasses.clear();
     }
 }
