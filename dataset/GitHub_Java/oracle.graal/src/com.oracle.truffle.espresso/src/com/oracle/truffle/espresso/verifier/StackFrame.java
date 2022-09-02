@@ -15,8 +15,6 @@ class StackFrame {
     final int stackSize;
     final int top;
     final Operand[] locals;
-
-    // For stackMap extraction
     int lastLocal;
 
     StackFrame(Stack stack, Locals locals) {
@@ -496,18 +494,18 @@ class Locals {
 class SubroutineModificationStack {
     SubroutineModificationStack next;
     boolean[] subRoutineModifications;
-    int subroutineBCI;
+    int jsr;
 
     SubroutineModificationStack(SubroutineModificationStack next, boolean[] subRoutineModifications, int bci) {
         this.next = next;
         this.subRoutineModifications = subRoutineModifications;
-        this.subroutineBCI = bci;
+        this.jsr = bci;
     }
 
     static SubroutineModificationStack copy(SubroutineModificationStack tocopy) {
         if (tocopy == null) {
             return null;
         }
-        return new SubroutineModificationStack(tocopy.next, tocopy.subRoutineModifications.clone(), tocopy.subroutineBCI);
+        return new SubroutineModificationStack(tocopy.next, tocopy.subRoutineModifications.clone(), tocopy.jsr);
     }
 }
