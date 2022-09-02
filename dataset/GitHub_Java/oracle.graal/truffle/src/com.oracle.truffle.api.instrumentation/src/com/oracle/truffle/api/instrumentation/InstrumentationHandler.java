@@ -874,7 +874,7 @@ final class InstrumentationHandler {
 
         node.replace(wrapperNode, "Insert instrumentation wrapper node.");
 
-        assert probe.getContext().validEventContextOnWrapperInsert();
+        assert probe.getContext().validEventContext();
     }
 
     private static Node getWrapperNodeChecked(Object wrapper, Node node, Node parent) {
