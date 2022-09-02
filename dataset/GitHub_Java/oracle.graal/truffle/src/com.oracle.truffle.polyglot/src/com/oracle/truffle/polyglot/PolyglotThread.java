@@ -110,7 +110,6 @@ final class PolyglotThread extends Thread {
         }
 
         @Override
-        @TruffleBoundary
         protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
             PolyglotThread thread = (PolyglotThread) receiver;
             PolyglotThreadRunnable run = (PolyglotThreadRunnable) args[HostToGuestRootNode.ARGUMENT_OFFSET];
