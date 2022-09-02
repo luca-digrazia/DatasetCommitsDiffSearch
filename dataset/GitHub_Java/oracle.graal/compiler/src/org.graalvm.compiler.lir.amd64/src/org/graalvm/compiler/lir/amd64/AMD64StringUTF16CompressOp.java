@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -342,8 +342,4 @@ public final class AMD64StringUTF16CompressOp extends AMD64LIRInstruction {
         masm.bind(labelDone);
     }
 
-    @Override
-    public boolean needsClearUpperVectorRegisters() {
-        return true;
-    }
 }
