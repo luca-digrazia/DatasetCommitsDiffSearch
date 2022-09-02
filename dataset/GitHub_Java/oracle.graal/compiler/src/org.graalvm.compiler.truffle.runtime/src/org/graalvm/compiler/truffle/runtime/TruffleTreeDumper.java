@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
+import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.PrintTruffleTrees;
 import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.PrintGraph;
 import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.getValue;
 import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.PrintGraphTarget.Disable;
@@ -65,7 +66,7 @@ public final class TruffleTreeDumper {
     private static final String AFTER_INLINING = "After Inlining";
 
     public static void dump(TruffleDebugContext debug, OptimizedCallTarget callTarget, TruffleInlining inliningDecision) {
-        if (getValue(PrintGraph) != Disable) {
+        if (getValue(PrintGraph) != Disable && getValue(PrintTruffleTrees)) {
             try {
                 dumpASTAndCallTrees(debug, callTarget, inliningDecision);
             } catch (IOException ex) {

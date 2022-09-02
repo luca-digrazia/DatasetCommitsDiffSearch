@@ -323,16 +323,14 @@ public class Option {
         option("TruffleCompilationStatistics")
             .type("Boolean")
             .category("INTERNAL")
-            .def("PolyglotCompilerOptions.CompilationStatistics.getDefaultValue()")
-            .help("Print Truffle compilation statistics at the end of a run.")
-            .deprecatedBy("CompilationStatistics"),
+            .def("false")
+            .help("Print Truffle compilation statistics at the end of a run."),
 
         option("TruffleCompilationStatisticDetails")
             .type("Boolean")
             .category("INTERNAL")
-            .def("PolyglotCompilerOptions.CompilationStatisticDetails.getDefaultValue()")
-            .help("Print additional more verbose Truffle compilation statistics at the end of a run.")
-            .deprecatedBy("CompilationStatisticDetails"),
+            .def("false")
+            .help("Print additional more verbose Truffle compilation statistics at the end of a run."),
 
         option("TruffleProfilingEnabled")
             .type("Boolean")
