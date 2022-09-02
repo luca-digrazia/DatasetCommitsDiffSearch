@@ -184,12 +184,11 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
 
     @Override
     public Value emitConstant(LIRKind kind, Constant constant) {
+        Value rawConstant = super.emitConstant(kind, constant);
         if (SubstrateOptions.SpawnIsolates.getValue() && kind.isReference(0) && !kind.isCompressedReference(0)) {
-            LIRKind compressedKind = lirKindTool.getNarrowOopKind();
-            Value compressedConstant = super.emitConstant(compressedKind, constant);
-            return emitUncompress(compressedConstant, ReferenceAccess.singleton().getCompressEncoding(), false);
+            return emitUncompress(rawConstant, ReferenceAccess.singleton().getCompressEncoding(), false);
         }
-        return super.emitConstant(kind, constant);
+        return rawConstant;
     }
 
     @Override
@@ -203,14 +202,38 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
 
     @Override
     public Value emitCompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
+        LLVMValueRef uncompressed = builder.buildPtrToInt(getVal(pointer), builder.longType());
         LLVMValueRef heapBase = getSpecialRegister(LLVMFeature.HEAP_BASE_INDEX);
-        return new LLVMVariable(builder.buildCompress(getVal(pointer), heapBase, nonNull, encoding.getShift()));
+        LLVMValueRef compressed = builder.buildSub(uncompressed, heapBase);
+
+        if (!nonNull) {
+            LLVMValueRef isNull = builder.buildIsNull(uncompressed);
+            compressed = builder.buildSelect(isNull, uncompressed, compressed);
+        }
+
+        if (encoding.hasShift()) {
+            compressed = builder.buildShr(compressed, builder.constantInt(encoding.getShift()));
+        }
+
+        return new LLVMVariable(builder.buildRegisterObject(builder.buildIntToPtr(compressed, builder.rawPointerType()), true));
     }
 
     @Override
     public Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull) {
+        LLVMValueRef compressed = builder.buildPtrToInt(getVal(pointer), builder.longType());
+
+        if (encoding.hasShift()) {
+            compressed = builder.buildShl(compressed, builder.constantInt(encoding.getShift()));
+        }
+
         LLVMValueRef heapBase = getSpecialRegister(LLVMFeature.HEAP_BASE_INDEX);
-        return new LLVMVariable(builder.buildUncompress(getVal(pointer), heapBase, nonNull, encoding.getShift()));
+        LLVMValueRef uncompressed = builder.buildAdd(compressed, heapBase);
+        if (!nonNull) {
+            LLVMValueRef isNull = builder.buildIsNull(compressed);
+            uncompressed = builder.buildSelect(isNull, compressed, uncompressed);
+        }
+
+        return new LLVMVariable(builder.buildRegisterObject(builder.buildIntToPtr(uncompressed, builder.rawPointerType()), false));
     }
 
     @Override

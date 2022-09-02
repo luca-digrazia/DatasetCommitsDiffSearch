@@ -35,16 +35,13 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.Isolates;
-import com.oracle.svm.core.RuntimeAssertionsSupport;
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.handles.ObjectHandlesImpl;
 import com.oracle.svm.core.handles.ThreadLocalHandles;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.threadlocal.FastThreadLocalFactory;
 import com.oracle.svm.core.threadlocal.FastThreadLocalObject;
-import com.oracle.svm.core.util.ExceptionHelpers;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 import com.oracle.svm.jni.nativeapi.JNIObjectRefType;
 
@@ -68,7 +65,7 @@ import com.oracle.svm.jni.nativeapi.JNIObjectRefType;
 public final class JNIObjectHandles {
     @Fold
     static boolean haveAssertions() {
-        return RuntimeAssertionsSupport.singleton().desiredAssertionStatus(JNIObjectHandles.class);
+        return SubstrateOptions.getRuntimeAssertionsForClass(JNIObjectHandles.class.getName());
     }
 
     public static <T extends SignedWord> T nullHandle() {
@@ -96,23 +93,10 @@ public final class JNIObjectHandles {
     }
 
     @SuppressWarnings("unchecked")
-    private static ThreadLocalHandles<ObjectHandle> getOrCreateLocals() {
-        ThreadLocalHandles<ObjectHandle> result = handles.get();
-        if (result == null) {
-            result = createLocals();
+    private static ThreadLocalHandles<ObjectHandle> getLocals() {
+        if (handles.get() == null) {
+            handles.set(new ThreadLocalHandles<>(NATIVE_CALL_MIN_LOCAL_HANDLE_CAPACITY));
         }
-        return result;
-    }
-
-    @NeverInline("slow path that is executed once per thread; do not bloat machine code by inlining the allocations")
-    private static ThreadLocalHandles<ObjectHandle> createLocals() {
-        ThreadLocalHandles<ObjectHandle> result = new ThreadLocalHandles<>(NATIVE_CALL_MIN_LOCAL_HANDLE_CAPACITY);
-        handles.set(result);
-        return result;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static ThreadLocalHandles<ObjectHandle> getExistingLocals() {
         return handles.get();
     }
 
@@ -133,7 +117,7 @@ public final class JNIObjectHandles {
             return null;
         }
         if (isInLocalRange(handle)) {
-            return getExistingLocals().getObject(decodeLocal(handle));
+            return getLocals().getObject(decodeLocal(handle));
         }
         if (useImageHeapHandles() && JNIImageHeapHandles.isInRange(handle)) {
             return JNIImageHeapHandles.getObject(handle);
@@ -141,8 +125,7 @@ public final class JNIObjectHandles {
         if (JNIGlobalHandles.isInRange(handle)) {
             return JNIGlobalHandles.getObject(handle);
         }
-
-        throw ExceptionHelpers.throwIllegalArgumentException("Invalid object handle");
+        throw new RuntimeException("Invalid object handle");
     }
 
     public static JNIObjectRefType getHandleType(JNIObjectHandle handle) {
@@ -162,36 +145,36 @@ public final class JNIObjectHandles {
         if (useImageHeapHandles() && JNIImageHeapHandles.isInImageHeap(obj)) {
             return JNIImageHeapHandles.asLocal(obj);
         }
-        return encodeLocal(getOrCreateLocals().create(obj));
+        return encodeLocal(getLocals().create(obj));
     }
 
     public static JNIObjectHandle newLocalRef(JNIObjectHandle ref) {
         if (useImageHeapHandles() && JNIImageHeapHandles.isInRange(ref)) {
             return JNIImageHeapHandles.toLocal(ref);
         }
-        return encodeLocal(getOrCreateLocals().create(getObject(ref)));
+        return encodeLocal(getLocals().create(getObject(ref)));
     }
 
     public static void deleteLocalRef(JNIObjectHandle localRef) {
         if (!useImageHeapHandles() || !JNIImageHeapHandles.isInRange(localRef)) {
-            getOrCreateLocals().delete(decodeLocal(localRef));
+            getLocals().delete(decodeLocal(localRef));
         }
     }
 
     public static int pushLocalFrame(int capacity) {
-        return getOrCreateLocals().pushFrame(capacity);
+        return getLocals().pushFrame(capacity);
     }
 
     public static void popLocalFrame() {
-        getExistingLocals().popFrame();
+        getLocals().popFrame();
     }
 
     public static void popLocalFramesIncluding(int frame) {
-        getExistingLocals().popFramesIncluding(frame);
+        getLocals().popFramesIncluding(frame);
     }
 
     public static void ensureLocalCapacity(int capacity) {
-        getOrCreateLocals().ensureCapacity(capacity);
+        getLocals().ensureCapacity(capacity);
     }
 
     public static JNIObjectHandle newGlobalRef(JNIObjectHandle handle) {
@@ -233,8 +216,7 @@ public final class JNIObjectHandles {
     }
 
     static int getLocalHandleCount() {
-        ThreadLocalHandles<ObjectHandle> locals = getExistingLocals();
-        return locals == null ? 0 : locals.getHandleCount();
+        return getLocals().getHandleCount();
     }
 
     static long computeCurrentGlobalHandleCount() {

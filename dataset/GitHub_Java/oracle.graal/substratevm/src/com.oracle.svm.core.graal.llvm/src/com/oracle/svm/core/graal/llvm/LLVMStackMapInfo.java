@@ -31,17 +31,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiConsumer;
 
 import org.graalvm.compiler.core.common.NumUtil;
+import org.graalvm.compiler.core.llvm.LLVMUtils;
+import org.graalvm.compiler.core.llvm.LLVMUtils.TargetSpecific;
 
 import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.util.VMError;
 
 public class LLVMStackMapInfo {
-    private static final long DEFAULT_PATCHPOINT_ID = 0xABCDEF00L;
-    private static final int AMD64_RSP_IDX = 7;
-    private static final int AMD64_RBP_IDX = 6;
     private StackMap stackMap;
 
     static class StackMap {
@@ -217,7 +215,7 @@ public class LLVMStackMapInfo {
             function.records[rec] = record;
 
             if (patchpointToFunction.containsKey(record.patchpointID)) {
-                assert record.patchpointID == DEFAULT_PATCHPOINT_ID || patchpointToFunction.get(record.patchpointID) == function;
+                assert record.patchpointID == LLVMUtils.DEFAULT_PATCHPOINT_ID || patchpointToFunction.get(record.patchpointID) == function;
             }
             patchpointToFunction.put(record.patchpointID, function);
             patchpointsByID.computeIfAbsent(record.patchpointID, v -> new HashSet<>()).add(record);
@@ -232,6 +230,11 @@ public class LLVMStackMapInfo {
         return patchpointToFunction.get(startPatchpointID).stackSize;
     }
 
+    private long getFunctionOffset(long startPatchpointID) {
+        assert patchpointToFunction.containsKey(startPatchpointID);
+        return patchpointToFunction.get(startPatchpointID).address;
+    }
+
     public int[] getPatchpointOffsets(long patchpointID) {
         if (patchpointsByID.containsKey(patchpointID)) {
             return patchpointsByID.get(patchpointID).stream().mapToInt(r -> r.instructionOffset).toArray();
@@ -242,7 +245,12 @@ public class LLVMStackMapInfo {
     private static final int STATEPOINT_HEADER_LOCATION_COUNT = 3;
     private static final int STATEPOINT_DEOPT_COUNT_LOCATION_INDEX = 2;
 
-    public void forEachStatepointOffset(long patchpointID, int instructionOffset, BiConsumer<Integer, Integer> callback) {
+    @FunctionalInterface
+    interface StatepointOffsetCallback {
+        void accept(int derivedOffset, int baseOffset, boolean compressed);
+    }
+
+    public void forEachStatepointOffset(long patchpointID, int instructionOffset, StatepointOffsetCallback callback) {
         Location[] locations = patchpointsByID.get(patchpointID).stream().filter(r -> r.instructionOffset == instructionOffset)
                         .findFirst().orElseThrow(VMError::shouldNotReachHere).locations;
         assert locations.length >= STATEPOINT_HEADER_LOCATION_COUNT;
@@ -252,6 +260,15 @@ public class LLVMStackMapInfo {
         int deoptCount = deoptCountLocation.offset;
         assert STATEPOINT_HEADER_LOCATION_COUNT + deoptCount <= locations.length;
 
+        Set<Integer> compressedOffsets = new HashSet<>();
+        for (int i = STATEPOINT_HEADER_LOCATION_COUNT; i < STATEPOINT_HEADER_LOCATION_COUNT + deoptCount; ++i) {
+            Location loc = locations[i];
+            assert loc.type == Location.Type.Indirect; // spilled values
+            int[] offsets = getStackOffsets(patchpointID, loc);
+            assert offsets.length == 1;
+            compressedOffsets.add(offsets[0]);
+        }
+
         Set<Integer> seenOffsets = new HashSet<>();
         Set<Integer> seenBases = new HashSet<>();
         for (int i = STATEPOINT_HEADER_LOCATION_COUNT + deoptCount; i < locations.length; i += 2) {
@@ -260,21 +277,38 @@ public class LLVMStackMapInfo {
             Location ref = locations[i + 1];
 
             if (base.type == Location.Type.Constant || ref.type == Location.Type.Constant) {
-                assert base.type == ref.type && base.offset == 0 && ref.offset == 0;
+                assert base.type == ref.type && base.offset == ref.offset;
+                if (base.offset != 0) {
+                    /*
+                     * We are seeing a hard-coded pointer. This will most probably cause a segfault
+                     * at runtime, but we have to emit it either way and not fail during
+                     * compilation.
+                     */
+                    seenBases.add((int) (base.offset - getFunctionOffset(patchpointID)));
+                    seenOffsets.add((int) (ref.offset - getFunctionOffset(patchpointID)));
+                }
                 continue;
             }
 
             assert base.type == Location.Type.Indirect; // spilled values
-            int baseOffset = getStackOffset(patchpointID, base);
-            seenBases.add(baseOffset);
+            int[] baseOffsets = getStackOffsets(patchpointID, base);
 
             assert ref.type == Location.Type.Indirect; // spilled values
-            int derivedOffset = getStackOffset(patchpointID, ref);
+            int[] derivedOffsets = getStackOffsets(patchpointID, ref);
 
-            /* Derived pointers have their base already registered on the stackmap */
-            if (!seenOffsets.contains(derivedOffset)) {
-                seenOffsets.add(derivedOffset);
-                callback.accept(derivedOffset, baseOffset);
+            assert baseOffsets.length == derivedOffsets.length;
+
+            for (int j = 0; j < baseOffsets.length; ++j) {
+                int baseOffset = baseOffsets[j];
+                int derivedOffset = derivedOffsets[j];
+
+                seenBases.add(baseOffset);
+                /* Derived pointers have their base already registered on the stackmap */
+                if (!seenOffsets.contains(derivedOffset)) {
+                    seenOffsets.add(derivedOffset);
+                    assert compressedOffsets.contains(derivedOffset) == compressedOffsets.contains(baseOffset);
+                    callback.accept(derivedOffset, baseOffset, compressedOffsets.contains(derivedOffset));
+                }
             }
         }
 
@@ -288,27 +322,36 @@ public class LLVMStackMapInfo {
 
         assert startRecord.locations.length == 1;
         Location alloca = startRecord.locations[0];
-
         assert alloca.type == Location.Type.Direct;
-        return getStackOffset(startPatchPointId, alloca);
+
+        int[] offsets = getStackOffsets(startPatchPointId, alloca);
+        assert offsets.length == 1;
+        return offsets[0];
     }
 
-    private int getStackOffset(long patchpointID, Location location) {
-        assert location.size == 8;
+    private int[] getStackOffsets(long patchpointID, Location location) {
+        assert location.size % FrameAccess.wordSize() == 0;
+        int numLocations = location.size / FrameAccess.wordSize();
+        assert numLocations > 0;
 
-        int offset;
-        if (location.regNum == AMD64_RSP_IDX) {
-            offset = location.offset;
-        } else if (location.regNum == AMD64_RBP_IDX) {
+        int baseOffset;
+        if (location.regNum == TargetSpecific.get().getStackPointerDwarfRegNum()) {
+            baseOffset = location.offset;
+        } else if (location.regNum == TargetSpecific.get().getFramePointerDwarfRegNum()) {
             /*
              * Convert frame-relative offset (negative) to a stack-relative offset (positive).
              */
-            offset = location.offset + NumUtil.safeToInt(getFunctionStackSize(patchpointID)) - FrameAccess.wordSize();
+            baseOffset = location.offset + NumUtil.safeToInt(getFunctionStackSize(patchpointID)) + TargetSpecific.get().getFramePointerOffset();
         } else {
             throw shouldNotReachHere("found other register " + patchpointID + " " + location.regNum);
         }
+        assert baseOffset >= 0 && baseOffset + location.size < getFunctionStackSize(patchpointID);
 
-        assert offset >= 0 && offset < (getFunctionStackSize(patchpointID) - FrameAccess.wordSize());
-        return offset;
+        int[] offsets = new int[numLocations];
+        for (int i = 0; i < numLocations; ++i) {
+            offsets[i] = baseOffset + i * FrameAccess.wordSize();
+        }
+
+        return offsets;
     }
 }
