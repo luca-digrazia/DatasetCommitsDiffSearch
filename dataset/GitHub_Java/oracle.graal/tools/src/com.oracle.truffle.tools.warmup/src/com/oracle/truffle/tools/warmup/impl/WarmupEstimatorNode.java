@@ -24,33 +24,55 @@
  */
 package com.oracle.truffle.tools.warmup.impl;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
 
 class WarmupEstimatorNode extends ExecutionEventNode {
 
-    private long start;
-    private List<Long> samples = new ArrayList<>();
+    private final List<Long> times;
+    @CompilerDirectives.CompilationFinal private volatile FrameSlot startSlot;
 
-    WarmupEstimatorNode() {
-    }
-
-    Results getResults(double epsilon) {
-        return new Results(samples, epsilon);
+    WarmupEstimatorNode(List<Long> times) {
+        this.times = times;
     }
 
     @Override
     protected void onEnter(VirtualFrame frame) {
-        start = System.nanoTime();
+        if (this.startSlot == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            Lock lock = getLock();
+            lock.lock();
+            try {
+                startSlot = frame.getFrameDescriptor().findOrAddFrameSlot(this, FrameSlotKind.Long);
+            } finally {
+                lock.unlock();
+            }
+        }
+        frame.setLong(startSlot, System.nanoTime());
     }
 
     @Override
     protected void onReturnValue(VirtualFrame frame, Object result) {
-        final long duration = System.nanoTime() - start;
-        samples.add(duration);
+        if (startSlot != null) {
+            final long end = System.nanoTime();
+            record(end - FrameUtil.getLongSafe(frame, startSlot));
+        }
     }
 
+    @CompilerDirectives.TruffleBoundary
+    private synchronized void record(long duration) {
+        times.add(duration);
+    }
+
+    synchronized List<Long> getTimes() {
+        return Collections.unmodifiableList(times);
+    }
 }
