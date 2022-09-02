@@ -37,7 +37,7 @@ final class DebuggerCommand {
     private final RequestFilter requestFilter;
     private SourceLocation location;
     private BreakpointInfo breakpointInfo;
-    private volatile boolean submitted;
+    private boolean submitted;
 
     DebuggerCommand(Kind kind, RequestFilter filter) {
         this.kind = kind;

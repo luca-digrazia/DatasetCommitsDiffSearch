@@ -57,15 +57,11 @@ public interface VMEventListener extends VMListener {
 
     void stepCompleted(int commandRequestId, byte suspendPolicy, Object guestThread, CallFrame currentFrame);
 
-    void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, CallFrame[] callFrames);
+    void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, CallFrame callFrame);
 
     void increaseFieldBreakpointCount();
 
     void decreaseFieldBreakpointCount();
-
-    void increaseMethodBreakpointCount();
-
-    void decreaseMethodBreakpointCount();
 
     void fieldAccessBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame);
 
@@ -76,6 +72,4 @@ public interface VMEventListener extends VMListener {
     void removeThreadStartedRequestId();
 
     void removeThreadDiedRequestId();
-
-    void methodBreakpointHit(MethodBreakpointEvent methodEvent, Object currentThread, CallFrame callFrame);
 }
