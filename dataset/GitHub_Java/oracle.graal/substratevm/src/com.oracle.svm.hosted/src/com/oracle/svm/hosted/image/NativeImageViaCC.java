@@ -76,6 +76,17 @@ public abstract class NativeImageViaCC extends NativeImage {
         super(k, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, imageClassLoader);
     }
 
+    private static boolean removeUnusedSymbols() {
+        if (SubstrateOptions.RemoveUnusedSymbols.hasBeenSet()) {
+            return SubstrateOptions.RemoveUnusedSymbols.getValue();
+        }
+        /*
+         * The Darwin linker sometimes segfaults when option -dead_strip is used. Thus, Linux is the
+         * only platform were RemoveUnusedSymbols can be safely enabled per default.
+         */
+        return Platform.includedIn(Platform.LINUX.class);
+    }
+
     class BinutilsCCLinkerInvocation extends CCLinkerInvocation {
 
         private final boolean staticExecWithDynamicallyLinkLibC = SubstrateOptions.StaticExecutableWithDynamicLibC.getValue();
@@ -89,7 +100,7 @@ public abstract class NativeImageViaCC extends NativeImage {
                 additionalPreOptions.add("-Wl,--rosegment");
             }
 
-            if (SubstrateOptions.RemoveUnusedSymbols.getValue()) {
+            if (removeUnusedSymbols()) {
                 /* Perform garbage collection of unused input sections. */
                 additionalPreOptions.add("-Wl,--gc-sections");
             }
@@ -178,7 +189,7 @@ public abstract class NativeImageViaCC extends NativeImage {
                 additionalPreOptions.add("-Wl,-no_compact_unwind");
             }
 
-            if (SubstrateOptions.RemoveUnusedSymbols.getValue()) {
+            if (removeUnusedSymbols()) {
                 /* Remove functions and data unreachable by entry points. */
                 additionalPreOptions.add("-Wl,-dead_strip");
             }
@@ -295,9 +306,8 @@ public abstract class NativeImageViaCC extends NativeImage {
                 }
             }
 
-            if (!SubstrateOptions.RemoveUnusedSymbols.getValue()) {
-                /* Disable removal as it is on by default. */
-                cmd.add("/OPT:NOREF,NOICF");
+            if (removeUnusedSymbols()) {
+                cmd.add("/OPT:REF");
             }
 
             // Add clibrary paths to command
@@ -344,6 +354,10 @@ public abstract class NativeImageViaCC extends NativeImage {
             default:
                 inv = new BinutilsCCLinkerInvocation();
                 break;
+        }
+
+        if (SubstrateOptions.AdditionalLinkerOptions.hasBeenSet()) {
+            inv.additionalPreOptions.add(SubstrateOptions.AdditionalLinkerOptions.getValue());
         }
 
         Path outputFile = outputDirectory.resolve(imageName + imageKind.getFilenameSuffix());

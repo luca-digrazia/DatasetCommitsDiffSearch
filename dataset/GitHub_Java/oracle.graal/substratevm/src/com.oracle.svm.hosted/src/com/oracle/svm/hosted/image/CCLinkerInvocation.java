@@ -26,56 +26,49 @@ package com.oracle.svm.hosted.image;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.graalvm.compiler.options.Option;
+import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.LinkerInvocation;
+import com.oracle.svm.core.option.HostedOptionKey;
+import com.oracle.svm.core.option.LocatableMultiOptionValue;
+import com.oracle.svm.hosted.c.codegen.CCompilerInvoker;
 
 public abstract class CCLinkerInvocation implements LinkerInvocation {
 
+    public static class Options {
+        @Option(help = "Pass the provided raw option that will be appended to the linker command to produce the final binary. The possible options are platform specific and passed through without any validation.")//
+        public static final HostedOptionKey<LocatableMultiOptionValue.Strings> NativeLinkerOption = new HostedOptionKey<>(new LocatableMultiOptionValue.Strings());
+    }
+
     protected final List<String> additionalPreOptions = new ArrayList<>();
-    protected String compilerCommand = "cc";
-    protected final List<String> inputFilenames = new ArrayList<>();
+    protected final List<String> nativeLinkerOptions = new ArrayList<>();
+    protected final List<Path> inputFilenames = new ArrayList<>();
     protected final List<String> rpaths = new ArrayList<>();
     protected final List<String> libpaths = new ArrayList<>();
     protected final List<String> libs = new ArrayList<>();
-    protected final Map<String, String> symbolAliases = new HashMap<>();
+    protected Path tempDirectory;
     protected Path outputFile;
-    protected AbstractBootImage.NativeImageKind outputKind;
 
     @Override
-    public List<String> getInputFiles() {
+    public List<Path> getInputFiles() {
         return Collections.unmodifiableList(inputFilenames);
     }
 
     @Override
-    public void addInputFile(String filename) {
+    public void addInputFile(Path filename) {
         inputFilenames.add(filename);
     }
 
     @Override
-    public void addInputFile(int index, String filename) {
+    public void addInputFile(int index, Path filename) {
         inputFilenames.add(index, filename);
-    }
-
-    public AbstractBootImage.NativeImageKind getOutputKind() {
-        return outputKind;
-    }
-
-    public void setOutputKind(AbstractBootImage.NativeImageKind k) {
-        outputKind = k;
-    }
-
-    @Override
-    public Map<String, String> getSymbolAliases() {
-        return Collections.unmodifiableMap(symbolAliases);
-    }
-
-    @Override
-    public void addSymbolAlias(String alias, String definition) {
-        symbolAliases.put(alias, definition);
     }
 
     @Override
@@ -122,6 +115,15 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
         outputFile = out;
     }
 
+    public void setTempDirectory(Path tempDirectory) {
+        this.tempDirectory = tempDirectory;
+    }
+
+    @Override
+    public Path getTempDirectory() {
+        return tempDirectory;
+    }
+
     @Override
     public List<String> getLinkedLibraries() {
         return Collections.unmodifiableList(libs);
@@ -137,35 +139,24 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
         libs.add(index, libname);
     }
 
-    @Override
-    public String getCompilerCommand() {
-        return compilerCommand;
+    protected List<String> getCompilerCommand(List<String> options) {
+        /* Relativize input files where applicable to avoid unintentional leaking of host paths. */
+        Path[] inputPaths = inputFilenames.stream()
+                        .map(path -> path.startsWith(tempDirectory) ? tempDirectory.relativize(path) : path)
+                        .toArray(Path[]::new);
+        return ImageSingletons.lookup(CCompilerInvoker.class).createCompilerCommand(options, outputFile, inputPaths);
     }
-
-    @Override
-    public void setCompilerCommand(String command) {
-        compilerCommand = command;
-    }
-
-    protected abstract void addOneSymbolAliasOption(List<String> cmd, Map.Entry<String, String> ent);
 
     protected abstract void setOutputKind(List<String> cmd);
 
     @Override
     public List<String> getCommand() {
-        ArrayList<String> cmd = new ArrayList<>();
-        cmd.add(compilerCommand);
-        cmd.add("-v");
-        cmd.add("-o");
-        cmd.add(outputFile.toString());
+        List<String> compilerCmd = getCompilerCommand(additionalPreOptions);
 
-        for (String opt : additionalPreOptions) {
-            cmd.add(opt);
-        }
+        List<String> cmd = new ArrayList<>(compilerCmd);
         setOutputKind(cmd);
-        for (Map.Entry<String, String> ent : symbolAliases.entrySet()) {
-            addOneSymbolAliasOption(cmd, ent);
-        }
+
+        cmd.add("-v");
         for (String libpath : libpaths) {
             cmd.add("-L" + libpath);
         }
@@ -173,7 +164,16 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
             cmd.add("-Wl,-rpath");
             cmd.add("-Wl," + rpath);
         }
-        cmd.addAll(inputFilenames);
+
+        cmd.addAll(getLibrariesCommand());
+
+        cmd.addAll(getNativeLinkerOptions());
+
+        return cmd;
+    }
+
+    protected List<String> getLibrariesCommand() {
+        List<String> cmd = new ArrayList<>();
         for (String lib : libs) {
             if (lib.startsWith("-")) {
                 cmd.add("-Wl," + lib.replace(" ", ","));
@@ -187,5 +187,15 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
     @Override
     public void addAdditionalPreOption(String option) {
         additionalPreOptions.add(option);
+    }
+
+    @Override
+    public void addNativeLinkerOption(String option) {
+        nativeLinkerOptions.add(option);
+    }
+
+    protected List<String> getNativeLinkerOptions() {
+        return Stream.of(nativeLinkerOptions, Options.NativeLinkerOption.getValue().values())
+                        .flatMap(Collection::stream).collect(Collectors.toList());
     }
 }

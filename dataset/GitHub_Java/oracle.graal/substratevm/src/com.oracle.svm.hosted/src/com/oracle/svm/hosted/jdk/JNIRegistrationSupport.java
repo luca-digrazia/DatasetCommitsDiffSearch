@@ -80,7 +80,6 @@ class JNIRegistrationSupport extends JNIRegistrationUtil implements GraalFeature
 
     private final ConcurrentMap<String, Boolean> registeredLibraries = new ConcurrentHashMap<>();
     private NativeLibraries nativeLibraries = null;
-    private boolean isSunMSCAPIProviderReachable = false;
 
     public static JNIRegistrationSupport singleton() {
         return ImageSingletons.lookup(JNIRegistrationSupport.class);
@@ -89,13 +88,6 @@ class JNIRegistrationSupport extends JNIRegistrationUtil implements GraalFeature
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
         nativeLibraries = ((BeforeAnalysisAccessImpl) access).getNativeLibraries();
-    }
-
-    @Override
-    public void afterAnalysis(AfterAnalysisAccess access) {
-        if (isWindows()) {
-            isSunMSCAPIProviderReachable = access.isReachable(clazz(access, "sun.security.mscapi.SunMSCAPI"));
-        }
     }
 
     @Override
@@ -123,7 +115,7 @@ class JNIRegistrationSupport extends JNIRegistrationUtil implements GraalFeature
     }
 
     void registerLibrary(String libname) {
-        if (libname != null && registeredLibraries.putIfAbsent(libname, Boolean.TRUE) == null) {
+        if (libname != null && registeredLibraries.putIfAbsent(libname, Boolean.TRUE) != Boolean.TRUE) {
             /*
              * If a library is in our list of static standard libraries, add the library to the
              * linker command.
@@ -194,10 +186,10 @@ class JNIRegistrationSupport extends JNIRegistrationUtil implements GraalFeature
                     continue;
                 }
 
-                if (libname.equals("sunmscapi") && !isSunMSCAPIProviderReachable) {
+                if (libname.equals("sunec")) {
                     /*
-                     * Ignore `sunmscapi` library if `SunMSCAPI` provider is not reachable (it's
-                     * always registered as a workaround in `Target_java_security_Provider`).
+                     * Ignore `sunec` library if it is not statically linked (we will use `SunEC` in
+                     * mode without full ECC implementation anyway).
                      */
                     debug.log(DebugContext.INFO_LEVEL, "%s: IGNORED", library);
                     continue;
