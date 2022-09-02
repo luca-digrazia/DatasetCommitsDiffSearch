@@ -83,9 +83,7 @@ public final class JRTSupport {
 final class Target_jdk_internal_jimage_ImageReader_SharedImageReader_JRTEnabled {
     @Alias //
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClass = HashMap.class, isFinal = true) //
-    // Checkstyle: stop
     static Map<Path, Target_jdk_internal_jimage_ImageReader_SharedImageReader_JRTEnabled> OPEN_FILES;
-    // Checkstyle: resume
 }
 
 @TargetClass(className = "jdk.internal.module.SystemModuleFinders", innerClass = "SystemImage", onlyWith = {JDK11OrLater.class, JRTEnabled.class})
@@ -99,14 +97,12 @@ final class Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTEnable
     static Object reader() {
         Target_jdk_internal_jimage_ImageReader_JRTEnabled localRef = READER;
         if (localRef == null) {
-            /* Checkstyle: allow synchronization. */
             synchronized (Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTEnabled.class) {
                 localRef = READER;
                 if (localRef == null) {
                     READER = localRef = Target_jdk_internal_jimage_ImageReaderFactory_JRTEnabled.getImageReader();
                 }
             }
-            /* Checkstyle: disallow synchronization. */
         }
         return localRef;
     }
@@ -143,7 +139,7 @@ final class Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTDisabl
 @TargetClass(className = "sun.net.www.protocol.jrt.Handler", onlyWith = {JDK11OrLater.class, JRTDisabled.class})
 final class Target_sun_net_www_protocol_jrt_Handler_JRTDisabled {
     @Substitute
-    @SuppressWarnings({"unused", "static-method"})
+    @SuppressWarnings("unused")
     protected URLConnection openConnection(URL url) throws IOException {
         throw VMError.unsupportedFeature("JavaRuntimeURLConnection not available.");
     }
