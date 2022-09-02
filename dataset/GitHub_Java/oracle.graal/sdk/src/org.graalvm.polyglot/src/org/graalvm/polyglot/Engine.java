@@ -475,8 +475,7 @@ public final class Engine implements AutoCloseable {
         }
 
         /**
-         * Creates a new engine instance from the configuration provided in the builder. The same
-         * engine builder can be used to create multiple engine instances.
+         *
          *
          * @since 1.0
          */
