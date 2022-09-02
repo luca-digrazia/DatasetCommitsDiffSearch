@@ -101,6 +101,7 @@ import com.oracle.truffle.api.utilities.TriState;
  * <li>{@link Byte}, {@link Short}, {@link Integer}, {@link Long}, {@link Float} and {@link Double}
  * are interpreted as {@link #isNumber(Object) number} values.
  * </ul>
+ * <p>
  * Note that {@code null} is <i>never</i> a valid interop value. Instead, use a
  * {@link TruffleObject} which implements {@link #isNull(Object)} message.
  * <p>
