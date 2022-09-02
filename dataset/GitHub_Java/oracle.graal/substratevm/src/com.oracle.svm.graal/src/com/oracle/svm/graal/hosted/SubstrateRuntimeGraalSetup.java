@@ -26,7 +26,6 @@ package com.oracle.svm.graal.hosted;
 
 import java.util.function.Function;
 
-import org.graalvm.compiler.nodes.spi.LoopsDataProvider;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 
@@ -46,27 +45,19 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class SubstrateRuntimeGraalSetup implements RuntimeGraalSetup {
 
-    protected GraalProviderObjectReplacements providerObjectReplacements;
-
     @Override
     public GraalProviderObjectReplacements getProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        if (providerObjectReplacements != null) {
-            return providerObjectReplacements;
-        }
-
         if (SubstrateOptions.supportCompileInIsolates()) {
-            providerObjectReplacements = new IsolateAwareProviderObjectReplacements(aMetaAccess);
-        } else {
-            providerObjectReplacements = new GraalProviderObjectReplacements(aMetaAccess);
+            return new IsolateAwareProviderObjectReplacements(aMetaAccess);
         }
-        return providerObjectReplacements;
+        return new GraalProviderObjectReplacements(aMetaAccess);
     }
 
     @Override
     public SharedRuntimeConfigurationBuilder createRuntimeConfigurationBuilder(OptionValues options, SVMHost hostVM, AnalysisUniverse aUniverse, MetaAccessProvider metaAccess,
                     ConstantReflectionProvider originalReflectionProvider, Function<Providers, SubstrateBackend> backendProvider,
-                    NativeLibraries nativeLibraries, ClassInitializationSupport classInitializationSupport, LoopsDataProvider loopsDataProvider) {
-        return new SubstrateRuntimeConfigurationBuilder(options, hostVM, aUniverse, metaAccess, originalReflectionProvider, backendProvider, nativeLibraries, classInitializationSupport,
-                        loopsDataProvider);
+                    NativeLibraries nativeLibraries, ClassInitializationSupport classInitializationSupport) {
+
+        return new SubstrateRuntimeConfigurationBuilder(options, hostVM, aUniverse, metaAccess, originalReflectionProvider, backendProvider, nativeLibraries, classInitializationSupport);
     }
 }
