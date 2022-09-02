@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,24 +39,29 @@ import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningDecision;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Ignore;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.oracle.truffle.api.test.ReflectionUtils;
 
 public class PerformanceTruffleInliningTest extends TruffleInliningTest {
 
-    @Before
-    @Override
-    public void before() {
-        // Needed to make some tests actually blow the budget
-        setupContext("engine.InliningRecursionDepth", "4");
+    // Needed to make some tests actually blow the budget
+    private static TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope maxRecursiveDepthScope;
+
+    @BeforeClass
+    public static void beforeClass() {
+        maxRecursiveDepthScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleMaximumRecursiveInlining, 4);
+    }
+
+    @AfterClass
+    public static void afterClass() {
+        maxRecursiveDepthScope.close();
     }
 
     @Test
-    @Ignore("Test needs to be updated it behaved wrongly when knownCallSites was taken into account. See GR-19271.")
     public void testThreeTangledRecursions() {
         // @formatter:off
         OptimizedCallTarget target = builder.
@@ -72,14 +77,13 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
                     calls("one").
                     calls("two").
                     calls("three").
-                buildTarget(false);
+                buildTarget();
         // @formatter:on
         assertRootCallsExplored(target, 2);
         assertBudget(target);
     }
 
     @Test
-    @Ignore("Budget assertion is wrong when knownCallSites are taken into account. See See GR-19271.")
     public void testFourTangledRecursions() {
         // @formatter:off
         OptimizedCallTarget target = builder.
@@ -105,7 +109,7 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
                     calls("four").
                 buildTarget();
         // @formatter:on
-        assertRootCallsExplored(target, 2);
+        assertRootCallsExplored(target, 1);
         assertBudget(target);
     }
 
@@ -155,7 +159,7 @@ public class PerformanceTruffleInliningTest extends TruffleInliningTest {
                 knowsCallSites++;
             }
         }
-        // The exploration budget should be exceeded before exploring the other 2 call sites of the
+        // The exploration brudged should be blown before exploring the other 2 call sites of the
         // root
         Assert.assertEquals("Only one target should not know about it's call sites!", explored, knowsCallSites);
     }
