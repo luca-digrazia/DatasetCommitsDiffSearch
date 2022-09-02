@@ -35,8 +35,8 @@ public class AbstractBreakpointInfo implements BreakpointInfo {
     }
 
     @Override
-    public void addSuspendPolicy(byte policy) {
-        this.suspendPolicy = policy;
+    public void addSuspendPolicy(byte suspendPolicy) {
+        this.suspendPolicy = suspendPolicy;
     }
 
     @Override

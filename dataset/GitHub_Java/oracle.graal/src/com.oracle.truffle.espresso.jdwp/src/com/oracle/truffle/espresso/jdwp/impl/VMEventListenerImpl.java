@@ -39,7 +39,7 @@ import java.util.regex.Pattern;
 public class VMEventListenerImpl implements VMEventListener {
 
     private final SocketConnection connection;
-    private final Ids<Object> ids;
+    private final Ids ids;
     private final JDWPContext context;
     private HashMap<Integer, ClassPrepareRequest> classPrepareRequests = new HashMap<>();
     private HashMap<Integer, BreakpointInfo> breakpointRequests = new HashMap<>();
@@ -74,11 +74,13 @@ public class VMEventListenerImpl implements VMEventListener {
             } else {
                 KlassRef[] allLoadedClasses = context.getAllLoadedClasses();
                 for (KlassRef klass : allLoadedClasses) {
-                    String dotName = klass.getNameAsString().replace('/', '.');
-                    Matcher matcher = patt.matcher(dotName);
+                    for (ClassPrepareRequest cpr : getAllClassPrepareRequests()) {
+                        String dotName = klass.getNameAsString().replace('/', '.');
+                        Matcher matcher = patt.matcher(dotName);
 
-                    if (matcher.matches()) {
-                        return getPreparedCallable(request, klass);
+                        if (matcher.matches()) {
+                            return getPreparedCallable(request, klass);
+                        }
                     }
                 }
             }

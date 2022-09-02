@@ -223,9 +223,7 @@ public class DebuggerConnection implements JDWPCommands {
                 System.err.println("Should not get any reply packet from debugger");
             } else {
                 // process a command packet from debugger
-                if (JDWPDebuggerController.isDebug(JDWPDebuggerController.Debug.PACKET)) {
-                    System.out.println("received command(" + packet.cmdSet + "." + packet.cmd + ")");
-                }
+                //System.out.println("received command(" + packet.cmdSet + "." + packet.cmd + ")");
                 switch (packet.cmdSet) {
                     case JDWP.VirtualMachine.ID: {
                         switch (packet.cmd) {
@@ -473,9 +471,7 @@ public class DebuggerConnection implements JDWPCommands {
                 }
             }
             if (result != null && result.getReply() != null) {
-                if (JDWPDebuggerController.isDebug(JDWPDebuggerController.Debug.PACKET)) {
-                    System.out.println("replying to command(" + packet.cmdSet + "." + packet.cmd + ")");
-                }
+                //System.out.println("replying to command(" + packet.cmdSet + "." + packet.cmd + ")");
                 connection.queuePacket(result.getReply());
             } else {
                 System.err.println("no result for command(" + packet.cmdSet + "." + packet.cmd + ")");
