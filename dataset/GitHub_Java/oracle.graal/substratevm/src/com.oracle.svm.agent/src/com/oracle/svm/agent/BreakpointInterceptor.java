@@ -519,6 +519,8 @@ final class BreakpointInterceptor {
         check(jvmti.getFunctions().AddCapabilities().invoke(jvmti, capabilities));
         UnmanagedMemory.free(capabilities);
 
+        Support.check(jvmti.getFunctions().SetEventNotificationMode().invoke(jvmti, JvmtiEventMode.JVMTI_ENABLE, JVMTI_EVENT_BREAKPOINT, nullHandle()));
+
         callbacks.setBreakpoint(onBreakpointLiteral.getFunctionPointer());
 
         BreakpointInterceptor.traceWriter = writer;
@@ -561,7 +563,6 @@ final class BreakpointInterceptor {
         }
 
         installedBreakpoints = breakpoints;
-        Support.check(jvmti.getFunctions().SetEventNotificationMode().invoke(jvmti, JvmtiEventMode.JVMTI_ENABLE, JVMTI_EVENT_BREAKPOINT, nullHandle()));
     }
 
     public static void onUnload(JNIEnvironment env) {

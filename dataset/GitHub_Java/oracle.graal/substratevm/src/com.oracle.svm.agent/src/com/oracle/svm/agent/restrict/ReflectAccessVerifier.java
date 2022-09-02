@@ -45,11 +45,11 @@ import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.c.type.WordPointer;
 
 import com.oracle.svm.agent.Agent;
-import com.oracle.svm.agent.Support;
 import com.oracle.svm.agent.Support.WordPredicate;
 import com.oracle.svm.agent.Support.WordSupplier;
 import com.oracle.svm.agent.jvmti.JvmtiError;
 import com.oracle.svm.configure.config.ConfigurationMethod;
+import com.oracle.svm.configure.config.TypeConfiguration;
 import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIFieldId;
@@ -59,11 +59,9 @@ import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 import jdk.vm.ci.meta.MetaUtil;
 
 public class ReflectAccessVerifier extends AbstractAccessVerifier {
-    private final TypeAccessChecker typeAccessChecker;
 
-    public ReflectAccessVerifier(TypeAccessChecker typeAccessChecker, AccessAdvisor advisor) {
-        super(advisor);
-        this.typeAccessChecker = typeAccessChecker;
+    public ReflectAccessVerifier(TypeConfiguration configuration, AccessAdvisor advisor) {
+        super(configuration, advisor);
     }
 
     public boolean verifyForName(JNIEnvironment env, JNIObjectHandle callerClass, JNIObjectHandle name) {
@@ -71,7 +69,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
             return true;
         }
         String className = fromJniString(env, name);
-        if (className != null && typeAccessChecker.getConfiguration().get(className) != null) {
+        if (className != null && configuration.get(className) != null) {
             return true;
         }
         try (CCharPointerHolder message = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit access to class: " + className)) {
@@ -86,7 +84,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
             return true;
         }
         JNIFieldId field = jniFunctions().getFromReflectedField().invoke(env, result);
-        if (field.isNonNull() && typeAccessChecker.isFieldAccessible(env, clazz, () -> fromJniString(env, name), field, declaring)) {
+        if (field.isNonNull() && isFieldAccessible(env, clazz, () -> fromJniString(env, name), field, declaring)) {
             return true;
         }
         try (CCharPointerHolder message = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit access to field: " +
@@ -121,11 +119,11 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
             return true;
         }
         JNIMethodId method = jniFunctions().getFromReflectedMethod().invoke(env, result);
-        return method.isNonNull() && typeAccessChecker.isMethodAccessible(env, clazz, name, () -> signature, method, clazz);
+        return method.isNonNull() && isMethodAccessible(env, clazz, name, () -> signature, method, clazz);
     }
 
     private boolean verifyGetMethod0(JNIEnvironment env, JNIObjectHandle clazz, String name, Supplier<String> signature, JNIMethodId method, JNIObjectHandle declaring) {
-        if (method.isNonNull() && typeAccessChecker.isMethodAccessible(env, clazz, name, signature, method, declaring)) {
+        if (method.isNonNull() && isMethodAccessible(env, clazz, name, signature, method, declaring)) {
             return true;
         }
         try (CCharPointerHolder message = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit access to method: " +
@@ -190,7 +188,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
                 CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
                 CCharPointerPointer signaturePtr = StackValue.get(CCharPointerPointer.class);
                 if (jvmtiFunctions().GetMethodName().invoke(jvmtiEnv(), method, namePtr, signaturePtr, nullPointer()) == JvmtiError.JVMTI_ERROR_NONE) {
-                    boolean accessible = typeAccessChecker.isMethodAccessible(env, clazz, fromCString(namePtr.read()), () -> fromCString(signaturePtr.read()), method, declaring);
+                    boolean accessible = isMethodAccessible(env, clazz, fromCString(namePtr.read()), () -> fromCString(signaturePtr.read()), method, declaring);
                     if (!accessible) {
                         beforeFilter(() -> "Method " + getClassNameOrNull(env, clazz) + "." + fromCString(namePtr.read()) + fromCString(signaturePtr.read()));
                     }
@@ -249,8 +247,16 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
                 }
             }
             if (declaring.notEqual(nullHandle())) {
-                Supplier<String> nameSupplier = () -> Support.getFieldName(clazz, field);
-                if (typeAccessChecker.isFieldAccessible(env, clazz, nameSupplier, field, declaring)) {
+                Supplier<String> nameSupplier = () -> {
+                    String result = null;
+                    CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
+                    if (jvmtiFunctions().GetFieldName().invoke(jvmtiEnv(), clazz, field, namePtr, nullPointer(), nullPointer()) == JvmtiError.JVMTI_ERROR_NONE) {
+                        result = fromCString(namePtr.read());
+                        jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), namePtr.read());
+                    }
+                    return result;
+                };
+                if (isFieldAccessible(env, clazz, nameSupplier, field, declaring)) {
                     return true;
                 }
                 beforeFilter(() -> "Method " + getClassNameOrNull(env, clazz) + "." + nameSupplier.get());
