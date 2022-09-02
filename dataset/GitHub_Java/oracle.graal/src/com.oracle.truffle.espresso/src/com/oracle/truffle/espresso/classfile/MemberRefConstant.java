@@ -64,7 +64,6 @@ public interface MemberRefConstant extends PoolConstant {
     abstract class Indexes implements MemberRefConstant {
 
         final char classIndex;
-
         final char nameAndTypeIndex;
 
         Indexes(int classIndex, int nameAndTypeIndex) {

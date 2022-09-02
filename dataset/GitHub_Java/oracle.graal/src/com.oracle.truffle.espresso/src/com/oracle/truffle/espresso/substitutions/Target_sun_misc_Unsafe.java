@@ -214,9 +214,9 @@ public final class Target_sun_misc_Unsafe {
         }
         if (holder.isStaticStorage()) {
             // Lookup static field in current class.
-            return holder.getKlass().lookupStaticFieldTable(slot);
+            return holder.getKlass().lookupStaticField(slot);
         } else {
-            return holder.getKlass().lookupFieldTable(slot);
+            return holder.getKlass().lookupField(slot);
         }
 
     }
