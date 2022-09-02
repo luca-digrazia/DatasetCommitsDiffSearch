@@ -501,7 +501,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
     public NativeTextSectionImpl getTextSectionImpl(RelocatableBuffer buffer, ObjectFile objectFile, NativeImageCodeCache codeCache) {
         return new NativeTextSectionImpl(buffer, objectFile, codeCache) {
             @Override
-            protected void defineMethodSymbol(String name, boolean global, Element section, HostedMethod method, CompilationResult result) {
+            protected void defineMethodSymbol(String name, Element section, HostedMethod method, CompilationResult result) {
                 objectFile.createUndefinedSymbol(name, 0, true);
             }
         };
@@ -512,11 +512,8 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         String relocatableFileName = tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()).toString();
         try {
             Path src = Paths.get(bitcodeFileName);
-            Path parent = Paths.get(relocatableFileName).getParent();
-            if (parent != null) {
-                Path dst = parent.resolve(src.getFileName());
-                Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
-            }
+            Path dst = Paths.get(relocatableFileName).getParent().resolve(src.getFileName());
+            Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             throw new GraalError("Error copying " + bitcodeFileName + ": " + e);
         }
