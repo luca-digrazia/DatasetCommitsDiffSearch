@@ -237,9 +237,7 @@ public final class SLFunction implements TruffleObject {
          * @see Specialization
          *
          * @param function the dynamically provided function
-         * @param arguments the arguments to the function
-         * @param callTargetStable The assumption object assuming the function was not redefined.
-         * @param cachedTarget The call target we aim to invoke
+         * @param cachedFunction the cached function of the specialization instance
          * @param callNode the {@link DirectCallNode} specifically created for the
          *            {@link CallTarget} in cachedFunction.
          */

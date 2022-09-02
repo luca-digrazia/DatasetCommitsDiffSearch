@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,7 @@
  */
 package com.oracle.truffle.sl.nodes;
 
-import java.io.File;
-
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.GenerateWrapper;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
@@ -83,6 +82,7 @@ public abstract class SLStatementNode extends Node implements InstrumentableNode
      * For more details see {@link InstrumentableNode}.
      */
     @Override
+    @TruffleBoundary
     public final SourceSection getSourceSection() {
         if (sourceCharIndex == NO_SOURCE) {
             // AST node without source
@@ -99,7 +99,11 @@ public abstract class SLStatementNode extends Node implements InstrumentableNode
         }
         Source source = rootSourceSection.getSource();
         if (sourceCharIndex == UNAVAILABLE_SOURCE) {
-            return source.createUnavailableSection();
+            if (hasRootTag && !rootSourceSection.isAvailable()) {
+                return rootSourceSection;
+            } else {
+                return source.createUnavailableSection();
+            }
         } else {
             return source.createSection(sourceCharIndex, sourceLength);
         }
@@ -145,7 +149,7 @@ public abstract class SLStatementNode extends Node implements InstrumentableNode
     public boolean hasTag(Class<? extends Tag> tag) {
         if (tag == StandardTags.StatementTag.class) {
             return hasStatementTag;
-        } else if (tag == StandardTags.RootTag.class) {
+        } else if (tag == StandardTags.RootTag.class || tag == StandardTags.RootBodyTag.class) {
             return hasRootTag;
         }
         return false;
@@ -168,7 +172,8 @@ public abstract class SLStatementNode extends Node implements InstrumentableNode
     }
 
     /**
-     * Marks this node as being a {@link StandardTags.RootTag} for instrumentation purposes.
+     * Marks this node as being a {@link StandardTags.RootTag} and {@link StandardTags.RootBodyTag}
+     * for instrumentation purposes.
      */
     public final void addRootTag() {
         hasRootTag = true;
@@ -201,7 +206,7 @@ public abstract class SLStatementNode extends Node implements InstrumentableNode
         if (section == null || section.getSource() == null) {
             return "<unknown source>";
         } else {
-            String sourceName = new File(section.getSource().getName()).getName();
+            String sourceName = section.getSource().getName();
             int startLine = section.getStartLine();
             return String.format("%s:%d%s", sourceName, startLine, estimated ? "~" : "");
         }
