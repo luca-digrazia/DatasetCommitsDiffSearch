@@ -49,6 +49,10 @@ public class SubstitutionType implements ResolvedJavaType, OriginalClassProvider
      */
     private final boolean isUserSubstitution;
 
+    public SubstitutionType(ResolvedJavaType original, ResolvedJavaType annotated) {
+        this(original, annotated, false);
+    }
+
     public SubstitutionType(ResolvedJavaType original, ResolvedJavaType annotated, boolean isUserSubstitution) {
         this.annotated = annotated;
         this.original = original;
