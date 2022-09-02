@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.runtime.library.internal;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -43,7 +44,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 abstract class LLVMNativeLibraryDefaults {
 
-    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Object.class, useForAOT = false)
+    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Object.class)
     static class DefaultLibrary {
 
         @ExportMessage
@@ -139,7 +140,7 @@ abstract class LLVMNativeLibraryDefaults {
 
     }
 
-    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Long.class, useForAOT = true, useForAOTPriority = 0)
+    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Long.class)
     static class LongLibrary {
 
         /**
@@ -162,7 +163,7 @@ abstract class LLVMNativeLibraryDefaults {
         }
     }
 
-    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = byte[].class, useForAOTPriority = 0)
+    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = int[].class)
     static class ArrayLibrary {
 
         /**
@@ -170,7 +171,7 @@ abstract class LLVMNativeLibraryDefaults {
          * @see LLVMNativeLibrary#isPointer(Object)
          */
         @ExportMessage
-        static boolean isPointer(byte[] receiver) {
+        static boolean isPointer(int[] receiver) {
             return false;
         }
 
@@ -179,18 +180,15 @@ abstract class LLVMNativeLibraryDefaults {
          * @see LLVMNativeLibrary#asPointer(Object)
          */
         @ExportMessage
-        static long asPointer(byte[] receiver) throws UnsupportedMessageException {
+        static long asPointer(int[] receiver) throws UnsupportedMessageException {
             throw UnsupportedMessageException.create();
         }
 
-        /**
-         * @param receiver
-         * @see LLVMNativeLibrary#asPointer(Object)
-         */
         @ExportMessage
-        static LLVMNativePointer toNativePointer(byte[] receiver,
+        static LLVMNativePointer toNativePointer(int[] receiver,
                         @CachedLibrary("receiver") LLVMNativeLibrary self) {
-            throw new LLVMPolyglotException(self, "Cannot convert virtual allocation object to native pointer.");
+            CompilerDirectives.transferToInterpreter();
+            throw new LLVMPolyglotException(self, "Cannot convert virtual allocation object to native pointer.", receiver);
         }
     }
 }
