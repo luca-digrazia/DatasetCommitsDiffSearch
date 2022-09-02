@@ -251,9 +251,11 @@ final class Target_java_lang_ClassLoader {
         return ClassForNameSupport.forNameOrNull(name, false);
     }
 
-    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = ConcurrentHashMap.class)//
-    @TargetElement(onlyWith = JDK11OrLater.class)//
-    private ConcurrentHashMap<?, ?> classLoaderValueMap;
+    @Substitute //
+    @TargetElement(onlyWith = JDK11OrLater.class) //
+    ConcurrentHashMap<?, ?> createOrGetClassLoaderValueMap() {
+        throw VMError.unsupportedFeature("JDK11OrLater: Target_java_lang_ClassLoader.createOrGetClassLoaderValueMap()");
+    }
 
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
