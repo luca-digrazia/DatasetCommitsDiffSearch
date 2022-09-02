@@ -195,11 +195,7 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
         return null;
     }
 
-    /*
-     * Used by the traversing queue to pick the best task. A comparator is currently not meant to
-     * use this method, because the weight is dynamic, and relying on it in the ordering could
-     * corrupt a queue data structure.
-     */
+    // Used by the traversing queue to pick the best task
     public boolean isHigherPriorityThan(CompilationTask other) {
         int tier = tier();
         if (traversingFirstTierPriority && tier != other.tier()) {
