@@ -69,7 +69,6 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.TypeLiteral;
@@ -411,14 +410,6 @@ public class ValueHostInteropTest extends AbstractPolyglotTest {
         assertFalse(context.asValue(new Object()).isNull());
     }
 
-    @Test
-    public void testClassStaticMembers() {
-        Value stringClass = context.asValue(String.class);
-        Value stringStatic = stringClass.getMember("static");
-        assertEquals("concatenated", stringStatic.getMember("join").execute("cat", "con", "enated").asString());
-        assertEquals(String.class, stringStatic.getMember("class").asHostObject());
-    }
-
     @FunctionalInterface
     public interface FunctionalWithDefaults {
         Object call(Object... args);
@@ -448,15 +439,6 @@ public class ValueHostInteropTest extends AbstractPolyglotTest {
         String toString();
 
         Object call(Object... args);
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void executableAsFunction() throws Exception {
-        TruffleObject executable = new FunctionObject();
-        Function<Integer, Integer> f = context.asValue(executable).as(Function.class);
-        assertEquals(13, (int) f.apply(13));
-        assertTrue(f.equals(f));
     }
 
     @Test
