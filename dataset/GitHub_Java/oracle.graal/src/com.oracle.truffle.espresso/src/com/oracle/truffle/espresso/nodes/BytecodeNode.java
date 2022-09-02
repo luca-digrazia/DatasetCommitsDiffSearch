@@ -602,6 +602,12 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 if (instrument != null) {
                     instrument.notifyStatement(frame, statementIndex, nextStatementIndex);
                     statementIndex = nextStatementIndex;
+
+                    // check for early return
+                    Object earlyReturnValue = getContext().getJDWPListener().getAndRemoveEarlyReturnValue();
+                    if (earlyReturnValue != null) {
+                        return notifyReturn(frame, statementIndex, exitMethodEarlyAndReturn(earlyReturnValue));
+                    }
                 }
 
                 // @formatter:off
@@ -1003,7 +1009,26 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                     case CHECKCAST: top += quickenCheckCast(frame, top, curBCI, curOpcode); break;
                     case INSTANCEOF: top += quickenInstanceOf(frame, top, curBCI, curOpcode); break;
 
-                    case MONITORENTER: monitorEnter(frame, nullCheck(peekAndReleaseObject(frame, top - 1))); break;
+                    case MONITORENTER:
+                        final StaticObject monitor = nullCheck(peekAndReleaseObject(frame, top - 1));
+                        if (instrument != null) {
+                            final int index = statementIndex;
+
+                            monitorEnter(frame, monitor, new Runnable() {
+                                @Override
+                                public void run() {
+                                    instrument.notifyMonitorContended(frame, index, monitor);
+                                }
+                            }, new Runnable() {
+                                @Override
+                                public void run() {
+                                    instrument.notifyMonitorContendedEntered(frame, index, monitor);
+                                }
+                            });
+                        } else {
+                            monitorEnter(frame, monitor);
+                        }
+                        break;
                     case MONITOREXIT:  monitorExit(frame, nullCheck(peekAndReleaseObject(frame, top - 1))); break;
 
                     case WIDE:
@@ -1138,9 +1163,29 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         getMonitorStack(frame).exit(monitor, this);
     }
 
-    private void monitorEnter(VirtualFrame frame, StaticObject monitor) {
+    void synchronizedMethodMonitorEnter(VirtualFrame frame, StaticObject monitor) {
+        Runnable monitorContendedEnterCallback = instrumentation == null ? null : new Runnable() {
+            @Override
+            public void run() {
+                instrumentation.notifyMonitorContended(frame, 0, monitor);
+            }
+        };
+        Runnable monitorContendedEnteredCallback = instrumentation == null ? null : new Runnable() {
+            @Override
+            public void run() {
+                instrumentation.notifyMonitorContendedEntered(frame, 0, monitor);
+            }
+        };
+        InterpreterToVM.monitorEnter(monitor, monitorContendedEnterCallback, monitorContendedEnteredCallback);
+    }
+
+    private void monitorEnter(VirtualFrame frame, StaticObject monitor, Runnable monitorContendedEnterCallback, Runnable monitorContendedEnteredCallback) {
         registerMonitor(frame, monitor);
-        InterpreterToVM.monitorEnter(monitor);
+        InterpreterToVM.monitorEnter(monitor, monitorContendedEnterCallback, monitorContendedEnteredCallback);
+    }
+
+    private void monitorEnter(VirtualFrame frame, StaticObject monitor) {
+        monitorEnter(frame, monitor, null, null);
     }
 
     private void registerMonitor(VirtualFrame frame, StaticObject monitor) {
@@ -1571,7 +1616,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 // instruction throws an IncompatibleClassChangeError.
                 if (!resolved.isStatic()) {
                     CompilerDirectives.transferToInterpreter();
-                    throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                    throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
                 }
                 break;
             case INVOKEINTERFACE:
@@ -1579,7 +1624,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 // instruction throws an IncompatibleClassChangeError.
                 if (resolved.isStatic() || resolved.isPrivate()) {
                     CompilerDirectives.transferToInterpreter();
-                    throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                    throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
                 }
                 break;
             case INVOKEVIRTUAL:
@@ -1587,7 +1632,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 // instruction throws an IncompatibleClassChangeError.
                 if (resolved.isStatic()) {
                     CompilerDirectives.transferToInterpreter();
-                    throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                    throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
                 }
                 break;
             case INVOKESPECIAL:
@@ -1597,14 +1642,14 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 if (resolved.isConstructor()) {
                     if (resolved.getDeclaringKlass().getName() != getConstantPool().methodAt(bs.readCPI(curBCI)).getHolderKlassName(getConstantPool())) {
                         CompilerDirectives.transferToInterpreter();
-                        throw getMeta().throwException(getMeta().java_lang_NoSuchMethodError);
+                        throw Meta.throwException(getMeta().java_lang_NoSuchMethodError);
                     }
                 }
                 // Otherwise, if the resolved method is a class (static) method, the invokespecial
                 // instruction throws an IncompatibleClassChangeError.
                 if (resolved.isStatic()) {
                     CompilerDirectives.transferToInterpreter();
-                    throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                    throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
                 }
                 // If all of the following are true, let C be the direct superclass of the current
                 // class:
@@ -1758,13 +1803,13 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 ptypes[i] = meta.resolveSymbol(paramType, accessingKlass.getDefiningClassLoader()).mirror();
             }
         } catch (Throwable e) {
-            throw meta.throwException(meta.java_lang_NoClassDefFoundError);
+            throw Meta.throwException(meta.java_lang_NoClassDefFoundError);
         }
         StaticObject rtype;
         try {
             rtype = meta.resolveSymbol(rt, accessingKlass.getDefiningClassLoader()).mirror();
         } catch (Throwable e) {
-            throw meta.throwException(meta.java_lang_BootstrapMethodError);
+            throw Meta.throwException(meta.java_lang_BootstrapMethodError);
         }
         return (StaticObject) meta.java_lang_invoke_MethodHandleNatives_findMethodHandleType.invokeDirect(
                         null,
@@ -1836,6 +1881,15 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
     private static Object exitMethodAndReturn() {
         return exitMethodAndReturnObject(StaticObject.NULL);
+    }
+
+    private Object exitMethodEarlyAndReturn(Object result) {
+        if (Signatures.returnKind(getMethod().getParsedSignature()) == JavaKind.Void) {
+            return exitMethodAndReturn();
+        } else {
+            System.out.println("returning result: " + result + " of type: " + result.getClass());
+            return result;
+        }
     }
 
     // endregion Method return
@@ -1937,14 +1991,14 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         if (value != 0) {
             return value;
         }
-        throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ArithmeticException, "/ by zero");
+        throw Meta.throwExceptionWithMessage(getMeta().java_lang_ArithmeticException, "/ by zero");
     }
 
     private long checkNonZero(long value) {
         if (value != 0L) {
             return value;
         }
-        throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ArithmeticException, "/ by zero");
+        throw Meta.throwExceptionWithMessage(getMeta().java_lang_ArithmeticException, "/ by zero");
     }
 
     // endregion Misc. checks
@@ -1970,7 +2024,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             // IncompatibleClassChangeError.
             if (field.isStatic()) {
                 CompilerDirectives.transferToInterpreter();
-                throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
             }
             // Otherwise, if the field is final, it must be declared in the current class, and
             // the instruction must occur in an instance initialization method (<init>) of the
@@ -1980,7 +2034,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 // Enforced in class files >= v53 (9).
                 if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass())) {
                     CompilerDirectives.transferToInterpreter();
-                    throw getMeta().throwException(getMeta().java_lang_IllegalAccessError);
+                    throw Meta.throwException(getMeta().java_lang_IllegalAccessError);
                 }
             }
         } else if (opcode == PUTSTATIC) {
@@ -1988,7 +2042,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             // field, putstatic throws an IncompatibleClassChange
             if (!field.isStatic()) {
                 CompilerDirectives.transferToInterpreter();
-                throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
             }
             // Otherwise, if the field is final, it must be declared in the current class, and the
             // instruction must occur in the <clinit> method of the current class. Otherwise, an
@@ -1998,7 +2052,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 // Enforced in class files >= v53 (9).
                 if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass())) {
                     CompilerDirectives.transferToInterpreter();
-                    throw getMeta().throwException(getMeta().java_lang_IllegalAccessError);
+                    throw Meta.throwException(getMeta().java_lang_IllegalAccessError);
                 }
             }
         }
@@ -2100,14 +2154,14 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             // IncompatibleClassChangeError.
             if (field.isStatic()) {
                 CompilerDirectives.transferToInterpreter();
-                throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
             }
         } else if (opcode == GETSTATIC) {
             // Otherwise, if the resolved field is not a static (class) field or an interface
             // field, getstatic throws an IncompatibleClassChangeError.
             if (!field.isStatic()) {
                 CompilerDirectives.transferToInterpreter();
-                throw getMeta().throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
             }
         }
 
@@ -2345,6 +2399,18 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
         public void notifyFieldAccess(VirtualFrame frame, int index, Field field, StaticObject receiver) {
             if (context.getJDWPListener().hasFieldAccessBreakpoint(field, receiver)) {
+                enterAt(frame, index);
+            }
+        }
+
+        public void notifyMonitorContended(VirtualFrame frame, int index, Object monitor) {
+            if (context.getJDWPListener().prepareMonitorContended(monitor)) {
+                enterAt(frame, index);
+            }
+        }
+
+        public void notifyMonitorContendedEntered(VirtualFrame frame, int index, Object monitor) {
+            if (context.getJDWPListener().prepareMonitorContendedEntered(monitor)) {
                 enterAt(frame, index);
             }
         }

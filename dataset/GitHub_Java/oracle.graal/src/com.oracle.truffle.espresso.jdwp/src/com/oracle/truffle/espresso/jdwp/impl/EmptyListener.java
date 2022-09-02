@@ -65,6 +65,16 @@ public final class EmptyListener implements VMListener {
     }
 
     @Override
+    public boolean prepareMonitorContended(Object monitor) {
+        return false;
+    }
+
+    @Override
+    public boolean prepareMonitorContendedEntered(Object monitor) {
+        return false;
+    }
+
+    @Override
     public void monitorWait(Object monitor, long timeout) {
 
     }
@@ -75,22 +85,27 @@ public final class EmptyListener implements VMListener {
     }
 
     @Override
-    public void onContendedMonitorEnter(Object monitor) {
+    public void addOwnedMonitor(Object monitor) {
 
     }
 
     @Override
-    public void onContendedMonitorEntered(Object monitor) {
+    public void removeOwnedMonitor(Object monitor) {
+
+    }
+
+    @Override
+    public Object[] getOwnedMonitors(Object thread) {
+        return new Object[0];
+    }
+
+    @Override
+    public void addCurrentContendedMonitor(Object monitor) {
 
     }
 
     @Override
     public Object getCurrentContendedMonitor(Object guestThread) {
-        return null;
-    }
-
-    @Override
-    public Object getEarlyReturnValue() {
         return null;
     }
 
@@ -101,16 +116,6 @@ public final class EmptyListener implements VMListener {
 
     @Override
     public void forceEarlyReturn(Object returnValue) {
-
-    }
-
-    @Override
-    public void onMonitorEnter(Object monitor) {
-
-    }
-
-    @Override
-    public void onMonitorExit(Object monitor) {
 
     }
 }

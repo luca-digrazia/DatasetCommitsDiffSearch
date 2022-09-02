@@ -28,11 +28,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Debugger;
-import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.FrameInstance;
+import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
@@ -52,7 +55,7 @@ import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.impl.DebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
-import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
+import com.oracle.truffle.espresso.jdwp.impl.MonitorInfo;
 import com.oracle.truffle.espresso.jdwp.impl.TypeTag;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
@@ -103,18 +106,13 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean isValidThread(Object thread, boolean checkTerminated) {
+    public boolean isValidThread(Object thread) {
         if (thread instanceof StaticObject) {
             StaticObject staticObject = (StaticObject) thread;
-            if (context.getMeta().java_lang_Thread.isAssignableFrom(staticObject.getKlass())) {
-                if (checkTerminated) {
-                    // check if thread has been terminated
-                    return getThreadStatus(thread) != Target_java_lang_Thread.State.TERMINATED.value;
-                }
-                return true;
-            }
+            return context.getMeta().java_lang_Thread.isAssignableFrom(staticObject.getKlass());
+        } else {
+            return false;
         }
-        return false;
     }
 
     @Override
@@ -511,14 +509,13 @@ public final class JDWPContextImpl implements JDWPContext {
 
     @Override
     public boolean systemExitImplemented() {
-        return true;
+        return false;
     }
 
     @Override
     public void exit(int exitCode) {
         // TODO - implement proper system exit for Espresso
         // tracked here: /browse/GR-20496
-        System.exit(exitCode);
     }
 
     @Override
@@ -542,10 +539,10 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean moreMethodCallsOnLine(RootNode callerRoot, MaterializedFrame materializedFrame) {
+    public boolean moreMethodCallsOnLine(RootNode callerRoot, FrameInstance frameInstance) {
         if (callerRoot instanceof EspressoRootNode) {
             EspressoRootNode espressoRootNode = (EspressoRootNode) callerRoot;
-            int bci = (int) readBCIFromFrame(callerRoot, materializedFrame);
+            int bci = (int) readBCIFromFrame(callerRoot, frameInstance);
             if (bci != -1) {
                 Method method = espressoRootNode.getMethod();
                 BytecodeStream bs = new BytecodeStream(method.getOriginalCode());
@@ -577,11 +574,11 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public long readBCIFromFrame(RootNode root, MaterializedFrame materializedFrame) {
-        if (root instanceof EspressoRootNode && materializedFrame != null) {
+    public long readBCIFromFrame(RootNode root, FrameInstance frameInstance) {
+        if (root instanceof EspressoRootNode && frameInstance != null) {
             EspressoRootNode rootNode = (EspressoRootNode) root;
             if (rootNode.isBytecodeNode()) {
-                return rootNode.readBCI(materializedFrame);
+                return rootNode.readBCI(frameInstance);
             }
         }
         return -1;
@@ -605,25 +602,22 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public MonitorStackInfo[] getOwnedMonitors(CallFrame[] callFrames) {
-        List<MonitorStackInfo> result = new ArrayList<>();
-        int stackDepth = 0;
-        for (CallFrame callFrame : callFrames) {
-            BytecodeNode bytecodeNode = getBytecodeNode(callFrame.getRootNode());
-            if (bytecodeNode != null) {
-                if (!bytecodeNode.usesMonitors()) {
-                    continue;
-                }
-                BytecodeNode.MonitorStack monitorStack = bytecodeNode.getMonitorStack(callFrame.getMaterializedFrame());
-                for (StaticObject monitor : monitorStack.getMonitors()) {
-                    if (monitor != null) {
-                        result.add(new MonitorStackInfo(monitor, callFrame.getMaterializedFrame(), stackDepth));
-                    }
-                }
+    public MonitorInfo getMonitorInfo(Object object) {
+        if (object instanceof StaticObject) {
+            EspressoLock lock = ((StaticObject) object).getLock();
+            Thread[] queuedThreads = lock.getWaitingThreads();
+            Object[] asGuestThreads = new Object[queuedThreads.length];
+            for (int i = 0; i < asGuestThreads.length; i++) {
+                asGuestThreads[i] = asGuestThread(queuedThreads[i]);
             }
-            stackDepth++;
+            return new MonitorInfo(asGuestThread(lock.getOwnerThread()), lock.getHoldCount(lock.getOwnerThread()), asGuestThreads);
         }
-        return result.toArray(new MonitorStackInfo[result.size()]);
+        return null;
+    }
+
+    @Override
+    public Object[] getOwnedMonitors(Object guestThread) {
+        return eventListener.getOwnedMonitors(guestThread);
     }
 
     @Override
@@ -632,28 +626,44 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean forceEarlyReturn(Object returnValue, CallFrame topFrame) {
-        // exit all monitors on the current top frame
-        MonitorStackInfo[] ownedMonitors = getOwnedMonitors(new CallFrame[]{topFrame});
-        for (MonitorStackInfo ownedMonitor : ownedMonitors) {
-            InterpreterToVM.monitorExit((StaticObject) ownedMonitor.getMonitor());
-        }
-        eventListener.forceEarlyReturn(returnValue);
-        return true;
-    }
+    public boolean forceEarlyReturn(Object returnValue) {
+        // find the currently executing method by locating the latest BytecodeNode from stack frames
+        BytecodeNode bytecodeNode = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<BytecodeNode>() {
+            @Override
+            public BytecodeNode visitFrame(FrameInstance frameInstance) {
+                CallTarget callTarget = frameInstance.getCallTarget();
+                if (callTarget == null) {
+                    return null;
+                }
+                if (callTarget instanceof RootCallTarget) {
+                    RootCallTarget rootCallTarget = (RootCallTarget) callTarget;
+                    RootNode rootNode = rootCallTarget.getRootNode();
+                    if (rootNode instanceof EspressoRootNode) {
+                        EspressoRootNode espressoRootNode = (EspressoRootNode) rootNode;
+                        if (espressoRootNode.isBytecodeNode()) {
+                            return espressoRootNode.getBytecodeNode();
+                        }
+                    }
+                }
+                return null;
+            }
+        });
 
-    public static BytecodeNode getBytecodeNode(RootNode rootNode) {
-        if (rootNode instanceof EspressoRootNode) {
-            EspressoRootNode espressoRootNode = (EspressoRootNode) rootNode;
-            if (espressoRootNode.isBytecodeNode()) {
-                return espressoRootNode.getBytecodeNode();
+        if (bytecodeNode == null) {
+            return false;
+        }
+
+        // release held monitor objects
+        if (!bytecodeNode.getMethod().isSynchronized()) {
+            // if a monitor is obtained in a synchronized block inside the method
+            // we must release it before returning early.
+            Object[] ownedMonitors = eventListener.getOwnedMonitors(asGuestThread(Thread.currentThread()));
+            for (Object ownedMonitor : ownedMonitors) {
+                InterpreterToVM.monitorExit((StaticObject) ownedMonitor);
             }
         }
-        return null;
-    }
 
-    @Override
-    public Class<? extends TruffleLanguage<?>> getLanguageClass() {
-        return EspressoLanguage.class;
+        eventListener.forceEarlyReturn(returnValue);
+        return true;
     }
 }
