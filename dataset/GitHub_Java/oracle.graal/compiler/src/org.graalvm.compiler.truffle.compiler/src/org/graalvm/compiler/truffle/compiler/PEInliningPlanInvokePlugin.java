@@ -42,6 +42,7 @@ import java.util.HashMap;
 
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumInlineNodeCount;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceInlining;
 
@@ -62,7 +63,7 @@ final class PEInliningPlanInvokePlugin implements InlineInvokePlugin {
         this.inlining = new ArrayDeque<>();
         this.inlining.push(inlining);
         this.graph = graph;
-        this.inliningNodeLimit = options.get(MaximumInlineNodeCount);
+        this.inliningNodeLimit = getPolyglotOptionValue(options, MaximumInlineNodeCount);
     }
 
     @Override
@@ -110,7 +111,7 @@ final class PEInliningPlanInvokePlugin implements InlineInvokePlugin {
     }
 
     private void logGraphTooBig() {
-        if (!graphTooBigReported && options.get(TraceInlining)) {
+        if (!graphTooBigReported && getPolyglotOptionValue(options, TraceInlining)) {
             graphTooBigReported = true;
             final HashMap<String, Object> properties = new HashMap<>();
             properties.put("graph node count", graph.getNodeCount());

@@ -51,7 +51,7 @@ import org.graalvm.compiler.truffle.compiler.nodes.InlineDecisionInjectNode;
 import org.graalvm.compiler.truffle.compiler.nodes.InlineDecisionNode;
 
 @NodeInfo(nameTemplate = "{p#truffleAST}", cycles = NodeCycles.CYCLES_IGNORED, size = NodeSize.SIZE_IGNORED)
-public final class CallNode extends Node implements Comparable<CallNode> {
+public final class CallNode extends Node {
 
     private static final NodeClass<CallNode> TYPE = NodeClass.create(CallNode.class);
     private final TruffleCallNode truffleCaller;
@@ -59,7 +59,6 @@ public final class CallNode extends Node implements Comparable<CallNode> {
     private final TruffleCallNode[] truffleCallees;
     private final double rootRelativeFrequency;
     private final int depth;
-    private final int id;
     // Effectively final, populated only as part of expansion. Cannot be final because of Successor
     // annotation
     @Successor private NodeSuccessorList<CallNode> children;
@@ -77,7 +76,7 @@ public final class CallNode extends Node implements Comparable<CallNode> {
     private Invoke invoke;
 
     // Needs to be protected because of the @NodeInfo annotation
-    protected CallNode(TruffleCallNode truffleCaller, CompilableTruffleAST truffleAST, double rootRelativeFrequency, int depth, int id) {
+    protected CallNode(TruffleCallNode truffleCaller, CompilableTruffleAST truffleAST, double rootRelativeFrequency, int depth) {
         super(TYPE);
         this.state = State.Cutoff;
         this.recursionDepth = -1;
@@ -87,7 +86,6 @@ public final class CallNode extends Node implements Comparable<CallNode> {
         this.truffleCallees = truffleAST == null ? new TruffleCallNode[0] : truffleAST.getCallNodes();
         this.children = new NodeSuccessorList<>(this, 0);
         this.depth = depth;
-        this.id = id;
     }
 
     /**
@@ -96,7 +94,7 @@ public final class CallNode extends Node implements Comparable<CallNode> {
     static CallNode makeRoot(CallTree callTree, PartialEvaluator.Request request) {
         Objects.requireNonNull(callTree);
         Objects.requireNonNull(request);
-        CallNode root = new CallNode(null, request.compilable, 1, 0, callTree.nextId());
+        CallNode root = new CallNode(null, request.compilable, 1, 0);
         callTree.add(root);
         root.ir = request.graph;
         root.policyData = callTree.getPolicy().newCallNodeData(root);
@@ -182,7 +180,7 @@ public final class CallNode extends Node implements Comparable<CallNode> {
         for (TruffleCallNode childCallNode : truffleCallees) {
             double relativeFrequency = calculateFrequency(truffleAST, childCallNode);
             double childFrequency = relativeFrequency * rootRelativeFrequency;
-            CallNode callNode = new CallNode(childCallNode, childCallNode.getCurrentCallTarget(), childFrequency, depth + 1, getCallTree().nextId());
+            CallNode callNode = new CallNode(childCallNode, childCallNode.getCurrentCallTarget(), childFrequency, depth + 1);
             getCallTree().add(callNode);
             children.add(callNode);
             callNode.policyData = getPolicy().newCallNodeData(callNode);
@@ -214,7 +212,7 @@ public final class CallNode extends Node implements Comparable<CallNode> {
     private void addIndirectChildren(GraphManager.Entry entry) {
         for (Invoke indirectInvoke : entry.indirectInvokes) {
             if (indirectInvoke != null && indirectInvoke.isAlive()) {
-                CallNode child = new CallNode(null, null, 0, depth + 1, getCallTree().nextId());
+                CallNode child = new CallNode(null, null, 0, depth + 1);
                 child.state = State.Indirect;
                 child.invoke = indirectInvoke;
                 getCallTree().add(child);
@@ -379,11 +377,6 @@ public final class CallNode extends Node implements Comparable<CallNode> {
                         ", truffleCallNode=" + truffleCaller +
                         ", truffleAST=" + truffleAST +
                         '}';
-    }
-
-    @Override
-    public int compareTo(CallNode o) {
-        return Integer.compare(id, o.id);
     }
 
     public enum State {

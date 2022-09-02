@@ -648,7 +648,7 @@ public abstract class PartialEvaluator {
             if (graph.getNodeCount() > nodeLimit) {
                 throw b.bailout("Graph too big to safely compile. Node count: " + graph.getNodeCount() + ". Limit: " + nodeLimit);
             }
-            // Continue onto other plugins.
+            // continue onto other plugins.
             return null;
         }
     }
