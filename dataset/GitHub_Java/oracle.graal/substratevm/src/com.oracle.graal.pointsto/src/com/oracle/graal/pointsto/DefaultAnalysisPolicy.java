@@ -135,9 +135,9 @@ public class DefaultAnalysisPolicy extends AnalysisPolicy {
     }
 
     @Override
-    public AbstractVirtualInvokeTypeFlow createVirtualInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
+    public AbstractVirtualInvokeTypeFlow createVirtualInvokeTypeFlow(Invoke invoke, MethodCallTargetNode target,
                     TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location) {
-        return new DefaultVirtualInvokeTypeFlow(invoke, receiverType, targetMethod, actualParameters, actualReturn, location);
+        return new DefaultVirtualInvokeTypeFlow(invoke, target, actualParameters, actualReturn, location);
     }
 
     /** Explicitly context insensitive implementation of the invoke virtual type flow update. */
@@ -145,9 +145,9 @@ public class DefaultAnalysisPolicy extends AnalysisPolicy {
 
         private TypeState seenReceiverTypes = TypeState.forEmpty();
 
-        protected DefaultVirtualInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
+        protected DefaultVirtualInvokeTypeFlow(Invoke invoke, MethodCallTargetNode target,
                         TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location) {
-            super(invoke, receiverType, targetMethod, actualParameters, actualReturn, location);
+            super(invoke, target, actualParameters, actualReturn, location);
         }
 
         protected DefaultVirtualInvokeTypeFlow(BigBang bb, MethodFlowsGraph methodFlows, DefaultVirtualInvokeTypeFlow original) {
