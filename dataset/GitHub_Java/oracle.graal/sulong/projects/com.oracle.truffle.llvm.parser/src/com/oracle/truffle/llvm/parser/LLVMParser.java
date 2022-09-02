@@ -170,11 +170,14 @@ public final class LLVMParser {
     }
 
     private void defineExpressionSymbol(String aliasName, boolean isAliasExported, GetElementPointerConstant elementPointerConstant, DataLayout targetDataLayout) {
-        LLVMSymbol baseSymbol = runtime.getFileScope().get(elementPointerConstant.getBasePointer().toString());
+        SymbolImpl base = elementPointerConstant.getBasePointer();
+        // TODO (pichristoph) check if name of base can be found differently/more safely
+        LLVMSymbol baseSymbol = runtime.getFileScope().get(base.toString());
         LLVMGetElementPtrNode elementPtrNode = (LLVMGetElementPtrNode) elementPointerConstant.createNode(runtime, targetDataLayout, GetStackSpaceFactory.createAllocaFactory());
         LLVMElemPtrSymbol expressionSymbol = new LLVMElemPtrSymbol(aliasName, runtime.getBitcodeID(), -1, isAliasExported,
                         elementPointerConstant.getType(), baseSymbol, elementPtrNode);
         runtime.getFileScope().register(expressionSymbol);
+
     }
 
     private void defineAlias(String existingName, String newName, boolean newExported) {

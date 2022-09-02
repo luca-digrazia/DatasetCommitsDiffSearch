@@ -55,7 +55,6 @@ public final class LLVMFunction extends LLVMSymbol {
 
     private final Assumption fixedCodeAssumption = Truffle.getRuntime().createAssumption();
     @CompilationFinal private LLVMFunctionCode fixedCode;
-    @CompilationFinal private Object nfiSymbol;
 
     public static LLVMFunction create(String name, Function function, FunctionType type, BitcodeID bitcodeID, int symbolIndex, boolean exported, String path, boolean externalWeak) {
         return new LLVMFunction(name, function, type, bitcodeID, symbolIndex, exported, path, externalWeak);
@@ -149,13 +148,5 @@ public final class LLVMFunction extends LLVMSymbol {
     @Override
     public LLVMElemPtrSymbol asElemPtrExpression() {
         throw new IllegalStateException("Function " + getName() + " is not a getElementPointer symbol.");
-    }
-
-    public void setNFISymbol(Object symbol) {
-        this.nfiSymbol = symbol;
-    }
-
-    public Object getNFISymbol() {
-        return this.nfiSymbol;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,59 +29,82 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.llvm.runtime.IDGenerater.BitcodeID;
+import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 
 public abstract class LLVMSymbol {
 
-    @CompilationFinal private String name;
-    @CompilationFinal private ExternalLibrary library;
-    private final int bitcodeID;
-    private final int symbolIndex;
+    public static final LLVMSymbol[] EMPTY = new LLVMSymbol[0];
 
-    public LLVMSymbol(String name, ExternalLibrary library, int bitcodeID, int symbolIndex) {
+    private final String name;
+    private final BitcodeID bitcodeID;
+    private final int symbolIndex;
+    private final boolean exported;
+    private final boolean externalWeak;
+
+    // Index for non-parsed symbols, such as alias, and function symbol for inline assembly.
+    public static final int INVALID_INDEX = -1;
+
+    public LLVMSymbol(String name, BitcodeID bitcodeID, int symbolIndex, boolean exported, boolean externalWeak) {
         this.name = name;
-        this.library = library;
         this.bitcodeID = bitcodeID;
         this.symbolIndex = symbolIndex;
+        this.exported = exported;
+        this.externalWeak = externalWeak;
     }
 
-    public String getName() {
+    public final String getName() {
         return name;
     }
 
-    public void setName(String name) {
-        this.name = name;
+    public final String getKind() {
+        CompilerAsserts.neverPartOfCompilation();
+        return this.getClass().getSimpleName();
     }
 
-    public ExternalLibrary getLibrary() {
-        return library;
+    public final boolean isExported() {
+        return exported;
     }
 
-    public void setLibrary(ExternalLibrary library) {
-        this.library = library;
+    public final boolean isExternalWeak() {
+        return externalWeak;
     }
 
-    public int getSymbolIndex(boolean illegalOK) {
+    /**
+     * Get the unique index of the symbol. The index is assigned during parsing. Symbols that are
+     * not created from parsing or that are alias have the value of -1.
+     *
+     * @param illegalOK if symbols created not from bitcode files can be retrieved.
+     */
+    public final int getSymbolIndex(boolean illegalOK) {
         if (symbolIndex >= 0 || illegalOK) {
             return symbolIndex;
         }
-        throw new IllegalStateException("Invalid function index: " + symbolIndex);
+        CompilerDirectives.transferToInterpreter();
+        throw new LLVMIllegalSymbolIndexException("Invalid function index: " + symbolIndex);
     }
 
-    public int getBitcodeID(boolean illegalOK) {
-        if (bitcodeID >= 0 || illegalOK) {
+    /**
+     * Get the unique module ID for the symbol. The ID is assigned during parsing. The module ID is
+     * unqiue per bitcode file. Symbols that are not created from parsing or that are alias have the
+     * value of null.
+     *
+     * @param illegalOK if symbols created not from bitcode files can be retrieved.
+     */
+    public final BitcodeID getBitcodeID(boolean illegalOK) {
+        if (bitcodeID != null || illegalOK) {
             return bitcodeID;
         }
-        throw new IllegalStateException("Invalid function ID: " + bitcodeID);
+        CompilerDirectives.transferToInterpreter();
+        throw new LLVMIllegalSymbolIndexException("Invalid function ID: " + bitcodeID);
     }
 
-    public boolean hasValidIndexAndID() {
-        return symbolIndex >= 0 && bitcodeID >= 0;
+    public final boolean hasValidIndexAndID() {
+        return symbolIndex >= 0 && bitcodeID != null;
     }
-
-    public abstract boolean isDefined();
 
     public abstract boolean isGlobalVariable();
 
@@ -89,7 +112,11 @@ public abstract class LLVMSymbol {
 
     public abstract boolean isAlias();
 
+    public abstract boolean isElemPtrExpression();
+
     public abstract LLVMFunction asFunction();
 
     public abstract LLVMGlobal asGlobalVariable();
+
+    public abstract LLVMElemPtrSymbol asElemPtrExpression();
 }

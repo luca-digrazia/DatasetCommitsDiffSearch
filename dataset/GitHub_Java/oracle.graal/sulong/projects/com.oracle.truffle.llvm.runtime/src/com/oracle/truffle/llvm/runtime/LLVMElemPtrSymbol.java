@@ -30,21 +30,19 @@
 
 package com.oracle.truffle.llvm.runtime;
 
-import java.util.function.Supplier;
-
 import com.oracle.truffle.llvm.runtime.IDGenerater.BitcodeID;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMElemPtrSymbol extends LLVMSymbol {
     private final Type type;
-    private final Supplier<LLVMExpressionNode> createGetElementPtrNode;
+    private final LLVMGetElementPtrNode elementPtrNode;
 
-    public LLVMElemPtrSymbol(String name, BitcodeID bitcodeID, int symbolIndex, boolean exported, Type type, LLVMSymbol base, Supplier<LLVMExpressionNode> createGetElementPtrNode) {
+    public LLVMElemPtrSymbol(String name, BitcodeID bitcodeID, int symbolIndex, boolean exported, Type type, LLVMSymbol base, LLVMGetElementPtrNode elementPtrNode) {
         super(name, bitcodeID, symbolIndex, exported, base.isExternalWeak());
         this.type = type;
-        this.createGetElementPtrNode = createGetElementPtrNode;
+        this.elementPtrNode = elementPtrNode;
     }
 
     @Override
@@ -76,8 +74,8 @@ public final class LLVMElemPtrSymbol extends LLVMSymbol {
         return type;
     }
 
-    public final Supplier<LLVMExpressionNode> createGetElementPtrNode() {
-        return createGetElementPtrNode;
+    public final LLVMGetElementPtrNode getElementPtrNode() {
+        return elementPtrNode;
     }
 
     @Override

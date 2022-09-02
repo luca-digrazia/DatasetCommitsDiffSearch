@@ -60,7 +60,7 @@ public abstract class LLVMAccessElemPtrSymbolNode extends LLVMExpressionNode {
 
     @Override
     public String toString() {
-        return getShortString("elemPtrSymbol");
+        return getShortString("symbol");
     }
 
     private LLVMPointer checkNull(LLVMPointer result) {

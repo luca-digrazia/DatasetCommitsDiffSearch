@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,25 +34,35 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.CanResolve;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
+import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public final class LLVMScope implements TruffleObject {
+@ExportLibrary(InteropLibrary.class)
+@SuppressWarnings("static-method")
+public class LLVMScope implements TruffleObject {
 
     private final HashMap<String, LLVMSymbol> symbols;
     private final ArrayList<String> functionKeys;
+    private final HashMap<String, String> linkageNames;
 
     public LLVMScope() {
         this.symbols = new HashMap<>();
         this.functionKeys = new ArrayList<>();
+        this.linkageNames = new HashMap<>();
     }
 
     @TruffleBoundary
@@ -61,21 +71,73 @@ public final class LLVMScope implements TruffleObject {
     }
 
     @TruffleBoundary
-    public LLVMFunctionDescriptor getFunction(String name) {
+    public String getKey(int idx) {
+        return functionKeys.get(idx);
+    }
+
+    /**
+     * Lookup a function in the scope by name. If not found, interpret the name as linkageName and
+     * lookup the function by its original name.
+     *
+     * @param name Function name to lookup.
+     * @return A handle to the function if found, null otherwise.
+     */
+    @TruffleBoundary
+    public LLVMFunction getFunction(String name) {
         LLVMSymbol symbol = get(name);
         if (symbol != null && symbol.isFunction()) {
             return symbol.asFunction();
         }
-        throw new IllegalStateException("Unknown function: " + name);
+        final String newName = linkageNames.get(name);
+        if (newName != null) {
+            symbol = get(newName);
+            if (symbol != null && symbol.isFunction()) {
+                return symbol.asFunction();
+            }
+        }
+
+        return null;
     }
 
+    /**
+     * Add a tuple of function name and function linkage name to the map.
+     *
+     * @param name Function name as specified in original (e.g. C/C++) source.
+     * @param linkageName Function name in LLVM code if @param name has been changed during
+     *            compilation to LLVM bitcode.
+     */
+    public void registerLinkageName(String name, String linkageName) {
+        linkageNames.put(name, linkageName);
+    }
+
+    /**
+     * Lookup a global variable in the scope by name.
+     *
+     * @param name Variable name to lookup.
+     * @return A handle to the global if found, null otherwise.
+     */
     @TruffleBoundary
     public LLVMGlobal getGlobalVariable(String name) {
         LLVMSymbol symbol = get(name);
         if (symbol != null && symbol.isGlobalVariable()) {
             return symbol.asGlobalVariable();
         }
-        throw new IllegalStateException("Unknown global: " + name);
+        return null;
+    }
+
+    /**
+     * Lookup an elementPointerSymbol in the scope by name.
+     *
+     * @param name Variable name to lookup.
+     * @return A handle to the global if found, null otherwise.
+     */
+    @TruffleBoundary
+    public LLVMElemPtrSymbol getGetElementPtrSymbol(String name) {
+        LLVMSymbol symbol = get(name);
+        if (symbol != null && symbol.isElemPtrExpression()) {
+            return symbol.asElemPtrExpression();
+        }
+        return null;
     }
 
     @TruffleBoundary
@@ -105,9 +167,20 @@ public final class LLVMScope implements TruffleObject {
     }
 
     @TruffleBoundary
+    public void addMissingLinkageName(LLVMScope other) {
+        for (Entry<String, String> entry : other.linkageNames.entrySet()) {
+            linkageNames.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+    }
+
+    @TruffleBoundary
     public void addMissingEntries(LLVMScope other) {
         for (Entry<String, LLVMSymbol> entry : other.symbols.entrySet()) {
             symbols.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+
+        for (Entry<String, String> entry : other.linkageNames.entrySet()) {
+            linkageNames.putIfAbsent(entry.getKey(), entry.getValue());
         }
     }
 
@@ -122,13 +195,8 @@ public final class LLVMScope implements TruffleObject {
         register(symbol);
     }
 
-    public TruffleObject getKeys() {
+    public Object getKeys() {
         return new Keys(this);
-    }
-
-    @Override
-    public ForeignAccess getForeignAccess() {
-        return LLVMGlobalScopeMessageResolutionForeign.ACCESS;
     }
 
     private void put(String name, LLVMSymbol symbol) {
@@ -138,60 +206,82 @@ public final class LLVMScope implements TruffleObject {
         if (symbol.isFunction()) {
             assert !functionKeys.contains(name);
             assert functionKeys.size() < symbols.size();
-            functionKeys.add(stripAtCharacter(name));
+            functionKeys.add(name);
         }
     }
 
-    private void remove(String name) {
+    @TruffleBoundary
+    public void remove(String name) {
         assert symbols.containsKey(name);
         LLVMSymbol removedSymbol = symbols.remove(name);
 
         if (removedSymbol.isFunction()) {
-            boolean contained = functionKeys.remove(stripAtCharacter(name));
+            boolean contained = functionKeys.remove(name);
             assert contained;
         }
     }
 
-    private static String stripAtCharacter(String name) {
-        return name.charAt(0) == '@' ? name.substring(1) : name;
+    @ExportMessage
+    final boolean hasLanguage() {
+        return true;
     }
 
-    @MessageResolution(receiverType = LLVMScope.class)
-    static class LLVMGlobalScopeMessageResolution {
-
-        @CanResolve
-        abstract static class CanResolveLLVMScopeNode extends Node {
-
-            public boolean test(TruffleObject receiver) {
-                return receiver instanceof LLVMScope;
-            }
-        }
-
-        @Resolve(message = "KEYS")
-        public abstract static class KeysOfLLVMScope extends Node {
-
-            protected Object access(LLVMScope receiver) {
-                return receiver.getKeys();
-            }
-        }
-
-        @Resolve(message = "READ")
-        public abstract static class ReadFromLLVMScope extends Node {
-
-            protected Object access(LLVMScope scope, String globalName) {
-                String atname = "@" + globalName; // for interop
-                if (scope.contains(atname)) {
-                    return scope.get(atname);
-                }
-                if (scope.contains(globalName)) {
-                    return scope.get(globalName);
-                }
-                return null;
-            }
-        }
+    @ExportMessage
+    final Class<? extends TruffleLanguage<?>> getLanguage() {
+        return LLVMLanguage.class;
     }
 
-    @MessageResolution(receiverType = Keys.class)
+    @ExportMessage
+    final boolean isScope() {
+        return true;
+    }
+
+    @ExportMessage
+    public Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
+        return "llvm-global";
+    }
+
+    @ExportMessage
+    boolean hasMembers() {
+        return true;
+    }
+
+    @ExportMessage
+    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+        return getKeys();
+    }
+
+    @ExportMessage
+    boolean isMemberReadable(@SuppressWarnings("unused") String name) {
+        return contains(name);
+    }
+
+    @ExportMessage
+    Object readMember(String globalName,
+                    @Cached BranchProfile exception,
+                    @CachedContext(LLVMLanguage.class) LLVMContext context) throws UnknownIdentifierException {
+
+        if (contains(globalName)) {
+            LLVMSymbol symbol = get(globalName);
+            if (symbol != null && symbol.isFunction()) {
+                try {
+                    LLVMPointer value = context.getSymbol(symbol);
+                    if (value != null) {
+                        return LLVMManagedPointer.cast(value).getObject();
+                    }
+                } catch (LLVMLinkerException | LLVMIllegalSymbolIndexException e) {
+                    // fallthrough
+                }
+                exception.enter();
+                throw UnknownIdentifierException.create(globalName);
+            }
+            return symbol;
+        }
+        exception.enter();
+        throw UnknownIdentifierException.create(globalName);
+    }
+
+    @ExportLibrary(InteropLibrary.class)
     static final class Keys implements TruffleObject {
 
         private final LLVMScope scope;
@@ -200,33 +290,29 @@ public final class LLVMScope implements TruffleObject {
             this.scope = scope;
         }
 
-        static boolean isInstance(TruffleObject obj) {
-            return obj instanceof Keys;
+        @ExportMessage
+        boolean hasArrayElements() {
+            return true;
         }
 
-        @Override
-        public ForeignAccess getForeignAccess() {
-            return KeysForeign.ACCESS;
+        @ExportMessage
+        long getArraySize() {
+            return scope.functionKeys.size();
         }
 
-        @Resolve(message = "GET_SIZE")
-        abstract static class GetSize extends Node {
-
-            int access(Keys receiver) {
-                return receiver.scope.functionKeys.size();
-            }
+        @ExportMessage
+        boolean isArrayElementReadable(long index) {
+            return 0 <= index && index < getArraySize();
         }
 
-        @Resolve(message = "READ")
-        abstract static class Read extends Node {
-
-            Object access(Keys receiver, int index) {
-                try {
-                    return receiver.scope.functionKeys.get(index);
-                } catch (IndexOutOfBoundsException ex) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw UnknownIdentifierException.raise(Integer.toString(index));
-                }
+        @ExportMessage
+        Object readArrayElement(long index,
+                        @Cached BranchProfile exception) throws InvalidArrayIndexException {
+            if (isArrayElementReadable(index)) {
+                return scope.getKey((int) index);
+            } else {
+                exception.enter();
+                throw InvalidArrayIndexException.create(index);
             }
         }
     }
