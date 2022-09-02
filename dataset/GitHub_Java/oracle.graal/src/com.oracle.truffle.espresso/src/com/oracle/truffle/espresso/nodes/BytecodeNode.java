@@ -372,7 +372,11 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         if (s == null) {
             return null;
         }
-        int line = getMethod().getLineNumberTable().getLineNumber(bci);
+        LineNumberTable table = getMethod().getLineNumberTable();
+        if (table == LineNumberTable.EMPTY) {
+            return null;
+        }
+        int line = table.getLineNumber(bci);
         return s.createSection(line);
     }
 
@@ -1735,7 +1739,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         } else if (allowFieldAccessInlining && resolved.isInlinableSetter()) {
             invoke = InlinedSetterNode.create(resolved, top, opCode, curBCI);
         } else if (resolved.isMethodHandleIntrinsic()) {
-            invoke = new InvokeHandleNode(resolved, getMethod().getDeclaringKlass(), top, curBCI);
+            invoke = new MethodHandleInvokeNode(resolved, top, curBCI);
         } else if (opCode == INVOKEINTERFACE && resolved.getITableIndex() < 0) {
             // Can happen in old classfiles that calls j.l.Object on interfaces.
             invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI);
