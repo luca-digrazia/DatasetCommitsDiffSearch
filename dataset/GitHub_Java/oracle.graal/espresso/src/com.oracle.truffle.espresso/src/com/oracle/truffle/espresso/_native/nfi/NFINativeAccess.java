@@ -31,7 +31,6 @@ import java.util.logging.Level;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.ArityException;
@@ -76,9 +75,12 @@ class NFINativeAccess implements NativeAccess {
 
     protected final InteropLibrary uncachedInterop = InteropLibrary.getUncached();
     protected final SignatureLibrary uncachedSignature = SignatureLibrary.getUncached();
-    private final TruffleLogger logger = TruffleLogger.getLogger(EspressoLanguage.ID, "NFINativeAccess");
 
-    protected final TruffleLanguage.Env env;
+    private final EspressoContext context;
+
+    protected EspressoContext getContext() {
+        return context;
+    }
 
     protected static NativeSimpleType nfiType(NativeType nativeType) {
         // @formatter:off
@@ -118,10 +120,6 @@ class NFINativeAccess implements NativeAccess {
         return sb.toString();
     }
 
-    protected final TruffleLogger getLogger() {
-        return logger;
-    }
-
     @FunctionalInterface
     private interface SignatureProvider extends Function<NativeSignature, Object> {
     }
@@ -132,7 +130,7 @@ class NFINativeAccess implements NativeAccess {
             nfiSignaturesCreated.inc();
             Source source = Source.newBuilder("nfi",
                             nfiStringSignature(nativeSignature), "signature").build();
-            CallTarget target = env.parseInternal(source);
+            CallTarget target = getContext().getEnv().parseInternal(source);
             return target.call();
         }
     };
@@ -143,8 +141,8 @@ class NFINativeAccess implements NativeAccess {
                         : signatureProvider.apply(nativeSignature);
     }
 
-    public NFINativeAccess(TruffleLanguage.Env env) {
-        this.env = env;
+    public NFINativeAccess(EspressoContext context) {
+        this.context = context;
         signatureCache = CACHE_SIGNATURES
                         ? new ConcurrentHashMap<>()
                         : null;
@@ -159,11 +157,11 @@ class NFINativeAccess implements NativeAccess {
 
     protected @Pointer TruffleObject loadLibraryHelper(String nfiSource) {
         Source source = Source.newBuilder("nfi", nfiSource, "loadLibrary").build();
-        CallTarget target = env.parseInternal(source);
+        CallTarget target = getContext().getEnv().parseInternal(source);
         try {
             return (TruffleObject) target.call();
         } catch (IllegalArgumentException e) {
-            getLogger().log(Level.SEVERE, "TruffleNFI native library isolation is not supported.", e);
+            getContext().getLogger().log(Level.SEVERE, "TruffleNFI native library isolation is not supported.", e);
             throw EspressoError.shouldNotReachHere(e);
         } catch (AbstractTruffleException e) {
             // TODO(peterssen): Remove assert once GR-27045 reaches a definitive consensus.
@@ -182,14 +180,7 @@ class NFINativeAccess implements NativeAccess {
     @Override
     public @Pointer TruffleObject lookupSymbol(@Pointer TruffleObject library, String symbolName) {
         try {
-            TruffleObject symbol = (TruffleObject) uncachedInterop.readMember(library, symbolName);
-            if (InteropLibrary.getUncached().isNull(symbol)) {
-                return null;
-            }
-            if (InteropLibrary.getUncached().isPointer(symbol) && InteropLibrary.getUncached().asPointer(symbol) == 0L) {
-                return null;
-            }
-            return symbol;
+            return (TruffleObject) uncachedInterop.readMember(library, symbolName);
         } catch (UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere(e);
         } catch (UnknownIdentifierException e) {
@@ -389,8 +380,8 @@ class NFINativeAccess implements NativeAccess {
         }
 
         @Override
-        public NativeAccess create(TruffleLanguage.Env env) {
-            return new NFINativeAccess(env);
+        public NativeAccess create(EspressoContext context) {
+            return new NFINativeAccess(context);
         }
     }
 

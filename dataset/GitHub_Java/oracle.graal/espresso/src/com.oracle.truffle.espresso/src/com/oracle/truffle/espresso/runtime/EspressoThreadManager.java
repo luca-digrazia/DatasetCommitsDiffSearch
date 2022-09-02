@@ -127,7 +127,7 @@ class EspressoThreadManager implements ContextAccess {
         });
 
         if (finalizerThreadId == -1) {
-            if (getMeta().java_lang_ref_Finalizer$FinalizerThread.isAssignableFrom(guest.getKlass())) {
+            if (getMeta().java_lang_ref_Finalizer$FinalizerThread == guest.getKlass()) {
                 synchronized (activeThreadLock) {
                     if (finalizerThreadId == -1) {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -139,7 +139,7 @@ class EspressoThreadManager implements ContextAccess {
             }
         }
         if (referenceHandlerThreadId == -1) {
-            if (getMeta().java_lang_ref_Reference$ReferenceHandler.isAssignableFrom(guest.getKlass())) {
+            if (getMeta().java_lang_ref_Reference$ReferenceHandler == guest.getKlass()) {
                 synchronized (activeThreadLock) {
                     if (referenceHandlerThreadId == -1) {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -326,6 +326,9 @@ class EspressoThreadManager implements ContextAccess {
                                         /* group */ mainThreadGroup,
                                         /* name */ meta.toGuestString("main"));
         mainThread.setIntField(meta.java_lang_Thread_threadStatus, Target_java_lang_Thread.State.RUNNABLE.value);
+
+        // Notify native backend about main thread.
+        getNativeAccess().prepareThread();
 
         mainThreadCreated = true;
         logger.fine(() -> {
