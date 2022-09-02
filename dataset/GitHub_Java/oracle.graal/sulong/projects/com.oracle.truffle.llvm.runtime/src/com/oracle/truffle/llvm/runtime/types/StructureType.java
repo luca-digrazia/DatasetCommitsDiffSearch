@@ -95,6 +95,10 @@ public final class StructureType extends AggregateType {
         types[idx] = type;
     }
 
+    public Type[] getElementTypes() {
+        return types;
+    }
+
     public boolean isPacked() {
         return isPacked;
     }
