@@ -35,6 +35,10 @@ public class VMEventListeners {
     @CompilerDirectives.CompilationFinal(dimensions = 1)
     private final VMEventListener[] listeners = new VMEventListener[1];
 
+    VMEventListeners() {
+
+    }
+
     public static VMEventListeners getDefault() {
         return DEFAULT;
     }
