@@ -31,9 +31,12 @@ import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_8;
 import java.io.File;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Parameter;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,7 +47,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
+import java.util.stream.Collectors;
 
+import com.oracle.truffle.espresso.Utils;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
@@ -74,6 +79,7 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.Callback;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.jni.JniImpl;
+import com.oracle.truffle.espresso.jni.NFIType;
 import com.oracle.truffle.espresso.jni.NativeEnv;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -89,6 +95,7 @@ import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
+import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
 /**
  * Espresso implementation of the VM interface (libjvm).
@@ -123,13 +130,14 @@ public final class VM extends NativeEnv implements ContextAccess {
         try {
             EspressoProperties props = getContext().getVmProperties();
 
-            List<String> libjavaSearchPaths = new ArrayList<>(Arrays.asList(props.getBootLibraryPath().split(File.pathSeparator)));
-            libjavaSearchPaths.addAll(Arrays.asList(props.getJavaLibraryPath().split(File.pathSeparator)));
+            List<Path> libjavaSearchPaths = new ArrayList<>();
+            libjavaSearchPaths.addAll(props.bootLibraryPath());
+            libjavaSearchPaths.addAll(props.javaLibraryPath());
 
-            mokapotLibrary = loadLibrary(props.getEspressoLibraryPath().split(File.pathSeparator), "mokapot");
+            mokapotLibrary = loadLibrary(props.espressoLibraryPath(), "mokapot");
 
             assert mokapotLibrary != null;
-            javaLibrary = loadLibrary(libjavaSearchPaths.toArray(new String[0]), "java");
+            javaLibrary = loadLibrary(libjavaSearchPaths, "java");
 
             initializeMokapotContext = NativeLibrary.lookupAndBind(mokapotLibrary,
                             "initializeMokapotContext", "(env, sint64, (string): pointer): sint64");
@@ -142,20 +150,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                             "getJavaVM",
                             "(env): sint64");
 
-            Callback lookupVmImplCallback = new Callback(LOOKUP_VM_IMPL_PARAMETER_COUNT, new Callback.Function() {
-                @Override
-                public Object call(Object... args) {
-                    try {
-                        return VM.this.lookupVmImpl((String) args[0]);
-                    } catch (ClassCastException e) {
-                        throw EspressoError.shouldNotReachHere(e);
-                    } catch (RuntimeException e) {
-                        throw e;
-                    } catch (Throwable e) {
-                        throw EspressoError.shouldNotReachHere(e);
-                    }
-                }
-            });
+            Callback lookupVmImplCallback = Callback.wrapInstanceMethod(this, "lookupVmImpl", String.class);
             this.vmPtr = (long) InteropLibrary.getFactory().getUncached().execute(initializeMokapotContext, jniEnv.getNativePointer(), lookupVmImplCallback);
 
             assert this.vmPtr != 0;
@@ -178,27 +173,57 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
     }
 
-    private static Map<String, VMSubstitutor> buildVmMethods() {
-        Map<String, VMSubstitutor> map = new HashMap<>();
-        for (VMSubstitutor method : VMCollector.getInstance()) {
-            assert !map.containsKey(method.methodName()) : "VmImpl for " + method + " already exists";
-            map.put(method.methodName(), method);
+    private static Map<String, java.lang.reflect.Method> buildVmMethods() {
+        Map<String, java.lang.reflect.Method> map = new HashMap<>();
+        java.lang.reflect.Method[] declaredMethods = VM.class.getDeclaredMethods();
+        for (java.lang.reflect.Method method : declaredMethods) {
+            VmImpl jniImpl = method.getAnnotation(VmImpl.class);
+            if (jniImpl != null) {
+                assert !map.containsKey(method.getName()) : "VmImpl for " + method + " already exists";
+                map.put(method.getName(), method);
+            }
         }
         return Collections.unmodifiableMap(map);
     }
 
-    private static final Map<String, VMSubstitutor> vmMethods = buildVmMethods();
+    private static final Map<String, java.lang.reflect.Method> vmMethods = buildVmMethods();
 
     public static VM create(JniEnv jniEnv) {
         return new VM(jniEnv);
     }
 
+    public static String vmNativeSignature(java.lang.reflect.Method method) {
+        StringBuilder sb = new StringBuilder("(");
+
+        boolean first = true;
+        if (method.getAnnotation(JniImpl.class) != null) {
+            sb.append(NativeSimpleType.SINT64); // Prepend JNIEnv*;
+            first = false;
+        }
+
+        for (Parameter param : method.getParameters()) {
+            if (!first) {
+                sb.append(", ");
+            } else {
+                first = false;
+            }
+
+            // Override NFI type.
+            NFIType nfiType = param.getAnnotatedType().getAnnotation(NFIType.class);
+            if (nfiType != null) {
+                sb.append(NativeSimpleType.valueOf(nfiType.value().toUpperCase()));
+            } else {
+                sb.append(classToType(param.getType(), false));
+            }
+        }
+        sb.append("): ").append(classToType(method.getReturnType(), true));
+        return sb.toString();
+    }
+
     private static final int JVM_CALLER_DEPTH = -1;
 
-    public static final int LOOKUP_VM_IMPL_PARAMETER_COUNT = 1;
-
     public TruffleObject lookupVmImpl(String methodName) {
-        VMSubstitutor m = vmMethods.get(methodName);
+        java.lang.reflect.Method m = vmMethods.get(methodName);
         try {
             // Dummy placeholder for unimplemented/unknown methods.
             if (m == null) {
@@ -214,7 +239,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                                 }));
             }
 
-            String signature = m.jniNativeSignature();
+            String signature = vmNativeSignature(m);
             Callback target = vmMethodWrapper(m);
             return (TruffleObject) InteropLibrary.getFactory().getUncached().execute(jniEnv.dupClosureRefAndCast(signature), target);
 
@@ -280,35 +305,97 @@ public final class VM extends NativeEnv implements ContextAccess {
         return self.copy();
     }
 
-    public Callback vmMethodWrapper(VMSubstitutor m) {
-        int extraArg = (m.isJni()) ? 1 : 0;
+    public Callback vmMethodWrapper(java.lang.reflect.Method m) {
+        int extraArg = (m.getAnnotation(JniImpl.class) != null) ? 1 : 0;
 
-        return new Callback(m.parameterCount() + extraArg, new Callback.Function() {
+        return new Callback(m.getParameterCount() + extraArg, new Callback.Function() {
             @Override
             @CompilerDirectives.TruffleBoundary
-            public Object call(Object... args) {
-                boolean isJni = m.isJni();
-                try {
+            public Object call(Object... rawArgs) {
 
+                boolean isJni = (m.getAnnotation(JniImpl.class) != null);
+
+                Object[] args;
+                if (isJni) {
+                    assert (long) rawArgs[0] == jniEnv.getNativePointer() : "Calling JVM_ method " + m + " from alien JniEnv";
+                    args = Arrays.copyOfRange(rawArgs, 1, rawArgs.length); // Strip JNIEnv* pointer,
+                    // replace
+                    // by VM (this) receiver.
+                } else {
+                    args = rawArgs;
+                }
+
+                Class<?>[] params = m.getParameterTypes();
+
+                for (int i = 0; i < args.length; ++i) {
+                    // FIXME(peterssen): Espresso should accept interop null objects, since it
+                    // doesn't
+                    // we must convert to Espresso null.
+                    // FIXME(peterssen): Also, do use proper nodes.
+                    if (args[i] instanceof TruffleObject) {
+                        if (InteropLibrary.getFactory().getUncached().isNull(args[i])) {
+                            if (StaticObject.class.isAssignableFrom(params[i])) {
+                                args[i] = StaticObject.NULL;
+                            } else {
+                                args[i] = null;
+                            }
+                        }
+                    } else {
+                        // TruffleNFI pass booleans as byte, do the proper conversion.
+                        if (params[i] == boolean.class) {
+                            args[i] = ((byte) args[i]) != 0;
+                        }
+                    }
+                }
+                try {
                     // Substitute raw pointer by proper `this` reference.
                     // System.err.print("Call DEFINED method: " + m.getName() +
                     // Arrays.toString(shiftedArgs));
-                    return m.invoke(VM.this, args);
-                } catch (EspressoException e) {
-                    if (isJni) {
-                        jniEnv.getThreadLocalPendingException().set(e.getException());
-                        return defaultValue(m.returnType());
+                    Object ret = m.invoke(VM.this, args);
+
+                    if (ret instanceof Boolean) {
+                        return (boolean) ret ? (byte) 1 : (byte) 0;
                     }
-                    throw EspressoError.shouldNotReachHere(e);
-                } catch (RuntimeException e) {
-                    throw e;
-                } catch (StackOverflowError soe) {
-                    throw getContext().getStackOverflow();
-                } catch (OutOfMemoryError oom) {
-                    throw getContext().getOutOfMemory();
-                } catch (ThreadDeath e) {
-                    throw getMeta().throwEx(ThreadDeath.class);
-                } catch (Throwable e) {
+
+                    if (ret instanceof Character) {
+                        return (short) (char) ret;
+                    }
+
+                    if (ret == null && !m.getReturnType().isPrimitive()) {
+                        throw EspressoError.shouldNotReachHere("Cannot return host null, only Espresso NULL");
+                    }
+
+                    if (ret == null && m.getReturnType() == void.class) {
+                        // Cannot return host null to TruffleNFI.
+                        ret = StaticObject.NULL;
+                    }
+
+                    // System.err.println(" -> " + ret);
+
+                    return ret;
+                } catch (InvocationTargetException e) {
+                    Throwable targetEx = e.getTargetException();
+                    if (isJni) {
+                        if (targetEx instanceof EspressoException) {
+                            jniEnv.getThreadLocalPendingException().set(((EspressoException) targetEx).getException());
+                            return defaultValue(m.getReturnType());
+                        }
+                    }
+                    if (targetEx instanceof RuntimeException) {
+                        throw (RuntimeException) targetEx;
+                    }
+                    if (targetEx instanceof StackOverflowError) {
+                        throw getContext().getStackOverflow();
+                    }
+                    if (targetEx instanceof OutOfMemoryError) {
+                        throw getContext().getOutOfMemory();
+                    }
+                    if (targetEx instanceof ThreadDeath) {
+                        throw getMeta().throwEx(ThreadDeath.class);
+                    }
+                    // FIXME(peterssen): Handle VME exceptions back to guest.
+                    throw EspressoError.shouldNotReachHere(targetEx);
+                } catch (IllegalAccessException | IllegalArgumentException e) {
                     throw EspressoError.shouldNotReachHere(e);
                 }
             }
@@ -590,7 +677,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public long JVM_LoadLibrary(String name) {
         try {
-            TruffleObject lib = NativeLibrary.loadLibrary(name);
+            TruffleObject lib = NativeLibrary.loadLibrary(Paths.get(name));
             Field f = lib.getClass().getDeclaredField("handle");
             f.setAccessible(true);
             long handle = (long) f.get(lib);
@@ -691,16 +778,26 @@ public final class VM extends NativeEnv implements ContextAccess {
             setProperty.invokeWithConversions(properties, entry.getKey(), entry.getValue());
         }
 
+        EspressoProperties props = getContext().getVmProperties();
+
         // TODO(peterssen): Use EspressoProperties to store classpath.
         EspressoError.guarantee(options.hasBeenSet(EspressoOptions.Classpath), "Classpath must be defined.");
-        setProperty.invokeWithConversions(properties, "java.class.path", options.get(EspressoOptions.Classpath));
+        setProperty.invokeWithConversions(properties, "java.class.path", props.classpath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
 
-        EspressoProperties props = getContext().getVmProperties();
-        setProperty.invokeWithConversions(properties, "java.home", props.getJavaHome());
-        setProperty.invokeWithConversions(properties, "sun.boot.class.path", props.getBootClasspath());
-        setProperty.invokeWithConversions(properties, "java.library.path", props.getJavaLibraryPath());
-        setProperty.invokeWithConversions(properties, "sun.boot.library.path", props.getBootLibraryPath());
-        setProperty.invokeWithConversions(properties, "java.ext.dirs", props.getExtDirs());
+        setProperty.invokeWithConversions(properties, "java.home", props.javaHome().toString());
+        setProperty.invokeWithConversions(properties, "sun.boot.class.path", Utils.stringify(props.bootClasspath()));
+        setProperty.invokeWithConversions(properties, "java.library.path", Utils.stringify(props.javaLibraryPath()));
+        setProperty.invokeWithConversions(properties, "sun.boot.library.path", Utils.stringify(props.bootLibraryPath()));
+        setProperty.invokeWithConversions(properties, "java.ext.dirs", Utils.stringify(props.extDirs()));
+
+        // VM properties.
+        setProperty.invokeWithConversions(properties, "java.vm.specification.version", EspressoProperties.VM_SPECIFICATION_VERSION);
+        setProperty.invokeWithConversions(properties, "java.vm.specification.name", EspressoProperties.VM_SPECIFICATION_NAME);
+        setProperty.invokeWithConversions(properties, "java.vm.specification.vendor", EspressoProperties.VM_SPECIFICATION_VENDOR);
+        setProperty.invokeWithConversions(properties, "java.vm.version", EspressoProperties.VM_VERSION);
+        setProperty.invokeWithConversions(properties, "java.vm.name", EspressoProperties.VM_NAME);
+        setProperty.invokeWithConversions(properties, "java.vm.vendor", EspressoProperties.VM_VENDOR);
+        setProperty.invokeWithConversions(properties, "java.vm.info", EspressoProperties.VM_INFO);
 
         return properties;
     }

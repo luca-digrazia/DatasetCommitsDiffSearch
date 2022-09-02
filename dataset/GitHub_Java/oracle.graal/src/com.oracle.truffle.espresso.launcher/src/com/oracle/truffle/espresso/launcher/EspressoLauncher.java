@@ -94,13 +94,6 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                 case "-help":
                     unrecognized.add("--help");
                     break;
-
-                case "-client":
-                case "-server":
-                case "-d64":
-                    // ignore
-                    break;
-
                 default:
                     if (arg.startsWith("-Xbootclasspath:")) {
                         polyglotOptions.remove("java.BootClasspathPrepend");
