@@ -68,7 +68,7 @@ final class LLScanner {
     }
 
     private static TruffleFile findLLPathMapping(String bcPath, String pathMappings, LLVMContext context) {
-        if (bcPath == null) {
+        if (bcPath == null || !bcPath.endsWith(".bc")) {
             return null;
         }
 
@@ -78,18 +78,12 @@ final class LLScanner {
             return mappedFile;
         }
 
-        return context.getEnv().getInternalTruffleFile(getLLPath(canonicalBCPath.toString()));
-    }
-
-    private static String getLLPath(String canonicalBCPath) {
-        if (canonicalBCPath.endsWith(".bc")) {
-            return canonicalBCPath.substring(0, canonicalBCPath.length() - ".bc".length()) + ".ll";
-        }
-        return canonicalBCPath + ".ll";
+        final String defaultPath = canonicalBCPath.toString().substring(0, bcPath.length() - ".bc".length()) + ".ll";
+        return context.getEnv().getInternalTruffleFile(defaultPath);
     }
 
     static LLSourceMap findAndScanLLFile(String bcPath, String pathMappings, LLVMContext context) {
-        if (bcPath == null) {
+        if (bcPath == null || !bcPath.endsWith(".bc")) {
             return NOT_FOUND;
         }
 
