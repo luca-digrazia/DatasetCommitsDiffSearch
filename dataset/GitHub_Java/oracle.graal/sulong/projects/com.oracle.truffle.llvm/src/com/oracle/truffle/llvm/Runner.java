@@ -111,7 +111,7 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalContainer;
 import com.oracle.truffle.llvm.runtime.interop.LLVMForeignCallNode;
 import com.oracle.truffle.llvm.runtime.interop.LLVMForeignCallNodeGen;
-import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateNode;
+import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateStructNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemoryOpNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
@@ -532,7 +532,7 @@ public final class Runner {
             return ret;
         }
 
-        LLVMAllocateNode getAllocateNode(NodeFactory factory, String typeName) {
+        LLVMAllocateStructNode getAllocateNode(NodeFactory factory, String typeName) {
             if (offset > 0) {
                 StructureType structType = new StructureType(typeName, true, types.toArray(Type.EMPTY_ARRAY));
                 return factory.createAllocateGlobalsBlock(structType);
@@ -544,8 +544,8 @@ public final class Runner {
 
     private static final class InitializeSymbolsNode extends LLVMNode {
 
-        @Child LLVMAllocateNode allocRoSection;
-        @Child LLVMAllocateNode allocRwSection;
+        @Child LLVMAllocateStructNode allocRoSection;
+        @Child LLVMAllocateStructNode allocRwSection;
 
         @Children final AllocGlobalNode[] allocGlobals;
 
@@ -634,7 +634,7 @@ public final class Runner {
             }
         }
 
-        private static LLVMPointer allocOrNull(LLVMAllocateNode allocNode) {
+        private static LLVMPointer allocOrNull(LLVMAllocateStructNode allocNode) {
             if (allocNode != null) {
                 return allocNode.executeWithTarget();
             } else {
@@ -1204,12 +1204,7 @@ public final class Runner {
             LLVMScope fileScope = parserResult.getRuntime().getFileScope();
             if (fileScope.exports(context, MAIN_METHOD_NAME)) {
                 LLVMSymbol mainMethod = fileScope.get(MAIN_METHOD_NAME);
-                if (mainMethod.isFunction() && mainMethod.isDefined() && mainMethod.asFunction().isLLVMIRFunction()) {
-                    /*
-                     * The `isLLVMIRFunction` check makes sure the `main` function is really defined
-                     * in bitcode. This prevents us from finding a native `main` function (e.g. the
-                     * `main` of the VM we're running in).
-                     */
+                if (mainMethod.isFunction() && mainMethod.isDefined()) {
                     return mainMethod.asFunction();
                 }
             }

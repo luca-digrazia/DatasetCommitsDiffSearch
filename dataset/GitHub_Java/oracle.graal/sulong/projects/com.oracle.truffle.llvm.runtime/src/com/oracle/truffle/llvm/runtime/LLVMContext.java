@@ -91,12 +91,11 @@ public final class LLVMContext {
     private final HashMap<LLVMPointer, LLVMGlobal> globalsReverseMap = new HashMap<>();
     // allocations used to store non-pointer globals (need to be freed when context is disposed)
     private final ArrayList<LLVMPointer> globalsNonPointerStore = new ArrayList<>();
-    private final ArrayList<LLVMPointer> globalsReadOnlyStore = new ArrayList<>();
 
     private DataLayout dataLayout;
 
     private final List<LLVMThread> runningThreads = new ArrayList<>();
-    @CompilationFinal private LLVMThreadingStack threadingStack;
+    private final LLVMThreadingStack threadingStack;
     private final Object[] mainArguments;
     private final Map<String, String> environment;
     private final LinkedList<LLVMNativePointer> caughtExceptionStack = new LinkedList<>();
@@ -175,6 +174,7 @@ public final class LLVMContext {
         this.dataLayout = new DataLayout();
         this.destructorFunctions = new ArrayList<>();
         this.nativeCallStatistics = SulongEngineOption.isTrue(env.getOptions().get(SulongEngineOption.NATIVE_CALL_STATS)) ? new HashMap<>() : null;
+        this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), env.getOptions().get(SulongEngineOption.STACK_SIZE_KB));
         this.sigDfl = LLVMNativePointer.create(0);
         this.sigIgn = LLVMNativePointer.create(1);
         this.sigErr = LLVMNativePointer.create(-1);
@@ -226,14 +226,6 @@ public final class LLVMContext {
                     initContext.call(args);
                 }
             }
-        }
-    }
-
-    public void initialize() {
-        assert this.threadingStack == null;
-        this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), env.getOptions().get(SulongEngineOption.STACK_SIZE_KB));
-        for (ContextExtension ext : contextExtensions) {
-            ext.initialize();
         }
     }
 
@@ -317,19 +309,13 @@ public final class LLVMContext {
         // free the space allocated for non-pointer globals
         Truffle.getRuntime().createCallTarget(new RootNode(language) {
 
-            @Child LLVMMemoryOpNode freeRo = nodeFactory.createFreeGlobalsBlock(true);
-            @Child LLVMMemoryOpNode freeRw = nodeFactory.createFreeGlobalsBlock(false);
+            @Child LLVMMemoryOpNode free = nodeFactory.createFreeGlobalsBlock();
 
             @Override
             public Object execute(VirtualFrame frame) {
-                for (LLVMPointer store : globalsReadOnlyStore) {
-                    if (store != null) {
-                        freeRo.execute(store);
-                    }
-                }
                 for (LLVMPointer store : globalsNonPointerStore) {
                     if (store != null) {
-                        freeRw.execute(store);
+                        free.execute(store);
                     }
                 }
                 return null;
@@ -674,10 +660,6 @@ public final class LLVMContext {
     @TruffleBoundary
     public LLVMGlobal findGlobal(LLVMPointer pointer) {
         return globalsReverseMap.get(pointer);
-    }
-
-    public void registerReadOnlyGlobals(LLVMPointer nonPointerStore) {
-        globalsReadOnlyStore.add(nonPointerStore);
     }
 
     public void registerGlobals(LLVMPointer nonPointerStore) {

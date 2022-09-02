@@ -122,11 +122,6 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
-    protected void initializeContext(LLVMContext context) {
-        context.initialize();
-    }
-
-    @Override
     protected void disposeContext(LLVMContext context) {
         LLVMMemory memory = getCapability(LLVMMemory.class);
         context.dispose(memory);
