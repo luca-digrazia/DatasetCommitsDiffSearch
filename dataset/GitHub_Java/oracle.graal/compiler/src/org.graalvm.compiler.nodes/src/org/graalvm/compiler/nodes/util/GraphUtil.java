@@ -243,12 +243,10 @@ public class GraphUtil {
             EconomicSet<Node> unsafeNodes = null;
             Graph.NodeEventScope nodeEventScope = null;
             OptionValues options = node.getOptions();
-            boolean verifyGraalGraphEdges = Graph.Options.VerifyGraalGraphEdges.getValue(options);
-            boolean verifyKillCFGUnusedNodes = GraphUtil.Options.VerifyKillCFGUnusedNodes.getValue(options);
-            if (verifyGraalGraphEdges) {
+            if (Graph.Options.VerifyGraalGraphEdges.getValue(options)) {
                 unsafeNodes = collectUnsafeNodes(node.graph());
             }
-            if (verifyKillCFGUnusedNodes) {
+            if (GraphUtil.Options.VerifyKillCFGUnusedNodes.getValue(options)) {
                 EconomicSet<Node> collectedUnusedNodes = unusedNodes = EconomicSet.create(Equivalence.IDENTITY);
                 nodeEventScope = node.graph().trackNodeEvents(new Graph.NodeEventListener() {
                     @Override
@@ -262,12 +260,12 @@ public class GraphUtil {
             debug.dump(DebugContext.VERY_DETAILED_LEVEL, node.graph(), "Before killCFG %s", node);
             killCFGInner(node);
             debug.dump(DebugContext.VERY_DETAILED_LEVEL, node.graph(), "After killCFG %s", node);
-            if (verifyGraalGraphEdges) {
+            if (Graph.Options.VerifyGraalGraphEdges.getValue(options)) {
                 EconomicSet<Node> newUnsafeNodes = collectUnsafeNodes(node.graph());
                 newUnsafeNodes.removeAll(unsafeNodes);
                 assert newUnsafeNodes.isEmpty() : "New unsafe nodes: " + newUnsafeNodes;
             }
-            if (verifyKillCFGUnusedNodes) {
+            if (GraphUtil.Options.VerifyKillCFGUnusedNodes.getValue(options)) {
                 nodeEventScope.close();
                 Iterator<Node> iterator = unusedNodes.iterator();
                 while (iterator.hasNext()) {
