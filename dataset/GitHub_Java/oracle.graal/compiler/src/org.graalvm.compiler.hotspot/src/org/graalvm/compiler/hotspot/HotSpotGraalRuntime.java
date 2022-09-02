@@ -113,11 +113,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final String runtimeName;
     private final String compilerConfigurationName;
     private final HotSpotBackend hostBackend;
-
-    public GlobalMetrics getMetricValues() {
-        return metricValues;
-    }
-
     private final GlobalMetrics metricValues = new GlobalMetrics();
     private final List<SnippetCounter.Group> snippetCounterGroups;
     private final HotSpotGC garbageCollector;
@@ -133,6 +128,8 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
      * obtaining them from this object. However, concurrent updates are never lost.
      */
     private AtomicReference<OptionValues> optionsRef = new AtomicReference<>();
+
+    private final HotSpotGraalCompiler compiler;
 
     private final DiagnosticsOutputDirectory outputDirectory;
     private final Map<ExceptionAction, Integer> compilationProblemsPerAction;
@@ -164,6 +161,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         CompilerConfiguration compilerConfiguration = compilerConfigurationFactory.createCompilerConfiguration();
         compilerConfigurationName = compilerConfigurationFactory.getName();
 
+        compiler = new HotSpotGraalCompiler(jvmciRuntime, this, options);
         if (IS_AOT) {
             management = null;
         } else {
@@ -596,7 +594,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         extra.put(DebugOptions.PrintGraphHost, host);
         extra.put(DebugOptions.PrintGraphPort, port);
         OptionValues compileOptions = new OptionValues(getOptions(), extra);
-        HotSpotGraalCompiler compiler = (HotSpotGraalCompiler) runtime().getCompiler();
         compiler.compileMethod(new HotSpotCompilationRequest(hotSpotMethod, -1, 0L), false, compileOptions);
     }
 
