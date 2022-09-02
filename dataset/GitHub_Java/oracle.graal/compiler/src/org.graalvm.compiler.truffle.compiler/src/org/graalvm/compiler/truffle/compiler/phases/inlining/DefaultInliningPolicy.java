@@ -80,7 +80,7 @@ final class DefaultInliningPolicy implements InliningPolicy {
         if (node.getState() == CallNode.State.Expanded) {
             data.callDiff = -1 * node.getRootRelativeFrequency();
             for (CallNode child : node.getChildren()) {
-                if (child.getState() != CallNode.State.Indirect && child.getState() != CallNode.State.Removed && child.getState() != CallNode.State.BailedOut) {
+                if (child.getState() != CallNode.State.Indirect && child.getState() != CallNode.State.Removed) {
                     data.callDiff += data(child).callDiff;
                 }
             }
@@ -129,10 +129,8 @@ final class DefaultInliningPolicy implements InliningPolicy {
 
     private void expand(CallNode candidate, PriorityQueue<CallNode> expandQueue) {
         candidate.expand();
-        if (candidate.getState() == CallNode.State.Expanded) {
-            expandedCount += candidate.getIR().getNodeCount();
-            updateQueue(candidate, expandQueue, CallNode.State.Cutoff);
-        }
+        expandedCount += candidate.getIR().getNodeCount();
+        updateQueue(candidate, expandQueue, CallNode.State.Cutoff);
     }
 
     @Override
