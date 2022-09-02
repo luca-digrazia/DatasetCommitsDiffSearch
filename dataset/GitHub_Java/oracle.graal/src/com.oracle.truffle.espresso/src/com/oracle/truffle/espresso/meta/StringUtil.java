@@ -47,8 +47,7 @@ public class StringUtil {
         return dst;
     }
 
-    private static byte[] toBytes(char[] value, int offset, int len) {
-        int off = offset;
+    private static byte[] toBytes(char[] value, int off, int len) {
         byte[] val = newBytesFor(len);
         for (int i = 0; i < len; i++) {
             putChar(val, i, value[off]);
@@ -58,13 +57,12 @@ public class StringUtil {
     }
 
     private static void getChars(byte[] value, int srcBegin, int srcEnd, char[] dst, int dstBegin) {
-        int pos = dstBegin;
         // We need a range check here because 'getChar' has no checks
         if (srcBegin < srcEnd) {
             checkBoundsOffCount(srcBegin, srcEnd - srcBegin, value);
         }
         for (int i = srcBegin; i < srcEnd; i++) {
-            dst[pos++] = getChar(value, i);
+            dst[dstBegin++] = getChar(value, i);
         }
     }
 
@@ -80,11 +78,10 @@ public class StringUtil {
     }
 
     private static char getChar(byte[] val, int index) {
-        int pos = index;
-        assert pos >= 0 && pos < length(val) : "Trusted caller missed bounds check";
-        pos <<= 1;
-        return (char) (((val[pos++] & 0xff) << HI_BYTE_SHIFT) |
-                        ((val[pos] & 0xff) << LO_BYTE_SHIFT));
+        assert index >= 0 && index < length(val) : "Trusted caller missed bounds check";
+        index <<= 1;
+        return (char) (((val[index++] & 0xff) << HI_BYTE_SHIFT) |
+                        ((val[index] & 0xff) << LO_BYTE_SHIFT));
     }
 
     private static byte[] newBytesFor(int len) {
@@ -99,11 +96,10 @@ public class StringUtil {
     }
 
     private static void putChar(byte[] val, int index, int c) {
-        int pos = index;
-        assert pos >= 0 && pos < length(val) : "Trusted caller missed bounds check";
-        pos <<= 1;
-        val[pos++] = (byte) (c >> HI_BYTE_SHIFT);
-        val[pos] = (byte) (c >> LO_BYTE_SHIFT);
+        assert index >= 0 && index < length(val) : "Trusted caller missed bounds check";
+        index <<= 1;
+        val[index++] = (byte) (c >> HI_BYTE_SHIFT);
+        val[index] = (byte) (c >> LO_BYTE_SHIFT);
     }
 
     private static int length(byte[] value) {
