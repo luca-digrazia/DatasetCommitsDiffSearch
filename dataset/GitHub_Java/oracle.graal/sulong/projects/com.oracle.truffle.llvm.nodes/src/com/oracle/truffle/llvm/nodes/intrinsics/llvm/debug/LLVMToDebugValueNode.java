@@ -29,12 +29,13 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
@@ -111,9 +112,9 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
         return ToPointer.create();
     }
 
-    @Specialization(limit = "3")
-    protected LLVMDebugValue fromManagedPointer(LLVMManagedPointer value,
-                    @CachedLibrary("value.getObject()") InteropLibrary interop) {
+    @Specialization
+    protected LLVMDebugValue fromManagedPointer(LLVMManagedPointer value, @Cached("createIsBoxed()") Node isBoxed, @Cached("createUnbox()") Node unbox,
+                    @Cached("createToPointer()") ToPointer toPointer) {
         final TruffleObject target = value.getObject();
 
         if (target instanceof LLVMGlobalContainer) {
@@ -121,14 +122,13 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
         }
 
         try {
-            if (interop.isNumber(target)) {
-                Object unboxedValue;
-                if (interop.fitsInLong(target)) {
-                    unboxedValue = interop.asLong(target);
-                } else {
-                    unboxedValue = interop.asDouble(target);
+            if (ForeignAccess.sendIsBoxed(isBoxed, target)) {
+                final Object unboxedValue = ForeignAccess.sendUnbox(unbox, target);
+                final Object asPointer = toPointer.executeWithTarget(unboxedValue);
+                if (asPointer instanceof LLVMBoxedPrimitive) {
+                    // for a boxed primitive we can display the value to the user
+                    return fromBoxedPrimitive((LLVMBoxedPrimitive) asPointer);
                 }
-                return fromBoxedPrimitive(new LLVMBoxedPrimitive(unboxedValue));
             }
         } catch (UnsupportedMessageException ignored) {
             // the default case is a sensible fallback for this
@@ -199,7 +199,7 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
 
     @Specialization
     protected LLVMDebugValue fromGlobalContainer(LLVMGlobalContainer value) {
-        if (value.isPointer()) {
+        if (value.isInNative()) {
             return executeWithTarget(LLVMNativePointer.create(value.getAddress()));
         } else {
             return executeWithTarget(value.get());
