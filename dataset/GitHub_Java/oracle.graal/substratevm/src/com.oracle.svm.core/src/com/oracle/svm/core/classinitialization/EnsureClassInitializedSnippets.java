@@ -53,15 +53,14 @@ import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescriptor;
 
 public final class EnsureClassInitializedSnippets extends SubstrateTemplates implements Snippets {
-
-    private static final SubstrateForeignCallDescriptor INITIALIZE = SnippetRuntime.findForeignCall(ClassInitializationInfo.class, "initialize", false);
+    private static final SubstrateForeignCallDescriptor INITIALIZE = SnippetRuntime.findForeignCall(ClassInitializationInfo.class, "initialize", false, LocationIdentity.any());
 
     public static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = new SubstrateForeignCallDescriptor[]{
                     INITIALIZE,
     };
 
     @Snippet
-    private static void ensureClassIsInitializedSnippet(DynamicHub hub) {
+    private static void ensureClassIsInitializedSnippet(@Snippet.NonNullParameter DynamicHub hub) {
         ClassInitializationInfo info = hub.getClassInitializationInfo();
         /*
          * The ClassInitializationInfo field is always initialized by the image generator. We can

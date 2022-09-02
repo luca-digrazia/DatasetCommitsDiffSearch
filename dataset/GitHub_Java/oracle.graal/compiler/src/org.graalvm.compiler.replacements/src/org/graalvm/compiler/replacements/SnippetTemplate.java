@@ -115,7 +115,6 @@ import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.UnreachableControlSinkNode;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -1369,7 +1368,7 @@ public class SnippetTemplate {
     };
 
     private boolean assertSnippetKills(ValueNode replacee) {
-        if (replacee.graph().isBeforeStage(StageFlag.FLOATING_READS)) {
+        if (!replacee.graph().isAfterFloatingReadPhase()) {
             // no floating reads yet, ignore locations created while lowering
             return true;
         }
@@ -1485,7 +1484,7 @@ public class SnippetTemplate {
     }
 
     private void rewireMemoryGraph(ValueNode replacee, UnmodifiableEconomicMap<Node, Node> duplicates) {
-        if (replacee.graph().isAfterStage(StageFlag.FLOATING_READS)) {
+        if (replacee.graph().isAfterFloatingReadPhase()) {
             // rewire outgoing memory edges
             replaceMemoryUsages(replacee, new MemoryOutputMap(replacee, duplicates));
 
@@ -1646,8 +1645,7 @@ public class SnippetTemplate {
                 }
             }
             if (unwindPath != null) {
-                GraalError.guarantee(replacee.graph().isBeforeStage(StageFlag.FLOATING_READS),
-                                "Using a snippet with an UnwindNode after floating reads would require support for the memory graph");
+                GraalError.guarantee(!replacee.graph().isAfterFloatingReadPhase(), "Using a snippet with an UnwindNode after floating reads would require support for the memory graph");
                 GraalError.guarantee(replacee instanceof WithExceptionNode, "Snippet has an UnwindNode, but replacee is not a node with an exception handler");
 
                 FixedWithNextNode unwindPathDuplicate = (FixedWithNextNode) duplicates.get(unwindPath);
@@ -1665,8 +1663,7 @@ public class SnippetTemplate {
                  * because lowering should not remove edges from the original CFG.
                  */
                 if (replacee instanceof WithExceptionNode) {
-                    GraalError.guarantee(replacee.graph().isBeforeStage(StageFlag.FLOATING_READS),
-                                    "Using a snippet with an UnwindNode after floating reads would require support for the memory graph");
+                    GraalError.guarantee(!replacee.graph().isAfterFloatingReadPhase(), "Using a snippet with an UnwindNode after floating reads would require support for the memory graph");
                     GraalError.guarantee(originalWithExceptionNextNode != null, "Need to have next node to link placeholder to.");
 
                     WithExceptionNode newExceptionNode = replacee.graph().add(new PlaceholderWithExceptionNode());
