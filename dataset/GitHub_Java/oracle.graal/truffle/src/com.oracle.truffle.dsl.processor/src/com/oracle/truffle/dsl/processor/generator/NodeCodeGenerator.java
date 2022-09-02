@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -57,21 +57,20 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
 
-import com.oracle.truffle.api.dsl.NodeFactory;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.dsl.processor.AnnotationProcessor;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.generator.FlatNodeGenFactory.GeneratorMode;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
-import com.oracle.truffle.dsl.processor.java.model.GeneratedTypeMirror;
 import com.oracle.truffle.dsl.processor.model.MessageContainer.Message;
 import com.oracle.truffle.dsl.processor.model.NodeChildData;
 import com.oracle.truffle.dsl.processor.model.NodeData;
@@ -79,7 +78,7 @@ import com.oracle.truffle.dsl.processor.model.NodeData;
 public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
 
     @Override
-    public List<CodeTypeElement> create(ProcessorContext context, NodeData node) {
+    public List<CodeTypeElement> create(ProcessorContext context, AnnotationProcessor<?> processor, NodeData node) {
         Map<String, CodeVariableElement> libraryConstants = new LinkedHashMap<>();
         List<CodeTypeElement> rootTypes = createImpl(context, node, libraryConstants);
         if (rootTypes != null) {
@@ -176,28 +175,44 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
         return node.isGenerateFactory() ? NodeFactoryFactory.factoryClassName(node.getTemplateType()) : createNodeTypeName(node.getTemplateType());
     }
 
-    private static void buildClassName(StringBuilder className, Element element, boolean first, boolean generateFactory) {
-        if (element == null || element.getKind() == ElementKind.PACKAGE) {
-            return;
+    private static Element buildClassName(Element nodeElement, boolean first, boolean generateFactory) {
+        if (nodeElement == null || nodeElement.getKind() == ElementKind.PACKAGE) {
+            return nodeElement;
         }
-        if (element.getKind().isClass()) {
-            buildClassName(className, element.getEnclosingElement(), false, generateFactory);
-            if (first) {
-                if (generateFactory) {
-                    className.append(NodeFactoryFactory.factoryClassName(element));
-                    className.append(".");
-                }
-                className.append(createNodeTypeName((TypeElement) element));
-            } else {
-                if (isSpecializedNode(element)) {
-                    className.append(createNodeTypeName((TypeElement) element));
-                    className.append(".");
-                } else {
-                    className.append(NodeFactoryFactory.factoryClassName(element));
-                    className.append(".");
+        if (nodeElement.getKind().isClass()) {
+            Element enclosingElement = buildClassName(nodeElement.getEnclosingElement(), false, generateFactory);
+            PackageElement enclosingPackage = null;
+            CodeTypeElement enclosingClass = null;
+            if (enclosingElement != null) {
+                if (enclosingElement.getKind() == ElementKind.PACKAGE) {
+                    enclosingPackage = (PackageElement) enclosingElement;
+                } else if (enclosingElement.getKind().isClass()) {
+                    enclosingClass = (CodeTypeElement) enclosingElement;
                 }
             }
+            if (first) {
+                if (generateFactory) {
+                    enclosingClass = createClass(enclosingPackage, enclosingClass, NodeFactoryFactory.factoryClassName(nodeElement));
+                }
+                enclosingClass = createClass(enclosingPackage, enclosingClass, createNodeTypeName((TypeElement) nodeElement));
+            } else {
+                if (isSpecializedNode(nodeElement)) {
+                    enclosingClass = createClass(enclosingPackage, enclosingClass, createNodeTypeName((TypeElement) nodeElement));
+                } else {
+                    enclosingClass = createClass(enclosingPackage, enclosingClass, NodeFactoryFactory.factoryClassName(nodeElement));
+                }
+            }
+            return enclosingClass;
         }
+        return null;
+    }
+
+    private static CodeTypeElement createClass(PackageElement pack, CodeTypeElement enclosingClass, String name) {
+        CodeTypeElement type = new CodeTypeElement(modifiers(PUBLIC), ElementKind.CLASS, pack, name);
+        if (enclosingClass != null) {
+            enclosingClass.add(type);
+        }
+        return type;
     }
 
     public static boolean isSpecializedNode(TypeMirror mirror) {
@@ -210,9 +225,9 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
 
     static boolean isSpecializedNode(Element element) {
         if (element.getKind().isClass()) {
-            if (ElementUtils.isAssignable(element.asType(), ProcessorContext.getInstance().getType(Node.class))) {
+            if (ElementUtils.isAssignable(element.asType(), ProcessorContext.getInstance().getTypes().Node)) {
                 for (ExecutableElement method : ElementFilter.methodsIn(element.getEnclosedElements())) {
-                    if (ElementUtils.findAnnotationMirror(method, Specialization.class) != null) {
+                    if (ElementUtils.findAnnotationMirror(method, ProcessorContext.getInstance().getTypes().Specialization) != null) {
                         return true;
                     }
                 }
@@ -223,11 +238,18 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
 
     public static TypeMirror nodeType(NodeData node) {
         TypeElement element = node.getTemplateType();
-        StringBuilder className = new StringBuilder();
-        buildClassName(className, element, true, node.isGenerateFactory());
-        String nodeClassName = className.toString();
-        String packageName = ElementUtils.getPackageName(element);
-        return new GeneratedTypeMirror(packageName, nodeClassName);
+        CodeTypeElement type = (CodeTypeElement) buildClassName(element, true, node.isGenerateFactory());
+        return type.asType();
+    }
+
+    public static TypeMirror factoryOrNodeType(NodeData node) {
+        TypeElement element = node.getTemplateType();
+        CodeTypeElement type = (CodeTypeElement) buildClassName(element, true, node.isGenerateFactory());
+        if (node.isGenerateFactory()) {
+            return type.getEnclosingElement().asType();
+        } else {
+            return type.asType();
+        }
     }
 
     private static final String NODE_SUFFIX = "NodeGen";
@@ -256,7 +278,7 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
             return Arrays.asList(type);
         }
 
-        type = new FlatNodeGenFactory(context, node, libraryConstants).create(type);
+        type = new FlatNodeGenFactory(context, GeneratorMode.DEFAULT, node, libraryConstants).create(type);
 
         return Arrays.asList(type);
     }
@@ -281,8 +303,8 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
                 List<Message> messages = node.collectMessages();
 
                 String message = messages.toString();
-                message = message.replaceAll("\"", "\\\\\"");
-                message = message.replaceAll("\n", "\\\\n");
+                message = message.replace("\"", "\\\"");
+                message = message.replace(System.lineSeparator(), "\\\\n");
                 overrideMethod.createBuilder().startThrow().startNew(context.getType(RuntimeException.class)).doubleQuote("Truffle DSL compiler errors: " + message).end().end();
                 type.add(overrideMethod);
             }
@@ -312,7 +334,7 @@ public class NodeCodeGenerator extends CodeTypeElementFactory<NodeData> {
         TypeMirror commonNodeSuperType = ElementUtils.getCommonSuperType(context, nodeTypesList);
 
         Types types = context.getEnvironment().getTypeUtils();
-        TypeMirror factoryType = context.getType(NodeFactory.class);
+        TypeMirror factoryType = context.getTypes().NodeFactory;
         TypeMirror baseType;
         if (allSame) {
             baseType = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(factoryType), commonNodeSuperType);

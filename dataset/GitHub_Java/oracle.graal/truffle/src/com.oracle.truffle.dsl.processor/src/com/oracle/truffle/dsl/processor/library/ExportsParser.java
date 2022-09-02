@@ -310,6 +310,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                     ExportMessageData exportMessage = exportLib.getExportedMessages().get(message.getName());
 
                     if (exportMessage == null || exportMessage.getResolvedMessage() != message) {
+
                         boolean isAbstract;
                         if (!message.getAbstractIfExported().isEmpty()) {
                             isAbstract = false;
@@ -320,8 +321,9 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                                 }
                             }
                         } else {
-                            isAbstract = !exportLib.hasExportDelegation();
+                            isAbstract = true;
                         }
+
                         if (isAbstract) {
                             missingAbstractMessage.add(message);
                         }
@@ -585,8 +587,8 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                     continue;
                 }
                 TypeMirror delegateType = delegateVar.asType();
-                TypeMirror exportsReceiverType = lib.getLibrary().getSignatureReceiverType();
-                if (!ElementUtils.isAssignable(delegateType, exportsReceiverType)) {
+                TypeMirror exportsReceiverType = lib.getLibrary().getExportsReceiverType();
+                if (!ElementUtils.isAssignable(exportsReceiverType, delegateType)) {
                     lib.addError(delegateToValue, "The type of export delegation field '%s' is not assignable to the expected type '%s'. " +
                                     "Change the field type to '%s' to resolve this.",
                                     ElementUtils.getSimpleName(receiverClass) + "." + delegateTo,

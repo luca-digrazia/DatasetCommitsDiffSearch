@@ -324,7 +324,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
             return node; // error sync point
         }
 
-        node.getSpecializations().addAll(new SpecializationMethodParser(context, node, mode == ParseMode.EXPORTED_MESSAGE).parse(members));
+        node.getSpecializations().addAll(new SpecializationMethodParser(context, node).parse(members));
         node.getSpecializations().addAll(new FallbackParser(context, node).parse(members));
         node.getCasts().addAll(new CreateCastParser(context, node).parse(members));
 
@@ -1315,8 +1315,8 @@ public final class NodeParser extends AbstractParser<NodeData> {
             if (findAnnotationMirror(method, types.Specialization) != null) {
                 continue;
             }
-            boolean ignoreUnexpected = mode == ParseMode.EXPORTED_MESSAGE;
-            ExecutableTypeData executableType = new ExecutableTypeData(node, method, signatureSize, context.getFrameTypes(), ignoreUnexpected);
+
+            ExecutableTypeData executableType = new ExecutableTypeData(node, method, signatureSize, context.getFrameTypes());
 
             if (executableType.getFrameParameter() != null) {
                 boolean supportedType = false;
@@ -1434,7 +1434,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
             List<? extends TypeMirror> thrownTypes = type.getMethod().getThrownTypes();
             List<String> checkedTypes = null;
             for (TypeMirror thrownType : thrownTypes) {
-                if (type.hasUnexpectedValue()) {
+                if (mode != ParseMode.EXPORTED_MESSAGE && typeEquals(thrownType, types.UnexpectedResultException)) {
                     continue;
                 } else if (isAssignable(thrownType, runtimeException)) {
                     // runtime exceptions don't need to be declared.
@@ -2668,7 +2668,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
             index++;
         }
 
-        SpecializationMethodParser parser = new SpecializationMethodParser(context, node, mode == ParseMode.EXPORTED_MESSAGE);
+        SpecializationMethodParser parser = new SpecializationMethodParser(context, node);
         SpecializationData polymorphic = parser.create("Polymorphic", TemplateMethod.NO_NATURAL_ORDER, null, null, returnType, foundTypes);
         if (polymorphic == null) {
             throw new AssertionError("Failed to parse polymorphic signature. " + parser.createDefaultMethodSpec(null, null, false, null) + " Types: " + returnType + " - " + foundTypes);

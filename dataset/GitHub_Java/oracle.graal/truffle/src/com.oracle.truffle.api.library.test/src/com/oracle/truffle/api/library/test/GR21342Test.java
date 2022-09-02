@@ -53,8 +53,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
-import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest.TestRun;
 
 @SuppressWarnings("unused")
 public class GR21342Test extends AbstractParametrizedLibraryTest {

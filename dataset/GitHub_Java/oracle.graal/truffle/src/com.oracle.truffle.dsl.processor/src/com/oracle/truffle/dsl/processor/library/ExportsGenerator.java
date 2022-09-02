@@ -623,7 +623,7 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
             }
             LibraryMessage message = export.getResolvedMessage();
 
-            TypeMirror cachedExportReceiverType = export.getExportsLibrary().getReceiverType();
+            TypeMirror cachedExportReceiverType = export.getReceiverType();
 
             // cached execute
             NodeData cachedSpecializedNode = export.getSpecializedNode();
