@@ -24,8 +24,8 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceCompilation;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceCompilationDetails;
+import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.TraceCompilation;
+import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.TraceCompilationDetails;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -59,25 +59,23 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
         runtime.addListener(new TraceCompilationListener(runtime));
     }
 
-    private static Map<String, Object> defaultProperties(OptimizedCallTarget target) {
-        Map<String, Object> properties = new LinkedHashMap<>();
-        properties.putAll(target.getDebugProperties(null));
-        properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
-        return properties;
-    }
-
     @Override
     public void onCompilationQueued(OptimizedCallTarget target) {
         if (target.engine.traceCompilationDetails) {
-            runtime.logEvent(0, "opt queued", target.toString(), defaultProperties(target));
+            Map<String, Object> properties = new LinkedHashMap<>();
+            properties.putAll(target.getDebugProperties(null));
+            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
+            runtime.logEvent(0, "opt queued", target.toString(), properties);
         }
     }
 
     @Override
     public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
         if (target.engine.traceCompilationDetails) {
-            Map<String, Object> properties = defaultProperties(target);
+            Map<String, Object> properties = new LinkedHashMap<>();
+            properties.putAll(target.getDebugProperties(null));
             properties.put("Reason", reason);
+            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
             runtime.logEvent(0, "opt unqueued", target.toString(), properties);
         }
     }
@@ -95,7 +93,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     @Override
     public void onCompilationStarted(OptimizedCallTarget target) {
         if (target.engine.traceCompilationDetails) {
-            runtime.logEvent(0, "opt start", target.toString(), defaultProperties(target));
+            runtime.logEvent(0, "opt start", target.toString(), target.getDebugProperties(null));
         }
 
         if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
@@ -106,7 +104,10 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     @Override
     public void onCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
         if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
-            runtime.logEvent(0, "opt deopt", target.toString(), defaultProperties(target));
+            Map<String, Object> properties = new LinkedHashMap<>();
+            properties.putAll(target.getDebugProperties(null));
+            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
+            runtime.logEvent(0, "opt deopt", target.toString(), properties);
         }
     }
 
@@ -177,8 +178,10 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     @Override
     public void onCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason) {
         if (target.getOptionValue(TraceCompilation) || target.getOptionValue(TraceCompilationDetails)) {
-            Map<String, Object> properties = defaultProperties(target);
+            Map<String, Object> properties = new LinkedHashMap<>();
+            properties.putAll(target.getDebugProperties(null));
             properties.put("Reason", reason);
+            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
             runtime.logEvent(0, "opt invalidated", target.toString(), properties);
         }
     }
