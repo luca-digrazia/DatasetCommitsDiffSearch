@@ -413,37 +413,28 @@ public final class InspectorInstrument extends TruffleInstrument {
                     throw new IOException(ex);
                 }
                 InspectServerSession iss = InspectServerSession.create(executionContext, debugBreak, connectionWatcher);
-                boolean disposeIss = true;
+                WSInterceptorServer interceptor = new WSInterceptorServer(socketAddress.getPort(), token, iss, connectionWatcher);
+                MessageEndpoint serverEndpoint;
                 try {
-                    WSInterceptorServer interceptor = new WSInterceptorServer(socketAddress.getPort(), token, iss, connectionWatcher);
-                    MessageEndpoint serverEndpoint;
-                    try {
-                        serverEndpoint = env.startServer(wsuri, iss);
-                    } catch (MessageTransport.VetoException vex) {
-                        throw new IOException(vex.getLocalizedMessage());
-                    }
-                    if (serverEndpoint == null) {
-                        InspectorServer server;
-                        interceptor.close(token);
-                        server = InspectorServer.get(socketAddress, token, pathContainingToken, executionContext, debugBreak, secure, keyStoreOptions, connectionWatcher, iss);
-                        String wsAddress = server.getWSAddress(token);
-                        wss = server;
-                        urlContainingToken = wsAddress;
-                        info.println("Debugger listening on " + wsAddress);
-                        info.println("For help, see: " + HELP_URL);
-                        info.println("E.g. in Chrome open: " + server.getDevtoolsAddress(token));
-                        info.flush();
-                    } else {
-                        restartServerEndpointOnClose(hostAndPort, env, wsuri, executionContext, connectionWatcher, iss, interceptor);
-                        interceptor.opened(serverEndpoint);
-                        wss = interceptor;
-                        urlContainingToken = wsuri.toString();
-                    }
-                    disposeIss = false;
-                } finally {
-                    if (disposeIss) {
-                        iss.dispose();
-                    }
+                    serverEndpoint = env.startServer(wsuri, iss);
+                } catch (MessageTransport.VetoException vex) {
+                    throw new IOException(vex.getLocalizedMessage());
+                }
+                if (serverEndpoint == null) {
+                    interceptor.close(token);
+                    InspectorServer server = InspectorServer.get(socketAddress, token, pathContainingToken, executionContext, debugBreak, secure, keyStoreOptions, connectionWatcher, iss);
+                    String wsAddress = server.getWSAddress(token);
+                    wss = server;
+                    urlContainingToken = wsAddress;
+                    info.println("Debugger listening on " + wsAddress);
+                    info.println("For help, see: " + HELP_URL);
+                    info.println("E.g. in Chrome open: " + server.getDevtoolsAddress(token));
+                    info.flush();
+                } else {
+                    restartServerEndpointOnClose(hostAndPort, env, wsuri, executionContext, connectionWatcher, iss, interceptor);
+                    interceptor.opened(serverEndpoint);
+                    wss = interceptor;
+                    urlContainingToken = wsuri.toString();
                 }
             }
             if (debugBreak || waitAttached) {
@@ -524,7 +515,6 @@ public final class InspectorInstrument extends TruffleInstrument {
                 try {
                     serverEndpoint = env.startServer(wsuri, newSession);
                 } catch (MessageTransport.VetoException vex) {
-                    newSession.dispose();
                     return;
                 } catch (IOException ioex) {
                     throw new InspectorIOException(hostAndPort.getHostPort(), ioex);

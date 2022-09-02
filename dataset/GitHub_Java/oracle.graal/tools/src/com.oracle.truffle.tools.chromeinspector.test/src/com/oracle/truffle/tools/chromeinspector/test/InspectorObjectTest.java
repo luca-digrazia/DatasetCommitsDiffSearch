@@ -41,6 +41,8 @@ import org.junit.Test;
  */
 public class InspectorObjectTest {
 
+    private static final String NL = System.lineSeparator();
+
     private ByteArrayOutputStream out;
     private Context context;
     private TruffleObject inspector;
@@ -73,8 +75,8 @@ public class InspectorObjectTest {
         Value testOpen = context.getBindings("sl").getMember("testOpen");
         testOpen.execute(inspector);
         String output = out.toString();
-        Assert.assertTrue(output, output.startsWith("Debugger listening on port"));
-        Assert.assertTrue(output, output.indexOf("ws=") > 0);
+        Assert.assertTrue(output, output.startsWith("Debugger listening "));
+        Assert.assertTrue(output, output.indexOf("ws://") > 0);
         Assert.assertTrue(output, output.indexOf(":" + freePort + "/") > 0);
     }
 
@@ -108,11 +110,35 @@ public class InspectorObjectTest {
         url = testUrl.execute(inspector);
         Assert.assertTrue(url.toString(), url.isString());
         String urlStr = url.asString();
-        Assert.assertTrue(urlStr, urlStr.startsWith("ws="));
-        Assert.assertTrue(urlStr, urlStr.indexOf(":" + freePort + "/") > 0);
+        testURL(urlStr);
         testClose.execute(inspector);
         url = testUrl.execute(inspector);
         Assert.assertTrue(url.toString(), url.isNull());
+    }
+
+    private void testURL(String url) {
+        Assert.assertTrue(url, url.startsWith("ws://"));
+        Assert.assertTrue(url, url.indexOf(":" + freePort + "/") > 0);
+    }
+
+    @Test
+    public void testOpenCloseOpen() {
+        context.eval("sl", "function testOpenCloseOpen(inspector) {\n" +
+                        "    inspector.open(" + freePort + ", \"localhost\", false);\n" +
+                        "    url = inspector.url();\n" +
+                        "    inspector.close();\n" +
+                        "    nourl = inspector.url();\n" +
+                        "    inspector.open(" + freePort + ", \"localhost\", false);\n" +
+                        "    url2 = inspector.url();\n" +
+                        "    inspector.close();\n" +
+                        "    return url + \",\" + nourl + \",\" + url2;\n" +
+                        "}\n");
+        Value testOpenCloseOpen = context.getBindings("sl").getMember("testOpenCloseOpen");
+        Value urlsValue = testOpenCloseOpen.execute(inspector);
+        String[] urls = urlsValue.toString().split(",");
+        testURL(urls[0]);
+        Assert.assertEquals(urls[1], "null");
+        testURL(urls[2]);
     }
 
     @Test
@@ -162,17 +188,17 @@ public class InspectorObjectTest {
                         "}\n");
         Value testSession = context.getBindings("sl").getMember("testSession");
         Value ret = testSession.execute(inspector);
-        Assert.assertEquals("3\n" +
-                        "l3: A\n" +
-                        "l1: A\n" +
-                        "l2: A\n" +
-                        "6\n" +
-                        "l3: B\n" +
-                        "l1: B\n" +
-                        "l2: B\n" +
-                        "4 = 3 + 1\n" +
-                        "l2: BB\n" +
-                        "3\n", out.toString());
+        Assert.assertEquals("3" + NL +
+                        "l3: A" + NL +
+                        "l1: A" + NL +
+                        "l2: A" + NL +
+                        "6" + NL +
+                        "l3: B" + NL +
+                        "l1: B" + NL +
+                        "l2: B" + NL +
+                        "4 = 3 + 1" + NL +
+                        "l2: BB" + NL +
+                        "3" + NL, out.toString());
         Assert.assertTrue(ret.asBoolean());
     }
 
@@ -192,14 +218,19 @@ public class InspectorObjectTest {
                         "    println(\"P: \" + arg.method);\n" +
                         "}\n" +
                         "function listenerAll(arg) {\n" +
-                        "    println(\"All: \" + arg.method);\n" +
+                        "    if (\"Runtime.consoleAPICalled\" == arg.method) {\n" +
+                        "        // print callback\n" +
+                        "        return;\n" +
+                        "    } else {\n" +
+                        "        println(\"All: \" + arg.method);\n" +
+                        "    }\n" +
                         "}\n");
         Value testSession = context.getBindings("sl").getMember("testSession");
         testSession.execute(inspector);
-        Assert.assertEquals("All: Debugger.scriptParsed\n" +
-                        "All: Debugger.scriptParsed\n" +
-                        "P: Debugger.paused\n" +
-                        "All: Debugger.paused\n" +
-                        "All: Debugger.resumed\n", out.toString());
+        Assert.assertEquals("All: Debugger.scriptParsed" + NL +
+                        "All: Debugger.scriptParsed" + NL +
+                        "P: Debugger.paused" + NL +
+                        "All: Debugger.paused" + NL +
+                        "All: Debugger.resumed" + NL, out.toString());
     }
 }
