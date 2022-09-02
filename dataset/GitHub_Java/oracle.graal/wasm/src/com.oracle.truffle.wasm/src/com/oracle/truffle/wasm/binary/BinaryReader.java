@@ -33,9 +33,7 @@ package com.oracle.truffle.wasm.binary;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BLOCK;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BR_IF;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.BR_TABLE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.CALL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.CALL_INDIRECT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.DROP;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.ELSE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.END;
@@ -198,7 +196,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.LOOP;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.MEMORY_GROW;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.MEMORY_SIZE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.NOP;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.RETURN;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.SELECT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
 import static com.oracle.truffle.wasm.binary.constants.Sections.CODE;
@@ -220,7 +217,6 @@ import java.util.ArrayList;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.wasm.binary.constants.ExportIdentifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.memory.WasmMemory;
@@ -325,36 +321,13 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void readFunctionSection() {
         int numFunctions = readVectorLength();
-        for (int i = 0; i != numFunctions; ++i) {
+        for (byte functionIndex = 0; functionIndex != numFunctions; ++functionIndex) {
             int functionTypeIndex = readUnsignedInt32();
-            wasmModule.symbolTable().allocateFunction(wasmLanguage, functionTypeIndex);
+            wasmModule.symbolTable().allocateFunction(wasmLanguage, functionIndex, functionTypeIndex);
         }
     }
 
     private void readTableSection() {
-        int numTables = readVectorLength();
-        // Since in the current version of WebAssembly supports at most one table instance,
-        // this loop should be executed at most once.
-        for (byte tableIndex = 0; tableIndex != numTables; ++tableIndex) {
-            byte elemType = read1();
-            Assert.assertEquals(elemType, 0x70, "Invalid element type for table");
-            byte limitsPrefix = read1();
-            switch (limitsPrefix) {
-                case 0x00: {
-                    int initSize = readUnsignedInt32();  // initial size (in number of entries)
-                    wasmModule.table().initialize(initSize);
-                    break;
-                }
-                case 0x01: {
-                    int initSize = readUnsignedInt32();  // initial size (in number of entries)
-                    int maxSize = readUnsignedInt32();  // max size (in number of entries)
-                    wasmModule.table().initialize(initSize, maxSize);
-                    break;
-                }
-                default:
-                    Assert.fail(String.format("Invalid limits prefix for table (expected 0x00 or 0x01, got 0x%02X", limitsPrefix));
-            }
-        }
     }
 
     private void readMemorySection() {
@@ -364,7 +337,7 @@ public class BinaryReader extends BinaryStreamReader {
             switch (limitsPrefix) {
                 case 0x00: {
                     /* Return value ignored, as we don't rely on the memory definition for the memory size. */
-                    readUnsignedInt32();  // initial size (in Wasm pages)
+                    readUnsignedInt32();  // initialSize (in Wasm pages)
                     break;
                 }
                 case 0x01: {
@@ -374,7 +347,7 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 }
                 default:
-                    Assert.fail(String.format("Invalid limits prefix for memory (expected 0x00 or 0x01, got 0x%02X", limitsPrefix));
+                    Assert.fail(String.format("Invalid limits prefix (expected 0x00 or 0x01, got 0x%02X", limitsPrefix));
             }
         }
     }
@@ -427,7 +400,6 @@ public class BinaryReader extends BinaryStreamReader {
         rootNode.codeEntry().setByteConstants(state.byteConstants());
         rootNode.codeEntry().setIntConstants(state.intConstants());
         rootNode.codeEntry().setNumericLiterals(state.numericLiterals());
-        rootNode.codeEntry().setBranchTables(state.branchTables());
         rootNode.codeEntry().initStackSlots(rootNode.getFrameDescriptor(), state.maxStackSize());
     }
 
@@ -473,14 +445,13 @@ public class BinaryReader extends BinaryStreamReader {
 
     private WasmBlockNode readBlock(WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId) {
         ArrayList<WasmNode> nestedControlTable = new ArrayList<>();
-        ArrayList<Node> callNodes = new ArrayList<>();
+        ArrayList<DirectCallNode> callNodes = new ArrayList<>();
         int startStackSize = state.stackSize();
         int startOffset = offset();
         int startByteConstantOffset = state.byteConstantOffset();
         int startIntConstantOffset = state.intConstantOffset();
         int startNumericLiteralOffset = state.numericLiteralOffset();
-        int startBranchTableOffset = state.branchTableOffset();
-        WasmBlockNode currentBlock = new WasmBlockNode(wasmModule, codeEntry, startOffset, returnTypeId, startStackSize, startByteConstantOffset, startIntConstantOffset, startNumericLiteralOffset, startBranchTableOffset);
+        WasmBlockNode currentBlock = new WasmBlockNode(wasmModule, codeEntry, startOffset, returnTypeId, startStackSize, startByteConstantOffset, startIntConstantOffset, startNumericLiteralOffset);
         int opcode;
         do {
             opcode = read1() & 0xFF;
@@ -527,7 +498,7 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 }
                 case BR_IF: {
-                    state.pop();  // The branch condition.
+                    state.pop();
                     // TODO: restore check
                     // This check was here to validate the stack size before branching and make sure that the block that
                     // is currently executing produced as many values as it was meant to before branching.
@@ -540,27 +511,6 @@ public class BinaryReader extends BinaryStreamReader {
                     state.useIntConstant(state.getStackState(unwindLevel));
                     break;
                 }
-                case BR_TABLE: {
-                    int numLabels = readVectorLength();
-                    // We need to save two tables here, to maintain the mapping target -> state mapping:
-                    // - a table containing the branch targets for the instruction
-                    // - a table containing the stack state for each corresponding branch target
-                    int[] branchTable = new int[numLabels + 1];
-                    int[] stackStates = new int[numLabels + 1];
-                    // The BR_TABLE instruction behaves like a 'switch' statement.
-                    // There is one extra label for the 'default' case.
-                    for (int i = 0; i != numLabels + 1; ++i) {
-                        branchTable[i] = readLabelIndex();
-                        stackStates[i] = state.getStackState(branchTable[i]);
-                    }
-                    state.pop();  // The offset to the branch table.
-                    state.saveBranchTable(branchTable);
-                    state.saveBranchTable(stackStates);
-                    break;
-                }
-                case RETURN: {
-                    break;
-                }
                 case CALL: {
                     int functionIndex = readFunctionIndex(bytesConsumed);
                     state.saveNumericLiteral(functionIndex);
@@ -569,19 +519,6 @@ public class BinaryReader extends BinaryStreamReader {
                     state.pop(function.numArguments());
                     state.push(function.returnTypeLength());
                     callNodes.add(Truffle.getRuntime().createDirectCallNode(function.getCallTarget()));
-                    break;
-                }
-                case CALL_INDIRECT: {
-                    int expectedFunctionTypeIndex = readTypeIndex(bytesConsumed);
-                    state.saveNumericLiteral(expectedFunctionTypeIndex);
-                    state.useByteConstant(bytesConsumed[0]);
-                    int numArguments = wasmModule.symbolTable().getFunctionTypeNumArguments(expectedFunctionTypeIndex);
-                    int returnLength = wasmModule.symbolTable().getFunctionTypeReturnTypeLength(expectedFunctionTypeIndex);
-                    state.pop();  // The function index to call.
-                    state.pop(numArguments);
-                    state.push(returnLength);
-                    callNodes.add(Truffle.getRuntime().createIndirectCallNode());
-                    Assert.assertEquals(read1(), 0x00, "CALL_INDIRECT: Instruction must end with 0x00");
                     break;
                 }
                 case DROP:
@@ -903,12 +840,11 @@ public class BinaryReader extends BinaryStreamReader {
             }
         } while (opcode != END && opcode != ELSE);
         currentBlock.nestedControlTable = nestedControlTable.toArray(new WasmNode[nestedControlTable.size()]);
-        currentBlock.callNodeTable = callNodes.toArray(new Node[callNodes.size()]);
+        currentBlock.callNodeTable = callNodes.toArray(new DirectCallNode[callNodes.size()]);
         currentBlock.setByteLength(offset() - startOffset);
         currentBlock.setByteConstantLength(state.byteConstantOffset() - startByteConstantOffset);
         currentBlock.setIntConstantLength(state.intConstantOffset() - startIntConstantOffset);
         currentBlock.setNumericLiteralLength(state.numericLiteralOffset() - startNumericLiteralOffset);
-        currentBlock.setBranchTableLength(state.branchTableOffset() - startBranchTableOffset);
         checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
         return currentBlock;
     }
@@ -956,44 +892,6 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void readElementSection() {
-        int numElements = readVectorLength();
-        for (int i = 0; i != numElements; ++i) {
-            int tableIndex = readUnsignedInt32();
-            // At the moment, WebAssembly only supports one table instance, thus the only valid table index is 0.
-            Assert.assertEquals(tableIndex, 0, "Invalid table index");
-            int offset = 0;
-            byte instruction;
-
-            // Read the offset expression.
-            do {
-                instruction = read1();
-                // Table offset expression must be a constant expression with result type i32.
-                // https://webassembly.github.io/spec/core/syntax/modules.html#element-segments
-                // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
-
-                switch (instruction) {
-                    case I32_CONST:
-                        offset = readSignedInt32();
-                        break;
-                    case GLOBAL_GET:
-                        // The global.get instructions in constant expressions are only allowed to refer to
-                        // imported globals, which are not yet supported in our implementation.
-                        throw new NotImplementedException();
-                    case END:
-                        break;
-                    default:
-                        Assert.fail(String.format("Invalid instruction for table offset expression: 0x%02X", instruction));
-                }
-            } while (instruction != END);
-
-            // Read the contents.
-            int contentLength = readUnsignedInt32();
-            int[] contents = new int[contentLength];
-            for (int funcIdx = 0; funcIdx != contentLength; ++funcIdx) {
-                contents[i] = readFunctionIndex();
-            }
-            wasmModule.table().initializeContents(offset, contents);
-        }
     }
 
     private void readStartSection() {
@@ -1157,14 +1055,6 @@ public class BinaryReader extends BinaryStreamReader {
 
     private int readFunctionIndex() {
         return readUnsignedInt32();
-    }
-
-    private int readTypeIndex() {
-        return readUnsignedInt32();
-    }
-
-    private int readTypeIndex(byte[] bytesConsumed) {
-        return readUnsignedInt32(bytesConsumed);
     }
 
     private int readFunctionIndex(byte[] bytesConsumed) {
