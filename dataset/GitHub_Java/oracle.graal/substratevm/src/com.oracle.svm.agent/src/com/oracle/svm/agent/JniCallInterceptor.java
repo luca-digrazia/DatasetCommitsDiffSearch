@@ -37,7 +37,6 @@ import static com.oracle.svm.agent.Support.handles;
 import static com.oracle.svm.agent.Support.jniFunctions;
 import static com.oracle.svm.agent.Support.jvmtiEnv;
 import static com.oracle.svm.agent.Support.jvmtiFunctions;
-import static com.oracle.svm.agent.Support.testException;
 import static com.oracle.svm.agent.Support.toCString;
 import static com.oracle.svm.jni.JNIObjectHandles.nullHandle;
 import static org.graalvm.word.WordFactory.nullPointer;
@@ -65,7 +64,6 @@ import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.FromReflectedFieldFu
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.FromReflectedMethodFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetFieldIDFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetMemberIDFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.NewObjectArrayFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ThrowNewFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ToReflectedFieldFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ToReflectedMethodFunctionPointer;
@@ -307,27 +305,6 @@ final class JniCallInterceptor {
         return result;
     }
 
-    @CEntryPoint(name = "NewObjectArray")
-    @CEntryPointOptions(prologue = AgentIsolate.Prologue.class, epilogue = AgentIsolate.Epilogue.class)
-    private static JNIObjectHandle newObjectArray(JNIEnvironment env, int length, JNIObjectHandle elementClass, JNIObjectHandle initialElement) {
-        JNIObjectHandle callerClass = getCallerClass(env);
-        JNIObjectHandle result = jniFunctions().getNewObjectArray().invoke(env, length, elementClass, initialElement);
-        JNIObjectHandle resultClass = nullHandle();
-        if (result.notEqual(nullHandle()) && !testException(env)) {
-            resultClass = jniFunctions().getGetObjectClass().invoke(env, result);
-            if (clearException(env)) {
-                resultClass = nullHandle();
-            }
-        }
-        if (accessVerifier != null && !accessVerifier.verifyNewObjectArray(env, resultClass, callerClass)) {
-            result = nullHandle();
-        }
-        if (shouldTrace()) {
-            traceCall(env, "NewObjectArray", resultClass, nullHandle(), callerClass, result.notEqual(nullHandle()));
-        }
-        return result;
-    }
-
     public static void onLoad(TraceWriter writer, JniAccessVerifier verifier) {
         accessVerifier = verifier;
         traceWriter = writer;
@@ -348,7 +325,6 @@ final class JniCallInterceptor {
         functions.setToReflectedMethod(toReflectedMethodLiteral.getFunctionPointer());
         functions.setFromReflectedField(fromReflectedFieldLiteral.getFunctionPointer());
         functions.setToReflectedField(toReflectedFieldLiteral.getFunctionPointer());
-        functions.setNewObjectArray(newObjectArrayLiteral.getFunctionPointer());
         check(jvmti.getFunctions().SetJNIFunctionTable().invoke(jvmti, functions));
         check(jvmti.getFunctions().Deallocate().invoke(jvmti, functions));
     }
@@ -392,7 +368,4 @@ final class JniCallInterceptor {
 
     private static final CEntryPointLiteral<ToReflectedFieldFunctionPointer> toReflectedFieldLiteral = CEntryPointLiteral.create(JniCallInterceptor.class,
                     "toReflectedField", JNIEnvironment.class, JNIObjectHandle.class, JNIFieldId.class, boolean.class);
-
-    private static final CEntryPointLiteral<NewObjectArrayFunctionPointer> newObjectArrayLiteral = CEntryPointLiteral.create(JniCallInterceptor.class,
-                    "newObjectArray", JNIEnvironment.class, int.class, JNIObjectHandle.class, JNIObjectHandle.class);
 }
