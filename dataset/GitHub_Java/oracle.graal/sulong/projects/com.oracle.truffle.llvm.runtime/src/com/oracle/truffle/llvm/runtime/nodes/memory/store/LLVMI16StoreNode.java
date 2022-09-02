@@ -29,32 +29,37 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory.store;
 
-import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMI16StoreNode extends LLVMStoreNodeCommon {
 
-    @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected void doOp(LLVMNativePointer addr, short value,
-                    @CachedLanguage LLVMLanguage language) {
-        language.getCapability(LLVMMemory.class).putI16(addr, value);
+    @Specialization
+    protected void doOp(LLVMVirtualAllocationAddress address, short value,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        address.writeI16(memory, value);
     }
 
-    @Specialization(guards = "isAutoDerefHandle(addr)")
-    protected void doOpDerefHandle(LLVMNativePointer addr, short value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
-        doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value, nativeWrite);
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
+    protected void doOp(LLVMNativePointer addr, short value) {
+        getLLVMMemoryCached().putI16(addr, value);
     }
 
     @Specialization(limit = "3")
     protected void doOpManaged(LLVMManagedPointer address, short value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         nativeWrite.writeI16(address.getObject(), address.getOffset(), value);
+    }
+
+    @Specialization(guards = "isAutoDerefHandle(addr)")
+    protected void doOpDerefHandle(LLVMNativePointer addr, short value,
+                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+        doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value, nativeWrite);
     }
 }

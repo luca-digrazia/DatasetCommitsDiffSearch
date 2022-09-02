@@ -29,27 +29,32 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory.store;
 
-import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMDoubleStoreNode extends LLVMStoreNodeCommon {
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected void doOp(LLVMNativePointer addr, double value,
-                    @CachedLanguage LLVMLanguage language) {
-        language.getCapability(LLVMMemory.class).putDouble(addr, value);
+    protected void doOp(LLVMNativePointer addr, double value) {
+        getLLVMMemoryCached().putDouble(addr, value);
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")
     protected void doOpDerefHandle(LLVMNativePointer addr, double value,
                     @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
         doOpManaged(getDerefHandleGetReceiverNode().execute(addr), value, nativeWrite);
+    }
+
+    @Specialization
+    protected void doOp(LLVMVirtualAllocationAddress address, double value,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        address.writeDouble(memory, value);
     }
 
     @Specialization(limit = "3")
