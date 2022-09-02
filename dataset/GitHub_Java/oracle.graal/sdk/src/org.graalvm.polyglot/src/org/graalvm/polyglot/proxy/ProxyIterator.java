@@ -42,6 +42,7 @@ package org.graalvm.polyglot.proxy;
 
 import org.graalvm.polyglot.Value;
 
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -56,7 +57,9 @@ import java.util.Objects;
 public interface ProxyIterator extends Proxy {
 
     /**
-     * Returns <code>true</code> if the iterator has more elements.
+     * Returns <code>true</code> if the iterator has more elements, else <code>false</code>. When
+     * the underlying iterable is modified the next call of the {@link #hasNext()} may return a
+     * different value.
      *
      * @see #getNext()
      * @since 21.1
@@ -64,19 +67,25 @@ public interface ProxyIterator extends Proxy {
     boolean hasNext();
 
     /**
-     * Returns the next element in the iteration.
+     * Returns the next element in the iteration. When the underlying iterable is modified the
+     * {@link #getNext()} may throw the {@link NoSuchElementException} even when the
+     * {@link #hasNext()} returned {@code true}.
      *
      * @throws NoSuchElementException if the iteration has no more elements, the {@link #hasNext()}
      *             returns <code>false</code>.
+     * @throws UnsupportedOperationException when the underlying iterator element exists but is not
+     *             readable.
      *
      * @see #hasNext()
      * @since 21.1
      */
-    Object getNext();
+    Object getNext() throws NoSuchElementException, UnsupportedOperationException;
 
     /**
      * Creates a proxy iterator backed by a Java {@link Iterator}. If the set values are host values
-     * then they will be {@link Value#asHostObject() unboxed}.
+     * then they will be {@link Value#asHostObject() unboxed}. The
+     * {@link ConcurrentModificationException} possibly thrown by the Java {@link Iterator} when a
+     * concurrent modification is detected is translated into the host exception.
      *
      * @since 21.1
      */
@@ -107,41 +116,32 @@ final class DefaultProxyIterator implements ProxyIterator {
 
 final class DefaultProxyArrayIterator implements ProxyIterator {
 
-    private static final Object STOP = new Object();
-
     private final ProxyArray array;
-    private int index;
-    private Object next;
+    private long index;
 
     DefaultProxyArrayIterator(ProxyArray array) {
         this.array = array;
-        advance();
     }
 
     @Override
     public boolean hasNext() {
-        return next != STOP;
+        return index < array.getSize();
     }
 
     @Override
     public Object getNext() {
-        Object res = next;
-        if (res == STOP) {
+        if (index >= array.getSize()) {
             throw new NoSuchElementException();
         }
-        advance();
-        return res;
-    }
-
-    private void advance() {
-        next = STOP;
-        if (index < array.getSize()) {
-            try {
-                next = array.get(index);
-                index++;
-            } catch (ArrayIndexOutOfBoundsException | UnsupportedOperationException e) {
-                // Pass with next set to STOP
-            }
+        try {
+            Object res = array.get(index);
+            index++;
+            return res;
+        } catch (UnsupportedOperationException e) {
+            index++;
+            throw e;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new NoSuchElementException();
         }
     }
 }

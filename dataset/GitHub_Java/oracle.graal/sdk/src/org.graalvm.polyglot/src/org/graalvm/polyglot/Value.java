@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -97,8 +97,6 @@ import java.util.function.Function;
  * <li>{@link #isMetaObject() Meta-Object}: This value represents a metaobject. Access metaobject
  * operations using {@link #getMetaSimpleName()}, {@link #getMetaQualifiedName()} and
  * {@link #isMetaInstance(Object)}.
- * <li>{@link #isIterator() Iterator}: This value represents an iterator. The iterator can be
- * iterated using {@link #hasIteratorNextElement()} and {@link #getIteratorNextElement()}.
  * </ul>
  * In addition any value may have one or more of the following traits:
  * <ul>
@@ -114,9 +112,6 @@ import java.util.function.Function;
  * instantiated}. For example, Java classes are instantiable.
  * <li>{@link #hasBufferElements() Buffer Elements}: This value may contain buffer elements. The
  * buffer indices always start with <code>0</code>, also if the language uses a different style.
- * <li>{@link #hasIterator() Iterable}: This value {@link #getIterator() provides} an
- * {@link #isIterator() iterator} which can be used to {@link #getIteratorNextElement() iterate}
- * value elements. For example, Guest language arrays are iterable.
  * </ul>
  * <p>
  * In addition to the language agnostic types, the language specific type can be accessed using
@@ -1772,7 +1767,7 @@ public final class Value {
     }
 
     /**
-     * Returns <code>true</code> if this polyglot value provides an iterator. In this case the
+     * Returns <code>true</code> if this polyglot value provides an iterator. In this case array the
      * iterator can be obtained using {@link #getIterator()}.
      *
      * @throws IllegalStateException if the context is already closed.
@@ -1817,8 +1812,8 @@ public final class Value {
 
     /**
      * Returns <code>true</code> if the value represents an iterator which has more elements, else
-     * {@code false}. Multiple calls to the {@link #hasIteratorNextElement()} might lead to
-     * different results if the underlying data structure is modified.
+     * {@code false}. When the underlying iterable is modified the next call of the
+     * {@link #hasIteratorNextElement()} may return a different value.
      *
      * @throws UnsupportedOperationException if the value is not an {@link #isIterator() iterator}.
      * @throws IllegalStateException if the context is already closed.
@@ -1833,12 +1828,14 @@ public final class Value {
     }
 
     /**
-     * Returns the next element in the iteration. When the underlying data structure is modified the
+     * Returns the next element in the iteration. When the underlying iterable is modified the
      * {@link #getIteratorNextElement()} may throw the {@link NoSuchElementException} despite the
      * {@link #hasIteratorNextElement()} returned {@code true}, or it may throw a language error.
      *
      * @throws UnsupportedOperationException if the value is not an {@link #isIterator() iterator}
-     *             or when the underlying iterable element exists but is not readable.
+     *             or when the underlying iterable element exists but is not readable, in such a
+     *             case the iterator cursor is incremented before the
+     *             {@link UnsupportedOperationException} is thrown.
      * @throws NoSuchElementException if the iteration has no more elements. Even if the
      *             {@link NoSuchElementException} was thrown it might not be thrown again by a next
      *             call of the {@link #getIteratorNextElement()} due to a modification of an
@@ -1852,34 +1849,6 @@ public final class Value {
      */
     public Value getIteratorNextElement() {
         return impl.getIteratorNextElement(receiver);
-    }
-
-    public boolean hasHashEntries() {
-        return impl.hasHashEntries(receiver);
-    }
-
-    public long getHashSize() {
-        return impl.getHashSize(receiver);
-    }
-
-    public boolean hasHashEntry(Object key) {
-        return impl.hasHashEntry(receiver, key);
-    }
-
-    public Value getHashValue(Object key) throws IllegalArgumentException, UnsupportedOperationException {
-        return impl.getHashValue(receiver, key);
-    }
-
-    public void putHashEntry(Object key, Object value) throws IllegalArgumentException, UnsupportedOperationException {
-        impl.putHashEntry(receiver, key, value);
-    }
-
-    public boolean removeHashEntry(Object key) throws UnsupportedOperationException {
-        return impl.removeHashEntry(receiver, key);
-    }
-
-    public Value getHashEntriesIterator() throws UnsupportedOperationException {
-        return impl.getHashEntriesIterator(receiver);
     }
 
     /**
