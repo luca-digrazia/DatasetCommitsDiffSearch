@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -2300,8 +2300,6 @@ final class JDWP {
                     }
                 });
                 controller.postJobForThread(job);
-                // don't return here before job completed
-                job.getResult();
 
                 return new CommandResult(reply);
             }
@@ -2941,7 +2939,6 @@ final class JDWP {
             }
         } catch (Throwable t) {
             JDWPLogger.log("Internal Espresso error: %s", JDWPLogger.LogLevel.ALL, t);
-            JDWPLogger.throwing(JDWPLogger.LogLevel.ALL, t);
             reply.errorCode(ErrorCodes.INTERNAL);
         }
     }
