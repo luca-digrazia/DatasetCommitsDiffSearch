@@ -309,18 +309,20 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             if (option.isDeprecated()) {
                 return;
             }
-            String groupOrOptionName = option.group != null ? APIOption.Utils.groupName(option.group) : optionName;
-            if (optionInfo.containsKey(groupOrOptionName)) {
-                List<OptionInfo> options = optionInfo.get(groupOrOptionName);
+            if (option.group != null) {
+                optionName = APIOption.Utils.groupName(option.group);
+            }
+            if (optionInfo.containsKey(optionName)) {
+                List<OptionInfo> options = optionInfo.get(optionName);
                 if (options.size() == 1) {
                     /* Switch from singletonList to ArrayList */
                     options = new ArrayList<>(options);
-                    optionInfo.put(groupOrOptionName, options);
+                    optionInfo.put(optionName, options);
                 }
                 options.add(option);
             } else {
                 /* Start with space efficient singletonList */
-                optionInfo.put(groupOrOptionName, Collections.singletonList(option));
+                optionInfo.put(optionName, Collections.singletonList(option));
             }
         });
         optionInfo.forEach((optionName, options) -> {
