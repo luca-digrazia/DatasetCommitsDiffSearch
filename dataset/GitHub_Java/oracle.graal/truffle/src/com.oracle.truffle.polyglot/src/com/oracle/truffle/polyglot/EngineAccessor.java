@@ -1078,7 +1078,7 @@ final class EngineAccessor extends Accessor {
             if (instance != null) {
                 ref = instance.lookupContextSupplier(resolveLanguage(sourceLanguageSPI));
             } else {
-                ref = targetLanguage.getConservativeContextReference();
+                ref = targetLanguage.getContextReference();
             }
             return (TruffleLanguage.ContextReference<C>) ref;
         }
@@ -1112,7 +1112,7 @@ final class EngineAccessor extends Accessor {
             if (instance != null) {
                 ref = instance.lookupLanguageSupplier(resolveLanguage(sourceLanguageSPI));
             } else {
-                ref = targetLanguage.getConservativeLanguageReference();
+                ref = targetLanguage.getLanguageReference();
             }
             return (TruffleLanguage.LanguageReference<T>) ref;
         }
