@@ -22,12 +22,12 @@
  */
 package com.oracle.truffle.espresso.debugger.jdwp;
 
-import com.oracle.truffle.espresso.debugger.BreakpointInfo;
-import com.oracle.truffle.espresso.debugger.VMEventListener;
-import com.oracle.truffle.espresso.debugger.VMEventListeners;
-import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.debugger.api.JDWPContext;
+import com.oracle.truffle.espresso.debugger.api.MethodRef;
+import com.oracle.truffle.espresso.debugger.api.VMEventListeners;
+import com.oracle.truffle.espresso.debugger.api.KlassRef;
 
+import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
 
 public class RequestedJDWPEvents {
@@ -56,17 +56,18 @@ public class RequestedJDWPEvents {
     public static final byte VM_DEATH = 99;
     public static final byte VM_DISCONNECTED = 100;
 
-    private final SocketConnection connection;
     private final VMEventListener eventListener;
+    private final Ids ids;
 
-    RequestedJDWPEvents(SocketConnection connection) {
-        this.connection = connection;
-        eventListener = new VMEventListenerImpl(connection);
+    RequestedJDWPEvents(SocketConnection connection, JDWPContext context) {
+        eventListener = new VMEventListenerImpl(connection, context);
         VMEventListeners.getDefault().registerListener(eventListener);
+        this.ids = context.getIds();
     }
 
-    public PacketStream registerEvent(Packet packet, JDWPCommands callback) {
+    public JDWPResult registerEvent(Packet packet, JDWPCommands callback) {
         PacketStream reply = null;
+        Callable future = null;
         PacketStream input = new PacketStream(packet);
 
         byte eventKind = input.readByte();
@@ -76,7 +77,7 @@ public class RequestedJDWPEvents {
         RequestFilter filter = new RequestFilter(packet.id, eventKind, modifiers);
         for (int i = 0; i < modifiers; i++) {
             byte modCount = input.readByte();
-            handleModCount(filter, input, modCount, suspendPolicy, callback);
+            future = handleModCount(filter, input, modCount, suspendPolicy, callback);
         }
 
         switch (eventKind) {
@@ -105,7 +106,7 @@ public class RequestedJDWPEvents {
 
         // register the request filter for this event
         EventFilters.getDefault().addFilter(filter);
-        return reply;
+        return new JDWPResult(reply, future);
     }
 
     private PacketStream toReply(Packet packet) {
@@ -115,7 +116,7 @@ public class RequestedJDWPEvents {
         return reply;
     }
 
-    private void handleModCount(RequestFilter filter, PacketStream stream, byte modCount, byte suspendPolicy, JDWPCommands callback) {
+    private Callable handleModCount(RequestFilter filter, PacketStream stream, byte modCount, byte suspendPolicy, JDWPCommands callback) {
         switch (modCount) {
             case 1:
                 int count = stream.readInt();
@@ -129,12 +130,12 @@ public class RequestedJDWPEvents {
                 break;
             case 4:
                 long refTypeId = stream.readLong();
-                filter.addRefTypeLimit((Klass) Ids.fromId((int) refTypeId));
+                filter.addRefTypeLimit((KlassRef) ids.fromId((int) refTypeId));
                 break;
             case 5: // class prepare positive pattern
                 String classPattern = stream.readString();
-                eventListener.addClassPrepareRequest(new ClassPrepareRequest(Pattern.compile(classPattern), filter.getRequestId()));
-                break;
+                ClassPrepareRequest classPrepareRequest = new ClassPrepareRequest(Pattern.compile(classPattern), filter.getRequestId());
+                return eventListener.addClassPrepareRequest(classPrepareRequest);
             case 6:
                 String classExcludePattern = stream.readString();
                 filter.addExcludePattern(classExcludePattern);
@@ -146,11 +147,12 @@ public class RequestedJDWPEvents {
                 long bci = stream.readLong();
                 BreakpointInfo info = new BreakpointInfo(filter.getRequestId(), typeTag, classId, methodId, bci);
 
-                Klass klass = (Klass) Ids.fromId((int) classId);
-                String slashName = ClassNameUtils.fromInternalObjectNametoSlashName(klass.getType().toString());
-                Method method = (Method) Ids.fromId((int) methodId);
+                KlassRef klass = (KlassRef) ids.fromId((int) classId);
+                String slashName = klass.getTypeAsString();
+                MethodRef method = (MethodRef) ids.fromId((int) methodId);
                 int line = method.BCItoLineNumber((int) bci);
                 callback.createLineBreakpointCommand(slashName, line, suspendPolicy, info);
+                eventListener.addBreakpointRequest(filter.getRequestId(), info);
                 break;
             case 8:
                 System.out.println("unhandled modcount 8");
@@ -185,16 +187,55 @@ public class RequestedJDWPEvents {
             default:
                 break;
         }
+        return null;
     }
 
-    public PacketStream clearRequest(Packet packet, DebuggerConnection debuggerConnection) {
+    public JDWPResult clearRequest(Packet packet, DebuggerConnection debuggerConnection) {
         PacketStream reply = new PacketStream().id(packet.id).replyPacket();
         PacketStream input = new PacketStream(packet);
 
         byte eventKind = input.readByte();
         int requestId = input.readInt();
-        // TODO(Gregersen) - actually clear events for this request
-        //System.out.println("clear request for " + eventKind + " for request " + requestId);
-        return reply;
+        RequestFilter requestFilter = EventFilters.getDefault().getRequestFilter(requestId);
+
+        if (requestFilter != null) {
+            byte kind = requestFilter.getEventKind();
+            if (kind == eventKind) {
+                switch (eventKind) {
+                    case SINGLE_STEP:
+                        //System.out.println("clear single step not implemented");
+                        break;
+                    case METHOD_EXIT_WITH_RETURN_VALUE:
+                        break;
+                    case BREAKPOINT:
+                        eventListener.removeBreakpointRequest(requestFilter.getRequestId());
+                        break;
+                    case CLASS_PREPARE:
+                        eventListener.removeClassPrepareRequest(requestFilter.getRequestId());
+                        break;
+                    case THREAD_START:
+                        eventListener.addThreadStartedRequestId(packet.id);
+
+                        break;
+                    case THREAD_DEATH:
+                        eventListener.addThreadDiedRequestId(packet.id);
+
+                        break;
+                    case CLASS_UNLOAD:
+                        eventListener.addClassUnloadRequestId(packet.id);
+
+                        break;
+                    default:
+                        System.out.println("unhandled event clear kind " + eventKind);
+                        break;
+                }
+            } else {
+                reply.errorCode(102);
+            }
+        } else {
+            reply.errorCode(102); // TODO(Gregersen) - add INVALID_EVENT_TYPE constant
+        }
+
+        return new JDWPResult(reply, null);
     }
 }
