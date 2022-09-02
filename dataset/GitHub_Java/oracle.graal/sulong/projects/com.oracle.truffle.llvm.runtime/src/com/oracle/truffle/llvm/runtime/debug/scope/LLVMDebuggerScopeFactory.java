@@ -135,7 +135,7 @@ public final class LLVMDebuggerScopeFactory {
 
     @TruffleBoundary
     public static Iterable<Scope> createIRLevelScope(Node node, Frame frame, LLVMContext context) {
-        DataLayout dataLayout = LLVMNode.findDataLayout(node);
+        DataLayout dataLayout = ((LLVMNode) node).getDataLayout();
         final Scope localScope = Scope.newBuilder("function", getIRLevelEntries(frame, context, dataLayout)).node(node).build();
         final Scope globalScope = Scope.newBuilder("module", getIRLevelEntries(node, context, dataLayout)).build();
         return Arrays.asList(localScope, globalScope);
