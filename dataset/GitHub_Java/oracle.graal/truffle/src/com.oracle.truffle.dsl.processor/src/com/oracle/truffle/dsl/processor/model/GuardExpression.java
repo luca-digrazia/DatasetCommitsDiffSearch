@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -107,7 +107,7 @@ public final class GuardExpression extends MessageContainer {
         return "Guard[" + (expression != null ? expression.asString() : "null") + "]";
     }
 
-    public boolean isConstantTrueInSlowPath(ProcessorContext context, boolean uncached) {
+    public boolean isConstantTrueInSlowPath(ProcessorContext context) {
         if (libraryAcceptsGuard) {
             return true;
         }
@@ -118,7 +118,7 @@ public final class GuardExpression extends MessageContainer {
                 // on the slow path we can assume all cache expressions inlined.
                 for (CacheExpression cache : source.getCaches()) {
                     if (ElementUtils.variableEquals(cache.getParameter().getVariableElement(), binary.getResolvedVariable())) {
-                        return uncached ? cache.getUncachedExpression() : cache.getDefaultExpression();
+                        return cache.getDefaultExpression();
                     }
                 }
                 return super.visitVariable(binary);

@@ -41,11 +41,14 @@
 package com.oracle.truffle.dsl.processor.model;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.lang.model.element.ExecutableElement;
@@ -152,7 +155,7 @@ public final class SpecializationData extends TemplateMethod {
     }
 
     public boolean isCacheBoundByGuard(CacheExpression cacheExpression) {
-        if (cacheExpression.isAlwaysInitialized()) {
+        if (cacheExpression.isInitializedInFastPath()) {
             return false;
         }
         VariableElement cachedVariable = cacheExpression.getParameter().getVariableElement();
@@ -196,7 +199,7 @@ public final class SpecializationData extends TemplateMethod {
             return false;
         }
         for (CacheExpression cache : resolvedCaches) {
-            if (cache.isAlwaysInitialized()) {
+            if (cache.isInitializedInFastPath()) {
                 continue;
             }
             VariableElement cacheVar = cache.getParameter().getVariableElement();
@@ -241,11 +244,6 @@ public final class SpecializationData extends TemplateMethod {
         Set<VariableElement> boundVariables = expression.findBoundVariableElements();
         for (Parameter parameter : getDynamicParameters()) {
             if (boundVariables.contains(parameter.getVariableElement())) {
-                return true;
-            }
-        }
-        for (CacheExpression cache : getBoundCaches(expression)) {
-            if (cache.isCachedContext() || cache.isCachedLanguage()) {
                 return true;
             }
         }
@@ -344,7 +342,7 @@ public final class SpecializationData extends TemplateMethod {
 
         if (!getCaches().isEmpty()) {
             for (CacheExpression cache : getCaches()) {
-                if (!cache.isAlwaysInitialized() || cache.isCachedContext() || cache.isCachedLanguage()) {
+                if (!cache.isInitializedInFastPath()) {
                     return true;
                 }
             }
@@ -505,7 +503,7 @@ public final class SpecializationData extends TemplateMethod {
                 Set<VariableElement> boundVariables = guardExpression.findBoundVariableElements();
                 if (isDynamicParameterBound(guardExpression)) {
                     for (CacheExpression cache : getCaches()) {
-                        if (cache.isAlwaysInitialized()) {
+                        if (cache.isInitializedInFastPath()) {
                             continue;
                         } else if (!guard.isLibraryAcceptsGuard() && cache.isCachedLibrary()) {
                             continue;
@@ -609,6 +607,27 @@ public final class SpecializationData extends TemplateMethod {
             }
         }
         return null;
+    }
+
+    public Collection<? extends TypeMirror> getUncaughtExceptions() {
+        List<? extends TypeMirror> thrownTypes = getMethod().getThrownTypes();
+        if (getExceptions().isEmpty()) {
+            return thrownTypes;
+        } else {
+
+            Map<String, TypeMirror> rewriteExceptions = new LinkedHashMap<>();
+            for (SpecializationThrowsData throwsData : getExceptions()) {
+                rewriteExceptions.put(ElementUtils.getQualifiedName(throwsData.getJavaClass()), throwsData.getJavaClass());
+            }
+
+            List<TypeMirror> filterThrownTypes = new ArrayList<>();
+            for (TypeMirror thrown : thrownTypes) {
+                if (!rewriteExceptions.containsKey(ElementUtils.getQualifiedName(thrown))) {
+                    filterThrownTypes.add(thrown);
+                }
+            }
+            return filterThrownTypes;
+        }
     }
 
 }
