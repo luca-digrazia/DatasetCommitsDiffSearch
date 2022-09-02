@@ -175,10 +175,4 @@ public interface KlassRef {
      */
     JDWPConstantPool getJDWPConstantPool();
 
-    /**
-     * Returns the source debug extension class file attribute value or <code>null</code>.
-     *
-     * @return the extension
-     */
-    String getSourceDebugExtension();
 }
