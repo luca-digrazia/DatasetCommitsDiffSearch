@@ -263,18 +263,22 @@ final class InstrumentationHandler {
         disposedInstrumenter.dispose();
 
         if (cleanupRequired) {
-            Collection<EventBinding.Source<?>> disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
-            setDisposingBindingsBulk(disposedExecutionBindings);
-            if (!disposedExecutionBindings.isEmpty()) {
-                VisitorBuilder visitorBuilder = new VisitorBuilder();
-                visitorBuilder.addDisposeWrapperOperationForBindings(new CopyOnWriteList<>(disposedExecutionBindings.toArray(new EventBinding.Source<?>[0])));
-                visitRoots(executedRoots, visitorBuilder.buildVisitor());
+            synchronized (executionBindings) {
+                Collection<EventBinding.Source<?>> disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
+                setDisposingBindingsBulk(disposedExecutionBindings);
+                if (!disposedExecutionBindings.isEmpty()) {
+                    VisitorBuilder visitorBuilder = new VisitorBuilder();
+                    visitorBuilder.addDisposeWrapperOperationForBindings(new CopyOnWriteList<>(disposedExecutionBindings.toArray(new EventBinding.Source<?>[0])));
+                    visitRoots(executedRoots, visitorBuilder.buildVisitor());
+                }
+                disposeBindingsBulk(disposedExecutionBindings);
+                executionBindings.removeAll(disposedExecutionBindings);
             }
-            disposeBindingsBulk(disposedExecutionBindings);
-            executionBindings.removeAll(disposedExecutionBindings);
-            Collection<EventBinding.Source<?>> disposedSourceSectionBindings = filterBindingsForInstrumenter(sourceSectionBindings, disposedInstrumenter);
-            disposeBindingsBulk(disposedSourceSectionBindings);
-            sourceSectionBindings.removeAll(disposedSourceSectionBindings);
+            synchronized (sourceSectionBindings) {
+                Collection<EventBinding.Source<?>> disposedSourceSectionBindings = filterBindingsForInstrumenter(sourceSectionBindings, disposedInstrumenter);
+                disposeBindingsBulk(disposedSourceSectionBindings);
+                sourceSectionBindings.removeAll(disposedSourceSectionBindings);
+            }
             Lock sourceLoadedBindingsWriteLock = sourceLoadedBindingsLock.writeLock();
             sourceLoadedBindingsWriteLock.lock();
             try {

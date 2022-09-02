@@ -334,7 +334,7 @@ public final class ProbeNode extends Node {
     WrapperNode findWrapper() throws AssertionError {
         Node parent = getParent();
         if (!(parent instanceof WrapperNode)) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerDirectives.transferToInterpreter();
             if (parent == null) {
                 throw new AssertionError("Probe node disconnected from AST.");
             } else {
@@ -391,8 +391,6 @@ public final class ProbeNode extends Node {
                 }
                 this.version = Truffle.getRuntime().createAssumption("Instruments unchanged");
             } while (executionBindingsSnapshot != handler.getExecutionBindingsSnapshot());
-
-            assert context.validEventContextOnLazyUpdate();
         } finally {
             lock.unlock();
         }
@@ -628,7 +626,7 @@ public final class ProbeNode extends Node {
             }
         } catch (Throwable t) {
             if (t instanceof InstrumentException) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+                CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(
                                 String.format("Error propagation is not supported in %s.create(%s). "//
                                                 + "Errors propagated in this method may result in an AST that never stabilizes. "//
@@ -685,7 +683,7 @@ public final class ProbeNode extends Node {
                             clazz == Character.class ||
                             clazz == Boolean.class ||
                             clazz == String.class)) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+                CompilerDirectives.transferToInterpreter();
                 ClassCastException ccex = new ClassCastException(clazz.getName() + " isn't allowed Truffle interop type!");
                 if (binding.isLanguageBinding()) {
                     throw ccex;
