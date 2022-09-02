@@ -310,10 +310,6 @@ public final class VM extends IntrinsifiedNativeEnv implements ContextAccess {
         }
     }
 
-    public JVMTI.JvmtiFactory getJvmti() {
-        return jvmti;
-    }
-
     @Override
     protected List<IntrinsicSubstitutor.Factory> getCollector() {
         return VMCollector.getCollector();

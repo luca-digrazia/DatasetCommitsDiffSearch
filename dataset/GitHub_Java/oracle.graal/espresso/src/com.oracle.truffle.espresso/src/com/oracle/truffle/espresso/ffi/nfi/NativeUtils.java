@@ -110,7 +110,7 @@ public final class NativeUtils {
         if (library.isNull(pointer)) {
             return;
         }
-        IntBuffer resultPointer = NativeUtils.directByteBuffer(pointer, 1, JavaKind.Int).asIntBuffer();
+        IntBuffer resultPointer = NativeUtils.directByteBuffer(pointer, 1, JavaKind.Byte).asIntBuffer();
         resultPointer.put(value);
     }
 
