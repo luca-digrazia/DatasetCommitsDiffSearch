@@ -79,7 +79,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     private static final AtomicReferenceFieldUpdater<AnalysisType, ConstantContextSensitiveObject> UNIQUE_CONSTANT_UPDATER = //
                     AtomicReferenceFieldUpdater.newUpdater(AnalysisType.class, ConstantContextSensitiveObject.class, "uniqueConstant");
 
-    protected final AnalysisUniverse universe;
+    private final AnalysisUniverse universe;
     private final ResolvedJavaType wrapped;
 
     private boolean isInHeap;
@@ -98,7 +98,6 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     private volatile ConcurrentHashMap<UnsafePartitionKind, Collection<AnalysisField>> unsafeAccessedFields;
 
     AnalysisType[] subTypes;
-    AnalysisType superClass;
 
     private final int id;
 
@@ -165,7 +164,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         }
 
         /* Ensure the super types as well as the component type (for arrays) is created too. */
-        superClass = universe.lookup(wrapped.getSuperclass());
+        getSuperclass();
         interfaces = convertTypes(wrapped.getInterfaces());
         if (isArray()) {
             this.componentType = universe.lookup(wrapped.getComponentType());
@@ -766,7 +765,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     @Override
     public AnalysisType getSuperclass() {
-        return superClass;
+        return universe.lookup(wrapped.getSuperclass());
     }
 
     @Override
