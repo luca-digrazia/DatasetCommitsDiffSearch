@@ -260,11 +260,9 @@ public final class ObjectKlass extends Klass {
 
     @ExplodeLoop
     private void actualInit() {
+        checkErroneousInitialization();
         synchronized (this) {
             if (!(isInitializedOrPrepared())) { // Check under lock
-                if (initState == ERRONEOUS) {
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
-                }
                 try {
                     /*
                      * Spec fragment: Then, initialize each final static field of C with the
@@ -303,7 +301,7 @@ public final class ObjectKlass extends Klass {
                         clinit.getCallTarget().call();
                     }
                 } catch (EspressoException e) {
-                    setErroneous();
+                    setErroneousInitialization();
                     StaticObject cause = e.getExceptionObject();
                     Meta meta = getMeta();
                     if (!InterpreterToVM.instanceOf(cause, meta.java_lang_Error)) {
@@ -313,12 +311,10 @@ public final class ObjectKlass extends Klass {
                     }
                 } catch (Throwable e) {
                     getContext().getLogger().log(Level.WARNING, "Host exception during class initialization: {0}", this);
-                    setErroneous();
+                    setErroneousInitialization();
                     throw e;
                 }
-                if (initState == ERRONEOUS) {
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
-                }
+                checkErroneousInitialization();
                 initState = INITIALIZED;
                 assert isInitialized();
             }
@@ -526,6 +522,9 @@ public final class ObjectKlass extends Klass {
         if (nestMembers == null) {
             return false;
         }
+        if (!this.sameRuntimePackage(k)) {
+            return false;
+        }
         RuntimeConstantPool pool = getConstantPool();
         for (int index : nestMembers.getClasses()) {
             if (k.getName().equals(pool.classAt(index).getName(pool))) {
@@ -632,7 +631,7 @@ public final class ObjectKlass extends Klass {
         return result;
     }
 
-    public Method resolveInterfaceMethod(Symbol<Name> name, Symbol<Signature> signature) {
+    public Method lookupInterfaceMethod(Symbol<Name> name, Symbol<Signature> signature) {
         assert isInterface();
         /*
          * 2. Otherwise, if C declares a method with the name and descriptor specified by the
@@ -667,39 +666,33 @@ public final class ObjectKlass extends Klass {
                  * methods declared in superInterf.
                  */
                 if (name == superM.getName() && signature == superM.getRawSignature()) {
-                    if (resolved == null) {
+                    if (!superM.isAbstract() && (resolved == null || !superInterf.isAssignableFrom(resolved.getDeclaringKlass()))) {
                         /*
                          * 4. Otherwise, if the maximally-specific superinterface methods
                          * (&sect;5.4.3.3) of C for the name and descriptor specified by the method
                          * reference include exactly one method that does not have its ACC_ABSTRACT
                          * flag set, then this method is chosen and method lookup succeeds.
-                         *
+                         * 
                          * Note: If there is more than one such method, we still select it, for it
                          * still complies with point 5.
                          */
-                        resolved = superM;
-                    } else {
+                        return superM;
+                    }
+                    /*
+                     * 5. Otherwise, if any superinterface of C declares a method with the name and
+                     * descriptor specified by the method reference that has neither its ACC_PRIVATE
+                     * flag nor its ACC_STATIC flag set, one of these is arbitrarily chosen and
+                     * method lookup succeeds.
+                     */
+                    if (resolved == null) {
                         /*
-                         * 5. Otherwise, if any superinterface of C declares a method with the name
-                         * and descriptor specified by the method reference that has neither its
-                         * ACC_PRIVATE flag nor its ACC_STATIC flag set, one of these is arbitrarily
-                         * chosen and method lookup succeeds.
-                         * 
-                         * NOTE: Since java 9, we can invokespecial interface methods (ie: a call
-                         * directly to the resolved method, rather than after an interface lookup).
-                         * We are looking up a method taken from the implemented interface (and not
-                         * from a currently non-existing itable of the implementing interface). This
-                         * difference, and the possibility of invokespecial, means that we cannot
-                         * return the looked up method directly in case of multiple maximally
-                         * specific method. thus, we spawn a new method, attached to no method
-                         * table, just to fail if invokespecial.
+                         * Since interfaces are sorted superinterfaces first, and we traverse in
+                         * reverse order, we have the guarantee that the first such method we
+                         * encounter will be a maximally-specific method. Thus, the only way
+                         * returning this method is incorrect is if there is another
+                         * maximally-specific non-abstract method
                          */
-                        resolved = InterfaceTables.resolveMaximallySpecific(resolved, superM);
-                        if (resolved.getITableIndex() == -1) {
-                            // multiple maximally specific: this method has a poison pill.
-                            assert (resolved.identity() == superM.identity());
-                            resolved.setITableIndex(superM.getITableIndex());
-                        }
+                        resolved = superM;
                     }
                 }
             }
@@ -749,6 +742,7 @@ public final class ObjectKlass extends Klass {
     @Override
     public void verify() {
         if (!isVerified()) {
+            checkErroneousVerification();
             synchronized (this) {
                 if (!isVerifyingOrVerified()) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -756,19 +750,13 @@ public final class ObjectKlass extends Klass {
                     try {
                         verifyImpl();
                     } catch (EspressoException e) {
-                        setErroneous();
-                        verificationError = e;
-                        throw e;
-                    } catch (Throwable e) {
-                        setErroneous();
+                        setErroneousVerification(e);
                         throw e;
                     }
                     setVerificationStatus(VERIFIED);
                 }
             }
-            if (verificationStatus == ERRONEOUS) {
-                throw verificationError;
-            }
+            checkErroneousVerification();
         }
     }
 
@@ -861,8 +849,25 @@ public final class ObjectKlass extends Klass {
         return verificationStatus == VERIFIED;
     }
 
-    private void setErroneous() {
+    private void checkErroneousVerification() {
+        if (verificationStatus == ERRONEOUS) {
+            throw verificationError;
+        }
+    }
+
+    private void setErroneousVerification(EspressoException e) {
+        verificationStatus = ERRONEOUS;
+        verificationError = e;
+    }
+
+    private void setErroneousInitialization() {
         initState = ERRONEOUS;
+    }
+
+    private void checkErroneousInitialization() {
+        if (initState == ERRONEOUS) {
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
+        }
     }
 
     private void checkLoadingConstraints() {
@@ -892,6 +897,7 @@ public final class ObjectKlass extends Klass {
                         if (m.getDeclaringKlass() == this) {
                             m.checkLoadingConstraints(this.getDefiningClassLoader(), interfKlass.getDefiningClassLoader());
                         } else {
+                            m.checkLoadingConstraints(interfKlass.getDefiningClassLoader(), m.getDeclaringKlass().getDefiningClassLoader());
                             m.checkLoadingConstraints(this.getDefiningClassLoader(), m.getDeclaringKlass().getDefiningClassLoader());
                         }
                     }
