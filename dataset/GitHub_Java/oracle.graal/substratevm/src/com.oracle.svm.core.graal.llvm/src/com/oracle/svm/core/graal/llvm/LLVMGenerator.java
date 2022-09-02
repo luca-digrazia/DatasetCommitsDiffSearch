@@ -54,7 +54,6 @@ import org.graalvm.compiler.core.common.spi.LIRKindTool;
 import org.graalvm.compiler.core.common.type.RawPointerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
-import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LabelRef;
@@ -896,10 +895,6 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
 
     @Override
     public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState state, Value... arguments) {
-        return emitForeignCall(linkage, state, null, null, arguments);
-    }
-
-    public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState state, LLVMBasicBlockRef successor, LLVMBasicBlockRef handler, Value... arguments) {
         ResolvedJavaMethod targetMethod = ((SnippetRuntime.SubstrateForeignCallDescriptor) linkage.getDescriptor()).findMethod(getMetaAccess());
 
         state.initDebugInfo(null, false);
@@ -911,15 +906,7 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
         CallingConvention.Type callType = ((SubstrateCallingConvention) linkage.getOutgoingCallingConvention()).getType();
         LLVMValueRef[] callArguments = getCallArguments(args, callType, targetMethod);
 
-        LLVMValueRef call;
-        boolean nativeABI = ((SubstrateCallingConventionType) callType).nativeABI;
-        if (successor == null && handler == null) {
-            call = buildStatepointCall(callee, nativeABI, patchpointId, callArguments);
-        } else {
-            assert successor != null && handler != null;
-            call = buildStatepointInvoke(callee, nativeABI, successor, handler, patchpointId, callArguments);
-        }
-
+        LLVMValueRef call = buildStatepointCall(callee, ((SubstrateCallingConventionType) callType).nativeABI, patchpointId, callArguments);
         return (isVoidReturnType(getLLVMFunctionReturnType(targetMethod, false))) ? null : new LLVMVariable(call);
     }
 
@@ -1741,16 +1728,6 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
             }
             LLVMValueRef castedAddress = builder.buildBitcast(address, builder.pointerType(valueType, LLVMIRBuilder.isObjectType(addressType), false));
             builder.buildStore(castedValue, castedAddress);
-        }
-
-        @Override
-        public Variable emitVolatileLoad(LIRKind kind, Value address, LIRFrameState state) {
-            throw GraalError.shouldNotReachHere();
-        }
-
-        @Override
-        public void emitVolatileStore(ValueKind<?> kind, Value address, Value input, LIRFrameState state) {
-            throw GraalError.shouldNotReachHere();
         }
     }
 
