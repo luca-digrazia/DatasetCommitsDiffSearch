@@ -45,7 +45,6 @@ import org.graalvm.compiler.nodes.Invokable;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
@@ -226,7 +225,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
     @SuppressWarnings("try")
     protected StructuredGraph lowerReplacement(final StructuredGraph replacementGraph, LoweringTool tool) {
         final CoreProviders c = tool.getProviders();
-        if (graph().isAfterStage(StageFlag.VALUE_PROXY_REMOVAL)) {
+        if (!graph().hasValueProxies()) {
             new RemoveValueProxyPhase().apply(replacementGraph);
         }
         GuardsStage guardsStage = graph().getGuardsStage();
