@@ -524,7 +524,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public int GetEnv(@Pointer TruffleObject vmPtr_, @Pointer TruffleObject envPtr, int version) {
         // TODO(peterssen): Check the thread is attached, and that the VM pointer matches.
-        assert interopAsPointer(getJavaVM()) == interopAsPointer(vmPtr_);
+        assert getJavaVM() == vmPtr_;
         LongBuffer buf = directByteBuffer(envPtr, 1, JavaKind.Long).asLongBuffer();
         buf.put(interopAsPointer(jniEnv.getNativePointer()));
         return JNI_OK;
