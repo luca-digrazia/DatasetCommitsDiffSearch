@@ -74,7 +74,6 @@ import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.svm.core.FallbackExecutor;
-import com.oracle.svm.core.FallbackExecutor.Options;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
@@ -161,7 +160,6 @@ public class NativeImage {
     final String oHOptimize = oH(SubstrateOptions.Optimize);
     final String oHFallbackThreshold = oH(SubstrateOptions.FallbackThreshold);
     final String oHFallbackExecutorJavaArg = oH(FallbackExecutor.Options.FallbackExecutorJavaArg);
-    final String oHRuntimeJavaArg = oH(Options.FallbackExecutorRuntimeJavaArg);
 
     /* List arguments */
     final String oHSubstitutionFiles = oH(ConfigurationFiles.Options.SubstitutionFiles);
@@ -512,13 +510,6 @@ public class NativeImage {
                         .collect(Collectors.toCollection(LinkedHashSet::new));
         for (String property : fallbackSystemProperties) {
             buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorSystemProperty) + property);
-        }
-
-        List<String> runtimeJavaArgs = imageBuilderArgs.stream()
-                        .filter(s -> s.startsWith(oHRuntimeJavaArg))
-                        .collect(Collectors.toList());
-        for (String runtimeJavaArg : runtimeJavaArgs) {
-            buildArgs.add(runtimeJavaArg);
         }
 
         List<String> fallbackExecutorJavaArgs = imageBuilderArgs.stream()
@@ -904,8 +895,7 @@ public class NativeImage {
                     /* Resolve relative manifestClassPath against directory containing jar */
                     manifestClassPath = jarFilePath.getParent().resolve(manifestClassPath);
                 }
-                /* Invalid entries in Class-Path are allowed (i.e. use strict false) */
-                addImageClasspathEntry(imageClasspath, manifestClassPath, false);
+                addImageProvidedClasspath(manifestClassPath);
             }
         }
     }
@@ -922,7 +912,7 @@ public class NativeImage {
 
         /* If no customImageClasspath was specified put "." on classpath */
         if (!config.buildFallbackImage() && customImageClasspath.isEmpty() && queryOption == null) {
-            addImageClasspath(Paths.get("."));
+            addImageProvidedClasspath(Paths.get("."));
         } else {
             imageClasspath.addAll(customImageClasspath);
         }
@@ -1255,63 +1245,44 @@ public class NativeImage {
         imageBuilderArgs.add(plainArg);
     }
 
-    /**
-     * For adding classpath elements that are only on the classpath in the context of native-image
-     * building. I.e. that are not on the classpath when the application would be run with the java
-     * command. (library-support.jar)
-     */
-    private void addImageProvidedClasspath(Path classpath) {
-        VMError.guarantee(imageClasspath.isEmpty() && customImageClasspath.isEmpty());
+    void addImageClasspath(Path classpath) {
         Path classpathEntry = canonicalize(classpath);
-        if (imageProvidedClasspath.add(classpathEntry)) {
+        if (imageClasspath.add(classpathEntry)) {
             processManifestMainAttributes(classpathEntry, this::handleClassPathAttribute);
             processClasspathNativeImageMetaInf(classpathEntry);
         }
     }
 
     /**
-     * For adding classpath elements that are automatically put on the image-classpath.
+     * For adding classpath elements that are not normally on the classpath in the Java version: svm
+     * jars, truffle jars etc.
      */
-    void addImageClasspath(Path classpath) {
-        addImageClasspathEntry(imageClasspath, classpath, true);
+    void addImageProvidedClasspath(Path classpath) {
+        Path classpathEntry = canonicalize(classpath);
+        if (imageProvidedClasspath.add(classpathEntry) && !imageClasspath.contains(classpathEntry) && !customImageClasspath.contains(classpathEntry)) {
+            processManifestMainAttributes(classpathEntry, this::handleClassPathAttribute);
+            processClasspathNativeImageMetaInf(classpathEntry);
+        }
     }
 
-    /**
-     * For adding classpath elements that are put *explicitly* on the image-classpath (i.e. when
-     * specified as -cp/-classpath/--class-path entry). This method handles invalid classpath
-     * strings same as java -cp (is tolerant against invalid classpath entries).
-     */
     void addCustomImageClasspath(String classpath) {
-        addImageClasspathEntry(customImageClasspath, ClasspathUtils.stringToClasspath(classpath), false);
+        addCustomImageClasspath(ClasspathUtils.stringToClasspath(classpath));
     }
 
-    /**
-     * For adding classpath elements that are put *explicitly* on the image-classpath (e.g. when
-     * adding a jar-file via -jar).
-     */
     void addCustomImageClasspath(Path classpath) {
-        addImageClasspathEntry(customImageClasspath, classpath, true);
-    }
-
-    private void addImageClasspathEntry(LinkedHashSet<Path> destination, Path classpath, boolean strict) {
         Path classpathEntry;
         try {
             classpathEntry = canonicalize(classpath);
         } catch (NativeImageError e) {
-            if (strict) {
-                throw e;
-            }
-
             if (isVerbose()) {
                 showWarning("Invalid classpath entry: " + classpath);
             }
             /* Allow non-existent classpath entries to comply with `java` command behaviour. */
-            destination.add(canonicalize(classpath, false));
+            customImageClasspath.add(canonicalize(classpath, false));
             return;
         }
 
-        if (!imageClasspath.contains(classpathEntry) && !customImageClasspath.contains(classpathEntry)) {
-            destination.add(classpathEntry);
+        if (customImageClasspath.add(classpathEntry)) {
             processManifestMainAttributes(classpathEntry, this::handleClassPathAttribute);
             processClasspathNativeImageMetaInf(classpathEntry);
         }
