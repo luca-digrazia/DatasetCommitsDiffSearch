@@ -95,15 +95,13 @@ public class Option {
             .type("Integer")
             .category("EXPERT")
             .def("3")
-            .help("Delay compilation after an invalidation to allow for reprofiling")
-            .deprecatedBy("InvalidationReprofileCount"),
+            .help("Delay compilation after an invalidation to allow for reprofiling"),
 
         option("TruffleReplaceReprofileCount")
             .type("Integer")
             .category("EXPERT")
             .def("3")
-            .help("Delay compilation after a node replacement")
-            .deprecatedBy("ReplaceReprofileCount"),
+            .help("Delay compilation after a node replacement"),
 
         option("TruffleFunctionInlining")
             .type("Boolean")
