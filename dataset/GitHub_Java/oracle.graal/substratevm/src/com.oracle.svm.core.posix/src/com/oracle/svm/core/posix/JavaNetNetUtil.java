@@ -47,7 +47,6 @@ import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.WordPointer;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
@@ -72,7 +71,7 @@ import com.oracle.svm.core.util.VMError;
 // TODO: This should be in some other package (svm.core.jdk?)
 // but then it can not use the non-public classes in this package.
 /** Native methods from jdk/src/share/native/java/net/net_util.c translated to Java. */
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class JavaNetNetUtil {
 
     /* Private constructor: No instances. */
@@ -152,22 +151,6 @@ class JavaNetNetUtil {
         // 037 return IPv6_available ;
         return IPv6_available;
     }
-
-    // ported from: ./src/java.base/share/native/libnet/net_util.c
-    // 36 static int REUSEPORT_available;
-    static Boolean REUSEPORT_available;
-
-    /* @formatter:off */
-    //    48  JNIEXPORT jint JNICALL reuseport_available()
-    static boolean reuseport_available() {
-        //    50      return REUSEPORT_available;
-        if ( REUSEPORT_available == null ) {
-            // Initialized here as StackValue.get isn't available during static init of native-image generation.
-            REUSEPORT_available = JavaNetNetUtilMD.reuseport_supported();
-        }
-        return REUSEPORT_available;
-    }
-    /* @formatter:on */
 
     // 226 JNIEXPORT jobject JNICALL
     // 227 NET_SockaddrToInetAddress(JNIEnv *env, struct sockaddr *him, int *port) {
@@ -554,7 +537,7 @@ class JavaNetNetUtil {
 }
 
 /** Native methods from jdk/src/solaris/native/java/net/net_util_md.c translated to Java. */
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class JavaNetNetUtilMD {
 
     /* Private constructor: No instances. */
@@ -912,59 +895,23 @@ class JavaNetNetUtilMD {
     }
     /* @formatter:on */
 
-    /* @formatter:off */
-    // ported from: ./src/java.base//unix/native/libnet/net_util_md.c
-    //   408  jint reuseport_supported()
-    static boolean reuseport_supported() {
-        //   409  {
-        //   410      /* Do a simple dummy call, and try to figure out from that */
-        //   411      int one = 1;
-        CIntPointer one = StackValue.get(CIntPointer.class);
-        one.write(1);
-        //   412      int rv, s;
-        int rv, s;
-        //   413      s = socket(PF_INET, SOCK_STREAM, 0);
-        s = Socket.socket(Socket.PF_INET(), Socket.SOCK_STREAM(), 0);
-        //   414      if (s < 0) {
-        if (s < 0) {
-            //   415          return JNI_FALSE;
-            return false;
-        }
-        //   417      rv = setsockopt(s, SOL_SOCKET, SO_REUSEPORT, (void *)&one, sizeof(one));
-        rv = Socket.setsockopt(s, Socket.SOL_SOCKET(), Socket.SO_REUSEPORT(), one, SizeOf.get(CIntPointer.class));
-        //   418      if (rv != 0) {
-        try {
-            if (rv != 0) {
-                //   419          rv = JNI_FALSE;
-                return false;
-            } else {
-                //   421          rv = JNI_TRUE;
-                return true;
-            }
-        } finally {
-            //   423      close(s);
-            Unistd.close(s);
-        }
-    }
-    /* @formatter:on */
-
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)//
+    @Platforms(Platform.LINUX.class)//
     /* TODO: This will be evaluated during native image generation. */
     // 219 static int vinit = 0;
     static int vinit = 0;
 
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)//
+    @Platforms(Platform.LINUX.class)//
     /* TODO: This will be evaluated during native image generation. */
     // 220 static int kernelV24 = 0;
     static int kernelV24 = 0;
 
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)//
+    @Platforms(Platform.LINUX.class)//
     /* TODO: This will be evaluated during native image generation. */
     // 221 static int vinit24 = 0;
     static int vinit24 = 0;
 
     /* Do not re-wrap comments.  @formatter:off */
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @Platforms(Platform.LINUX.class)
     // 223 int kernelIsV24 () {
     static boolean kernelIsV24() {
         // 224 if (!vinit24) {
@@ -985,13 +932,13 @@ class JavaNetNetUtilMD {
     }
     /* @formatter:on */
 
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)//
+    @Platforms(Platform.LINUX.class)//
     /* TODO: This will be evaluated during native image generation. */
     // 492 static int lo_scope_id = 0;
     static int lo_scope_id = 0;
 
     /* Do not re-wrap comments.  @formatter:off */
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @Platforms(Platform.LINUX.class)
     // 504 static jboolean needsLoopbackRoute (struct in6_addr* dest_addr) {
     static boolean needsLoopbackRoute(@SuppressWarnings("unused") NetinetIn.in6_addr dest_addr) {
         VMError.unimplemented();
@@ -1031,7 +978,7 @@ class JavaNetNetUtilMD {
     /* @formatter:on */
 
     /* Do not re-wrap comments.  @formatter:off */
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @Platforms(Platform.LINUX.class)
     // 539 static void initLoopbackRoutes() {
     static void initLoopbackRoutes() {
         VMError.unimplemented();
@@ -1151,7 +1098,7 @@ class JavaNetNetUtilMD {
     /* @formatter:on */
 
     /* Do not re-wrap comments.  @formatter:off */
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @Platforms(Platform.LINUX.class)
     // 721 /* return the scope_id (interface index) of the
     // 722  * interface corresponding to the given address
     // 723  * returns 0 if no match found
@@ -1177,7 +1124,7 @@ class JavaNetNetUtilMD {
     /* @formatter:on */
 
     /* Do not re-wrap comments.  @formatter:off */
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @Platforms(Platform.LINUX.class)
     // 1043 /*
     // 1044  * Determine the default interface for an IPv6 address.
     // 1045  *
@@ -1337,7 +1284,7 @@ class JavaNetNetUtilMD {
     // 088 void setDefaultScopeID(JNIEnv *env, struct sockaddr *him)
     static void setDefaultScopeID(Socket.sockaddr him) {
         // 090 #ifdef MACOSX
-        if (Platform.includedIn(DeprecatedPlatform.DARWIN_SUBSTITUTION.class)) {
+        if (Platform.includedIn(Platform.DARWIN.class)) {
             // 091     static jclass ni_class = NULL;
             // 092     static jfieldID ni_defaultIndexID;
             // 093     if (ni_class == NULL) {
@@ -2195,7 +2142,7 @@ class JavaNetNetUtilMD {
 }
 
 /** Native methods (and macros) from src/share/vm/prims/jni.cpp translated to Java. */
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class VmPrimsJNI {
     /* Do not re-format commented-out code: @formatter:off */
 
@@ -2280,7 +2227,7 @@ class VmPrimsJNI {
 
 /** Translations of methods from src/os/bsd/vm/os_bsd.inline.hpp or src/os/bsd/vm/os_bsd.cpp. */
 // TODO: Maybe this should be Target_bsd_vm_os?
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class Target_os {
     /* Do not re-format commented-out code: @formatter:off */
 
@@ -2467,7 +2414,7 @@ class Target_os {
 }
 
 /** Translations from src/share/vm/runtime/os.hpp. */
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class VmRuntimeOS {
 
     /* Do not re-format commented-out code: @formatter:off */
@@ -2510,7 +2457,7 @@ class VmRuntimeOS {
 }
 
 /** Translations from src/share/javavm/export/jvm.h. */
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class JavavmExportJvm {
 
     // 1100 #define JVM_IO_ERR (-1)
