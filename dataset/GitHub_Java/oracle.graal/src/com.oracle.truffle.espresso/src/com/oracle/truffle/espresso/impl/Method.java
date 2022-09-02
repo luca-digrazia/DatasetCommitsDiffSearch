@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -56,7 +55,7 @@ import com.oracle.truffle.espresso.nodes.EspressoBaseNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.NativeRootNode;
 import com.oracle.truffle.espresso.runtime.Attribute;
-import com.oracle.truffle.espresso.classfile.BootstrapMethodsAttribute;
+import com.oracle.truffle.espresso.runtime.BootstrapMethodsAttribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -148,8 +147,7 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
         initRefKind();
         // Proxy the method, so that we have the same callTarget if it is not yet initialized.
         // Allows for not duplicating the codeAttribute
-        this.proxy = method.proxy == null ? method : method.proxy;
-        this.poisonPill = method.poisonPill;
+        this.proxy = method;
     }
 
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod) {
@@ -549,7 +547,6 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
     final void setVTableIndex(int i) {
         assert (vtableIndex == -1 || vtableIndex == i);
-        CompilerAsserts.neverPartOfCompilation();
         this.vtableIndex = i;
     }
 
@@ -559,7 +556,6 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
     final void setITableIndex(int i) {
         assert (itableIndex == -1 || itableIndex == i);
-        CompilerAsserts.neverPartOfCompilation();
         this.itableIndex = i;
     }
 

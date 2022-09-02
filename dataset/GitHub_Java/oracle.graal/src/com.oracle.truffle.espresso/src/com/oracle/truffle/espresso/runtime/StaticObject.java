@@ -186,40 +186,26 @@ public final class StaticObject implements TruffleObject {
         if (isStatic) {
             for (Field f : thisKlass.getStaticFieldTable()) {
                 assert f.isStatic();
-                switch (f.getKind()) {
-                    // @formatter:off
-                    // Checkstyle: stop
-                    case Float  : setFloatField(f, MetaUtil.defaultFloatValue(f.getKind()));   break;
-                    case Long   : setLongField(f, MetaUtil.defaultLongValue(f.getKind()));     break;
-                    case Double : setDoubleField(f, MetaUtil.defaultDoubleValue(f.getKind())); break;
-                    default:
-                        if (f.getKind().isSubWord()) {
-                            setWordField(f, MetaUtil.defaultWordFieldValue(f.getKind()));
-                        } else {
-                            setUnsafeField(f.getFieldIndex(), MetaUtil.defaultFieldValue(f.getKind()));
-                        }
-                    // Checkstyle: resume
-                    // @formatter:on
+                if (f.getKind().isSubWord()) {
+                    setWordField(f, MetaUtil.defaultWordFieldValue(f.getKind()));
+                } else if (f.getKind().isPrimitive()) {
+                    // not a subword but primitive -> long or double
+                    setLongField(f, (long) MetaUtil.defaultFieldValue(f.getKind()));
+                } else {
+                    setUnsafeField(f.getFieldIndex(), MetaUtil.defaultFieldValue(f.getKind()));
                 }
             }
         } else {
             for (Field f : thisKlass.getFieldTable()) {
                 assert !f.isStatic();
                 if (!f.isHidden()) {
-                    switch (f.getKind()) {
-                        // @formatter:off
-                        // Checkstyle: stop
-                        case Float  : setFloatField(f, MetaUtil.defaultFloatValue(f.getKind()));   break;
-                        case Long   : setLongField(f, MetaUtil.defaultLongValue(f.getKind()));     break;
-                        case Double : setDoubleField(f, MetaUtil.defaultDoubleValue(f.getKind())); break;
-                        default:
-                            if (f.getKind().isSubWord()) {
-                                setWordField(f, MetaUtil.defaultWordFieldValue(f.getKind()));
-                            } else {
-                                setUnsafeField(f.getFieldIndex(), MetaUtil.defaultFieldValue(f.getKind()));
-                            }
-                        // Checkstyle: resume
-                        // @formatter:on
+                    if (f.getKind().isSubWord()) {
+                        setWordField(f, MetaUtil.defaultWordFieldValue(f.getKind()));
+                    } else if (f.getKind().isPrimitive()) {
+                        // not a subword but primitive -> long or double
+                        setLongField(f, (long) MetaUtil.defaultFieldValue(f.getKind()));
+                    } else {
+                        setUnsafeField(f.getFieldIndex(), MetaUtil.defaultFieldValue(f.getKind()));
                     }
                 }
             }
@@ -232,6 +218,7 @@ public final class StaticObject implements TruffleObject {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return (StaticObject) U.getObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex());
     }
+
 
     // Not to be used to access hidden fields !
     public final StaticObject getField(Field field) {
@@ -493,6 +480,7 @@ public final class StaticObject implements TruffleObject {
         U.putFloatVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
     }
 
+
     public boolean compareAndSwapIntField(Field field, int before, int after) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return U.compareAndSwapInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), before, after);
@@ -617,12 +605,6 @@ public final class StaticObject implements TruffleObject {
         }
         if (getKlass() == getKlass().getMeta().String) {
             return Meta.toHostString(this);
-        }
-        if (isArray()) {
-            return unwrap().toString();
-        }
-        if (getKlass() == getKlass().getMeta().Class) {
-            return "mirror: " + getMirrorKlass().toString();
         }
         return getKlass().getType().toString();
     }

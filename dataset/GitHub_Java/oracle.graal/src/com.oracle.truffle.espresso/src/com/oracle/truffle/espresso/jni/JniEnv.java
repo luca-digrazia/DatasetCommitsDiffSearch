@@ -22,31 +22,16 @@
  */
 package com.oracle.truffle.espresso.jni;
 
-import java.io.File;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Parameter;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.CharBuffer;
-import java.nio.DoubleBuffer;
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
-import java.nio.LongBuffer;
-import java.nio.ShortBuffer;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -70,7 +55,24 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
+import com.oracle.truffle.nfi.types.NativeSimpleType;
+
+import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Parameter;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.CharBuffer;
+import java.nio.DoubleBuffer;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
+import java.nio.LongBuffer;
+import java.nio.ShortBuffer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class JniEnv extends NativeEnv implements ContextAccess {
 
@@ -149,7 +151,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                     // we must convert to Espresso null.
                     // FIXME(peterssen): Also, do use proper nodes.
                     if (shiftedArgs[i] instanceof TruffleObject) {
-                        if (InteropLibrary.getFactory().getUncached().isNull(shiftedArgs[i])) {
+                        if (ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), (TruffleObject) shiftedArgs[i])) {
                             if (params[i] == StaticObject.class) {
                                 shiftedArgs[i] = StaticObject.NULL;
                             } else {
@@ -160,10 +162,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                         // TruffleNFI pass booleans as byte, do the proper conversion.
                         if (params[i] == boolean.class) {
                             shiftedArgs[i] = ((byte) shiftedArgs[i]) != 0;
-                        }
-                        // TruffleNFI pass chars as short
-                        if (params[i] == char.class) {
-                            shiftedArgs[i] = (char) (short) shiftedArgs[i];
                         }
                     }
                 }
@@ -176,10 +174,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
                     if (ret instanceof Boolean) {
                         return (boolean) ret ? (byte) 1 : (byte) 0;
-                    }
-
-                    if (ret instanceof Character) {
-                        return (short) (char) ret;
                     }
 
                     if (ret == null && !m.getReturnType().isPrimitive()) {
@@ -236,11 +230,10 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             // Dummy placeholder for unimplemented/unknown methods.
             if (m == null) {
                 // System.err.println("Fetching unknown/unimplemented JNI method: " + methodName);
-                return (TruffleObject) InteropLibrary.getFactory().getUncached().execute(dupClosureRefAndCast("(pointer): void"),
+                return (TruffleObject) ForeignAccess.sendExecute(Message.EXECUTE.createNode(), dupClosureRefAndCast("(pointer): void"),
                                 new Callback(1, new Callback.Function() {
                                     @Override
                                     public Object call(Object... args) {
-                                        CompilerDirectives.transferToInterpreter();
                                         System.err.println("Calling unimplemented JNI method: " + methodName);
                                         throw EspressoError.unimplemented("JNI method: " + methodName);
                                     }
@@ -249,7 +242,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
             String signature = jniNativeSignature(m);
             Callback target = jniMethodWrapper(m);
-            return (TruffleObject) InteropLibrary.getFactory().getUncached().execute(dupClosureRefAndCast(signature), target);
+            return (TruffleObject) ForeignAccess.sendExecute(Message.EXECUTE.createNode(), dupClosureRefAndCast(signature), target);
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
@@ -261,6 +254,9 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     private class VarArgsImpl implements VarArgs {
 
+        @Child Node execute = Message.EXECUTE.createNode();
+        @Child Node isNull = Message.IS_NULL.createNode();
+
         private final long nativePointer;
 
         public VarArgsImpl(long nativePointer) {
@@ -270,7 +266,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public boolean popBoolean() {
             try {
-                return ((byte) InteropLibrary.getFactory().getUncached().execute(popBoolean, nativePointer)) != 0;
+                return ((byte) ForeignAccess.sendExecute(execute, popBoolean, nativePointer)) != 0;
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -279,7 +275,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public byte popByte() {
             try {
-                return (byte) InteropLibrary.getFactory().getUncached().execute(popByte, nativePointer);
+                return (byte) ForeignAccess.sendExecute(execute, popByte, nativePointer);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -288,7 +284,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public char popChar() {
             try {
-                return (char) (short) InteropLibrary.getFactory().getUncached().execute(popChar, nativePointer);
+                return (char) ForeignAccess.sendExecute(execute, popChar, nativePointer);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -297,7 +293,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public short popShort() {
             try {
-                return (short) InteropLibrary.getFactory().getUncached().execute(popShort, nativePointer);
+                return (short) ForeignAccess.sendExecute(execute, popShort, nativePointer);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -306,7 +302,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public int popInt() {
             try {
-                return (int) InteropLibrary.getFactory().getUncached().execute(popInt, nativePointer);
+                return (int) ForeignAccess.sendExecute(execute, popInt, nativePointer);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -315,7 +311,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public float popFloat() {
             try {
-                return (float) InteropLibrary.getFactory().getUncached().execute(popFloat, nativePointer);
+                return (float) ForeignAccess.sendExecute(execute, popFloat, nativePointer);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -324,7 +320,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public double popDouble() {
             try {
-                return (Double) InteropLibrary.getFactory().getUncached().execute(popDouble, nativePointer);
+                return (Double) ForeignAccess.sendExecute(execute, popDouble, nativePointer);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -333,7 +329,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public long popLong() {
             try {
-                return (long) InteropLibrary.getFactory().getUncached().execute(popLong, nativePointer);
+                return (long) ForeignAccess.sendExecute(execute, popLong, nativePointer);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
@@ -342,11 +338,11 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public Object popObject() {
             try {
-                TruffleObject result = (TruffleObject) InteropLibrary.getFactory().getUncached().execute(popObject, nativePointer);
+                TruffleObject result = (TruffleObject) ForeignAccess.sendExecute(execute, popObject, nativePointer);
                 if (result instanceof StaticObject) {
                     return result;
                 } else {
-                    if (InteropLibrary.getFactory().getUncached().isNull(result)) {
+                    if (ForeignAccess.sendIsNull(isNull, result)) {
                         // TODO(garcia) understand the weird stuff happening here.
                         // DaCapo batik gives us a NativePointer to 0 here. This is a workaround
                         // until I
@@ -409,9 +405,9 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                             "(env, sint64): void");
 
             // Varargs native bindings.
-            popBoolean = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_boolean", "(sint64): sint8");
-            popByte = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_byte", "(sint64): sint8");
-            popChar = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_char", "(sint64): sint16");
+            popBoolean = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_boolean", "(sint64): uint8");
+            popByte = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_byte", "(sint64): uint8");
+            popChar = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_char", "(sint64): uint16");
             popShort = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_short", "(sint64): sint16");
             popInt = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_int", "(sint64): sint32");
             popFloat = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_float", "(sint64): float");
@@ -420,7 +416,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             popObject = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_object", "(sint64): object");
 
             Callback lookupJniImplCallback = Callback.wrapInstanceMethod(this, "lookupJniImpl", String.class);
-            this.jniEnvPtr = (long) InteropLibrary.getFactory().getUncached().execute(initializeNativeContext, lookupJniImplCallback);
+            this.jniEnvPtr = (long) ForeignAccess.sendExecute(Message.EXECUTE.createNode(), initializeNativeContext, lookupJniImplCallback);
             assert this.jniEnvPtr != 0;
         } catch (UnsupportedMessageException | ArityException | UnknownIdentifierException | UnsupportedTypeException e) {
             throw EspressoError.shouldNotReachHere("Cannot initialize Espresso native interface");
@@ -461,7 +457,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public void dispose() {
         assert jniEnvPtr != 0L : "JNIEnv already disposed";
         try {
-            InteropLibrary.getFactory().getUncached().execute(disposeNativeContext, jniEnvPtr);
+            ForeignAccess.sendExecute(Message.EXECUTE.createNode(), disposeNativeContext, jniEnvPtr);
             threadLocalPendingException.dispose();
             this.jniEnvPtr = 0L;
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {

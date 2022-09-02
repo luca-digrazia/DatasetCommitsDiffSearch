@@ -329,9 +329,6 @@ public class MethodVerifier {
      */
     private synchronized boolean verify() {
         clear();
-        if (code.endBCI() == 0) {
-            throw new VerifyError("Control flow falls through code end");
-        }
         int nextBCI = 0;
         Stack stack = new Stack(maxStack);
         while (verified[nextBCI] != DONE) {

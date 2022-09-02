@@ -30,6 +30,7 @@ import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
+import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
@@ -79,17 +80,11 @@ public abstract class ClassRegistry implements ContextAccess {
 
     public ObjectKlass defineKlass(Symbol<Type> type, final byte[] bytes) {
 
-        if (classes.containsKey(type)) {
-            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + type + " already defined in the BCL");
-        }
+        EspressoError.guarantee(!classes.containsKey(type), "Class " + type + " already defined in the BCL");
 
         ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), type.toString(), null, context);
 
         Symbol<Type> superKlassType = parserKlass.getSuperKlass();
-
-        if (type == superKlassType) {
-            throw getMeta().throwEx(ClassCircularityError.class);
-        }
 
         // TODO(peterssen): Superclass must be a class, and non-final.
         ObjectKlass superKlass = superKlassType != null
@@ -122,20 +117,14 @@ public abstract class ClassRegistry implements ContextAccess {
         ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
         Klass previous = classes.put(type, klass);
 
-        if (previous != null) {
-            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + previous + " loaded twice");
-        }
+        EspressoError.guarantee(previous == null, "Klass " + previous + " loaded twice");
         return klass;
     }
 
     public ObjectKlass putKlass(Symbol<Type> type, final ObjectKlass klass) {
-        if (classes.containsKey(type)) {
-            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + type + " already defined in the BCL");
-        }
+        EspressoError.guarantee(!classes.containsKey(type), "Class " + type + " already defined in the BCL");
         Klass previous = classes.put(type, klass);
-        if (previous != null) {
-            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + previous + " loaded twice");
-        }
+        EspressoError.guarantee(previous == null, "Klass " + previous + " loaded twice");
         return klass;
     }
 }
