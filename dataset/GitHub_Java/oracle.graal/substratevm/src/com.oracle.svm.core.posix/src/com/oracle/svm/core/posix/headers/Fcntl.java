@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.core.posix.headers;
 
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.constant.CConstant;
@@ -32,7 +33,6 @@ import org.graalvm.nativeimage.c.function.CFunction.Transition;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.SignedWord;
 
@@ -125,7 +125,7 @@ public class Fcntl {
     public static native int F_SETLKW();
 
     @CConstant
-    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @Platforms(Platform.LINUX.class)
     public static native int O_DIRECT();
 
     @CConstant
@@ -153,7 +153,7 @@ public class Fcntl {
     public static native short F_UNLCK();
 
     @CConstant
-    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    @Platforms({Platform.DARWIN.class})
     public static native int F_NOCACHE();
 
     @CFunction
