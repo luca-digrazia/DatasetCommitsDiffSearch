@@ -38,8 +38,6 @@ import javax.management.MBeanParameterInfo;
 import javax.management.ReflectionException;
 import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.CompositeType;
-
-import org.graalvm.compiler.serviceprovider.IsolateUtil;
 import org.graalvm.libgraal.jni.HotSpotToSVMScope;
 import org.graalvm.libgraal.jni.JNI;
 import org.graalvm.libgraal.jni.JNIUtil;
@@ -59,16 +57,10 @@ final class HotSpotToSVMEntryPoints {
     private HotSpotToSVMEntryPoints() {
     }
 
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_attachThread", builtin = CEntryPoint.Builtin.ATTACH_THREAD)
-    static native long attachThread(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateContext long isolateId);
-
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_detachThread", builtin = CEntryPoint.Builtin.DETACH_THREAD)
-    static native void detachThread(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId);
-
     /**
      * Returns the pending {@link DynamicMBean} registrations.
      */
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_pollRegistrations")
+    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_libgraal_runtime_HotSpotToSVMCalls_pollRegistrations")
     @SuppressWarnings({"try", "unused"})
     static JNI.JLongArray pollRegistrations(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId) {
         HotSpotToSVMScope<Id> scope = new HotSpotToSVMScope<>(Id.PollRegistrations, env);
@@ -93,7 +85,7 @@ final class HotSpotToSVMEntryPoints {
     /**
      * Notifies the {@link MBeanProxy} about finished registration.
      */
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_finishRegistration")
+    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_libgraal_runtime_HotSpotToSVMCalls_finishRegistration")
     @SuppressWarnings({"try", "unused"})
     static void finishRegistration(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, JNI.JLongArray svmRegistrations) {
         try (HotSpotToSVMScope<Id> s = new HotSpotToSVMScope<>(Id.FinishRegistration, env)) {
@@ -114,18 +106,14 @@ final class HotSpotToSVMEntryPoints {
     /**
      * Returns the name to use to register the MBean.
      */
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_getObjectName")
+    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_libgraal_runtime_HotSpotToSVMCalls_getObjectName")
     @SuppressWarnings({"try", "unused"})
     static JNI.JString getObjectName(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration) {
         HotSpotToSVMScope<Id> scope = new HotSpotToSVMScope<>(Id.GetObjectName, env);
         try (HotSpotToSVMScope<Id> s = scope) {
             ObjectHandles globalHandles = ObjectHandles.getGlobal();
             MBeanProxy<?> registration = globalHandles.get(WordFactory.pointer(svmRegistration));
-            long isolateID = IsolateUtil.getIsolateID();
             String name = registration.getName();
-            if (isolateID != 0L) {
-                name += '@' + isolateID;
-            }
             scope.setObjectResult(JNIUtil.createHSString(env, name));
         }
         return scope.getObjectResult();
@@ -134,7 +122,7 @@ final class HotSpotToSVMEntryPoints {
     /**
      * Returns the {@link MBeanInfo} encoded as a byte array using {@link OptionsEncoder}.
      */
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_getMBeanInfo")
+    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_libgraal_runtime_HotSpotToSVMCalls_getMBeanInfo")
     @SuppressWarnings({"try", "unused"})
     static JNI.JByteArray getMBeanInfo(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration) {
         HotSpotToSVMScope<Id> scope = new HotSpotToSVMScope<>(Id.GetMBeanInfo, env);
@@ -192,7 +180,7 @@ final class HotSpotToSVMEntryPoints {
      * Returns the required {@link DynamicMBean}'s attribute values encoded as a byte array using
      * {@link OptionsEncoder}.
      */
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_getAttributes")
+    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_libgraal_runtime_HotSpotToSVMCalls_getAttributes")
     @SuppressWarnings({"try", "unused"})
     static JNI.JByteArray getAttributes(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration, JNI.JObjectArray requiredAttributes) {
         HotSpotToSVMScope<Id> scope = new HotSpotToSVMScope<>(Id.GetAttributes, env);
@@ -213,7 +201,7 @@ final class HotSpotToSVMEntryPoints {
     /**
      * Sets the given {@link DynamicMBean}'s attribute values.
      */
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_setAttributes")
+    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_libgraal_runtime_HotSpotToSVMCalls_setAttributes")
     @SuppressWarnings({"try", "unused"})
     static JNI.JByteArray setAttributes(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration, JNI.JByteArray attributes) {
         HotSpotToSVMScope<Id> scope = new HotSpotToSVMScope<>(Id.SetAttributes, env);
@@ -233,7 +221,7 @@ final class HotSpotToSVMEntryPoints {
     /**
      * Invokes an action on {@link DynamicMBean}.
      */
-    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_HotSpotToSVMCalls_invoke")
+    @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_management_libgraal_runtime_HotSpotToSVMCalls_invoke")
     @SuppressWarnings({"try", "unused"})
     static JNI.JByteArray invoke(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long svmRegistration, JNI.JString hsActionName,
                     JNI.JByteArray hsParams, JNI.JObjectArray hsSignature) {
@@ -345,6 +333,5 @@ enum Id {
     Invoke,
     NewMBean,
     PollRegistrations,
-    RegisterNatives,
     SetAttributes
 }
