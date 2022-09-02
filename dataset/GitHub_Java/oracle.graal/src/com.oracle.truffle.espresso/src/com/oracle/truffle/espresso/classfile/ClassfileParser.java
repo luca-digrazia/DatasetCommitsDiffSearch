@@ -181,7 +181,7 @@ public final class ClassfileParser {
             if (majorVersion >= JAVA_9_VERSION) {
                 s.readU2();
                 badConstantSeen = tag;
-                throw stream.classFormatError("Illegal constant tag for a class file: %d. Should appear only in module info files.", tag.getValue());
+                return;
             }
         }
         throw stream.classFormatError("Unknown constant tag %d", tag.getValue());
@@ -546,8 +546,7 @@ public final class ClassfileParser {
                             methodFlags |= ACC_LAMBDA_FORM_COMPILED;
                         } else if (Type.java_lang_invoke_LambdaForm$Hidden.equals(annotType)) {
                             methodFlags |= ACC_LAMBDA_FORM_HIDDEN;
-                        } else if (Type.sun_reflect_CallerSensitive.equals(annotType) ||
-                                        Type.jdk_internal_reflect_CallerSensitive.equals(annotType)) {
+                        } else if (Type.sun_reflect_CallerSensitive.equals(annotType)) {
                             methodFlags |= ACC_CALLER_SENSITIVE;
                         }
                     }
@@ -878,11 +877,7 @@ public final class ClassfileParser {
             int numBootstrapArguments = stream.readU2();
             char[] bootstrapArguments = new char[numBootstrapArguments];
             for (int j = 0; j < numBootstrapArguments; ++j) {
-                char cpIndex = (char) stream.readU2();
-                if (!pool.tagAt(cpIndex).isLoadable()) {
-                    throw ConstantPool.classFormatError("Invalid constant pool constant for BootstrapMethodAttribute. Not a loadable constant");
-                }
-                bootstrapArguments[j] = cpIndex;
+                bootstrapArguments[j] = (char) stream.readU2();
             }
             entries[i] = new BootstrapMethodsAttribute.Entry((char) bootstrapMethodRef, bootstrapArguments);
         }
