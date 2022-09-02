@@ -106,24 +106,21 @@ class JNIRegistrationSupport extends JNIRegistrationUtil implements GraalFeature
                  * String arguments.
                  */
                 if (libnameNode.isConstant()) {
-                    registerLibrary((String) SubstrateObjectConstant.asObject(libnameNode.asConstant()));
+                    String libname = (String) SubstrateObjectConstant.asObject(libnameNode.asConstant());
+                    if (libname != null && registeredLibraries.putIfAbsent(libname, Boolean.TRUE) != Boolean.TRUE) {
+                        /*
+                         * If a library is in our list of static standard libraries, add the library
+                         * to the linker command.
+                         */
+                        if (NativeLibrarySupport.singleton().isPreregisteredBuiltinLibrary(libname)) {
+                            nativeLibraries.addStaticJniLibrary(libname);
+                        }
+                    }
                 }
                 /* We never want to do any actual intrinsification, process the original invoke. */
                 return false;
             }
         });
-    }
-
-    void registerLibrary(String libname) {
-        if (libname != null && registeredLibraries.putIfAbsent(libname, Boolean.TRUE) != Boolean.TRUE) {
-            /*
-             * If a library is in our list of static standard libraries, add the library to the
-             * linker command.
-             */
-            if (NativeLibrarySupport.singleton().isPreregisteredBuiltinLibrary(libname)) {
-                nativeLibraries.addStaticJniLibrary(libname);
-            }
-        }
     }
 
     boolean isRegisteredLibrary(String libname) {
