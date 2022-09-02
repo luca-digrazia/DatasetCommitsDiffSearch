@@ -53,7 +53,6 @@ import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
 import com.oracle.svm.core.nodes.CFunctionPrologueNode;
 import com.oracle.svm.core.stack.StackOverflowCheck;
 import com.oracle.svm.core.thread.VMThreads.StatusSupport;
-import com.oracle.svm.core.util.RingBuffer;
 import com.oracle.svm.core.util.VMError;
 
 /**
@@ -863,16 +862,23 @@ public final class VMOperationControl {
      * any crashes.
      */
     private static class VMOpHistory {
-        private final RingBuffer<VMOpStatusChange> history;
+        private final VMOpStatusChange[] history;
+        private int pos;
 
         @Platforms(Platform.HOSTED_ONLY.class)
         VMOpHistory() {
-            history = new RingBuffer<>(10, VMOpStatusChange::new);
+            history = new VMOpStatusChange[10];
+            for (int i = 0; i < history.length; i++) {
+                history[i] = new VMOpStatusChange();
+            }
+
+            pos = history.length;
         }
 
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
         public void add(VMOpStatus started, VMOperation operation, IsolateThread queueingThread, IsolateThread executingThread) {
-            VMOpStatusChange entry = history.next();
+            pos = nextPos();
+            VMOpStatusChange entry = history[pos];
             entry.timestamp = System.currentTimeMillis();
             entry.status = started;
             entry.operation = operation.getName();
@@ -882,14 +888,23 @@ public final class VMOperationControl {
         }
 
         public void print(Log log) {
-            log.string("The ").signed(history.size()).string(" most recent VM operation status changes (oldest first):").indent(true);
-            history.foreach(log, VMOpHistory::printEntries);
+            log.string("The ").signed(history.length).string(" most recent VM operation status changes:").indent(true);
+            // Read pos once before the loop as other threads may modify pos in the meanwhile.
+            int startPos = pos;
+            for (int i = 0; i < history.length; i++) {
+                int index = (startPos + i) % history.length;
+                history[index].print(log);
+            }
             log.indent(false);
         }
 
-        private static void printEntries(Object context, VMOpStatusChange entry) {
-            Log log = (Log) context;
-            entry.print(log);
+        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        private int nextPos() {
+            assert pos >= 0;
+            if (pos == 0) {
+                return history.length - 1;
+            }
+            return pos - 1;
         }
     }
 
