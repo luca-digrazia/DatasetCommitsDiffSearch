@@ -47,7 +47,6 @@ import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -55,6 +54,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
@@ -66,12 +66,15 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.BranchProfile;
 
 @ExportLibrary(InteropLibrary.class)
 @SuppressWarnings("static-method")
 public abstract class BuiltinObject implements TruffleObject {
+
+    static final int MEMBER_NAME_CACHE_SIZE = 5;
 
     protected abstract BuiltinDescriptor getBuiltinDescriptor();
 
@@ -100,22 +103,41 @@ public abstract class BuiltinObject implements TruffleObject {
     }
 
     @ExportMessage
-    final Object readMember(String member,
-                    @Shared("descriptor") @Cached(value = "getDescriptorImpl(this)", allowUncached = true) BuiltinDescriptor descriptor)
-                    throws UnknownIdentifierException {
-        int hash = member.hashCode();
-        for (int i = 0; i < descriptor.members.length; i++) {
-            MemberEntry entry = descriptor.members[i];
-            if (hash == entry.hash && entry.name.equals(member)) {
-                return new MemberFunction(this, entry);
+    @SuppressWarnings("unused")
+    static class ReadMember {
+
+        @Specialization(guards = "cachedMember.equals(member)", limit = "MEMBER_NAME_CACHE_SIZE")
+        static Object doCached(BuiltinObject receiver, String member,
+                        @Cached("member") String cachedMember,
+                        @Cached("getDescriptorImpl(receiver).lookup(cachedMember)") MemberEntry cachedEntry)
+                        throws UnknownIdentifierException {
+            if (cachedEntry == null) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnknownIdentifierException.create(member);
             }
+            return new MemberFunction(receiver, cachedEntry);
         }
-        CompilerDirectives.transferToInterpreter();
-        throw UnknownIdentifierException.create(member);
+
+        @Specialization(replaces = "doCached")
+        @ExplodeLoop
+        static Object doDefault(BuiltinObject receiver, String member,
+                        @Shared("descriptor") @Cached(value = "getDescriptorImpl(receiver)", allowUncached = true) BuiltinDescriptor descriptor)
+                        throws UnknownIdentifierException {
+            int hash = member.hashCode();
+            for (int i = 0; i < descriptor.members.length; i++) {
+                MemberEntry entry = descriptor.members[i];
+                if (hash == entry.hash && entry.name.equals(member)) {
+                    return new MemberFunction(receiver, entry);
+                }
+            }
+            CompilerDirectives.transferToInterpreter();
+            throw UnknownIdentifierException.create(member);
+        }
     }
 
     @ExportMessage(name = "isMemberReadable")
     @ExportMessage(name = "isMemberInvocable")
+    @ExplodeLoop
     final boolean isMemberExisting(String member,
                     @Shared("descriptor") @Cached(value = "getDescriptorImpl(this)", allowUncached = true) BuiltinDescriptor descriptor) {
         int hash = member.hashCode();
@@ -128,14 +150,12 @@ public abstract class BuiltinObject implements TruffleObject {
         return false;
     }
 
-    static final BuiltinDescriptor getDescriptorImpl(BuiltinObject object) {
-        BuiltinDescriptor descriptor = object.getBuiltinDescriptor();
-        CompilerAsserts.partialEvaluationConstant(descriptor);
-        return descriptor;
+    static BuiltinDescriptor getDescriptorImpl(BuiltinObject object) {
+        return object.getBuiltinDescriptor();
     }
 
     @GenerateNodeFactory
-    @GenerateUncached
+    @GenerateUncached(inherit = true)
     public abstract static class BuiltinNode extends Node {
 
         protected abstract Object execute(BuiltinObject receiver, Object... arguments) throws ArityException, UnsupportedTypeException;
@@ -145,7 +165,7 @@ public abstract class BuiltinObject implements TruffleObject {
                 assert member != null;
                 if (member.expectedArgumentCount != arguments.length) {
                     CompilerDirectives.transferToInterpreter();
-                    throw ArityException.create(member.expectedArgumentCount, arguments.length);
+                    throw ArityException.create(member.expectedArgumentCount, member.expectedArgumentCount, arguments.length);
                 }
                 return execute(receiver, arguments);
             } catch (UnsupportedSpecializationException e) {
@@ -165,7 +185,7 @@ public abstract class BuiltinObject implements TruffleObject {
     @ExportMessage
     static class InvokeMember {
 
-        @Specialization(guards = "cachedMember.equals(member)", limit = "5")
+        @Specialization(guards = "cachedMember.equals(member)", limit = "MEMBER_NAME_CACHE_SIZE")
         @SuppressWarnings("unused")
         static Object doCached(BuiltinObject receiver, String member, Object[] arguments,
                         @Cached("member") String cachedMember,
@@ -228,6 +248,7 @@ public abstract class BuiltinObject implements TruffleObject {
     }
 
     @ExportLibrary(InteropLibrary.class)
+
     static final class MemberFunction implements TruffleObject {
 
         final BuiltinObject receiver;
@@ -245,9 +266,10 @@ public abstract class BuiltinObject implements TruffleObject {
         }
 
         @ExportMessage
+        @ImportStatic(BuiltinObject.class)
         static class Execute {
 
-            @Specialization(guards = "receiver.member == cachedMember", limit = "5")
+            @Specialization(guards = "receiver.member == cachedMember", limit = "MEMBER_NAME_CACHE_SIZE")
             @SuppressWarnings("unused")
             static Object doCached(MemberFunction receiver, Object[] arguments,
                             @Cached("receiver.member") MemberEntry cachedMember,
@@ -261,7 +283,6 @@ public abstract class BuiltinObject implements TruffleObject {
                             throws UnsupportedTypeException, ArityException {
                 return receiver.member.uncached.executeImpl(receiver.member, receiver.receiver, arguments);
             }
-
         }
 
     }
@@ -312,6 +333,7 @@ public abstract class BuiltinObject implements TruffleObject {
             this.membersArray = new MembersArray(members);
         }
 
+        @ExplodeLoop
         MemberEntry lookup(String member) {
             int hash = member.hashCode();
             for (int i = 0; i < members.length; i++) {

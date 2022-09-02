@@ -45,29 +45,26 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-import java.util.Arrays;
-import java.util.List;
-
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 
-@RunWith(Parameterized.class)
 @SuppressWarnings("unused")
-public class AcceptsTransitionTest extends AbstractParametrizedLibraryTest {
-
-    @Parameters(name = "{0}")
-    public static List<TestRun> data() {
-        return Arrays.asList(TestRun.CACHED, TestRun.UNCACHED);
-    }
+public class AcceptsTransitionTest extends AbstractLibraryTest {
 
     @GenerateLibrary
     abstract static class TransitionTestLibrary extends Library {
@@ -84,50 +81,111 @@ public class AcceptsTransitionTest extends AbstractParametrizedLibraryTest {
         STRATEGY3;
     }
 
-    @ExportLibrary(value = TransitionTestLibrary.class, allowTransition = true)
-    static class StrategyObject {
-
+    @ExportLibrary(InteropLibrary.class)
+    @ExportLibrary(value = TransitionTestLibrary.class, transitionLimit = "LIMIT")
+    static class StrategyObject implements TruffleObject {
+        static final int LIMIT = 1;
         protected Strategy strategy = Strategy.STRATEGY1;
-
         protected final Object mergeKey = "testMerged";
 
         StrategyObject(Strategy s) {
             this.strategy = s;
         }
 
-        @ExportMessage
+        @ExportMessage(library = TransitionTestLibrary.class)
         boolean accepts(@Shared("strategy") @Cached("this.strategy") Strategy cached) {
             return this.strategy == cached;
         }
 
         @ExportMessage
         String transition(Strategy s,
-                        @Shared("strategy") @Cached("this.strategy") Strategy cached) {
+                        @Shared("strategy") @Cached("this.strategy") Strategy cached,
+                        @CachedLibrary("this") TransitionTestLibrary thisLibrary,
+                        @CachedLibrary("cached.toString()") InteropLibrary lib) {
             assertSame(cached, this.strategy);
+            try {
+                // testing that we can use a library in the transition
+                // and all nodes adopted properly
+                assertEquals(cached.toString(), lib.asString(cached.toString()));
+            } catch (UnsupportedMessageException e) {
+                throw new AssertionError(e);
+            }
             Strategy old = this.strategy;
             this.strategy = s;
-            return "transition_" + old + "_" + s;
+            return "transition_" + old + "_" + s + "_" + (thisLibrary.isAdoptable() ? "cached" : "uncached");
+        }
+
+        @SuppressWarnings("static-method")
+        @ExportMessage
+        final boolean hasMembers(@Cached("this.strategy") Strategy cached) {
+            return true;
+        }
+
+        @SuppressWarnings({"static-method", "unused"})
+        @ExportMessage
+        final Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
+            throw UnsupportedMessageException.create();
+        }
+
+        @SuppressWarnings("static-method")
+        @TruffleBoundary
+        @ExportMessage
+        final boolean isMemberInvocable(String member) {
+            return "transition".equals(member);
+        }
+
+        @TruffleBoundary
+        @ExportMessage
+        final Object invokeMember(String member, Object[] arguments,
+                        @CachedLibrary("this") TransitionTestLibrary lib,
+                        @CachedLibrary(limit = "3") InteropLibrary strings) throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
+            if (!isMemberInvocable(member)) {
+                throw UnknownIdentifierException.create(member);
+            } else if (arguments.length != 1) {
+                throw ArityException.create(1, 1, arguments.length);
+            } else if (!strings.isString(arguments[0])) {
+                throw UnsupportedTypeException.create(arguments);
+            }
+            return lib.transition(this, Strategy.valueOf(strings.asString(arguments[0])));
         }
     }
 
     @Test
-    public void testTransitions() {
+    public void testTransitionsUncached() {
         StrategyObject o = new StrategyObject(Strategy.STRATEGY1);
-        TransitionTestLibrary lib = createLibrary(TransitionTestLibrary.class, o);
+        TransitionTestLibrary lib = getUncached(TransitionTestLibrary.class, o);
         assertTrue(lib.accepts(o));
-        assertEquals("transition_STRATEGY1_STRATEGY2", lib.transition(o, Strategy.STRATEGY2));
-        if (this.run == TestRun.CACHED) {
-            assertFalse(lib.accepts(o));
-        } else {
-            assertTrue(lib.accepts(o));
-        }
-        assertEquals("transition_STRATEGY2_STRATEGY3", lib.transition(o, Strategy.STRATEGY3));
-        if (this.run == TestRun.CACHED) {
-            assertFalse(lib.accepts(o));
-        } else {
-            assertTrue(lib.accepts(o));
-        }
-        assertEquals("transition_STRATEGY3_STRATEGY1", lib.transition(o, Strategy.STRATEGY1));
+        assertEquals("transition_STRATEGY1_STRATEGY2_uncached", lib.transition(o, Strategy.STRATEGY2));
+        assertTrue(lib.accepts(o));
+        assertEquals("transition_STRATEGY2_STRATEGY3_uncached", lib.transition(o, Strategy.STRATEGY3));
+        assertTrue(lib.accepts(o));
+        assertEquals("transition_STRATEGY3_STRATEGY1_uncached", lib.transition(o, Strategy.STRATEGY1));
+        assertTrue(lib.accepts(o));
+    }
+
+    @Test
+    public void testTransitionsCached() {
+        StrategyObject o = new StrategyObject(Strategy.STRATEGY1);
+        TransitionTestLibrary lib = createCached(TransitionTestLibrary.class, o);
+        assertTrue(lib.accepts(o));
+        assertEquals("transition_STRATEGY1_STRATEGY2_cached", lib.transition(o, Strategy.STRATEGY2));
+        assertFalse(lib.accepts(o));
+        assertEquals("transition_STRATEGY2_STRATEGY3_cached", lib.transition(o, Strategy.STRATEGY3));
+        assertFalse(lib.accepts(o));
+        assertEquals("transition_STRATEGY3_STRATEGY1_uncached", lib.transition(o, Strategy.STRATEGY1));
+        assertTrue(lib.accepts(o));
+    }
+
+    @Test
+    public void testTransitionsCachedMerged() throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
+        StrategyObject o = new StrategyObject(Strategy.STRATEGY1);
+        InteropLibrary lib = createCached(InteropLibrary.class, o);
+        assertTrue(lib.accepts(o));
+        assertEquals("transition_STRATEGY1_STRATEGY2_cached", lib.invokeMember(o, "transition", "STRATEGY2"));
+        assertFalse(lib.accepts(o));
+        assertEquals("transition_STRATEGY2_STRATEGY3_cached", lib.invokeMember(o, "transition", "STRATEGY3"));
+        assertFalse(lib.accepts(o));
+        assertEquals("transition_STRATEGY3_STRATEGY1_uncached", lib.invokeMember(o, "transition", "STRATEGY1"));
         assertTrue(lib.accepts(o));
     }
 
