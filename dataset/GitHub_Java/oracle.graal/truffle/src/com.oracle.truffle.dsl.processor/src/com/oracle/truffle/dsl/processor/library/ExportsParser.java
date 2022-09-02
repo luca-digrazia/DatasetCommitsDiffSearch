@@ -605,7 +605,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
             if (explicitReceiver) {
                 boolean foundInvalidExportsOnReceiver = false;
                 superType = ElementUtils.castTypeElement(receiverClass);
-                while (superType != null) {
+                while ((superType = getSuperType(superType)) != null) {
                     List<AnnotationMirror> exports = getRepeatedAnnotation(superType.getAnnotationMirrors(), types.ExportLibrary);
                     for (AnnotationMirror export : exports) {
                         TypeMirror exportedLibrary = getAnnotationValue(TypeMirror.class, export, "value");
@@ -614,7 +614,6 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                             break;
                         }
                     }
-                    superType = getSuperType(superType);
                 }
                 if (foundInvalidExportsOnReceiver) {
                     lib.addError(annotationMirror, receiverClassValue, "An explicit receiver type must not export any libraries other than %s.",
