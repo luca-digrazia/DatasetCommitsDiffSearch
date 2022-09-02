@@ -62,7 +62,7 @@ public final class ToolchainImpl implements Toolchain {
     }
 
     protected TruffleFile getRoot() {
-        TruffleLanguage.Env env = LLVMLanguage.getContext().getEnv();
+        TruffleLanguage.Env env = language.getContextReference().get().getEnv();
         String toolchainRoot = toolchainConfig.getToolchainRootOverride();
         return toolchainRoot != null //
                         ? env.getInternalTruffleFile(toolchainRoot)

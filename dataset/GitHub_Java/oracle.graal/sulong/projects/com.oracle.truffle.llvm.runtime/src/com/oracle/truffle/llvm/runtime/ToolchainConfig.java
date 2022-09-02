@@ -47,9 +47,4 @@ public interface ToolchainConfig extends LLVMCapability {
      * Returns true if C++ support is enabled.
      */
     boolean enableCXX();
-
-    @SuppressWarnings("unused")
-    default Object bind(Object signature, Object function) {
-        return null;
-    }
 }
