@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -59,13 +59,7 @@ public final class MemoryAnchorNode extends FixedWithNextNode implements LIRLowe
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (tool.allUsagesAvailable() && hasNoUsages()) {
-            // GR-27194
-            if (!this.graph().isAfterFixedReadPhase()) {
-                return null;
-            }
-        }
-        return this;
+        return tool.allUsagesAvailable() && hasNoUsages() ? null : this;
     }
 
     @Override
