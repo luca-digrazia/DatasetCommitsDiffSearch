@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.replacements;
 
+import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
@@ -36,8 +37,8 @@ import org.graalvm.compiler.replacements.nodes.ArrayEqualsNode;
 /**
  * Substitutions for {@link String} methods for JDK9 and later.
  *
- * {@link String} changed in JDK9 to contain a byte array instead of a char array.
- * We therefore need new substitutions for the related methods.
+ * {@link String} changed in JDK9 to contain a byte array instead of a char array. We therefore need
+ * new substitutions for the related methods.
  */
 @ClassSubstitution(String.class)
 public class JDK9StringSubstitutions {
@@ -52,21 +53,29 @@ public class JDK9StringSubstitutions {
             return false;
         }
         String thatString = (String) obj;
-        if (thisString.length() != thatString.length()) {
+        if (getCoder(thisString) != getCoder(thatString)) {
             return false;
         }
-        if (thisString.length() == 0) {
+        final byte[] array1 = getValue(thisString);
+        final byte[] array2 = getValue(thatString);
+        if (array1.length != array2.length) {
+            return false;
+        }
+        if (array1.length == 0) {
             return true;
         }
 
-        final byte[] array1 = getValue(thisString);
-        final byte[] array2 = getValue(thatString);
-
-        return ArrayEqualsNode.equals(array1, array2, array1.length);
+        return ArrayEqualsNode.equals(array1, array2, GraalDirectives.isCompilationConstant(thatString) ? array2.length : array1.length);
     }
 
     /**
      * Will be intrinsified with an {@link InvocationPlugin} to a {@link LoadFieldNode}.
      */
     public static native byte[] getValue(String s);
+
+    public static native int getCoder(String s);
+
+    public static boolean isCompactString(String s) {
+        return getCoder(s) == 0;
+    }
 }

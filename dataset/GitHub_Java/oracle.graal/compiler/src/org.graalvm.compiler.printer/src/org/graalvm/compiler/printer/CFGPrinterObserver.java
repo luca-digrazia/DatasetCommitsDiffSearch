@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.printer;
 
-import static org.graalvm.compiler.debug.DebugOptions.PrintBackendCFG;
 import static org.graalvm.compiler.debug.DebugOptions.PrintCFG;
 
 import java.io.BufferedOutputStream;
@@ -80,10 +79,10 @@ public class CFGPrinterObserver implements DebugDumpHandler {
     private List<String> curDecorators = Collections.emptyList();
 
     @Override
-    public void dump(Object object, DebugContext debug, boolean forced, String format, Object... arguments) {
+    public void dump(DebugContext debug, Object object, String format, Object... arguments) {
         String message = String.format(format, arguments);
         try {
-            dumpSandboxed(debug, object, forced, message);
+            dumpSandboxed(debug, object, message);
         } catch (Throwable ex) {
             TTY.println("CFGPrinter: Exception during output of " + message + ": " + ex);
             ex.printStackTrace();
@@ -147,16 +146,11 @@ public class CFGPrinterObserver implements DebugDumpHandler {
     private LIR lastLIR = null;
     private IntervalDumper delayedIntervals = null;
 
-    public void dumpSandboxed(DebugContext debug, Object object, boolean forced, String message) {
+    public void dumpSandboxed(DebugContext debug, Object object, String message) {
         OptionValues options = debug.getOptions();
-        if (isFrontendObject(object)) {
-            if (!PrintCFG.getValue(options) && !forced) {
-                return;
-            }
-        } else {
-            if (!PrintBackendCFG.getValue(options) && !forced) {
-                return;
-            }
+        boolean dumpFrontend = PrintCFG.getValue(options);
+        if (!dumpFrontend && isFrontendObject(object)) {
+            return;
         }
 
         if (cfgPrinter == null) {
