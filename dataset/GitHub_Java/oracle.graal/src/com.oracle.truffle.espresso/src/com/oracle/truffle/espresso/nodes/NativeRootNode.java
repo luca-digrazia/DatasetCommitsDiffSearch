@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import java.util.Arrays;
-
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
@@ -88,7 +86,6 @@ public final class NativeRootNode extends EspressoBaseNode {
         return argsWithEnv;
     }
 
-
     @Override
     public final Object executeNaked(VirtualFrame frame) {
         try {
@@ -98,23 +95,15 @@ public final class NativeRootNode extends EspressoBaseNode {
             // constant.
             // Having a constant length would help PEA to skip the copying.
             Object[] argsWithEnv = preprocessArgs(frame.getArguments());
-            //logIn(argsWithEnv);
+            // System.err.println("Calling native " + originalMethod.getName() +
+            // Arrays.toString(argsWithEnv));
             Object result = callNative(argsWithEnv);
-            //logOut(argsWithEnv, result);
+            // System.err.println("Return from native " + originalMethod.getName() +
+            // Arrays.toString(argsWithEnv) + " -> " + result);
             return processResult(result);
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
-    }
-
-    @TruffleBoundary
-    private void logOut(Object[] argsWithEnv, Object result) {
-        System.err.println("Return from native " + getMethod() + Arrays.toString(argsWithEnv) + " -> " + result);
-    }
-
-    @TruffleBoundary
-    private void logIn(Object[] argsWithEnv) {
-        System.err.println("Calling native " + getMethod() + Arrays.toString(argsWithEnv));
     }
 
     private final Object callNative(Object[] argsWithEnv) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {

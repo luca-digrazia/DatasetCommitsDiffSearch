@@ -58,18 +58,18 @@ public abstract class EspressoBaseNode extends Node implements ContextAccess, In
         return method.getContext();
     }
 
-    public abstract Object invokeNaked(VirtualFrame frame);
+    public abstract Object executeNaked(VirtualFrame frame);
 
-    public Object execute(VirtualFrame frame) {
+    public final Object execute(VirtualFrame frame) {
         if (method.isSynchronized()) {
             Object monitor = method.isStatic()
                             ? /* class */ method.getDeclaringKlass().mirror()
                             : /* receiver */ frame.getArguments()[0];
             synchronized (monitor) {
-                return invokeNaked(frame);
+                return executeNaked(frame);
             }
         } else {
-            return invokeNaked(frame);
+            return executeNaked(frame);
         }
     }
 
