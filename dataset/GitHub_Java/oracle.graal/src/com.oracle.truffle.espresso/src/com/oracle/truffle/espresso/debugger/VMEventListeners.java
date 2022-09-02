@@ -22,57 +22,61 @@
  */
 package com.oracle.truffle.espresso.debugger;
 
-import com.oracle.truffle.api.debug.Breakpoint;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.espresso.debugger.jdwp.JDWPCallFrame;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
+import com.oracle.truffle.espresso.runtime.StaticObject;
 
-import java.util.HashSet;
 
 public class VMEventListeners {
 
     private static final VMEventListeners DEFAULT = new VMEventListeners();
 
-    // TODO(Gregersen) - change to array or even a single listener for now
-    private HashSet<VMEventListener> listeners = new HashSet<>();
-
-    VMEventListeners() {
-
-    }
+    @CompilerDirectives.CompilationFinal(dimensions = 1)
+    private final VMEventListener[] listeners = new VMEventListener[1];
 
     public static VMEventListeners getDefault() {
         return DEFAULT;
     }
 
     public void registerListener(VMEventListener listener) {
-        listeners.add(listener);
+        assert listeners[0] == null;
+        listeners[0] = listener;
     }
 
-    public void classPrepared(ObjectKlass klass) {
-        for (VMEventListener listener : listeners) {
-            listener.classPrepared(klass);
+    public void classPrepared(ObjectKlass klass, StaticObject currentThread) {
+        if (listeners[0] != null) {
+            listeners[0].classPrepared(klass, currentThread);
         }
     }
 
     public void classUnloaded(ObjectKlass klass) {
-        for (VMEventListener listener : listeners) {
-            listener.classUnloaded(klass);
+        if (listeners[0] != null) {
+            listeners[0].classUnloaded(klass);
         }
     }
 
-    public void threadStarted(Thread thread) {
-        for (VMEventListener listener : listeners) {
-            listener.threadStarted(thread);
+    public void threadStarted(StaticObject thread) {
+        if (listeners[0] != null) {
+            listeners[0].threadStarted(thread);
         }
     }
 
-    public void threadDied(Thread thread) {
-        for (VMEventListener listener : listeners) {
-            listener.threadDied(thread);
+    public void threadDied(StaticObject thread) {
+        if (listeners[0] != null) {
+            listeners[0].threadDied(thread);
         }
     }
 
-    public void breakpointHit(BreakpointInfo info) {
-        for (VMEventListener listener : listeners) {
-            listener.breakpointHIt(info);
+    public void breakpointHit(BreakpointInfo info, StaticObject currentThread) {
+        if (listeners[0] != null) {
+            listeners[0].breakpointHIt(info, currentThread);
+        }
+    }
+
+    public void stepCompleted(int commandRequestId, JDWPCallFrame currentFrame) {
+        if (listeners[0] != null) {
+            listeners[0].stepCompleted(commandRequestId, currentFrame);
         }
     }
 }
