@@ -99,29 +99,20 @@ final class CoverageCLI {
     }
 
     private static String lineCoverage(LineCoverage lineCoverage) {
-        final double coverage = lineCoverage.getCoverage();
-        if (Double.isNaN(coverage)) {
-           return "";
-        }
-        return percentFormat(100 * coverage);
+        return percentFormat(100 * lineCoverage.getCoverage());
     }
 
     void printLinesOutput() {
         printLine();
         printLinesLegend();
         for (SourceCoverage sourceCoverage : coverage) {
-            final Source source = sourceCoverage.getSource();
-            final String name = getName(source);
+            final String name = getName(sourceCoverage.getSource());
             printLine();
             printSummaryHeader();
             final LineCoverage lineCoverage = new LineCoverage(sourceCoverage, strictLines);
             out.println(String.format(format, name, statementCoverage(sourceCoverage), lineCoverage(lineCoverage), rootCoverage(sourceCoverage)));
             out.println();
-            if (source.hasCharacters() || source.hasBytes()) {
-                printLinesOfSource(source, lineCoverage);
-            } else {
-                out.println("NO CONTENT AVAILABLE");
-            }
+            printLinesOfSource(sourceCoverage.getSource(), lineCoverage);
         }
         printLine();
     }
