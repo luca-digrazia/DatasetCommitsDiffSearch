@@ -118,7 +118,7 @@ public interface MethodHandleConstant extends PoolConstant {
         @Override
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             Meta meta = pool.getContext().getMeta();
-            if (meta.getContext().specCompliancyMode() == EspressoOptions.SpecCompliancyMode.HOTSPOT) {
+            if (meta.getContext().specCompliancyMode() == EspressoOptions.SpecCompliancyMode.HotSpot) {
                 return hotspotResolutionBehavior(pool, accessingKlass, meta);
             } else {
                 return specCompliantResolution(pool, accessingKlass, meta);
