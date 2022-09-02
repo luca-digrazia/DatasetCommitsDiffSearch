@@ -507,12 +507,4 @@ public interface JDWPContext {
      */
     void setTruffleContext(TruffleContext con);
 
-    /**
-     * Returns the current BCI of the node.
-     *
-     * @param rawNode the current node
-     * @param frame the current frame
-     * @return the current bci
-     */
-    long getBCI(Node rawNode, Frame frame);
 }
