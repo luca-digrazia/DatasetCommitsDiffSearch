@@ -45,8 +45,7 @@ public abstract class WasmTestBase {
     protected static final Predicate<? super Path> isResultFile = f -> f.getFileName().toString().endsWith(".result");
 
     enum WasmTestStatus {
-        OK,
-        SKIPPED;
+        OK, SKIPPED;
     }
 
     protected static Predicate<String> filterTestName() {
