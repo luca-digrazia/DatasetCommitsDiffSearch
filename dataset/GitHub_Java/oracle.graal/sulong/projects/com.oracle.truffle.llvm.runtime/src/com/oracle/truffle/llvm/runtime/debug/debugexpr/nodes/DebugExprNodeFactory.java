@@ -1,14 +1,11 @@
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import java.util.List;
-
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.llvm.runtime.ArithmeticOperation;
 import com.oracle.truffle.llvm.runtime.CompareOperator;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprBitFlipNodeFactory.BitFlipNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprNotNode.NotNode;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprNotNodeFactory.NotNodeGen;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprShortCircuitEvaluationNodeFactory.DebugExprLogicalAndNodeGen;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprShortCircuitEvaluationNodeFactory.DebugExprLogicalOrNodeGen;
@@ -24,18 +21,17 @@ public final class DebugExprNodeFactory {
     public final static DebugExprErrorNode errorObjNode = DebugExprErrorNode.create("<cannot evaluate expression>");
     public final static DebugExpressionPair noObjPair = DebugExpressionPair.create(noObjNode, DebugExprType.getVoidType());
     public final static DebugExpressionPair errorObjPair = DebugExpressionPair.create(errorObjNode, DebugExprType.getVoidType());
-    private Iterable<Scope> scopes, globalScopes;
+    private Iterable<Scope> scopes;
     private Parser parser;
 
-    private DebugExprNodeFactory(ContextReference<LLVMContext> contextReference, Iterable<Scope> scopes, Parser parser, Iterable<Scope> globalScopes) {
+    private DebugExprNodeFactory(ContextReference<LLVMContext> contextReference, Iterable<Scope> scopes, Parser parser) {
         this.contextReference = contextReference;
         this.scopes = scopes;
         this.parser = parser;
-        this.globalScopes = globalScopes;
     }
 
-    public static DebugExprNodeFactory create(ContextReference<LLVMContext> contextReference, Iterable<Scope> scopes, Parser parser, Iterable<Scope> globalScopes) {
-        return new DebugExprNodeFactory(contextReference, scopes, parser, globalScopes);
+    public static DebugExprNodeFactory create(ContextReference<LLVMContext> contextReference, Iterable<Scope> scopes, Parser parser) {
+        return new DebugExprNodeFactory(contextReference, scopes, parser);
     }
 
     private boolean isErrorPair(DebugExpressionPair p) {
@@ -209,50 +205,6 @@ public final class DebugExprNodeFactory {
         else
             node = contextReference.get().getNodeFactory().createSignedCast(pair.getNode(), type.getLLVMRuntimeType());
         return DebugExpressionPair.create(node, type);
-    }
-
-    @SuppressWarnings("static-method")
-    public DebugExpressionPair createObjectMember(DebugExpressionPair receiver, String fieldName) {
-        Object baseMember = null;
-        if (receiver.getNode() instanceof DebugExprVarNode) {
-            baseMember = ((DebugExprVarNode) (receiver.getNode())).getMember();
-        } else if (receiver.getNode() instanceof DebugExprObjectMemberNode) {
-            baseMember = ((DebugExprObjectMemberNode) (receiver.getNode())).getMember();
-        }
-        if (baseMember != null) {
-            DebugExprObjectMemberNode node = new DebugExprObjectMemberNode(fieldName, baseMember);
-            return DebugExpressionPair.create(node, node.getType());
-        }
-        return errorObjPair;
-    }
-
-    public DebugExpressionPair createFunctionCall(DebugExpressionPair functionPair, List<DebugExpressionPair> arguments) {
-        if (isErrorPair(functionPair))
-            return errorObjPair;
-        if (functionPair.getNode() instanceof DebugExprVarNode) {
-            DebugExprVarNode varNode = (DebugExprVarNode) functionPair.getNode();
-            LLVMExpressionNode node = varNode.createFunctionCall(arguments, globalScopes);
-            return DebugExpressionPair.create(node, varNode.getType());
-        }
-        return errorObjPair;
-    }
-
-    @SuppressWarnings("static-method")
-    public DebugExpressionPair createArrayElement(DebugExpressionPair array, DebugExpressionPair index) {
-        Object baseMember = null;
-        DebugExprType baseType = null;
-        if (array.getNode() instanceof DebugExprVarNode) {
-            baseMember = ((DebugExprVarNode) (array.getNode())).getMember();
-            baseType = ((DebugExprVarNode) (array.getNode())).getType();
-        } else if (array.getNode() instanceof DebugExprObjectMemberNode) {
-            baseMember = ((DebugExprObjectMemberNode) (array.getNode())).getMember();
-            baseType = ((DebugExprObjectMemberNode) (array.getNode())).getType();
-        }
-        if (baseMember != null) {
-            DebugExprArrayElementNode node = new DebugExprArrayElementNode(baseMember, index.getNode(), baseType.getInnerType());
-            return DebugExpressionPair.create(node, baseType.getInnerType());
-        }
-        return errorObjPair;
     }
 
     public enum CompareKind {

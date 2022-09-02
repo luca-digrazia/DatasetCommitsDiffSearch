@@ -29,11 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.parser;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.TruffleLanguage.InlineParsingRequest;
@@ -47,26 +42,29 @@ public class DebugExprParser {
     private final Scanner scanner;
     private final CocoInputStream cis;
 
-    public DebugExprParser(InlineParsingRequest request, ContextReference<LLVMContext> contextReference, Iterable<Scope> globalScopes) {
+    public DebugExprParser(InlineParsingRequest request, ContextReference<LLVMContext> contextReference) {
         cis = new CocoInputStream(request.getSource().getCharacters());
         scanner = new Scanner(cis);
         parser = new Parser(scanner);
 
         final Iterable<Scope> scopes = LLVMDebuggerScopeFactory.createSourceLevelScope(request.getLocation(), request.getFrame(), contextReference.get());
-        DebugExprNodeFactory nodeFactory = DebugExprNodeFactory.create(contextReference, scopes, globalScopes);
+        DebugExprNodeFactory nodeFactory = DebugExprNodeFactory.create(contextReference, scopes, parser);
         parser.setNodeFactory(nodeFactory);
     }
 
     public LLVMExpressionNode parse() throws DebugExprException {
-        final ByteArrayOutputStream errorStream = new ByteArrayOutputStream();
-        parser.errors.errorStream = new PrintStream(errorStream);
-        parser.Parse();
-        LLVMExpressionNode root = parser.GetASTRoot();
-        if (parser.errors.count == 0) { // parsed correctly
-            return root;
-        } else {
-            throw DebugExprException.create(root, errorStream.toString().replace("\n", "").replace("\r", ""));
+        try {
+            parser.Parse();
+            LLVMExpressionNode root = parser.GetASTRoot();
+            if (parser.errors.count == 0) { // parsed correctly
+                return root;
+            } else {
+                throw new DebugExprException(DebugExprNodeFactory.errorObjNode);
+            }
+        } catch (DebugExprException d) {
+            if (d.exceptionNode == null)
+                throw new RuntimeException();
+            return d.exceptionNode;
         }
-
     }
 }
