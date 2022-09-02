@@ -160,6 +160,7 @@ public final class Engine implements AutoCloseable {
      * {@link OptionDescriptor#getKey() groups}:
      * <ul>
      * <li><b>engine</b>: options to configure the behavior of this engine.
+     * <li><b>compiler</b>: options to configure the optimizing compiler.
      * </ul>
      * The language and instrument specific options need to be retrieved using
      * {@link Instrument#getOptions()} or {@link Language#getOptions()}.
@@ -996,6 +997,10 @@ public final class Engine implements AutoCloseable {
             return new Object();
         }
 
+        @Override
+        public SecurityException throwSecurityException(String message) {
+            throw new SecurityException(message);
+        }
     }
 
 }

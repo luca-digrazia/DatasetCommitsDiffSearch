@@ -55,10 +55,12 @@ import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -112,7 +114,7 @@ public abstract class AbstractPolyglotImpl {
         }
 
         public abstract ProcessHandler.ProcessCommand newProcessCommand(List<String> cmd, String cwd, Map<String, String> environment, boolean redirectErrorStream,
-                        ProcessHandler.Redirect inputRedirect, ProcessHandler.Redirect outputRedirect, ProcessHandler.Redirect errorRedirect);
+                        ProcessHandler.Redirect[] redirects);
     }
 
     public abstract static class APIAccess {
@@ -428,7 +430,7 @@ public abstract class AbstractPolyglotImpl {
                         boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter,
                         Map<String, String> options,
                         Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream, boolean allowCreateProcess, ProcessHandler processHandler,
-                        EnvironmentAccess environmentAccess, Map<String, String> environment);
+                        EnvironmentConfig envConfig);
 
         public abstract String getImplementationName();
 
@@ -694,4 +696,39 @@ public abstract class AbstractPolyglotImpl {
 
     public abstract <S, T> Object newTargetTypeMapping(Class<S> sourceType, Class<T> targetType, Predicate<S> acceptsValue, Function<S, T> convertValue);
 
+    public abstract SecurityException throwSecurityException(String message);
+
+    public static final class EnvironmentConfig {
+        private final EnvironmentAccess environmentAccess;
+        private volatile Map<String, String> configuredEnvironement;
+
+        public EnvironmentConfig(EnvironmentAccess environmentAcceess) {
+            assert environmentAcceess != null;
+            this.environmentAccess = environmentAcceess;
+        }
+
+        public EnvironmentAccess getEnvironmentAccess() {
+            return environmentAccess;
+        }
+
+        public Map<String, String> getEnvironment() {
+            Map<String, String> result = configuredEnvironement;
+            if (result == null) {
+                synchronized (this) {
+                    result = configuredEnvironement;
+                    if (result == null) {
+                        if (environmentAccess == EnvironmentAccess.NONE) {
+                            result = Collections.emptyMap();
+                        } else if (environmentAccess == EnvironmentAccess.INHERIT) {
+                            result = System.getenv();   // System.getenv returns unmodifiable map.
+                        } else {
+                            throw new IllegalStateException(String.format("Unsupported EnvironmentAccess: %s", environmentAccess));
+                        }
+                        configuredEnvironement = result;
+                    }
+                }
+            }
+            return result;
+        }
+    }
 }

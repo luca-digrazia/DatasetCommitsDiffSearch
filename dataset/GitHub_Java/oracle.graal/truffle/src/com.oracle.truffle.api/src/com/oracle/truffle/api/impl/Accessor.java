@@ -339,6 +339,8 @@ public abstract class Accessor {
 
         public abstract Object getCurrentOuterContext();
 
+        public abstract Env getLanguageEnv(Object languageContextVMObject, LanguageInfo otherLanguage);
+
         public abstract boolean isCharacterBasedSource(String language, String mimeType);
 
         public abstract Set<String> getValidMimeTypes(String language);
@@ -377,14 +379,12 @@ public abstract class Accessor {
 
         public abstract Map<String, String> getProcessEnvironment(Object polyglotLanguageContext);
 
-        public abstract Process createSubProcess(Object polyglotLanguageContext, List<String> cmd, String cwd, Map<String, String> environment, boolean redirectErrorStream,
-                        ProcessHandler.Redirect inputRedirect, ProcessHandler.Redirect outputRedirect, ProcessHandler.Redirect errorRedirect) throws IOException;
+        public abstract ProcessHandler.ProcessCommand newProcessCommand(Object vmObject, List<String> cmd, String cwd, Map<String, String> environment, boolean redirectErrorStream,
+                        ProcessHandler.Redirect[] redirects);
 
-        public abstract boolean hasDefaultProcessHandler(Object polyglotLanguageContext);
+        public abstract ProcessHandler getProcessHandler(Object polylgotLanguageContext);
 
-        public abstract ProcessHandler.Redirect createRedirectToOutputStream(Object vmObject, OutputStream stream);
-
-        public abstract boolean isIOAllowed();
+        public abstract boolean isDefaultProcessHandler(ProcessHandler handler);
     }
 
     public abstract static class LanguageSupport {
@@ -435,6 +435,8 @@ public abstract class Accessor {
         public abstract InstrumentInfo createInstrument(Object vmObject, String id, String name, String version);
 
         public abstract Object getVMObject(InstrumentInfo info);
+
+        public abstract <S> S lookup(TruffleLanguage<?> languageEnsureInitialized, Class<S> type);
 
         public abstract boolean isContextInitialized(Env env);
 
