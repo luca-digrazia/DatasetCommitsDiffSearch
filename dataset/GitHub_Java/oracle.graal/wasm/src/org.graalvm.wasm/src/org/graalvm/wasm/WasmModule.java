@@ -43,7 +43,7 @@ package org.graalvm.wasm;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
@@ -51,24 +51,19 @@ import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
  * Represents a parsed and validated WebAssembly module, which has not yet been instantiated.
  */
 @SuppressWarnings("static-method")
-public final class WasmModule extends SymbolTable {
+public final class WasmModule {
     private final String name;
-    private final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy;
-    private final ArrayList<BiConsumer<WasmContext, WasmInstance>> linkActions;
+    private final SymbolTable symbolTable;
+    private final ArrayList<Consumer<WasmContext>> linkActions;
     @CompilationFinal(dimensions = 1) private byte[] data;
     @CompilationFinal private boolean isParsed;
 
-    public WasmModule(String name, byte[] data, WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy) {
-        super();
+    public WasmModule(String name, byte[] data) {
         this.name = name;
-        this.storeConstantsPolicy = storeConstantsPolicy;
+        this.symbolTable = new SymbolTable(this);
         this.linkActions = new ArrayList<>();
         this.data = data;
         this.isParsed = false;
-    }
-
-    protected WasmModule module() {
-        return this;
     }
 
     public void setParsed() {
@@ -80,7 +75,7 @@ public final class WasmModule extends SymbolTable {
     }
 
     public SymbolTable symbolTable() {
-        return this;
+        return symbolTable;
     }
 
     public String name() {
@@ -91,16 +86,12 @@ public final class WasmModule extends SymbolTable {
         return data;
     }
 
-    public List<BiConsumer<WasmContext, WasmInstance>> linkActions() {
+    public List<Consumer<WasmContext>> linkActions() {
         return Collections.unmodifiableList(linkActions);
     }
 
-    public void addLinkAction(BiConsumer<WasmContext, WasmInstance> action) {
+    public void addLinkAction(Consumer<WasmContext> action) {
         linkActions.add(action);
-    }
-
-    public WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy() {
-        return storeConstantsPolicy;
     }
 
     @Override
