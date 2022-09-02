@@ -48,8 +48,9 @@ import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.image.ImageHeapLayoutInfo;
+import com.oracle.svm.core.image.AbstractImageHeapLayouter.ImageHeapLayout;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
+import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.config.HybridLayout;
 import com.oracle.svm.hosted.image.NativeImageHeap.ObjectInfo;
 import com.oracle.svm.hosted.meta.HostedClass;
@@ -67,10 +68,10 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  */
 public final class NativeImageHeapWriter {
     private final NativeImageHeap heap;
-    private final ImageHeapLayoutInfo heapLayout;
+    private final ImageHeapLayout heapLayout;
     private long sectionOffsetOfARelocatablePointer;
 
-    public NativeImageHeapWriter(NativeImageHeap heap, ImageHeapLayoutInfo heapLayout) {
+    public NativeImageHeapWriter(NativeImageHeap heap, ImageHeapLayout heapLayout) {
         this.heap = heap;
         this.heapLayout = heapLayout;
         this.sectionOffsetOfARelocatablePointer = -1;
@@ -81,15 +82,15 @@ public final class NativeImageHeapWriter {
      * image.
      */
     @SuppressWarnings("try")
-    public long writeHeap(DebugContext debug, RelocatableBuffer buffer) {
+    public long writeHeap(DebugContext debug, final RelocatableBuffer roBuffer, final RelocatableBuffer rwBuffer) {
         try (Indent perHeapIndent = debug.logAndIndent("BootImageHeap.writeHeap:")) {
             for (ObjectInfo info : heap.getObjects()) {
                 assert !heap.isBlacklisted(info.getObject());
-                writeObject(info, buffer);
+                writeObject(info, roBuffer, rwBuffer);
             }
             // Only static fields that are writable get written to the native image heap,
             // the read-only static fields have been inlined into the code.
-            writeStaticFields(buffer);
+            writeStaticFields(rwBuffer);
         }
         return sectionOffsetOfARelocatablePointer;
     }
@@ -241,7 +242,7 @@ public final class NativeImageHeapWriter {
     }
 
     private static void writePrimitive(RelocatableBuffer buffer, int index, JavaConstant con) {
-        ByteBuffer bb = buffer.getByteBuffer();
+        ByteBuffer bb = buffer.getBuffer();
         switch (con.getJavaKind()) {
             case Boolean:
                 bb.put(index, (byte) con.asInt());
@@ -274,19 +275,27 @@ public final class NativeImageHeapWriter {
 
     private void writeReferenceValue(RelocatableBuffer buffer, int index, long value) {
         if (referenceSize() == Long.BYTES) {
-            buffer.getByteBuffer().putLong(index, value);
+            buffer.getBuffer().putLong(index, value);
         } else if (referenceSize() == Integer.BYTES) {
-            buffer.getByteBuffer().putInt(index, NumUtil.safeToInt(value));
+            buffer.getBuffer().putInt(index, NumUtil.safeToInt(value));
         } else {
             throw shouldNotReachHere("Unsupported reference size: " + referenceSize());
         }
     }
 
-    private void writeObject(ObjectInfo info, RelocatableBuffer buffer) {
+    private static RelocatableBuffer bufferForPartition(final ObjectInfo info, final RelocatableBuffer roBuffer, final RelocatableBuffer rwBuffer) {
+        VMError.guarantee(info != null, "[BootImageHeap.bufferForPartition: info is null]");
+        VMError.guarantee(info.getPartition() != null, "[BootImageHeap.bufferForPartition: info.partition is null]");
+
+        return info.getPartition().isWritable() ? rwBuffer : roBuffer;
+    }
+
+    private void writeObject(ObjectInfo info, final RelocatableBuffer roBuffer, final RelocatableBuffer rwBuffer) {
         /*
          * Write a reference from the object to its hub. This lives at layout.getHubOffset() from
          * the object base.
          */
+        final RelocatableBuffer buffer = bufferForPartition(info, roBuffer, rwBuffer);
         ObjectLayout objectLayout = heap.getObjectLayout();
         final int indexInBuffer = info.getIndexInBuffer(objectLayout.getHubOffset());
         assert objectLayout.isAligned(indexInBuffer);
@@ -296,7 +305,6 @@ public final class NativeImageHeapWriter {
 
         writeDynamicHub(buffer, indexInBuffer, hub);
 
-        ByteBuffer bufferBytes = buffer.getByteBuffer();
         if (clazz.isInstanceClass()) {
             JavaConstant con = SubstrateObjectConstant.forObject(info.getObject());
 
@@ -325,7 +333,7 @@ public final class NativeImageHeapWriter {
                             }
                             int mask = 1 << (bit % bitsPerByte);
                             assert mask < (1 << bitsPerByte);
-                            bufferBytes.put(index, (byte) (bufferBytes.get(index) | mask));
+                            buffer.putByte(index, (byte) (buffer.getByte(index) | mask));
                         }
                     }
                 }
@@ -342,14 +350,14 @@ public final class NativeImageHeapWriter {
                 }
             }
             if (hub.getHashCodeOffset() != 0) {
-                bufferBytes.putInt(info.getIndexInBuffer(hub.getHashCodeOffset()), info.getIdentityHashCode());
+                buffer.putInt(info.getIndexInBuffer(hub.getHashCodeOffset()), info.getIdentityHashCode());
             }
             if (hybridArray != null) {
                 /*
                  * Write the hybrid array length and the array elements.
                  */
                 int length = Array.getLength(hybridArray);
-                bufferBytes.putInt(info.getIndexInBuffer(objectLayout.getArrayLengthOffset()), length);
+                buffer.putInt(info.getIndexInBuffer(objectLayout.getArrayLengthOffset()), length);
                 for (int i = 0; i < length; i++) {
                     final int elementIndex = info.getIndexInBuffer(hybridLayout.getArrayElementOffset(i));
                     final JavaKind elementStorageKind = hybridLayout.getArrayElementStorageKind();
@@ -362,8 +370,8 @@ public final class NativeImageHeapWriter {
             JavaKind kind = clazz.getComponentType().getStorageKind();
             Object array = info.getObject();
             int length = Array.getLength(array);
-            bufferBytes.putInt(info.getIndexInBuffer(objectLayout.getArrayLengthOffset()), length);
-            bufferBytes.putInt(info.getIndexInBuffer(objectLayout.getArrayIdentityHashcodeOffset()), info.getIdentityHashCode());
+            buffer.putInt(info.getIndexInBuffer(objectLayout.getArrayLengthOffset()), length);
+            buffer.putInt(info.getIndexInBuffer(objectLayout.getArrayIdentityHashcodeOffset()), info.getIdentityHashCode());
             if (array instanceof Object[]) {
                 Object[] oarray = (Object[]) array;
                 assert oarray.length == length;
