@@ -159,9 +159,6 @@ public final class LLVMPThreadThreadIntrinsics {
         protected int doIntrinsic(long threadID, LLVMPointer buffer, long targetLen,
                         @CachedContext(LLVMLanguage.class) LLVMContext context) {
             Thread thread = context.getpThreadContext().getThread(threadID);
-            if (thread == null) {
-                return LLVMAMD64Error.ERANGE;
-            }
             byte[] byteString = getThreadNameAsBytes(thread);
             long bytesWritten = 0;
             for (int i = 0; i < byteString.length && i < targetLen - 1; i++) {
