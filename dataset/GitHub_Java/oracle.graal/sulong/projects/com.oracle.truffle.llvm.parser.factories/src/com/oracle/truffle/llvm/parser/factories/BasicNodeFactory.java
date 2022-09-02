@@ -166,11 +166,9 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.bit.CountTrailingZe
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.bit.CountTrailingZeroesNodeFactory.CountTrailingZeroesI32NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.bit.CountTrailingZeroesNodeFactory.CountTrailingZeroesI64NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.bit.CountTrailingZeroesNodeFactory.CountTrailingZeroesI8NodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVAEndNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVAListNode;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVAListNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVAStartNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64BitVACopyNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64BitVAEndNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VAStartNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ComparisonNodeFactory.LLVMX86_CmpssNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_ConversionDoubleToIntNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_ConversionFloatToIntNodeGen;
@@ -953,19 +951,10 @@ public class BasicNodeFactory implements NodeFactory {
 
     @Override
     public LLVMExpressionNode createAlloca(Type type, int alignment) {
-        if (LLVMVAListNode.isVAListType(type)) {
-            return LLVMVAListNodeGen.create(() -> createAllocaNative(type, alignment));
-        } else {
-            return createAllocaNative(type, alignment);
-        }
-    }
-
-    protected LLVMExpressionNode createAllocaNative(Type type, int alignment) {
         try {
             long byteSize = getByteSize(type);
             LLVMGetStackForConstInstruction alloc = LLVMAllocaConstInstructionNodeGen.create(byteSize, alignment, type);
-            LLVMExpressionNode allocaNode = createGetStackSpace(type, alloc, byteSize);
-            return allocaNode;
+            return createGetStackSpace(type, alloc, byteSize);
         } catch (TypeOverflowException e) {
             return Type.handleOverflowExpression(e);
         }
@@ -1149,7 +1138,7 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createInlineAssemblerExpression(ExternalLibrary library, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type.TypeArrayBuilder argTypes,
+    public LLVMExpressionNode createInlineAssemblerExpression(ExternalLibrary library, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type[] argTypes,
                     Type retType) {
         Type[] retTypes = null;
         long[] retOffsets = null;
@@ -1172,7 +1161,7 @@ public class BasicNodeFactory implements NodeFactory {
         LLVMFunctionDescriptor asm = context.createFunctionDescriptor(functionDetail);
         LLVMManagedPointerLiteralNode asmFunction = LLVMManagedPointerLiteralNodeGen.create(LLVMManagedPointer.create(asm));
 
-        return LLVMCallNode.create(new FunctionType(MetaType.UNKNOWN, argTypes, false), asmFunction, args, false);
+        return LLVMCallNode.create(FunctionType.createByCopy(MetaType.UNKNOWN, argTypes, false), asmFunction, args, false);
     }
 
     private LLVMInlineAssemblyRootNode getLazyUnsupportedInlineRootNode(String asmExpression, AsmParseException e) {
@@ -1235,7 +1224,7 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createLLVMBuiltin(Symbol target, LLVMExpressionNode[] args, Type.TypeArrayBuilder argsTypes, int callerArgumentCount) {
+    public LLVMExpressionNode createLLVMBuiltin(Symbol target, LLVMExpressionNode[] args, Type[] argsTypes, int callerArgumentCount) {
         if (target instanceof FunctionDeclaration) {
             FunctionDeclaration declaration = (FunctionDeclaration) target;
             String name = declaration.getName();
@@ -1263,7 +1252,7 @@ public class BasicNodeFactory implements NodeFactory {
                 // Inline Sulong intrinsics directly at their call site, to avoid the overhead of a
                 // call node and extra argument nodes.
                 LLVMIntrinsicProvider intrinsicProvider = context.getLanguage().getCapability(LLVMIntrinsicProvider.class);
-                return intrinsicProvider.generateIntrinsicNode(name, args, argsTypes, this);
+                return intrinsicProvider.generateIntrinsicNode(name, args, Arrays.asList(argsTypes), this);
             }
         }
         return null;
@@ -1423,9 +1412,9 @@ public class BasicNodeFactory implements NodeFactory {
                 case "llvm.frameaddress":
                     return LLVMFrameAddressNodeGen.create(args[1]);
                 case "llvm.va_start":
-                    return LLVMVAStartNodeGen.create(callerArgumentCount, args[1]);
+                    return LLVMX86_64VAStartNodeGen.create(callerArgumentCount, createVarargsAreaStackAllocation(), createMemMove(), args[1]);
                 case "llvm.va_end":
-                    return LLVMVAEndNodeGen.create(args[1]);
+                    return LLVMX86_64BitVAEndNodeGen.create(args[1]);
                 case "llvm.va_copy":
                     return LLVMX86_64BitVACopyNodeGen.create(args[1], args[2], callerArgumentCount);
                 case "llvm.eh.sjlj.longjmp":
@@ -1562,48 +1551,6 @@ public class BasicNodeFactory implements NodeFactory {
                 case "llvm.experimental.constrained.fpext.f80":
                 case "llvm.experimental.constrained.fpext.f80.f64":
                     return LLVMSignedCastToLLVM80BitFloatNodeGen.create(args[1]);
-
-/*
- * We ignore the two meta-arguments of the binary arithmetic llvm.experimental.constrained builtins
- * as they are just hints by compiler to optimization passes. They inform the passes on possible
- * assumptions about the current rounding mode and floating point exceptions (FPE) behavior.
- *
- * Nonetheless, as the values of rounding mode or the FPE behavior other than "round.tonearest" and
- * "fpexcept.ignore", which are the default and currently the only supported ones, indicate that the
- * code may want to ensure a specific rounding of numbers or respond to FPE, we should issue some
- * "unsupported FP mode" warning when parsing bitcode.
- */
-
-                case "llvm.experimental.constrained.fadd.f32":
-                    return LLVMFloatArithmeticNodeGen.create(ArithmeticOperation.ADD, args[1], args[2]);
-                case "llvm.experimental.constrained.fadd.f64":
-                    return LLVMDoubleArithmeticNodeGen.create(ArithmeticOperation.ADD, args[1], args[2]);
-                case "llvm.experimental.constrained.fadd.f80":
-                    return LLVMFP80ArithmeticNodeGen.create(ArithmeticOperation.ADD, args[1], args[2]);
-                case "llvm.experimental.constrained.fsub.f32":
-                    return LLVMFloatArithmeticNodeGen.create(ArithmeticOperation.SUB, args[1], args[2]);
-                case "llvm.experimental.constrained.fsub.f64":
-                    return LLVMDoubleArithmeticNodeGen.create(ArithmeticOperation.SUB, args[1], args[2]);
-                case "llvm.experimental.constrained.fsub.f80":
-                    return LLVMFP80ArithmeticNodeGen.create(ArithmeticOperation.SUB, args[1], args[2]);
-                case "llvm.experimental.constrained.fmul.f32":
-                    return LLVMFloatArithmeticNodeGen.create(ArithmeticOperation.MUL, args[1], args[2]);
-                case "llvm.experimental.constrained.fmul.f64":
-                    return LLVMDoubleArithmeticNodeGen.create(ArithmeticOperation.MUL, args[1], args[2]);
-                case "llvm.experimental.constrained.fmul.f80":
-                    return LLVMFP80ArithmeticNodeGen.create(ArithmeticOperation.MUL, args[1], args[2]);
-                case "llvm.experimental.constrained.fdiv.f32":
-                    return LLVMFloatArithmeticNodeGen.create(ArithmeticOperation.DIV, args[1], args[2]);
-                case "llvm.experimental.constrained.fdiv.f64":
-                    return LLVMDoubleArithmeticNodeGen.create(ArithmeticOperation.DIV, args[1], args[2]);
-                case "llvm.experimental.constrained.fdiv.f80":
-                    return LLVMFP80ArithmeticNodeGen.create(ArithmeticOperation.DIV, args[1], args[2]);
-                case "llvm.experimental.constrained.frem.f32":
-                    return LLVMFloatArithmeticNodeGen.create(ArithmeticOperation.REM, args[1], args[2]);
-                case "llvm.experimental.constrained.frem.f64":
-                    return LLVMDoubleArithmeticNodeGen.create(ArithmeticOperation.REM, args[1], args[2]);
-                case "llvm.experimental.constrained.frem.f80":
-                    return LLVMFP80ArithmeticNodeGen.create(ArithmeticOperation.REM, args[1], args[2]);
                 default:
                     break;
             }
