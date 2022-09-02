@@ -94,7 +94,9 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         }
         checker[defaultSuccessorIndex()] = true;
         for (boolean b : checker) {
-            assert b;
+            if (!b) {
+                return false;
+            }
         }
         return true;
     }

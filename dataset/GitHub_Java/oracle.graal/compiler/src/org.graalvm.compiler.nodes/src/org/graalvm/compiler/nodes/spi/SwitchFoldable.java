@@ -35,16 +35,16 @@ import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.PrimitiveStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
+import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.NodeInterface;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
-import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.ValueNodeInterface;
 import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
@@ -55,7 +55,7 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
  * in a cascade.
  */
 @SuppressFBWarnings(value = {"UCF"}, justification = "javac spawns useless control flow in static initializer when using assert(asNode().isAlive())")
-public interface SwitchFoldable extends ValueNodeInterface {
+public interface SwitchFoldable extends NodeInterface {
     Comparator<KeyData> SORTER = Comparator.comparingInt((KeyData k) -> k.key);
 
     /**
@@ -135,151 +135,15 @@ public interface SwitchFoldable extends ValueNodeInterface {
         return false;
     }
 
-    static boolean maybeIsInSwitch(LogicNode condition) {
-        return condition instanceof IntegerEqualsNode && ((IntegerEqualsNode) condition).getY().isJavaConstant();
-    }
-
-    static boolean sameSwitchValue(LogicNode condition, ValueNode switchValue) {
-        return ((IntegerEqualsNode) condition).getX() == switchValue;
-    }
-
     // Helper data structures
 
-    class Helper {
-        private Helper() {
-        }
-
-        private static boolean isDuplicateKey(int key, QuickQueryKeyData keyData) {
-            return keyData.contains(key);
-        }
-
-        private static int duplicateIndex(AbstractBeginNode begin, QuickQueryList<AbstractBeginNode> successors) {
-            return successors.indexOf(begin);
-        }
-
-        private static Node skipUpBegins(Node node) {
-            Node result = node;
-            while (result instanceof BeginNode && result.hasNoUsages()) {
-                result = result.predecessor();
-            }
-            return result;
-        }
-
-        private static Node skipDownBegins(Node node) {
-            Node result = node;
-            while (result instanceof BeginNode && result.hasNoUsages()) {
-                result = ((BeginNode) result).next();
-            }
-            return result;
-        }
-
-        private static SwitchFoldable getParentSwitchNode(SwitchFoldable node, ValueNode switchValue) {
-            Node result = skipUpBegins(node.asNode().predecessor());
-            if (result instanceof SwitchFoldable && ((SwitchFoldable) result).isInSwitch(switchValue)) {
-                return (SwitchFoldable) result;
-            }
-            return null;
-        }
-
-        private static SwitchFoldable getChildSwitchNode(SwitchFoldable node, ValueNode switchValue) {
-            Node result = skipDownBegins(node.getNextSwitchFoldableBranch());
-            if (result instanceof SwitchFoldable && ((SwitchFoldable) result).isInSwitch(switchValue)) {
-                return (SwitchFoldable) result;
-            }
-            return null;
-        }
-
-        private static int addDefault(SwitchFoldable node, QuickQueryList<AbstractBeginNode> successors) {
-            AbstractBeginNode defaultBranch = node.getDefault();
-            int index = successors.indexOf(defaultBranch);
-            if (index == -1) {
-                index = successors.size();
-                successors.add(defaultBranch);
-            }
-            return index;
-        }
-
-        private static int countNonDeoptSuccessors(QuickQueryKeyData keyData) {
-            int result = 0;
-            for (KeyData key : keyData.list) {
-                if (key.keyProbability > 0.0d) {
-                    result++;
-                }
-            }
-            return result;
-        }
-
-        /**
-         * Updates the current state of the IntegerSwitch that will be spawned. That means:
-         * <p>
-         * - Checking for duplicate keys: add the duplicate key's branch to duplicates
-         * <p>
-         * - For branches of non-duplicate keys: add them to successors and update the keyData
-         * accordingly
-         * <p>
-         * - Update the value of the cumulative probability, ie, multiply it by the probability of
-         * taking the next branch (according to {@link SwitchFoldable#getNextSwitchFoldableBranch})
-         * <p>
-         * </p>
-         *
-         * @see QuickQueryList
-         * @see QuickQueryKeyData
-         */
-        private static void updateSwitchData(SwitchFoldable node, QuickQueryKeyData keyData, QuickQueryList<AbstractBeginNode> newSuccessors, double[] cumulative, double[] totalProbabilities,
-                        QuickQueryList<AbstractBeginNode> duplicates) {
-            for (int i = 0; i < node.keyCount(); i++) {
-                int key = node.intKeyAt(i);
-                double keyProbability = cumulative[0] * node.keyProbability(i);
-                KeyData data;
-                AbstractBeginNode keySuccessor = node.keySuccessor(i);
-                if (isDuplicateKey(key, keyData)) {
-                    // Key was already seen
-                    data = keyData.fromKey(key);
-                    if (data.keySuccessor != KeyData.KEY_UNKNOWN) {
-                        // Unreachable key: kill it manually at the end
-                        if (!newSuccessors.contains(keySuccessor) && !duplicates.contains(keySuccessor) && keySuccessor.isAlive()) {
-                            // This might be a false alert, if one of the next keys points to it.
-                            duplicates.add(keySuccessor);
-                        }
-                        continue;
-                    }
-                    /*
-                     * A key might not be able to immediately link to its target, if it is shared
-                     * with the default target. In that case, we will need to resolve the target at
-                     * a later time, either by seeing this key going to a known target in later
-                     * cascade nodes, or by linking it to the overall default target at the very end
-                     * of the folding.
-                     */
-                } else {
-                    data = new KeyData(key, keyProbability, KeyData.KEY_UNKNOWN);
-                    totalProbabilities[0] += keyProbability;
-                    keyData.add(data);
-                }
-                if (keySuccessor.isUnregistered()) {
-                    // Shortcut map check if uninitialized node.
-                    data.keySuccessor = newSuccessors.size();
-                    newSuccessors.addUnique(keySuccessor);
-                } else {
-                    int pos = duplicateIndex(keySuccessor, newSuccessors);
-                    if (pos != -1) {
-                        // Target is already known
-                        data.keySuccessor = pos;
-                    } else if (!node.isDefaultSuccessor(keySuccessor)) {
-                        data.keySuccessor = newSuccessors.size();
-                        newSuccessors.add(keySuccessor);
-                    }
-                }
-            }
-            cumulative[0] *= node.defaultProbability();
-        }
-    }
-
     final class KeyData {
-        private static final int KEY_UNKNOWN = -2;
+        public static final int KEY_UNKNOWN = -2;
+        public static final int KEY_INVALID = -1;
 
-        private final int key;
-        private final double keyProbability;
-        private int keySuccessor;
+        final int key;
+        final double keyProbability;
+        int keySuccessor;
 
         KeyData(int key, double keyProbability, int keySuccessor) {
             this.key = key;
@@ -296,20 +160,19 @@ public interface SwitchFoldable extends ValueNodeInterface {
         private final List<T> list = new ArrayList<>();
         private final EconomicMap<T, Integer> map = EconomicMap.create(Equivalence.IDENTITY);
 
-        private int indexOf(T begin) {
+        public int indexOf(T begin) {
             return map.get(begin, -1);
         }
 
-        private boolean contains(T o) {
+        public boolean contains(T o) {
             return map.containsKey(o);
         }
 
-        @SuppressWarnings("unused")
-        private T get(int index) {
+        public T get(int index) {
             return list.get(index);
         }
 
-        private boolean add(T item) {
+        public boolean add(T item) {
             map.put(item, list.size());
             return list.add(item);
         }
@@ -317,11 +180,11 @@ public interface SwitchFoldable extends ValueNodeInterface {
         /**
          * Adds an object, known to be unique beforehand.
          */
-        private void addUnique(T item) {
+        public void addUnique(T item) {
             list.add(item);
         }
 
-        private int size() {
+        public int size() {
             return list.size();
         }
     }
@@ -330,33 +193,163 @@ public interface SwitchFoldable extends ValueNodeInterface {
         private final List<KeyData> list = new ArrayList<>();
         private final EconomicMap<Integer, KeyData> map = EconomicMap.create();
 
-        private void add(KeyData key) {
+        public void add(KeyData key) {
             assert !map.containsKey(key.key);
             list.add(key);
             map.put(key.key, key);
         }
 
-        private boolean contains(int key) {
+        public boolean contains(int key) {
             return map.containsKey(key);
         }
 
-        private KeyData get(int index) {
+        public KeyData get(int index) {
             return list.get(index);
         }
 
-        private int size() {
+        public int size() {
             return list.size();
         }
 
-        private KeyData fromKey(int key) {
+        public KeyData fromKey(int key) {
             assert contains(key);
             return map.get(key);
         }
 
-        private void sort() {
+        public void sort() {
             list.sort(SORTER);
         }
+    }
 
+    static boolean isDuplicateKey(int key, QuickQueryKeyData keyData) {
+        return keyData.contains(key);
+    }
+
+    static int duplicateIndex(AbstractBeginNode begin, QuickQueryList<AbstractBeginNode> successors) {
+        return successors.indexOf(begin);
+    }
+
+    static Node skipUpBegins(Node node) {
+        Node result = node;
+        while (result instanceof BeginNode && result.hasNoUsages()) {
+            result = result.predecessor();
+        }
+        return result;
+    }
+
+    static Node skipDownBegins(Node node) {
+        Node result = node;
+        while (result instanceof BeginNode && result.hasNoUsages()) {
+            result = ((BeginNode) result).next();
+        }
+        return result;
+    }
+
+    static boolean maybeIsInSwitch(LogicNode condition) {
+        return condition instanceof IntegerEqualsNode && ((IntegerEqualsNode) condition).getY().isJavaConstant();
+    }
+
+    static boolean sameSwitchValue(LogicNode condition, ValueNode switchValue) {
+        return ((IntegerEqualsNode) condition).getX() == switchValue;
+    }
+
+    default SwitchFoldable getParentSwitchNode(ValueNode switchValue) {
+        Node result = skipUpBegins(asNode().predecessor());
+        if (result instanceof SwitchFoldable && ((SwitchFoldable) result).isInSwitch(switchValue)) {
+            return (SwitchFoldable) result;
+        }
+        return null;
+    }
+
+    default SwitchFoldable getChildSwitchNode(ValueNode switchValue) {
+        Node result = skipDownBegins(getNextSwitchFoldableBranch());
+        if (result instanceof SwitchFoldable && ((SwitchFoldable) result).isInSwitch(switchValue)) {
+            return (SwitchFoldable) result;
+        }
+        return null;
+    }
+
+    default int addDefault(QuickQueryList<AbstractBeginNode> successors) {
+        AbstractBeginNode defaultBranch = getDefault();
+        int index = successors.indexOf(defaultBranch);
+        if (index == -1) {
+            index = successors.size();
+            successors.add(defaultBranch);
+        }
+        return index;
+    }
+
+    static int countNonDeoptSuccessors(QuickQueryKeyData keyData) {
+        int result = 0;
+        for (KeyData key : keyData.list) {
+            if (key.keyProbability > 0.0d) {
+                result++;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Updates the current state of the IntegerSwitch that will be spawned. That means:
+     * <p>
+     * - Checking for duplicate keys: add the duplicate key's branch to duplicates
+     * <p>
+     * - For branches of non-duplicate keys: add them to successors and update the keyData
+     * accordingly
+     * <p>
+     * - Update the value of the cumulative probability, ie, multiply it by the probability of
+     * taking the next branch (according to {@link SwitchFoldable#getNextSwitchFoldableBranch})
+     * <p>
+     * </p>
+     *
+     * @see QuickQueryList
+     * @see QuickQueryKeyData
+     */
+    default void updateSwitchData(QuickQueryKeyData keyData, QuickQueryList<AbstractBeginNode> newSuccessors, double[] cumulative, double[] totalProbabilities,
+                    QuickQueryList<AbstractBeginNode> duplicates) {
+        for (int i = 0; i < keyCount(); i++) {
+            int key = intKeyAt(i);
+            double keyProbability = cumulative[0] * keyProbability(i);
+            KeyData data;
+            AbstractBeginNode keySuccessor = keySuccessor(i);
+            if (isDuplicateKey(key, keyData)) {
+                // Key was already seen
+                data = keyData.fromKey(key);
+                if (data.keySuccessor != KeyData.KEY_UNKNOWN) {
+                    // Unreachable key: kill it manually at the end
+                    if (!newSuccessors.contains(keySuccessor) && !duplicates.contains(keySuccessor) && keySuccessor.isAlive()) {
+                        // This might be a false alert, if one of the next keys points to it.
+                        duplicates.add(keySuccessor);
+                    }
+                    continue;
+                }
+                /*
+                 * A key might not be able to immediately link to its target, if it is shared with
+                 * the default target. In that case, we will need to resolve the target at a later
+                 * time, either by seeing this key going to a known target in later cascade nodes,
+                 * or by linking it to the overall default target at the very end of the folding.
+                 */
+            } else {
+                data = new KeyData(key, keyProbability, KeyData.KEY_UNKNOWN);
+                totalProbabilities[0] += keyProbability;
+                keyData.add(data);
+            }
+            if (keySuccessor.isUnregistered()) {
+                // Shortcut map check if uninitialized node.
+                data.keySuccessor = newSuccessors.size();
+                newSuccessors.addUnique(keySuccessor);
+            } else {
+                int pos = duplicateIndex(keySuccessor, newSuccessors);
+                if (pos != -1) {
+                    // Target is already known
+                    data.keySuccessor = pos;
+                } else if (!isDefaultSuccessor(keySuccessor)) {
+                    data.keySuccessor = newSuccessors.size();
+                    newSuccessors.add(keySuccessor);
+                }
+            }
+        }
+        cumulative[0] *= defaultProbability();
     }
 
     /**
@@ -365,10 +358,11 @@ public interface SwitchFoldable extends ValueNodeInterface {
     default boolean switchTransformationOptimization(SimplifierTool tool) {
         ValueNode switchValue = switchValue();
         assert asNode().isAlive();
-        if (switchValue == null || !isInSwitch(switchValue) || (Helper.getParentSwitchNode(this, switchValue) == null && Helper.getChildSwitchNode(this, switchValue) == null)) {
+        if (switchValue == null || !isInSwitch(switchValue) || (getParentSwitchNode(switchValue) == null && getChildSwitchNode(switchValue) == null)) {
             // Don't bother trying if there is nothing to do.
             return false;
         }
+        SwitchFoldable topMostSwitchNode = this;
         Stamp switchStamp = switchValue.stamp(NodeView.DEFAULT);
 
         // Abort if we do not have an int
@@ -381,12 +375,11 @@ public interface SwitchFoldable extends ValueNodeInterface {
 
         // PlaceHolder for cascade traversal.
         SwitchFoldable iteratingNode = this;
-        SwitchFoldable topMostSwitchNode = this;
 
         // Find top-most foldable.
         while (iteratingNode != null) {
             topMostSwitchNode = iteratingNode;
-            iteratingNode = Helper.getParentSwitchNode(iteratingNode, switchValue);
+            iteratingNode = iteratingNode.getParentSwitchNode(switchValue);
         }
         QuickQueryKeyData keyData = new QuickQueryKeyData();
         QuickQueryList<AbstractBeginNode> successors = new QuickQueryList<>();
@@ -403,11 +396,11 @@ public interface SwitchFoldable extends ValueNodeInterface {
         // Go down the if cascade, collecting necessary data
         while (iteratingNode != null) {
             lowestSwitchNode = iteratingNode;
-            Helper.updateSwitchData(iteratingNode, keyData, successors, cumulative, totalProbability, potentiallyUnreachable);
+            iteratingNode.updateSwitchData(keyData, successors, cumulative, totalProbability, potentiallyUnreachable);
             if (!iteratingNode.isNonInitializedProfile()) {
                 uninitializedProfiles = false;
             }
-            iteratingNode = Helper.getChildSwitchNode(iteratingNode, switchValue);
+            iteratingNode = iteratingNode.getChildSwitchNode(switchValue);
         }
 
         if (keyData.size() < 4 || lowestSwitchNode == topMostSwitchNode) {
@@ -416,7 +409,7 @@ public interface SwitchFoldable extends ValueNodeInterface {
         }
 
         // At that point, we will commit the optimization.
-        StructuredGraph graph = asNode().graph();
+        Graph graph = asNode().graph();
 
         // Sort the keys
         keyData.sort();
@@ -438,12 +431,12 @@ public interface SwitchFoldable extends ValueNodeInterface {
         int[] keys = new int[newKeyCount];
         double[] keyProbabilities = new double[newKeyCount + 1];
         int[] keySuccessors = new int[newKeyCount + 1];
-        int nonDeoptSuccessorCount = Helper.countNonDeoptSuccessors(keyData) + (cumulative[0] > 0.0d ? 1 : 0);
+        int nonDeoptSuccessorCount = countNonDeoptSuccessors(keyData) + (cumulative[0] > 0.0d ? 1 : 0);
         double uniform = (uninitializedProfiles && nonDeoptSuccessorCount > 0 ? 1 / (double) nonDeoptSuccessorCount : 1.0d);
 
         // Add default
         keyProbabilities[newKeyCount] = uninitializedProfiles && cumulative[0] > 0.0d ? uniform : normalizationFactor * cumulative[0];
-        keySuccessors[newKeyCount] = Helper.addDefault(lowestSwitchNode, successors);
+        keySuccessors[newKeyCount] = lowestSwitchNode.addDefault(successors);
 
         // Add branches.
         for (int i = 0; i < newKeyCount; i++) {
@@ -472,7 +465,7 @@ public interface SwitchFoldable extends ValueNodeInterface {
             if (iteratingNode != lowestSwitchNode) {
                 iteratingNode.cutOffCascadeNode();
             }
-            iteratingNode = Helper.getParentSwitchNode(iteratingNode, switchValue);
+            iteratingNode = iteratingNode.getParentSwitchNode(switchValue);
         }
 
         // Place the new Switch node
