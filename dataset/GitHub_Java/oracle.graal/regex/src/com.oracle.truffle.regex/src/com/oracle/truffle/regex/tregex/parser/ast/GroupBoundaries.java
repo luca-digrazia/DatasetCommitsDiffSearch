@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,10 +46,11 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.regex.RegexLanguage;
 import com.oracle.truffle.regex.result.PreCalculatedResultFactory;
+import com.oracle.truffle.regex.tregex.dfa.DFAGenerator;
 import com.oracle.truffle.regex.tregex.nfa.ASTTransition;
 import com.oracle.truffle.regex.tregex.nfa.NFAStateTransition;
+import com.oracle.truffle.regex.tregex.nodes.dfa.DFACaptureGroupPartialTransition;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonArray;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
@@ -73,14 +74,20 @@ import com.oracle.truffle.regex.util.CompilationFinalBitSet;
  */
 public class GroupBoundaries implements JsonConvertible {
 
+    private static final GroupBoundaries[] STATIC_INSTANCES = new GroupBoundaries[CompilationFinalBitSet.getNumberOfStaticInstances()];
+
+    static {
+        for (int i = 0; i < CompilationFinalBitSet.getNumberOfStaticInstances(); i++) {
+            STATIC_INSTANCES[i] = new GroupBoundaries(CompilationFinalBitSet.getStaticInstance(i), CompilationFinalBitSet.getEmptyInstance());
+        }
+    }
+
     private static final byte[] EMPTY_BYTE_ARRAY = {};
     private static final short[] EMPTY_SHORT_ARRAY = {};
 
     private final CompilationFinalBitSet updateIndices;
     private final CompilationFinalBitSet clearIndices;
     private final int cachedHash;
-    @CompilationFinal(dimensions = 1) private byte[] updateArrayByte;
-    @CompilationFinal(dimensions = 1) private byte[] clearArrayByte;
     @CompilationFinal(dimensions = 1) private short[] updateArray;
     @CompilationFinal(dimensions = 1) private short[] clearArray;
 
@@ -92,47 +99,77 @@ public class GroupBoundaries implements JsonConvertible {
         this.cachedHash = Objects.hashCode(updateIndices) * 31 + Objects.hashCode(clearIndices);
     }
 
-    public static GroupBoundaries[] createCachedGroupBoundaries() {
-        GroupBoundaries[] instances = new GroupBoundaries[CompilationFinalBitSet.getNumberOfStaticInstances()];
-        for (int i = 0; i < instances.length; i++) {
-            instances[i] = new GroupBoundaries(CompilationFinalBitSet.getStaticInstance(i), CompilationFinalBitSet.getEmptyInstance());
-        }
-        return instances;
-    }
-
     /**
      * Used for deduplication of very common instances of this class.
      */
-    public static GroupBoundaries getStaticInstance(RegexLanguage language, CompilationFinalBitSet updateIndices, CompilationFinalBitSet clearIndices) {
+    public static GroupBoundaries getStaticInstance(CompilationFinalBitSet updateIndices, CompilationFinalBitSet clearIndices) {
         if (clearIndices.isEmpty()) {
             int key = updateIndices.getStaticCacheKey();
             if (key >= 0) {
-                return language.getCachedGroupBoundaries()[key];
+                return STATIC_INSTANCES[key];
             }
         }
         return null;
     }
 
-    public static GroupBoundaries getEmptyInstance(RegexLanguage language) {
-        return language.getCachedGroupBoundaries()[0];
+    public static GroupBoundaries getEmptyInstance() {
+        return STATIC_INSTANCES[0];
     }
 
     public boolean isEmpty() {
         return updateIndices.isEmpty() && clearIndices.isEmpty();
     }
 
-    public byte[] updatesToByteArray() {
-        if (updateArrayByte == null) {
-            updateArrayByte = indicesToByteArray(updateIndices);
+    /**
+     * Creates a byte array suitable to be part of the {@code indexUpdates} parameter passed to
+     * {@link DFACaptureGroupPartialTransition#create(DFAGenerator, byte[], byte[], byte[][], byte[][], byte)}
+     * from this object.
+     *
+     * @param targetArray the index of the row to be targeted.
+     *
+     * @see DFACaptureGroupPartialTransition#create(DFAGenerator, byte[], byte[], byte[][],
+     *      byte[][], byte)
+     */
+    public byte[] updatesToPartialTransitionArray(int targetArray) {
+        return createPartialTransitionArray(targetArray, updateIndices);
+    }
+
+    /**
+     * Creates a byte array suitable to be part of the {@code indexClears} parameter passed to
+     * {@link DFACaptureGroupPartialTransition#create(DFAGenerator, byte[], byte[], byte[][], byte[][], byte)}
+     * from this object.
+     *
+     * @param targetArray the index of the row to be targeted.
+     *
+     * @see DFACaptureGroupPartialTransition#create(DFAGenerator, byte[], byte[], byte[][],
+     *      byte[][], byte)
+     */
+    public byte[] clearsToPartialTransitionArray(int targetArray) {
+        return createPartialTransitionArray(targetArray, clearIndices);
+    }
+
+    private static byte[] createPartialTransitionArray(int targetArray, CompilationFinalBitSet indices) {
+        assert !indices.isEmpty() : "should not be called on empty sets";
+        final byte[] indexUpdate = new byte[indices.numberOfSetBits() + 1];
+        indexUpdate[0] = (byte) targetArray;
+        writeIndicesToArray(indices, indexUpdate, 1);
+        return indexUpdate;
+    }
+
+    private static void writeIndicesToArray(CompilationFinalBitSet indices, final byte[] array, int offset) {
+        int i = offset;
+        for (int j : indices) {
+            assert j < 256;
+            array[i++] = (byte) j;
         }
-        return updateArrayByte;
+    }
+
+    public byte[] updatesToByteArray() {
+        return indicesToByteArray(updateIndices);
     }
 
     public byte[] clearsToByteArray() {
-        if (clearArrayByte == null) {
-            clearArrayByte = indicesToByteArray(clearIndices);
-        }
-        return clearArrayByte;
+        return indicesToByteArray(clearIndices);
     }
 
     private static byte[] indicesToByteArray(CompilationFinalBitSet indices) {
@@ -140,11 +177,7 @@ public class GroupBoundaries implements JsonConvertible {
             return EMPTY_BYTE_ARRAY;
         }
         final byte[] array = new byte[indices.numberOfSetBits()];
-        int i = 0;
-        for (int j : indices) {
-            assert j < 256;
-            array[i++] = (byte) j;
-        }
+        writeIndicesToArray(indices, array, 0);
         return array;
     }
 
@@ -204,7 +237,6 @@ public class GroupBoundaries implements JsonConvertible {
      */
     public void updateBitSets(CompilationFinalBitSet foreignUpdateIndices, CompilationFinalBitSet foreignClearIndices) {
         foreignUpdateIndices.union(updateIndices);
-        foreignClearIndices.subtract(updateIndices);
         foreignClearIndices.union(clearIndices);
     }
 

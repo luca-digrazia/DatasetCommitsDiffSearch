@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,7 +47,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.nfa.PureNFATransition;
 import com.oracle.truffle.regex.tregex.nodes.TRegexExecutorLocals;
 import com.oracle.truffle.regex.tregex.parser.Token.Quantifier;
-import com.oracle.truffle.regex.util.BitSets;
+import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 /**
  * Contains the stack used by {@link TRegexBacktrackingNFAExecutorNode}. One stack frame represents
@@ -89,7 +89,7 @@ public final class TRegexBacktrackingNFAExecutorLocals extends TRegexExecutorLoc
 
     public TRegexBacktrackingNFAExecutorLocals(Object input, int fromIndex, int index, int maxIndex, int nCaptureGroups, int nQuantifiers, int nZeroWidthQuantifiers, int maxNTransitions) {
         this(input, fromIndex, index, maxIndex, nCaptureGroups, nQuantifiers, nZeroWidthQuantifiers, new Stack(new int[getStackFrameSize(nCaptureGroups, nQuantifiers, nZeroWidthQuantifiers) * 4]), 0,
-                        BitSets.createBitSetArray(maxNTransitions));
+                        CompilationFinalBitSet.createBitSetArray(maxNTransitions));
         setIndex(fromIndex);
         clearCaptureGroups();
     }
@@ -161,7 +161,8 @@ public final class TRegexBacktrackingNFAExecutorLocals extends TRegexExecutorLoc
         t.getGroupBoundaries().applyExploded(stack(), offsetCaptureGroups(), index);
     }
 
-    public void resetToInitialState() {
+    public void resetToInitialState(int newIndex) {
+        setIndex(newIndex);
         clearCaptureGroups();
         clearQuantifierCounts();
         // no need to reset zero-width quantifier indices, they will always be overwritten before
@@ -234,16 +235,22 @@ public final class TRegexBacktrackingNFAExecutorLocals extends TRegexExecutorLoc
     public int pop() {
         assert sp > stackBase;
         sp -= stackFrameSize;
-        restoreIndex();
         return stack()[offsetIP()];
     }
 
-    public void saveIndex(int index) {
-        stack()[sp] = index;
+    @Override
+    public int getIndex() {
+        return stack()[sp];
     }
 
-    public void restoreIndex() {
-        setIndex(stack()[sp]);
+    @Override
+    public void setIndex(int i) {
+        stack()[sp] = i;
+    }
+
+    @Override
+    public void incIndex(int i) {
+        stack()[sp] += i;
     }
 
     public int setPc(int pc) {
