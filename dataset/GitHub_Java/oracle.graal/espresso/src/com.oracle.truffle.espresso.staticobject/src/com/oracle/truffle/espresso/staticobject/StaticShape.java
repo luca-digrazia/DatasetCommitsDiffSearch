@@ -45,8 +45,8 @@ public abstract class StaticShape<T> {
         }
     }
 
-    public static Builder newBuilder(ClassLoaderCache clc) {
-        return new Builder(clc);
+    public static Builder newBuilder() {
+        return new Builder();
     }
 
     protected final void setFactory(T factory) {
@@ -92,10 +92,8 @@ public abstract class StaticShape<T> {
     public static final class Builder {
         private static final char[] FORBIDDEN_CHARS = new char[]{'.', ';', '[', '/'};
         private final HashMap<String, StaticProperty> staticProperties = new LinkedHashMap<>();
-        private final ClassLoaderCache clc;
 
-        Builder(ClassLoaderCache clc) {
-            this.clc = clc;
+        Builder() {
         }
 
         public Builder property(StaticProperty property) {
@@ -120,8 +118,7 @@ public abstract class StaticShape<T> {
 
         public <T> StaticShape<T> build(Class<?> superClass, Class<T> factoryInterface) {
             validateClasses(factoryInterface, superClass);
-            GeneratorClassLoader gcl = getOrCreateClassLoader(superClass);
-            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, superClass, factoryInterface);
+            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(superClass, factoryInterface);
             return build(sg, null);
         }
 
@@ -132,18 +129,6 @@ public abstract class StaticShape<T> {
                 staticProperty.initShape(shape);
             }
             return shape;
-        }
-
-        private GeneratorClassLoader getOrCreateClassLoader(Class<?> referenceClass) {
-            ClassLoader cl = clc.getClassLoader();
-            if (cl == null) {
-                cl = new GeneratorClassLoader(referenceClass.getClassLoader(), referenceClass.getProtectionDomain());
-                clc.setClassLoader(cl);
-            }
-            if (!GeneratorClassLoader.class.isInstance(cl)) {
-                throw new RuntimeException("The ClassLoaderCache associated to this Builder returned an unexpected class loader");
-            }
-            return (GeneratorClassLoader) cl;
         }
 
         private void validatePropertyId(String id) {
