@@ -34,7 +34,6 @@ import static com.oracle.truffle.llvm.parser.model.GlobalSymbol.DESTRUCTORS_VARN
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -796,23 +795,11 @@ final class Runner {
         EconomicMap<String, ExternalLibrary> libs = EconomicMap.create();
         // TODO (je) we should probably do this in symbol resolution order - let's fix that when we
         // fix symbol resolution [GR-21400]
-        ArrayDeque<ExternalLibrary> dependencyQueue = new ArrayDeque<>(parserResult.getDependencies());
-        EconomicSet<ExternalLibrary> visited = EconomicSet.create(Equivalence.IDENTITY);
-        visited.addAll(parserResult.getDependencies());
-        while (!dependencyQueue.isEmpty()) {
-            ExternalLibrary dep = dependencyQueue.removeFirst();
+        for (ExternalLibrary dep : parserResult.getDependencies()) {
             LLVMParserResult depResult = libToRes.get(dep);
             if (depResult != null) {
-                String libraryName = getSimpleLibraryName(dep.getName());
-                scopes.put(libraryName, depResult.getRuntime().getFileScope());
-                libs.put(libraryName, dep);
-                // add transitive dependencies
-                for (ExternalLibrary transDep : depResult.getDependencies()) {
-                    if (!visited.contains(transDep)) {
-                        dependencyQueue.addLast(transDep);
-                        visited.add(transDep);
-                    }
-                }
+                scopes.put(getSimpleLibraryName(dep.getName()), depResult.getRuntime().getFileScope());
+                libs.put(getSimpleLibraryName(dep.getName()), dep);
             }
         }
         ListIterator<FunctionSymbol> it = parserResult.getExternalFunctions().listIterator();
