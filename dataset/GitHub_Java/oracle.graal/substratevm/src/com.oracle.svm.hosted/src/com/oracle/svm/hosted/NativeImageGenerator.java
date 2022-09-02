@@ -506,7 +506,7 @@ public class NativeImageGenerator {
                                     writer.println("# particular native image (including its name)");
                                     writer.println("# and therefore cannot be used with others.");
                                 }
-                                paths.stream().map(Path::toAbsolutePath).map(buildDir::relativize).forEach(writer::println);
+                                paths.stream().map(buildDir::relativize).forEach(writer::println);
                                 writer.println();
                             }));
         } catch (InterruptedException | CancellationException e) {
@@ -940,8 +940,7 @@ public class NativeImageGenerator {
         SubstitutionProcessor aSubstitutions = createAnalysisSubstitutionProcessor(originalMetaAccess, originalSnippetReflection, cEnumProcessor, automaticSubstitutions,
                         annotationSubstitutions, additionalSubstitutions);
 
-        SVMHost hostVM = HostedConfiguration.instance().createHostVM(options, buildExecutor, loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
-
+        SVMHost hostVM = new SVMHost(options, buildExecutor, loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
         automaticSubstitutions.init(loader, originalMetaAccess);
         AnalysisPolicy analysisPolicy = PointstoOptions.AllocationSiteSensitiveHeap.getValue(options) ? new BytecodeSensitiveAnalysisPolicy(options)
                         : new DefaultAnalysisPolicy(options);
