@@ -173,7 +173,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
          */
         NativeImageGenerator.setSystemPropertiesForImageEarly();
 
-        return new ImageClassLoader(NativeImageGenerator.getTargetPlatform(nativeImageClassLoader), nativeImageClassLoaderSupport);
+        return new ImageClassLoader(NativeImageGenerator.defaultPlatform(nativeImageClassLoader), nativeImageClassLoaderSupport);
     }
 
     public static List<String> extractDriverArguments(List<String> args) {
@@ -183,8 +183,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         if (argsFile.isPresent()) {
             String argFilePath = argsFile.get().substring(IMAGE_BUILDER_ARG_FILE_OPTION.length());
             try {
-                String options = new String(Files.readAllBytes(Paths.get(argFilePath)));
-                result.addAll(Arrays.asList(options.split("\0")));
+                result.addAll(Files.readAllLines(Paths.get(argFilePath)));
             } catch (IOException e) {
                 throw VMError.shouldNotReachHere("Exception occurred during image builder argument file processing.", e);
             }
@@ -377,9 +376,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
                 compilationExecutor.shutdownNow();
             }
             if (e.getReason().isPresent()) {
-                if (!e.getReason().get().isEmpty()) {
-                    NativeImageGeneratorRunner.info(e.getReason().get());
-                }
+                NativeImageGeneratorRunner.info(e.getReason().get());
                 return 0;
             } else {
                 /* InterruptImageBuilding without explicit reason is exit code 3 */
