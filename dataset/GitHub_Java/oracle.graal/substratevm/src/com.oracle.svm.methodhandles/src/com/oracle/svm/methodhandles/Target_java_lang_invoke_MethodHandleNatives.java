@@ -259,7 +259,6 @@ final class Util_java_lang_invoke_MethodHandleNatives {
         }
     }
 
-    @SuppressWarnings("unused")
     public static Target_java_lang_invoke_MemberName resolve(Target_java_lang_invoke_MemberName self, Class<?> caller, boolean speculativeResolve)
                     throws LinkageError, ClassNotFoundException {
         if (self.reflectAccess != null) {
