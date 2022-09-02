@@ -84,8 +84,7 @@ public class DwarfFrameSectionImplX86_64 extends DwarfFrameSectionImpl {
     }
 
     @Override
-    protected int writeFDEs(int frameSize, List<DebugInfoProvider.DebugFrameSizeChange> frameSizeInfos, byte[] buffer, int p) {
-        int pos = p;
+    protected int writeFDEs(int frameSize, List<DebugInfoProvider.DebugFrameSizeChange> frameSizeInfos, byte[] buffer, int pos) {
         int currentOffset = 0;
         for (DebugInfoProvider.DebugFrameSizeChange debugFrameSizeInfo : frameSizeInfos) {
             int advance = debugFrameSizeInfo.getOffset() - currentOffset;

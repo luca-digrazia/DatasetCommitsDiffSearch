@@ -29,7 +29,6 @@ package com.oracle.objectfile.elf.dwarf;
 import com.oracle.objectfile.LayoutDecision;
 import com.oracle.objectfile.debugentry.ClassEntry;
 import com.oracle.objectfile.debugentry.PrimaryEntry;
-import com.oracle.objectfile.debugentry.Range;
 import com.oracle.objectfile.debuginfo.DebugInfoProvider;
 import org.graalvm.compiler.debug.DebugContext;
 
@@ -172,34 +171,15 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
 
     private int writeMethodFrames(byte[] buffer, int p) {
         int pos = p;
-        /* write frames for normal methods */
         for (ClassEntry classEntry : getPrimaryClasses()) {
             for (PrimaryEntry primaryEntry : classEntry.getPrimaryEntries()) {
-                Range range = primaryEntry.getPrimary();
-                if (!range.isDeoptTarget()) {
-                    long lo = range.getLo();
-                    long hi = range.getHi();
-                    int lengthPos = pos;
-                    pos = writeFDEHeader((int) lo, (int) hi, buffer, pos);
-                    pos = writeFDEs(primaryEntry.getFrameSize(), primaryEntry.getFrameSizeInfos(), buffer, pos);
-                    pos = writePaddingNops(buffer, pos);
-                    patchLength(lengthPos, buffer, pos);
-                }
-            }
-        }
-        /* now write frames for deopt targets */
-        for (ClassEntry classEntry : getPrimaryClasses()) {
-            for (PrimaryEntry primaryEntry : classEntry.getPrimaryEntries()) {
-                Range range = primaryEntry.getPrimary();
-                if (range.isDeoptTarget()) {
-                    long lo = range.getLo();
-                    long hi = range.getHi();
-                    int lengthPos = pos;
-                    pos = writeFDEHeader((int) lo, (int) hi, buffer, pos);
-                    pos = writeFDEs(primaryEntry.getFrameSize(), primaryEntry.getFrameSizeInfos(), buffer, pos);
-                    pos = writePaddingNops(buffer, pos);
-                    patchLength(lengthPos, buffer, pos);
-                }
+                long lo = primaryEntry.getPrimary().getLo();
+                long hi = primaryEntry.getPrimary().getHi();
+                int lengthPos = pos;
+                pos = writeFDEHeader((int) lo, (int) hi, buffer, pos);
+                pos = writeFDEs(primaryEntry.getFrameSize(), primaryEntry.getFrameSizeInfos(), buffer, pos);
+                pos = writePaddingNops(buffer, pos);
+                patchLength(lengthPos, buffer, pos);
             }
         }
         return pos;
