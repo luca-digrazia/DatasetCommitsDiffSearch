@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,10 +32,8 @@ package com.oracle.truffle.llvm.runtime.interop.convert;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
@@ -91,9 +89,8 @@ public abstract class ToAnyLLVM extends ForeignToLLVM {
         return pointer;
     }
 
-    @Specialization(guards = {"foreigns.isForeign(obj)"})
-    protected LLVMManagedPointer fromUnknownObject(Object obj,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns) {
+    @Specialization(guards = {"notLLVM(obj)"})
+    protected LLVMManagedPointer fromUnknownObject(Object obj) {
         return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(obj));
     }
 
@@ -116,7 +113,7 @@ public abstract class ToAnyLLVM extends ForeignToLLVM {
             return value;
         } else if (value instanceof LLVMInternalTruffleObject) {
             return LLVMManagedPointer.create(value);
-        } else if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(value)) {
+        } else if (notLLVM(value)) {
             LLVMTypedForeignObject typed = LLVMTypedForeignObject.createUnknown(value);
             return LLVMManagedPointer.create(typed);
         } else {
