@@ -100,6 +100,7 @@ import com.oracle.svm.graal.GraalSupport;
 import com.oracle.svm.graal.SubstrateGraalRuntime;
 import com.oracle.svm.graal.meta.SubstrateField;
 import com.oracle.svm.graal.meta.SubstrateMethod;
+import com.oracle.svm.graal.meta.SubstrateRuntimeConfigurationBuilder;
 import com.oracle.svm.graal.meta.SubstrateType;
 import com.oracle.svm.hosted.FeatureHandler;
 import com.oracle.svm.hosted.FeatureImpl.AfterHeapLayoutAccessImpl;
@@ -341,10 +342,8 @@ public final class GraalFeature implements Feature {
         Function<Providers, SubstrateBackend> backendProvider = GraalSupport.getRuntimeBackendProvider();
         ClassInitializationSupport classInitializationSupport = config.getHostVM().getClassInitializationSupport();
         Providers originalProviders = GraalAccess.getOriginalProviders();
-        runtimeConfigBuilder = ImageSingletons.lookup(RuntimeGraalSetup.class)
-                        .createRuntimeConfigurationBuilder(RuntimeOptionValues.singleton(), config.getHostVM(), config.getUniverse(), config.getMetaAccess(),
-                                        originalProviders.getConstantReflection(), backendProvider, config.getNativeLibraries(), classInitializationSupport)
-                        .build();
+        runtimeConfigBuilder = new SubstrateRuntimeConfigurationBuilder(RuntimeOptionValues.singleton(), config.getHostVM(), config.getUniverse(), config.getMetaAccess(),
+                        originalProviders.getConstantReflection(), backendProvider, config.getNativeLibraries(), classInitializationSupport).build();
         RuntimeConfiguration runtimeConfig = runtimeConfigBuilder.getRuntimeConfig();
 
         Providers runtimeProviders = runtimeConfig.getProviders();

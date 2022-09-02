@@ -118,6 +118,7 @@ import com.oracle.svm.core.annotate.Specialize;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.code.FrameInfoEncoder;
 import com.oracle.svm.core.deopt.DeoptEntryInfopoint;
+import com.oracle.svm.core.deopt.DeoptTester;
 import com.oracle.svm.core.graal.GraalConfiguration;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
@@ -125,7 +126,6 @@ import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.nodes.DeoptEntryNode;
 import com.oracle.svm.core.graal.nodes.DeoptTestNode;
 import com.oracle.svm.core.graal.phases.DeadStoreRemovalPhase;
-import com.oracle.svm.core.graal.snippets.DeoptTester;
 import com.oracle.svm.core.graal.stackvalue.StackValueNode;
 import com.oracle.svm.core.heap.RestrictHeapAccessCallees;
 import com.oracle.svm.core.util.InterruptImageBuilding;
@@ -758,18 +758,7 @@ public class CompileQueue {
                             ensureParsed(invokeImplementation, new VirtualCallReason(method, invokeImplementation, reason));
                         }
                     } else {
-                        /*
-                         * Direct calls to instance methods (invokespecial bytecode or devirtualized
-                         * calls) can go to methods that are unreachable if the receiver is always
-                         * null. At this time, we do not know the receiver types, so we filter such
-                         * invokes by looking at the reachability status from the point of view of
-                         * the static analysis. Note that we cannot use "isImplementationInvoked"
-                         * because (for historic reasons) it also returns true if a method has a
-                         * graph builder plugin registered. All graph builder plugins are already
-                         * applied during parsing before we reach this point, so we look at the
-                         * "simple" implementation invoked status.
-                         */
-                        if (invokeTarget.wrapped.isSimplyImplementationInvoked()) {
+                        if (invokeTarget.wrapped.isImplementationInvoked()) {
                             handleSpecialization(method, targetNode, invokeTarget, invokeTarget);
                             ensureParsed(invokeTarget, new DirectCallReason(method, reason));
                         }
