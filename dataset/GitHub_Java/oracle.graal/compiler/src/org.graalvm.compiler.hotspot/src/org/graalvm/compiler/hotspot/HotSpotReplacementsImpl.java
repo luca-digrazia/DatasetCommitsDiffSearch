@@ -37,7 +37,6 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.NodeSourcePosition;
-import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.meta.HotSpotWordOperationPlugin;
 import org.graalvm.compiler.hotspot.word.HotSpotOperation;
 import org.graalvm.compiler.nodes.Cancellable;
@@ -51,6 +50,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
 import org.graalvm.compiler.nodes.spi.SnippetParameterInfo;
 import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 
@@ -63,18 +63,13 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  * them.
  */
 public class HotSpotReplacementsImpl extends ReplacementsImpl {
-    public HotSpotReplacementsImpl(HotSpotProviders providers, SnippetReflectionProvider snippetReflection, BytecodeProvider bytecodeProvider, TargetDescription target) {
+    public HotSpotReplacementsImpl(Providers providers, SnippetReflectionProvider snippetReflection, BytecodeProvider bytecodeProvider, TargetDescription target) {
         super(new GraalDebugHandlersFactory(snippetReflection), providers, snippetReflection, bytecodeProvider, target);
     }
 
-    HotSpotReplacementsImpl(HotSpotReplacementsImpl replacements, HotSpotProviders providers) {
+    HotSpotReplacementsImpl(HotSpotReplacementsImpl replacements, Providers providers) {
         super(new GraalDebugHandlersFactory(replacements.snippetReflection), providers, replacements.snippetReflection,
                         replacements.getDefaultReplacementBytecodeProvider(), replacements.target);
-    }
-
-    @Override
-    public HotSpotProviders getProviders() {
-        return (HotSpotProviders) super.getProviders();
     }
 
     public void maybeInitializeEncoder(OptionValues options) {
@@ -186,7 +181,6 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
 
     @Override
     public void registerSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object receiver, boolean trackNodeSourcePosition, OptionValues options) {
-        assert method.isStatic() || receiver != null : "must have a constant type for the receiver";
         if (!IS_IN_NATIVE_IMAGE) {
             assert !snippetRegistrationClosed : "Cannot register snippet after registration is closed: " + method.format("%H.%n(%p)");
             assert registeredSnippets.add(method) : "Cannot register snippet twice: " + method.format("%H.%n(%p)");
@@ -301,12 +295,4 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T> T getInjectedArgument(Class<T> capability) {
-        if (capability.equals(GraalHotSpotVMConfig.class)) {
-            return (T) getProviders().getConfig();
-        }
-        return super.getInjectedArgument(capability);
-    }
 }
