@@ -56,7 +56,6 @@ import com.oracle.svm.hosted.c.util.FileUtils;
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
-import org.graalvm.nativeimage.Platform;
 
 public abstract class CCompilerInvoker {
 
@@ -211,10 +210,7 @@ public abstract class CCompilerInvoker {
 
         @Override
         protected String getDefaultCompiler() {
-            if (Platform.includedIn(Platform.LINUX.class)) {
-                return LibCBase.singleton().getTargetCompiler();
-            }
-            return "gcc";
+            return LibCBase.singleton().getTargetCompiler();
         }
 
         @Override
@@ -229,7 +225,7 @@ public abstract class CCompilerInvoker {
                 }
 
                 if (scanner.findInLine("clang version ") != null) {
-                    scanner.useDelimiter("[. -]");
+                    scanner.useDelimiter("[. ]");
                     int major = scanner.nextInt();
                     int minor0 = scanner.nextInt();
                     int minor1 = scanner.nextInt();
