@@ -22,12 +22,16 @@
  */
 package com.oracle.truffle.espresso.staticobject;
 
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.asm.ClassVisitor;
 import com.oracle.truffle.api.impl.asm.FieldVisitor;
 import com.oracle.truffle.api.impl.asm.Type;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.security.ProtectionDomain;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicInteger;
 import sun.misc.Unsafe;
@@ -37,24 +41,42 @@ import static com.oracle.truffle.api.impl.asm.Opcodes.ACC_PUBLIC;
 
 abstract class ShapeGenerator<T> {
     protected static final Unsafe UNSAFE = getUnsafe();
-    private static final boolean ARRAY_BASED_STORAGE = TruffleOptions.AOT || Boolean.getBoolean("com.oracle.truffle.espresso.staticobject.ArrayBasedStorage");
+    private static final boolean FIELD_BASED_STORAGE = Boolean.getBoolean("com.oracle.truffle.espresso.staticobject.FieldBasedStorage");
     private static final String DELIMITER = "$$";
     private static final AtomicInteger counter = new AtomicInteger();
+    private static final int JAVA_SPEC_VERSION;
+    private static final Method DEFINE_CLASS;
+
+    static {
+        String value = System.getProperty("java.specification.version");
+        if (value.startsWith("1.")) {
+            value = value.substring(2);
+        }
+        JAVA_SPEC_VERSION = Integer.parseInt(value);
+        try {
+            if (JAVA_SPEC_VERSION == 8) {
+                DEFINE_CLASS = Unsafe.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class);
+            } else {
+                DEFINE_CLASS = Lookup.class.getDeclaredMethod("defineClass", byte[].class);
+            }
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     abstract StaticShape<T> generateShape(StaticShape<T> parentShape, Collection<StaticProperty> staticProperties);
 
     static <T> ShapeGenerator<T> getShapeGenerator(StaticShape<T> parentShape) {
         Class<?> parentStorageClass = parentShape.getStorageClass();
-        Class<?> storageSuperclass = ARRAY_BASED_STORAGE ? parentStorageClass.getSuperclass() : parentStorageClass;
-        GeneratorClassLoader gcl = (GeneratorClassLoader) parentStorageClass.getClassLoader();
-        return getShapeGenerator(gcl, storageSuperclass, parentShape.getFactoryInterface());
+        Class<?> storageSuperclass = FIELD_BASED_STORAGE ? parentStorageClass : parentStorageClass.getSuperclass();
+        return getShapeGenerator(storageSuperclass, parentShape.getFactoryInterface());
     }
 
-    static <T> ShapeGenerator<T> getShapeGenerator(GeneratorClassLoader gcl, Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
-        if (ARRAY_BASED_STORAGE) {
-            return ArrayBasedShapeGenerator.getShapeGenerator(gcl, storageSuperClass, storageFactoryInterface);
+    static <T> ShapeGenerator<T> getShapeGenerator(Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
+        if (FIELD_BASED_STORAGE) {
+            return FieldBasedShapeGenerator.getShapeGenerator(storageSuperClass, storageFactoryInterface);
         } else {
-            return FieldBasedShapeGenerator.getShapeGenerator(gcl, storageSuperClass, storageFactoryInterface);
+            return ArrayBasedShapeGenerator.getShapeGenerator(storageSuperClass, storageFactoryInterface);
         }
     }
 
@@ -83,12 +105,18 @@ abstract class ShapeGenerator<T> {
     }
 
     @SuppressWarnings("unchecked")
-    static <T> Class<? extends T> load(GeneratorClassLoader gcl, String internalName, byte[] bytes) {
+    static <T> Class<? extends T> load(String name, byte[] bytes, Class<T> referenceClass) {
+        Object clazz;
         try {
-            return (Class<T>) gcl.defineGeneratedClass(internalName.replace('/', '.'), bytes, 0, bytes.length);
-        } catch (ClassFormatError e) {
+            if (JAVA_SPEC_VERSION == 8) {
+                clazz = DEFINE_CLASS.invoke(UNSAFE, name, bytes, 0, bytes.length, referenceClass.getClassLoader(), referenceClass.getProtectionDomain());
+            } else {
+                clazz = DEFINE_CLASS.invoke(MethodHandles.lookup(), bytes);
+            }
+        } catch (IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
+        return (Class<T>) clazz;
     }
 
     private static Unsafe getUnsafe() {
