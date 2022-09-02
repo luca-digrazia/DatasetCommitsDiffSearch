@@ -240,7 +240,7 @@ public abstract class InteropLibrary extends Library {
 
     // Object Messages
 
-    @Abstract(ifExported = {"getMembers", "isMemberReadable", "readMember", "isMemberModifiable", "isMemberInsertable", "writeMember", "isMemberRemovable", "removeMember", "isMemberInvocable",
+    @Abstract(ifExported = {"getMembers", "isMemberReadable", "readMember", "isMemberModifiable", "isMemberInsertable", "writeMember", "isMemberRemovable", "removeMember", "isMemberInvokable",
                     "invokeMember", "isMemberInternal", "hasMemberReadSideEffects", "hasMemberWriteSideEffects"})
     public boolean hasMembers(Object receiver) {
         return false;
@@ -291,11 +291,11 @@ public abstract class InteropLibrary extends Library {
     }
 
     @Abstract(ifExported = "invokeMember")
-    public boolean isMemberInvocable(Object receiver, String member) {
+    public boolean isMemberInvokable(Object receiver, String member) {
         return false;
     }
 
-    @Abstract(ifExported = "isMemberInvocable")
+    @Abstract(ifExported = "isMemberInvokable")
     public Object invokeMember(Object receiver, String member, Object... arguments)
                     throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
         throw UnsupportedMessageException.create();
@@ -310,7 +310,7 @@ public abstract class InteropLibrary extends Library {
     }
 
     public final boolean isMemberExisting(Object receiver, String member) {
-        return isMemberReadable(receiver, member) || isMemberModifiable(receiver, member) || isMemberRemovable(receiver, member) || isMemberInvocable(receiver, member);
+        return isMemberReadable(receiver, member) || isMemberModifiable(receiver, member) || isMemberRemovable(receiver, member) || isMemberInvokable(receiver, member);
     }
 
     public boolean hasMemberReadSideEffects(Object receiver, String member) {
@@ -745,7 +745,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             assert validArguments(receiver, arguments);
-            boolean wasInvocable = ASSERTIONS_ENABLED && delegate.isMemberInvocable(receiver, identifier);
+            boolean wasInvocable = ASSERTIONS_ENABLED && delegate.isMemberInvokable(receiver, identifier);
             try {
                 Object result = delegate.invokeMember(receiver, identifier, arguments);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
@@ -860,10 +860,10 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public boolean isMemberInvocable(Object receiver, String identifier) {
+        public boolean isMemberInvokable(Object receiver, String identifier) {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
-            boolean result = delegate.isMemberInvocable(receiver, identifier);
+            boolean result = delegate.isMemberInvokable(receiver, identifier);
             assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
             return result;
         }

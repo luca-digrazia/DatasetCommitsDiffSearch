@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -190,7 +190,7 @@ import com.oracle.truffle.sl.runtime.SLNull;
  * variables.
  * </ul>
  */
-@TruffleLanguage.Registration(id = SLLanguage.ID, name = "SL", defaultMimeType = SLLanguage.MIME_TYPE, characterMimeTypes = SLLanguage.MIME_TYPE, contextPolicy = ContextPolicy.SHARED, fileTypeDetectors = SLFileDetector.class)
+@TruffleLanguage.Registration(id = SLLanguage.ID, name = "SL", defaultMimeType = SLLanguage.MIME_TYPE, characterMimeTypes = SLLanguage.MIME_TYPE, contextPolicy = ContextPolicy.SHARED)
 @ProvidedTags({StandardTags.CallTag.class, StandardTags.StatementTag.class, StandardTags.RootTag.class, StandardTags.ExpressionTag.class, DebuggerTags.AlwaysHalt.class})
 public final class SLLanguage extends TruffleLanguage<SLContext> {
     public static volatile int counter;
@@ -310,8 +310,6 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
                 }
             } else if (interop.hasMembers(value)) {
                 return "Object";
-            } else if (value instanceof SLBigNumber) {
-                return value.toString();
             } else {
                 return "Unsupported";
             }
@@ -331,7 +329,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
             return "ANY";
         }
         InteropLibrary interop = InteropLibrary.getFactory().getUncached(value);
-        if (interop.isNumber(value) || value instanceof SLBigNumber) {
+        if (interop.isNumber(value)) {
             return "Number";
         } else if (interop.isBoolean(value)) {
             return "Boolean";

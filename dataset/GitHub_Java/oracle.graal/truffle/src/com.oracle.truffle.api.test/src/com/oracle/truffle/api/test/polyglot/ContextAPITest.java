@@ -76,7 +76,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -585,7 +584,8 @@ public class ContextAPITest {
                     @Override
                     public Object execute(VirtualFrame frame) {
                         try {
-                            return boundary();
+                            Object o = InteropLibrary.resolve().getUncachedDispatch().readMember(ProxyLanguage.getCurrentContext().env.getPolyglotBindings(), "test");
+                            return InteropLibrary.resolve().getUncachedDispatch().execute(o);
                         } catch (Exception e) {
                             throw new RuntimeException(e);
                         }

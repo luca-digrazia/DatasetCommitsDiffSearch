@@ -55,6 +55,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -98,19 +99,12 @@ final class PolyglotProxy implements TruffleObject {
         return proxy instanceof ProxyInstantiable;
     }
 
-    static class InstantiateNode extends GuestToHostRootNode {
-
-        protected InstantiateNode() {
-            super(ProxyInstantiable.class, "newInstance");
-        }
-
+    private static final CallTarget INSTANTIATE = createGuestToHost(new GuestToHostRootNode(ProxyInstantiable.class, "newInstance") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyInstantiable) proxy).newInstance((Value[]) arguments[ARGUMENT_OFFSET]);
         }
-    }
-
-    private static final CallTarget INSTANTIATE = createGuestToHost(new InstantiateNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -128,19 +122,12 @@ final class PolyglotProxy implements TruffleObject {
         return proxy instanceof ProxyExecutable;
     }
 
-    static class ExecuteNode extends GuestToHostRootNode {
-
-        protected ExecuteNode() {
-            super(ProxyExecutable.class, "execute");
-        }
-
+    private static final CallTarget EXECUTE = createGuestToHost(new GuestToHostRootNode(ProxyExecutable.class, "execute") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyExecutable) proxy).execute((Value[]) arguments[ARGUMENT_OFFSET]);
         }
-    }
-
-    private static final CallTarget EXECUTE = createGuestToHost(new ExecuteNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -158,19 +145,12 @@ final class PolyglotProxy implements TruffleObject {
         return proxy instanceof ProxyNativeObject;
     }
 
-    static class AsPointerNode extends GuestToHostRootNode {
-
-        protected AsPointerNode() {
-            super(ProxyNativeObject.class, "asPointer");
-        }
-
+    private static final CallTarget AS_POINTER = createGuestToHost(new GuestToHostRootNode(ProxyNativeObject.class, "asPointer") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyNativeObject) proxy).asPointer();
         }
-    }
-
-    private static final CallTarget AS_POINTER = createGuestToHost(new AsPointerNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -186,12 +166,7 @@ final class PolyglotProxy implements TruffleObject {
         return proxy instanceof ProxyArray;
     }
 
-    static class ArrayGetNode extends GuestToHostRootNode {
-
-        protected ArrayGetNode() {
-            super(ProxyArray.class, "get");
-        }
-
+    private static final CallTarget ARRAY_GET = createGuestToHost(new GuestToHostRootNode(ProxyArray.class, "get") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws InvalidArrayIndexException, UnsupportedMessageException {
             long index = (long) arguments[ARGUMENT_OFFSET];
@@ -203,9 +178,7 @@ final class PolyglotProxy implements TruffleObject {
                 throw UnsupportedMessageException.create();
             }
         }
-    }
-
-    private static final CallTarget ARRAY_GET = createGuestToHost(new ArrayGetNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -218,12 +191,7 @@ final class PolyglotProxy implements TruffleObject {
         }
     }
 
-    static class ArraySetNode extends GuestToHostRootNode {
-
-        protected ArraySetNode() {
-            super(ProxyArray.class, "set");
-        }
-
+    private static final CallTarget ARRAY_SET = createGuestToHost(new GuestToHostRootNode(ProxyArray.class, "set") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws InvalidArrayIndexException, UnsupportedMessageException {
             long index = (long) arguments[ARGUMENT_OFFSET];
@@ -236,9 +204,7 @@ final class PolyglotProxy implements TruffleObject {
             }
             return null;
         }
-    }
-
-    private static final CallTarget ARRAY_SET = createGuestToHost(new ArraySetNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -251,14 +217,9 @@ final class PolyglotProxy implements TruffleObject {
         }
     }
 
-    static class ArrayRemoveNode extends GuestToHostRootNode {
-
-        protected ArrayRemoveNode() {
-            super(ProxyArray.class, "remove");
-        }
-
+    private static final CallTarget ARRAY_REMOVE = createGuestToHost(new GuestToHostRootNode(ProxyArray.class, "remove") {
         @Override
-        protected Object executeImpl(Object proxy, Object[] arguments) throws InvalidArrayIndexException, UnsupportedMessageException {
+        protected Object executeImpl(Object proxy, Object[] arguments) throws InteropException {
             long index = (long) arguments[ARGUMENT_OFFSET];
             try {
                 return ((ProxyArray) proxy).remove(index);
@@ -268,9 +229,7 @@ final class PolyglotProxy implements TruffleObject {
                 throw UnsupportedMessageException.create();
             }
         }
-    }
-
-    private static final CallTarget ARRAY_REMOVE = createGuestToHost(new ArrayRemoveNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -285,19 +244,12 @@ final class PolyglotProxy implements TruffleObject {
         }
     }
 
-    static class ArraySizeNode extends GuestToHostRootNode {
-
-        protected ArraySizeNode() {
-            super(ProxyArray.class, "getSize");
-        }
-
+    private static final CallTarget ARRAY_SIZE = createGuestToHost(new GuestToHostRootNode(ProxyArray.class, "getSize") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyArray) proxy).getSize();
         }
-    }
-
-    private static final CallTarget ARRAY_SIZE = createGuestToHost(new ArraySizeNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -338,19 +290,12 @@ final class PolyglotProxy implements TruffleObject {
         return proxy instanceof ProxyObject;
     }
 
-    static class GetMemberKeysNode extends GuestToHostRootNode {
-
-        protected GetMemberKeysNode() {
-            super(ProxyObject.class, "getMemberKeys");
-        }
-
+    private static final CallTarget MEMBER_KEYS = createGuestToHost(new GuestToHostRootNode(ProxyObject.class, "getMemberKeys") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyObject) proxy).getMemberKeys();
         }
-    }
-
-    private static final CallTarget MEMBER_KEYS = createGuestToHost(new GetMemberKeysNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -372,12 +317,7 @@ final class PolyglotProxy implements TruffleObject {
         }
     }
 
-    static class GetMemberNode extends GuestToHostRootNode {
-
-        protected GetMemberNode() {
-            super(ProxyObject.class, "getMember");
-        }
-
+    private static final CallTarget GET_MEMBER = createGuestToHost(new GuestToHostRootNode(ProxyObject.class, "getMember") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
             try {
@@ -386,9 +326,7 @@ final class PolyglotProxy implements TruffleObject {
                 throw UnsupportedMessageException.create();
             }
         }
-    }
-
-    private static final CallTarget GET_MEMBER = createGuestToHost(new GetMemberNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -404,12 +342,7 @@ final class PolyglotProxy implements TruffleObject {
         }
     }
 
-    static class PutMemberNode extends GuestToHostRootNode {
-
-        protected PutMemberNode() {
-            super(ProxyObject.class, "putMember");
-        }
-
+    private static final CallTarget PUT_MEMBER = createGuestToHost(new GuestToHostRootNode(ProxyObject.class, "putMember") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
             try {
@@ -419,9 +352,7 @@ final class PolyglotProxy implements TruffleObject {
             }
             return null;
         }
-    }
-
-    private static final CallTarget PUT_MEMBER = createGuestToHost(new PutMemberNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -476,12 +407,7 @@ final class PolyglotProxy implements TruffleObject {
         return false;
     }
 
-    static class RemoveMemberNode extends GuestToHostRootNode {
-
-        protected RemoveMemberNode() {
-            super(ProxyObject.class, "removeMember");
-        }
-
+    private static final CallTarget REMOVE_MEMBER = createGuestToHost(new GuestToHostRootNode(ProxyObject.class, "removeMember") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
             try {
@@ -490,9 +416,7 @@ final class PolyglotProxy implements TruffleObject {
                 throw UnsupportedMessageException.create();
             }
         }
-    }
-
-    private static final CallTarget REMOVE_MEMBER = createGuestToHost(new RemoveMemberNode());
+    });
 
     @ExportMessage
     @TruffleBoundary
@@ -510,19 +434,12 @@ final class PolyglotProxy implements TruffleObject {
         }
     }
 
-    static class HasMemberNode extends GuestToHostRootNode {
-
-        protected HasMemberNode() {
-            super(ProxyObject.class, "hasMember");
-        }
-
+    private static final CallTarget HAS_MEMBER = createGuestToHost(new GuestToHostRootNode(ProxyObject.class, "hasMember") {
         @Override
         protected Object executeImpl(Object proxy, Object[] arguments) {
             return ((ProxyObject) proxy).hasMember((String) arguments[ARGUMENT_OFFSET]);
         }
-    }
-
-    private static final CallTarget HAS_MEMBER = createGuestToHost(new HasMemberNode());
+    });
 
     @ExportMessage(name = "isMemberReadable")
     @ExportMessage(name = "isMemberModifiable")

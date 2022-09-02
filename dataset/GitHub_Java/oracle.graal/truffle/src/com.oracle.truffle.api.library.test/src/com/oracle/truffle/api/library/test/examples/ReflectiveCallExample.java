@@ -66,13 +66,13 @@ public class ReflectiveCallExample {
 
     @GenerateLibrary
     @SuppressWarnings("unused")
-    abstract static class ReflectiveCallTestLibrary extends Library {
+    abstract static class UnknownLibrary extends Library {
         public String message(Object receiver) {
             return "result";
         }
     }
 
-    @ExportLibrary(ReflectiveCallTestLibrary.class)
+    @ExportLibrary(UnknownLibrary.class)
     static final class UnknownObject {
 
         @ExportMessage

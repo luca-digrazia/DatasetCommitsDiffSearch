@@ -91,7 +91,6 @@ public abstract class LibraryFactory<T extends Library> {
         }
         this.nameToMessages = messagesMap;
         this.uncachedDispatch = uncachedDispatch;
-
         if (libraryClass == DynamicDispatchLibrary.class) {
             this.dispatchLibrary = null;
         } else {
@@ -122,11 +121,11 @@ public abstract class LibraryFactory<T extends Library> {
      *
      * @since 1.0
      */
-    public final T createDispatched(int limit) {
+    public final T createCachedLimit(int limit) {
         if (limit <= 0) {
             return getUncached();
         } else {
-            return createDispatchImpl(limit);
+            return createCachedDispatchImpl(limit);
         }
     }
 
@@ -140,7 +139,7 @@ public abstract class LibraryFactory<T extends Library> {
      * @see CachedLibrary
      * @since 1.0
      */
-    public final T create(Object receiver) {
+    public final T createCached(Object receiver) {
         Class<?> dispatchClass = dispatch(receiver);
         T cached = cachedCache.get(dispatchClass);
         if (cached != null) {
@@ -207,7 +206,7 @@ public abstract class LibraryFactory<T extends Library> {
      *
      * @since 1.0
      */
-    protected abstract T createDispatchImpl(int limit);
+    protected abstract T createCachedDispatchImpl(int limit);
 
     /**
      * Creates a proxy version of this library. An implementation for this method is generated, do
@@ -400,7 +399,7 @@ public abstract class LibraryFactory<T extends Library> {
 
         @Override
         public T createCached(Object receiver) {
-            return createProxy(REFLECTION_FACTORY.create(receiver));
+            return createProxy(REFLECTION_FACTORY.createCached(receiver));
         }
     }
 

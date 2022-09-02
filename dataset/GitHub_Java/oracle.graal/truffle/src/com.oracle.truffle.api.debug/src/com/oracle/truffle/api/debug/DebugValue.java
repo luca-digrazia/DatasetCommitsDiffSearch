@@ -211,7 +211,8 @@ public abstract class DebugValue {
         }
     }
 
-    static ValuePropertiesCollection getProperties(Object value, DebuggerSession session, LanguageInfo language, DebugScope scope) {
+
+    static ValuePropertiesCollection getProperties(Object value, Debugger debugger, LanguageInfo language, DebugScope scope) {
         if (INTEROP.hasMembers(value)) {
             Object keys;
             try {
@@ -219,7 +220,7 @@ public abstract class DebugValue {
             } catch (UnsupportedMessageException e) {
                 return null;
             }
-            return new ValuePropertiesCollection(session, language, value, keys, scope);
+            return new ValuePropertiesCollection(debugger, language, value, keys, scope);
         }
         return null;
     }
@@ -243,7 +244,7 @@ public abstract class DebugValue {
                 if (!INTEROP.isMemberExisting(value, name)) {
                     return null;
                 } else {
-                    return new DebugValue.ObjectMemberValue(getSession(), resolveLanguage(), null, value, name);
+                    return new DebugValue.ObjectMemberValue(getDebugger(), resolveLanguage(), null, value, name);
                 }
             } catch (ThreadDeath td) {
                 throw td;
@@ -283,7 +284,7 @@ public abstract class DebugValue {
         }
         Object value = get();
         if (INTEROP.hasArrayElements(value)) {
-            return new ValueInteropList(getSession(), resolveLanguage(), value);
+            return new ValueInteropList(getDebugger(), resolveLanguage(), value);
         }
         return null;
     }
@@ -377,7 +378,7 @@ public abstract class DebugValue {
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
-            throw new DebugException(getSession(), ex, resolveLanguage(), null, true, null);
+            throw new DebugException(getDebugger(), ex, resolveLanguage(), null, true, null);
         }
     }
 
@@ -440,11 +441,11 @@ public abstract class DebugValue {
 
     abstract static class AbstractDebugValue extends DebugValue {
 
-        final DebuggerSession session;
+        final Debugger debugger;
 
-        AbstractDebugValue(DebuggerSession session, LanguageInfo preferredLanguage) {
+        AbstractDebugValue(Debugger debugger, LanguageInfo preferredLanguage) {
             super(preferredLanguage);
-            this.session = session;
+            this.debugger = debugger;
         }
 
         @Override
@@ -483,8 +484,8 @@ public abstract class DebugValue {
         }
 
         @Override
-        final DebuggerSession getSession() {
-            return session;
+        final Debugger getDebugger() {
+            return debugger;
         }
     }
 
@@ -493,12 +494,12 @@ public abstract class DebugValue {
         private final String name;
         private Object value;
 
-        HeapValue(DebuggerSession session, String name, Object value) {
-            this(session, null, name, value);
+        HeapValue(Debugger debugger, String name, Object value) {
+            this(debugger, null, name, value);
         }
 
-        HeapValue(DebuggerSession session, LanguageInfo preferredLanguage, String name, Object value) {
-            super(session, preferredLanguage);
+        HeapValue(Debugger debugger, LanguageInfo preferredLanguage, String name, Object value) {
+            super(debugger, preferredLanguage);
             this.name = name;
             this.value = value;
         }
@@ -554,6 +555,11 @@ public abstract class DebugValue {
             return new HeapValue(session, language, name, value);
         }
 
+        @Override
+        DebuggerSession getSession() {
+            return session;
+        }
+
     }
 
     static final class ObjectPropertyValue extends AbstractDebugValue {
@@ -562,8 +568,8 @@ public abstract class DebugValue {
         private final String member;
         private final DebugScope scope;
 
-        ObjectPropertyValue(DebuggerSession session, LanguageInfo preferredLanguage, DebugScope scope, Object array, String member) {
-            super(session, preferredLanguage);
+        ObjectPropertyValue(Debugger debugger, LanguageInfo preferredLanguage, DebugScope scope, Object array, String member) {
+            super(debugger, preferredLanguage);
             this.object = array;
             this.member = member;
             this.scope = scope;
@@ -647,7 +653,7 @@ public abstract class DebugValue {
 
         @Override
         DebugValue createAsInLanguage(LanguageInfo language) {
-            return new ObjectPropertyValue(session, language, scope, object, member);
+            return new ObjectPropertyValue(debugger, language, scope, object, member);
         }
 
         private void checkValid() {
@@ -663,8 +669,8 @@ public abstract class DebugValue {
         private final String member;
         private final DebugScope scope;
 
-        ObjectMemberValue(DebuggerSession session, LanguageInfo preferredLanguage, DebugScope scope, Object object, String member) {
-            super(session, preferredLanguage);
+        ObjectMemberValue(Debugger debugger, LanguageInfo preferredLanguage, DebugScope scope, Object object, String member) {
+            super(debugger, preferredLanguage);
             this.object = object;
             this.member = member;
             this.scope = scope;
@@ -748,7 +754,7 @@ public abstract class DebugValue {
 
         @Override
         DebugValue createAsInLanguage(LanguageInfo language) {
-            return new ObjectMemberValue(session, language, scope, object, member);
+            return new ObjectMemberValue(debugger, language, scope, object, member);
         }
 
         private void checkValid() {
@@ -764,8 +770,8 @@ public abstract class DebugValue {
         private final long index;
         private final DebugScope scope;
 
-        ArrayElementValue(DebuggerSession session, LanguageInfo preferredLanguage, DebugScope scope, Object array, long index) {
-            super(session, preferredLanguage);
+        ArrayElementValue(Debugger debugger, LanguageInfo preferredLanguage, DebugScope scope, Object array, long index) {
+            super(debugger, preferredLanguage);
             this.array = array;
             this.index = index;
             this.scope = scope;
@@ -779,7 +785,7 @@ public abstract class DebugValue {
             } catch (ThreadDeath td) {
                 throw td;
             } catch (Throwable ex) {
-                throw new DebugException(getSession(), ex, resolveLanguage(), null, true, null);
+                throw new DebugException(getDebugger(), ex, resolveLanguage(), null, true, null);
             }
         }
 
@@ -832,7 +838,7 @@ public abstract class DebugValue {
             } catch (ThreadDeath td) {
                 throw td;
             } catch (Throwable ex) {
-                throw new DebugException(getSession(), ex, resolveLanguage(), null, true, null);
+                throw new DebugException(getDebugger(), ex, resolveLanguage(), null, true, null);
             }
         }
 
@@ -843,13 +849,13 @@ public abstract class DebugValue {
             try {
                 INTEROP.writeArrayElement(array, index, primitiveValue);
             } catch (Throwable ex) {
-                throw new DebugException(getSession(), ex, resolveLanguage(), null, true, null);
+                throw new DebugException(getDebugger(), ex, resolveLanguage(), null, true, null);
             }
         }
 
         @Override
         DebugValue createAsInLanguage(LanguageInfo language) {
-            return new ArrayElementValue(session, language, scope, array, index);
+            return new ArrayElementValue(debugger, language, scope, array, index);
         }
 
         private void checkValid() {
