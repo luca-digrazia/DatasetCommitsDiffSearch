@@ -53,11 +53,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.RTLDFlags.RTLD_GLOBAL;
-import static com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.RTLDFlags.RTLD_LAZY;
-import static com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.RTLDFlags.RTLD_LOCAL;
-import static com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.RTLDFlags.RTLD_NOW;
-
 @NodeChild(type = LLVMExpressionNode.class)
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMDLOpen extends LLVMIntrinsic {
@@ -104,18 +99,14 @@ public abstract class LLVMDLOpen extends LLVMIntrinsic {
                     @Cached() LLVMReadStringNode readStr,
                     @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
         // Default settings for RTLD flags.
-        RTLDFlags globalOrLocal = RTLD_LOCAL;
-        RTLDFlags lazyOrNow = RTLD_NOW;
+        RTLDFlags globalOrLocal = RTLDFlags.RTLD_LOCAL;
         // Check for flag settings for each platform.
         PlatformCapability<?> sysContextExt = LLVMLanguage.getLanguage().getCapability(PlatformCapability.class);
         if (sysContextExt.isGlobalDLOpenFlagSet(flag)) {
-            globalOrLocal = RTLD_GLOBAL;
-        }
-        if (sysContextExt.isLazyDLOpenFlagSet(flag)) {
-            lazyOrNow = RTLD_LAZY;
+            globalOrLocal = RTLDFlags.RTLD_GLOBAL;
         }
         try {
-            return LLVMManagedPointer.create(new LLVMDLHandler(loadLibrary(ctx, globalOrLocal, lazyOrNow, flag, file, readStr)));
+            return LLVMManagedPointer.create(new LLVMDLHandler(loadLibrary(ctx, globalOrLocal, flag, file, readStr)));
         } catch (RuntimeException e) {
             ctx.setDLError(1);
             return LLVMNativePointer.createNull();
@@ -123,15 +114,7 @@ public abstract class LLVMDLOpen extends LLVMIntrinsic {
     }
 
     @TruffleBoundary
-    protected Object loadLibrary(LLVMContext ctx, RTLDFlags globalOrLocal, RTLDFlags lazyOrNow, int flag, Object file, LLVMReadStringNode readStr) {
-        if (file.equals(LLVMNativePointer.createNull())) {
-            if (lazyOrNow.isActive(RTLD_LAZY)) {
-                return LLVMNativePointer.createNull();
-            } else {
-                throw new IllegalStateException("Cannot dlopen NULL");
-            }
-        }
-
+    protected Object loadLibrary(LLVMContext ctx, RTLDFlags globalOrLocal, int flag, Object file, LLVMReadStringNode readStr) {
         String filename = readStr.executeWithTarget(file);
         Path path = Paths.get(filename);
         TruffleFile truffleFile;
