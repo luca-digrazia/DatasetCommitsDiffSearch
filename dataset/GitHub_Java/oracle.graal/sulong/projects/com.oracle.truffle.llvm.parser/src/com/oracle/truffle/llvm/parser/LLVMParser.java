@@ -226,7 +226,7 @@ public final class LLVMParser {
 
     private void defineAlias(String existingName, boolean existingExported, String newName, boolean newExported, List<String> importedSymbols) {
         // handle the file scope
-        LLVMSymbol aliasTarget = runtime.lookupSymbol(existingName);
+        LLVMSymbol aliasTarget = runtime.lookupSymbolWithExport(existingName, existingExported);
         LLVMAlias aliasSymbol = new LLVMAlias(library, newName, aliasTarget);
         runtime.getFileScope().register(aliasSymbol);
 

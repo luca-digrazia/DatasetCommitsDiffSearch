@@ -35,7 +35,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.debug.LLDBSupport;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
@@ -46,9 +45,11 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 final class LLDBGlobalConstant implements LLVMDebugValue {
 
     private final LLVMGlobal global;
+    private final LLVMContext context;
 
-    LLDBGlobalConstant(LLVMGlobal global) {
+    LLDBGlobalConstant(LLVMGlobal global, LLVMContext context) {
         this.global = global;
+        this.context = context;
     }
 
     @Override
@@ -58,7 +59,6 @@ final class LLDBGlobalConstant implements LLVMDebugValue {
 
     private boolean canRead(long bitOffset, int bits, LLVMDebugValue currentValue) {
         int index = global.getSymbolIndex(false);
-        LLVMContext context = LLVMLanguage.getContext();
         AssumedValue<LLVMPointer>[] globals = context.findSymbolTable(global.getBitcodeID(false));
         return globals[index].get() != null && currentValue != null && currentValue.canRead(bitOffset, bits);
     }
@@ -169,7 +169,6 @@ final class LLDBGlobalConstant implements LLVMDebugValue {
 
     private LLVMDebugValue getCurrentValue() {
         int index = global.getSymbolIndex(false);
-        LLVMContext context = LLVMLanguage.getContext();
         AssumedValue<LLVMPointer>[] globals = context.findSymbolTable(global.getBitcodeID(false));
         if (isInNative()) {
             return new LLDBMemoryValue(LLVMNativePointer.cast(globals[index].get()));
@@ -180,7 +179,6 @@ final class LLDBGlobalConstant implements LLVMDebugValue {
 
     private boolean isInNative() {
         int index = global.getSymbolIndex(false);
-        LLVMContext context = LLVMLanguage.getContext();
         AssumedValue<LLVMPointer>[] globals = context.findSymbolTable(global.getBitcodeID(false));
         return LLVMNativePointer.isInstance(globals[index].get());
     }

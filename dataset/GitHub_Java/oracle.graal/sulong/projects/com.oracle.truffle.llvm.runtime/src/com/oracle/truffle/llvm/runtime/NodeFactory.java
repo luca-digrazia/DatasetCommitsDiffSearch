@@ -99,7 +99,7 @@ public interface NodeFactory {
 
     LLVMExpressionNode createFunctionArgNode(int argIndex, Type paramType);
 
-    LLVMControlFlowNode createFunctionInvoke(LLVMWriteNode writeResult, LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type, int normalIndex,
+    LLVMControlFlowNode createFunctionInvoke(FrameSlot resultLocation, LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type, int normalIndex,
                     int unwindIndex, LLVMStatementNode normalPhiWriteNodes,
                     LLVMStatementNode unwindPhiWriteNodes);
 
@@ -130,8 +130,6 @@ public interface NodeFactory {
     LLVMExpressionNode createBitcast(LLVMExpressionNode fromNode, Type targetType, Type fromType);
 
     LLVMExpressionNode createArithmeticOp(ArithmeticOperation op, Type type, LLVMExpressionNode left, LLVMExpressionNode right);
-
-    LLVMExpressionNode createUnaryOp(UnaryOperation op, Type type, LLVMExpressionNode operand);
 
     /*
      * Stack allocations with type

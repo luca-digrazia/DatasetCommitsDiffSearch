@@ -916,7 +916,8 @@ public class CommonNodeFactory {
         }
     }
 
-    public static LLVMExpressionNode createBitcast(LLVMExpressionNode fromNode, Type targetType, @SuppressWarnings("unused") Type fromType) {
+    @SuppressWarnings("unused")
+    public static LLVMExpressionNode createBitcast(LLVMExpressionNode fromNode, Type targetType, Type fromType) {
         // does a reinterpreting cast between pretty much anything as long as source and target have
         // the same bit width.
         assert targetType != null;
