@@ -30,11 +30,11 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.spi.FileSystemProvider;
 
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.RuntimeClassInitialization;
 import org.graalvm.nativeimage.c.function.CLibrary;
-import org.graalvm.nativeimage.hosted.ClassInitialization;
-import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
@@ -53,11 +53,11 @@ class WindowsJavaNIOSubstituteFeature implements Feature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        ClassInitialization.rerun(access.findClassByName("sun.nio.fs.WindowsNativeDispatcher"));
-        ClassInitialization.rerun(access.findClassByName("sun.nio.fs.WindowsSecurity"));
-        ClassInitialization.rerun(access.findClassByName("sun.nio.ch.ServerSocketChannelImpl"));
-        ClassInitialization.rerun(access.findClassByName("sun.nio.ch.IOUtil"));
-        ClassInitialization.rerun(access.findClassByName("sun.nio.ch.FileChannelImpl"));
+        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.nio.fs.WindowsNativeDispatcher"));
+        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.nio.fs.WindowsSecurity"));
+        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.nio.ch.ServerSocketChannelImpl"));
+        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.nio.ch.IOUtil"));
+        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.nio.ch.FileChannelImpl"));
     }
 
     @Override
