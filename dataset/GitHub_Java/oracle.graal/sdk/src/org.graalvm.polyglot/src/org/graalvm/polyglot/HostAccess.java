@@ -91,13 +91,12 @@ public final class HostAccess {
     private final EconomicSet<Class<?>> implementableTypes;
     private final List<Object> targetMappings;
     private final boolean allowPublic;
-    private final boolean allowAllInterfaceImplementations;
-    private final boolean allowAllClassImplementations;
+    private final boolean allowAllImplementations;
     final boolean allowArrayAccess;
     final boolean allowListAccess;
     volatile Object impl;
 
-    private static final HostAccess EMPTY = new HostAccess(null, null, null, null, null, null, null, false, false, false, false, false);
+    private static final HostAccess EMPTY = new HostAccess(null, null, null, null, null, null, null, false, false, false, false);
 
     /**
      * Predefined host access policy that allows access to public host methods or fields that were
@@ -130,25 +129,13 @@ public final class HostAccess {
      * Equivalent of using the following builder configuration:
      *
      * <pre>
-     * <code>
-     * HostAccess.newBuilder()
-     *           .allowPublicAccess(true)
-     *           .allowAllImplementations(true)
-     *           .allowAllClassImplementations(true)
-     *           .allowArrayAccess(true)
-     *           .allowListAccess(true)
-     *           .build();
-     * </code>
+     * HostAccess.newBuilder().allowPublicAccess(true).allowAllImplementations(true).//
+     *                 allowArrayAccess(true).allowListAccess(true).build();
      * </pre>
      *
      * @since 19.0
      */
-    public static final HostAccess ALL = newBuilder().//
-                    allowPublicAccess(true).//
-                    allowAllImplementations(true).//
-                    allowAllClassImplementations(true).//
-                    allowArrayAccess(true).allowListAccess(true).//
-                    name("HostAccess.ALL").build();
+    public static final HostAccess ALL = newBuilder().allowPublicAccess(true).allowAllImplementations(true).allowArrayAccess(true).allowListAccess(true).name("HostAccess.ALL").build();
 
     /**
      * Predefined host access policy that disallows any access to public host methods or fields.
@@ -167,7 +154,7 @@ public final class HostAccess {
                     EconomicSet<Class<? extends Annotation>> implementableAnnotations,
                     EconomicSet<Class<?>> implementableTypes, List<Object> targetMappings,
                     String name,
-                    boolean allowPublic, boolean allowAllImplementations, boolean allowAllClassImplementations, boolean allowArrayAccess, boolean allowListAccess) {
+                    boolean allowPublic, boolean allowAllImplementations, boolean allowArrayAccess, boolean allowListAccess) {
         // create defensive copies
         this.accessAnnotations = copySet(annotations, Equivalence.IDENTITY);
         this.excludeTypes = copyMap(excludeTypes, Equivalence.IDENTITY);
@@ -177,15 +164,14 @@ public final class HostAccess {
         this.targetMappings = targetMappings != null ? new ArrayList<>(targetMappings) : null;
         this.name = name;
         this.allowPublic = allowPublic;
-        this.allowAllInterfaceImplementations = allowAllImplementations;
-        this.allowAllClassImplementations = allowAllClassImplementations;
+        this.allowAllImplementations = allowAllImplementations;
         this.allowArrayAccess = allowArrayAccess;
         this.allowListAccess = allowListAccess;
     }
 
     /**
      * {@inheritDoc}
-     *
+     * 
      * @since 20.3
      */
     @Override
@@ -195,8 +181,7 @@ public final class HostAccess {
         }
         HostAccess other = (HostAccess) obj;
         return allowPublic == other.allowPublic//
-                        && allowAllInterfaceImplementations == other.allowAllInterfaceImplementations//
-                        && allowAllClassImplementations == other.allowAllClassImplementations//
+                        && allowAllImplementations == other.allowAllImplementations//
                         && allowArrayAccess == other.allowArrayAccess//
                         && allowListAccess == other.allowListAccess//
                         && equalsMap(excludeTypes, other.excludeTypes)//
@@ -209,16 +194,13 @@ public final class HostAccess {
 
     /**
      * {@inheritDoc}
-     *
+     * 
      * @since 20.3
      */
     @Override
     public int hashCode() {
-        return Objects.hash(allowPublic,
-                        allowAllInterfaceImplementations,
-                        allowAllClassImplementations,
-                        allowArrayAccess,
-                        allowListAccess,
+        return Objects.hash(allowPublic, allowAllImplementations,
+                        allowArrayAccess, allowListAccess,
                         hashMap(excludeTypes),
                         hashSet(members),
                         hashSet(implementableAnnotations),
@@ -332,9 +314,7 @@ public final class HostAccess {
     }
 
     boolean allowsImplementation(Class<?> type) {
-        if (allowAllInterfaceImplementations && type.isInterface()) {
-            return true;
-        } else if (allowAllClassImplementations && !type.isInterface()) {
+        if (allowAllImplementations) {
             return true;
         }
         if (implementableTypes != null && implementableTypes.contains(type)) {
@@ -549,7 +529,6 @@ public final class HostAccess {
         private boolean allowListAccess;
         private boolean allowArrayAccess;
         private boolean allowAllImplementations;
-        private boolean allowAllClassImplementations;
         private String name;
 
         Builder() {
@@ -568,8 +547,7 @@ public final class HostAccess {
             this.allowPublic = access.allowPublic;
             this.allowListAccess = access.allowListAccess;
             this.allowArrayAccess = access.allowArrayAccess;
-            this.allowAllImplementations = access.allowAllInterfaceImplementations;
-            this.allowAllClassImplementations = access.allowAllClassImplementations;
+            this.allowAllImplementations = access.allowAllImplementations;
         }
 
         /**
@@ -659,7 +637,7 @@ public final class HostAccess {
         }
 
         /**
-         * Allow guest languages to implement any Java interface.
+         * Allow guest languages to implement any Java interface and extend any Java class.
          *
          * @see HostAccess#ALL
          * @see #allowImplementations(Class)
@@ -668,21 +646,6 @@ public final class HostAccess {
          */
         public Builder allowAllImplementations(boolean allow) {
             this.allowAllImplementations = allow;
-            return this;
-        }
-
-        /**
-         * Allow guest languages to implement (extend) any Java class. Note that the default host
-         * type mappings and {@link Value#as(Class)} only implement abstract classes.
-         *
-         * @see HostAccess#ALL
-         * @see #allowImplementations(Class)
-         * @see #allowImplementationsAnnotatedBy(Class)
-         * @see #allowAllImplementations(boolean)
-         * @since 20.3.0
-         */
-        public Builder allowAllClassImplementations(boolean allow) {
-            this.allowAllClassImplementations = allow;
             return this;
         }
 
@@ -909,8 +872,8 @@ public final class HostAccess {
          * @since 19.0
          */
         public HostAccess build() {
-            return new HostAccess(accessAnnotations, excludeTypes, members, implementationAnnotations, implementableTypes, targetMappings, name, allowPublic,
-                            allowAllImplementations, allowAllClassImplementations, allowArrayAccess, allowListAccess);
+            return new HostAccess(accessAnnotations, excludeTypes, members, implementationAnnotations, implementableTypes, targetMappings, name, allowPublic, allowAllImplementations, allowArrayAccess,
+                            allowListAccess);
         }
     }
 
