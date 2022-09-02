@@ -56,16 +56,16 @@ import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 public class DFAInitialStateNode extends DFAAbstractStateNode {
 
     private final boolean searching;
-    private final boolean genericCG;
+    private final boolean trackCaptureGroups;
 
-    public DFAInitialStateNode(short[] successors, boolean searching, boolean genericCG) {
+    public DFAInitialStateNode(short[] successors, boolean searching, boolean trackCaptureGroups) {
         super((short) 0, successors);
         this.searching = searching;
-        this.genericCG = genericCG;
+        this.trackCaptureGroups = trackCaptureGroups;
     }
 
     private DFAInitialStateNode(DFAInitialStateNode copy) {
-        this(Arrays.copyOf(copy.successors, copy.successors.length), copy.searching, copy.genericCG);
+        this(Arrays.copyOf(copy.successors, copy.successors.length), copy.searching, copy.trackCaptureGroups);
     }
 
     public int getPrefixLength() {
@@ -100,7 +100,7 @@ public class DFAInitialStateNode extends DFAAbstractStateNode {
         if (!executor.atBegin(locals)) {
             locals.setSuccessorIndex(locals.getSuccessorIndex() + (successors.length / 2));
         }
-        if (genericCG) {
+        if (trackCaptureGroups) {
             locals.setLastTransition((short) 0);
         }
         if (executor.recordExecution()) {
