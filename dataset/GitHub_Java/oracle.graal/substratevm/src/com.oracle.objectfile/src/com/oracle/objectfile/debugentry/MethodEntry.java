@@ -75,29 +75,23 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
     }
 
     public int compareTo(String methodName, String paramSignature, String returnTypeName) {
-        int nameComparison = memberName.compareTo(methodName);
-        if (nameComparison != 0) {
-            return nameComparison;
+        if (!memberName.equals(methodName)) {
+            return memberName.compareTo(methodName);
         }
-        int typeComparison = valueType.getTypeName().compareTo(returnTypeName);
-        if (typeComparison != 0) {
-            return typeComparison;
+        if (!valueType.getTypeName().equals(returnTypeName)) {
+            return valueType.getTypeName().compareTo(returnTypeName);
+        }
+        int paramCount = getParamCount();
+        if (paramCount == 0) {
+            return 0 - paramSignature.trim().length();
         }
         String[] paramTypeNames = paramSignature.split((","));
-        int length;
-        if (paramSignature.trim().length() == 0) {
-            length = 0;
-        } else {
-            length = paramTypeNames.length;
+        if (paramCount != paramTypeNames.length) {
+            return paramCount - paramTypeNames.length;
         }
-        int paramCountComparison = getParamCount() - length;
-        if (paramCountComparison != 0) {
-            return paramCountComparison;
-        }
-        for (int i = 0; i < getParamCount(); i++) {
-            int paraComparison = getParamTypeName(i).compareTo(paramTypeNames[i].trim());
-            if (paraComparison != 0) {
-                return paraComparison;
+        for (int i = 0; i < paramCount; i++) {
+            if (!paramTypeNames[i].trim().equals(getParamTypeName(i))) {
+                return getParamTypeName(i).compareTo(paramTypeNames[i].trim());
             }
         }
         return 0;
@@ -110,24 +104,21 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
     @Override
     public int compareTo(MethodEntry other) {
         assert other != null;
-        int nameComparison = methodName().compareTo(other.methodName());
-        if (nameComparison != 0) {
-            return nameComparison;
+        int result = methodName().compareTo(other.methodName());
+        if (result == 0) {
+            result = valueType.getTypeName().compareTo(other.valueType.getTypeName());
         }
-        int typeComparison = valueType.getTypeName().compareTo(other.valueType.getTypeName());
-        if (typeComparison != 0) {
-            return typeComparison;
+        if (result == 0) {
+            result = getParamCount() - other.getParamCount();
         }
-        int paramCountComparison = getParamCount() - other.getParamCount();
-        if (paramCountComparison != 0) {
-            return paramCountComparison;
-        }
-        for (int i = 0; i < getParamCount(); i++) {
-            int paramComparison = getParamTypeName(i).compareTo(other.getParamTypeName(i));
-            if (paramComparison != 0) {
-                return paramComparison;
+        if (result == 0) {
+            for (int i = 0; i < getParamCount(); i++) {
+                result = getParamTypeName(i).compareTo(other.getParamTypeName(i));
+                if (result != 0) {
+                    break;
+                }
             }
         }
-        return 0;
+        return result;
     }
 }

@@ -369,7 +369,7 @@ public class ClassEntry extends StructureTypeEntry {
         return newMethodEntry;
     }
 
-    private static boolean listIsSorted(List<MethodEntry> list) {
+    private boolean listIsSorted(List<MethodEntry> list) {
         List<MethodEntry> copy = new ArrayList<>(list);
         copy.sort(MethodEntry::compareTo);
         return list.equals(copy);
