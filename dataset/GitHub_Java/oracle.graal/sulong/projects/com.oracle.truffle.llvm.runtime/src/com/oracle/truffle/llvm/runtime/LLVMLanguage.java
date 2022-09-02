@@ -201,11 +201,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         return getCurrentContext(LLVMLanguage.class);
     }
 
-    @Override
-    protected void initializeThread(LLVMContext context, Thread thread) {
-        getCapability(PlatformCapability.class).initializeThread(context, thread);
-    }
-
     /**
      * Do not use this on fast-path.
      */
