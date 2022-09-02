@@ -31,17 +31,16 @@ package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
-import com.oracle.truffle.llvm.runtime.config.LLVMCapability;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public interface LLVMIntrinsicProvider extends LLVMCapability {
+public interface LLVMIntrinsicProvider {
 
     boolean isIntrinsified(String name);
 
-    RootCallTarget generateIntrinsicTarget(String name, Type[] argTypes, NodeFactory nodeFactory);
+    RootCallTarget generateIntrinsicTarget(String name, Type[] argTypes);
 
-    LLVMExpressionNode generateIntrinsicNode(String name, LLVMExpressionNode[] arguments, Type[] argTypes, NodeFactory nodeFactory);
+    LLVMExpressionNode generateIntrinsicNode(String name, LLVMExpressionNode[] arguments, Type[] argTypes);
 
     ExternalLibrary getLibrary();
 }
