@@ -30,7 +30,6 @@ import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
@@ -95,29 +94,18 @@ public abstract class ClassRegistry implements ContextAccess {
         return defineKlass(type, bytes, null);
     }
 
-    public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes, Symbol<Type> instigator) {
+    public ObjectKlass defineKlass(Symbol<Type> type, final byte[] bytes, Symbol<Type> instigator) {
 
-        Meta meta = getMeta();
-        if (typeOrNull != null && classes.containsKey(typeOrNull)) {
-            throw meta.throwExWithMessage(LinkageError.class, "Class " + typeOrNull + " already defined in the BCL");
+        if (classes.containsKey(type)) {
+            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + type + " already defined in the BCL");
         }
 
-        String strType = null;
-        if (typeOrNull != null) {
-            strType = typeOrNull.toString();
-        }
-
-        ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), strType, null, context);
-
-        Symbol<Type> type = typeOrNull;
-        if (type == null) {
-            type = parserKlass.getType();
-        }
+        ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), type.toString(), null, context);
 
         Symbol<Type> superKlassType = parserKlass.getSuperKlass();
 
         if (type == superKlassType || (superKlassType != null && instigator == superKlassType)) {
-            throw meta.throwEx(ClassCircularityError.class);
+            throw getMeta().throwEx(ClassCircularityError.class);
         }
 
         // TODO(peterssen): Superclass must be a class, and non-final.
@@ -153,22 +141,11 @@ public abstract class ClassRegistry implements ContextAccess {
         LinkedKlass linkedKlass = new LinkedKlass(parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
 
         ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
+        Klass previous = classes.put(type, klass);
 
-        if (superKlass != null && !Klass.checkAccess(superKlass, klass)) {
-            throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString("class " + type + " cannot access its superclass " + superKlassType));
-        }
-
-        for (ObjectKlass interf : superInterfaces) {
-            if (interf != null && !Klass.checkAccess(interf, klass)) {
-                throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString("class " + type + " cannot access its superinterface " + interf.getType()));
-            }
-        }
-
-        Klass previous = classes.putIfAbsent(type, klass);
         if (previous != null) {
-            throw meta.throwExWithMessage(LinkageError.class, "Class " + previous + " loaded twice");
+            throw getMeta().throwExWithMessage(LinkageError.class, "Class " + previous + " loaded twice");
         }
-
         return klass;
     }
 
