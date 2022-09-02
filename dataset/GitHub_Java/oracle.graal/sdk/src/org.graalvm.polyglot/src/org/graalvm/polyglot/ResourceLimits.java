@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,6 +40,7 @@
  */
 package org.graalvm.polyglot;
 
+import java.lang.management.ThreadMXBean;
 import java.time.Duration;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -55,6 +56,8 @@ import java.util.function.Predicate;
  * <p>
  * The following resource limits are supported:
  * <ul>
+ * <li>{@link Builder#cpuTimeLimit(Duration, Duration) Time} limit per context. Allows to limit the
+ * amount of time spent per context.
  * <li>{@link Builder#statementLimit(long, Predicate) Statement count} limit per context. Allows to
  * limit the amount of statements executed per context.
  * </ul>
@@ -72,6 +75,29 @@ import java.util.function.Predicate;
  *         assert false;
  *     } catch (PolyglotException e) {
  *         // triggered after 500 iterations of while(true);
+ *         // context is closed and can no longer be used
+ *         assert e.isCancelled();
+ *     }
+ * }
+ * </pre>
+ * </code>
+ *
+ * <h3>Time Limit Example</h3>
+ *
+ * <code>
+ * <pre>
+ * ResourceLimits limits = ResourceLimits.newBuilder()
+ *                   .timeLimit(Duration.ofMillis(500),
+ *                              Duration.ofMillis(5))
+ *                   .build();
+ * try (Context context = Context.newBuilder("js")
+ *                            .resourceLimits(limits)
+ *                        .build();) {
+ *     try {
+ *         context.eval("js", "while(true);");
+ *         assert false;
+ *     } catch (PolyglotException e) {
+ *         // triggered after 500ms;
  *         // context is closed and can no longer be used
  *         assert e.isCancelled();
  *     }
@@ -128,13 +154,13 @@ public final class ResourceLimits {
          * overwrites previous statement limit configurations. If the statement limit is exceeded
          * then the {@link #onLimit(Consumer) onLimit} listener is notified.
          * <p>
-         * By default there is no statement limit applied. The limit may be set to 0 to disable it.
-         * In addition to the limit a source filter may be set to indicate for which sources the
-         * limit should be applied. If the source filter is <code>null</code> then it will be
-         * applied to all {@link Source#isInternal() internal} and public sources. The provided
-         * limit must not be negative otherwise an {@link IllegalArgumentException} is thrown. If a
-         * {@link Context.Builder#engine(Engine) shared engine} is used then the same source filter
-         * instance must be used for all contexts of an engine. Otherwise an
+         * By default there is no statement limit applied. The limit may be set to 0 to disable the
+         * statement limit. In addition to the limit a source filter may be set to indicate for
+         * which sources the limit should be applied. If the source filter is <code>null</code> then
+         * it will be applied to all {@link Source#isInternal() internal} and public sources. The
+         * provided limit must not be negative otherwise an {@link IllegalArgumentException} is
+         * thrown. If a {@link Context.Builder#engine(Engine) shared engine} is used then the same
+         * source filter instance must be used for all contexts of an engine. Otherwise an
          * {@link IllegalArgumentException} is thrown when the context is
          * {@link Context.Builder#build() built}. The limit itself may vary between contexts.
          * <p>
@@ -142,15 +168,9 @@ public final class ResourceLimits {
          * Therefore, new inner contexts cannot be used to exceed the statement limit.
          * <p>
          * Note that attaching a statement limit to a context reduces the throughput of all guest
-         * applications with the same engine. The statement counter needs to be updated with every
-         * statement that is executed. It is recommended to benchmark the use of the statement limit
-         * before it is used in production.
-         * <p>
-         * Note that the complexity of a single statement may not be constant time depending on the
-         * guest language. For example, statements that execute JavaScript builtins, like
-         * <code>Array.sort</code>, may account for a single statement, but its execution time is
-         * dependent on the size of the array. The statement count limit is therefore not suitable
-         * to perform time boxing and must be combined with other more reliable measures.
+         * applications with that use the same engine. The statement counter needs to be updated
+         * with every statement that is executed. It is recommended to benchmark the use of the
+         * statement limit before it is used in production.
          *
          * @see ResourceLimits Example Usage
          * @since 19.3
@@ -162,6 +182,52 @@ public final class ResourceLimits {
             }
             this.statementLimit = limit;
             this.statementLimitSourceFilter = sourceFilter;
+            return this;
+        }
+
+        /**
+         * Specifies the maximum {@link ThreadMXBean#getThreadCpuTime(long) CPU time} a context may
+         * be active until the onLimit event is notified and the context will be
+         * {@link Context#close() closed}. The {@link Duration time limit} may be specified
+         * alongside an {@link Duration accuracy} with which the time limit is enforced. Both time
+         * limit and accuracy must be positive. Both parameters may be set to <code>null</code> to
+         * disable the time limit for a builder. By default no time limit is configured. Invoking
+         * this method multiple times overwrites previous time limit configurations. If the time
+         * limit is exceeded then the {@link #onLimit(Consumer) onLimit} listener is notified. The
+         * minimal accuracy is 10 milliseconds, values below that will be rounded up.
+         * <p>
+         * The used CPU time of a context typically does not include time spent waiting for
+         * synchronization or IO. The CPU time of all threads will be added and checked against the
+         * CPU time limit. This can mean that if two threads execute the same context then the time
+         * limit will be exceeded twice as fast.
+         * <p>
+         * The time limit is enforced by a separate high-priority thread that will be woken
+         * regularly. There is no guarantee that the context will be cancelled within the accuracy
+         * specified. The accuracy may be significantly missed, e.g. if the host VM causes a full
+         * garbage collection. If the time limit is never exceeded then the throughput of the guest
+         * context is not affected. If the time limit is exceeded for one context then it may slow
+         * down the throughput for other contexts of an engine temporarily.
+         * <p>
+         * The time limit is applied to the context and all inner contexts it spawns. Therefore, new
+         * inner contexts cannot be used to exceed the time limit.
+         *
+         * @see ThreadMXBean#getThreadCpuTime(long)
+         * @see ResourceLimits Example Usage
+         * @since 19.3
+         */
+        @SuppressWarnings("hiding")
+        public Builder cpuTimeLimit(Duration timeLimit, Duration accuracy) {
+            if (timeLimit == null && accuracy == null) {
+                // fall through to allow reset
+            } else if (timeLimit == null || accuracy == null) {
+                throw new IllegalArgumentException("If a timeLimit is specified accuracy must be specified as well.");
+            } else if (timeLimit.isNegative() || timeLimit.isZero()) {
+                throw new IllegalArgumentException("Time limit must not be negative or zero.");
+            } else if (accuracy.isNegative() || accuracy.isZero()) {
+                throw new IllegalArgumentException("Accuracy must not be negative or zero.");
+            }
+            this.timeLimit = timeLimit;
+            this.timeLimitAccuracy = accuracy;
             return this;
         }
 
@@ -183,7 +249,7 @@ public final class ResourceLimits {
          * @since 19.3
          */
         public ResourceLimits build() {
-            return new ResourceLimits(Engine.getImpl().buildLimits(statementLimit, statementLimitSourceFilter, onLimit));
+            return new ResourceLimits(Engine.getImpl().buildLimits(statementLimit, statementLimitSourceFilter, timeLimit, timeLimitAccuracy, onLimit));
         }
     }
 }
