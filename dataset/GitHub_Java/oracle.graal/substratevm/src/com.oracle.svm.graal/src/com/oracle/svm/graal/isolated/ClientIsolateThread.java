@@ -24,26 +24,11 @@
  */
 package com.oracle.svm.graal.isolated;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.nativeimage.IsolateThread;
 
-import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
-import com.oracle.svm.graal.hosted.GraalProviderObjectReplacements;
-import com.oracle.svm.graal.meta.SubstrateConstantFieldProvider;
-
-public final class IsolateAwareProviderObjectReplacements extends GraalProviderObjectReplacements {
-    private final SnippetReflectionProvider snippetReflection;
-
-    public IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        this(aMetaAccess, new IsolateAwareMetaAccess());
-    }
-
-    private IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess, IsolateAwareMetaAccess sMetaAccess) {
-        super(sMetaAccess, new SubstrateConstantFieldProvider(aMetaAccess), new IsolateAwareConstantReflectionProvider(sMetaAccess));
-        this.snippetReflection = new IsolateAwareSnippetReflectionProvider();
-    }
-
-    @Override
-    public SnippetReflectionProvider getSnippetReflectionProvider() {
-        return snippetReflection;
-    }
+/**
+ * The {@link IsolateThread} of the client that requested a compilation to be performed in a
+ * {@linkplain CompilerIsolateThread different isolate}.
+ */
+public interface ClientIsolateThread extends IsolateThread {
 }

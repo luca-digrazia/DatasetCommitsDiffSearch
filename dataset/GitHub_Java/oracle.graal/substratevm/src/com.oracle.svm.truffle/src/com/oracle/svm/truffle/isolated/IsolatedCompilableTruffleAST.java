@@ -27,6 +27,7 @@ package com.oracle.svm.truffle.isolated;
 import java.util.function.Supplier;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
@@ -78,8 +79,8 @@ final class IsolatedCompilableTruffleAST extends IsolatedObjectProxy<SubstrateCo
     }
 
     @Override
-    public void onCompilationFailed(Supplier<String> serializedException, boolean silent, boolean bailout, boolean permanentBailout, boolean graphTooBig) {
-        onCompilationFailed0(IsolatedCompileContext.get().getClient(), handle, IsolatedCompileContext.get().hand(serializedException), silent, bailout, permanentBailout, graphTooBig);
+    public void onCompilationFailed(Supplier<String> serializedException, boolean bailout, boolean permanentBailout) {
+        onCompilationFailed0(IsolatedCompileContext.get().getClient(), handle, IsolatedCompileContext.get().hand(serializedException), bailout, permanentBailout);
     }
 
     @Override
@@ -135,13 +136,18 @@ final class IsolatedCompilableTruffleAST extends IsolatedObjectProxy<SubstrateCo
     }
 
     @Override
-    public SubstrateInstalledCode createSubstrateInstalledCode() {
+    public SubstrateInstalledCode getSubstrateInstalledCode() {
         throw VMError.shouldNotReachHere("Must not be called during isolated compilation");
     }
 
     @Override
-    public InstalledCode createPreliminaryInstalledCode() {
-        return new IsolatedCodeInstallBridge(handle);
+    public OptimizedAssumptionDependency getDependency() {
+        throw VMError.shouldNotReachHere("Must not be called during isolated compilation");
+    }
+
+    @Override
+    public InstalledCode createInstalledCode() {
+        return new IsolatedCodeInstallBridge(handle, handle);
     }
 
     @Override
@@ -160,13 +166,13 @@ final class IsolatedCompilableTruffleAST extends IsolatedObjectProxy<SubstrateCo
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static void onCompilationFailed0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<SubstrateCompilableTruffleAST> compilableHandle,
-                    CompilerHandle<Supplier<String>> serializedExceptionHandle, boolean silent, boolean bailout, boolean permanentBailout, boolean graphTooBig) {
+                    CompilerHandle<Supplier<String>> serializedExceptionHandle, boolean bailout, boolean permanentBailout) {
 
         Supplier<String> serializedException = () -> {
             ClientHandle<String> resultHandle = getReasonAndStackTrace0(IsolatedCompileClient.get().getCompiler(), serializedExceptionHandle);
             return IsolatedCompileClient.get().unhand(resultHandle);
         };
-        IsolatedCompileClient.get().unhand(compilableHandle).onCompilationFailed(serializedException, silent, bailout, permanentBailout, graphTooBig);
+        IsolatedCompileClient.get().unhand(compilableHandle).onCompilationFailed(serializedException, bailout, permanentBailout);
     }
 
     @CEntryPoint
@@ -180,6 +186,7 @@ final class IsolatedCompilableTruffleAST extends IsolatedObjectProxy<SubstrateCo
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static CompilerHandle<String> getName0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<SubstrateCompilableTruffleAST> compilableHandle) {
+
         String name = IsolatedCompileClient.get().unhand(compilableHandle).getName();
         return IsolatedCompileClient.get().createStringInCompiler(name);
     }

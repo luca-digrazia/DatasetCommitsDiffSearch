@@ -66,12 +66,12 @@ public final class IsolatedGraalUtils {
         return (CompilerIsolateThread) Isolates.createIsolate(params);
     }
 
-    public static InstalledCode compileInNewIsolateAndInstall(SubstrateMethod method) {
+    public static InstalledCode compileInNewIsolateAndInstall(SubstrateMethod method, boolean testTrampolineJumps) {
         CompilerIsolateThread context = createCompilationIsolate();
         IsolatedCompileClient.set(new IsolatedCompileClient(context));
         byte[] encodedOptions = encodeRuntimeOptionValues();
         ClientHandle<SubstrateInstalledCode> installedCodeHandle = compileInNewIsolateAndInstall0(context, (ClientIsolateThread) CurrentIsolate.getCurrentThread(),
-                        ImageHeapObjects.ref(method), IsolatedCompileClient.get().hand(encodedOptions), getNullableArrayLength(encodedOptions));
+                        ImageHeapObjects.ref(method), IsolatedCompileClient.get().hand(encodedOptions), getNullableArrayLength(encodedOptions), testTrampolineJumps);
         Isolates.tearDownIsolate(context);
         InstalledCode installedCode = (InstalledCode) IsolatedCompileClient.get().unhand(installedCodeHandle);
         IsolatedCompileClient.set(null);
@@ -81,7 +81,7 @@ public final class IsolatedGraalUtils {
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static ClientHandle<SubstrateInstalledCode> compileInNewIsolateAndInstall0(@SuppressWarnings("unused") @CEntryPoint.IsolateThreadContext CompilerIsolateThread isolate,
-                    ClientIsolateThread clientIsolate, ImageHeapRef<SubstrateMethod> methodRef, ClientHandle<byte[]> encodedOptions, int encodedOptionsLength) {
+                    ClientIsolateThread clientIsolate, ImageHeapRef<SubstrateMethod> methodRef, ClientHandle<byte[]> encodedOptions, int encodedOptionsLength, boolean testTrampolineJumps) {
 
         IsolatedCompileContext.set(new IsolatedCompileContext(clientIsolate));
 
@@ -92,7 +92,7 @@ public final class IsolatedGraalUtils {
         DebugContext debug = new Builder(RuntimeOptionValues.singleton(), new GraalDebugHandlersFactory(GraalSupport.getRuntimeConfig().getSnippetReflection())).build();
         CompilationResult compilationResult = SubstrateGraalUtils.doCompile(debug, GraalSupport.getRuntimeConfig(), GraalSupport.getSuites(), GraalSupport.getLIRSuites(), method);
         ClientHandle<SubstrateInstalledCode> installedCodeHandle = IsolatedRuntimeCodeInstaller.installInClientIsolate(
-                        methodRef, compilationResult, IsolatedHandles.nullHandle());
+                        methodRef, compilationResult, testTrampolineJumps, IsolatedHandles.nullHandle());
         Log.log().string("Code for " + method.format("%H.%n(%p)") + ": " + compilationResult.getTargetCodeSize() + " bytes").newline();
 
         IsolatedCompileContext.set(null);

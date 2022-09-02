@@ -24,26 +24,27 @@
  */
 package com.oracle.svm.graal.isolated;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import java.util.Arrays;
 
-import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
-import com.oracle.svm.graal.hosted.GraalProviderObjectReplacements;
-import com.oracle.svm.graal.meta.SubstrateConstantFieldProvider;
+import jdk.vm.ci.meta.SpeculationLog;
 
-public final class IsolateAwareProviderObjectReplacements extends GraalProviderObjectReplacements {
-    private final SnippetReflectionProvider snippetReflection;
+final class EncodedSpeculationReason implements SpeculationLog.SpeculationReason {
+    private final byte[] data;
 
-    public IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        this(aMetaAccess, new IsolateAwareMetaAccess());
-    }
-
-    private IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess, IsolateAwareMetaAccess sMetaAccess) {
-        super(sMetaAccess, new SubstrateConstantFieldProvider(aMetaAccess), new IsolateAwareConstantReflectionProvider(sMetaAccess));
-        this.snippetReflection = new IsolateAwareSnippetReflectionProvider();
+    EncodedSpeculationReason(byte[] data) {
+        this.data = data;
     }
 
     @Override
-    public SnippetReflectionProvider getSnippetReflectionProvider() {
-        return snippetReflection;
+    public boolean equals(Object obj) {
+        if (obj != this && obj instanceof EncodedSpeculationReason) {
+            return Arrays.equals(data, ((EncodedSpeculationReason) obj).data);
+        }
+        return (obj == this);
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(data);
     }
 }

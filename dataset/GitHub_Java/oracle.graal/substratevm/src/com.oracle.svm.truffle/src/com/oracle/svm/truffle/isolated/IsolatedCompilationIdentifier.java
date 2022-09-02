@@ -24,52 +24,60 @@
  */
 package com.oracle.svm.truffle.isolated;
 
-import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
+import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilationIdentifier;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.graal.isolated.ClientHandle;
 import com.oracle.svm.graal.isolated.ClientIsolateThread;
+import com.oracle.svm.graal.isolated.CompilerHandle;
 import com.oracle.svm.graal.isolated.IsolatedCompileClient;
 import com.oracle.svm.graal.isolated.IsolatedCompileContext;
 import com.oracle.svm.graal.isolated.IsolatedObjectProxy;
 
-final class IsolatedTruffleCompilationTask extends IsolatedObjectProxy<TruffleCompilationTask> implements TruffleCompilationTask {
+final class IsolatedCompilationIdentifier extends IsolatedObjectProxy<TruffleCompilationIdentifier> implements TruffleCompilationIdentifier {
+    private static final Verbosity[] VERBOSITIES = Verbosity.values();
 
-    IsolatedTruffleCompilationTask(ClientHandle<TruffleCompilationTask> handle) {
+    private final IsolatedCompilableTruffleAST compilable;
+    private final String[] descriptions = new String[VERBOSITIES.length];
+
+    IsolatedCompilationIdentifier(ClientHandle<TruffleCompilationIdentifier> handle, IsolatedCompilableTruffleAST compilable) {
         super(handle);
+        this.compilable = compilable;
     }
 
     @Override
-    public boolean isCancelled() {
-        return isCancelled0(IsolatedCompileContext.get().getClient(), handle);
+    public CompilableTruffleAST getCompilable() {
+        return compilable;
     }
 
     @Override
-    public boolean isLastTier() {
-        return isLastTier0(IsolatedCompileContext.get().getClient(), handle);
+    public void close() {
+        close0(IsolatedCompileContext.get().getClient(), handle);
     }
 
     @Override
-    public boolean isFirstTier() {
-        return isFirstTier0(IsolatedCompileContext.get().getClient(), handle);
+    public String toString(Verbosity verbosity) {
+        int ordinal = verbosity.ordinal();
+        if (descriptions[ordinal] == null) {
+            CompilerHandle<String> h = toString0(IsolatedCompileContext.get().getClient(), handle, ordinal);
+            descriptions[ordinal] = IsolatedCompileContext.get().unhand(h);
+        }
+        return descriptions[ordinal];
     }
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static boolean isCancelled0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
-        return IsolatedCompileClient.get().unhand(taskHandle).isCancelled();
+    private static void close0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationIdentifier> compilationHandle) {
+        IsolatedCompileClient.get().unhand(compilationHandle).close();
     }
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static boolean isLastTier0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
-        return IsolatedCompileClient.get().unhand(taskHandle).isLastTier();
-    }
-
-    @CEntryPoint
-    @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static boolean isFirstTier0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
-        return IsolatedCompileClient.get().unhand(taskHandle).isFirstTier();
+    private static CompilerHandle<String> toString0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationIdentifier> idHandle, int verbosityOrdinal) {
+        TruffleCompilationIdentifier id = IsolatedCompileClient.get().unhand(idHandle);
+        String description = id.toString(VERBOSITIES[verbosityOrdinal]);
+        return IsolatedCompileClient.get().createStringInCompiler(description);
     }
 }

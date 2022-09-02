@@ -24,26 +24,26 @@
  */
 package com.oracle.svm.graal.isolated;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.nativeimage.ObjectHandle;
 
-import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
-import com.oracle.svm.graal.hosted.GraalProviderObjectReplacements;
-import com.oracle.svm.graal.meta.SubstrateConstantFieldProvider;
+import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.handles.ThreadLocalHandles;
 
-public final class IsolateAwareProviderObjectReplacements extends GraalProviderObjectReplacements {
-    private final SnippetReflectionProvider snippetReflection;
-
-    public IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        this(aMetaAccess, new IsolateAwareMetaAccess());
+public final class IsolatedHandles {
+    @SuppressWarnings("unchecked")
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static <T, H extends IsolatedHandle<? extends T>> H nullHandle() {
+        return ThreadLocalHandles.nullHandle();
     }
 
-    private IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess, IsolateAwareMetaAccess sMetaAccess) {
-        super(sMetaAccess, new SubstrateConstantFieldProvider(aMetaAccess), new IsolateAwareConstantReflectionProvider(sMetaAccess));
-        this.snippetReflection = new IsolateAwareSnippetReflectionProvider();
+    private IsolatedHandles() {
     }
+}
 
-    @Override
-    public SnippetReflectionProvider getSnippetReflectionProvider() {
-        return snippetReflection;
-    }
+/**
+ * An object handle for isolated compilation with added static type information.
+ *
+ * @param <T> The type of the object referenced by the handle.
+ */
+interface IsolatedHandle<T> extends ObjectHandle {
 }

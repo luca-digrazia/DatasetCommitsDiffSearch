@@ -24,26 +24,24 @@
  */
 package com.oracle.svm.graal.isolated;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.nativeimage.c.struct.RawField;
+import org.graalvm.nativeimage.c.struct.RawStructure;
+import org.graalvm.word.PointerBase;
 
-import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
-import com.oracle.svm.graal.hosted.GraalProviderObjectReplacements;
-import com.oracle.svm.graal.meta.SubstrateConstantFieldProvider;
+import com.oracle.svm.core.code.CodeInfo;
 
-public final class IsolateAwareProviderObjectReplacements extends GraalProviderObjectReplacements {
-    private final SnippetReflectionProvider snippetReflection;
+/** The data that is required for installing compiled code in a different isolate. */
+@RawStructure
+interface CodeInstallInfo extends PointerBase {
+    @RawField
+    CodeInfo getCodeInfo();
 
-    public IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        this(aMetaAccess, new IsolateAwareMetaAccess());
-    }
+    @RawField
+    void setCodeInfo(CodeInfo value);
 
-    private IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess, IsolateAwareMetaAccess sMetaAccess) {
-        super(sMetaAccess, new SubstrateConstantFieldProvider(aMetaAccess), new IsolateAwareConstantReflectionProvider(sMetaAccess));
-        this.snippetReflection = new IsolateAwareSnippetReflectionProvider();
-    }
+    @RawField
+    ForeignIsolateReferenceAdjusterData getAdjusterData();
 
-    @Override
-    public SnippetReflectionProvider getSnippetReflectionProvider() {
-        return snippetReflection;
-    }
+    @RawField
+    void setAdjusterData(ForeignIsolateReferenceAdjusterData value);
 }

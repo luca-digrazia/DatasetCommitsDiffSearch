@@ -24,26 +24,14 @@
  */
 package com.oracle.svm.graal.isolated;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.graal.meta.SharedRuntimeMethod;
 
-import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
-import com.oracle.svm.graal.hosted.GraalProviderObjectReplacements;
-import com.oracle.svm.graal.meta.SubstrateConstantFieldProvider;
+/** Method object in the compiler isolate with an equivalent method object in the client isolate. */
+public interface IsolatedCompilationMethod<T extends SharedRuntimeMethod> extends SharedRuntimeMethod, IsolatedMirroredObject<T> {
 
-public final class IsolateAwareProviderObjectReplacements extends GraalProviderObjectReplacements {
-    private final SnippetReflectionProvider snippetReflection;
-
-    public IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        this(aMetaAccess, new IsolateAwareMetaAccess());
-    }
-
-    private IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess, IsolateAwareMetaAccess sMetaAccess) {
-        super(sMetaAccess, new SubstrateConstantFieldProvider(aMetaAccess), new IsolateAwareConstantReflectionProvider(sMetaAccess));
-        this.snippetReflection = new IsolateAwareSnippetReflectionProvider();
-    }
-
+    /** Handle to the method in the client isolate for installing code. */
     @Override
-    public SnippetReflectionProvider getSnippetReflectionProvider() {
-        return snippetReflection;
-    }
+    @Uninterruptible(reason = "Called from uninterruptible code.")
+    ClientHandle<T> getMirror();
 }

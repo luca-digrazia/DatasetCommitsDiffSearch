@@ -88,7 +88,7 @@ public final class IsolatedObjectConstant extends SubstrateObjectConstant {
     }
 
     @Override
-    public int getIdentityHashCode() {
+    protected int getIdentityHashCode() {
         int h = cachedIdentityHash;
         if (h == 0) {
             h = getIdentityHashCode0(IsolatedCompileContext.get().getClient(), handle);
@@ -102,6 +102,12 @@ public final class IsolatedObjectConstant extends SubstrateObjectConstant {
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static int getIdentityHashCode0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<?> h) {
         Object target = IsolatedCompileClient.get().unhand(h);
-        return computeIdentityHashCode(target);
+        return System.identityHashCode(target);
     }
+
+    @Override
+    public String toString() {
+        return getJavaKind().getJavaName();
+    }
+
 }

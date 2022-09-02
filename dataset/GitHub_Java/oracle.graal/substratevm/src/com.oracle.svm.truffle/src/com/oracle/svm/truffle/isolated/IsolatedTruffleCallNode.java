@@ -24,7 +24,8 @@
  */
 package com.oracle.svm.truffle.isolated;
 
-import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
+import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.common.TruffleCallNode;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 
 import com.oracle.svm.core.c.function.CEntryPointOptions;
@@ -33,43 +34,48 @@ import com.oracle.svm.graal.isolated.ClientIsolateThread;
 import com.oracle.svm.graal.isolated.IsolatedCompileClient;
 import com.oracle.svm.graal.isolated.IsolatedCompileContext;
 import com.oracle.svm.graal.isolated.IsolatedObjectProxy;
+import com.oracle.svm.truffle.api.SubstrateCompilableTruffleAST;
 
-final class IsolatedTruffleCompilationTask extends IsolatedObjectProxy<TruffleCompilationTask> implements TruffleCompilationTask {
-
-    IsolatedTruffleCompilationTask(ClientHandle<TruffleCompilationTask> handle) {
-        super(handle);
+final class IsolatedTruffleCallNode extends IsolatedObjectProxy<TruffleCallNode> implements TruffleCallNode {
+    IsolatedTruffleCallNode(ClientHandle<TruffleCallNode> node) {
+        super(node);
     }
 
     @Override
-    public boolean isCancelled() {
-        return isCancelled0(IsolatedCompileContext.get().getClient(), handle);
+    public CompilableTruffleAST getCurrentCallTarget() {
+        ClientHandle<SubstrateCompilableTruffleAST> astHandle = getCurrentCallTarget0(IsolatedCompileContext.get().getClient(), handle);
+        return new IsolatedCompilableTruffleAST(astHandle);
     }
 
     @Override
-    public boolean isLastTier() {
-        return isLastTier0(IsolatedCompileContext.get().getClient(), handle);
+    public int getCallCount() {
+        return getCallCount0(IsolatedCompileContext.get().getClient(), handle);
     }
 
     @Override
-    public boolean isFirstTier() {
-        return isFirstTier0(IsolatedCompileContext.get().getClient(), handle);
+    public boolean isInliningForced() {
+        return isInliningForced0(IsolatedCompileContext.get().getClient(), handle);
     }
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static boolean isCancelled0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
-        return IsolatedCompileClient.get().unhand(taskHandle).isCancelled();
+    private static ClientHandle<SubstrateCompilableTruffleAST> getCurrentCallTarget0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCallNode> nodeHandle) {
+        TruffleCallNode node = IsolatedCompileClient.get().unhand(nodeHandle);
+        CompilableTruffleAST target = node.getCurrentCallTarget();
+        return IsolatedCompileClient.get().hand((SubstrateCompilableTruffleAST) target);
     }
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static boolean isLastTier0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
-        return IsolatedCompileClient.get().unhand(taskHandle).isLastTier();
+    private static int getCallCount0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCallNode> nodeHandle) {
+        TruffleCallNode node = IsolatedCompileClient.get().unhand(nodeHandle);
+        return node.getCallCount();
     }
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static boolean isFirstTier0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
-        return IsolatedCompileClient.get().unhand(taskHandle).isFirstTier();
+    private static boolean isInliningForced0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCallNode> nodeHandle) {
+        TruffleCallNode node = IsolatedCompileClient.get().unhand(nodeHandle);
+        return node.isInliningForced();
     }
 }

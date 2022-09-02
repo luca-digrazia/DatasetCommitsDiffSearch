@@ -424,7 +424,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         installShutdownHooks();
     }
 
-    protected final void installShutdownHooks() {
+    protected void installShutdownHooks() {
         addShutdownHook(this::shutdown);
     }
 

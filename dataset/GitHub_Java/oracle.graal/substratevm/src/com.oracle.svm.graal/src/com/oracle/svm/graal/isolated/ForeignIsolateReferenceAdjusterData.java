@@ -24,26 +24,31 @@
  */
 package com.oracle.svm.graal.isolated;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.nativeimage.ObjectHandle;
+import org.graalvm.nativeimage.c.struct.RawField;
+import org.graalvm.nativeimage.c.struct.RawStructure;
+import org.graalvm.word.Pointer;
+import org.graalvm.word.PointerBase;
 
-import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
-import com.oracle.svm.graal.hosted.GraalProviderObjectReplacements;
-import com.oracle.svm.graal.meta.SubstrateConstantFieldProvider;
+import com.oracle.svm.core.c.NonmovableArray;
 
-public final class IsolateAwareProviderObjectReplacements extends GraalProviderObjectReplacements {
-    private final SnippetReflectionProvider snippetReflection;
+@RawStructure
+interface ForeignIsolateReferenceAdjusterData extends PointerBase {
+    @RawField
+    int getCount();
 
-    public IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        this(aMetaAccess, new IsolateAwareMetaAccess());
-    }
+    @RawField
+    void setCount(int count);
 
-    private IsolateAwareProviderObjectReplacements(AnalysisMetaAccess aMetaAccess, IsolateAwareMetaAccess sMetaAccess) {
-        super(sMetaAccess, new SubstrateConstantFieldProvider(aMetaAccess), new IsolateAwareConstantReflectionProvider(sMetaAccess));
-        this.snippetReflection = new IsolateAwareSnippetReflectionProvider();
-    }
+    @RawField
+    NonmovableArray<Pointer> getAddresses();
 
-    @Override
-    public SnippetReflectionProvider getSnippetReflectionProvider() {
-        return snippetReflection;
-    }
+    @RawField
+    void setAddresses(NonmovableArray<Pointer> array);
+
+    @RawField
+    NonmovableArray<ObjectHandle> getHandles();
+
+    @RawField
+    void setHandles(NonmovableArray<ObjectHandle> array);
 }

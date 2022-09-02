@@ -101,6 +101,9 @@ class SubstrateTruffleOptions {
 
 public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
 
+    private static final int DEBUG_TEAR_DOWN_TIMEOUT = 2_000;
+    private static final int PRODUCTION_TEAR_DOWN_TIMEOUT = 10_000;
+
     private CallMethods hostedCallMethods;
     private volatile BackgroundCompileQueue compileQueue;
     private volatile boolean initialized;
@@ -170,6 +173,18 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Override
     public SubstrateTruffleCompiler newTruffleCompiler() {
         return TruffleFeature.getSupport().createTruffleCompiler(this);
+    }
+
+    @Override
+    protected void shutdown() {
+        /*
+         * Runaway compilations should fail during testing, but should not cause crashes in
+         * production.
+         */
+        long timeout = SubstrateUtil.assertionsEnabled() ? DEBUG_TEAR_DOWN_TIMEOUT : PRODUCTION_TEAR_DOWN_TIMEOUT;
+        getCompileQueue().shutdownAndAwaitTermination(timeout);
+
+        super.shutdown();
     }
 
     @Override
