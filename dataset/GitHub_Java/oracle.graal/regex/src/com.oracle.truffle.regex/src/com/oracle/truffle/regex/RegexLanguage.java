@@ -40,16 +40,16 @@
  */
 package com.oracle.truffle.regex;
 
+import java.util.Collections;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.regex.tregex.nfa.PureNFAIndex;
-import com.oracle.truffle.regex.tregex.parser.RegexParserGlobals;
-import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
 
 /**
  * Truffle Regular Expression Language
@@ -96,20 +96,6 @@ public final class RegexLanguage extends TruffleLanguage<RegexLanguage.RegexCont
 
     public final RegexEngineBuilder engineBuilder = new RegexEngineBuilder(this);
 
-    private final GroupBoundaries[] cachedGroupBoundaries;
-    public final RegexParserGlobals parserGlobals;
-    public final PureNFAIndex emptyNFAIndex;
-
-    public RegexLanguage() {
-        this.cachedGroupBoundaries = GroupBoundaries.createCachedGroupBoundaries();
-        this.parserGlobals = new RegexParserGlobals(this);
-        this.emptyNFAIndex = new PureNFAIndex(0);
-    }
-
-    public GroupBoundaries[] getCachedGroupBoundaries() {
-        return cachedGroupBoundaries;
-    }
-
     @Override
     protected CallTarget parse(ParsingRequest parsingRequest) {
         return getCurrentContext().getEngineBuilderCT;
@@ -127,8 +113,8 @@ public final class RegexLanguage extends TruffleLanguage<RegexLanguage.RegexCont
     }
 
     @Override
-    protected Object getScope(RegexContext context) {
-        return null;
+    protected Iterable<Scope> findTopScopes(RegexContext context) {
+        return Collections.emptySet();
     }
 
     /**
