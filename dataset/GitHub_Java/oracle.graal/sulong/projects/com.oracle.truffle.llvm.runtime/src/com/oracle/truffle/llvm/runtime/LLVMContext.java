@@ -523,9 +523,6 @@ public final class LLVMContext {
         return Paths.get(lib);
     }
 
-    /**
-     * @return null if already loaded
-     */
     public ExternalLibrary addExternalLibrary(String lib, boolean isNative, Object reason) {
         return addExternalLibrary(lib, isNative, reason, DefaultLibraryLocator.INSTANCE);
     }
@@ -548,22 +545,20 @@ public final class LLVMContext {
         return null;
     }
 
-    /**
-     * Helper class to capture an {@link ExternalLibrary} and a flag to indicate whether the library
-     * has been added. If {@link LibraryAddResult#added} is false, the
-     * {@link LibraryAddResult#library} is the existing library.
-     */
-    public static class LibraryAddResult {
+    public static class AddResult {
         public final ExternalLibrary library;
         public final boolean added;
 
-        public LibraryAddResult(ExternalLibrary lib, boolean added) {
+        public AddResult(ExternalLibrary lib, boolean added) {
             this.library = lib;
             this.added = added;
         }
     }
 
-    public LibraryAddResult addOrGetExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
+    /**
+     * @return null if already loaded
+     */
+    public AddResult addExternalLibraryPair(String lib, boolean isNative, Object reason, LibraryLocator locator) {
         CompilerAsserts.neverPartOfCompilation();
         if (isInternalLibrary(lib)) {
             // Disallow loading internal libraries explicitly.
@@ -572,10 +567,10 @@ public final class LLVMContext {
         ExternalLibrary newLib = getExternalLibrary(lib, isNative, reason, locator);
         ExternalLibrary existingLib = getOrAddExternalLibrary(newLib);
         if (existingLib == newLib) {
-            return new LibraryAddResult(newLib, true);
+            return new AddResult(newLib, true);
         }
         LibraryLocator.traceAlreadyLoaded(this, existingLib.path);
-        return new LibraryAddResult(existingLib, false);
+        return new AddResult(existingLib, false);
     }
 
     private ExternalLibrary getExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {

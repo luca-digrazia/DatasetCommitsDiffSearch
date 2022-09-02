@@ -35,10 +35,6 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.UnresolvedFunction;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
-/**
- * {@link LLVMFunctionCode} represents the symbol for a function.
- *
- */
 public final class LLVMFunction extends LLVMSymbol {
 
     private final FunctionType type;

@@ -60,11 +60,11 @@ import com.oracle.truffle.llvm.runtime.types.FunctionType;
 @SuppressWarnings("static-method")
 public final class LLVMNativeWrapper implements TruffleObject {
 
-    private final LLVMFunctionDescriptor descriptor;
+    private final LLVMFunctionDescriptor function;
 
-    public LLVMNativeWrapper(LLVMFunctionDescriptor descriptor) {
-        assert descriptor.getFunctionCode().isLLVMIRFunction() || descriptor.getFunctionCode().isIntrinsicFunctionSlowPath();
-        this.descriptor = descriptor;
+    public LLVMNativeWrapper(LLVMFunctionDescriptor function) {
+        assert function.getFunctionCode().isLLVMIRFunction() || function.getFunctionCode().isIntrinsicFunctionSlowPath();
+        this.function = function;
     }
 
     static boolean isInstance(TruffleObject obj) {
@@ -73,7 +73,7 @@ public final class LLVMNativeWrapper implements TruffleObject {
 
     @Override
     public String toString() {
-        return descriptor.toString();
+        return function.toString();
     }
 
     @ExportMessage
@@ -84,7 +84,7 @@ public final class LLVMNativeWrapper implements TruffleObject {
     @ExportMessage
     Object execute(Object[] args,
                     @Cached CallbackHelperNode callbackHelper) {
-        return callbackHelper.execute(descriptor, args);
+        return callbackHelper.execute(function, args);
     }
 
     @GenerateUncached
