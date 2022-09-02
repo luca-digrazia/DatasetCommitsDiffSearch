@@ -339,9 +339,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             RuntimeClassInitialization.initializeAtBuildTime(provider.getClass());
         }
         initializeTruffleReflectively(Thread.currentThread().getContextClassLoader());
-
-        // reinitialize language cache
-        invokeStaticMethod("com.oracle.truffle.api.library.LibraryFactory", "reinitializeNativeImageState", Collections.emptyList());
     }
 
     @Override
@@ -476,8 +473,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
                             partialEvaluator.getProviders().getStampProvider(),
                             snippetReflection,
                             graalFeature.getHostedProviders().getWordTypes(),
-                            graalFeature.getHostedProviders().getPlatformConfigurationProvider(),
-                            graalFeature.getHostedProviders().getMetaAccessExtensionProvider());
+                            graalFeature.getHostedProviders().getPlatformConfigurationProvider());
             newHostedProviders.setGraphBuilderPlugins(graphBuilderConfig.getPlugins());
 
             graalFeature.initializeRuntimeCompilationConfiguration(newHostedProviders, graphBuilderConfig, this::includeCallee, this::deoptimizeOnException);
