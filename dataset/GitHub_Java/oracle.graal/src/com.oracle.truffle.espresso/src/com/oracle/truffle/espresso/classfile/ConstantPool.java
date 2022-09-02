@@ -479,6 +479,9 @@ public abstract class ConstantPool {
                     // A new symbol is spawned (copy) only if doesn't already exists.
                     utf8EntryCount.inc();
                     ByteSequence bytes = stream.readByteSequenceUTF();
+                    if (!bytes.isValid()) {
+                        throw classFormatError("Illegal UTF-8 constant " + (i - 1));
+                    }
                     entries[i] = language.getUtf8ConstantTable().getOrCreate(bytes);
                     break;
                 }
