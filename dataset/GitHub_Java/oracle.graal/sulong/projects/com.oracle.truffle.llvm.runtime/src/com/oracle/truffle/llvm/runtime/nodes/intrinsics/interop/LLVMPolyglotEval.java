@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -42,6 +42,7 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
@@ -88,7 +89,7 @@ public abstract class LLVMPolyglotEval extends LLVMIntrinsic {
     }
 
     protected ForeignToLLVM createForeignToLLVM() {
-        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.POINTER);
+        return CommonNodeFactory.createForeignToLLVM(ForeignToLLVMType.POINTER);
     }
 
     abstract static class GetSourceNode extends LLVMNode {
@@ -98,12 +99,16 @@ public abstract class LLVMPolyglotEval extends LLVMIntrinsic {
 
     abstract static class GetSourceStringNode extends GetSourceNode {
 
-        @SuppressWarnings("unused")
-        @Specialization(limit = "2", guards = {"id.equals(cachedId)", "code.equals(cachedCode)"})
+        /**
+         * @param id
+         * @param code
+         * @see #execute(String, String)
+         */
+        @Specialization(limit = "2", guards = {"id.equals(cachedId)", "code.equals(cachedCode)"}, assumptions = "singleContextAssumption()")
         CallTarget doCached(String id, String code,
-                        @Cached("id") String cachedId,
-                        @Cached("code") String cachedCode,
-                        @CachedContext(LLVMLanguage.class) ContextReference<LLVMContext> ctxRef,
+                        @Cached("id") @SuppressWarnings("unused") String cachedId,
+                        @Cached("code") @SuppressWarnings("unused") String cachedCode,
+                        @CachedContext(LLVMLanguage.class) @SuppressWarnings("unused") ContextReference<LLVMContext> ctxRef,
                         @Cached("uncached(cachedId, cachedCode, ctxRef)") CallTarget callTarget) {
             return callTarget;
         }
