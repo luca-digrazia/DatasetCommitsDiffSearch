@@ -31,8 +31,8 @@ import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.util.function.BooleanSupplier;
 
-import com.oracle.svm.core.SubstrateUtil;
 import org.graalvm.compiler.api.directives.GraalDirectives;
+import org.graalvm.compiler.word.ObjectAccess;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -57,6 +57,7 @@ import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import org.graalvm.word.WordFactory;
 
 /**
  * Substitution of {@link Reference}, which is the abstract base class of all non-strong reference
@@ -127,24 +128,38 @@ public final class Target_java_lang_ref_Reference<T> {
     @KeepOriginal
     native T get();
 
-    @Substitute
-    public void clear() {
-        ReferenceInternals.clear(SubstrateUtil.cast(this, Reference.class));
-    }
-
-    @Delete
-    @TargetElement(onlyWith = JDK16OrLater.class)
-    private native void clear0();
+    @KeepOriginal
+    native void clear();
 
     @Substitute
     @TargetElement(onlyWith = JDK16OrLater.class)
-    public boolean refersTo(T obj) {
-        return ReferenceInternals.refersTo(SubstrateUtil.cast(this, Reference.class), obj);
+    @Uninterruptible(reason = "Must be atomic with regard to garbage collection.")
+    private void clear0() {
+        /*
+         * This (native) method was added to fix following issues:
+         * 
+         * JDK-8256517: This issue only affects GCs that do the reference processing concurrently
+         * (i.e., Shenandoah and ZGC). G1 only processes references at safepoints, so this shouldn't
+         * be an issue for Native Image
+         * 
+         * JDK-8240696: This issue affects G1.
+         *
+         * This barrier-less write is to resolve JDK-8240696.
+         */
+        ObjectAccess.writeObject(this, WordFactory.signed(referentFieldOffset), null);
     }
 
-    @Delete
+    @KeepOriginal
     @TargetElement(onlyWith = JDK16OrLater.class)
-    native boolean refersTo0(Object o);
+    public native boolean refersTo(T obj);
+
+    @Substitute
+    @TargetElement(onlyWith = JDK16OrLater.class)
+    @Uninterruptible(reason = "Must be atomic with regard to garbage collection.")
+    boolean refersTo0(Object o) {
+        // JDK-8188055
+        return o == ObjectAccess.readObject(this, WordFactory.signed(referentFieldOffset));
+    }
 
     @KeepOriginal
     native boolean enqueue();
