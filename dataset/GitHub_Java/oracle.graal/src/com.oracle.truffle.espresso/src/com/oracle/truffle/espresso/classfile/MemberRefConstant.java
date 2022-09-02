@@ -90,10 +90,6 @@ public interface MemberRefConstant extends PoolConstant {
         public Symbol<? extends Descriptor> getDescriptor(ConstantPool pool) {
             return pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool);
         }
-
-        public int getHolderClassIndex() {
-            return classIndex;
-        }
     }
 
     /**
