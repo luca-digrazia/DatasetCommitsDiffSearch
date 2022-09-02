@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.processor;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import javax.lang.model.element.AnnotationMirror;
@@ -30,16 +29,11 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ReferenceType;
-import javax.tools.Diagnostic;
 
 public abstract class IntrinsicsProcessor extends EspressoProcessor {
     static final String JNI_PACKAGE = "com.oracle.truffle.espresso.jni";
-    protected static final String FFI_PACKAGE = "com.oracle.truffle.espresso.ffi";
-    private static final String POINTER = FFI_PACKAGE + "." + "Pointer";
+    private static final String POINTER = "com.oracle.truffle.espresso._native" + "." + "Pointer";
     private static final String HANDLE = JNI_PACKAGE + "." + "Handle";
-
-    protected static final String IMPORT_NATIVE_SIGNATURE = "import " + FFI_PACKAGE + "." + "NativeSignature" + ";\n";
-    protected static final String IMPORT_NATIVE_TYPE = "import " + FFI_PACKAGE + "." + "NativeType" + ";\n";
 
     // @Pointer
     TypeElement pointerAnnotation;
@@ -70,46 +64,43 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         }
     }
 
-    NativeType[] jniNativeSignature(ExecutableElement method, boolean prependJniEnv) {
-        List<NativeType> signature = new ArrayList<>(16);
-
-        // Return type is always first.
-        AnnotationMirror pointer = getAnnotation(method.getReturnType(), pointerAnnotation);
-        AnnotationMirror handle = getAnnotation(method.getReturnType(), handleAnnotation);
-        if (pointer != null) {
-            signature.add(NativeType.POINTER);
-        } else if (handle != null) {
-            signature.add(NativeType.LONG);
-        } else {
-            signature.add(classToType(method.getReturnType().getKind()));
-        }
-
-        // Arguments...
-
+    String jniNativeSignature(ExecutableElement method, String returnType, boolean isJni) {
+        StringBuilder sb = new StringBuilder("(");
         // Prepend JNIEnv* . The raw pointer will be substituted by the proper `this` reference.
-        if (prependJniEnv) {
-            signature.add(NativeType.POINTER);
+        boolean first = true;
+        if (isJni) {
+            sb.append(NativeSimpleType.POINTER);
+            first = false;
         }
-
         for (VariableElement param : method.getParameters()) {
             if (isActualParameter(param)) {
+                first = checkFirst(sb, first);
+
                 // Override NFI type.
-                pointer = getAnnotation(param.asType(), pointerAnnotation);
-                handle = getAnnotation(param.asType(), handleAnnotation);
-                if (pointer != null && handle != null) {
-                    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, String.format("Parameter cannot be be annotated with both %s and %s", pointer, handle), param);
-                }
+                AnnotationMirror pointer = getAnnotation(param.asType(), pointerAnnotation);
+                AnnotationMirror handle = getAnnotation(param.asType(), handleAnnotation);
                 if (pointer != null) {
-                    signature.add(NativeType.POINTER);
+                    sb.append(NativeSimpleType.POINTER);
                 } else if (handle != null) {
-                    signature.add(NativeType.LONG); // word size
+                    sb.append(NativeSimpleType.SINT64);
                 } else {
-                    signature.add(classToType(param.asType().getKind()));
+                    sb.append(classToType(param.asType().toString()));
                 }
             }
         }
 
-        return signature.toArray(new NativeType[0]);
+        sb.append("): ");
+
+        AnnotationMirror pointer = getAnnotation(method.getReturnType(), pointerAnnotation);
+        AnnotationMirror handle = getAnnotation(method.getReturnType(), handleAnnotation);
+        if (pointer != null) {
+            sb.append(NativeSimpleType.POINTER);
+        } else if (handle != null) {
+            sb.append(NativeSimpleType.SINT64);
+        } else {
+            sb.append(classToType(returnType));
+        }
+        return sb.toString();
     }
 
     static String extractArg(int index, String clazz, boolean isNonPrimitive, int startAt, String tabulation) {
@@ -121,7 +112,14 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
             }
             return decl + "env.getHandles().get(Math.toIntExact((long) " + obj + "))" + ";\n";
         }
-        return decl + castTo(obj, clazz) + ";\n";
+        switch (clazz) {
+            case "boolean":
+                return decl + "(" + castTo(obj, "byte") + ") != 0;\n";
+            case "char":
+                return decl + castTo(castTo(obj, "short"), "char") + ";\n";
+            default:
+                return decl + castTo(obj, clazz) + ";\n";
+        }
     }
 
     String extractInvocation(String className, String methodName, int nParameters, boolean isStatic, SubstitutionHelper helper) {
