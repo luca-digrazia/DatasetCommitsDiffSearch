@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.Java8OrEarlier;
 import static org.graalvm.compiler.test.SubprocessUtil.getVMCommandLine;
 import static org.graalvm.compiler.test.SubprocessUtil.withoutDebuggerArguments;
 
@@ -45,7 +46,6 @@ import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.test.SubprocessUtil;
 import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
 import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
@@ -89,7 +89,7 @@ public class LazyInitializationTest {
         List<String> vmCommandLine = getVMCommandLine();
         Assume.assumeFalse("Explicitly enables JVMCI compiler", vmCommandLine.contains("-XX:+UseJVMCINativeLibrary") || vmCommandLine.contains("-XX:+UseJVMCICompiler"));
         List<String> vmArgs = withoutDebuggerArguments(vmCommandLine);
-        vmArgs.add(JavaVersionUtil.JAVA_SPEC <= 8 ? "-XX:+TraceClassLoading" : "-Xlog:class+init=info");
+        vmArgs.add(Java8OrEarlier ? "-XX:+TraceClassLoading" : "-Xlog:class+init=info");
         vmArgs.add("-dsa");
         vmArgs.add("-da");
         vmArgs.add("-XX:-UseJVMCICompiler");
@@ -135,7 +135,7 @@ public class LazyInitializationTest {
      * Extracts the class name from a line of log output.
      */
     private static String extractClass(String line) {
-        if (JavaVersionUtil.JAVA_SPEC <= 8) {
+        if (Java8OrEarlier) {
             String traceClassLoadingPrefix = "[Loaded ";
             int index = line.indexOf(traceClassLoadingPrefix);
             if (index != -1) {
@@ -230,7 +230,7 @@ public class LazyInitializationTest {
             return true;
         }
 
-        if (JVMCICompilerFactory.class.isAssignableFrom(cls) || cls.getName().startsWith("org.graalvm.compiler.hotspot.IsGraalPredicate")) {
+        if (JVMCICompilerFactory.class.isAssignableFrom(cls) || cls.getName().equals("org.graalvm.compiler.hotspot.IsGraalPredicate")) {
             // The compiler factories have to be loaded and instantiated by the JVMCI.
             return true;
         }
