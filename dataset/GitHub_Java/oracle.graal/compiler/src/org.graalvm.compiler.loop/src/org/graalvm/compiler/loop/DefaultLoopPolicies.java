@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,7 @@ package org.graalvm.compiler.loop;
 
 import static org.graalvm.compiler.core.common.GraalOptions.LoopMaxUnswitch;
 import static org.graalvm.compiler.core.common.GraalOptions.MaximumDesiredSize;
-import static org.graalvm.compiler.core.common.GraalOptions.MinimumPeelFrequency;
+import static org.graalvm.compiler.core.common.GraalOptions.MinimumPeelProbability;
 
 import java.util.List;
 
@@ -79,32 +79,13 @@ public class DefaultLoopPolicies implements LoopPolicies {
     public boolean shouldPeel(LoopEx loop, ControlFlowGraph cfg, MetaAccessProvider metaAccess) {
         LoopBeginNode loopBegin = loop.loopBegin();
         double entryProbability = cfg.blockFor(loopBegin.forwardEnd()).getRelativeFrequency();
-        StructuredGraph graph = cfg.graph;
-        OptionValues options = graph.getOptions();
-
-        if (entryProbability < MinimumPeelFrequency.getValue(options)) {
+        OptionValues options = cfg.graph.getOptions();
+        if (entryProbability > MinimumPeelProbability.getValue(options) && loop.size() + loopBegin.graph().getNodeCount() < MaximumDesiredSize.getValue(options)) {
+            // check whether we're allowed to peel this loop
+            return loop.canDuplicateLoop();
+        } else {
             return false;
         }
-
-        if (loop.parent() != null) {
-            if (loop.size() > loop.parent().size() >> 1) {
-                // This loops make up more than half of the parent loop in terms of number of nodes.
-                // There is a risk that this loop unproportionally increases parent loop body size.
-                return false;
-            }
-        }
-
-        if (loop.loop().getChildren().size() > 0) {
-            // This loop has child loops. Loop peeling could explode graph size.
-            return false;
-        }
-
-        if (loop.size() + graph.getNodeCount() > MaximumDesiredSize.getValue(options)) {
-            // We are out of budget for peeling.
-            return false;
-        }
-
-        return true;
     }
 
     @Override
