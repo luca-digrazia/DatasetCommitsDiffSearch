@@ -40,6 +40,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
@@ -52,30 +53,10 @@ import java.util.List;
 public final class ClassRedefinition {
 
     @CompilationFinal static volatile RedefineAssumption current = new RedefineAssumption();
-    private static final RedefinitionSupport REDEFINITION_SUPPORT = RedefinitionSupport.REMOVE_METHOD;
 
     private static final Object redefineLock = new Object();
     private static volatile boolean locked = false;
     private static Thread redefineThread = null;
-
-    private enum RedefinitionSupport {
-        METHOD_BODY,
-        ADD_METHOD,
-        REMOVE_METHOD,
-        ARBITRARY
-    }
-
-    enum ClassChange {
-        NO_CHANGE,
-        METHOD_BODY_CHANGE,
-        ADD_METHOD,
-        SCHEMA_CHANGE,
-        HIERARCHY_CHANGE,
-        REMOVE_METHOD,
-        CLASS_MODIFIERS_CHANGE,
-        CONSTANT_POOL_CHANGE,
-        INVALID
-    }
 
     public static void begin() {
         // the redefine thread is privileged
@@ -120,19 +101,33 @@ public final class ClassRedefinition {
         }
     }
 
-    public static List<ChangePacket> detectClassChanges(ClassInfo[] redefineInfos, EspressoContext context) {
+    private enum RedefinitionSupport {
+        METHOD_BODY,
+        ADD_METHOD,
+        REMOVE_METHOD,
+        ARBITRARY
+    }
+
+    enum ClassChange {
+        NO_CHANGE,
+        METHOD_BODY_CHANGE,
+        ADD_METHOD,
+        SCHEMA_CHANGE,
+        HIERARCHY_CHANGE,
+        REMOVE_METHOD,
+        CLASS_MODIFIERS_CHANGE,
+        CONSTANT_POOL_CHANGE,
+        INVALID
+    }
+
+    private static final RedefinitionSupport REDEFINITION_SUPPORT = RedefinitionSupport.REMOVE_METHOD;
+
+    public static List<ChangePacket> detectClassChanges(RedefineInfo[] redefineInfos, EspressoContext context) {
         List<ChangePacket> result = new ArrayList<>(redefineInfos.length);
-        for (ClassInfo redefineInfo : redefineInfos) {
+        for (RedefineInfo redefineInfo : redefineInfos) {
             KlassRef klass = redefineInfo.getKlass();
-            if (klass == null) {
-                // new anonymous inner class
-                // TODO - create a new Klass instance and register it within the class registry
-                // so it will be found when class loading occurs
-                System.out.println("NEED TO HANDLE A NEW CLASS: " + redefineInfo.getNewName());
-                continue;
-            }
-            byte[] bytes = redefineInfo.getBytes();
-            ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), "L" + redefineInfo.getNewName() + ";", null, context, redefineInfo.getPatches());
+            byte[] bytes = redefineInfo.getClassBytes();
+            ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), klass.getTypeAsString(), null, context);
             ClassChange classChange;
             DetectedChange detectedChange = new DetectedChange();
             if (klass instanceof ObjectKlass) {
@@ -212,19 +207,11 @@ public final class ClassRedefinition {
         ParserKlass oldParserKlass = oldKlass.getLinkedKlass().getParserKlass();
         // detect class-level changes
         if (newParserKlass.getFlags() != oldParserKlass.getFlags()) {
-            if (isArbitraryChangesSupported()) {
-                return ClassChange.CLASS_MODIFIERS_CHANGE;
-            } else {
-                throw new RedefintionNotSupportedException(ErrorCodes.CLASS_MODIFIERS_CHANGE_NOT_IMPLEMENTED);
-            }
+            return ClassChange.CLASS_MODIFIERS_CHANGE;
         }
 
         if (!newParserKlass.getSuperKlass().equals(oldParserKlass.getSuperKlass()) || !Arrays.equals(newParserKlass.getSuperInterfaces(), oldParserKlass.getSuperInterfaces())) {
-            if (isArbitraryChangesSupported()) {
-                return ClassChange.HIERARCHY_CHANGE;
-            } else {
-                throw new RedefintionNotSupportedException(ErrorCodes.HIERARCHY_CHANGE_NOT_IMPLEMENTED);
-            }
+            return ClassChange.HIERARCHY_CHANGE;
         }
 
         // detect field changes
@@ -232,11 +219,7 @@ public final class ClassRedefinition {
         ParserField[] newFields = newParserKlass.getFields();
 
         if (oldFields.length != newFields.length) {
-            if (isArbitraryChangesSupported()) {
-                return ClassChange.SCHEMA_CHANGE;
-            } else {
-                throw new RedefintionNotSupportedException(ErrorCodes.SCHEMA_CHANGE_NOT_IMPLEMENTED);
-            }
+            return ClassChange.SCHEMA_CHANGE;
         }
 
         for (int i = 0; i < oldFields.length; i++) {
@@ -251,17 +234,24 @@ public final class ClassRedefinition {
                 }
             }
             if (!found) {
-                if (isArbitraryChangesSupported()) {
-                    return ClassChange.SCHEMA_CHANGE;
-                } else {
-                    throw new RedefintionNotSupportedException(ErrorCodes.SCHEMA_CHANGE_NOT_IMPLEMENTED);
-                }
+                return ClassChange.SCHEMA_CHANGE;
             }
         }
 
         // detect method changes (including constructors)
         List<Method> oldMethods = new ArrayList<>(Arrays.asList(oldKlass.getDeclaredMethods()));
         List<ParserMethod> newMethods = new ArrayList<>(Arrays.asList(newParserKlass.getMethods()));
+
+        if (ClassRedefinition.REDEFINITION_SUPPORT == RedefinitionSupport.METHOD_BODY) {
+            // we only need to hunt down method bodies changes then
+            // so return immediately when we see an added/removed method
+            if (oldMethods.size() < newMethods.size()) {
+                return ClassChange.ADD_METHOD;
+            }
+            if (oldMethods.size() > newMethods.size()) {
+                return ClassChange.REMOVE_METHOD;
+            }
+        }
 
         boolean constantPoolChanged = false;
         // check constant pool changes. If changed, we have to redefine all methods in the class
@@ -482,7 +472,7 @@ public final class ClassRedefinition {
     }
 
     private static int doRedefineClass(ChangePacket packet, Ids<Object> ids, List<ObjectKlass> refreshSubClasses) {
-        ObjectKlass oldKlass = packet.info.getKlass();
+        ObjectKlass oldKlass = (ObjectKlass) packet.info.getKlass();
         oldKlass.redefineClass(packet, refreshSubClasses, ids);
         return 0;
     }

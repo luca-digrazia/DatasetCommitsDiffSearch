@@ -25,16 +25,14 @@ package com.oracle.truffle.espresso.impl;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 final class DetectedChange {
 
     private final Map<Method, ParserMethod> changedMethodBodies = new HashMap<>();
     private final List<ParserMethod> addedMethods = new ArrayList<>();
-    private final Set<Method> removedMethods = new HashSet<>();
+    private final List<Method> removedMethods = new ArrayList<>();
 
     void addMethodBodyChange(Method oldMethod, ParserMethod newMethod) {
         changedMethodBodies.put(oldMethod, newMethod);
@@ -48,8 +46,8 @@ final class DetectedChange {
         return Collections.unmodifiableList(addedMethods);
     }
 
-    Set<Method> getRemovedMethods() {
-        return Collections.unmodifiableSet(removedMethods);
+    List<Method> getRemovedMethods() {
+        return Collections.unmodifiableList(removedMethods);
     }
 
     public void addNewMethods(List<ParserMethod> methods) {
