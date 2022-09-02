@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,15 +32,9 @@ import org.graalvm.compiler.loop.LoopPolicies;
 import org.graalvm.compiler.loop.LoopsData;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 
 public class LoopFullUnrollPhase extends LoopPhase<LoopPolicies> {
-    public static class Options {
-        @Option(help = "", type = OptionType.Expert) public static final OptionKey<Integer> FullUnrollMaxApplication = new OptionKey<>(60);
-    }
 
     private static final CounterKey FULLY_UNROLLED_LOOPS = DebugContext.counter("FullUnrolls");
     private final CanonicalizerPhase canonicalizer;
@@ -56,7 +50,6 @@ public class LoopFullUnrollPhase extends LoopPhase<LoopPolicies> {
             DebugContext debug = graph.getDebug();
             if (graph.hasLoops()) {
                 boolean peeled;
-                int applications = 0;
                 do {
                     peeled = false;
                     final LoopsData dataCounted = new LoopsData(graph);
@@ -72,8 +65,7 @@ public class LoopFullUnrollPhase extends LoopPhase<LoopPolicies> {
                         }
                     }
                     dataCounted.deleteUnusedNodes();
-                    applications++;
-                } while (peeled && applications < Options.FullUnrollMaxApplication.getValue(graph.getOptions()));
+                } while (peeled);
             }
         }
     }

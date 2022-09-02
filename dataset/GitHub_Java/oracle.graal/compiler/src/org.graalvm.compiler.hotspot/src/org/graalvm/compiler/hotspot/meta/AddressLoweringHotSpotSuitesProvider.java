@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2017, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -56,13 +56,11 @@ public class AddressLoweringHotSpotSuitesProvider extends HotSpotSuitesProvider 
         Suites suites = super.createSuites(options);
 
         ListIterator<BasePhase<? super LowTierContext>> findPhase = suites.getLowTier().findPhase(UseTrappingNullChecksPhase.class);
-        if (findPhase != null) {
-            findPhase.add(addressLowering);
-        } else {
+        if (findPhase == null) {
             findPhase = suites.getLowTier().findPhase(SchedulePhase.class);
-            findPhase.previous();
-            findPhase.add(addressLowering);
         }
+        findPhase.previous();
+        findPhase.add(addressLowering);
 
         return suites;
     }

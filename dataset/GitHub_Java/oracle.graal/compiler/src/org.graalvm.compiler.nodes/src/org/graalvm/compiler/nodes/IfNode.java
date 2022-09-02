@@ -469,7 +469,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 return false;
             }
             MergeNode merge = (MergeNode) trueEnd.merge();
-            if (!merge.hasExactlyOneUsage() || merge.phis().count() != 1) {
+            if (merge.usages().count() != 1 || merge.phis().count() != 1) {
                 return false;
             }
 
@@ -1026,6 +1026,11 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      */
     @SuppressWarnings("try")
     private boolean splitIfAtPhi(SimplifierTool tool) {
+        if (graph().getGuardsStage().areFrameStatesAtSideEffects()) {
+            // Disabled until we make sure we have no FrameState-less merges at this stage
+            return false;
+        }
+
         if (!(predecessor() instanceof MergeNode)) {
             return false;
         }
@@ -1034,14 +1039,15 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             // Don't bother.
             return false;
         }
-        if (merge.getUsageCount() != 1 || merge.phis().count() != 1) {
+        if (merge.usages().count() != 1 || merge.phis().count() != 1) {
             return false;
         }
-        if (graph().getGuardsStage().areFrameStatesAtSideEffects() && merge.stateAfter() == null) {
+        if (merge.stateAfter() != null) {
+            /* We'll get the chance to simplify this after frame state assignment. */
             return false;
         }
         PhiNode phi = merge.phis().first();
-        if (phi.getUsageCount() != 1) {
+        if (phi.usages().count() != 1) {
             /*
              * For simplicity the below code assumes assumes the phi goes dead at the end so skip
              * this case.
@@ -1066,6 +1072,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         /* Each successor of the if gets a new merge if needed. */
         MergeNode trueMerge = null;
         MergeNode falseMerge = null;
+        assert merge.stateAfter() == null;
 
         for (EndNode end : merge.forwardEnds().snapshot()) {
             Node value = phi.valueAt(end);
@@ -1074,12 +1081,12 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 merge.removeEnd(end);
                 if (((LogicConstantNode) result).getValue()) {
                     if (trueMerge == null) {
-                        trueMerge = insertMerge(trueSuccessor(), merge.stateAfter());
+                        trueMerge = insertMerge(trueSuccessor());
                     }
                     trueMerge.addForwardEnd(end);
                 } else {
                     if (falseMerge == null) {
-                        falseMerge = insertMerge(falseSuccessor(), merge.stateAfter());
+                        falseMerge = insertMerge(falseSuccessor());
                     }
                     falseMerge.addForwardEnd(end);
                 }
@@ -1100,13 +1107,13 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 ((FixedWithNextNode) end.predecessor()).setNext(newIfNode);
 
                 if (trueMerge == null) {
-                    trueMerge = insertMerge(trueSuccessor(), merge.stateAfter());
+                    trueMerge = insertMerge(trueSuccessor());
                 }
                 trueBegin.setNext(graph().add(new EndNode()));
                 trueMerge.addForwardEnd((EndNode) trueBegin.next());
 
                 if (falseMerge == null) {
-                    falseMerge = insertMerge(falseSuccessor(), merge.stateAfter());
+                    falseMerge = insertMerge(falseSuccessor());
                 }
                 falseBegin.setNext(graph().add(new EndNode()));
                 falseMerge.addForwardEnd((EndNode) falseBegin.next());
@@ -1133,7 +1140,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
      *         dead after the optimization.
      */
     private static boolean conditionUses(LogicNode condition, PhiNode phi) {
-        if (!condition.hasExactlyOneUsage()) {
+        if (condition.usages().count() != 1) {
             return false;
         }
         if (condition instanceof ShortCircuitOrNode) {
@@ -1226,7 +1233,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     @SuppressWarnings("try")
-    private MergeNode insertMerge(AbstractBeginNode begin, FrameState stateAfter) {
+    private MergeNode insertMerge(AbstractBeginNode begin) {
         MergeNode merge = graph().add(new MergeNode());
         if (!begin.anchored().isEmpty()) {
             Object before = null;
@@ -1249,7 +1256,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         next.replaceAtPredecessor(merge);
         theBegin.setNext(graph().add(new EndNode()));
         merge.addForwardEnd((EndNode) theBegin.next());
-        merge.setStateAfter(stateAfter);
         merge.setNext(next);
         return merge;
     }

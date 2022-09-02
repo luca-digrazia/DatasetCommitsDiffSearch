@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -78,39 +78,25 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
     private boolean globalValueNumber = true;
     private boolean canonicalizeReads = true;
     private boolean simplify = true;
-    private CustomCanonicalization customCanonicalization;
-    private CustomSimplification customSimplification;
+    private final CustomCanonicalizer customCanonicalizer;
 
-    public interface CustomCanonicalization {
-        /**
-         * @param node the node to be canonicalized
-         * @return the same node if no action should be taken, {@code null} if the node should be
-         *         deleted, or a new node that should replace the given node
-         */
-        Node canonicalize(Node node);
+    public abstract static class CustomCanonicalizer {
+
+        public Node canonicalize(Node node) {
+            return node;
+        }
+
+        @SuppressWarnings("unused")
+        public void simplify(Node node, SimplifierTool tool) {
+        }
     }
 
-    public interface CustomSimplification {
-        /**
-         * @param node the node to be simplified
-         * @param tool utility available during the simplification process
-         */
-        void simplify(Node node, SimplifierTool tool);
+    public CanonicalizerPhase() {
+        this(null);
     }
 
-    public static CanonicalizerPhase create() {
-        return new CanonicalizerPhase();
-    }
-
-    protected CanonicalizerPhase() {
-    }
-
-    public void setCustomCanonicalization(CustomCanonicalization customCanonicalization) {
-        this.customCanonicalization = customCanonicalization;
-    }
-
-    public void setCustomSimplification(CustomSimplification customSimplification) {
-        this.customSimplification = customSimplification;
+    public CanonicalizerPhase(CustomCanonicalizer customCanonicalizer) {
+        this.customCanonicalizer = customCanonicalizer;
     }
 
     public void disableGVN() {
@@ -343,18 +329,24 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
         @SuppressWarnings("try")
         public boolean tryCanonicalize(final Node node, NodeClass<?> nodeClass) {
             try (DebugCloseable position = node.withNodeSourcePosition(); DebugContext.Scope scope = debug.withContext(node)) {
+                if (customCanonicalizer != null) {
+                    Node canonical = customCanonicalizer.canonicalize(node);
+                    if (performReplacement(node, canonical)) {
+                        return true;
+                    } else {
+                        customCanonicalizer.simplify(node, tool);
+                        if (node.isDeleted()) {
+                            return true;
+                        }
+                    }
+                }
                 if (nodeClass.isCanonicalizable()) {
                     COUNTER_CANONICALIZATION_CONSIDERED_NODES.increment(debug);
-                    Node canonical = node;
+                    Node canonical;
                     try (AutoCloseable verify = getCanonicalizeableContractAssertion(node)) {
-                        if (customCanonicalization != null) {
-                            canonical = customCanonicalization.canonicalize(node);
-                        }
-                        if (canonical == node) {
-                            canonical = ((Canonicalizable) node).canonical(tool);
-                            if (canonical == node && nodeClass.isCommutative()) {
-                                canonical = ((BinaryCommutative<?>) node).maybeCommuteInputs();
-                            }
+                        canonical = ((Canonicalizable) node).canonical(tool);
+                        if (canonical == node && nodeClass.isCommutative()) {
+                            canonical = ((BinaryCommutative<?>) node).maybeCommuteInputs();
                         }
                     } catch (Throwable e) {
                         throw new GraalGraphError(e).addContext(node);
@@ -367,14 +359,9 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
                 if (nodeClass.isSimplifiable() && simplify) {
                     debug.log(DebugContext.VERBOSE_LEVEL, "Canonicalizer: simplifying %s", node);
                     COUNTER_SIMPLIFICATION_CONSIDERED_NODES.increment(debug);
-                    if (customSimplification != null) {
-                        customSimplification.simplify(node, tool);
-                    }
-                    if (node.isAlive()) {
-                        node.simplify(tool);
-                        if (node.isDeleted()) {
-                            debug.log("Canonicalizer: simplified %s", node);
-                        }
+                    node.simplify(tool);
+                    if (node.isDeleted()) {
+                        debug.log("Canonicalizer: simplified %s", node);
                     }
                     return node.isDeleted();
                 }
