@@ -29,7 +29,6 @@ import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.compiler.truffle.compiler.phases.TruffleCompilerPhases;
 
 public final class TruffleTierConfiguration {
     private final PartialEvaluatorConfiguration configuration;
@@ -48,8 +47,6 @@ public final class TruffleTierConfiguration {
         this.providers = providers;
         this.suites = suites;
         this.lirSuites = lirSuites;
-        TruffleCompilerPhases.register(suites);
-        this.suites.setImmutable();
     }
 
     public PartialEvaluatorConfiguration partialEvaluator() {

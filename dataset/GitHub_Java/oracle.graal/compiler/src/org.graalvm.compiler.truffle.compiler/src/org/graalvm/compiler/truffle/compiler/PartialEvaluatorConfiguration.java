@@ -24,7 +24,11 @@
  */
 package org.graalvm.compiler.truffle.compiler;
 
+import jdk.vm.ci.code.Architecture;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
+import org.graalvm.compiler.phases.util.Providers;
+import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.truffle.compiler.substitutions.GraphDecoderInvocationPluginProvider;
 
 public interface PartialEvaluatorConfiguration {
     /**
@@ -33,12 +37,11 @@ public interface PartialEvaluatorConfiguration {
     String name();
 
     /**
-     * Register graph-building invocation plugins.
-     */
-    void registerGraphBuilderInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification);
-
-    /**
      * Register graph-decoding invocation plugins.
      */
-    void registerGraphDecoderInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification);
+    default void registerDecodingInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification, Providers providers, Architecture arch) {
+        for (GraphDecoderInvocationPluginProvider p : GraalServices.load(GraphDecoderInvocationPluginProvider.class)) {
+            p.registerInvocationPlugins(providers, arch, name(), plugins, canDelayIntrinsification);
+        }
+    }
 }
