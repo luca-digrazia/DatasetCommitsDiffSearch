@@ -24,48 +24,23 @@
  */
 package com.oracle.svm.core;
 
-import java.io.CharConversionException;
-import java.nio.ByteBuffer;
-
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
 
-import com.oracle.svm.core.c.CGlobalData;
-import com.oracle.svm.core.c.CGlobalDataFactory;
-import com.oracle.svm.core.util.Utf8;
 import com.oracle.svm.core.util.VMError;
 
 public final class VM {
-    private static final String valueSeparator = "\t";
-    private static final String versionValue = getVersionValue();
+
+    public final String version;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    private static String getVersionValue() {
-        String version = System.getProperty("org.graalvm.version");
-        VMError.guarantee(version != null);
-        version = VM.class.getName() + valueSeparator + "GraalVM " + version;
-        String config = System.getProperty("org.graalvm.config", "");
-        if (!config.isEmpty()) {
-            version += " " + config;
-        }
-        return version;
-    }
-
-    private static final String VERSION_INFO_SYMBOL_NAME = "__svm_version_info";
-
-    private static final CGlobalData<CCharPointer> VERSION_INFO = CGlobalDataFactory.createCString(versionValue, VERSION_INFO_SYMBOL_NAME);
-
-    public static String getVersion() {
-        try {
-            CCharPointer versionInfoBytes = VERSION_INFO.get();
-            ByteBuffer buffer = CTypeConversion.asByteBuffer(versionInfoBytes, Math.toIntExact(SubstrateUtil.strlen(versionInfoBytes).rawValue()));
-            String version = Utf8.utf8ToString(true, buffer);
-            VMError.guarantee(versionValue.equals(version), "Version info mismatch: " + VERSION_INFO_SYMBOL_NAME + " contains " + version + " (expected " + versionValue + ")");
-            return version.split(valueSeparator)[1];
-        } catch (CharConversionException ignore) {
-            throw VMError.shouldNotReachHere("Invalid version info in " + VERSION_INFO_SYMBOL_NAME);
-        }
+    public VM(String config) {
+        String versionStr = System.getProperty("org.graalvm.version");
+        VMError.guarantee(versionStr != null);
+        versionStr = "GraalVM " + versionStr;
+        versionStr += " Java " + JavaVersionUtil.JAVA_SPEC;
+        versionStr += " " + config;
+        version = versionStr;
     }
 }

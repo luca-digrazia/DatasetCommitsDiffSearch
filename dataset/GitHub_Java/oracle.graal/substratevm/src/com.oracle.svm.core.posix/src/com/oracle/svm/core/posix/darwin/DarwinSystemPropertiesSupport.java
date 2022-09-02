@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,13 +24,14 @@
  */
 package com.oracle.svm.core.posix.darwin;
 
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
+import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
@@ -38,9 +39,11 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jdk.SystemPropertiesSupport;
 import com.oracle.svm.core.posix.PosixSystemPropertiesSupport;
 import com.oracle.svm.core.posix.headers.Limits;
+import com.oracle.svm.core.posix.headers.Stdlib;
 import com.oracle.svm.core.posix.headers.Unistd;
+import com.oracle.svm.core.posix.headers.darwin.Foundation;
 
-@Platforms({Platform.DARWIN.class})
+@CLibrary(value = "darwin", requireStatic = true)
 public class DarwinSystemPropertiesSupport extends PosixSystemPropertiesSupport {
 
     @Override
@@ -59,13 +62,54 @@ public class DarwinSystemPropertiesSupport extends PosixSystemPropertiesSupport 
             return "/var/tmp";
         }
     }
+
+    @Override
+    protected String javaLibraryPathValue() {
+        /*
+         * Adapted from `os::init_system_properties_values` in `src/hotspot/os/bsd/os_bsd.cpp`, but
+         * omits HotSpot specifics.
+         */
+        CCharPointer dyldLibraryPath;
+        try (CCharPointerHolder name = CTypeConversion.toCString("DYLD_LIBRARY_PATH")) {
+            dyldLibraryPath = Stdlib.getenv(name.get());
+        }
+
+        if (dyldLibraryPath.isNull()) {
+            return ".";
+        }
+        return CTypeConversion.toJavaString(dyldLibraryPath) + ":.";
+    }
+
+    @Override
+    protected String osNameValue() {
+        return Platform.includedIn(Platform.IOS.class) ? "iOS" : "Mac OS X";
+    }
+
+    private static volatile String osVersionValue = null;
+
+    @Override
+    protected String osVersionValue() {
+        if (osVersionValue != null) {
+            return osVersionValue;
+        }
+
+        Foundation.NSOperatingSystemVersion osVersion = StackValue.get(Foundation.NSOperatingSystemVersion.class);
+        Foundation.operatingSystemVersion(osVersion);
+        if (osVersion.isNull()) {
+            return osVersionValue = "Unknown";
+        } else {
+            long major = osVersion.getMajorVersion();
+            long minor = osVersion.getMinorVersion();
+            long patch = osVersion.getPatchVersion();
+            return osVersionValue = major + "." + minor + "." + patch;
+        }
+    }
 }
 
-@Platforms({Platform.DARWIN.class})
 @AutomaticFeature
 class DarwinSystemPropertiesFeature implements Feature {
     @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
+    public void duringSetup(DuringSetupAccess access) {
         ImageSingletons.add(SystemPropertiesSupport.class, new DarwinSystemPropertiesSupport());
     }
 }
