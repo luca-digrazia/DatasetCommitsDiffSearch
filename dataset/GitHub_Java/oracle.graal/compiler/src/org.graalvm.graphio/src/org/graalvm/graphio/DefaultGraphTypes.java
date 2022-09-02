@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,16 +30,23 @@ final class DefaultGraphTypes implements GraphTypes {
     private DefaultGraphTypes() {
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Class<?> findEnumClass(Object enumValue) {
+    public Class<?> enumClass(Object enumValue) {
         if (enumValue instanceof Enum<?>) {
-            return enumValue.getClass();
+            // check that the enum class is not actually an anonymous subclass:
+            Class<? extends Enum<?>> enumClass = (Class<? extends Enum<?>>) enumValue.getClass();
+            Enum<?>[] constants = enumClass.getEnumConstants();
+            if (constants == null && enumClass.isAnonymousClass()) {
+                enumClass = (Class<? extends Enum<?>>) enumClass.getSuperclass();
+            }
+            return enumClass;
         }
         return null;
     }
 
     @Override
-    public int findEnumOrdinal(Object obj) {
+    public int enumOrdinal(Object obj) {
         if (obj instanceof Enum<?>) {
             return ((Enum<?>) obj).ordinal();
         }
@@ -46,7 +55,7 @@ final class DefaultGraphTypes implements GraphTypes {
 
     @SuppressWarnings("unchecked")
     @Override
-    public String[] findEnumTypeValues(Object clazz) {
+    public String[] enumTypeValues(Object clazz) {
         if (clazz instanceof Class<?>) {
             Class<? extends Enum<?>> enumClass = (Class<? extends Enum<?>>) clazz;
             Enum<?>[] constants = enumClass.getEnumConstants();
