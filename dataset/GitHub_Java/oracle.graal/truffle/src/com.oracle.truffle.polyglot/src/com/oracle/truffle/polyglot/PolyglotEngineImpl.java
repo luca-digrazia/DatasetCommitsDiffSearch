@@ -129,7 +129,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
     // also update list in LanguageRegistrationProcessor
     private static final Set<String> RESERVED_IDS = new HashSet<>(
-                    Arrays.asList(HOST_LANGUAGE_ID, "graal", "truffle", "language", "instrument", "graalvm", "context", "polyglot", "compiler", "vm", "file",
+                    Arrays.asList(HOST_LANGUAGE_ID, "graal", "truffle", "language", "instrument", "graalvm", "context", "polyglot", "compiler", "vm",
                                     OPTION_GROUP_ENGINE, OPTION_GROUP_LOG, OPTION_GROUP_IMAGE_BUILD_TIME));
 
     private static final Map<PolyglotEngineImpl, Void> ENGINES = Collections.synchronizedMap(new WeakHashMap<>());
@@ -260,17 +260,12 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         Map<String, String> originalEngineOptions = new HashMap<>();
         Map<PolyglotLanguage, Map<String, String>> languagesOptions = new HashMap<>();
         Map<PolyglotInstrument, Map<String, String>> instrumentsOptions = new HashMap<>();
-        LogConfig logOptions = new LogConfig();
+        LogOptions logOptions = new LogOptions();
 
         parseOptions(options, useSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logOptions);
         this.logLevels = logOptions.logLevels;
-        if (logHandler != null) {
-            this.logHandler = logHandler;
-        } else if (ALLOW_IO && logOptions.logFile != null) {
-            this.logHandler = PolyglotLoggers.getFileHandler(logOptions.logFile);
-        } else {
-            this.logHandler = PolyglotLoggers.createDefaultHandler(INSTRUMENT.getOut(this.err));
-        }
+        this.logHandler = logHandler != null ? logHandler
+                        : ALLOW_IO && logOptions.logFile != null ? PolyglotLoggers.getFileHandler(logOptions.logFile) : PolyglotLoggers.createDefaultHandler(INSTRUMENT.getOut(this.err));
 
         boolean useAllowExperimentalOptions = allowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSavedProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
         this.engineOptionValues.putAll(originalEngineOptions, useAllowExperimentalOptions);
@@ -443,16 +438,11 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         Map<PolyglotInstrument, Map<String, String>> instrumentsOptions = new HashMap<>();
 
         assert this.logLevels.isEmpty();
-        LogConfig logOptions = new LogConfig();
+        LogOptions logOptions = new LogOptions();
         parseOptions(newOptions, newUseSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logOptions);
         logLevels = logOptions.logLevels;
-        if (newLogHandler != null) {
-            this.logHandler = newLogHandler;
-        } else if (ALLOW_IO && logOptions.logFile != null) {
-            this.logHandler = PolyglotLoggers.getFileHandler(logOptions.logFile);
-        } else {
-            this.logHandler = PolyglotLoggers.createDefaultHandler(INSTRUMENT.getOut(this.err));
-        }
+        this.logHandler = newLogHandler != null ? newLogHandler
+                        : ALLOW_IO && logOptions.logFile != null ? PolyglotLoggers.getFileHandler(logOptions.logFile) : PolyglotLoggers.createDefaultHandler(INSTRUMENT.getOut(this.err));
         boolean useAllowExperimentalOptions = newAllowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSavedProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
         this.engineOptionValues.putAll(originalEngineOptions, useAllowExperimentalOptions);
 
@@ -515,7 +505,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     private void parseOptions(Map<String, String> options, boolean useSystemProperties,
                     Map<String, String> originalEngineOptions,
                     Map<PolyglotLanguage, Map<String, String>> languagesOptions, Map<PolyglotInstrument, Map<String, String>> instrumentsOptions,
-                    LogConfig logOptions) {
+                    LogOptions logOptions) {
         final Map<String, String> optionsWithSystemProperties;
         if (useSystemProperties) {
             optionsWithSystemProperties = readOptionsFromSystemProperties();
@@ -1713,12 +1703,12 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
     }
 
-    private static final class LogConfig {
+    private static final class LogOptions {
 
         final Map<String, Level> logLevels;
         String logFile;
 
-        LogConfig() {
+        LogOptions() {
             this.logLevels = new HashMap<>();
         }
     }
