@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -75,7 +75,6 @@ public final class ExportsLibrary extends Template {
     private Map<CacheExpression, String> sharedExpressions;
     private VariableElement delegationVariable;
     private DSLExpression transitionLimit;
-    private final List<TypeElement> declaringTypes = new ArrayList<>();
 
     public ExportsLibrary(ProcessorContext context, TypeElement templateType, AnnotationMirror annotation, ExportsData exports, LibraryData library, TypeMirror receiverType,
                     boolean explicitReceiver) {
@@ -240,18 +239,6 @@ public final class ExportsLibrary extends Template {
 
     public boolean isAllowTransition() {
         return transitionLimit != null;
-    }
-
-    public boolean isDeclaredInTemplate() {
-        return ElementUtils.elementEquals(getDeclaringType(), getTemplateType());
-    }
-
-    public List<TypeElement> getDeclaringTypes() {
-        return declaringTypes;
-    }
-
-    public TypeElement getDeclaringType() {
-        return declaringTypes.get(0);
     }
 
 }
