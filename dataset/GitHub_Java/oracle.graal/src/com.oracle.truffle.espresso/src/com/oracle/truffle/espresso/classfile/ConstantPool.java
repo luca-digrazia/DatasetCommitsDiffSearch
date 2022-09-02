@@ -110,7 +110,7 @@ public abstract class ConstantPool {
             return value;
         }
 
-        public static Tag fromValue(int value) {
+        static Tag fromValue(int value) {
             // @formatter:off
             switch (value) {
                 case 1: return UTF8;

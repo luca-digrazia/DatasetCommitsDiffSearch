@@ -259,7 +259,6 @@ import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.bytecode.MapperBCI;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.BootstrapMethodsAttribute;
-import com.oracle.truffle.espresso.classfile.attributes.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
 import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.DoubleConstant;
@@ -281,7 +280,6 @@ import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -349,21 +347,20 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     @Child private volatile InstrumentationSupport instrumentation;
 
     @TruffleBoundary
-    public BytecodeNode(MethodVersion method, FrameDescriptor frameDescriptor, FrameSlot bciSlot) {
+    public BytecodeNode(Method method, FrameDescriptor frameDescriptor, FrameSlot bciSlot) {
         super(method);
         CompilerAsserts.neverPartOfCompilation();
-        CodeAttribute codeAttribute = method.getCodeAttribute();
-        this.bs = new BytecodeStream(codeAttribute.getCode());
+        this.bs = new BytecodeStream(method.getCode());
         FrameSlot[] slots = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
 
-        this.locals = Arrays.copyOfRange(slots, 0, codeAttribute.getMaxLocals());
-        this.stackSlots = Arrays.copyOfRange(slots, codeAttribute.getMaxLocals(), codeAttribute.getMaxLocals() + codeAttribute.getMaxStack());
+        this.locals = Arrays.copyOfRange(slots, 0, method.getMaxLocals());
+        this.stackSlots = Arrays.copyOfRange(slots, method.getMaxLocals(), method.getMaxLocals() + method.getMaxStackSize());
         this.bciSlot = bciSlot;
         this.stackOverflowErrorInfo = getMethod().getSOEHandlerInfo();
     }
 
     public BytecodeNode(BytecodeNode copy) {
-        this(copy.getMethodVersion(), copy.getRootNode().getFrameDescriptor(), copy.bciSlot);
+        this(copy.getMethod(), copy.getRootNode().getFrameDescriptor(), copy.bciSlot);
         System.err.println("Copying node for " + getMethod());
     }
 
@@ -372,9 +369,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         if (s == null) {
             return null;
         }
-
-        LineNumberTableAttribute table = getMethodVersion().getLineNumberTableAttribute();
-
+        LineNumberTableAttribute table = getMethod().getLineNumberTable();
         if (table == LineNumberTableAttribute.EMPTY) {
             return null;
         }
@@ -1163,7 +1158,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 info = this.instrumentation;
                 // double checked locking
                 if (info == null) {
-                    this.instrumentation = info = insert(new InstrumentationSupport(getMethodVersion()));
+                    this.instrumentation = info = insert(new InstrumentationSupport(getMethod()));
                     // the debug info contains instrumentable nodes so we need to notify for
                     // instrumentation updates.
                     notifyInserted(info);
@@ -1396,7 +1391,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     }
 
     protected RuntimeConstantPool getConstantPool() {
-        return getMethodVersion().getPool();
+        return getMethod().getRuntimeConstantPool();
     }
 
     @TruffleBoundary
@@ -1418,7 +1413,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     private void patchBci(int bci, byte opcode, char nodeIndex) {
         CompilerAsserts.neverPartOfCompilation();
         assert Bytecodes.isQuickened(opcode);
-        byte[] code = getMethodVersion().getCodeAttribute().getCode();
+        byte[] code = getMethod().getCode();
 
         int oldBC = code[bci];
         assert Bytecodes.lengthOf(oldBC) >= 3 : "cannot patch slim bc";
@@ -2227,7 +2222,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
     @Override
     public int customNodeCount() {
-        int codeSize = getMethodVersion().getCodeSize();
+        int codeSize = getMethod().getCodeSize();
         return 2 * codeSize + 1;
     }
 
@@ -2237,13 +2232,12 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         @Child private MapperBCI hookBCIToNodeIndex;
 
         private final EspressoContext context;
-        private final MethodVersion method;
+        private final Method method;
 
-        InstrumentationSupport(MethodVersion method) {
-            this.context = method.getMethod().getContext();
+        InstrumentationSupport(Method method) {
+            this.context = method.getContext();
+            LineNumberTableAttribute table = method.getLineNumberTable();
             this.method = method;
-
-            LineNumberTableAttribute table = method.getLineNumberTableAttribute();
 
             if (table != LineNumberTableAttribute.EMPTY) {
                 LineNumberTableAttribute.Entry[] entries = table.getEntries();
@@ -2281,7 +2275,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         }
 
         public void notifyReturn(VirtualFrame frame, int statementIndex, Object returnValue) {
-            if (context.getJDWPListener().hasMethodBreakpoint(method.getMethod(), returnValue)) {
+            if (context.getJDWPListener().hasMethodBreakpoint(method, returnValue)) {
                 enterAt(frame, statementIndex);
             }
         }
