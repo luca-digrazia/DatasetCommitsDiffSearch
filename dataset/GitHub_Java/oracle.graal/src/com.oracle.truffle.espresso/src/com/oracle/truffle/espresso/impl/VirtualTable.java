@@ -1,26 +1,6 @@
-/*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.truffle.espresso.impl;
+
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_invoke_MethodHandleNatives;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,8 +13,7 @@ public class VirtualTable {
     private VirtualTable() {
     }
 
-    // Mirandas are already present in declaredMethods
-    public static Method[] create(ObjectKlass superKlass, Method[] declaredMethods, ObjectKlass thisKlass) {
+    public static Method[] create(ObjectKlass superKlass, Method[] declaredMethods, ArrayList<Method> mirandas) {
         ArrayList<Method> tmp;
         if (superKlass != null) {
             tmp = new ArrayList<>(Arrays.asList(superKlass.getVTable()));
@@ -43,9 +22,8 @@ public class VirtualTable {
         }
         Method override;
         int pos;
-        int n_method = 0;
         for (Method m : declaredMethods) {
-            if (m.isVirtualCall() || !(n_method < thisKlass.trueDeclaredMethods)) {
+            if (m.getRefKind() == Target_java_lang_invoke_MethodHandleNatives.REF_invokeVirtual) {
                 if (superKlass != null) {
                     override = superKlass.lookupVirtualMethod(m.getName(), m.getRawSignature());
                 } else {
@@ -61,7 +39,15 @@ public class VirtualTable {
                     tmp.add(m);
                 }
             }
-            n_method++;
+        }
+        // Miranda methods can be called with an invokevirtual. We need to add them to the vtable to
+        // deal with that.
+        if (!mirandas.isEmpty()) {
+            pos = tmp.size();
+            tmp.addAll(mirandas);
+            for (Method m : mirandas) {
+                m.setVTableIndex(pos++);
+            }
         }
         return tmp.toArray(Method.EMPTY_ARRAY);
     }
