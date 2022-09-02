@@ -59,20 +59,13 @@ import java.util.Stack;
 import java.util.function.Consumer;
 
 public class Linker {
-    private enum LinkState {
-        notLinked,
-        inProgress,
-        linked
-    }
-
     private final WasmLanguage language;
     private final ResolutionDag resolutionDag;
-    private @CompilerDirectives.CompilationFinal LinkState linkState;
+    private @CompilerDirectives.CompilationFinal boolean linked;
 
     public Linker(WasmLanguage language) {
         this.language = language;
         this.resolutionDag = new ResolutionDag();
-        this.linkState = LinkState.notLinked;
     }
 
     // TODO: Many of the following methods should work on all the modules in the context, instead of
@@ -86,7 +79,7 @@ public class Linker {
         // compilation, and this check will fold away.
         // If the code is compiled synchronously, then this check will persist in the compiled code.
         // We nevertheless invalidate the compiled code that reaches this point.
-        if (linkState == LinkState.notLinked) {
+        if (!linked) {
             // TODO: Once we support multi-threading, add adequate synchronization here.
             tryLinkOutsidePartialEvaluation();
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -97,8 +90,7 @@ public class Linker {
     private void tryLinkOutsidePartialEvaluation() {
         // Some Truffle configurations allow that the code gets compiled before executing the code.
         // We therefore check the link state again.
-        if (linkState == LinkState.notLinked) {
-            linkState = LinkState.inProgress;
+        if (!linked) {
             Map<String, WasmModule> modules = WasmContext.getCurrent().modules();
             for (WasmModule module : modules.values()) {
                 linkFunctions(module);
@@ -114,7 +106,7 @@ public class Linker {
                 }
             }
             resolutionDag.clear();
-            linkState = LinkState.linked;
+            linked = true;
         }
     }
 
@@ -277,14 +269,13 @@ public class Linker {
             }
             setMemory.accept(memory);
         };
-        resolutionDag.resolveLater(new ImportMemoryDecl(module.name(), importDescriptor), new Decl[]{new ExportMemoryDecl(importedModuleName, importedMemoryName)}, resolveAction);
+        resolutionDag.resolveLater(new ImportMemoryDecl(module.name(), importDescriptor), new Decl[] { new ExportMemoryDecl(importedModuleName, importedMemoryName) }, resolveAction);
     }
 
     void resolveMemoryExport(WasmModule module, String exportedMemoryName) {
-        final Runnable resolveAction = () -> {
-        };
+        final Runnable resolveAction = () -> {};
         final ImportDescriptor importDescriptor = module.symbolTable().importedMemory();
-        final Decl[] dependencies = importDescriptor != null ? new Decl[]{new ImportMemoryDecl(module.name(), importDescriptor)} : new Decl[0];
+        final Decl[] dependencies = importDescriptor != null ? new Decl[] { new ImportMemoryDecl(module.name(), importDescriptor) } : new Decl[0];
         resolutionDag.resolveLater(new ExportMemoryDecl(module.name(), exportedMemoryName), dependencies, resolveAction);
     }
 
@@ -299,7 +290,7 @@ public class Linker {
                 memory.store_i32_8(baseAddress + writeOffset, b);
             }
         };
-        resolutionDag.resolveLater(new DataDecl(module.name(), dataSectionId), new Decl[]{new ImportMemoryDecl(module.name(), module.symbolTable().importedMemory())}, resolveAction);
+        resolutionDag.resolveLater(new DataDecl(module.name(), dataSectionId), new Decl[] { new ImportMemoryDecl(module.name(), module.symbolTable().importedMemory()) }, resolveAction);
     }
 
     static class ResolutionDag {
@@ -317,7 +308,7 @@ public class Linker {
 
             @Override
             public String toString() {
-                return String.format("(import %s from %s into %s)", importDescriptor.memberName, importDescriptor.moduleName, moduleName);
+                return String.format("import %s from %s into %s", importDescriptor.memberName, importDescriptor.moduleName, moduleName);
             }
 
             @Override
@@ -346,7 +337,7 @@ public class Linker {
 
             @Override
             public String toString() {
-                return String.format("(export %s from %s)", memoryName, moduleName);
+                return String.format("export %s from %s", memoryName, moduleName);
             }
 
             @Override
@@ -374,11 +365,6 @@ public class Linker {
             }
 
             @Override
-            public String toString() {
-                return String.format("(data %d in %s)", dataSectionId, moduleName);
-            }
-
-            @Override
             public int hashCode() {
                 return moduleName.hashCode() ^ dataSectionId;
             }
@@ -394,19 +380,12 @@ public class Linker {
         }
 
         static class Resolver {
-            final Decl element;
             final Decl[] dependencies;
             final Runnable action;
 
-            Resolver(Decl element, Decl[] dependencies, Runnable action) {
-                this.element = element;
+            Resolver(Decl[] dependencies, Runnable action) {
                 this.dependencies = dependencies;
                 this.action = action;
-            }
-
-            @Override
-            public String toString() {
-                return "Resolver(" + element + ")";
             }
         }
 
@@ -417,7 +396,7 @@ public class Linker {
         }
 
         void resolveLater(Decl element, Decl[] dependencies, Runnable action) {
-            resolutions.put(element, new Resolver(element, dependencies, action));
+            resolutions.put(element, new Resolver(dependencies, action));
         }
 
         void clear() {

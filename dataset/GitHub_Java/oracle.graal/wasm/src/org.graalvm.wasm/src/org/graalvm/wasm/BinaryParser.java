@@ -97,9 +97,9 @@ public class BinaryParser extends BinaryStreamParser {
         this.moduleFunctionIndex = 0;
     }
 
-    WasmModule readModule(WasmContext context) {
+    WasmModule readModule() {
         validateMagicNumberAndVersion();
-        readSections(context);
+        readSections();
         return module;
     }
 
@@ -108,7 +108,7 @@ public class BinaryParser extends BinaryStreamParser {
         Assert.assertIntEqual(read4(), VERSION, "Invalid VERSION number");
     }
 
-    private void readSections(WasmContext context) {
+    private void readSections() {
         while (!isEOF()) {
             byte sectionID = read1();
             int size = readUnsignedInt32();
@@ -136,7 +136,7 @@ public class BinaryParser extends BinaryStreamParser {
                     readGlobalSection();
                     break;
                 case Section.EXPORT:
-                    readExportSection(context);
+                    readExportSection();
                     break;
                 case Section.START:
                     readStartSection();
@@ -362,9 +362,7 @@ public class BinaryParser extends BinaryStreamParser {
         /* Read (parse) and abstractly interpret the code entry */
         byte returnTypeId = module.symbolTable().function(funcIndex).returnType();
         ExecutionState state = new ExecutionState();
-        state.pushStackState(0);
         WasmBlockNode bodyBlock = readBlockBody(rootNode.codeEntry(), state, returnTypeId, returnTypeId);
-        state.popStackState();
         rootNode.setBody(bodyBlock);
 
         /* Push a frame slot to the frame descriptor for every local. */
@@ -1057,7 +1055,7 @@ public class BinaryParser extends BinaryStreamParser {
         module.symbolTable().setStartFunction(startFunctionIndex);
     }
 
-    private void readExportSection(WasmContext context) {
+    private void readExportSection() {
         int numExports = readVectorLength();
         for (int i = 0; i != numExports; ++i) {
             String exportName = readName();
@@ -1077,7 +1075,7 @@ public class BinaryParser extends BinaryStreamParser {
                 }
                 case ExportIdentifier.MEMORY: {
                     readMemoryIndex();
-                    module.symbolTable().exportMemory(context, exportName);
+                    // TODO: Store the export information somewhere (e.g. in the symbol table).
                     break;
                 }
                 case ExportIdentifier.GLOBAL: {
@@ -1160,8 +1158,7 @@ public class BinaryParser extends BinaryStreamParser {
     private void readDataSection() {
         final WasmContext context = WasmLanguage.getCurrentContext();
         int numDataSections = readVectorLength();
-        boolean allDataSectionsResolved = true;
-        for (int dataSectionId = 0; dataSectionId != numDataSections; ++dataSectionId) {
+        for (int i = 0; i != numDataSections; ++i) {
             int memIndex = readUnsignedInt32();
             // At the moment, WebAssembly only supports one memory instance, thus the only valid
             // memory index is 0.
@@ -1195,24 +1192,19 @@ public class BinaryParser extends BinaryStreamParser {
             int byteLength = readVectorLength();
             long baseAddress = dataOffset;
             final WasmMemory memory = module.symbolTable().memory();
-            if (memory != null && allDataSectionsResolved) {
-                // A data section can be loaded directly into memory only if there are no prior
-                // unresolved data sections.
+            if (memory != null) {
                 memory.validateAddress(null, baseAddress, byteLength);
                 for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
                     byte b = read1();
                     memory.store_i32_8(baseAddress + writeOffset, b);
                 }
             } else {
-                // When some data section is not resolved, all the later data sections must be
-                // resolved after it.
                 byte[] dataSegment = new byte[byteLength];
                 for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
                     byte b = read1();
                     dataSegment[writeOffset] = b;
                 }
-                context.linker().resolveDataSection(module, dataSectionId, baseAddress, byteLength, dataSegment, allDataSectionsResolved);
-                allDataSectionsResolved = false;
+                context.linker().resolveDataSection(module, i, baseAddress, byteLength, dataSegment);
             }
         }
     }
