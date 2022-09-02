@@ -70,6 +70,10 @@ class GatherSourceSectionsListener implements LoadSourceSectionListener {
     @Override
     public void onLoad(LoadSourceSectionEvent event) {
         final SourceSection sourceSection = event.getSourceSection();
-        simpleCoverageInstrument.addLoaded(sourceSection);
+        // TODO: This should not be necessary because of the filter. Bug!
+        if (!sourceSection.getSource().isInternal()) {
+            simpleCoverageInstrument.addLoaded(sourceSection);
+        }
     }
+
 }
