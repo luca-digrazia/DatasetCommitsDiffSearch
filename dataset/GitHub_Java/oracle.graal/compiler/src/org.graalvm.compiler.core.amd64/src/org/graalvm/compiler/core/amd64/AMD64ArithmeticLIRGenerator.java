@@ -124,7 +124,6 @@ import org.graalvm.compiler.lir.amd64.AMD64ShiftOp;
 import org.graalvm.compiler.lir.amd64.AMD64SignExtendOp;
 import org.graalvm.compiler.lir.amd64.AMD64Ternary;
 import org.graalvm.compiler.lir.amd64.AMD64Unary;
-import org.graalvm.compiler.lir.amd64.AMD64ZeroMemoryOp;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorBinary;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorBinary.AVXBinaryOp;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorUnary;
@@ -448,13 +447,6 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
             default:
                 throw GraalError.shouldNotReachHere();
         }
-    }
-
-    public Value emitBinaryMemory(VexRVMOp op, OperandSize size, AllocatableValue a, AMD64AddressValue location, LIRFrameState state) {
-        assert (size.isXmmType() && supportAVX());
-        Variable result = getLIRGen().newVariable(LIRKind.combine(a));
-        getLIRGen().append(new AMD64VectorBinary.AVXBinaryMemoryOp(op, getRegisterSize(result), result, a, location, state));
-        return result;
     }
 
     public Value emitBinaryMemory(AMD64RMOp op, OperandSize size, AllocatableValue a, AMD64AddressValue location, LIRFrameState state) {
@@ -1129,12 +1121,6 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
         return new AMD64MathPowOp().emitLIRWrapper(getLIRGen(), x, y);
     }
 
-    @Override
-    public void emitZeroMemory(Value address, Value length) {
-        RegisterValue lengthReg = moveToReg(AMD64.rcx, length);
-        getLIRGen().append(new AMD64ZeroMemoryOp(getAMD64LIRGen().asAddressValue(address), lengthReg));
-    }
-
     protected AMD64LIRGenerator getAMD64LIRGen() {
         return (AMD64LIRGenerator) getLIRGen();
     }
@@ -1346,7 +1332,7 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
         return result;
     }
 
-    public boolean supportAVX() {
+    private boolean supportAVX() {
         TargetDescription target = getLIRGen().target();
         return ((AMD64) target.arch).getFeatures().contains(CPUFeature.AVX);
     }
