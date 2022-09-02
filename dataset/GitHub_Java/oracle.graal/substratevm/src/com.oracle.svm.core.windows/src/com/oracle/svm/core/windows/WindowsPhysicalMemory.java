@@ -24,7 +24,11 @@
  */
 package com.oracle.svm.core.windows;
 
+import static org.graalvm.word.WordFactory.nullPointer;
+
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -35,6 +39,9 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.heap.PhysicalMemory;
 import com.oracle.svm.core.windows.headers.SysinfoAPI;
 
+// Checkstyle: stop
+
+@Platforms(Platform.WINDOWS.class)
 class WindowsPhysicalMemory extends PhysicalMemory {
 
     static class WindowsPhysicalMemorySupportImpl implements PhysicalMemorySupport {
@@ -48,9 +55,13 @@ class WindowsPhysicalMemory extends PhysicalMemory {
         public UnsignedWord size() {
             SysinfoAPI.MEMORYSTATUSEX memStatusEx = StackValue.get(SysinfoAPI.MEMORYSTATUSEX.class);
             memStatusEx.set_dwLength(SizeOf.get(SysinfoAPI.MEMORYSTATUSEX.class));
-            SysinfoAPI.GlobalMemoryStatusEx(memStatusEx);
-            return WordFactory.unsigned(memStatusEx.ullTotalPhys());
+            if (SysinfoAPI.GlobalMemoryStatusEx(memStatusEx) != 0) {
+                return WordFactory.unsigned(memStatusEx.ullTotalPhys());
+            } else {
+                return nullPointer();
+            }
         }
+
     }
 
     @AutomaticFeature
