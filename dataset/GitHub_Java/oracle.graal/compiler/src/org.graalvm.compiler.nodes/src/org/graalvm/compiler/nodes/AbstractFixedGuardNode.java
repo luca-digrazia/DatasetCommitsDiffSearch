@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@ import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.Verbosity;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
@@ -140,10 +139,10 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
             IfNode ifNode;
             AbstractBeginNode noDeoptSuccessor;
             if (negated) {
-                ifNode = graph().add(new IfNode(condition, deopt, currentNext, 0, ProfileSource.INJECTED));
+                ifNode = graph().add(new IfNode(condition, deopt, currentNext, 0));
                 noDeoptSuccessor = ifNode.falseSuccessor();
             } else {
-                ifNode = graph().add(new IfNode(condition, currentNext, deopt, 1, ProfileSource.INJECTED));
+                ifNode = graph().add(new IfNode(condition, currentNext, deopt, 1));
                 noDeoptSuccessor = ifNode.trueSuccessor();
             }
             noDeoptSuccessor.setNodeSourcePosition(getNoDeoptSuccessorPosition());
