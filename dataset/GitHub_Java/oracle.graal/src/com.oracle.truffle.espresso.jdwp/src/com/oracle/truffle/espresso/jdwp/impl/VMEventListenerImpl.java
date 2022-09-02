@@ -134,10 +134,8 @@ public final class VMEventListenerImpl implements VMEventListener {
     @CompilerDirectives.TruffleBoundary
     public void removeBreakpointRequest(int requestId) {
         BreakpointInfo remove = breakpointRequests.remove(requestId);
-        Breakpoint[] breakpoints = remove.getBreakpoints();
-        for (Breakpoint breakpoint : breakpoints) {
-            breakpoint.dispose();
-        }
+        Breakpoint breakpoint = remove.getBreakpoint();
+        breakpoint.dispose();
     }
 
     @Override
@@ -305,22 +303,22 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    public void breakpointHit(BreakpointInfo info, CallFrame frame, Object currentThread) {
+    public void breakpointHit(BreakpointInfo info, Object currentThread) {
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(info.getSuspendPolicy());
         stream.writeInt(1); // # events in reply
 
-        stream.writeByte(info.getEventKind());
+        stream.writeByte(RequestedJDWPEvents.BREAKPOINT);
         stream.writeInt(info.getRequestId());
         long threadId = ids.getIdAsLong(currentThread);
         stream.writeLong(threadId);
 
         // location
-        stream.writeByte(frame.getTypeTag());
-        stream.writeLong(frame.getClassId());
-        stream.writeLong(frame.getMethodId());
-        stream.writeLong(frame.getCodeIndex());
+        stream.writeByte(info.getTypeTag());
+        stream.writeLong(info.getClassId());
+        stream.writeLong(info.getMethodId());
+        stream.writeLong(info.getBci());
         JDWPLogger.log("Sending breakpoint hit event in thread: %s with suspension policy: %d", JDWPLogger.LogLevel.STEPPING, context.getThreadName(currentThread), info.getSuspendPolicy());
         if (holdEvents) {
             heldEvents.add(stream);
@@ -426,11 +424,11 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    public void stepCompleted(int commandRequestId, byte suspendPolicy, Object guestThread, CallFrame currentFrame) {
+    public void stepCompleted(int commandRequestId, CallFrame currentFrame) {
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
-        stream.writeByte(suspendPolicy);
-        suspend(suspendPolicy, guestThread);
+        // tracked by /browse/GR-19816
+        stream.writeByte(SuspendStrategy.EVENT_THREAD);
         stream.writeInt(1); // # events in reply
 
         stream.writeByte(RequestedJDWPEvents.SINGLE_STEP);
