@@ -54,7 +54,6 @@ public final class ArrayType extends AggregateType {
 
     public void setElementType(Type elementType) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        verifyCycleFree(elementType);
         this.elementTypeAssumption.invalidate();
         this.elementType = elementType;
         this.elementTypeAssumption = Truffle.getRuntime().createAssumption("ArrayType.elementType");

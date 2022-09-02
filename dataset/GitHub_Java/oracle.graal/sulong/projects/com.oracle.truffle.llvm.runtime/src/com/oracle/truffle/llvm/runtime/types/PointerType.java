@@ -59,7 +59,6 @@ public final class PointerType extends AggregateType {
 
     public void setPointeeType(Type type) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        verifyCycleFree(type);
         this.pointeeTypeAssumption.invalidate();
         this.pointeeType = type;
         this.pointeeTypeAssumption = Truffle.getRuntime().createAssumption("PointerType.pointeeType");
