@@ -270,19 +270,23 @@ public final class CPUSampler implements Closeable {
 
             @Override
             public void onContextClosed(TruffleContext context) {
-                // TODO GR-32021
+                // print?
+// synchronized (CPUSampler.this) {
+// print here instead?
+// activeContexts.remove(context);
+// }
             }
         }, true);
     }
 
     @SuppressWarnings("unused")
     private void pushSyntheticFrame(TruffleContext context, LanguageInfo info, String message) {
-        // TODO GR-32022
+        // TODO
     }
 
     @SuppressWarnings("unused")
     private void popSyntheticFrame(TruffleContext context, LanguageInfo info) {
-        // TODO GR-32022
+        // TODO
     }
 
     /**
