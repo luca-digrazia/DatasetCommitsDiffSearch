@@ -241,9 +241,6 @@ public final class InspectorDebugger extends DebuggerDomain {
                 if (c2 <= 0) {
                     c2 = -1;
                 }
-                if (l1 > l2) {
-                    l1 = l2;
-                }
             } else {
                 l2 = l1;
                 if (c1 == -1) {
@@ -733,8 +730,8 @@ public final class InspectorDebugger extends DebuggerDomain {
         }
     }
 
-    public boolean sourceMatchesBlackboxPatterns(Source source, Pattern[] patterns) {
-        String uri = slh.getSourceURL(source);
+    public static boolean sourceMatchesBlackboxPatterns(Source source, Pattern[] patterns) {
+        String uri = ScriptsHandler.getNiceStringFromURI(source.getURI());
         for (Pattern pattern : patterns) {
             // Check whether pattern corresponds to:
             // 1) the name of a file
