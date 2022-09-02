@@ -583,26 +583,23 @@ public class AllocationReporterTest {
         });
         context.eval(source);
         context.enter();
-        try {
-            AllocationReporter reporter = AllocationReporterLanguage.getCurrentContext().getEnv().lookup(AllocationReporter.class);
-            AtomicInteger listenerCalls = new AtomicInteger(0);
-            AllocationReporterListener activatedListener = AllocationReporterListener.register(listenerCalls, reporter);
-            assertEquals(0, listenerCalls.get());
-            assertFalse(reporter.isActive());
-            allocation.setEnabled(true);
-            assertEquals(1, listenerCalls.get());
-            activatedListener.unregister();
-            listenerCalls.set(0);
+        AllocationReporter reporter = ProxyLanguage.getCurrentContext().getEnv().lookup(AllocationReporter.class);
+        AtomicInteger listenerCalls = new AtomicInteger(0);
+        AllocationReporterListener activatedListener = AllocationReporterListener.register(listenerCalls, reporter);
+        assertEquals(0, listenerCalls.get());
+        assertFalse(reporter.isActive());
+        allocation.setEnabled(true);
+        assertEquals(1, listenerCalls.get());
+        activatedListener.unregister();
+        listenerCalls.set(0);
 
-            AllocationDeactivatedListener deactivatedListener = AllocationDeactivatedListener.register(listenerCalls, reporter);
-            assertEquals(0, listenerCalls.get());
-            assertTrue(reporter.isActive());
-            allocation.setEnabled(false);
-            assertEquals(1, listenerCalls.get());
-            deactivatedListener.unregister();
-        } finally {
-            context.leave();
-        }
+        AllocationDeactivatedListener deactivatedListener = AllocationDeactivatedListener.register(listenerCalls, reporter);
+        assertEquals(0, listenerCalls.get());
+        assertTrue(reporter.isActive());
+        allocation.setEnabled(false);
+        assertEquals(1, listenerCalls.get());
+        deactivatedListener.unregister();
+        context.leave();
     }
 
     /**
@@ -869,22 +866,16 @@ public class AllocationReporterTest {
             }
 
         }
-
-        public static LanguageContext getCurrentContext() {
-            return getCurrentContext(AllocationReporterLanguage.class);
-        }
     }
 
     private static class BigNumber implements TruffleObject {
 
         private BigInteger integer;
 
-        @TruffleBoundary
         BigNumber(String value) {
             this.integer = new BigInteger(value);
         }
 
-        @TruffleBoundary
         long getSize() {
             return integer.bitCount() / 8;
         }
