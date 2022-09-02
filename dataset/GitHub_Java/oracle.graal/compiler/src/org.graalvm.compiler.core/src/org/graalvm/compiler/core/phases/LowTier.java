@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,7 +43,6 @@ import org.graalvm.compiler.phases.common.UseTrappingNullChecksPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
-import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 
 public class LowTier extends BaseTier<LowTierContext> {
 
@@ -72,10 +71,6 @@ public class LowTier extends BaseTier<LowTierContext> {
                         new SchedulePhase(GraalOptions.StressTestEarlyReads.getValue(options) ? SchedulingStrategy.EARLIEST : SchedulingStrategy.LATEST_OUT_OF_LOOPS_IMPLICIT_NULL_CHECKS)));
 
         appendPhase(canonicalizerWithoutGVN);
-
-        if (GraalOptions.PartialUnroll.getValue(options)) {
-            appendPhase(new EarlyReadEliminationPhase(canonicalizerWithoutGVN));
-        }
 
         appendPhase(new UseTrappingNullChecksPhase());
 

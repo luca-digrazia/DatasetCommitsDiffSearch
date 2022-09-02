@@ -57,7 +57,8 @@ public class VolatileReadNode extends ReadNode implements SingleMemoryKill, Lowe
 
     @Override
     public void simplify(SimplifierTool tool) {
-        if (lastLocationAccess != null && hasOnlyUsagesOfType(Memory)) {
+        if (hasOnlyUsagesOfType(Memory)) {
+            assert lastLocationAccess != null;
             replaceAtUsages(Memory, lastLocationAccess.asNode());
             assert hasNoUsages();
             graph().removeFixed(this);

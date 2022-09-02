@@ -26,12 +26,11 @@
 
 package org.graalvm.compiler.nodes.memory;
 
-import org.graalvm.compiler.core.common.LIRKind;
+import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
@@ -49,8 +48,7 @@ public class VolatileWriteNode extends WriteNode implements Lowerable {
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        LIRKind writeKind = gen.getLIRGeneratorTool().getLIRKind(value().stamp(NodeView.DEFAULT));
-        gen.getLIRGeneratorTool().getArithmetic().emitVolatileStore(writeKind, gen.operand(address), gen.operand(value()), gen.state(this));
+        throw new GraalError("Shouldn't be generated");
     }
 
     @Override
