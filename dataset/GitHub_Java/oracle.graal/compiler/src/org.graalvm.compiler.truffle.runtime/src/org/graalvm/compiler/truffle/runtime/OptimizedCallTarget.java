@@ -451,11 +451,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         }
     }
 
-    /**
-     * In compiled code, this is only used if the callee is <i>not</i> inlined. If the callee is
-     * inlined, {@link #callInlined(Node, Object...)} is used instead, which does not profile
-     * arguments, as it is estimated redundant. See the docs of {@link OptimizedCallTarget}.
-     */
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
     public final Object callDirect(Node location, Object... args) {
         try {
@@ -476,6 +471,14 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         }
     }
 
+    private static boolean keepAlive(@SuppressWarnings("unused") Object o) {
+        return true;
+    }
+
+    public final Object callOSR(Object... args) {
+        return doInvoke(args);
+    }
+
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
     public final Object callInlined(Node location, Object... arguments) {
         try {
@@ -485,14 +488,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             // this assertion is needed to keep the values from being cleared as non-live locals
             assert keepAlive(location);
         }
-    }
-
-    private static boolean keepAlive(@SuppressWarnings("unused") Object o) {
-        return true;
-    }
-
-    public final Object callOSR(Object... args) {
-        return doInvoke(args);
     }
 
     /**
@@ -509,7 +504,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
          * important that this method stays small. It is compiled as a special stub that calls into
          * the optimized code or if the call target is not yet optimized calls into profiledPERoot
          * directly. In order to avoid deoptimizations in this method it has optimizations disabled.
-         * Any additional code here will likely have significant impact on the interpreter call
+         * Any additional code here will likely have significant impact on the intepreter call
          * performance.
          */
         if (interpreterCall()) {

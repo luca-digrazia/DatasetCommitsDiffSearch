@@ -24,10 +24,14 @@
  */
 package com.oracle.svm.truffle.api;
 
+import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.code.CodeInfo;
+import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.UntetheredCodeInfo;
 import com.oracle.svm.core.code.UntetheredCodeInfoAccess;
@@ -40,7 +44,13 @@ import com.oracle.svm.core.util.VMError;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode implements SubstrateInstalledCode {
+/**
+ * Represents the compiled code of a {@link SubstrateOptimizedCallTarget}.
+ * <p>
+ * Assume that methods return stale values because internal state can change at any safepoint (see
+ * {@link SubstrateInstalledCode}).
+ */
+public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode implements SubstrateInstalledCode, OptimizedAssumptionDependency {
     protected final SubstrateOptimizedCallTarget callTarget;
 
     protected SubstrateOptimizedCallTargetInstalledCode(SubstrateOptimizedCallTarget callTarget) {
@@ -49,8 +59,37 @@ public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode imp
     }
 
     @Override
-    public void invalidate() {
+    public final void invalidate() {
         CodeInfoTable.invalidateInstalledCode(this); // calls clearAddress
+        callTarget.onInvalidate(null, null, true);
+    }
+
+    @Override
+    public void onAssumptionInvalidated(Object source, CharSequence reason) {
+        boolean wasActive = false;
+        if (isAlive()) {
+            CodeInfoTable.invalidateInstalledCode(this); // calls clearAddress
+            wasActive = true;
+        } else {
+            assert !isValid() : "Cannot be valid but not alive";
+        }
+        callTarget.onInvalidate(source, reason, wasActive);
+    }
+
+    /**
+     * Returns false if not valid, including if {@linkplain #invalidateWithoutDeoptimization
+     * previously invalidated without deoptimization} in which case there can still be
+     * {@linkplain #isAlive live activations}. In order to entirely invalidate code in such cases,
+     * {@link #invalidate} must still be called even when this method returns false.
+     */
+    @Override
+    public boolean isValid() {
+        return super.isValid();
+    }
+
+    @Override
+    public CompilableTruffleAST getCompilable() {
+        return callTarget;
     }
 
     @Override
@@ -71,35 +110,52 @@ public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode imp
     @Override
     public void setAddress(long address, ResolvedJavaMethod method) {
         assert VMOperation.isInProgressAtSafepoint();
+        this.entryPoint = address;
         this.address = address;
-        callTarget.setInstalledCode(this);
+        callTarget.onCodeInstalled(this);
     }
 
     @Override
     public void clearAddress() {
         assert VMOperation.isInProgressAtSafepoint();
+        this.entryPoint = 0;
         this.address = 0;
+        callTarget.onCodeCleared(this);
     }
 
     @Override
-    public boolean isValid() {
-        return address != 0;
+    public void invalidateWithoutDeoptimization() {
+        assert VMOperation.isInProgressAtSafepoint();
+        if (isValid()) {
+            invalidateWithoutDeoptimization0();
+        }
     }
 
-    @Override
-    public boolean isAlive() {
-        // Same as isValid(): when SVM invalidates code, it immediately deoptimizes all frames.
-        return isValid();
+    @Uninterruptible(reason = "Must tether the CodeInfo.")
+    private void invalidateWithoutDeoptimization0() {
+        this.entryPoint = 0;
+
+        UntetheredCodeInfo untetheredInfo = CodeInfoTable.lookupCodeInfo(WordFactory.pointer(this.address));
+        assert untetheredInfo.isNonNull() && untetheredInfo.notEqual(CodeInfoTable.getImageCodeInfo());
+
+        Object tether = CodeInfoAccess.acquireTether(untetheredInfo);
+        try { // Indicates to GC that the code can be freed once there are no activations left
+            CodeInfo codeInfo = CodeInfoAccess.convert(untetheredInfo, tether);
+            CodeInfoAccess.setState(codeInfo, CodeInfo.STATE_NON_ENTRANT);
+        } finally {
+            CodeInfoAccess.releaseTether(untetheredInfo, tether);
+        }
     }
 
-    static Object doInvoke(SubstrateOptimizedCallTarget callTarget, SubstrateOptimizedCallTargetInstalledCode installedCode, Object[] args) {
+    static Object doInvoke(SubstrateOptimizedCallTarget callTarget, Object[] args) {
+        SubstrateOptimizedCallTarget.safepointBarrier();
         /*
          * We have to be very careful that the calling code is uninterruptible, i.e., has no
          * safepoint between the read of the entry point address and the indirect call to this
          * address. Otherwise, the code can be invalidated concurrently and we invoke an address
          * that no longer contains executable code.
          */
-        long start = installedCode.address;
+        long start = callTarget.installedCode.entryPoint;
         if (start != 0) {
             SubstrateOptimizedCallTarget.CallBoundaryFunctionPointer target = WordFactory.pointer(start);
             Object result = target.invoke(callTarget, args);
@@ -111,16 +167,18 @@ public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode imp
 
     @Uninterruptible(reason = "Prevent the GC from freeing the CodeInfo object.")
     boolean isValidLastTier() {
-        UntetheredCodeInfo info = CodeInfoTable.lookupCodeInfo(WordFactory.pointer(address));
-        if (info.isNonNull() && info.notEqual(CodeInfoTable.getImageCodeInfo())) {
-            return UntetheredCodeInfoAccess.getTier(info) == TruffleCompiler.LAST_TIER_INDEX;
+        if (entryPoint == 0) {
+            return false; // not valid
         }
-        return false;
+        UntetheredCodeInfo info = CodeInfoTable.lookupCodeInfo(WordFactory.pointer(entryPoint));
+        return info.isNonNull() && info.notEqual(CodeInfoTable.getImageCodeInfo()) &&
+                        UntetheredCodeInfoAccess.getTier(info) == TruffleCompiler.LAST_TIER_INDEX;
     }
 
-    // All methods below should never be called in SVM. There are others defined
-    // in InstalledCode (such as getAddress) that should also not be called
-    // but they are unfortunately final.
+    /*
+     * All methods below should never be called in SVM. There are others defined in InstalledCode
+     * (such as getAddress) that should also not be called but they are unfortunately final.
+     */
 
     private static final String NOT_CALLED_IN_SUBSTRATE_VM = "No implementation in Substrate VM";
 
