@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
 
@@ -176,11 +175,6 @@ final class GraalTVMCI extends TVMCI {
     @Override
     protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
         ((EngineData) runtimeData).loadOptions(optionValues);
-    }
-
-    @Override
-    protected void onEngineClosed(Object runtimeData) {
-        GraalTruffleRuntime.getRuntime().onEngineClosed((EngineData) runtimeData);
     }
 
     private static final GraalCastUnsafe CAST_UNSAFE = new GraalCastUnsafe();

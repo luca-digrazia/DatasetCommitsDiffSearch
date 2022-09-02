@@ -89,6 +89,12 @@ final class NodeAccessor extends Accessor {
             rootNode.setCallTarget(callTarget);
         }
 
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean isTaggedWith(Node node, Class<?> tag) {
+            return node.isTaggedWith(tag);
+        }
+
         @Override
         public boolean isCloneUninitializedSupported(RootNode rootNode) {
             return rootNode.isCloneUninitializedSupported();
@@ -148,11 +154,6 @@ final class NodeAccessor extends Accessor {
         @Override
         public void applyPolyglotEngine(RootNode from, RootNode to) {
             to.polyglotEngine = from.polyglotEngine;
-        }
-
-        @Override
-        public void forceAdoption(Node parent, Node child) {
-            child.setParent(parent);
         }
 
     }

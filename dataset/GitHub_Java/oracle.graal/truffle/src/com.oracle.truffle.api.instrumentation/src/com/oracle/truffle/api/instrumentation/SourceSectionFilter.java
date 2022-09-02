@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -131,23 +131,12 @@ public final class SourceSectionFilter {
      * @since 19.0.
      */
     public boolean includes(Node node) {
-        if (!InstrumentationHandler.isInstrumentableNode(node)) {
+        if (!InstrumentationHandler.isInstrumentableNode(node, node.getSourceSection())) {
             return false;
         }
-        return includesImpl(node, node.getSourceSection());
-    }
-
-    public boolean includes(Node node, SourceSection sourceSection) {
-        if (node != null && !InstrumentationHandler.isInstrumentableNode(node)) {
-            return false;
-        }
-        return includesImpl(node, sourceSection);
-    }
-
-    private boolean includesImpl(Node node, SourceSection sourceSection) {
-        Set<Class<?>> tags = node != null ? getProvidedTags(node) : Collections.emptySet();
+        Set<Class<?>> tags = getProvidedTags(node);
         for (EventFilterExpression exp : expressions) {
-            if (!exp.isIncluded(tags, node, sourceSection)) {
+            if (!exp.isIncluded(tags, node, node.getSourceSection())) {
                 return false;
             }
         }
@@ -213,7 +202,7 @@ public final class SourceSectionFilter {
     }
 
     boolean isInstrumentedNode(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
-        assert InstrumentationHandler.isInstrumentableNode(instrumentedNode);
+        assert InstrumentationHandler.isInstrumentableNode(instrumentedNode, sourceSection);
         for (EventFilterExpression exp : expressions) {
             if (!exp.isIncluded(providedTags, instrumentedNode, sourceSection)) {
                 return false;
@@ -1519,7 +1508,7 @@ public final class SourceSectionFilter {
                                 rootSection == null ||
                                 !rootSection.getSource().isInternal() ||
                                 rootSection.getSource().isInternal() && rootNode.isInternal() : //
-                                "The root's source is internal, but the root node is not. Root node = " + rootNode.getClass();
+                "The root's source is internal, but the root node is not. Root node = " + rootNode.getClass();
                 return rootNode == null || !rootNode.isInternal();
             }
 

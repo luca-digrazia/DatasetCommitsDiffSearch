@@ -162,7 +162,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @return an approximation of the source code represented by this Node
      * @since 0.8 or earlier
      */
-    @TruffleBoundary
+    @ExplodeLoop
     public SourceSection getEncapsulatingSourceSection() {
         Node current = this;
         while (current != null) {
@@ -259,7 +259,9 @@ public abstract class Node implements NodeInterface, Cloneable {
     /** @since 0.8 or earlier */
     public final void adoptChildren() {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        NodeUtil.adoptChildrenHelper(this);
+        if (isAdoptable()) {
+            NodeUtil.adoptChildrenHelper(this);
+        }
     }
 
     @SuppressWarnings("deprecation")

@@ -99,7 +99,6 @@ final class EngineAccessor extends Accessor {
     static final SourceSupport SOURCE = ACCESSOR.sourceSupport();
     static final InstrumentSupport INSTRUMENT = ACCESSOR.instrumentSupport();
     static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
-    static final JDKSupport JDKSERVICES = ACCESSOR.jdkSupport();
 
     private static List<AbstractClassLoaderSupplier> locatorLoaders() {
         if (TruffleOptions.AOT) {
@@ -484,14 +483,15 @@ final class EngineAccessor extends Accessor {
         @CompilerDirectives.TruffleBoundary
         public void exportSymbol(Object polyglotLanguageContext, String symbolName, Object value) {
             PolyglotLanguageContext context = (PolyglotLanguageContext) polyglotLanguageContext;
-            if (value == null) {
-                context.context.getPolyglotGuestBindings().remove(symbolName);
-                return;
-            }
             if (!PolyglotImpl.isGuestPrimitive(value) && !(value instanceof TruffleObject)) {
                 throw new IllegalArgumentException("Invalid exported value. Must be an interop value.");
             }
-            context.context.getPolyglotGuestBindings().put(symbolName, context.asValue(value));
+
+            if (value == null) {
+                context.context.getPolyglotGuestBindings().remove(symbolName);
+            } else {
+                context.context.getPolyglotGuestBindings().put(symbolName, context.asValue(value));
+            }
         }
 
         @SuppressWarnings("unchecked")

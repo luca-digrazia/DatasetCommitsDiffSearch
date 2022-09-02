@@ -64,7 +64,6 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Supplier;
 
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.io.MessageTransport;
@@ -85,6 +84,7 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import java.util.function.Supplier;
 
 /**
  * Central coordinator class for the Truffle instrumentation framework. Allocated once per
@@ -777,7 +777,7 @@ final class InstrumentationHandler {
         while (parentNode != null && parentNode.getParent() != null) {
             if (parentInstrumentable == null) {
                 SourceSection parentSourceSection = parentNode.getSourceSection();
-                if (isInstrumentableNode(parentNode)) {
+                if (isInstrumentableNode(parentNode, parentSourceSection)) {
                     parentInstrumentable = parentNode;
                     parentInstrumentableSourceSection = parentSourceSection;
                 }
@@ -794,6 +794,7 @@ final class InstrumentationHandler {
         Set<Class<?>> providedTags = getProvidedTags(rootNode);
         EventChainNode root = null;
         EventChainNode parent = null;
+
         for (EventBinding.Source<?> binding : executionBindings) {
             if (binding.isChildInstrumentedFull(providedTags, rootNode, parentInstrumentable, parentInstrumentableSourceSection, instrumentedNode, sourceSection)) {
                 if (TRACE) {
@@ -845,7 +846,7 @@ final class InstrumentationHandler {
         Node parentInstrumentable = tree;
         while (parentInstrumentable != null && parentInstrumentable.getParent() != null) {
             parentInstrumentable = parentInstrumentable.getParent();
-            if (InstrumentationHandler.isInstrumentableNode(parentInstrumentable)) {
+            if (InstrumentationHandler.isInstrumentableNode(parentInstrumentable, parentInstrumentable.getSourceSection())) {
                 break;
             }
         }
@@ -949,21 +950,44 @@ final class InstrumentationHandler {
     @SuppressWarnings({"unchecked", "deprecation"})
     private void insertWrapperImpl(Node node, SourceSection sourceSection) {
         Node parent = node.getParent();
-        if (parent instanceof WrapperNode) {
+        if (parent instanceof com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) {
             // already wrapped, need to invalidate the wrapper something changed
-            invalidateWrapperImpl((WrapperNode) parent, node);
+            invalidateWrapperImpl((com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) parent, node);
             return;
         }
         ProbeNode probe = new ProbeNode(InstrumentationHandler.this, sourceSection);
-        WrapperNode wrapper;
-        if (node instanceof InstrumentableNode) {
-            try {
+        com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode wrapper;
+        try {
+            if (node instanceof InstrumentableNode) {
                 wrapper = ((InstrumentableNode) node).createWrapper(probe);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to create wrapper of " + node, e);
+            } else {
+                Class<?> factory = null;
+                Class<?> currentClass = node.getClass();
+                while (currentClass != null) {
+                    Instrumentable instrumentable = currentClass.getAnnotation(Instrumentable.class);
+                    if (instrumentable != null) {
+                        factory = instrumentable.factory();
+                        break;
+                    }
+                    currentClass = currentClass.getSuperclass();
+                }
+
+                if (factory == null) {
+                    if (TRACE) {
+                        trace("No wrapper inserted for %s, section %s. Not annotated with @Instrumentable.%n", node, sourceSection);
+                    }
+                    // node or superclass is not annotated with @Instrumentable
+                    return;
+                }
+
+                if (TRACE) {
+                    trace("Insert wrapper for %s, section %s%n", node, sourceSection);
+                }
+                wrapper = ((InstrumentableFactory<Node>) factory.getDeclaredConstructor().newInstance()).createWrapper(node, probe);
             }
-        } else {
-            throw new AssertionError();
+
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to create wrapper of " + node, e);
         }
 
         final Node wrapperNode = getWrapperNodeChecked(wrapper, node, parent);
@@ -1111,14 +1135,15 @@ final class InstrumentationHandler {
         return getProvidedTags(InstrumentAccessor.nodesAccess().getLanguage(root.getRootNode()));
     }
 
-    static boolean isInstrumentableNode(Node node) {
-        if (node instanceof WrapperNode) {
+    @SuppressWarnings("deprecation")
+    static boolean isInstrumentableNode(Node node, SourceSection sourceSection) {
+        if (node instanceof com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) {
             return false;
         }
         if (node instanceof InstrumentableNode) {
             return ((InstrumentableNode) node).isInstrumentable();
         } else {
-            return false;
+            return !(node instanceof RootNode) && sourceSection != null;
         }
     }
 
@@ -1167,21 +1192,22 @@ final class InstrumentationHandler {
         if (TRACE) {
             trace("Remove wrapper for %s%n", node.getContext().getInstrumentedSourceSection());
         }
-        WrapperNode wrapperNode = node.findWrapper();
+        com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode wrapperNode = node.findWrapper();
         ((Node) wrapperNode).replace(wrapperNode.getDelegateNode());
     }
 
     @SuppressWarnings("deprecation")
     private static void invalidateWrapper(Node node) {
         Node parent = node.getParent();
-        if (!(parent instanceof WrapperNode)) {
+        if (!(parent instanceof com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode)) {
             // not yet wrapped
             return;
         }
-        invalidateWrapperImpl((WrapperNode) parent, node);
+        invalidateWrapperImpl((com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) parent, node);
     }
 
-    private static void invalidateWrapperImpl(WrapperNode parent, Node node) {
+    @SuppressWarnings("deprecation")
+    private static void invalidateWrapperImpl(com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode parent, Node node) {
         ProbeNode probeNode = parent.getProbeNode();
         if (TRACE) {
             SourceSection section = probeNode.getContext().getInstrumentedSourceSection();
@@ -1198,7 +1224,7 @@ final class InstrumentationHandler {
             if (node instanceof InstrumentableNode) {
                 return ((InstrumentableNode) node).hasTag((Class<? extends Tag>) tag);
             } else {
-                return false;
+                return InstrumentAccessor.nodesAccess().isTaggedWith(node, tag);
             }
         }
         return false;
@@ -1282,7 +1308,7 @@ final class InstrumentationHandler {
         public final boolean visit(Node originalNode) {
             Node node = originalNode;
             SourceSection sourceSection = node.getSourceSection();
-            boolean instrumentable = InstrumentationHandler.isInstrumentableNode(node);
+            boolean instrumentable = InstrumentationHandler.isInstrumentableNode(node, sourceSection);
             Node previousParent = null;
             SourceSection previousParentSourceSection = null;
             if (instrumentable) {
@@ -1838,8 +1864,8 @@ final class InstrumentationHandler {
         abstract boolean isInstrumentableSource(Source source);
 
         final Set<Class<?>> queryTagsImpl(Node node, LanguageInfo onlyLanguage) {
-            Objects.requireNonNull(node);
-            if (!InstrumentationHandler.isInstrumentableNode(node)) {
+            SourceSection sourceSection = node.getSourceSection();
+            if (!InstrumentationHandler.isInstrumentableNode(node, sourceSection)) {
                 return Collections.emptySet();
             }
 
@@ -1866,13 +1892,14 @@ final class InstrumentationHandler {
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public final ExecutionEventNode lookupExecutionEventNode(Node node, EventBinding<?> binding) {
-            if (!InstrumentationHandler.isInstrumentableNode(node)) {
+            if (!InstrumentationHandler.isInstrumentableNode(node, node.getSourceSection())) {
                 return null;
             }
             Node p = node.getParent();
-            if (p instanceof WrapperNode) {
-                WrapperNode w = (WrapperNode) p;
+            if (p instanceof InstrumentableFactory.WrapperNode) {
+                InstrumentableFactory.WrapperNode w = (InstrumentableFactory.WrapperNode) p;
                 return w.getProbeNode().lookupExecutionEventNode(binding);
             } else {
                 return null;
@@ -1885,7 +1912,6 @@ final class InstrumentationHandler {
             return InstrumentationHandler.this.attachFactory(this, filter, inputFilter, factory);
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public <T extends ExecutionEventListener> EventBinding<T> attachExecutionEventListener(SourceSectionFilter filter, SourceSectionFilter inputFilter, T listener) {
             verifyFilter(filter);
