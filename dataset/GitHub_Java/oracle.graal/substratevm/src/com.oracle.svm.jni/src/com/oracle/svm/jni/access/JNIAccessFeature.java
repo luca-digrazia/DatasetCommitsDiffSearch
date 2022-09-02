@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -190,8 +190,7 @@ public class JNIAccessFeature implements Feature {
 
     public JNINativeLinkage makeLinkage(String declaringClass, String name, String descriptor) {
         UserError.guarantee(!sealed,
-                        "All linkages for JNI calls must be created before the analysis has completed.%nOffending class: %s name: %s descriptor: %s",
-                        declaringClass, name, descriptor);
+                        "All linkages for JNI calls must be created before the analysis has completed.\nOffending class: " + declaringClass + " name: " + name + " descriptor: " + descriptor + "\n");
 
         JNINativeLinkage key = new JNINativeLinkage(declaringClass, name, descriptor);
 
