@@ -51,6 +51,7 @@ import java.lang.reflect.Type;
 import java.util.Objects;
 
 import org.graalvm.collections.EconomicSet;
+import org.graalvm.polyglot.Value;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -261,13 +262,14 @@ final class HostInteropReflect {
             throw PolyglotEngineException.unsupported("Unsupported target type.");
         }
 
+        Value delegate = languageContext.asValue(obj);
         HostClassDesc classDesc = HostClassDesc.forClass(languageContext.getEngine(), clazz);
-        AdapterResult adapter = classDesc.getAdapter(languageContext.context.getHostContextImpl());
+        AdapterResult adapter = classDesc.getAdapter();
         if (!adapter.isAutoConvertible()) {
             throw PolyglotEngineException.illegalArgument("Cannot convert to " + clazz);
         }
         HostMethodDesc.SingleMethod adapterConstructor = adapter.getValueConstructor();
-        Object[] arguments = new Object[]{obj};
+        Object[] arguments = new Object[]{delegate};
         try {
             return ((HostObject) HostExecuteNodeGen.getUncached().execute(adapterConstructor, null, arguments, languageContext)).obj;
         } catch (UnsupportedTypeException e) {
