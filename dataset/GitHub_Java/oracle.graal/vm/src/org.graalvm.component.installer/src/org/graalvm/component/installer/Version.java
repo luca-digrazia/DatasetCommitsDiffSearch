@@ -25,7 +25,7 @@
 package org.graalvm.component.installer;
 
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -46,57 +46,27 @@ public final class Version implements Comparable<Version> {
     /**
      * Represents no version at all. All versions are greater than this one.
      */
-    public static final Version NO_VERSION = new Version("0.0.0.0", false);
-    private static final String WILDCARD = "*";
+    public static final Version NO_VERSION = new Version("0.0.0.0");
 
     private final String versionString;
     private final String normalizedString;
     private final List<String> releaseParts;
     private final List<String> versionParts;
 
-    /**
-     * Contains wildcard.
-     */
-    private final boolean wildcard;
-
-    /**
-     * Entered by user, displayed 'as is'.
-     */
-    private final boolean user;
-
-    Version(String versionString, boolean fromUser) throws IllegalArgumentException {
+    Version(String versionString) throws IllegalArgumentException {
         this.versionString = versionString;
 
-        boolean wc = false;
-        String normalized = fromUser ? versionString : SystemUtils.normalizeOldVersions(versionString);
+        String normalized = SystemUtils.normalizeOldVersions(versionString);
         List<String> vp;
         int releaseDash = normalized.indexOf('-');
         if (releaseDash == -1) {
-            if (fromUser) {
-                wc = true;
-                releaseParts = Collections.singletonList(WILDCARD);
-            } else {
-                releaseParts = Collections.emptyList();
-            }
+            releaseParts = Collections.emptyList();
             vp = parseParts(normalized);
         } else {
             String vS = normalized.substring(0, releaseDash);
             String rS = normalized.substring(releaseDash + 1);
             vp = parseParts(vS);
-            List<String> rp = parseParts(rS);
-            if (fromUser && !rp.isEmpty()) {
-                String first = rp.get(0);
-                try {
-                    Integer.parseInt(first);
-                } catch (NumberFormatException ex) {
-                    // if (rp.size() > 1 && !Character.isDigit(rp.get(1).charAt(0))) {
-                    rp.add(0, WILDCARD);
-                    wc = true;
-                    // }
-                }
-                rp.add(WILDCARD);
-            }
-            releaseParts = Collections.unmodifiableList(rp);
+            releaseParts = parseParts(rS);
         }
         if (vp.size() < 2 || vp.size() > 4 || !Character.isDigit(vp.get(0).charAt(0)) || !Character.isDigit(vp.get(1).charAt(0))) {
             throw new IllegalArgumentException("A format Year.Release[.Update[.Patch]] is required. Got: " + versionString);
@@ -112,8 +82,6 @@ public final class Version implements Comparable<Version> {
             normalizedString = normalized;
         }
         versionParts = vp;
-        wildcard = wc;
-        user = fromUser;
     }
 
     static boolean isOldStyleVersion(String s) {
@@ -148,10 +116,10 @@ public final class Version implements Comparable<Version> {
         return sb.toString();
     }
 
-    Version(String orig, List<String> vParts, List<String> rParts, boolean wc, boolean fromUser) {
+    Version(List<String> vParts, List<String> rParts) {
         this.versionParts = new ArrayList<>(vParts);
         this.releaseParts = new ArrayList<>(rParts);
-        this.versionString = orig != null ? orig : print(vParts, rParts);
+        this.versionString = print(vParts, rParts);
         if (vParts.size() < 4 && isOldStyleVersion(vParts.get(0))) {
             while (versionParts.size() < 4) {
                 versionParts.add("0");
@@ -160,8 +128,6 @@ public final class Version implements Comparable<Version> {
         } else {
             normalizedString = versionString;
         }
-        wildcard = wc;
-        user = fromUser;
     }
 
     /**
@@ -178,11 +144,11 @@ public final class Version implements Comparable<Version> {
         while (vp.size() < 3) {
             vp.add("0");
         }
-        return new Version(null, vp, Collections.emptyList(), false, false);
+        return new Version(vp, Collections.emptyList());
     }
 
     public Version onlyVersion() {
-        return new Version(null, versionParts, Collections.emptyList(), false, false);
+        return new Version(versionParts, Collections.emptyList());
     }
 
     @Override
@@ -225,32 +191,11 @@ public final class Version implements Comparable<Version> {
     }
 
     private static List<String> parseParts(String s) throws IllegalArgumentException {
-        List<String> parts = new ArrayList<>();
-        final int l = s.length();
-        boolean digit = false;
-        int lastP = -1;
-
-        for (int i = 0; i < l; i++) {
-            char c = s.charAt(i);
-            if (!Character.isLetterOrDigit(c)) {
-                // separator
-                if (lastP >= 0) {
-                    parts.add(s.substring(lastP, i));
-                    lastP = -1;
-                }
-                continue;
+        List<String> parts = Arrays.asList(s.split("[^\\p{Alnum}]", -1)); // NOI18N
+        for (String p : parts) {
+            if (p.isEmpty()) {
+                throw new IllegalArgumentException();
             }
-            boolean nowDigit = Character.isDigit(c);
-            if (nowDigit != digit && lastP >= 0) {
-                parts.add(s.substring(lastP, i));
-                lastP = i;
-            } else if (lastP < 0) {
-                lastP = i;
-            }
-            digit = nowDigit;
-        }
-        if (lastP >= 0) {
-            parts.add(s.substring(lastP));
         }
         return parts;
     }
@@ -266,56 +211,30 @@ public final class Version implements Comparable<Version> {
         } else if (o == null) {
             return 1;
         }
-        int c = compareVersionParts(versionParts, o.versionParts, false);
+        int c = compareVersionParts(versionParts, o.versionParts);
         if (c != 0) {
             return c;
         }
-        return compareVersionParts(releaseParts, o.releaseParts, true);
+        return compareVersionParts(releaseParts, o.releaseParts);
     }
 
-    private static int compareVersionParts(List<String> pA, List<String> pB, boolean release) {
+    private static int compareVersionParts(List<String> pA, List<String> pB) {
         Iterator<String> iA = pA.iterator();
         Iterator<String> iB = pB.iterator();
         int res = 0;
-        String sA = null;
-        String sB = null;
         while ((res == 0) && iA.hasNext() && iB.hasNext()) {
-            sA = iA.next();
-            sB = iB.next();
-            res = compareVersionPart(sA, sB);
+            res = compareVersionPart(iA.next(), iB.next());
         }
         if (res != 0 || !(iA.hasNext() || iB.hasNext())) {
             return res;
         }
         if (iA.hasNext()) {
-            if (release) {
-                /*
-                 * if (WILDCARD.equals(iA.next()) || (WILDCARD.equals(sB))) { return 0; }
-                 */
-                if (WILDCARD.equals(iA.next()) && !iA.hasNext()) {
-                    return 0;
-                }
-                if (WILDCARD.equals(sB)) {
-                    return 0;
-                }
-            }
             return 1;
         } else if (iB.hasNext()) {
-            if (release) {
-                if (WILDCARD.equals(iB.next()) && !iB.hasNext()) {
-                    return 0;
-                }
-                if (WILDCARD.equals(sA)) {
-                    return 0;
-                }
-                // special case: if there's just one part and that one is zero, define it the same
-                if (pB.size() == 1 && "0".equals(pB.get(0))) {
-                    return 0;
-                }
-            }
             return -1;
+        } else {
+            throw new IllegalStateException("Should not happen"); // NOI18N
         }
-        throw new IllegalStateException("Should not happen"); // NOI18N
     }
 
     /**
@@ -326,9 +245,6 @@ public final class Version implements Comparable<Version> {
      * @return less than 0, 0 or more than 0, as with Comparator.
      */
     public static int compareVersionPart(String a, String b) {
-        if (WILDCARD.equals(a) || WILDCARD.equals(b)) {
-            return 0;
-        }
         // handle of the parts == null
         if (a == null) {
             if (b != null) {
@@ -356,98 +272,16 @@ public final class Version implements Comparable<Version> {
         return a.compareTo(b);
     }
 
-    public boolean hasWildcard() {
-        return wildcard;
-    }
-
     public Version installVersion() {
-        List<String> vps = new ArrayList<>();
-        vps.add(versionParts.get(0));
-        vps.add(versionParts.get(1));
-        if (versionParts.size() > 2) {
-            vps.add(versionParts.get(2));
-        } else {
-            vps.add("0");
-        }
-        vps.add("0");
-        return new Version(null, vps, releaseParts, wildcard, user);
-    }
-
-    /**
-     * Produces a 'human readable' version. The intention is to hide complexities of prerelease
-     * versioning from the poor user.
-     * 
-     * @return human-readable string.
-     */
-    public String displayString() {
-        if (user) {
-            return originalString();
-        }
         StringBuilder sb = new StringBuilder();
-        List<String> vps = new ArrayList<>(versionParts);
-        if (vps.size() == 4 && "0".equals(vps.get(3))) { // NOI18N
-            vps.remove(3);
+        sb.append(versionParts.get(0)).append(".").append(versionParts.get(1));
+        if (versionParts.size() > 2) {
+            sb.append(".").append(versionParts.get(2));
         }
-        for (String vp : vps) {
-            if (sb.length() > 0) {
-                sb.append('.');
-            }
-            sb.append(vp);
+        if (!releaseParts.isEmpty()) {
+            sb.append("-").append(String.join(".", releaseParts));
         }
-
-        if (releaseParts.isEmpty()) {
-            // no release part, no magic
-            return sb.toString();
-        }
-        String firstRel = releaseParts.get(0);
-        List<String> printedParts = new ArrayList<>(releaseParts);
-        try {
-            Integer.parseInt(firstRel);
-            printedParts.remove(0);
-        } catch (NumberFormatException ex) {
-        }
-
-        if (printedParts.isEmpty()) {
-            return sb.toString();
-        }
-
-        boolean name = false;
-        boolean next = false;
-        int patchChar = -1;
-        sb.append("-");
-        for (String s : printedParts) {
-            if (s.isEmpty() || WILDCARD.equals(s)) { // NOI18N
-                // skip artifical wildcards
-                continue;
-            }
-            if (Character.isDigit(s.charAt(0))) {
-                if (next && !name) {
-                    sb.append("."); // NOI18N
-                }
-                if (name && patchChar != -1) {
-                    sb.setCharAt(patchChar, '.'); // patch to .nameXX
-                }
-                sb.append(s);
-                name = false;
-                patchChar = -1;
-            } else {
-                patchChar = -1;
-                if (name) {
-                    // was name, now is also name
-                    sb.append("_"); // NOI18N
-                } else {
-                    if (next) {
-                        patchChar = sb.length();
-                        sb.append("-"); // NOI18N
-                    }
-                }
-                sb.append(s);
-
-                name = true;
-            }
-            next = true;
-        }
-        return sb.toString();
+        return fromString(sb.toString());
     }
 
     public Match match(Match.Type type) {
@@ -461,11 +295,7 @@ public final class Version implements Comparable<Version> {
      * @return constructed Version object.
      */
     public static Version fromString(String versionString) {
-        return versionString == null ? NO_VERSION : new Version(versionString, false);
-    }
-
-    public static Version fromUserString(String userVersion) {
-        return userVersion == null ? NO_VERSION : new Version(userVersion, true);
+        return versionString == null ? NO_VERSION : new Version(versionString);
     }
 
     public static final String EXACT_VERSION = "="; // NOI18N
@@ -499,7 +329,7 @@ public final class Version implements Comparable<Version> {
             matchOut[0] = Version.NO_VERSION.match(Match.Type.MOSTRECENT);
             return idSpec;
         }
-        matchOut[0] = Version.fromUserString(idSpec.substring(i + 1)).match(type);
+        matchOut[0] = Version.fromString(idSpec.substring(i + 1)).match(type);
         return idSpec.substring(0, i);
     }
 
@@ -587,7 +417,7 @@ public final class Version implements Comparable<Version> {
         private final Type matchType;
         private final Version version;
 
-        Match(Version version, Type matchType) {
+        public Match(Version version, Type matchType) {
             this.matchType = matchType;
             this.version = version;
         }
@@ -634,92 +464,6 @@ public final class Version implements Comparable<Version> {
         @Override
         public String toString() {
             return matchType.toString() + "[" + version + "]";
-        }
-
-        /**
-         * Attempts to turn a wildcard version match into normal one.
-         * 
-         * @param allVersions all versions to select from
-         * @return resolved match, or match that will produce an error on test.
-         */
-        public Match resolveWildcards(Collection<Version> allVersions, Feedback fb) {
-            if (!version.hasWildcard()) {
-                return this;
-            }
-            List<Version> ordered = new ArrayList<>(allVersions);
-            Collections.sort(ordered);
-            Version candidate = null;
-            switch (matchType) {
-                case MOSTRECENT:
-                    throw new IllegalArgumentException();
-
-                case EXACT:
-                    // exact: find a matching version,
-                    // if not found return the suppressed wildcard one for reporting
-                    for (Version v : ordered) {
-                        if (v.compareTo(version) == 0) {
-                            if (candidate != null) {
-                                // should not really happen
-                                throw new IllegalArgumentException();
-                            }
-                            candidate = v;
-                        }
-                    }
-                    if (candidate == null) {
-                        return this;
-                    } else {
-                        return new Match(candidate, matchType);
-                    }
-
-                case SATISFIES:
-                case INSTALLABLE:
-                case GREATER:
-                    // the lowest possible matching version
-                    // exact: find a matching version,
-                    // if not found return the suppressed wildcard one for reporting
-                    for (Version v : ordered) {
-                        if (v.compareTo(version) >= 0) {
-                            candidate = v;
-                            break;
-                        }
-                    }
-                    if (candidate == null) {
-                        return this;
-                    } else {
-                        return new Match(candidate, matchType);
-                    }
-
-                case COMPATIBLE:
-                    Version myInst = version.installVersion();
-                    Version myBase = myInst.onlyVersion();
-                    Version report = null;
-                    for (Version v : ordered) {
-                        Version inst = v.installVersion();
-                        if (myInst.equals(inst)) {
-                            candidate = v;
-                        }
-                        if (myBase.equals(inst.onlyVersion())) {
-                            report = v;
-                        }
-                    }
-                    if (candidate == null) {
-                        String msg;
-                        if (report == null) {
-                            msg = fb.withBundle(Version.class).l10n(
-                                            "VERSION_UnknownVersion1", version.displayString(), null);
-                        } else {
-                            msg = fb.withBundle(Version.class).l10n(
-                                            "VERSION_UnknownVersion2", version.displayString(), report.displayString());
-                        }
-                        throw new UnknownVersionException(
-                                        msg,
-                                        version, report);
-                    } else {
-                        return new Match(candidate, matchType);
-                    }
-                default:
-                    throw new IllegalStateException();
-            }
         }
     }
 }
