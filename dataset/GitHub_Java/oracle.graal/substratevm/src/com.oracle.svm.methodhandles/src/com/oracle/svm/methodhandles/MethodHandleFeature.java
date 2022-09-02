@@ -26,23 +26,18 @@ package com.oracle.svm.methodhandles;
 
 import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 // Checkstyle: stop
 import java.lang.reflect.Array;
-import java.lang.reflect.Executable;
-import java.lang.reflect.Field;
-import java.lang.reflect.Member;
 // Checkstyle: resume
 import java.util.Iterator;
+import java.util.function.BooleanSupplier;
 
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.invoke.MethodHandleIntrinsic;
-import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.util.ReflectionUtil;
 
 // Checkstyle: stop
@@ -79,18 +74,9 @@ import sun.invoke.util.Wrapper;
 @SuppressWarnings("unused")
 public class MethodHandleFeature implements Feature {
 
-    private boolean analysisFinished = false;
-    private Class<?> directMethodHandleClass;
-
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.areMethodHandlesSupported();
-    }
-
-    @Override
-    public void duringSetup(DuringSetupAccess access) {
-        directMethodHandleClass = access.findClassByName("java.lang.invoke.DirectMethodHandle");
-        access.registerObjectReplacer(this::registerMethodHandle);
+        return NativeImageOptions.areMethodHandlesSupported();
     }
 
     @Override
@@ -122,7 +108,7 @@ public class MethodHandleFeature implements Feature {
         access.registerReachabilityHandler(MethodHandleFeature::registerValueConversionIgnoreForReflection,
                         ReflectionUtil.lookupMethod(ValueConversions.class, "ignore"));
 
-        access.registerClassInitializerReachabilityHandler(MethodHandleFeature::registerDelegatingMHFunctionsForReflection,
+        access.registerReachabilityHandler(MethodHandleFeature::registerDelegatingMHFunctionsForReflection,
                         access.findClassByName("java.lang.invoke.DelegatingMethodHandle"));
 
         access.registerReachabilityHandler(MethodHandleFeature::registerCallSiteGetTargetForReflection,
@@ -130,14 +116,6 @@ public class MethodHandleFeature implements Feature {
 
         access.registerReachabilityHandler(MethodHandleFeature::registerUninitializedCallSiteForReflection,
                         ReflectionUtil.lookupMethod(CallSite.class, "uninitializedCallSiteHandle"));
-
-        access.registerSubtypeReachabilityHandler(MethodHandleFeature::registerVarHandleMethodsForReflection,
-                        access.findClassByName("java.lang.invoke.VarHandle"));
-    }
-
-    @Override
-    public void afterAnalysis(AfterAnalysisAccess access) {
-        analysisFinished = true;
     }
 
     private static void registerMHImplFunctionsForReflection(DuringAnalysisAccess access) {
@@ -232,29 +210,18 @@ public class MethodHandleFeature implements Feature {
     private static void registerUninitializedCallSiteForReflection(DuringAnalysisAccess access) {
         RuntimeReflection.register(ReflectionUtil.lookupMethod(CallSite.class, "uninitializedCallSite", Object[].class));
     }
+}
 
-    private static void registerVarHandleMethodsForReflection(DuringAnalysisAccess access, Class<?> subtype) {
-        if (subtype.getPackage().getName().equals("java.lang.invoke") && subtype != access.findClassByName("java.lang.invoke.VarHandle")) {
-            RuntimeReflection.register(subtype.getDeclaredMethods());
-        }
+class MethodHandlesSupported implements BooleanSupplier {
+    @Override
+    public boolean getAsBoolean() {
+        return NativeImageOptions.areMethodHandlesSupported();
     }
+}
 
-    private Object registerMethodHandle(Object obj) {
-        if (!analysisFinished && directMethodHandleClass.isAssignableFrom(obj.getClass())) {
-            MethodHandle handle = (MethodHandle) obj;
-            try {
-                Member member = MethodHandles.reflectAs(Member.class, handle);
-                if (member instanceof Executable) {
-                    RuntimeReflection.register((Executable) member);
-                } else if (member instanceof Field) {
-                    RuntimeReflection.register((Field) member);
-                } else {
-                    throw VMError.shouldNotReachHere("Unexpected reflected type " + member.getClass());
-                }
-            } catch (IllegalArgumentException e) {
-                /* This happens for polymorphic signature methods, no need to register those. */
-            }
-        }
-        return obj;
+class MethodHandlesNotSupported implements BooleanSupplier {
+    @Override
+    public boolean getAsBoolean() {
+        return !NativeImageOptions.areMethodHandlesSupported();
     }
 }
