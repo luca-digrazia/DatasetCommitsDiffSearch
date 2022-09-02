@@ -132,7 +132,7 @@ public class EspressoScope {
         @SuppressWarnings("static-method")
         @ExportMessage
         boolean hasMembers() {
-            return true;
+            return identifiers != null && !identifiers.isEmpty();
         }
 
         @ExportMessage
