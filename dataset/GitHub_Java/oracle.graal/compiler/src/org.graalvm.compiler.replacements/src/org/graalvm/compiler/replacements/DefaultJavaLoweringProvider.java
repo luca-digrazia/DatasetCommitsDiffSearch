@@ -124,6 +124,7 @@ import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
+import org.graalvm.compiler.nodes.java.RawMonitorEnterNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
 import org.graalvm.compiler.nodes.java.UnsafeCompareAndExchangeNode;
@@ -242,6 +243,8 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 lowerLoadHubOrNullNode((LoadHubOrNullNode) n, tool);
             } else if (n instanceof LoadArrayComponentHubNode) {
                 lowerLoadArrayComponentHubNode((LoadArrayComponentHubNode) n);
+            } else if (n instanceof MonitorEnterNode) {
+                lowerMonitorEnterNode((MonitorEnterNode) n, tool, graph);
             } else if (n instanceof UnsafeCompareAndSwapNode) {
                 lowerCompareAndSwapNode((UnsafeCompareAndSwapNode) n);
             } else if (n instanceof UnsafeCompareAndExchangeNode) {
@@ -271,7 +274,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                      */
                     FloatingNode canonical = canonicalizeBoxing((BoxNode) n, metaAccess, tool.getConstantReflection());
                     if (canonical != null) {
-                        n.replaceAtUsages((ValueNode) ((BoxNode) n).getLastLocationAccess(), InputType.Memory);
+                        n.replaceAtUsages(InputType.Memory, (ValueNode) ((BoxNode) n).getLastLocationAccess());
                         graph.replaceFixedWithFloating((FixedWithNextNode) n, canonical);
                     }
                 } else if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.MID_TIER) {
@@ -667,6 +670,15 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         graph.replaceFixed(loadHub, hub);
     }
 
+    protected void lowerMonitorEnterNode(MonitorEnterNode monitorEnter, LoweringTool tool, StructuredGraph graph) {
+        ValueNode object = createNullCheckedValue(monitorEnter.object(), monitorEnter, tool);
+        ValueNode hub = graph.addOrUnique(LoadHubNode.create(object, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection()));
+        RawMonitorEnterNode rawMonitorEnter = graph.add(new RawMonitorEnterNode(object, hub, monitorEnter.getMonitorId(), monitorEnter.isBiasable()));
+        rawMonitorEnter.setStateBefore(monitorEnter.stateBefore());
+        rawMonitorEnter.setStateAfter(monitorEnter.stateAfter());
+        graph.replaceFixedWithFixed(monitorEnter, rawMonitorEnter);
+    }
+
     protected void lowerCompareAndSwapNode(UnsafeCompareAndSwapNode cas) {
         StructuredGraph graph = cas.graph();
         JavaKind valueKind = cas.getValueKind();
@@ -1023,7 +1035,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 addObject.replaceAtUsagesAndDelete(allocations[index]);
             } else {
                 assert enters != null;
-                commit.replaceAtUsages(enters.get(enters.size() - 1), InputType.Memory);
+                commit.replaceAtUsages(InputType.Memory, enters.get(enters.size() - 1));
             }
         }
         if (enters != null) {
@@ -1267,7 +1279,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         graph.addBeforeFixed(n, preMembar);
         MembarNode postMembar = graph.add(new MembarNode(JMM_POST_VOLATILE_READ));
         graph.addAfterFixed(n, postMembar);
-        n.replaceAtUsages(postMembar, InputType.Memory);
+        n.replaceAtUsages(InputType.Memory, postMembar);
         ReadNode nonVolatileRead = graph.add(new ReadNode(n.getAddress(), n.getLocationIdentity(), n.getAccessStamp(NodeView.DEFAULT), n.getBarrierType()));
         graph.replaceFixedWithFixed(n, nonVolatileRead);
     }
@@ -1281,7 +1293,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         graph.addBeforeFixed(n, preMembar);
         MembarNode postMembar = graph.add(new MembarNode(JMM_POST_VOLATILE_WRITE));
         graph.addAfterFixed(n, postMembar);
-        n.replaceAtUsages(postMembar, InputType.Memory);
+        n.replaceAtUsages(InputType.Memory, postMembar);
         WriteNode nonVolatileWrite = graph.add(new WriteNode(n.getAddress(), n.getLocationIdentity(), n.value(), n.getBarrierType()));
         graph.replaceFixedWithFixed(n, nonVolatileWrite);
     }
