@@ -802,9 +802,9 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             // don't commit to the close if still running as this might cause races in the executing
             // context.
             if (!stillRunning) {
-                Object loggers = getEngineLoggers();
-                if (loggers != null) {
-                    LANGUAGE.closeEngineLoggers(loggers);
+                Object engineLoggers = getEngineLoggers();
+                if (engineLoggers != null) {
+                    LANGUAGE.closeEngineLoggers(engineLoggers);
                 }
                 if (logHandler != null) {
                     logHandler.close();
@@ -1092,7 +1092,9 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
         Handler useHandler = PolyglotLogHandler.asHandler(logHandlerOrStream);
         useHandler = useHandler != null ? useHandler : logHandler;
-        useHandler = useHandler != null ? useHandler : PolyglotLogHandler.createStreamHandler(useErr, false, true);
+        useHandler = useHandler != null ? useHandler : PolyglotLogHandler.createStreamHandler(
+                        configErr == null ? INSTRUMENT.getOut(this.err) : configErr,
+                        false, true);
 
         final InputStream useIn = configIn == null ? this.in : configIn;
 

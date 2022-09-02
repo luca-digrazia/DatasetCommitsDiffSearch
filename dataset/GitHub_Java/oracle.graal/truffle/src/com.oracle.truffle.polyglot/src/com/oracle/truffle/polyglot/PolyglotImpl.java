@@ -89,13 +89,13 @@ import com.oracle.truffle.api.impl.TruffleLocator;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.instrumentation.ThreadsListener;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+
 import com.oracle.truffle.polyglot.HostLanguage.HostContext;
 
 /*
@@ -324,11 +324,11 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         throw new EngineException(e);
     }
 
-    static <T extends Throwable> RuntimeException wrapHostException(PolyglotLanguageContext context, T e) {
-        return wrapHostException(context.context, e);
+    @TruffleBoundary
+    static <T extends Throwable> RuntimeException wrapHostException(PolyglotLanguageContext languageContext, T e) {
+        throw wrapHostException(languageContext.context, e);
     }
 
-    @SuppressWarnings("deprecation")
     @TruffleBoundary
     static <T extends Throwable> RuntimeException wrapHostException(PolyglotContextImpl context, T e) {
         if (e instanceof ThreadDeath) {
@@ -841,7 +841,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public RuntimeException wrapHostException(Node location, Object languageContext, Throwable exception) {
+        public RuntimeException wrapHostException(Object languageContext, Throwable exception) {
             return PolyglotImpl.wrapHostException((PolyglotLanguageContext) languageContext, exception);
         }
 
@@ -1053,10 +1053,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public boolean isHostSymbol(Object obj) {
-            if (HostObject.isInstance(obj)) {
-                return ((HostObject) obj).isStaticClass();
-            }
-            return false;
+            return HostObject.isStaticClass(obj);
         }
 
         @Override
@@ -1077,11 +1074,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             PolyglotEngineImpl engine = getEngine(vmObject);
             Object loggerCache = engine.getOrCreateEngineLoggers();
             return LANGUAGE.getLogger(id, loggerName, loggerCache);
-        }
-
-        @Override
-        public Object convertPrimitive(Object value, Class<?> requestedType) {
-            return ToHostNode.convertLossLess(value, requestedType, InteropLibrary.getFactory().getUncached());
         }
     }
 }
