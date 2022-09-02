@@ -55,10 +55,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
@@ -229,7 +227,7 @@ public abstract class Accessor {
 
         public abstract boolean isScopeObject(Object receiver);
 
-        public abstract Object createDefaultIterator(Object receiver);
+        public abstract Object createDefaultArrayIterator(Object receiver);
 
     }
 
@@ -379,8 +377,6 @@ public abstract class Accessor {
 
         public abstract boolean hasAllAccess(FileSystem fs);
 
-        public abstract boolean hasNoAccess(FileSystem fs);
-
         public abstract String getLanguageHome(Object engineObject);
 
         public abstract void addToHostClassPath(Object polyglotLanguageContext, TruffleFile entries);
@@ -390,8 +386,6 @@ public abstract class Accessor {
         public abstract Object asBoxedGuestValue(Object guestObject, Object polyglotLanguageContext);
 
         public abstract Object createDefaultLoggerCache();
-
-        public abstract Object getContextLoggerCache(Object polyglotLanguageContext);
 
         public abstract Handler getLogHandler(Object loggerCache);
 
@@ -548,8 +542,6 @@ public abstract class Accessor {
         public abstract Object getEngineLock(Object polyglotEngine);
 
         public abstract long calculateContextHeapSize(Object polyglotContext, long stopAtBytes, AtomicBoolean cancelled);
-
-        public abstract Future<Void> runThreadLocal(Object polyglotLanguageContext, Thread[] threads, Consumer<Thread> action, boolean async);
     }
 
     public abstract static class LanguageSupport extends Support {
@@ -651,8 +643,6 @@ public abstract class Accessor {
         public abstract Object getDefaultLoggers();
 
         public abstract Object createEngineLoggers(Object spi, Map<String, Level> logLevels);
-
-        public abstract Object getLoggersSPI(Object loggerCache);
 
         public abstract void closeEngineLoggers(Object loggers);
 
@@ -874,10 +864,6 @@ public abstract class Accessor {
             if (permission != PERMISSION) {
                 throw new AssertionError("Invalid permission to create runtime support.");
             }
-        }
-
-        public ThreadLocalHandshake getThreadLocalHandshake() {
-            return DefaultThreadLocalHandshake.INSTANCE;
         }
 
         /**

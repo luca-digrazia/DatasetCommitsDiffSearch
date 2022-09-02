@@ -1629,13 +1629,13 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean hasIterator(@Shared("isIterable") @Cached IsIterableNode isIterable,
+    boolean hasArrayIterator(@Shared("isIterable") @Cached IsIterableNode isIterable,
                     @Shared("isArray") @Cached IsArrayNode isArray) {
         return isIterable.execute(this) || isArray.execute(this);
     }
 
     @ExportMessage
-    abstract static class GetIterator {
+    abstract static class GetArrayIterator {
 
         @Specialization(guards = {"isArray.execute(receiver)"}, limit = "1")
         protected static Object doArray(HostObject receiver,
@@ -1646,18 +1646,18 @@ final class HostObject implements TruffleObject {
 
         @TruffleBoundary
         private static Object arrayIteratorImpl(Object receiver) {
-            return EngineAccessor.INTEROP.createDefaultIterator(receiver);
+            return EngineAccessor.INTEROP.createDefaultArrayIterator(receiver);
         }
 
         @Specialization(guards = {"isIterable.execute(receiver)"}, limit = "1")
         protected static Object doIterable(HostObject receiver,
                         @Shared("isIterable") @Cached IsIterableNode isIterable,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest) {
-            return toGuest.execute(receiver.languageContext, iterableIteratorImpl((Iterable<?>) receiver.obj));
+            return toGuest.execute(receiver.languageContext, iteratorImpl((Iterable<?>) receiver.obj));
         }
 
         @TruffleBoundary
-        private static Object iterableIteratorImpl(Iterable<?> iterable) {
+        private static Object iteratorImpl(Iterable<?> iterable) {
             return iterable.iterator();
         }
 
@@ -2218,7 +2218,7 @@ final class HostObject implements TruffleObject {
 
         @Specialization
         public boolean doDefault(HostObject receiver,
-                        @Cached(value = "receiver.getHostClassCache().isBufferAccess()", allowUncached = true) boolean isBufferAccess) {
+                                 @Cached(value = "receiver.getHostClassCache().isBufferAccess()", allowUncached = true) boolean isBufferAccess) {
             assert receiver.getHostClassCache().isBufferAccess() == isBufferAccess;
             return isBufferAccess && receiver.obj != null && ByteBuffer.class.isAssignableFrom(receiver.obj.getClass());
         }
@@ -2232,7 +2232,7 @@ final class HostObject implements TruffleObject {
 
         @Specialization
         public boolean doDefault(HostObject receiver,
-                        @Cached(value = "receiver.getHostClassCache().isIterableAccess()", allowUncached = true) boolean isIterableAccess) {
+                                 @Cached(value = "receiver.getHostClassCache().isIterableAccess()", allowUncached = true) boolean isIterableAccess) {
             assert receiver.getHostClassCache().isIterableAccess() == isIterableAccess;
             return isIterableAccess && receiver.obj instanceof Iterable;
         }
@@ -2245,7 +2245,7 @@ final class HostObject implements TruffleObject {
 
         @Specialization
         public boolean doDefault(HostObject receiver,
-                        @Cached(value = "receiver.getHostClassCache().isIteratorAccess()", allowUncached = true) boolean isIteratorAccess) {
+                                 @Cached(value = "receiver.getHostClassCache().isIteratorAccess()", allowUncached = true) boolean isIteratorAccess) {
             assert receiver.getHostClassCache().isIteratorAccess() == isIteratorAccess;
             return isIteratorAccess && receiver.obj instanceof Iterator;
         }
