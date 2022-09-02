@@ -298,8 +298,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             return;
         }
 
-        if (falseSuccessor().hasNoUsages() && (!(falseSuccessor() instanceof LoopExitNode)) && falseSuccessor().next() instanceof IfNode &&
-                        !(((IfNode) falseSuccessor().next()).falseSuccessor() instanceof LoopExitNode)) {
+        if (falseSuccessor().hasNoUsages() && (!(falseSuccessor() instanceof LoopExitNode)) && falseSuccessor().next() instanceof IfNode) {
             AbstractBeginNode intermediateBegin = falseSuccessor();
             IfNode nextIf = (IfNode) intermediateBegin.next();
             double probabilityB = (1.0 - this.trueSuccessorProbability) * nextIf.trueSuccessorProbability;
