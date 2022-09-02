@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,7 +54,7 @@ public class GlobalMetrics {
     /**
      * Clears all values in this object.
      */
-    public synchronized void clear() {
+    public void clear() {
         values = null;
     }
 
@@ -102,7 +102,7 @@ public class GlobalMetrics {
      * {@link DebugOptions#AggregatedMetricsFile} if present otherwise to
      * {@link DebugContext#getDefaultLogStream()}.
      */
-    public synchronized void print(OptionValues options) {
+    public void print(OptionValues options) {
         long[] vals = values;
         if (vals != null) {
             EconomicMap<MetricKey, Long> map = asKeyValueMap();
