@@ -23,8 +23,6 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -103,9 +101,7 @@ public final class Target_java_lang_Thread {
 
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
-    public static void start0(@Host(Thread.class) StaticObject self,
-                    @GuestCall DirectCallNode Thread_dispatchUncaughtException,
-                    @GuestCall DirectCallNode Thread_exit) {
+    public static void start0(@Host(Thread.class) StaticObject self) {
         if (EspressoOptions.ENABLE_THREADS) {
             // Thread.start() is synchronized.
             EspressoContext context = self.getKlass().getContext();
@@ -117,10 +113,10 @@ public final class Target_java_lang_Thread {
                         // Execute the payload
                         self.getKlass().vtableLookup(meta.Thread_run.getVTableIndex()).invokeDirect(self);
                     } catch (EspressoException uncaught) {
-                        Thread_dispatchUncaughtException.call(self, uncaught.getException());
+                        meta.Thread_dispatchUncaughtException.invokeDirect(self, uncaught.getException());
                     } finally {
                         self.setIntField(meta.Thread_state, State.TERMINATED.value);
-                        Thread_exit.call(self);
+                        meta.Thread_exit.invokeDirect(self);
                         synchronized (self) {
                             // Notify waiting threads you are done working
                             self.notifyAll();
@@ -165,18 +161,16 @@ public final class Target_java_lang_Thread {
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(typeName = "Ljava/lang/Thread$State;") StaticObject getState(@Host(Thread.class) StaticObject self,
-                    @GuestCall DirectCallNode toThreadState) {
+    public static @Host(typeName = "Ljava/lang/Thread$State;") StaticObject getState(@Host(Thread.class) StaticObject self) {
         Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
         // If hostThread is null, start hasn't been called yet -> NEW state.
-        return (StaticObject) toThreadState.call(null, hostThread == null ? State.NEW.value : stateToInt(hostThread.getState()));
+        return (StaticObject) self.getKlass().getMeta().toThreadState.invokeDirect(null, hostThread == null ? State.NEW.value : stateToInt(hostThread.getState()));
     }
 
     @SuppressWarnings("unused")
     @Substitution
     public static void registerNatives() {
-        /* nop */
-    }
+        /* nop */ }
 
     @Substitution(hasReceiver = true)
     public static boolean isInterrupted(@Host(Thread.class) StaticObject self) {
@@ -201,7 +195,6 @@ public final class Target_java_lang_Thread {
         return Thread.holdsLock(object);
     }
 
-    @TruffleBoundary
     @Substitution
     public static void sleep(long millis) {
         try {
@@ -212,7 +205,6 @@ public final class Target_java_lang_Thread {
         }
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void interrupt0(@Host(Object.class) StaticObject self) {
         Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
@@ -222,7 +214,6 @@ public final class Target_java_lang_Thread {
         hostThread.interrupt();
     }
 
-    @TruffleBoundary
     @SuppressWarnings({"unused", "deprecation"})
     @Substitution(hasReceiver = true)
     public static void resume0(@Host(Object.class) StaticObject self) {
@@ -237,7 +228,6 @@ public final class Target_java_lang_Thread {
         }
     }
 
-    @TruffleBoundary
     @SuppressWarnings({"unused", "deprecation"})
     @Substitution(hasReceiver = true)
     public static void suspend0(@Host(Object.class) StaticObject self) {
@@ -252,7 +242,6 @@ public final class Target_java_lang_Thread {
         }
     }
 
-    @TruffleBoundary
     @SuppressWarnings({"unused", "deprecation"})
     @Substitution(hasReceiver = true)
     public static void stop0(@Host(Object.class) StaticObject self, Object unused) {

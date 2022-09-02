@@ -23,7 +23,12 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
+import java.util.List;
+
 public abstract class Substitutor {
+
+    public static final String INSTANCE_NAME = "theInstance";
+    public static final String GETTER = "getInstance";
 
     private final String methodName;
     private final String substitutionClassName;
@@ -37,6 +42,25 @@ public abstract class Substitutor {
         this.returnType = returnType;
         this.parameterTypes = parameterTypes;
         this.hasReceiver = hasReceiver;
+    }
+
+    private static String getClassName(String className, String methodName, List<String> parameterTypes) {
+        StringBuilder str = new StringBuilder();
+        str.append(className).append("_").append(methodName).append(signatureSuffixBuilder(parameterTypes));
+        return str.toString();
+    }
+
+    /**
+     * This method MUST return the same as th one in SubstitutionProcessor.
+     */
+    public static String getQualifiedClassName(String className, String methodName, List<String> parameterTypes) {
+        return Substitutor.class.getPackage().getName() + "." + getClassName(className, methodName, parameterTypes);
+    }
+
+    private static StringBuilder signatureSuffixBuilder(List<String> parameterTypes) {
+        StringBuilder str = new StringBuilder();
+        str.append("_").append(parameterTypes.size());
+        return str;
     }
 
     public String getMethodName() {
