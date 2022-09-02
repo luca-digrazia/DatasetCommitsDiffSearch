@@ -685,8 +685,8 @@ public final class CompileTheWorld {
                 int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
                 boolean useProfilingInfo = false;
                 boolean installAsDefault = false;
-                CompilationTask task = new CompilationTask(jvmciRuntime, compiler, new HotSpotCompilationRequest(dummyMethod, entryBCI, 0L), useProfilingInfo, installAsDefault);
-                task.runCompilation(compilerOptions);
+                CompilationTask task = new CompilationTask(jvmciRuntime, compiler, new HotSpotCompilationRequest(dummyMethod, entryBCI, 0L), useProfilingInfo, installAsDefault, compilerOptions);
+                task.runCompilation();
             } catch (NoSuchMethodException | SecurityException e1) {
                 printStackTrace(e1);
             }
@@ -979,8 +979,8 @@ public final class CompileTheWorld {
             } else {
                 int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
                 HotSpotCompilationRequest request = new HotSpotCompilationRequest(method, entryBCI, 0L);
-                CompilationTask task = new CompilationTask(jvmciRuntime, compiler, request, useProfilingInfo, installAsDefault);
-                task.runCompilation(compilerOptions);
+                CompilationTask task = new CompilationTask(jvmciRuntime, compiler, request, useProfilingInfo, installAsDefault, compilerOptions);
+                task.runCompilation();
                 installedCode = task.getInstalledCode();
             }
 
