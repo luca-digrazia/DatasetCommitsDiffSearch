@@ -29,8 +29,8 @@
  */
 package com.oracle.truffle.wasm;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -47,7 +47,7 @@ public class WasmFunction implements TruffleObject {
     private WasmCodeEntry codeEntry;
     private final String name;
     private final int typeIndex;
-    private CallTarget callTarget;
+    private RootCallTarget callTarget;
 
     /**
      * Represents a WebAssembly function.
@@ -82,11 +82,11 @@ public class WasmFunction implements TruffleObject {
         return symbolTable.getFunctionTypeReturnTypeLength(typeIndex);
     }
 
-    public void setCallTarget(CallTarget callTarget) {
+    public void setCallTarget(RootCallTarget callTarget) {
         this.callTarget = callTarget;
     }
 
-    public CallTarget resolveCallTarget() {
+    public RootCallTarget resolveCallTarget() {
         if (callTarget == null) {
             CompilerDirectives.transferToInterpreter();
             // TODO: If this is an imported function, the call target might not yet be resolved.
