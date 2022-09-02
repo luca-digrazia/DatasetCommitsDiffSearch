@@ -49,10 +49,32 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
      */
     @CompilationFinal private int byteLength;
 
-    public WasmNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int byteLength) {
+    /**
+     * The number of bytes in the byte constant table used by this node.
+     */
+    @CompilationFinal private int byteConstantLength;
+
+    /**
+     * The number of integers in the int constant table used by this node.
+     */
+    @CompilationFinal private int intConstantLength;
+
+    /**
+     * The number of literals in the numeric literals table used by this node.
+     */
+    @CompilationFinal private int longConstantLength;
+
+    /**
+     * The number of branch tables used by this node.
+     */
+    @CompilationFinal private int branchTableLength;
+
+    public WasmNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int byteLength, int byteConstantLength, int longConstantLength) {
         this.wasmModule = wasmModule;
         this.codeEntry = codeEntry;
         this.byteLength = byteLength;
+        this.byteConstantLength = byteConstantLength;
+        this.longConstantLength = longConstantLength;
     }
 
     /**
@@ -67,10 +89,6 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
     public abstract TargetOffset execute(WasmContext context, VirtualFrame frame);
 
     public abstract byte returnTypeId();
-
-    protected final void initialize(int byteLength) {
-        this.byteLength = byteLength;
-    }
 
     protected static final int typeLength(int typeId) {
         switch (typeId) {
@@ -95,16 +113,31 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
         return wasmModule;
     }
 
+    final void initialize(int byteLength, int byteConstantLength, int intConstantLength, int longConstantLength, int branchTableLength) {
+        this.byteLength = byteLength;
+        this.byteConstantLength = byteConstantLength;
+        this.intConstantLength = intConstantLength;
+        this.longConstantLength = longConstantLength;
+        this.branchTableLength = branchTableLength;
+    }
+
     int byteLength() {
         return byteLength;
     }
 
-    abstract int byteConstantLength();
+    int byteConstantLength() {
+        return byteConstantLength;
+    }
 
-    abstract int intConstantLength();
+    int intConstantLength() {
+        return intConstantLength;
+    }
 
-    abstract int longConstantLength();
+    int longConstantLength() {
+        return longConstantLength;
+    }
 
-    abstract int branchTableLength();
-
+    int branchTableLength() {
+        return branchTableLength;
+    }
 }

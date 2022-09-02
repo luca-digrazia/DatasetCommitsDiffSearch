@@ -235,27 +235,6 @@ import com.oracle.truffle.wasm.memory.WasmMemoryException;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public final class WasmBlockNode extends WasmNode implements RepeatingNode {
-
-    /**
-     * The number of bytes in the byte constant table used by this node.
-     */
-    @CompilationFinal private int byteConstantLength;
-
-    /**
-     * The number of integers in the int constant table used by this node.
-     */
-    @CompilationFinal private int intConstantLength;
-
-    /**
-     * The number of literals in the numeric literals table used by this node.
-     */
-    @CompilationFinal private int longConstantLength;
-
-    /**
-     * The number of branch tables used by this node.
-     */
-    @CompilationFinal private int branchTableLength;
-
     @CompilationFinal private final int startOffset;
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final byte continuationTypeId;
@@ -270,7 +249,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, byte continuationTypeId, int initialStackPointer,
                     int initialByteConstantOffset, int initialIntConstantOffset, int initialLongConstantOffset, int initialBranchTableOffset) {
-        super(wasmModule, codeEntry, -1);
+        super(wasmModule, codeEntry, -1, -1, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
         this.continuationTypeId = continuationTypeId;
@@ -292,33 +271,9 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     public final void initialize(WasmNode[] nestedControlTable, Node[] callNodeTable, int byteLength, int byteConstantLength,
                     int intConstantLength, int longConstantLength, int branchTableLength) {
-        initialize(byteLength);
         this.nestedControlTable = nestedControlTable;
         this.callNodeTable = callNodeTable;
-        this.byteConstantLength = byteConstantLength;
-        this.intConstantLength = intConstantLength;
-        this.longConstantLength = longConstantLength;
-        this.branchTableLength = branchTableLength;
-    }
-
-    @Override
-    int byteConstantLength() {
-        return byteConstantLength;
-    }
-
-    @Override
-    int intConstantLength() {
-        return intConstantLength;
-    }
-
-    @Override
-    int longConstantLength() {
-        return longConstantLength;
-    }
-
-    @Override
-    int branchTableLength() {
-        return branchTableLength;
+        initialize(byteLength, byteConstantLength, intConstantLength, longConstantLength, branchTableLength);
     }
 
     @Override
