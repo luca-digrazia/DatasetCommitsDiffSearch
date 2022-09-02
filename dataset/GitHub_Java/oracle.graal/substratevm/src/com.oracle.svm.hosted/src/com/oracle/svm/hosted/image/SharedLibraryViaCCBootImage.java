@@ -42,13 +42,20 @@ import com.oracle.svm.hosted.meta.HostedUniverse;
 public class SharedLibraryViaCCBootImage extends NativeBootImageViaCC {
 
     public SharedLibraryViaCCBootImage(HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
-                    List<HostedMethod> entryPoints, ClassLoader imageLoader) {
-        super(NativeImageKind.SHARED_LIBRARY, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, imageLoader);
+                    List<HostedMethod> entryPoints, HostedMethod mainEntryPoint, ClassLoader imageLoader) {
+        super(NativeImageKind.SHARED_LIBRARY, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, mainEntryPoint, imageLoader);
     }
 
     @Override
     public String[] makeLaunchCommand(NativeImageKind k, String imageName, Path binPath, Path workPath, Method method) {
         throw VMError.unimplemented();
+    }
+
+    @Override
+    protected void addMainEntryPoint(CCLinkerInvocation inv) {
+        if (mainEntryPoint != null) {
+            inv.addSymbolAlias(mainEntryPoint, "run_main");
+        }
     }
 
     @Override

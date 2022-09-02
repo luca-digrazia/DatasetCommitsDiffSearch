@@ -784,10 +784,8 @@ public class NativeImageGenerator {
                  * Check if any configuration factory class was registered. If not, register the
                  * basic one.
                  */
-                HostedConfiguration.setDefaultIfEmpty(access);
+                HostedConfiguration.setDefaultIfEmpty();
                 GraalConfiguration.setDefaultIfEmpty();
-
-                ClassInitializationSupport classInitializationSupport = ClassInitializationSupport.instance();
 
                 /* Setup substitutions. */
                 AnnotationSubstitutionProcessor annotationSubstitutions = setupDeclarativeSubstitutionProcessor(originalMetaAccess);
@@ -796,17 +794,17 @@ public class NativeImageGenerator {
                 SubstitutionProcessor substitutions = setupSubstitutionProcessor(originalMetaAccess, harnessSubstitutions, originalSnippetReflection, cEnumProcessor, automaticSubstitutions,
                                 annotationSubstitutions);
 
-                SVMHost svmHost = new SVMHost(options, loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
+                SVMHost svmHost = new SVMHost(options, loader.getClassLoader(), automaticSubstitutions);
                 aUniverse = setupAnalysisUniverse(options, svmHost, target, platform, originalSnippetReflection, originalMetaAccess, substitutions);
 
                 AnalysisMetaAccess aMetaAccess = new SVMAnalysisMetaAccess(aUniverse, originalMetaAccess);
-                AnalysisConstantReflectionProvider aConstantReflection = new AnalysisConstantReflectionProvider(aUniverse, originalProviders.getConstantReflection(), classInitializationSupport);
+                AnalysisConstantReflectionProvider aConstantReflection = new AnalysisConstantReflectionProvider(aUniverse, originalProviders.getConstantReflection());
                 WordTypes aWordTypes = new WordTypes(aMetaAccess, FrameAccess.getWordKind());
                 HostedSnippetReflectionProvider aSnippetReflection = new HostedSnippetReflectionProvider(svmHost, aWordTypes);
 
                 nativeLibraries = setupNativeLibraries(imageName, aConstantReflection, aMetaAccess, aSnippetReflection, cEnumProcessor);
 
-                bigbang = setupBigBang(target, options, analysisExecutor, aMetaAccess, aConstantReflection, aWordTypes, aSnippetReflection, classInitializationSupport);
+                bigbang = setupBigBang(target, options, analysisExecutor, aMetaAccess, aConstantReflection, aWordTypes, aSnippetReflection);
 
                 try (Indent ignored2 = debug.logAndIndent("process startup initializers")) {
                     FeatureImpl.DuringSetupAccessImpl config = new FeatureImpl.DuringSetupAccessImpl(featureHandler, loader, bigbang, debug);
@@ -934,11 +932,10 @@ public class NativeImageGenerator {
     }
 
     private Inflation setupBigBang(TargetDescription target, OptionValues options, ForkJoinPool analysisExecutor, AnalysisMetaAccess aMetaAccess,
-                    AnalysisConstantReflectionProvider aConstantReflection, WordTypes aWordTypes, SnippetReflectionProvider aSnippetReflection,
-                    ClassInitializationSupport classInitializationSupport) {
+                    AnalysisConstantReflectionProvider aConstantReflection, WordTypes aWordTypes, SnippetReflectionProvider aSnippetReflection) {
         assert aUniverse != null : "Analysis universe must be initialized.";
         assert nativeLibraries != null : "Native libraries must be set.";
-        AnalysisConstantFieldProvider aConstantFieldProvider = new AnalysisConstantFieldProvider(aUniverse, aMetaAccess, aConstantReflection, classInitializationSupport);
+        AnalysisConstantFieldProvider aConstantFieldProvider = new AnalysisConstantFieldProvider(aUniverse, aMetaAccess, aConstantReflection);
         /*
          * Install all snippets so that the types, methods, and fields used in the snippets get
          * added to the universe.
