@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,9 +24,17 @@
  */
 package com.oracle.svm.truffle.nfi;
 
+import com.oracle.svm.truffle.nfi.NativeAPI.NativeTruffleContext;
+import com.oracle.svm.truffle.nfi.NativeAPI.NativeTruffleEnv;
 import static com.oracle.svm.truffle.nfi.Target_com_oracle_truffle_nfi_impl_NativeArgumentBuffer_TypeTag.getOffset;
 import static com.oracle.svm.truffle.nfi.Target_com_oracle_truffle_nfi_impl_NativeArgumentBuffer_TypeTag.getTag;
+import static com.oracle.svm.truffle.nfi.TruffleNFISupport.NativeErrnoContext;
 
+import com.oracle.svm.truffle.nfi.libffi.LibFFI;
+import com.oracle.svm.truffle.nfi.libffi.LibFFI.ffi_cif;
+import com.oracle.svm.truffle.nfi.libffi.LibFFI.ffi_type;
+import com.oracle.svm.truffle.nfi.libffi.LibFFI.ffi_type_array;
+import com.oracle.svm.truffle.nfi.libffi.LibFFIHeaderDirectives;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.UnmanagedMemory;
@@ -39,20 +47,6 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
-
-import com.oracle.svm.core.CErrorNumber;
-import com.oracle.svm.core.annotate.NeverInline;
-import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
-import com.oracle.svm.core.nodes.CFunctionPrologueNode;
-import com.oracle.svm.core.thread.VMThreads;
-import com.oracle.svm.truffle.nfi.NativeAPI.NativeTruffleContext;
-import com.oracle.svm.truffle.nfi.NativeAPI.NativeTruffleEnv;
-import com.oracle.svm.truffle.nfi.libffi.LibFFI;
-import com.oracle.svm.truffle.nfi.libffi.LibFFI.ffi_cif;
-import com.oracle.svm.truffle.nfi.libffi.LibFFI.ffi_type;
-import com.oracle.svm.truffle.nfi.libffi.LibFFI.ffi_type_array;
-import com.oracle.svm.truffle.nfi.libffi.LibFFIHeaderDirectives;
 
 final class NativeSignature {
 
@@ -69,10 +63,10 @@ final class NativeSignature {
 
     static class PrepareHelper {
 
-        static CifData prepareArgs(int argCount, Target_com_oracle_truffle_nfi_impl_LibFFIType... args) {
-            CifData data = UnmanagedMemory.malloc(SizeOf.get(CifData.class) + argCount * SizeOf.get(ffi_type_array.class));
+        static CifData prepareArgs(Target_com_oracle_truffle_nfi_impl_LibFFIType... args) {
+            CifData data = UnmanagedMemory.malloc(SizeOf.get(CifData.class) + args.length * SizeOf.get(ffi_type_array.class));
 
-            for (int i = 0; i < argCount; i++) {
+            for (int i = 0; i < args.length; i++) {
                 data.args().write(i, WordFactory.pointer(args[i].type));
             }
 
@@ -131,7 +125,7 @@ final class NativeSignature {
                     } else if (tag == Target_com_oracle_truffle_nfi_impl_NativeArgumentBuffer_TypeTag.STRING) {
                         PointerBase strPtr = scope.pinString((String) obj);
                         prim.writeWord(offset, strPtr);
-                    } else if (tag == Target_com_oracle_truffle_nfi_impl_NativeArgumentBuffer_TypeTag.KEEPALIVE) {
+                    } else if (tag == Target_com_oracle_truffle_nfi_impl_NativeArgumentBuffer_TypeTag.CLOSURE) {
                         // nothing to do
                     } else if (tag == Target_com_oracle_truffle_nfi_impl_NativeArgumentBuffer_TypeTag.ENV) {
                         prim.writeWord(offset, env);
@@ -142,7 +136,9 @@ final class NativeSignature {
                     }
                 }
 
-                ffiCall(cif, WordFactory.pointer(functionPointer), ret, argPtrs);
+                try (NativeErrnoContext mirror = new NativeErrnoContext()) {
+                    LibFFI.ffi_call(cif, WordFactory.pointer(functionPointer), ret, argPtrs);
+                }
 
                 Throwable pending = NativeClosure.pendingException.get();
                 if (pending != null) {
@@ -152,29 +148,6 @@ final class NativeSignature {
             } finally {
                 UnmanagedMemory.free(argPtrs);
             }
-        }
-
-        /**
-         * Invokes {@link LibFFI.NoTransitions#ffi_call}, preserving and returning its errno before
-         * it is possibly altered at a safepoint.
-         */
-        @NeverInline("Must not be inlined in a caller that has an exception handler: We only support InvokeNode and not InvokeWithExceptionNode between a CFunctionPrologueNode and CFunctionEpilogueNode")
-        private static void ffiCall(ffi_cif cif, PointerBase fn, PointerBase rvalue, WordPointer avalue) {
-            CFunctionPrologueNode.cFunctionPrologue(VMThreads.StatusSupport.STATUS_IN_NATIVE);
-            doFfiCall(cif, fn, rvalue, avalue);
-            CFunctionEpilogueNode.cFunctionEpilogue(VMThreads.StatusSupport.STATUS_IN_NATIVE);
-        }
-
-        @Uninterruptible(reason = "In native.")
-        @NeverInline("Can have only a single invoke between CFunctionPrologueNode and CFunctionEpilogueNode.")
-        private static void doFfiCall(ffi_cif cif, PointerBase fn, PointerBase rvalue, WordPointer avalue) {
-            /*
-             * Set / get the error number immediately before / after the ffi call. We must be
-             * uninterruptible, so that no safepoint can interfere.
-             */
-            CErrorNumber.setCErrorNumber(ErrnoMirror.errnoMirror.getAddress().read());
-            LibFFI.NoTransitions.ffi_call(cif, fn, rvalue, avalue);
-            ErrnoMirror.errnoMirror.getAddress().write(CErrorNumber.getCErrorNumber());
         }
     }
 
