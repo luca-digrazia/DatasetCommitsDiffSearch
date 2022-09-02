@@ -174,9 +174,4 @@ public final class FixedGuardNode extends AbstractFixedGuardNode implements Lowe
         }
         return null;
     }
-
-    @Override
-    public boolean isNonInitializedProfile() {
-        return true;
-    }
 }

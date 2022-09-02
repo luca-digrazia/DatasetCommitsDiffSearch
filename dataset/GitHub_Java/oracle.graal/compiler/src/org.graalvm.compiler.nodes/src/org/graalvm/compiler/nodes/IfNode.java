@@ -298,7 +298,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             return;
         }
 
-        if (switchTransformationOptimization(tool)) {
+        if (switchTransformationOptimization()) {
             return;
         }
 
@@ -507,11 +507,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             return ((IntegerEqualsNode) condition()).getX();
         }
         return null;
-    }
-
-    @Override
-    public boolean isNonInitializedProfile() {
-        return getTrueSuccessorProbability() == 0.5d;
     }
 
     /**
