@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -359,22 +359,5 @@ public class NodeSplittingStrategyTest extends AbstractSplittingStrategyTest {
         rootNode.report();
         callsInner1.call(noArguments);
         callsInner2.call(noArguments);
-    }
-
-    @NodeChild
-    @ReportPolymorphism.Exclude
-    abstract static class HasInlineCacheNodeAndMegamorpic extends SplittingTestNode {
-
-        @Specialization(limit = "2", //
-                guards = "target.getRootNode() == cachedNode")
-        protected static Object doDirect(RootCallTarget target, @Cached("target.getRootNode()") @SuppressWarnings("unused") RootNode cachedNode) {
-            return target.call(noArguments);
-        }
-
-        @ReportPolymorphism.Megamorphic
-        @Specialization(replaces = "doDirect")
-        protected static Object doIndirect(RootCallTarget target) {
-            return target.call(noArguments);
-        }
     }
 }
