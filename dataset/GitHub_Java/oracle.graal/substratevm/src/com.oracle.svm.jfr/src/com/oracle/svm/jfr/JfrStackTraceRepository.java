@@ -102,15 +102,17 @@ public class JfrStackTraceRepository implements JfrRepository {
     }
 
     @Override
-    public int write(JfrChunkWriter writer) throws IOException {
+    public void write(JfrChunkWriter writer) throws IOException {
         assert VMOperation.isInProgressAtSafepoint();
-        if (table.getSize() == 0) {
-            return 0;
-        }
         writer.writeCompressedLong(JfrTypes.StackTrace.getId());
         writer.writeCompressedLong(table.getSize());
+
         // TODO: write the stack traces to the file
-        return 1;
+    }
+
+    @Override
+    public boolean hasItems() {
+        return table.getSize() > 0;
     }
 
     /**

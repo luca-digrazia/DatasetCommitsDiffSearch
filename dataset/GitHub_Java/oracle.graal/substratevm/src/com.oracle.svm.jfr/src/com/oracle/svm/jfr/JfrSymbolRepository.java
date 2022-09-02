@@ -81,17 +81,17 @@ public class JfrSymbolRepository implements JfrRepository {
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
-    public long getSymbolId(Class<?> clazz, boolean previousEpoch) {
-        return getSymbolId(clazz.getName(), previousEpoch, true);
+    public long getSymbolId(Class<?> clazz) {
+        return getSymbolId(clazz.getName(), true);
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
-    public long getSymbolId(String imageHeapString, boolean previousEpoch) {
-        return getSymbolId(imageHeapString, previousEpoch, false);
+    public long getSymbolId(String imageHeapString) {
+        return getSymbolId(imageHeapString, false);
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
-    public long getSymbolId(String imageHeapString, boolean previousEpoch, boolean replaceDotWithSlash) {
+    private long getSymbolId(String imageHeapString, boolean replaceDotWithSlash) {
         assert Heap.getHeap().isInImageHeap(imageHeapString);
 
         JfrSymbol symbol = StackValue.get(JfrSymbol.class);
@@ -102,15 +102,12 @@ public class JfrSymbolRepository implements JfrRepository {
         int hashcode = (int) (rawPointerValue ^ (rawPointerValue >>> 32));
         symbol.setHash(hashcode);
 
-        return getTable(previousEpoch).add(symbol);
+        return getTable().add(symbol);
     }
 
     @Override
-    public int write(JfrChunkWriter writer) throws IOException {
+    public void write(JfrChunkWriter writer) throws IOException {
         JfrSymbolHashtable table = getTable(true);
-        if (table.getSize() == 0) {
-            return 0;
-        }
         writer.writeCompressedLong(JfrTypes.Symbol.getId());
         writer.writeCompressedLong(table.getSize());
 
@@ -128,7 +125,6 @@ public class JfrSymbolRepository implements JfrRepository {
             }
         }
         table.setSize(0);
-        return 1;
     }
 
     private void writeSymbol(JfrChunkWriter writer, JfrSymbol symbol) throws IOException {
@@ -148,6 +144,11 @@ public class JfrSymbolRepository implements JfrRepository {
                 utf8String[i] = '/';
             }
         }
+    }
+
+    @Override
+    public boolean hasItems() {
+        return getTable(true).getSize() > 0;
     }
 
     @RawStructure
