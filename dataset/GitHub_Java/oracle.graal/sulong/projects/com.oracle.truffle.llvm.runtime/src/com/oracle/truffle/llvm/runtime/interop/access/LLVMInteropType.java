@@ -367,31 +367,38 @@ public abstract class LLVMInteropType implements TruffleObject {
         public Pair<LLVMForeignGetSuperElemPtrNode[], Struct> getSuperElementPtrChain(String ident) throws UnknownIdentifierException {
             for (StructMember member : members) {
                 if (member.name.equals(ident)) {
-                    return Pair.create(new LLVMForeignGetSuperElemPtrNode[0], this);
+                    return Pair.create(new LLVMForeignGetSuperElemPtrNode[0], member.struct);
                 }
             }
-            Pair<LinkedList<LLVMForeignGetSuperElemPtrNode>, Struct> pair = getMemberAccessList(ident);
-            if (pair == null) {
+            List<Pair<StructMember, ClazzInheritance>> list = getMemberAccessList(ident);
+            if (list == null) {
                 throw UnknownIdentifierException.create(ident);
             }
-            LLVMForeignGetSuperElemPtrNode[] arr = pair.getLeft().toArray(new LLVMForeignGetSuperElemPtrNode[0]);
-            return Pair.create(arr, pair.getRight());
+            LLVMForeignGetSuperElemPtrNode[] arr = new LLVMForeignGetSuperElemPtrNode[list.size()];
+            Struct struct = null;
+            for (int i = 0; i < arr.length; i++) {
+                arr[i] = LLVMForeignGetSuperElemPtrNode.createFromPair(list.get(i));
+            }
+            if (list.size() > 0) {
+                struct = list.get(list.size() - 1).getLeft().struct;
+            }
+            return Pair.create(arr, struct);
         }
 
         @TruffleBoundary
-        private Pair<LinkedList<LLVMForeignGetSuperElemPtrNode>, Struct> getMemberAccessList(String ident) throws UnknownIdentifierException {
+        private LinkedList<Pair<StructMember, ClazzInheritance>> getMemberAccessList(String ident) throws UnknownIdentifierException {
             for (StructMember member : members) {
                 if (member.name.equals(ident)) {
-                    return Pair.create(new LinkedList<>(), this);
+                    return new LinkedList<>();
                 }
             }
             for (ClazzInheritance ci : superclasses) {
-                Pair<LinkedList<LLVMForeignGetSuperElemPtrNode>, Struct> pair = ci.superClass.getMemberAccessList(ident);
-                if (pair != null) {
+                LinkedList<Pair<StructMember, ClazzInheritance>> list = ci.superClass.getMemberAccessList(ident);
+                if (list != null) {
                     for (StructMember member : members) {
                         if (member.type.equals(ci.superClass)) {
-                            pair.getLeft().addFirst(LLVMForeignGetSuperElemPtrNode.create(member, ci));
-                            return pair;
+                            list.addFirst(Pair.create(member, ci));
+                            return list;
                         }
                     }
                 }
@@ -422,10 +429,6 @@ public abstract class LLVMInteropType implements TruffleObject {
                 throw new IllegalStateException("vtable of given LLVMInteropType.Clazz type does not exist");
             }
             ArrayList<String> list = new ArrayList<>();
-            /*
-             * virtual method tables are always stored at offset 0 (current class, or recursively of
-             * super class at 0)
-             */
             StructMember structMember = findMember(0);
             list.add(structMember.name);
 
