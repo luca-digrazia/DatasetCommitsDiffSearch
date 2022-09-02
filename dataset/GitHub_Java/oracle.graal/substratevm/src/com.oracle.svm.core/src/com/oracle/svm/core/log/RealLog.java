@@ -393,12 +393,6 @@ public class RealLog extends Log {
         return this;
     }
 
-    @Override
-    public Log resetIndentation() {
-        indent = 0;
-        return this;
-    }
-
     private static byte digit(long d) {
         return (byte) (d + (d < 10 ? '0' : 'a' - 10));
     }

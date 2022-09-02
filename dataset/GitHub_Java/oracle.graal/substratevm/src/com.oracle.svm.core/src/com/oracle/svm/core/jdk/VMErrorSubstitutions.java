@@ -102,7 +102,6 @@ public class VMErrorSubstitutions {
             Log log = Log.log();
             log.autoflush(true);
 
-            ImageSingletons.lookup(LogHandler.class).fatalContext();
             /*
              * Print the error message. If the diagnostic output fails, at least we printed the most
              * important bit of information.
