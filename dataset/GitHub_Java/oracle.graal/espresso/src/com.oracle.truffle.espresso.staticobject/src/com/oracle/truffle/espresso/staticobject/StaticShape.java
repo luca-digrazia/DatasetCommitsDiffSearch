@@ -22,35 +22,27 @@
  */
 package com.oracle.truffle.espresso.staticobject;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Objects;
 
 public abstract class StaticShape<T> {
     protected static final Unsafe UNSAFE = getUnsafe();
     protected final Class<?> storageClass;
-    @CompilationFinal //
     protected T factory;
 
-    StaticShape(Class<?> storageClass, PrivilegedToken privilegedToken) {
+    StaticShape(Class<?> storageClass) {
         this.storageClass = storageClass;
-        if (privilegedToken == null) {
-            throw new AssertionError("Only known implementations can create subclasses of " + StaticShape.class.getName());
-        }
     }
 
-    public static Builder newBuilder() {
-        return new Builder();
+    public static StaticShapeBuilder newBuilder() {
+        return new StaticShapeBuilder();
     }
 
     protected final void setFactory(T factory) {
-        assert this.factory == null;
+        if (this.factory != null) {
+            throw new RuntimeException("Attempt to reinitialize the offset of a static property. Was it added to more than one builder?");
+        }
         this.factory = factory;
     }
 
@@ -86,87 +78,6 @@ public abstract class StaticShape<T> {
             return (Unsafe) theUnsafeInstance.get(Unsafe.class);
         } catch (Exception e) {
             throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
-        }
-    }
-
-    public static final class Builder {
-        private final HashMap<String, StaticProperty> staticProperties = new LinkedHashMap<>();
-
-        Builder() {
-        }
-
-        public Builder property(StaticProperty property) {
-            CompilerAsserts.neverPartOfCompilation();
-            Objects.requireNonNull(property);
-            if (staticProperties.containsKey(property.getId())) {
-                throw new IllegalArgumentException("This builder already contains a property named '" + property.getId() + "'");
-            }
-            staticProperties.put(property.getId(), property);
-            return this;
-        }
-
-        public StaticShape<DefaultStaticObject.Factory> build() {
-            // The classloader that loaded the default superClass must be able to load the default
-            // factory.
-            // Therefore, we can't use java.lang.Object as default superClass.
-            return build(DefaultStaticObject.class, DefaultStaticObject.Factory.class);
-        }
-
-        public <T> StaticShape<T> build(StaticShape<T> parentShape) {
-            Objects.requireNonNull(parentShape);
-            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(parentShape);
-            return build(sg, parentShape);
-        }
-
-        public <T> StaticShape<T> build(Class<?> superClass, Class<T> factoryInterface) {
-            validate(factoryInterface, superClass);
-            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(superClass, factoryInterface);
-            return build(sg, null);
-        }
-
-        private <T> StaticShape<T> build(ShapeGenerator<T> sg, StaticShape<T> parentShape) {
-            CompilerAsserts.neverPartOfCompilation();
-            StaticShape<T> shape = sg.generateShape(parentShape, staticProperties.values());
-            for (StaticProperty staticProperty : staticProperties.values()) {
-                staticProperty.initShape(shape);
-            }
-            return shape;
-        }
-
-        private static void validate(Class<?> storageFactoryInterface, Class<?> storageSuperClass) {
-            CompilerAsserts.neverPartOfCompilation();
-            if (!storageFactoryInterface.isInterface()) {
-                throw new RuntimeException(storageFactoryInterface.getName() + " must be an interface.");
-            }
-            for (Method m : storageFactoryInterface.getMethods()) {
-                if (!m.getReturnType().isAssignableFrom(storageSuperClass)) {
-                    throw new RuntimeException("The return type of '" + m.getReturnType().getName() + " " + storageFactoryInterface.getName() + "." + m + "' is not assignable from '" +
-                                    storageSuperClass.getName() + "'");
-                }
-                try {
-                    storageSuperClass.getDeclaredConstructor(m.getParameterTypes());
-                } catch (NoSuchMethodException e) {
-                    throw new RuntimeException("Method '" + m + "' does not match any constructor in '" + storageSuperClass.getName() + "'", e);
-                }
-            }
-        }
-    }
-
-    abstract static class PrivilegedToken {
-        PrivilegedToken() {
-            if (!isKnownImplementation()) {
-                throw new AssertionError("Only known implementations can create a " + PrivilegedToken.class.getName() + ".\nGot: " + getClass().getName());
-            }
-        }
-
-        private boolean isKnownImplementation() {
-            for (String knownImplementation : new String[]{"com.oracle.truffle.espresso.staticobject.ArrayBasedStaticShape$ArrayBasedPrivilegedToken",
-                            "com.oracle.truffle.espresso.staticobject.FieldBasedStaticShape$FieldBasedPrivilegedToken"}) {
-                if (getClass().getName().equals(knownImplementation)) {
-                    return true;
-                }
-            }
-            return false;
         }
     }
 }

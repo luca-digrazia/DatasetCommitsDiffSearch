@@ -24,6 +24,7 @@ package com.oracle.truffle.espresso.staticobject;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.espresso.staticobject.StaticShapeBuilder.ExtendedProperty;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -34,16 +35,15 @@ import sun.misc.Unsafe;
 import static com.oracle.truffle.espresso.staticobject.StaticPropertyKind.N_PRIMITIVES;
 
 final class ArrayBasedStaticShape<T> extends StaticShape<T> {
-    private static final PrivilegedToken TOKEN = new ArrayBasedPrivilegedToken();
     @CompilationFinal //
-    private static Boolean enableShapeChecks;
+    private static Boolean disableShapeChecks;
     @CompilationFinal(dimensions = 1) //
     private final StaticShape<T>[] superShapes;
     private final ArrayBasedPropertyLayout propertyLayout;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private ArrayBasedStaticShape(ArrayBasedStaticShape<T> parentShape, Class<?> storageClass, ArrayBasedPropertyLayout propertyLayout) {
-        super(storageClass, TOKEN);
+        super(storageClass);
         if (parentShape == null) {
             superShapes = new StaticShape[]{this};
         } else {
@@ -56,27 +56,24 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
     }
 
     public static boolean shapeChecks() {
-        if (enableShapeChecks == null) {
+        if (disableShapeChecks == null) {
             initializeShapeChecks();
         }
-        return enableShapeChecks;
+        return !disableShapeChecks;
     }
 
     @CompilerDirectives.TruffleBoundary
     private static synchronized void initializeShapeChecks() {
-        if (enableShapeChecks == null) {
-            // Eventually this will become a context option.
-            // For now we store its value in a static field that is initialized on first usage to
-            // avoid that it gets initialized at native-image build time.
-            enableShapeChecks = Boolean.getBoolean("com.oracle.truffle.espresso.staticobject.ShapeChecks");
+        if (disableShapeChecks == null) {
+            disableShapeChecks = Boolean.getBoolean("com.oracle.truffle.espresso.staticobject.DisableShapeChecks");
         }
     }
 
     static <T> ArrayBasedStaticShape<T> create(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass, ArrayBasedStaticShape<T> parentShape,
-                    Collection<StaticProperty> staticProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
+                    Collection<ExtendedProperty> extendedProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
         try {
             ArrayBasedPropertyLayout parentPropertyLayout = parentShape == null ? null : parentShape.getPropertyLayout();
-            ArrayBasedPropertyLayout propertyLayout = new ArrayBasedPropertyLayout(parentPropertyLayout, staticProperties, byteArrayOffset, objectArrayOffset, shapeOffset);
+            ArrayBasedPropertyLayout propertyLayout = new ArrayBasedPropertyLayout(parentPropertyLayout, extendedProperties, byteArrayOffset, objectArrayOffset, shapeOffset);
             ArrayBasedStaticShape<T> shape = new ArrayBasedStaticShape<>(parentShape, generatedStorageClass, propertyLayout);
             T factory = generatedFactoryClass.cast(
                             generatedFactoryClass.getConstructor(Object.class, int.class, int.class).newInstance(shape, propertyLayout.getPrimitiveArraySize(), propertyLayout.getObjectArraySize()));
@@ -100,15 +97,12 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
         ArrayBasedStaticShape<?> receiverShape = cast(UNSAFE.getObject(receiverObject, (long) propertyLayout.shapeOffset), ArrayBasedStaticShape.class);
         if (this != receiverShape && (receiverShape.superShapes.length < superShapes.length || receiverShape.superShapes[superShapes.length - 1] != this)) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw new IllegalArgumentException("Incompatible shape on property access. Expected '" + this + "' got '" + receiverShape + "'.");
+            throw new RuntimeException("Incompatible shape on property access. Expected '" + this + "' got '" + receiverShape + "'.");
         }
     }
 
     private ArrayBasedPropertyLayout getPropertyLayout() {
         return propertyLayout;
-    }
-
-    private static final class ArrayBasedPrivilegedToken extends PrivilegedToken {
     }
 
     /**
@@ -192,7 +186,7 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
         private final int objectArrayOffset;
         private final int shapeOffset;
 
-        ArrayBasedPropertyLayout(ArrayBasedPropertyLayout parentLayout, Collection<StaticProperty> staticProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
+        ArrayBasedPropertyLayout(ArrayBasedPropertyLayout parentLayout, Collection<ExtendedProperty> extendedProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
             this.byteArrayOffset = byteArrayOffset;
             this.objectArrayOffset = objectArrayOffset;
             this.shapeOffset = shapeOffset;
@@ -218,23 +212,23 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
             }
 
             int[] primitiveFields = new int[N_PRIMITIVES];
-            for (StaticProperty staticProperty : staticProperties) {
-                byte propertyKind = staticProperty.getInternalKind();
+            for (ExtendedProperty extendedProperty : extendedProperties) {
+                byte propertyKind = extendedProperty.getProperty().getInternalKind();
                 if (propertyKind != StaticPropertyKind.Object.toByte()) {
                     primitiveFields[propertyKind]++;
                 }
             }
 
             PrimitiveFieldIndexes primitiveFieldIndexes = new PrimitiveFieldIndexes(primitiveFields, superTotalByteCount, parentLeftoverHoles);
-            for (StaticProperty staticProperty : staticProperties) {
-                byte propertyKind = staticProperty.getInternalKind();
+            for (ExtendedProperty extendedProperty : extendedProperties) {
+                byte propertyKind = extendedProperty.getProperty().getInternalKind();
                 int index;
                 if (propertyKind == StaticPropertyKind.Object.toByte()) {
                     index = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * objArraySize++;
                 } else {
                     index = primitiveFieldIndexes.getIndex(propertyKind);
                 }
-                staticProperty.initOffset(index);
+                extendedProperty.getProperty().initOffset(index);
             }
             lastOffset = primitiveFieldIndexes.offsets[N_PRIMITIVES - 1];
             primitiveArraySize = getSizeToAlloc(parentLayout == null ? 0 : parentLayout.primitiveArraySize, primitiveFieldIndexes);

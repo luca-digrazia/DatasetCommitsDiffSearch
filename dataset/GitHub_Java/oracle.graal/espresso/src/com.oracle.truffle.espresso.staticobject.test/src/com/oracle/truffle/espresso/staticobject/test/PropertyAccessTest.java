@@ -159,7 +159,7 @@ public class PropertyAccessTest extends StaticObjectTest {
 
     @Theory
     public void correctAccessors(TestDescriptor descriptor) {
-        StaticShape.Builder builder = StaticShape.newBuilder(this);
+        StaticShape.Builder builder = StaticShape.newBuilder();
         StaticProperty property = new DefaultStaticProperty("property", descriptor.kind, false);
         builder.property(property);
         StaticShape<DefaultStaticObject.Factory> shape = builder.build();
@@ -178,7 +178,7 @@ public class PropertyAccessTest extends StaticObjectTest {
     public void wrongAccessors(TestDescriptor expectedDescriptor, TestDescriptor actualDescriptor) {
         Assume.assumeFalse(expectedDescriptor.equals(actualDescriptor));
 
-        StaticShape.Builder builder = StaticShape.newBuilder(this);
+        StaticShape.Builder builder = StaticShape.newBuilder();
         StaticProperty property = new DefaultStaticProperty("property", expectedDescriptor.kind, false);
         builder.property(property);
         StaticShape<DefaultStaticObject.Factory> shape = builder.build();
@@ -203,12 +203,12 @@ public class PropertyAccessTest extends StaticObjectTest {
     @Theory
     @SuppressWarnings("unused")
     public void wrongShape(TestDescriptor descriptor) {
-        StaticShape.Builder b1 = StaticShape.newBuilder(this);
+        StaticShape.Builder b1 = StaticShape.newBuilder();
         StaticProperty p1 = new DefaultStaticProperty("property", descriptor.kind, false);
         b1.property(p1);
         StaticShape<DefaultStaticObject.Factory> s1 = b1.build();
 
-        StaticShape.Builder b2 = StaticShape.newBuilder(this);
+        StaticShape.Builder b2 = StaticShape.newBuilder();
         StaticProperty p2 = new DefaultStaticProperty("property", descriptor.kind, false);
         b2.property(p2);
         StaticShape<DefaultStaticObject.Factory> s2 = b2.build();
@@ -218,7 +218,7 @@ public class PropertyAccessTest extends StaticObjectTest {
             descriptor.setter.set(p1, o2, descriptor.testValue);
             Assert.fail();
         } catch (ClassCastException e) {
-            Assert.assertTrue(!ARRAY_BASED_STORAGE);
+            Assert.assertTrue(!ARRAY_BASED);
         } catch (RuntimeException e) {
             Assert.assertTrue(e.getMessage().startsWith("Incompatible shape on property access."));
         }
