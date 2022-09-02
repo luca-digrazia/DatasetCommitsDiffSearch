@@ -204,7 +204,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private Method(Method method, CodeAttribute split) {
         super(method.getRawSignature(), method.getName());
         this.declaringKlass = method.declaringKlass;
-        this.methodVersion = new MethodVersion(method.getRuntimeConstantPool(), method.getLinkedMethod(), split);
+        this.methodVersion = method.methodVersion;
 
         try {
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
