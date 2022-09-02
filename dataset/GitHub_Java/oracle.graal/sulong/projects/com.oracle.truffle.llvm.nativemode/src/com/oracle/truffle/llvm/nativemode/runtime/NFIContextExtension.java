@@ -192,7 +192,7 @@ public final class NFIContextExtension extends NativeContextExtension {
     private Object defaultLibraryHandle;
     private boolean internalLibrariesAdded = false;
     private final List<Object> libraryHandles = new ArrayList<>();
-    private final EconomicMap<String, CallTarget> visited = EconomicMap.create();
+    private final EconomicMap<TruffleFile, CallTarget> visited = EconomicMap.create();
     private final Env env;
 
     private final SignatureSourceCache signatureSourceCache;
@@ -213,7 +213,7 @@ public final class NFIContextExtension extends NativeContextExtension {
         assert !isInitialized();
         if (!internalLibrariesAdded) {
             TruffleFile file = locateInternalLibrary(context, "libsulong-native." + getNativeLibrarySuffix(), "<default nfi library>");
-            Object lib = loadLibrary(file.getPath(), context);
+            Object lib = loadLibrary(file, context);
             if (lib instanceof CallTarget) {
                 libraryHandles.add(((CallTarget) lib).call());
             }
@@ -269,18 +269,23 @@ public final class NFIContextExtension extends NativeContextExtension {
     }
 
     @Override
-    public synchronized CallTarget parseNativeLibrary(String path, LLVMContext context) throws UnsatisfiedLinkError {
+    public synchronized CallTarget parseNativeLibrary(TruffleFile file, LLVMContext context) throws UnsatisfiedLinkError {
         CompilerAsserts.neverPartOfCompilation();
-        if (!visited.containsKey(path)) {
-            Object callTarget = loadLibrary(path, context);
-            if (callTarget != null) {
-                visited.put(path, (CallTarget) callTarget);
-                return (CallTarget) callTarget;
+        try {
+            if (!visited.containsKey(file)) {
+                Object callTarget = loadLibrary(file, context);
+                if (callTarget != null) {
+                    visited.put(file, (CallTarget) callTarget);
+                    return (CallTarget) callTarget;
+                } else {
+                    throw new IllegalStateException("Native library call target is null.");
+                }
             } else {
-                throw new IllegalStateException("Native library call target is null.");
+                return visited.get(file);
             }
-        } else {
-            return visited.get(path);
+        } catch (UnsatisfiedLinkError e) {
+            System.err.println(file.toString() + " not found!\n" + e.getMessage());
+            throw e;
         }
     }
 
@@ -300,20 +305,21 @@ public final class NFIContextExtension extends NativeContextExtension {
         }
     }
 
-    private Object loadLibrary(String path, LLVMContext context) {
+    private Object loadLibrary(TruffleFile file, LLVMContext context) {
         CompilerAsserts.neverPartOfCompilation();
-        return loadLibrary(path, false, null, context);
+        String libName = file.getPath();
+        return loadLibrary(libName, false, null, context, file);
     }
 
-    private Object loadLibrary(String path, boolean optional, String flags, LLVMContext context) {
-        LibraryLocator.traceLoadNative(context, path);
+    private Object loadLibrary(String libName, boolean optional, String flags, LLVMContext context, Object file) {
+        LibraryLocator.traceLoadNative(context, file);
         String loadExpression;
         if (flags == null) {
-            loadExpression = String.format("load \"%s\"", path);
+            loadExpression = String.format("load \"%s\"", libName);
         } else {
-            loadExpression = String.format("load(%s) \"%s\"", flags, path);
+            loadExpression = String.format("load(%s) \"%s\"", flags, libName);
         }
-        final Source source = Source.newBuilder("nfi", loadExpression, "(load " + path + ")").internal(true).build();
+        final Source source = Source.newBuilder("nfi", loadExpression, "(load " + libName + ")").internal(true).build();
         try {
             // remove the call to the calltarget
             return env.parseInternal(source);
