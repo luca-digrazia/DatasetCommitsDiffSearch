@@ -81,7 +81,6 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
             policy.run(tree);
             tree.dumpBasic("After Inline");
             tree.collectTargetsToDequeue(request.inliningPlan);
-            tree.updateTracingInfo(request.inliningPlan);
         }
         tree.finalizeGraph();
         tree.trace();
