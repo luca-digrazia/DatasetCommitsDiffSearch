@@ -980,23 +980,15 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public @Host(Parameter[].class) StaticObject JVM_GetMethodParameters(@Host(Object.class) StaticObject executable) {
-        assert getMeta().Executable.isAssignableFrom(executable.getKlass());
-        StaticObject parameterTypes = (StaticObject) executable.getKlass().lookupMethod(Name.getParameterTypes, Signature.Class_array).invokeDirect(executable);
+    public Object JVM_GetMethodParameters(@Host(Object.class) StaticObject guestReflectionMethod) {
+
+        StaticObject parameterTypes = (StaticObject) getMeta().Method_parameterTypes.get(guestReflectionMethod);
         int numParams = parameterTypes.length();
         if (numParams == 0) {
             return StaticObject.NULL;
         }
 
-        Method method;
-        if (getMeta().Method.isAssignableFrom(executable.getKlass())) {
-            method = Method.getHostReflectiveMethodRoot(executable);
-        } else if (getMeta().Constructor.isAssignableFrom(executable.getKlass())) {
-            method = Method.getHostReflectiveConstructorRoot(executable);
-        } else {
-            throw EspressoError.shouldNotReachHere();
-        }
-
+        Method method = Method.getHostReflectiveMethodRoot(guestReflectionMethod);
         MethodParametersAttribute methodParameters = (MethodParametersAttribute) method.getAttribute(Name.MethodParameters);
 
         if (methodParameters == null) {
@@ -1038,7 +1030,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                 parameterInit.invokeDirect(/* this */ instance,
                                 /* name */ getMeta().toGuestString(hostName),
                                 /* modifiers */ entry.getAccessFlags(),
-                                /* executable */ executable,
+                                /* executable */ guestReflectionMethod,
                                 /* index */ index);
                 return instance;
             }

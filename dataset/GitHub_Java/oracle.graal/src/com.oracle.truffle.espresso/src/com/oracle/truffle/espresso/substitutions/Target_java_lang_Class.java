@@ -25,9 +25,7 @@ package com.oracle.truffle.espresso.substitutions;
 
 import java.lang.reflect.Constructor;
 import java.security.ProtectionDomain;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
 
@@ -45,6 +43,7 @@ import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
+import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
@@ -64,9 +63,9 @@ public final class Target_java_lang_Class {
         return EspressoLanguage.getCurrentContext().getRegistries().loadKlassWithBootClassLoader(JavaKind.fromTypeString(hostName).getType()).mirror();
     }
 
-    @Substitution
-    public static boolean desiredAssertionStatus0(@Host(Class.class) StaticObject clazz) {
-        if (StaticObject.isNull(clazz.getMirrorKlass().getDefiningClassLoader())) {
+    @Substitution(hasReceiver = true)
+    public static boolean desiredAssertionStatus(@Host(Class.class) StaticObject self) {
+        if (StaticObject.isNull(self.getMirrorKlass().getDefiningClassLoader())) {
             return EspressoOptions.EnableSystemAssertions.getValue(EspressoLanguage.getCurrentContext().getEnv().getOptions());
         }
         return EspressoOptions.EnableAssertions.getValue(EspressoLanguage.getCurrentContext().getEnv().getOptions());
@@ -382,7 +381,7 @@ public final class Target_java_lang_Class {
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(Class[].class) StaticObject getInterfaces0(@Host(Class.class) StaticObject self) {
+    public static @Host(Class[].class) StaticObject getInterfaces0(StaticObject self) {
         final Klass[] superInterfaces = self.getMirrorKlass().getInterfaces();
 
         Meta meta = self.getKlass().getMeta();
@@ -438,7 +437,7 @@ public final class Target_java_lang_Class {
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(Object[].class) StaticObject getEnclosingMethod0(@Host(Class.class) StaticObject self) {
+    public static @Host(Object[].class) StaticObject getEnclosingMethod0(StaticObject self) {
 
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         InterpreterToVM vm = meta.getInterpreterToVM();
@@ -470,7 +469,7 @@ public final class Target_java_lang_Class {
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(Class.class) StaticObject getDeclaringClass0(@Host(Class.class) StaticObject self) {
+    public static @Host(Class.class) StaticObject getDeclaringClass0(StaticObject self) {
         // Primitives and arrays are not "enclosed".
         if (!(self.getMirrorKlass() instanceof ObjectKlass)) {
             return StaticObject.NULL;
@@ -557,7 +556,7 @@ public final class Target_java_lang_Class {
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(ProtectionDomain.class) StaticObject getProtectionDomain0(@Host(Class.class) StaticObject self) {
+    public static @Host(ProtectionDomain.class) StaticObject getProtectionDomain0(StaticObject self) {
         StaticObject pd = (StaticObject) self.getHiddenField(self.getKlass().getMeta().HIDDEN_PROTECTION_DOMAIN);
         // The protection domain is not always set e.g. bootstrap (classloader) classes.
         return pd == null ? StaticObject.NULL : pd;
@@ -604,53 +603,17 @@ public final class Target_java_lang_Class {
 
     @Substitution(hasReceiver = true)
     public static @Host(Class[].class) StaticObject getDeclaredClasses0(@Host(Class.class) StaticObject self) {
-        Meta meta = self.getKlass().getMeta();
         Klass klass = self.getMirrorKlass();
-        if (klass.isPrimitive() || !klass.isInstanceClass()) {
-            return meta.Class.allocateArray(0);
-        }
-        ObjectKlass instanceKlass = (ObjectKlass) klass;
-        InnerClassesAttribute innerClasses = (InnerClassesAttribute) instanceKlass.getAttribute(InnerClassesAttribute.NAME);
 
-        if (innerClasses == null || innerClasses.entries().isEmpty()) {
-            return meta.Class.allocateArray(0);
+        if (klass.isPrimitive() || !klass.isArray()) {
+            return new StaticObject(klass.getMeta().Class_Array, new StaticObject[0]);
         }
 
-        RuntimeConstantPool pool = instanceKlass.getConstantPool();
-        List<Klass> innerKlasses = new ArrayList<>();
-
-        for (InnerClassesAttribute.Entry entry : innerClasses.entries()) {
-            if (entry.innerClassIndex != 0 && entry.outerClassIndex != 0) {
-                // Check to see if the name matches the class we're looking for
-                // before attempting to find the class.
-                Symbol<Name> outerDescriptor = pool.classAt(entry.outerClassIndex).getName(pool);
-
-                // Check decriptors/names before resolving.
-                if (outerDescriptor.equals(instanceKlass.getName())) {
-                    Klass outerKlass = pool.resolvedKlassAt(instanceKlass, entry.outerClassIndex);
-                    if (outerKlass == instanceKlass) {
-                        Klass innerKlass = pool.resolvedKlassAt(instanceKlass, entry.innerClassIndex);
-                        // HotSpot:
-                        // Throws an exception if outer klass has not declared k as
-                        // an inner klass
-                        // Reflection::check_for_inner_class(k, inner_klass, true, CHECK_NULL);
-                        // TODO(peterssen): The check in HotSpot is redundant.
-                        innerKlasses.add(innerKlass);
-                    }
-                }
-            }
-        }
-
-        return meta.Class.allocateArray(innerKlasses.size(), new IntFunction<StaticObject>() {
-            @Override
-            public StaticObject apply(int index) {
-                return innerKlasses.get(index).mirror();
-            }
-        });
+        throw EspressoError.unimplemented();
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(Object[].class) StaticObject getSigners(@Host(Class.class) StaticObject self) {
+    public static @Host(Object[].class) StaticObject getSigners(StaticObject self) {
         Klass klass = self.getMirrorKlass();
         if (klass.isPrimitive()) {
             return StaticObject.NULL;
@@ -664,7 +627,7 @@ public final class Target_java_lang_Class {
     }
 
     @Substitution(hasReceiver = true)
-    public static void setSigners(@Host(Class.class) StaticObject self, @Host(Object[].class) StaticObject signers) {
+    public static void setSigners(StaticObject self, @Host(Object[].class) StaticObject signers) {
         Klass klass = self.getMirrorKlass();
         if (!klass.isPrimitive() && !klass.isArray()) {
             Meta meta = self.getKlass().getMeta();
