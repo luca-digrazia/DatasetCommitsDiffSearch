@@ -39,15 +39,28 @@ import com.oracle.svm.core.util.VMError;
  */
 @RawStructure
 public interface JfrBuffer extends PointerBase {
+
+    /**
+     * Returns the size of the buffer.
+     */
     @RawField
     UnsignedWord getSize();
 
+    /**
+     * Sets the size of the buffer.
+     */
     @RawField
     void setSize(UnsignedWord value);
 
+    /**
+     * Returns the committed position. Any data before this position is valid event data.
+     */
     @RawField
     Pointer getPos();
 
+    /**
+     * Sets the committed position.
+     */
     @RawField
     void setPos(Pointer value);
 
@@ -56,9 +69,26 @@ public interface JfrBuffer extends PointerBase {
         throw VMError.unimplemented(); // replaced
     }
 
+    /**
+     * Returns the position of unflushed data. Any data before this position was already flushed to
+     * some other buffer or to the disk.
+     */
+    @RawField
+    Pointer getTop();
+
+    /**
+     * Sets the position of unflushed data.
+     */
+    @RawField
+    void setTop(Pointer value);
+
     @RawField
     int getAcquired();
 
+    /**
+     * Should only be called by {@link JfrBufferAccess#acquire(JfrBuffer)} and
+     * {@link JfrBufferAccess#release(JfrBuffer)}.
+     */
     @RawField
     void setAcquired(int value);
 
