@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -312,15 +312,6 @@ public interface Feature {
     }
 
     /**
-     * Access methods available for {@link Feature#afterUniverseCreation}.
-     *
-     * @since 20.1
-     */
-    @Platforms(Platform.HOSTED_ONLY.class)
-    interface AfterUniverseCreationAccess extends FeatureAccess {
-    }
-
-    /**
      * Access methods available for {@link Feature#beforeCompilation} and
      * {@link Feature#afterCompilation}.
      *
@@ -486,7 +477,7 @@ public interface Feature {
     }
 
     /**
-     * Handler for code that needs to run after the analysis, even if an error has occurred, e.g.,
+     * Handler for code that needs to run after the analysis, even if an error has occured, e.g.,
      * like reporting code.
      *
      * @param access The supported operations that the feature can perform at this time
@@ -494,16 +485,6 @@ public interface Feature {
      * @since 19.0
      */
     default void onAnalysisExit(OnAnalysisExitAccess access) {
-    }
-
-    /**
-     * Handler for code that needs to run after the universe creation.
-     *
-     * @param access The supported operations that the feature can perform at this time
-     *
-     * @since 20.1
-     */
-    default void afterUniverseCreation(AfterUniverseCreationAccess access) {
     }
 
     /**

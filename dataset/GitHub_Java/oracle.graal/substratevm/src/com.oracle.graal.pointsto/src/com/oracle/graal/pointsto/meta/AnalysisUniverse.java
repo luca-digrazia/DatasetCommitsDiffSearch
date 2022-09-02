@@ -169,8 +169,7 @@ public class AnalysisUniverse implements Universe {
     }
 
     public AnalysisType optionalLookup(ResolvedJavaType type) {
-        ResolvedJavaType actualType = substitutions.lookup(type);
-        Object claim = types.get(actualType);
+        Object claim = types.get(type);
         if (claim instanceof AnalysisType) {
             return (AnalysisType) claim;
         }

@@ -26,10 +26,9 @@ package com.oracle.svm.hosted;
 
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -102,31 +101,23 @@ public class ReachabilityHandlerFeature implements Feature {
     @Override
     public void duringAnalysis(DuringAnalysisAccess a) {
         DuringAnalysisAccessImpl access = (DuringAnalysisAccessImpl) a;
-        HashSet<Object> handledCallbacks = new HashSet<>();
-        HashSet<Object> callbacks = new HashSet<>(activeHandlers.keySet());
-        do {
-            List<Object> completedCallbacks = new ArrayList<>();
-            for (Object callback : callbacks) {
-                Set<Object> triggers = activeHandlers.get(callback);
-                if (callback instanceof Consumer) {
-                    if (isTriggered(access, triggers)) {
-                        triggeredHandlers.put(callback, null);
-                        toExactCallback(callback).accept(access);
-                        completedCallbacks.add(callback);
-                    }
-                } else {
-                    VMError.guarantee(callback instanceof BiConsumer);
-                    processReachable(access, callback, triggers);
+
+        Iterator<Map.Entry<Object, Set<Object>>> iter = activeHandlers.entrySet().iterator();
+        while (iter.hasNext()) {
+            Map.Entry<Object, Set<Object>> entry = iter.next();
+            Object callback = entry.getKey();
+            Set<Object> triggers = entry.getValue();
+            if (callback instanceof Consumer) {
+                if (isTriggered(access, triggers)) {
+                    triggeredHandlers.put(callback, null);
+                    iter.remove();
+                    toExactCallback(callback).accept(access);
                 }
-                handledCallbacks.add(callback);
+            } else {
+                VMError.guarantee(callback instanceof BiConsumer);
+                processReachable(access, callback, triggers);
             }
-            for (Object completed : completedCallbacks) {
-                activeHandlers.remove(completed);
-                handledCallbacks.remove(completed);
-            }
-            callbacks = new HashSet<>(activeHandlers.keySet());
-            callbacks.removeAll(handledCallbacks);
-        } while (!callbacks.isEmpty());
+        }
     }
 
     private static boolean isTriggered(DuringAnalysisAccessImpl access, Set<Object> triggers) {

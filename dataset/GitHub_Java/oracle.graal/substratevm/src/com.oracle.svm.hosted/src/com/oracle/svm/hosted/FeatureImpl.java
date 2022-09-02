@@ -196,23 +196,22 @@ public class FeatureImpl {
         }
 
         public Set<Class<?>> reachableSubtypes(Class<?> baseClass) {
-            return reachableSubtypes(getMetaAccess().lookupJavaType(baseClass)).stream()
-                            .map(AnalysisType::getJavaClass).collect(Collectors.toCollection(LinkedHashSet::new));
+            return reachableSubtypes(getMetaAccess().lookupJavaType(baseClass));
         }
 
-        Set<AnalysisType> reachableSubtypes(AnalysisType baseType) {
+        Set<Class<?>> reachableSubtypes(AnalysisType baseType) {
             Set<AnalysisType> result = getUniverse().getSubtypes(baseType);
-            result.removeIf(t -> !isReachable(t));
-            return result;
+            return result.stream().filter(this::isReachable).map(AnalysisType::getJavaClass)
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
         }
 
         public Set<Executable> reachableMethodOverrides(Executable baseMethod) {
-            return reachableMethodOverrides(getMetaAccess().lookupJavaMethod(baseMethod)).stream()
-                            .map(AnalysisMethod::getJavaMethod).collect(Collectors.toCollection(LinkedHashSet::new));
+            return reachableMethodOverrides(getMetaAccess().lookupJavaMethod(baseMethod));
         }
 
-        Set<AnalysisMethod> reachableMethodOverrides(AnalysisMethod baseMethod) {
-            return getUniverse().getMethodImplementations(getBigBang(), baseMethod);
+        Set<Executable> reachableMethodOverrides(AnalysisMethod baseMethod) {
+            Set<AnalysisMethod> implementations = getUniverse().getMethodImplementations(getBigBang(), baseMethod);
+            return implementations.stream().map(AnalysisMethod::getJavaMethod).collect(Collectors.toCollection(LinkedHashSet::new));
         }
     }
 
