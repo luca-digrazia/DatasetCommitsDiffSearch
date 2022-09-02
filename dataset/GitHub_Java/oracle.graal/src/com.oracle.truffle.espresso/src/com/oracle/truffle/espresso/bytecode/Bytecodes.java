@@ -257,7 +257,6 @@ public final class Bytecodes {
 
     // Espresso quickened bytecodes.
     public static final int QUICK                = 203; // 0xCB
-    public static final int SLIM_QUICK           = 204; // 0xCC
 
     public static final int ILLEGAL = 255;
     public static final int END = 256;
@@ -622,8 +621,7 @@ public final class Bytecodes {
         // Quickening patches the BCI, replacing it by a QUICK(nodeIndex) bytecode and spawning a child node.
         // Unlike standard bytecodes, stack effects are determined completely by the node, even if the semantics
         // of patched bytecode is partially or completely known.
-        def(QUICK               , "quick"           , "bjj"  ,  0, TRAP | QUICKENED | PRODUCE_FOREIGN | RECEIVE_FOREIGN);
-        def(SLIM_QUICK          , "slimquick"       ,"b"     ,  0, TRAP | QUICKENED | PRODUCE_FOREIGN | RECEIVE_FOREIGN);
+        def(QUICK               , "quick"           , "b"  ,  0, TRAP | QUICKENED);
     }
     // @formatter:on
     // Checkstyle: resume
