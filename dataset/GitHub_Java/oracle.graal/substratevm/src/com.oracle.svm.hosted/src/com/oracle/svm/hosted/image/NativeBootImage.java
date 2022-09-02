@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.hosted.image;
 
+import static com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugFrameSizeChange.Type.EXTEND;
+import static com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugFrameSizeChange.Type.CONTRACT;
 import static com.oracle.svm.core.SubstrateUtil.mangleName;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
@@ -37,6 +39,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collection;
@@ -44,18 +47,28 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
+import com.oracle.svm.core.option.HostedOptionValues;
+import com.oracle.svm.hosted.meta.HostedType;
+import com.oracle.svm.util.ModuleSupport;
+import jdk.vm.ci.code.site.Mark;
+import jdk.vm.ci.meta.LineNumberTable;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.code.CompilationResult;
+import org.graalvm.compiler.code.SourceMapping;
 import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
+import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.serviceprovider.BufferUtil;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
@@ -67,12 +80,15 @@ import com.oracle.objectfile.BuildDependency;
 import com.oracle.objectfile.LayoutDecision;
 import com.oracle.objectfile.LayoutDecisionMap;
 import com.oracle.objectfile.ObjectFile;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugCodeInfo;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugFrameSizeChange;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugLineInfo;
 import com.oracle.objectfile.ObjectFile.Element;
 import com.oracle.objectfile.ObjectFile.ProgbitsSectionImpl;
 import com.oracle.objectfile.ObjectFile.RelocationKind;
 import com.oracle.objectfile.ObjectFile.Section;
 import com.oracle.objectfile.SectionName;
-import com.oracle.objectfile.debuginfo.DebugInfoProvider;
 import com.oracle.objectfile.macho.MachOObjectFile;
 import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.Isolates;
@@ -89,11 +105,10 @@ import com.oracle.svm.core.c.function.GraalIsolateHeader;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.code.CGlobalDataInfo;
 import com.oracle.svm.core.graal.code.CGlobalDataReference;
-import com.oracle.svm.core.image.ImageHeapLayoutInfo;
+import com.oracle.svm.core.image.AbstractImageHeapLayouter.ImageHeapLayout;
 import com.oracle.svm.core.image.ImageHeapLayouter;
 import com.oracle.svm.core.image.ImageHeapPartition;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
-import com.oracle.svm.core.option.HostedOptionValues;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.c.CGlobalDataFeature;
@@ -106,7 +121,6 @@ import com.oracle.svm.hosted.code.CEntryPointCallStubSupport;
 import com.oracle.svm.hosted.code.CEntryPointData;
 import com.oracle.svm.hosted.image.NativeImageHeap.ObjectInfo;
 import com.oracle.svm.hosted.image.RelocatableBuffer.Info;
-import com.oracle.svm.hosted.image.sources.SourceManager;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedUniverse;
@@ -124,6 +138,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod.Parameter;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public abstract class NativeBootImage extends AbstractBootImage {
+    public static final long RODATA_CGLOBALS_PARTITION_OFFSET = 0;
     public static final long RWDATA_CGLOBALS_PARTITION_OFFSET = 0;
 
     private final ObjectFile objectFile;
@@ -163,16 +178,14 @@ public abstract class NativeBootImage extends AbstractBootImage {
     @Override
     public abstract String[] makeLaunchCommand(NativeImageKind k, String imageName, Path binPath, Path workPath, java.lang.reflect.Method method);
 
-    protected final void write(DebugContext context, Path outputFile) {
+    protected final void write(Path outputFile) {
         try {
             Path outFileParent = outputFile.normalize().getParent();
             if (outFileParent != null) {
                 Files.createDirectories(outFileParent);
             }
             try (FileChannel channel = FileChannel.open(outputFile, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE)) {
-                objectFile.withDebugContext(context, "ObjectFile.write", () -> {
-                    objectFile.write(channel);
-                });
+                objectFile.write(channel);
             }
         } catch (Exception ex) {
             throw shouldNotReachHere(ex);
@@ -393,17 +406,6 @@ public abstract class NativeBootImage extends AbstractBootImage {
         return objectFile.createDefinedSymbol(name, section, position, wordSize, false, true);
     }
 
-    private ObjectFile.Symbol defineRelocationForSymbol(String name, long position) {
-        ObjectFile.Symbol symbol = null;
-        if (objectFile.getSymbolTable().getSymbol(name) == null) {
-            symbol = objectFile.createUndefinedSymbol(name, 0, true);
-        }
-        ProgbitsSectionImpl baseSectionImpl = (ProgbitsSectionImpl) rwDataSection.getImpl();
-        int offsetInSection = Math.toIntExact(RWDATA_CGLOBALS_PARTITION_OFFSET + position);
-        baseSectionImpl.markRelocationSite(offsetInSection, wordSize, RelocationKind.DIRECT, name, false, 0L);
-        return symbol;
-    }
-
     /**
      * Create the image sections for code, constants, and the heap.
      */
@@ -413,9 +415,22 @@ public abstract class NativeBootImage extends AbstractBootImage {
         try (DebugContext.Scope buildScope = debug.scope("NativeBootImage.build")) {
             final CGlobalDataFeature cGlobals = CGlobalDataFeature.singleton();
 
+            ImageHeapLayout heapLayout;
             long roSectionSize = codeCache.getAlignedConstantsSize();
             long rwSectionSize = ConfigurationValues.getObjectLayout().alignUp(cGlobals.getSize());
-            ImageHeapLayoutInfo heapLayout = layouter.layout(heap, objectFile.getPageSize());
+            if (SubstrateOptions.SpawnIsolates.getValue()) {
+                String heapSectionName = SectionName.SVM_HEAP.getFormatDependentName(objectFile.getFormat());
+                heapLayout = layouter.layoutPartitionsAsContiguousHeap(heapSectionName, objectFile.getPageSize());
+            } else {
+                String roDataSectionName = SectionName.RODATA.getFormatDependentName(objectFile.getFormat());
+                String rwDataSectionName = SectionName.DATA.getFormatDependentName(objectFile.getFormat());
+                long roConstantsEndOffset = RODATA_CGLOBALS_PARTITION_OFFSET + roSectionSize;
+                long rwGlobalsEndOffset = RWDATA_CGLOBALS_PARTITION_OFFSET + rwSectionSize;
+                heapLayout = layouter.layoutPartitionsAsSeparatedHeap(roDataSectionName, roConstantsEndOffset, rwDataSectionName, rwGlobalsEndOffset);
+
+                roSectionSize += heapLayout.getReadOnlySize();
+                rwSectionSize += heapLayout.getWritableSize();
+            }
             // after this point, the layout is final and must not be changed anymore
             assert !hasDuplicatedObjects(heap.getObjects()) : "heap.getObjects() must not contain any duplicates";
 
@@ -425,10 +440,17 @@ public abstract class NativeBootImage extends AbstractBootImage {
             final NativeTextSectionImpl textImpl = NativeTextSectionImpl.factory(textBuffer, objectFile, codeCache);
             textSection = objectFile.newProgbitsSection(SectionName.TEXT.getFormatDependentName(objectFile.getFormat()), objectFile.getPageSize(), false, true, textImpl);
 
-            // Read-only data section
+            /*
+             * Read-only data section
+             *
+             * The reason for making the read-only data section writable is for a workaround in
+             * order to use Graal on some platforms where you can't have relocations in a read-only
+             * section (eg. Android).
+             */
+            boolean roDataWritable = !SubstrateOptions.SpawnIsolates.getValue() && SubstrateOptions.UseOnlyWritableBootImageHeap.getValue();
             final RelocatableBuffer roDataBuffer = RelocatableBuffer.factory("roData", roSectionSize, objectFile.getByteOrder());
             final ProgbitsSectionImpl roDataImpl = new BasicProgbitsSectionImpl(roDataBuffer.getBytes());
-            roDataSection = objectFile.newProgbitsSection(SectionName.RODATA.getFormatDependentName(objectFile.getFormat()), objectFile.getPageSize(), false, false, roDataImpl);
+            roDataSection = objectFile.newProgbitsSection(SectionName.RODATA.getFormatDependentName(objectFile.getFormat()), objectFile.getPageSize(), roDataWritable, false, roDataImpl);
 
             // Read-write data section
             final RelocatableBuffer rwDataBuffer = RelocatableBuffer.factory("rwData", rwSectionSize, objectFile.getByteOrder());
@@ -448,43 +470,48 @@ public abstract class NativeBootImage extends AbstractBootImage {
             // - The constants go at the beginning of the read-only data section.
             codeCache.writeConstants(writer, roDataBuffer);
             // - Non-heap global data goes at the beginning of the read-write data section.
-            cGlobals.writeData(rwDataBuffer,
-                            (offset, symbolName) -> defineDataSymbol(symbolName, rwDataSection, offset + RWDATA_CGLOBALS_PARTITION_OFFSET),
-                            (offset, symbolName) -> defineRelocationForSymbol(symbolName, offset));
+            cGlobals.writeData(rwDataBuffer, (offset, symbolName) -> defineDataSymbol(symbolName, rwDataSection, offset + RWDATA_CGLOBALS_PARTITION_OFFSET));
             defineDataSymbol(CGlobalDataInfo.CGLOBALDATA_BASE_SYMBOL_NAME, rwDataSection, RWDATA_CGLOBALS_PARTITION_OFFSET);
 
-            /*
-             * If we constructed debug info give the object file a chance to install it
-             */
+            // if we have constructed any debug info then
+            // give the object file a chance to install it
             if (SubstrateOptions.GenerateDebugInfo.getValue(HostedOptionValues.singleton()) > 0) {
-                ImageSingletons.add(SourceManager.class, new SourceManager());
-                DebugInfoProvider provider = new NativeImageDebugInfoProvider(debug, codeCache, heap);
+                DebugInfoProvider provider = new NativeImageDebugInfoProvider(codeCache, heap);
                 objectFile.installDebugInfo(provider);
             }
-            // - Write the heap to its own section.
-            boolean writable = SubstrateOptions.UseOnlyWritableBootImageHeap.getValue();
-            long heapSize = heapLayout.getImageHeapSize();
-            RelocatableBuffer heapSectionBuffer = RelocatableBuffer.factory("heap", heapSize, objectFile.getByteOrder());
-            ProgbitsSectionImpl heapSectionImpl = new BasicProgbitsSectionImpl(heapSectionBuffer.getBytes());
-            heapSection = objectFile.newProgbitsSection(SectionName.SVM_HEAP.getFormatDependentName(objectFile.getFormat()), objectFile.getPageSize(), writable, false, heapSectionImpl);
-            objectFile.createDefinedSymbol(heapSection.getName(), heapSection, 0, 0, false, false);
+            // - Write the heap, either to its own section, or to the ro and rw data sections.
+            RelocatableBuffer heapSectionBuffer = null;
+            ProgbitsSectionImpl heapSectionImpl = null;
+            if (SubstrateOptions.SpawnIsolates.getValue()) {
+                boolean writable = SubstrateOptions.UseOnlyWritableBootImageHeap.getValue();
+                long heapSize = heapLayout.getImageHeapSize();
+                heapSectionBuffer = RelocatableBuffer.factory("heap", heapSize, objectFile.getByteOrder());
+                heapSectionImpl = new BasicProgbitsSectionImpl(heapSectionBuffer.getBytes());
+                heapSection = objectFile.newProgbitsSection(SectionName.SVM_HEAP.getFormatDependentName(objectFile.getFormat()), objectFile.getPageSize(), writable, false, heapSectionImpl);
+                objectFile.createDefinedSymbol(heapSection.getName(), heapSection, 0, 0, false, false);
 
-            long offsetOfARelocatablePointer = writer.writeHeap(debug, heapSectionBuffer);
-            assert !SubstrateOptions.SpawnIsolates.getValue() || castToByteBuffer(heapSectionBuffer).getLong((int) offsetOfARelocatablePointer) == 0L;
+                long sectionOffsetOfARelocatablePointer = writer.writeHeap(debug, heapSectionBuffer, heapSectionBuffer);
+                assert castToByteBuffer(heapSectionBuffer).getLong((int) sectionOffsetOfARelocatablePointer) == 0L;
 
-            defineDataSymbol(Isolates.IMAGE_HEAP_BEGIN_SYMBOL_NAME, heapSection, 0);
-            defineDataSymbol(Isolates.IMAGE_HEAP_END_SYMBOL_NAME, heapSection, heapSize);
-            defineDataSymbol(Isolates.IMAGE_HEAP_RELOCATABLE_BEGIN_SYMBOL_NAME, heapSection, heapLayout.getReadOnlyRelocatableOffset());
-            defineDataSymbol(Isolates.IMAGE_HEAP_RELOCATABLE_END_SYMBOL_NAME, heapSection, heapLayout.getReadOnlyRelocatableOffset() + heapLayout.getReadOnlyRelocatableSize());
-            defineDataSymbol(Isolates.IMAGE_HEAP_A_RELOCATABLE_POINTER_SYMBOL_NAME, heapSection, offsetOfARelocatablePointer);
-            defineDataSymbol(Isolates.IMAGE_HEAP_WRITABLE_BEGIN_SYMBOL_NAME, heapSection, heapLayout.getWritableOffset());
-            defineDataSymbol(Isolates.IMAGE_HEAP_WRITABLE_END_SYMBOL_NAME, heapSection, heapLayout.getWritableOffset() + heapLayout.getWritableSize());
+                defineDataSymbol(Isolates.IMAGE_HEAP_BEGIN_SYMBOL_NAME, heapSection, 0);
+                defineDataSymbol(Isolates.IMAGE_HEAP_END_SYMBOL_NAME, heapSection, heapSize);
+                defineDataSymbol(Isolates.IMAGE_HEAP_RELOCATABLE_BEGIN_SYMBOL_NAME, heapSection, heapLayout.getReadOnlyRelocatableOffsetInSection());
+                defineDataSymbol(Isolates.IMAGE_HEAP_RELOCATABLE_END_SYMBOL_NAME, heapSection, heapLayout.getReadOnlyRelocatableOffsetInSection() + heapLayout.getReadOnlyRelocatableSize());
+                defineDataSymbol(Isolates.IMAGE_HEAP_A_RELOCATABLE_POINTER_SYMBOL_NAME, heapSection, sectionOffsetOfARelocatablePointer);
+                defineDataSymbol(Isolates.IMAGE_HEAP_WRITABLE_BEGIN_SYMBOL_NAME, heapSection, heapLayout.getWritableOffsetInSection());
+                defineDataSymbol(Isolates.IMAGE_HEAP_WRITABLE_END_SYMBOL_NAME, heapSection, heapLayout.getWritableOffsetInSection() + heapLayout.getWritableSize());
+            } else {
+                assert heapSectionBuffer == null;
+                writer.writeHeap(debug, roDataBuffer, rwDataBuffer);
+            }
 
             // Mark the sections with the relocations from the maps.
             markRelocationSitesFromMaps(textBuffer, textImpl);
             markRelocationSitesFromMaps(roDataBuffer, roDataImpl);
             markRelocationSitesFromMaps(rwDataBuffer, rwDataImpl);
-            markRelocationSitesFromMaps(heapSectionBuffer, heapSectionImpl);
+            if (SubstrateOptions.SpawnIsolates.getValue()) {
+                markRelocationSitesFromMaps(heapSectionBuffer, heapSectionImpl);
+            }
 
             // We print the heap statistics after the heap was successfully written because this
             // could modify objects that will be part of the image heap.
@@ -595,14 +622,20 @@ public abstract class NativeBootImage extends AbstractBootImage {
     // TODO: read-only data section.
 
     // A reference to data. Mark the relocation using the section and addend in the relocation info.
-    private void markDataRelocationSite(ProgbitsSectionImpl sectionImpl, int offset, RelocatableBuffer.Info info, ObjectInfo targetObjectInfo) {
-        // References to objects are via relocations to offsets in the heap section.
-        assert info.getRelocationSize() == 4 || info.getRelocationSize() == 8 : "Data relocation size should be 4 or 8 bytes.";
+    private static void markDataRelocationSite(final ProgbitsSectionImpl sectionImpl, final int offset, final RelocatableBuffer.Info info, final ObjectInfo targetObjectInfo) {
+        // References to objects are via relocations to offsets from the symbol
+        // for the section the symbol is in.
+        // Use the target object to find the partition and offset, and from the
+        // partition the section and the partition offset.
+        assert ((info.getRelocationSize() == 4) || (info.getRelocationSize() == 8)) : "Data relocation size should be 4 or 8 bytes.";
         assert targetObjectInfo != null;
-        String targetSectionName = heapSection.getName();
-        long address = targetObjectInfo.getAddress();
-        long relocationInfoAddend = info.hasExplicitAddend() ? info.getExplicitAddend() : 0L;
-        long relocationAddend = address + relocationInfoAddend;
+        // Gather information about the target object.
+        ImageHeapPartition partition = targetObjectInfo.getPartition();
+        assert partition != null;
+        final String targetSectionName = partition.getSectionName();
+        final long address = targetObjectInfo.getAddress();
+        final long relocationInfoAddend = info.hasExplicitAddend() ? info.getExplicitAddend().longValue() : 0L;
+        final long relocationAddend = address + relocationInfoAddend;
         sectionImpl.markRelocationSite(offset, info.getRelocationSize(), info.getRelocationKind(), targetSectionName, false, relocationAddend);
     }
 
@@ -939,5 +972,405 @@ public abstract class NativeBootImage extends AbstractBootImage {
         protected final RelocatableBuffer textBuffer;
         protected final ObjectFile objectFile;
         protected final NativeImageCodeCache codeCache;
+    }
+
+    /**
+     * implementation of the DebugInfoProvider API interface
+     * that allows type, code and heap data info to be passed to
+     * an ObjectFile when generation of debug info is enabled.
+     */
+    private class NativeImageDebugInfoProvider implements DebugInfoProvider {
+        private final NativeImageCodeCache codeCache;
+        private final NativeImageHeap heap;
+        private final Iterator<Map.Entry<HostedMethod, CompilationResult>> codeCacheIterator;
+        private final Iterator<Map.Entry<Object, ObjectInfo>> heapIterator;
+
+        NativeImageDebugInfoProvider(NativeImageCodeCache codeCache, NativeImageHeap heap) {
+            super();
+            this.codeCache = codeCache;
+            this.heap = heap;
+            this.codeCacheIterator = codeCache.compilations.entrySet().iterator();
+            this.heapIterator = heap.objects.entrySet().iterator();
+        }
+
+        @Override
+        public DebugTypeInfoProvider typeInfoProvider() {
+            return () -> new Iterator<DebugTypeInfo>() {
+                @Override
+                public boolean hasNext() {
+                    return false;
+                }
+
+                @Override
+                public DebugTypeInfo next() {
+                    return null;
+                }
+            };
+        }
+
+        @Override
+        public DebugCodeInfoProvider codeInfoProvider() {
+            return () -> new Iterator<DebugCodeInfo>() {
+                @Override
+                public boolean hasNext() {
+                    return codeCacheIterator.hasNext();
+                }
+
+                @Override
+                public DebugCodeInfo next() {
+                    Map.Entry<HostedMethod, CompilationResult> entry = codeCacheIterator.next();
+                    return new NativeImageDebugCodeInfo(entry.getKey(), entry.getValue());
+                }
+            };
+        }
+
+        @Override
+        public DebugDataInfoProvider dataInfoProvider() {
+            return () -> new Iterator<DebugDataInfo>() {
+                @Override
+                public boolean hasNext() {
+                    return false;
+                }
+
+                @Override
+                public DebugDataInfo next() {
+                    return null;
+                }
+            };
+        }
+    }
+
+    private static final String[] GRAAL_SRC_PACKAGE_PREFIXES = {
+            "org.graalvm",
+            "com.oracle.graal",
+            "com.oracle.objectfile",
+            "com.oracle.svm",
+            "com.oracle.truffle",
+    };
+
+
+    /**
+     * compute a prefix to be added to the front of the file path for
+     * a class in order to locate it under a GRaal or JDK-specific
+     * search root
+     * @param packageName the name of the package the class belongs to
+     * or possibly an empty string if it is in the default package.
+     * @param moduleName the name of the module the class belongs to
+     * or possibly null or an empty string if it is not located
+     * in a module
+     * @return any required prefix or the empty string if no prefix is required
+     */
+    private String getPathPrefix(String packageName, String moduleName) {
+        /*
+         * if we have a module name it is used as a prefix except
+         * when the class belongs to Graal itself.
+         */
+        if (moduleName == null || moduleName.length() == 0) {
+            return "";
+        } else {
+            for (String prefix : GRAAL_SRC_PACKAGE_PREFIXES) {
+                if (packageName.startsWith(prefix)) {
+                    return "";
+                }
+            }
+            return moduleName;
+        }
+    }
+
+    /**
+     * implementation of the DebugCodeInfo API interface
+     * that allows code info to be passed to an ObjectFile
+     * when generation of debug info is enabled.
+     */
+    private class NativeImageDebugCodeInfo implements DebugCodeInfo {
+        private final HostedMethod method;
+        private final CompilationResult compilation;
+
+        NativeImageDebugCodeInfo(HostedMethod method, CompilationResult compilation) {
+            this.method = method;
+            this.compilation = compilation;
+        }
+
+        @Override
+        public String fileName() {
+            HostedType declaringClass = method.getDeclaringClass();
+            String sourceFileName = declaringClass.getSourceFileName();
+
+            if (sourceFileName == null) {
+                String className = declaringClass.getJavaClass().getName();
+                int idx = className.lastIndexOf('.');
+                if (idx > 0) {
+                    // strip off package prefix
+                    className = className.substring(idx + 1);
+                }
+                idx = className.indexOf('$');
+                if (idx == 0) {
+                    // name is $XXX so cannot associate with a file
+                    // create a path with an empty name
+                    sourceFileName = "";
+                } else {
+                    if (idx > 0) {
+                        // name is XXX$YYY so use outer class to derive file name
+                        className = className.substring(0, idx);
+                    }
+                    sourceFileName = className + ".java";
+                }
+            }
+
+            return sourceFileName;
+        }
+        @Override
+        public Path filePath() {
+            HostedType declaringClass = method.getDeclaringClass();
+            Class<?> javaClass = declaringClass.getJavaClass();
+            Package pkg = javaClass.getPackage();
+            String packageName = (pkg != null ? pkg.getName() : "");
+            String module = ModuleSupport.getModuleName(javaClass);
+            if (packageName.length() != 0) {
+                String prefix = getPathPrefix(packageName, module);
+                /*
+                 * use the package name as a path to the file
+                 * for jdk11 classes we assume that the path includes
+                 * the module name then the package name components
+                 * for jdk8 classes this will just collapse to
+                 * the sequence of package name elements
+                 */
+                return Paths.get(prefix, pkg.getName().split("\\."));
+            } else {
+                return null;
+            }
+        }
+
+        @Override
+        public String className() {
+            return method.format("%H");
+        }
+
+        @Override
+        public String methodName() {
+            return method.format("%n");
+        }
+
+        @Override
+        public String paramNames() {
+            return method.format("%P");
+        }
+
+        @Override
+        public String returnTypeName() {
+            return method.format("%R");
+        }
+
+        @Override
+        public int addressLo() {
+            return method.getCodeAddressOffset();
+        }
+
+        @Override
+        public int addressHi() {
+            return method.getCodeAddressOffset() + compilation.getTargetCodeSize();
+        }
+
+        @Override
+        public int line() {
+            LineNumberTable lineNumberTable = method.getLineNumberTable();
+            if (lineNumberTable != null) {
+                return lineNumberTable.getLineNumber(0);
+            }
+            return -1;
+        }
+
+        @Override
+        public DebugInfoProvider.DebugLineInfoProvider lineInfoProvider() {
+            if (fileName().toString().length() == 0) {
+                return () -> new Iterator<DebugLineInfo>() {
+                    @Override
+                    public boolean hasNext() {
+                        return false;
+                    }
+
+                    @Override
+                    public DebugLineInfo next() {
+                        return null;
+                    }
+                };
+            }
+            return () -> new Iterator<DebugLineInfo>() {
+                final Iterator<SourceMapping> sourceIterator = compilation.getSourceMappings().iterator();
+
+                @Override
+                public boolean hasNext() {
+                    return sourceIterator.hasNext();
+                }
+
+                @Override
+                public DebugLineInfo next() {
+                    return new NativeImageDebugLineInfo(sourceIterator.next());
+                }
+            };
+        }
+
+        public int getFrameSize() {
+            return compilation.getTotalFrameSize();
+        }
+
+        public List<DebugFrameSizeChange> getFrameSizeChanges() {
+            List<DebugFrameSizeChange> frameSizeChanges = new LinkedList<>();
+            for (Mark mark : compilation.getMarks()) {
+                // we only need to observe stack increment or decrement points
+                if (mark.id.equals("PROLOGUE_DECD_RSP")) {
+                    NativeImageDebugFrameSizeChange sizeChange = new NativeImageDebugFrameSizeChange(mark.pcOffset, EXTEND);
+                    frameSizeChanges.add(sizeChange);
+                    // } else if (mark.id.equals("PROLOGUE_END")) {
+                    // can ignore these
+                    // } else if (mark.id.equals("EPILOGUE_START")) {
+                    // can ignore these
+                } else if (mark.id.equals("EPILOGUE_INCD_RSP")) {
+                    NativeImageDebugFrameSizeChange sizeChange = new NativeImageDebugFrameSizeChange(mark.pcOffset, CONTRACT);
+                    frameSizeChanges.add(sizeChange);
+                    // } else if(mark.id.equals("EPILOGUE_END")) {
+                }
+            }
+            return frameSizeChanges;
+        }
+    }
+
+    /**
+     * implementation of the DebugLineInfo API interface
+     * that allows line number info to be passed to an
+     * ObjectFile when generation of debug info is enabled.
+     */
+    private class NativeImageDebugLineInfo implements DebugLineInfo {
+        private final int bci;
+        private final ResolvedJavaMethod method;
+        private final int lo;
+        private final int hi;
+
+        NativeImageDebugLineInfo(SourceMapping sourceMapping) {
+            NodeSourcePosition position = sourceMapping.getSourcePosition();
+            int bci = position.getBCI();
+            this.bci = (bci >= 0 ? bci : 0);
+            this.method = position.getMethod();
+            this.lo = sourceMapping.getStartOffset();
+            this.hi = sourceMapping.getEndOffset();
+        }
+
+        @Override
+        public String fileName() {
+            ResolvedJavaType declaringClass = method.getDeclaringClass();
+            String sourceFileName = declaringClass.getSourceFileName();
+
+            if (sourceFileName == null) {
+                String className = declaringClass.getName();
+                int idx = className.lastIndexOf('.');
+                if (idx > 0) {
+                    // strip off package prefix
+                    className = className.substring(idx + 1);
+                }
+                idx = className.indexOf('$');
+                if (idx == 0) {
+                    // name is $XXX so cannot associate with a file
+                    // create a path with an empty name
+                    sourceFileName = "";
+                } else {
+                    if (idx > 0) {
+                        // name is XXX$YYY so use outer class to derive file name
+                        className = className.substring(0, idx);
+                    }
+                    sourceFileName = className + ".java";
+                }
+            }
+
+            return sourceFileName;
+        }
+
+        public Path filePath() {
+            ResolvedJavaType declaringClass = (method.getDeclaringClass());
+            if (declaringClass instanceof OriginalClassProvider) {
+                Class<?> javaClass = ((OriginalClassProvider) declaringClass).getJavaClass();
+                Package pkg = javaClass.getPackage();
+                String packageName = (pkg != null ? pkg.getName() : "");
+                String module = ModuleSupport.getModuleName(javaClass);
+                if (packageName.length() != 0) {
+                    String prefix = getPathPrefix(packageName, module);
+                    /*
+                     * use the package name as a path to the file
+                     *
+                     * for jdk11 classes we assume that the path includes
+                     * the module name then the package name components
+                     *
+                     * for jdk8 classes this will just collapse to
+                     * the sequence of package name components
+                     */
+                    return Paths.get(prefix, pkg.getName().split("\\."));
+                } else {
+                    return null;
+                }
+            } else {
+                // use the class name to generate a path
+                String name = className();
+                int idx = name.lastIndexOf('.');
+                if (idx > 0) {
+                    name = name.substring(0, idx);
+                    return Paths.get("", name.split("\\."));
+                } else {
+                    return null;
+                }
+            }
+        }
+
+        @Override
+        public String className() {
+            return method.format("%H");
+        }
+
+        @Override
+        public String methodName() {
+            return method.format("%n");
+        }
+
+        @Override
+        public int addressLo() {
+            return lo;
+        }
+
+        @Override
+        public int addressHi() {
+            return hi;
+        }
+
+        @Override
+        public int line() {
+            LineNumberTable lineNumberTable = method.getLineNumberTable();
+            if (lineNumberTable != null) {
+                return lineNumberTable.getLineNumber(bci);
+            }
+            return -1;
+        }
+    }
+
+    /**
+     * implementation of the DebugFrameSizeChange API interface
+     * that allows stack frame size change info to be passed to
+     * an ObjectFile when generation of debug info is enabled.
+     */
+    private class NativeImageDebugFrameSizeChange implements DebugFrameSizeChange {
+        private int offset;
+        private Type type;
+
+        NativeImageDebugFrameSizeChange(int offset, Type type) {
+            this.offset = offset;
+            this.type = type;
+        }
+
+        @Override
+        public int getOffset() {
+            return offset;
+        }
+
+        @Override
+        public Type getType() {
+            return type;
+        }
     }
 }

@@ -26,18 +26,31 @@
 
 package com.oracle.objectfile.elf.dwarf;
 
+import java.nio.file.Path;
+
 /**
- * track the directory associated with one or
+ * Tracks the directory associated with one or
  * more source files.
+ *
+ * This is identified separately from each FileEntry
+ * idenityfing files that reside in the directory.
+ * That is necessary because the line info generator
+ * needs to collect and write out directory names
+ * into directory tables once only rather than once
+ * per file.
  */
 public class DirEntry {
-    private String path;
+    private Path path;
 
-    public DirEntry(String path) {
+    public DirEntry(Path path) {
         this.path = path;
     }
 
-    public String getPath() {
+    public Path getPath() {
         return path;
+    }
+
+    public String getPathString() {
+        return path.toString();
     }
 }
