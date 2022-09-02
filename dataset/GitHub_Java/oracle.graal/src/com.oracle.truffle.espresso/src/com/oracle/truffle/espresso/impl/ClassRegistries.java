@@ -62,20 +62,15 @@ public final class ClassRegistries {
         // Double-checked locking to attach class registry to guest instance.
         ClassRegistry classRegistry = (ClassRegistry) classLoader.getHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY);
         if (classRegistry == null) {
-            // Synchronizing on the classLoader instance would be the natural choice here, but:
-            // On SubstrateVM, synchronizing on a StaticObject instance will add an extra slot/field
-            // to all StaticObject instances. Locking on the weak set instead (maybe) spares one
-            // slot/field in every single guest object.
-            // Setting the class registry happens only once, for such rare operations, no contention
-            // is expected.
-            synchronized (weakClassLoaderSet) {
+            synchronized (classLoader) {
                 classRegistry = (ClassRegistry) classLoader.getHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY);
                 if (classRegistry == null) {
                     classRegistry = new GuestClassRegistry(context, classLoader);
                     classLoader.setHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY, classRegistry);
                     // Register the class loader in the weak set.
-                    assert Thread.holdsLock(weakClassLoaderSet);
-                    weakClassLoaderSet.add(classLoader);
+                    synchronized (weakClassLoaderSet) {
+                        weakClassLoaderSet.add(classLoader);
+                    }
                 }
             }
         }
