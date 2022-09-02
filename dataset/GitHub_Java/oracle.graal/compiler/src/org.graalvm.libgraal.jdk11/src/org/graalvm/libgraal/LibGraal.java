@@ -157,15 +157,15 @@ public class LibGraal {
         }
     }
 
-    public static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime, boolean isDaemon) {
+    static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime) {
         try {
-            return (boolean) runtimeAttachCurrentThread.invoke(runtime, isDaemon);
+            return (boolean) runtimeAttachCurrentThread.invoke(runtime, false);
         } catch (Throwable throwable) {
             throw new InternalError(throwable);
         }
     }
 
-    public static void detachCurrentThread(HotSpotJVMCIRuntime runtime) {
+    static void detachCurrentThread(HotSpotJVMCIRuntime runtime) {
         try {
             runtimeDetachCurrentThread.invoke(runtime);
         } catch (Throwable throwable) {
