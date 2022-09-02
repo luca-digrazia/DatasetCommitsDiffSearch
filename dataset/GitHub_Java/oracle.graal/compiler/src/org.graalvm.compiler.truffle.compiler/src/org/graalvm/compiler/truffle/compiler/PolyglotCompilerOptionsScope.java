@@ -36,13 +36,14 @@ import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
 
-
 public final class PolyglotCompilerOptionsScope implements Closeable {
 
-    private static ThreadLocal<PolyglotCompilerOptionsScope> currentScope = new ThreadLocal<>();
+    private static class Lazy {
+        static final ThreadLocal<PolyglotCompilerOptionsScope> currentScope = new ThreadLocal<>();
+    }
 
     private final OptionValues optionValues;
-    private PolyglotCompilerOptionsScope parent;
+    private final PolyglotCompilerOptionsScope parent;
 
     private PolyglotCompilerOptionsScope(OptionValues optionValues, PolyglotCompilerOptionsScope parent) {
         Objects.requireNonNull(optionValues, "OptionValues must be non null.");
@@ -52,47 +53,67 @@ public final class PolyglotCompilerOptionsScope implements Closeable {
 
     @Override
     public void close() {
-        PolyglotCompilerOptionsScope current = currentScope.get();
+        PolyglotCompilerOptionsScope current = Lazy.currentScope.get();
         if (current != this) {
             throw new IllegalStateException("Unpaired close.");
         }
-        currentScope.set(current.parent);
+        Lazy.currentScope.set(current.parent);
     }
 
     public static OptionValues getOptionValues() {
-        PolyglotCompilerOptionsScope current = currentScope.get();
+        PolyglotCompilerOptionsScope current = Lazy.currentScope.get();
         if (current == null) {
             throw new IllegalStateException("Not entered in scope.");
         }
         return current.optionValues;
     }
 
-    public static <T> T getValue(OptionKey<T> optionKey) {
-        return PolyglotCompilerOptions.getValue(getOptionValues(), optionKey);
-    }
-
-    static PolyglotCompilerOptionsScope open (Map<String,Object> options) {
-        PolyglotCompilerOptionsScope parent = currentScope.get();
+    public static PolyglotCompilerOptionsScope open(Map<String, Object> options) {
+        PolyglotCompilerOptionsScope parent = Lazy.currentScope.get();
         OptionValues values = convertToOptionValues(options);
         PolyglotCompilerOptionsScope newScope = new PolyglotCompilerOptionsScope(values, parent);
-        currentScope.set(newScope);
+        Lazy.currentScope.set(newScope);
         return newScope;
     }
 
-    private static OptionValues convertToOptionValues(Map<String,Object> options) {
+    public static PolyglotCompilerOptionsScope overrideOptions(OptionKey<?> key1, Object value1, Object... extraOverrides) {
+        if ((extraOverrides.length & 1) != 0) {
+            throw new IllegalArgumentException("ExtraOverrides must have even size.");
+        }
+        PolyglotCompilerOptionsScope parent = Lazy.currentScope.get();
+        EconomicMap<OptionKey<?>, Object> parsedOptions = EconomicMap.create(Equivalence.IDENTITY);
+        if (parent != null) {
+            for (OptionDescriptor desc : PolyglotCompilerOptions.getDescriptors()) {
+                OptionKey<?> descKey = desc.getKey();
+                if (parent.optionValues.hasBeenSet(descKey)) {
+                    parsedOptions.put(desc.getKey(), parent.optionValues.get(desc.getKey()));
+                }
+            }
+        }
+        parsedOptions.put(key1, value1);
+        for (int i = 0; i < extraOverrides.length; i += 2) {
+            parsedOptions.put((OptionKey<?>) extraOverrides[i], extraOverrides[i + 1]);
+        }
+        OptionValuesImpl values = new OptionValuesImpl(PolyglotCompilerOptions.getDescriptors(), parsedOptions);
+        PolyglotCompilerOptionsScope newScope = new PolyglotCompilerOptionsScope(values, parent);
+        Lazy.currentScope.set(newScope);
+        return newScope;
+    }
+
+    private static OptionValues convertToOptionValues(Map<String, Object> options) {
         EconomicMap<OptionKey<?>, Object> parsedOptions = EconomicMap.create(Equivalence.IDENTITY);
         OptionDescriptors descriptors = PolyglotCompilerOptions.getDescriptors();
         for (Map.Entry<String, Object> e : options.entrySet()) {
-                final OptionDescriptor descriptor = descriptors.get(e.getKey());
-                final OptionKey<?> k = descriptor != null ? descriptor.getKey() : null;
-                if (k != null) {
-                    Object value = e.getValue();
-                    if (value.getClass() == String.class) {
-                        value = descriptor.getKey().getType().convert((String)e.getValue());
-                    }
-                    parsedOptions.put(k, value);
+            final OptionDescriptor descriptor = descriptors.get(e.getKey());
+            final OptionKey<?> k = descriptor != null ? descriptor.getKey() : null;
+            if (k != null) {
+                Object value = e.getValue();
+                if (value.getClass() == String.class) {
+                    value = descriptor.getKey().getType().convert((String) e.getValue());
                 }
+                parsedOptions.put(k, value);
             }
+        }
         return new OptionValuesImpl(descriptors, parsedOptions);
     }
 }

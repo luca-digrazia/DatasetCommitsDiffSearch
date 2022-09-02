@@ -123,7 +123,6 @@ import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
 import org.graalvm.compiler.truffle.compiler.substitutions.TruffleGraphBuilderPlugins;
 import org.graalvm.compiler.truffle.compiler.substitutions.TruffleInvocationPluginProvider;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
-import org.graalvm.options.OptionValues;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.JavaConstant;
@@ -191,11 +190,11 @@ public abstract class PartialEvaluator {
      * Gets the instrumentation manager associated with this compiler, creating it first if
      * necessary. Each compiler instance has its own instrumentation manager.
      */
-    public final InstrumentPhase.Instrumentation getInstrumentation(OptionValues polyglotCompilerOptionValues) {
+    public final InstrumentPhase.Instrumentation getInstrumentation() {
         if (instrumentation == null) {
             synchronized (this) {
                 if (instrumentation == null) {
-                    long[] accessTable = new long[getPolyglotOptionValue(polyglotCompilerOptionValues, PolyglotCompilerOptions.InstrumentationTableSize)];
+                    long[] accessTable = new long[getPolyglotOptionValue(PolyglotCompilerOptions.InstrumentationTableSize)];
                     instrumentation = new InstrumentPhase.Instrumentation(accessTable);
                 }
             }
@@ -266,9 +265,8 @@ public abstract class PartialEvaluator {
 
     @SuppressWarnings("try")
     public StructuredGraph createGraph(DebugContext debug, final CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan,
-                    AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable,
-                    OptionValues polyglotCompilerOptionValues) {
-        try (PerformanceInformationHandler handler = PerformanceInformationHandler.install(polyglotCompilerOptionValues)) {
+                    AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable) {
+        try (PerformanceInformationHandler handler = PerformanceInformationHandler.install()) {
             String name = compilable.toString();
             ResolvedJavaMethod rootMethod = rootForCallTarget(compilable);
             final StructuredGraph graph = createGraphForPE(debug, name, rootMethod, allowAssumptions, compilationId, log, cancellable);
@@ -279,14 +277,14 @@ public abstract class PartialEvaluator {
                 CoreProviders baseContext = providers;
                 HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
 
-                fastPartialEvaluation(compilable, inliningPlan, graph, baseContext, tierContext, handler, polyglotCompilerOptionValues);
+                fastPartialEvaluation(compilable, inliningPlan, graph, baseContext, tierContext, handler);
 
                 if (cancellable != null && cancellable.isCancelled()) {
                     return null;
                 }
 
                 new VerifyFrameDoesNotEscapePhase().apply(graph, false);
-                postPartialEvaluation(graph, polyglotCompilerOptionValues);
+                postPartialEvaluation(graph);
 
             } catch (Throwable e) {
                 throw debug.handle(e);
@@ -297,23 +295,23 @@ public abstract class PartialEvaluator {
     }
 
     public void parseRootGraphForInlining(CompilableTruffleAST compilable, StructuredGraph graph, CallNodeProvider callNodeProvider, InlineInvokePlugin callNodePlugin,
-                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining, OptionValues polyglotCompilerOptionValues) {
+                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining) {
         // This is only called by agnostic inlining. Legacy inlining does not use this method.
         HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<>(), OptimisticOptimizations.NONE);
 
-        doGraphPE(compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining, polyglotCompilerOptionValues);
+        doGraphPE(compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining);
     }
 
     public StructuredGraph createGraphForInlining(DebugContext debug, CompilableTruffleAST compilable, CallNodeProvider callNodeProvider, InlineInvokePlugin callNodePlugin,
                     AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable,
-                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining, OptionValues polyglotCompilerOptionValues) {
+                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining) {
         // This is only called by agnostic inlining. Legacy inlining does not use this method.
         String name = compilable.toString();
         ResolvedJavaMethod rootMethod = inlineRootForCallTargetAgnostic(compilable);
         final StructuredGraph graph = createGraphForPE(debug, name, rootMethod, allowAssumptions, compilationId, log, cancellable);
         HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<>(), OptimisticOptimizations.NONE);
 
-        doGraphPE(compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining, polyglotCompilerOptionValues);
+        doGraphPE(compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining);
 
         return graph;
     }
@@ -393,16 +391,14 @@ public abstract class PartialEvaluator {
         private final int nodeLimit;
         private final StructuredGraph graph;
         private final int inliningNodeLimit;
-        private final OptionValues polyglotCompilerOptionValues;
         private boolean graphTooBigReported;
 
-        PEInliningPlanInvokePlugin(TruffleInliningPlan inlining, StructuredGraph graph, OptionValues polyglotCompilerOptionValues) {
+        PEInliningPlanInvokePlugin(TruffleInliningPlan inlining, StructuredGraph graph, int nodeLimit, int inliningNodeLimit) {
             this.inlining = new ArrayDeque<>();
             this.inlining.push(inlining);
             this.graph = graph;
-            this.nodeLimit = getPolyglotOptionValue(polyglotCompilerOptionValues, MaximumGraalNodeCount);
-            this.inliningNodeLimit = getPolyglotOptionValue(polyglotCompilerOptionValues, MaximumInlineNodeCount);
-            this.polyglotCompilerOptionValues = polyglotCompilerOptionValues;
+            this.nodeLimit = nodeLimit;
+            this.inliningNodeLimit = inliningNodeLimit;
         }
 
         @Override
@@ -439,7 +435,7 @@ public abstract class PartialEvaluator {
         }
 
         private void logGraphTooBig() {
-            if (!graphTooBigReported && getPolyglotOptionValue(polyglotCompilerOptionValues, TraceInlining)) {
+            if (!graphTooBigReported && getPolyglotOptionValue(TraceInlining)) {
                 graphTooBigReported = true;
                 final HashMap<String, Object> properties = new HashMap<>();
                 properties.put("graph node count", graph.getNodeCount());
@@ -556,8 +552,7 @@ public abstract class PartialEvaluator {
     @SuppressWarnings("unused")
     protected PEGraphDecoder createGraphDecoder(StructuredGraph graph, final HighTierContext tierContext, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins,
                     InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePluginList,
-                    SourceLanguagePositionProvider sourceLanguagePositionProvider, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache,
-                    OptionValues polyglotCompilerOptionValues) {
+                    SourceLanguagePositionProvider sourceLanguagePositionProvider, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
         final GraphBuilderConfiguration newConfig = configForParsing.copy();
         InvocationPlugins parsingInvocationPlugins = newConfig.getPlugins().getInvocationPlugins();
 
@@ -566,7 +561,7 @@ public abstract class PartialEvaluator {
         plugins.clearInlineInvokePlugins();
         plugins.appendInlineInvokePlugin(replacements);
         plugins.appendInlineInvokePlugin(new ParsingInlineInvokePlugin(replacements, parsingInvocationPlugins, loopExplosionPlugin));
-        if (!getPolyglotOptionValue(polyglotCompilerOptionValues, PrintExpansionHistogram)) {
+        if (!getPolyglotOptionValue(PrintExpansionHistogram)) {
             plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
         }
 
@@ -580,14 +575,14 @@ public abstract class PartialEvaluator {
     }
 
     protected void doGraphPE(CompilableTruffleAST compilable, StructuredGraph graph, HighTierContext tierContext, TruffleInliningPlan inliningDecision, InlineInvokePlugin inlineInvokePlugin,
-                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache, OptionValues polyglotCompilerOptionValues) {
+                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
         LoopExplosionPlugin loopExplosionPlugin = new PELoopExplosionPlugin();
         ParameterPlugin parameterPlugin = new InterceptReceiverPlugin(compilable);
 
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         InlineInvokePlugin[] inlineInvokePlugins;
         HistogramInlineInvokePlugin histogramPlugin = null;
-        Boolean printTruffleExpansionHistogram = getPolyglotOptionValue(polyglotCompilerOptionValues, PrintExpansionHistogram);
+        Boolean printTruffleExpansionHistogram = getPolyglotOptionValue(PrintExpansionHistogram);
         if (printTruffleExpansionHistogram) {
             histogramPlugin = new HistogramInlineInvokePlugin(graph);
             inlineInvokePlugins = new InlineInvokePlugin[]{replacements, inlineInvokePlugin, histogramPlugin};
@@ -597,7 +592,7 @@ public abstract class PartialEvaluator {
 
         SourceLanguagePositionProvider sourceLanguagePosition = new TruffleSourceLanguagePositionProvider(inliningDecision);
         PEGraphDecoder decoder = createGraphDecoder(graph, tierContext, loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins,
-                        sourceLanguagePosition, graphCache, polyglotCompilerOptionValues);
+                        sourceLanguagePosition, graphCache);
         decoder.decode(graph.method(), graph.isSubstitution(), graph.trackNodeSourcePosition());
 
         if (printTruffleExpansionHistogram) {
@@ -638,10 +633,10 @@ public abstract class PartialEvaluator {
 
     @SuppressWarnings({"try", "unused"})
     private void fastPartialEvaluation(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, CoreProviders baseContext, HighTierContext tierContext,
-                    PerformanceInformationHandler handler, OptionValues polyglotCompilerOptionValues) {
+                    PerformanceInformationHandler handler) {
         DebugContext debug = graph.getDebug();
         try (DebugCloseable a = PartialEvaluationTimer.start(debug)) {
-            agnosticInliningOrGraphPE(compilable, inliningDecision, graph, baseContext, tierContext, polyglotCompilerOptionValues);
+            agnosticInliningOrGraphPE(compilable, inliningDecision, graph, baseContext, tierContext);
         }
         debug.dump(DebugContext.BASIC_LEVEL, graph, "After Partial Evaluation");
 
@@ -667,7 +662,7 @@ public abstract class PartialEvaluator {
 
         // Do single partial escape and canonicalization pass.
         try (DebugContext.Scope pe = debug.scope("TrufflePartialEscape", graph)) {
-            new PartialEscapePhase(getPolyglotOptionValue(polyglotCompilerOptionValues, IterativePartialEscape), canonicalizer, graph.getOptions()).apply(graph, tierContext);
+            new PartialEscapePhase(getPolyglotOptionValue(IterativePartialEscape), canonicalizer, graph.getOptions()).apply(graph, tierContext);
         } catch (Throwable t) {
             debug.handle(t);
         }
@@ -675,35 +670,35 @@ public abstract class PartialEvaluator {
         // recompute loop frequencies now that BranchProbabilities have had time to canonicalize
         ComputeLoopFrequenciesClosure.compute(graph);
 
-        applyInstrumentationPhases(graph, tierContext, polyglotCompilerOptionValues);
+        applyInstrumentationPhases(graph, tierContext);
 
         graph.maybeCompress();
 
         handler.reportPerformanceWarnings(compilable, graph);
     }
 
-    private void agnosticInliningOrGraphPE(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, CoreProviders baseContext, HighTierContext tierContext,
-                    OptionValues polyglotCompilerOptionValues) {
-        if (getPolyglotOptionValue(polyglotCompilerOptionValues, LanguageAgnosticInlining)) {
-            AgnosticInliningPhase agnosticInlining = new AgnosticInliningPhase(this, inliningDecision, compilable, polyglotCompilerOptionValues);
+    private void agnosticInliningOrGraphPE(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, CoreProviders baseContext, HighTierContext tierContext) {
+        if (getPolyglotOptionValue(LanguageAgnosticInlining)) {
+            AgnosticInliningPhase agnosticInlining = new AgnosticInliningPhase(this, inliningDecision, compilable);
             agnosticInlining.apply(graph, baseContext);
         } else {
-            final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(inliningDecision, graph, polyglotCompilerOptionValues);
-            doGraphPE(compilable, graph, tierContext, inliningDecision, plugin, EconomicMap.create(), polyglotCompilerOptionValues);
+            final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(inliningDecision, graph, getPolyglotOptionValue(MaximumGraalNodeCount),
+                            getPolyglotOptionValue(MaximumInlineNodeCount));
+            doGraphPE(compilable, graph, tierContext, inliningDecision, plugin, EconomicMap.create());
         }
         removeInlineTokenNodes(graph);
     }
 
-    protected void applyInstrumentationPhases(StructuredGraph graph, HighTierContext tierContext, OptionValues polyglotCompilerOptionValues) {
+    protected void applyInstrumentationPhases(StructuredGraph graph, HighTierContext tierContext) {
         if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue(graph.getOptions())) {
-            new InstrumentBranchesPhase(snippetReflection, getInstrumentation(polyglotCompilerOptionValues), polyglotCompilerOptionValues).apply(graph, tierContext);
+            new InstrumentBranchesPhase(snippetReflection, getInstrumentation()).apply(graph, tierContext);
         }
         if (TruffleCompilerOptions.TruffleInstrumentBoundaries.getValue(graph.getOptions())) {
-            new InstrumentTruffleBoundariesPhase(snippetReflection, getInstrumentation(polyglotCompilerOptionValues), polyglotCompilerOptionValues).apply(graph, tierContext);
+            new InstrumentTruffleBoundariesPhase(snippetReflection, getInstrumentation()).apply(graph, tierContext);
         }
     }
 
-    private static void postPartialEvaluation(final StructuredGraph graph, OptionValues polyglotCompilerOptionValues) {
+    private static void postPartialEvaluation(final StructuredGraph graph) {
         NeverPartOfCompilationNode.verifyNotFoundIn(graph);
         for (AllowMaterializeNode materializeNode : graph.getNodes(AllowMaterializeNode.TYPE).snapshot()) {
             materializeNode.replaceAtUsages(materializeNode.getFrame());
@@ -720,7 +715,7 @@ public abstract class PartialEvaluator {
             }
         }
 
-        if (!getPolyglotOptionValue(polyglotCompilerOptionValues, InlineAcrossTruffleBoundary)) {
+        if (!getPolyglotOptionValue(InlineAcrossTruffleBoundary)) {
             // Do not inline across Truffle boundaries.
             for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.TYPE)) {
                 TruffleCompilerRuntime.InlineKind inlineKind = rt.getInlineKind(mct.targetMethod(), false);
@@ -747,11 +742,9 @@ public abstract class PartialEvaluator {
     public static final class PerformanceInformationHandler implements Closeable {
 
         private static final ThreadLocal<PerformanceInformationHandler> instance = new ThreadLocal<>();
-        private final OptionValues polyglotCompilerOptionValues;
         private boolean warningSeen;
 
-        private PerformanceInformationHandler(OptionValues polyglotCompilerOptionValues) {
-            this.polyglotCompilerOptionValues = polyglotCompilerOptionValues;
+        private PerformanceInformationHandler() {
         }
 
         private void setWarnings(boolean hasWarnings) {
@@ -768,28 +761,26 @@ public abstract class PartialEvaluator {
             instance.remove();
         }
 
-        static PerformanceInformationHandler install(OptionValues polyglotCompilerOptionValues) {
+        static PerformanceInformationHandler install() {
             assert instance.get() == null : "PerformanceInformationHandler already installed";
-            PerformanceInformationHandler handler = new PerformanceInformationHandler(polyglotCompilerOptionValues);
+            PerformanceInformationHandler handler = new PerformanceInformationHandler();
             instance.set(handler);
             return handler;
         }
 
         public static boolean isEnabled() {
-            PerformanceInformationHandler handler = instance.get();
-            return getPolyglotOptionValue(handler.polyglotCompilerOptionValues, TracePerformanceWarnings) || getPolyglotOptionValue(handler.polyglotCompilerOptionValues, PerformanceWarningsAreFatal); // TODO
+            return getPolyglotOptionValue(TracePerformanceWarnings) || getPolyglotOptionValue(PerformanceWarningsAreFatal); // TODO
         }
 
         public static void logPerformanceWarning(String callTargetName, List<? extends Node> locations, String details, Map<String, Object> properties) {
-            PerformanceInformationHandler handler = instance.get();
-            handler.setWarnings(true);
+            instance.get().setWarnings(true);
             logPerformanceWarningImpl(callTargetName, "perf warn", details, properties);
-            handler.logPerformanceStackTrace(locations);
+            logPerformanceStackTrace(locations);
         }
 
         private static void logPerformanceInfo(String callTargetName, List<? extends Node> locations, String details, Map<String, Object> properties) {
             logPerformanceWarningImpl(callTargetName, "perf info", details, properties);
-            instance.get().logPerformanceStackTrace(locations);
+            logPerformanceStackTrace(locations);
         }
 
         private static void logPerformanceWarningImpl(String callTargetName, String msg, String details, Map<String, Object> properties) {
@@ -797,11 +788,11 @@ public abstract class PartialEvaluator {
             runtime.logEvent(0, msg, String.format("%-60s|%s", callTargetName, details), properties);
         }
 
-        private void logPerformanceStackTrace(List<? extends Node> locations) {
+        private static void logPerformanceStackTrace(List<? extends Node> locations) {
             if (locations == null || locations.isEmpty()) {
                 return;
             }
-            int limit = getPolyglotOptionValue(polyglotCompilerOptionValues, TraceStackTraceLimit); // TODO
+            int limit = getPolyglotOptionValue(TraceStackTraceLimit); // TODO
             if (limit <= 0) {
                 return;
             }
@@ -886,7 +877,7 @@ public abstract class PartialEvaluator {
                 }
             }
 
-            if (hasWarnings() && getPolyglotOptionValue(polyglotCompilerOptionValues, PerformanceWarningsAreFatal)) { // TODO
+            if (hasWarnings() && getPolyglotOptionValue(PerformanceWarningsAreFatal)) { // TODO
                 throw new AssertionError("Performance warning detected and is fatal.");
             }
         }
