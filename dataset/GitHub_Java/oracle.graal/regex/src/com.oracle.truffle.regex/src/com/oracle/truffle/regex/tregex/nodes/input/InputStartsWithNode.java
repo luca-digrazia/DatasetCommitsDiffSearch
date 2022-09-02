@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,7 +43,9 @@ package com.oracle.truffle.regex.tregex.nodes.input;
 import com.oracle.truffle.api.ArrayUtils;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.regex.tregex.string.StringUTF16;
 
 public abstract class InputStartsWithNode extends Node {
 
@@ -54,80 +56,39 @@ public abstract class InputStartsWithNode extends Node {
     public abstract boolean execute(Object input, Object prefix, Object mask);
 
     @Specialization(guards = "mask == null")
-    public boolean doBytes(byte[] input, byte[] prefix, @SuppressWarnings("unused") Object mask) {
-        return ArrayUtils.regionEqualsWithOrMask(input, 0, prefix, 0, prefix.length, null);
+    public boolean startsWith(String input, StringUTF16 prefix, @SuppressWarnings("unused") Object mask) {
+        return input.startsWith(prefix.toString());
     }
 
     @Specialization(guards = "mask != null")
-    public boolean doBytesMask(byte[] input, byte[] prefix, byte[] mask) {
-        return ArrayUtils.regionEqualsWithOrMask(input, 0, prefix, 0, prefix.length, mask);
+    public boolean startsWithWithMask(String input, StringUTF16 prefix, StringUTF16 mask) {
+        return ArrayUtils.regionEqualsWithOrMask(input, 0, prefix.toString(), 0, mask.encodedLength(), mask.toString());
     }
 
     @Specialization(guards = "mask == null")
-    public boolean doString(String input, String prefix, @SuppressWarnings("unused") Object mask) {
-        return input.startsWith(prefix);
+    public boolean startsWithTruffleObjNoMask(TruffleObject input, StringUTF16 prefix, @SuppressWarnings("unused") Object mask,
+                    @Cached("create()") InputLengthNode lengthNode,
+                    @Cached("create()") InputReadNode charAtNode) {
+        return startsWithTruffleObj(input, prefix, null, lengthNode, charAtNode);
     }
 
     @Specialization(guards = "mask != null")
-    public boolean doStringMask(String input, String prefix, String mask) {
-        return ArrayUtils.regionEqualsWithOrMask(input, 0, prefix, 0, mask.length(), mask);
-    }
-
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask == null"})
-    public boolean doTruffleObjBytes(Object input, byte[] prefix, @SuppressWarnings("unused") Object mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
-        return startsWithTruffleObj(input, prefix, null, lengthNode, charAtNode);
-    }
-
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask != null"})
-    public boolean doTruffleObjBytesMask(Object input, byte[] prefix, byte[] mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
-        assert mask.length == prefix.length;
+    public boolean startsWithTruffleObjWithMask(TruffleObject input, StringUTF16 prefix, StringUTF16 mask,
+                    @Cached("create()") InputLengthNode lengthNode,
+                    @Cached("create()") InputReadNode charAtNode) {
+        assert mask.encodedLength() == prefix.encodedLength();
         return startsWithTruffleObj(input, prefix, mask, lengthNode, charAtNode);
     }
 
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask == null"})
-    public boolean doTruffleObjString(Object input, String prefix, @SuppressWarnings("unused") Object mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
-        return startsWithTruffleObj(input, prefix, null, lengthNode, charAtNode);
-    }
-
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask != null"})
-    public boolean doTruffleObjStringMask(Object input, String prefix, String mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
-        assert mask.length() == prefix.length();
-        return startsWithTruffleObj(input, prefix, mask, lengthNode, charAtNode);
-    }
-
-    private static boolean startsWithTruffleObj(Object input, byte[] prefix, byte[] mask, InputLengthNode lengthNode, InputReadNode charAtNode) {
-        if (lengthNode.execute(input) < prefix.length) {
+    private static boolean startsWithTruffleObj(TruffleObject input, StringUTF16 prefix, StringUTF16 mask, InputLengthNode lengthNode, InputReadNode charAtNode) {
+        if (lengthNode.execute(input) < prefix.encodedLength()) {
             return false;
         }
-        for (int i = 0; i < prefix.length; i++) {
-            if (InputReadNode.readWithMask(input, i, mask, i, charAtNode) != Byte.toUnsignedInt(prefix[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean startsWithTruffleObj(Object input, String prefix, String mask, InputLengthNode lengthNode, InputReadNode charAtNode) {
-        if (lengthNode.execute(input) < prefix.length()) {
-            return false;
-        }
-        for (int i = 0; i < prefix.length(); i++) {
+        for (int i = 0; i < prefix.encodedLength(); i++) {
             if (InputReadNode.readWithMask(input, i, mask, i, charAtNode) != prefix.charAt(i)) {
                 return false;
             }
         }
         return true;
-    }
-
-    protected static boolean neitherByteArrayNorString(Object obj) {
-        return !(obj instanceof byte[]) && !(obj instanceof String);
     }
 }

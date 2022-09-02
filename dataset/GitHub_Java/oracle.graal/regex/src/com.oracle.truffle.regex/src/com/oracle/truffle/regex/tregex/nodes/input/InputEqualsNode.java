@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,12 +40,12 @@
  */
 package com.oracle.truffle.regex.tregex.nodes.input;
 
-import java.util.Arrays;
-
 import com.oracle.truffle.api.ArrayUtils;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.regex.tregex.string.StringUTF16;
 
 public abstract class InputEqualsNode extends Node {
 
@@ -56,78 +56,38 @@ public abstract class InputEqualsNode extends Node {
     public abstract boolean execute(Object input, Object string, Object mask);
 
     @Specialization(guards = "mask == null")
-    public boolean doBytes(byte[] input, byte[] string, @SuppressWarnings("unused") Object mask) {
-        return Arrays.equals(input, string);
+    public boolean execEquals(String input, StringUTF16 string, @SuppressWarnings("unused") Object mask) {
+        return input.equals(string.toString());
     }
 
     @Specialization(guards = "mask != null")
-    public boolean doBytesMask(byte[] input, byte[] string, byte[] mask) {
-        return input.length == string.length && ArrayUtils.regionEqualsWithOrMask(input, 0, string, 0, mask.length, mask);
+    public boolean execEqualsWithMask(String input, StringUTF16 string, StringUTF16 mask) {
+        return input.length() == string.encodedLength() && ArrayUtils.regionEqualsWithOrMask(input, 0, string.toString(), 0, mask.encodedLength(), mask.toString());
     }
 
     @Specialization(guards = "mask == null")
-    public boolean doString(String input, String string, @SuppressWarnings("unused") Object mask) {
-        return input.equals(string);
+    public boolean equalsTruffleObjNoMask(TruffleObject input, StringUTF16 string, @SuppressWarnings("unused") Object mask,
+                    @Cached("create()") InputLengthNode lengthNode,
+                    @Cached("create()") InputReadNode charAtNode) {
+        return equalsTruffleObj(input, string, null, lengthNode, charAtNode);
     }
 
     @Specialization(guards = "mask != null")
-    public boolean doStringMask(String input, String string, String mask) {
-        return input.length() == string.length() && ArrayUtils.regionEqualsWithOrMask(input, 0, string, 0, mask.length(), mask);
-    }
-
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask == null"})
-    public boolean doTruffleObjBytes(Object input, byte[] string, @SuppressWarnings("unused") Object mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
-        return equalsTruffleObj(input, string, null, lengthNode, charAtNode);
-    }
-
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask != null"})
-    public boolean doTruffleObjBytesMask(Object input, byte[] string, byte[] mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
+    public boolean equalsTruffleObjWithMask(TruffleObject input, StringUTF16 string, StringUTF16 mask,
+                    @Cached("create()") InputLengthNode lengthNode,
+                    @Cached("create()") InputReadNode charAtNode) {
         return equalsTruffleObj(input, string, mask, lengthNode, charAtNode);
     }
 
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask == null"})
-    public boolean doTruffleObjString(Object input, String string, @SuppressWarnings("unused") Object mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
-        return equalsTruffleObj(input, string, null, lengthNode, charAtNode);
-    }
-
-    @Specialization(guards = {"neitherByteArrayNorString(input)", "mask != null"})
-    public boolean doTruffleObjStringMask(Object input, String string, String mask,
-                    @Cached InputLengthNode lengthNode,
-                    @Cached InputReadNode charAtNode) {
-        return equalsTruffleObj(input, string, mask, lengthNode, charAtNode);
-    }
-
-    private static boolean equalsTruffleObj(Object input, String string, String mask, InputLengthNode lengthNode, InputReadNode charAtNode) {
-        if (lengthNode.execute(input) != string.length()) {
+    private static boolean equalsTruffleObj(TruffleObject input, StringUTF16 string, StringUTF16 mask, InputLengthNode lengthNode, InputReadNode charAtNode) {
+        if (lengthNode.execute(input) != string.encodedLength()) {
             return false;
         }
-        for (int i = 0; i < string.length(); i++) {
+        for (int i = 0; i < string.encodedLength(); i++) {
             if (InputReadNode.readWithMask(input, i, mask, i, charAtNode) != string.charAt(i)) {
                 return false;
             }
         }
         return true;
-    }
-
-    private static boolean equalsTruffleObj(Object input, byte[] string, byte[] mask, InputLengthNode lengthNode, InputReadNode charAtNode) {
-        if (lengthNode.execute(input) != string.length) {
-            return false;
-        }
-        for (int i = 0; i < string.length; i++) {
-            if (InputReadNode.readWithMask(input, i, mask, i, charAtNode) != Byte.toUnsignedInt(string[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    protected static boolean neitherByteArrayNorString(Object obj) {
-        return !(obj instanceof byte[]) && !(obj instanceof String);
     }
 }
