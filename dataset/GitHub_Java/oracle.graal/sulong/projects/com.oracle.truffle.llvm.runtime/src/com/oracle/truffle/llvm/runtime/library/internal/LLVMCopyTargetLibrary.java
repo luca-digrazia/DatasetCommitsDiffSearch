@@ -43,11 +43,11 @@ public abstract class LLVMCopyTargetLibrary extends Library {
         return FACTORY;
     }
 
-    public boolean canCopyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source, @SuppressWarnings("unused") long length) {
+    public boolean canCopyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source) {
         return false;
     }
 
-    public void copyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source, @SuppressWarnings("unused") long length) {
+    public void copyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source) {
         throw new InvalidSourceException();
     }
 
