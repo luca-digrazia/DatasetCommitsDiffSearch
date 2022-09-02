@@ -186,37 +186,63 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
      * and return types resolve correctly.
      */
     protected static ResolvedJavaType getDeclaringClass(HostedType hostedType, boolean wantOriginal) {
-        // unwrap to the underlying class eihter the original or target class
+        ResolvedJavaType javaType;
         if (wantOriginal) {
-            return getOriginal(hostedType);
+            /* Check for wholesale replacement of the original class. */
+            javaType = hostedType.getWrapped().getWrappedWithoutResolve();
+            ResolvedJavaType originalType = getOriginal(javaType);
+            return (originalType != null ? originalType : javaType);
         }
-        // we want any substituted target if there is one. directly unwrapping will
-        // do what we want.
         return hostedType.getWrapped().getWrapped();
     }
 
     protected static ResolvedJavaType getDeclaringClass(HostedMethod hostedMethod, boolean wantOriginal) {
         if (wantOriginal) {
-            return getOriginal(hostedMethod.getDeclaringClass());
+            /* Check for wholesale replacement of the original class. */
+            HostedType hostedType = hostedMethod.getDeclaringClass();
+            ResolvedJavaType javaType = hostedType.getWrapped().getWrappedWithoutResolve();
+            ResolvedJavaType originalType = getOriginal(javaType);
+            if (originalType != null) {
+                return originalType;
+            }
         }
-        // we want a substituted target if there is one. if there is a substitution at the end of
-        // the method chain fetch the annotated target class
         ResolvedJavaMethod javaMethod = hostedMethod.getWrapped().getWrapped();
+        /* If this is a SubstitutionMethod we might need the target not the original */
         if (javaMethod instanceof SubstitutionMethod) {
             SubstitutionMethod substitutionMethod = (SubstitutionMethod) javaMethod;
-            return substitutionMethod.getAnnotated().getDeclaringClass();
+            if (wantOriginal) {
+                return substitutionMethod.getOriginal().getDeclaringClass();
+            } else {
+                return substitutionMethod.getAnnotated().getDeclaringClass();
+            }
         }
         return javaMethod.getDeclaringClass();
     }
 
     protected static ResolvedJavaType getDeclaringClass(HostedField hostedField, boolean wantOriginal) {
-        /* for now fields are always reported as belonging to the original class */
-        return getOriginal(hostedField.getDeclaringClass());
+        if (wantOriginal) {
+            /* Check for wholesale replacement of the original class. */
+            HostedType hostedType = hostedField.getDeclaringClass();
+            ResolvedJavaType javaType = hostedType.getWrapped().getWrappedWithoutResolve();
+            ResolvedJavaType originalType = getOriginal(javaType);
+            if (originalType != null) {
+                return originalType;
+            }
+        }
+        ResolvedJavaField javaField = hostedField.wrapped.wrapped;
+        /* If this is a SubstitutionMethod we might need the target not the original */
+        if (javaField instanceof SubstitutionField) {
+            SubstitutionField substitutionField = (SubstitutionField) javaField;
+            if (wantOriginal) {
+                return substitutionField.getOriginal().getDeclaringClass();
+            } else {
+                return substitutionField.getAnnotated().getDeclaringClass();
+            }
+        }
+        return javaField.getDeclaringClass();
     }
 
-    private static ResolvedJavaType getOriginal(HostedType hostedType) {
-        /* partially unwrap then traverse through substitutions to the original */
-        ResolvedJavaType javaType = hostedType.getWrapped().getWrappedWithoutResolve();
+    private static ResolvedJavaType getOriginal(ResolvedJavaType javaType) {
         if (javaType instanceof SubstitutionType) {
             return ((SubstitutionType) javaType).getOriginal();
         } else if (javaType instanceof CustomSubstitutionType<?, ?>) {
@@ -226,7 +252,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
         } else if (javaType instanceof InjectedFieldsType) {
             return ((InjectedFieldsType) javaType).getOriginal();
         }
-        return javaType;
+        return null;
     }
 
     private static String toJavaName(JavaType javaType) {
