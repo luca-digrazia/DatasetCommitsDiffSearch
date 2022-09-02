@@ -25,8 +25,6 @@ package com.oracle.truffle.espresso.libespresso;
 import java.io.PrintStream;
 
 import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.nativeimage.ObjectHandle;
-import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
@@ -54,19 +52,14 @@ public class LibEspresso {
         if (result != JNIErrors.JNI_OK()) {
             return result;
         }
-        builder.option("java.ExposeNativeJavaVM", "true");
         Context context = builder.build();
         context.enter();
-        Value bindings = context.getBindings("java");
-        Value java = bindings.getMember("<JavaVM>");
+        Value java = context.getBindings("java").getMember("<JavaVM>");
         if (!java.isNativePointer()) {
             STDERR.println("<JavaVM> is not available in the java bindings");
             return JNIErrors.JNI_ERR();
         }
         JNIJavaVM espressoJavaVM = WordFactory.pointer(java.asNativePointer());
-        bindings.removeMember("<JavaVM>");
-        ObjectHandle contextHandle = ObjectHandles.getGlobal().create(context);
-        espressoJavaVM.getFunctions().setContext(contextHandle);
 
         GetEnvFunctionPointer getEnv = espressoJavaVM.getFunctions().getGetEnv();
         result = getEnv.invoke(espressoJavaVM, penv, JNIVersion.JNI_VERSION_1_2());
@@ -74,24 +67,6 @@ public class LibEspresso {
             return result;
         }
         javaVMPointer.write(espressoJavaVM);
-        return JNIErrors.JNI_OK();
-    }
-
-    @CEntryPoint(name = "Espresso_EnterContext")
-    static int enterContext(@SuppressWarnings("unused") IsolateThread thread, JNIJavaVM javaVM) {
-        ObjectHandle contextHandle = javaVM.getFunctions().getContext();
-        Context context = ObjectHandles.getGlobal().get(contextHandle);
-        if (context == null) {
-            return JNIErrors.JNI_ERR();
-        }
-        context.enter();
-        return JNIErrors.JNI_OK();
-    }
-
-    @CEntryPoint(name = "Espresso_ReleaseContext")
-    static int releaseContext(@SuppressWarnings("unused") IsolateThread thread, JNIJavaVM javaVM) {
-        ObjectHandle contextHandle = javaVM.getFunctions().getContext();
-        ObjectHandles.getGlobal().destroy(contextHandle);
         return JNIErrors.JNI_OK();
     }
 }
