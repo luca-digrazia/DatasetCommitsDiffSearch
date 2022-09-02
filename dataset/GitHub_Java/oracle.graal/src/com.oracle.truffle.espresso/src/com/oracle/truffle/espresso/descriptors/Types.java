@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
  * questions.
  */
 package com.oracle.truffle.espresso.descriptors;
+
+import static com.oracle.truffle.espresso.descriptors.ByteSequence.EMPTY;
 
 import java.util.Arrays;
 
@@ -48,7 +50,9 @@ public final class Types {
     public static Symbol<Type> fromDescriptor(Symbol<? extends Descriptor> descriptor) {
         Symbol<Type> type = (Symbol<Type>) descriptor;
         // TODO(peterssen): Turn check into assert, maybe?
-        EspressoError.guarantee(isValid(type), "descriptor is not a valid type");
+        if (!isValid(type)) {
+            return null;
+        }
         return type;
     }
 
@@ -81,6 +85,7 @@ public final class Types {
         return "L" + className.replace('.', '/') + ";";
     }
 
+    @TruffleBoundary
     public Symbol<Type> fromClassGetName(String className) {
         return symbols.symbolify(ByteSequence.create(checkType(internalFromClassName(className))));
     }
@@ -102,7 +107,11 @@ public final class Types {
     Symbol<Type> parse(Symbol<? extends Descriptor> descriptor, int beginIndex, boolean slashes) throws ClassFormatError {
         int endIndex = skipValidTypeDescriptor(descriptor, beginIndex, slashes);
         if (endIndex == beginIndex + 1) {
-            return forPrimitive(JavaKind.fromPrimitiveOrVoidTypeChar((char) descriptor.byteAt(beginIndex)));
+            try {
+                return forPrimitive(JavaKind.fromPrimitiveOrVoidTypeChar((char) descriptor.byteAt(beginIndex)));
+            } catch (IllegalArgumentException e) {
+                throw new ClassFormatError("invalid descriptor: " + descriptor);
+            }
         }
         return symbols.symbolify(descriptor.substring(beginIndex, endIndex));
     }
@@ -192,7 +201,7 @@ public final class Types {
         return index;
     }
 
-    public static boolean isPrimitive(Symbol<Type> type) {
+    public static boolean isPrimitive(ByteSequence type) {
         if (type.length() != 1) {
             return false;
         }
@@ -227,7 +236,7 @@ public final class Types {
     /**
      * Gets the number of array dimensions in this type descriptor.
      */
-    public static int getArrayDimensions(Symbol<Type> type) {
+    public static int getArrayDimensions(ByteSequence type) {
         int dims = 0;
         while (dims < type.length() && type.byteAt(dims) == '[') {
             dims++;
@@ -235,14 +244,26 @@ public final class Types {
         return dims;
     }
 
-    public static void verify(Symbol<Type> type) throws ClassFormatError {
-        if (!isValid(type)) {
-            throw new ClassFormatError("Invalid type descriptor " + type);
-        }
-    }
-
     private static boolean isValid(Symbol<Type> type) {
-        int endIndex = Types.skipValidTypeDescriptor(type, 0, true);
+        if (type.length() == 0) {
+            return false;
+        }
+        if (type.length() == 1) {
+            return isPrimitive(type);
+        }
+        char first = (char) type.byteAt(0);
+        int beginIndex;
+        if (first == '[') {
+            beginIndex = 0;
+            while (beginIndex < type.length() && type.byteAt(beginIndex) == '[') {
+                ++beginIndex;
+            }
+        } else if (first == 'L') {
+            beginIndex = 0;
+        } else {
+            return false;
+        }
+        int endIndex = skipValidTypeDescriptor(type, beginIndex, true);
         return endIndex == type.length();
     }
 
@@ -273,8 +294,7 @@ public final class Types {
 
     static ByteSequence checkType(ByteSequence sequence) {
         // FIXME(peterssen): Do check.
-        return sequence;
-        // throw EspressoError.unimplemented();
+        return Validation.validTypeDescriptor(sequence, true) ? sequence : null;
     }
 
     public static String checkType(String type) {
@@ -299,12 +319,11 @@ public final class Types {
     @SuppressWarnings("unchecked")
     public static Symbol<Type> fromSymbol(Symbol<?> symbol) {
         Symbol<Type> type = (Symbol<Type>) symbol;
-        // TODO(peterssen): Turn check into assert, maybe?
-        EspressoError.guarantee(isValid(type), "descriptor is not a valid type");
+        assert isValid(type) : "Type validity should have been checked beforehand";
         return type;
     }
 
-    public final Symbol<Type> fromName(Symbol<Name> name) {
+    public Symbol<Type> fromName(Symbol<Name> name) {
         if (name.byteAt(0) == '[') {
             // TODO(peterssen): Verify . or / separators.
             return fromSymbol(name);
@@ -313,10 +332,28 @@ public final class Types {
         Symbol.copyBytes(name, 0, bytes, 1, name.length());
         bytes[0] = 'L';
         bytes[bytes.length - 1] = ';';
-        return symbols.symbolify(checkType(ByteSequence.wrap(bytes)));
+        ByteSequence wrap = ByteSequence.wrap(bytes);
+        assert checkType(wrap) != null : "Type validity should have been checked beforehand";
+        return symbols.symbolify(wrap);
     }
 
-    public final Symbol<Type> lookup(String type) {
+    public Symbol<Type> lookup(String type) {
         return symbols.lookup(checkType(type));
+    }
+
+    public static ByteSequence getRuntimePackage(ByteSequence symbol) {
+        if (symbol.byteAt(0) == '[') {
+            int arrayDimensions = getArrayDimensions(symbol);
+            return getRuntimePackage(symbol.subSequence(arrayDimensions, symbol.length() - arrayDimensions));
+        }
+        if (symbol.byteAt(0) != 'L') {
+            assert isPrimitive(symbol);
+            return EMPTY;
+        }
+        int lastSlash = symbol.lastIndexOf((byte) '/');
+        if (lastSlash < 0) {
+            return EMPTY;
+        }
+        return symbol.subSequence(1, lastSlash - 1);
     }
 }
