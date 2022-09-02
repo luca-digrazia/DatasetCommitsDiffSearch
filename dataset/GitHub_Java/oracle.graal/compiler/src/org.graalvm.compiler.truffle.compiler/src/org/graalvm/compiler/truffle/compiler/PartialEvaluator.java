@@ -213,6 +213,27 @@ public abstract class PartialEvaluator {
         }
     }
 
+    /**
+     * @return OptimizedCallTarget#callDirectOrInlined
+     */
+    public ResolvedJavaMethod getCallDirectMethod() {
+        return callDirectMethod;
+    }
+
+    /**
+     * @return OptimizedCallTarget#callIndirect
+     */
+    public ResolvedJavaMethod getCallIndirectMethod() {
+        return callIndirectMethod;
+    }
+
+    /**
+     * @return OptimizedCallTarget#callBoundary
+     */
+    public ResolvedJavaMethod getCallBoundary() {
+        return callBoundary;
+    }
+
     public Providers getProviders() {
         return providers;
     }
@@ -307,6 +328,12 @@ public abstract class PartialEvaluator {
             }
             return request.graph;
         }
+    }
+
+    public StructuredGraph evaluate(Request request, InlineInvokePlugin plugin, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining) {
+        // This is only called by agnostic inlining. Legacy inlining does not use this method.
+        doGraphPE(request, plugin, graphCacheForInlining);
+        return request.graph;
     }
 
     /**
