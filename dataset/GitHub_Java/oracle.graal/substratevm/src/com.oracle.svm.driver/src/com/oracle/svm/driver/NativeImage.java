@@ -34,7 +34,6 @@ import java.lang.management.OperatingSystemMXBean;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
-import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -540,7 +539,6 @@ public class NativeImage {
         addImageBuilderJavaArgs("-Dgraalvm.version=" + graalvmVersion);
         addImageBuilderJavaArgs("-Dorg.graalvm.version=" + graalvmVersion);
         addImageBuilderJavaArgs("-Dcom.oracle.graalvm.isaot=true");
-        addImageBuilderJavaArgs("-Dtruffle.TruffleRuntime=com.oracle.truffle.api.impl.DefaultTruffleRuntime");
 
         config.getBuilderClasspath().forEach(this::addImageBuilderClasspath);
         config.getImageProvidedClasspath().forEach(this::addImageProvidedClasspath);
@@ -703,7 +701,7 @@ public class NativeImage {
                     }
                 }
             }
-        } catch (IOException | FileSystemNotFoundException e) {
+        } catch (IOException e) {
             throw showError("Invalid classpath entry " + ImageClassLoader.classpathToString(classpathEntry), e);
         }
     }
