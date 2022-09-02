@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,38 +24,41 @@
  */
 package org.graalvm.compiler.loop;
 
-import java.util.Collections;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Iterator;
 
-import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.compiler.core.common.cfg.AbstractControlFlowGraph;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Graph.DuplicationReplacement;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeBitMap;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
+import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.GuardNode;
-import org.graalvm.compiler.nodes.GuardPhiNode;
 import org.graalvm.compiler.nodes.GuardProxyNode;
 import org.graalvm.compiler.nodes.Invoke;
+import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.ValuePhiNode;
-import org.graalvm.compiler.nodes.ValueProxyNode;
 import org.graalvm.compiler.nodes.VirtualState;
 import org.graalvm.compiler.nodes.cfg.Block;
+import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.spi.NodeWithState;
 import org.graalvm.compiler.nodes.virtual.CommitAllocationNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.util.EconomicMap;
+
+import jdk.vm.ci.meta.TriState;
 
 public abstract class LoopFragment {
 
@@ -74,7 +79,10 @@ public abstract class LoopFragment {
         this.nodesReady = false;
     }
 
-    public LoopEx loop() {
+    /**
+     * Return the original LoopEx for this fragment. For duplicated fragments this returns null.
+     */
+    protected LoopEx loop() {
         return loop;
     }
 
@@ -133,7 +141,18 @@ public abstract class LoopFragment {
 
     protected abstract void beforeDuplication();
 
-    protected abstract void finishDuplication();
+    protected void finishDuplication() {
+        LoopEx originalLoopEx = original().loop();
+        ControlFlowGraph cfg = originalLoopEx.loopsData().getCFG();
+        for (LoopExitNode exit : originalLoopEx.loopBegin().loopExits().snapshot()) {
+            if (!originalLoopEx.loop().isLoopExit(cfg.blockFor(exit))) {
+                // this LoopExitNode is too low, we need to remove it otherwise it will be below
+                // merged exits
+                exit.removeExit();
+            }
+        }
+
+    }
 
     protected void patchNodes(final DuplicationReplacement dataFix) {
         if (isDuplicate() && !nodesReady) {
@@ -168,23 +187,15 @@ public abstract class LoopFragment {
             NodeIterable<Node> nodesIterable = original().nodes();
             duplicationMap = graph().addDuplicates(nodesIterable, graph(), nodesIterable.count(), dr);
             finishDuplication();
+            nodes = new NodeBitMap(graph());
+            nodes.markAll(duplicationMap.getValues());
             nodesReady = true;
         } else {
             // TODO (gd) apply fix ?
         }
     }
 
-    protected static NodeBitMap computeNodes(Graph graph, Iterable<AbstractBeginNode> blocks) {
-        return computeNodes(graph, blocks, Collections.emptyList());
-    }
-
-    protected static NodeBitMap computeNodes(Graph graph, Iterable<AbstractBeginNode> blocks, Iterable<AbstractBeginNode> earlyExits) {
-        final NodeBitMap nodes = graph.createNodeBitMap();
-        computeNodes(nodes, graph, blocks, earlyExits);
-        return nodes;
-    }
-
-    protected static void computeNodes(NodeBitMap nodes, Graph graph, Iterable<AbstractBeginNode> blocks, Iterable<AbstractBeginNode> earlyExits) {
+    protected static void computeNodes(NodeBitMap nodes, Graph graph, LoopEx loop, Iterable<AbstractBeginNode> blocks, Iterable<AbstractBeginNode> earlyExits) {
         for (AbstractBeginNode b : blocks) {
             if (b.isDeleted()) {
                 continue;
@@ -197,6 +208,12 @@ public abstract class LoopFragment {
                 if (n instanceof NodeWithState) {
                     NodeWithState withState = (NodeWithState) n;
                     withState.states().forEach(state -> state.applyToVirtual(node -> nodes.mark(node)));
+                }
+                if (n instanceof AbstractMergeNode) {
+                    // if a merge is in the loop, all of its phis are also in the loop
+                    for (PhiNode phi : ((AbstractMergeNode) n).phis()) {
+                        nodes.mark(phi);
+                    }
                 }
                 nodes.mark(n);
             }
@@ -221,6 +238,7 @@ public abstract class LoopFragment {
         }
 
         final NodeBitMap nonLoopNodes = graph.createNodeBitMap();
+        Deque<WorkListEntry> worklist = new ArrayDeque<>();
         for (AbstractBeginNode b : blocks) {
             if (b.isDeleted()) {
                 continue;
@@ -229,56 +247,133 @@ public abstract class LoopFragment {
             for (Node n : b.getBlockNodes()) {
                 if (n instanceof CommitAllocationNode) {
                     for (VirtualObjectNode obj : ((CommitAllocationNode) n).getVirtualObjects()) {
-                        markFloating(obj, nodes, nonLoopNodes);
+                        markFloating(worklist, loop, obj, nodes, nonLoopNodes);
                     }
                 }
                 if (n instanceof MonitorEnterNode) {
-                    markFloating(((MonitorEnterNode) n).getMonitorId(), nodes, nonLoopNodes);
+                    markFloating(worklist, loop, ((MonitorEnterNode) n).getMonitorId(), nodes, nonLoopNodes);
+                }
+                if (n instanceof AbstractMergeNode) {
+                    /*
+                     * Since we already marked all phi nodes as being in the loop to break cycles,
+                     * we also have to iterate over their usages here.
+                     */
+                    for (PhiNode phi : ((AbstractMergeNode) n).phis()) {
+                        for (Node usage : phi.usages()) {
+                            markFloating(worklist, loop, usage, nodes, nonLoopNodes);
+                        }
+                    }
                 }
                 for (Node usage : n.usages()) {
-                    markFloating(usage, nodes, nonLoopNodes);
+                    markFloating(worklist, loop, usage, nodes, nonLoopNodes);
                 }
             }
         }
     }
 
-    private static boolean markFloating(Node n, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
-        if (loopNodes.isMarked(n)) {
-            return true;
+    static class WorkListEntry {
+        final Iterator<Node> usages;
+        final Node n;
+        boolean isLoopNode;
+
+        WorkListEntry(Node n, NodeBitMap loopNodes) {
+            this.n = n;
+            this.usages = n.usages().iterator();
+            this.isLoopNode = loopNodes.isMarked(n);
         }
-        if (nonLoopNodes.isMarked(n)) {
-            return false;
-        }
-        if (n instanceof FixedNode) {
-            return false;
-        }
-        boolean mark = false;
-        if (n instanceof PhiNode) {
-            PhiNode phi = (PhiNode) n;
-            mark = loopNodes.isMarked(phi.merge());
-            if (mark) {
-                loopNodes.mark(n);
-            } else {
-                nonLoopNodes.mark(n);
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof WorkListEntry)) {
                 return false;
             }
+            WorkListEntry other = (WorkListEntry) obj;
+            return this.n == other.n;
         }
-        for (Node usage : n.usages()) {
-            if (markFloating(usage, loopNodes, nonLoopNodes)) {
-                mark = true;
+
+        @Override
+        public int hashCode() {
+            return n.hashCode();
+        }
+    }
+
+    static TriState isLoopNode(Node n, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
+        if (loopNodes.isMarked(n)) {
+            return TriState.TRUE;
+        }
+        if (nonLoopNodes.isMarked(n)) {
+            return TriState.FALSE;
+        }
+        if (n instanceof FixedNode || n instanceof PhiNode) {
+            // phi nodes are treated the same as fixed nodes in this algorithm to break cycles
+            return TriState.FALSE;
+        }
+        return TriState.UNKNOWN;
+    }
+
+    private static void pushWorkList(Deque<WorkListEntry> workList, Node node, NodeBitMap loopNodes) {
+        WorkListEntry entry = new WorkListEntry(node, loopNodes);
+        assert !workList.contains(entry) : "node " + node + " added to worklist twice";
+        workList.push(entry);
+    }
+
+    private static void markFloating(Deque<WorkListEntry> workList, LoopEx loop, Node start, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
+        if (isLoopNode(start, loopNodes, nonLoopNodes).isKnown()) {
+            return;
+        }
+
+        LoopBeginNode loopBeginNode = loop.loopBegin();
+        ControlFlowGraph cfg = loop.loopsData().getCFG();
+
+        pushWorkList(workList, start, loopNodes);
+        while (!workList.isEmpty()) {
+            WorkListEntry currentEntry = workList.peek();
+            if (currentEntry.usages.hasNext()) {
+                Node current = currentEntry.usages.next();
+                TriState result = isLoopNode(current, loopNodes, nonLoopNodes);
+                if (result.isKnown()) {
+                    if (result.toBoolean()) {
+                        currentEntry.isLoopNode = true;
+                    }
+                } else {
+                    pushWorkList(workList, current, loopNodes);
+                }
+            } else {
+                workList.pop();
+                boolean isLoopNode = currentEntry.isLoopNode;
+                Node current = currentEntry.n;
+                if (!isLoopNode && current instanceof GuardNode && !current.hasUsages()) {
+                    GuardNode guard = (GuardNode) current;
+                    if (isLoopNode(guard.getCondition(), loopNodes, nonLoopNodes) != TriState.FALSE) {
+                        ValueNode anchor = guard.getAnchor().asNode();
+                        TriState isAnchorInLoop = isLoopNode(anchor, loopNodes, nonLoopNodes);
+                        if (isAnchorInLoop != TriState.FALSE) {
+                            if (!(anchor instanceof LoopExitNode && ((LoopExitNode) anchor).loopBegin() == loopBeginNode)) {
+                                /*
+                                 * (gd) this is wrong in general, it's completely avoidable while we
+                                 * are doing loop transforms using ValueProxies. If it happens after
+                                 * it could still cause problem.
+                                 */
+                                assert !((GuardNode) current).graph().hasValueProxies();
+                                isLoopNode = true;
+                            }
+                        } else if (AbstractControlFlowGraph.strictlyDominates(cfg.blockFor(anchor), cfg.blockFor(loopBeginNode))) {
+                            // The anchor is above the loop. The no-usage guard can potentially be
+                            // scheduled inside the loop.
+                            isLoopNode = true;
+                        }
+                    }
+                }
+                if (isLoopNode) {
+                    loopNodes.mark(current);
+                    for (WorkListEntry e : workList) {
+                        e.isLoopNode = true;
+                    }
+                } else {
+                    nonLoopNodes.mark(current);
+                }
             }
         }
-        if (!mark && n instanceof GuardNode) {
-            // (gd) this is only OK if we are not going to make loop transforms based on this
-            assert !((GuardNode) n).graph().hasValueProxies();
-            mark = true;
-        }
-        if (mark) {
-            loopNodes.mark(n);
-            return true;
-        }
-        nonLoopNodes.mark(n);
-        return false;
     }
 
     public static NodeIterable<AbstractBeginNode> toHirBlocks(final Iterable<Block> blocks) {
@@ -309,42 +404,6 @@ public abstract class LoopFragment {
         };
     }
 
-    public static NodeIterable<AbstractBeginNode> toHirExits(final Iterable<Block> blocks) {
-        return new NodeIterable<AbstractBeginNode>() {
-
-            @Override
-            public Iterator<AbstractBeginNode> iterator() {
-                final Iterator<Block> it = blocks.iterator();
-                return new Iterator<AbstractBeginNode>() {
-
-                    @Override
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    /**
-                     * Return the true LoopExitNode for this loop or the BeginNode for the block.
-                     */
-                    @Override
-                    public AbstractBeginNode next() {
-                        Block next = it.next();
-                        LoopExitNode exit = next.getLoopExit();
-                        if (exit != null) {
-                            return exit;
-                        }
-                        return next.getBeginNode();
-                    }
-
-                    @Override
-                    public boolean hasNext() {
-                        return it.hasNext();
-                    }
-                };
-            }
-
-        };
-    }
-
     /**
      * Merges the early exits (i.e. loop exits) that were duplicated as part of this fragment, with
      * the original fragment's exits.
@@ -352,13 +411,12 @@ public abstract class LoopFragment {
     protected void mergeEarlyExits() {
         assert isDuplicate();
         StructuredGraph graph = graph();
-        for (AbstractBeginNode earlyExit : LoopFragment.toHirBlocks(original().loop().loop().getExits())) {
-            LoopExitNode loopEarlyExit = (LoopExitNode) earlyExit;
-            FixedNode next = loopEarlyExit.next();
-            if (loopEarlyExit.isDeleted() || !this.original().contains(loopEarlyExit)) {
+        for (AbstractBeginNode earlyExit : LoopFragment.toHirBlocks(original().loop().loop().getLoopExits())) {
+            FixedNode next = earlyExit.next();
+            if (earlyExit.isDeleted() || !this.original().contains(earlyExit)) {
                 continue;
             }
-            AbstractBeginNode newEarlyExit = getDuplicatedNode(loopEarlyExit);
+            AbstractBeginNode newEarlyExit = getDuplicatedNode(earlyExit);
             if (newEarlyExit == null) {
                 continue;
             }
@@ -367,72 +425,72 @@ public abstract class LoopFragment {
             EndNode newEnd = graph.add(new EndNode());
             merge.addForwardEnd(originalEnd);
             merge.addForwardEnd(newEnd);
-            loopEarlyExit.setNext(originalEnd);
+            earlyExit.setNext(originalEnd);
             newEarlyExit.setNext(newEnd);
             merge.setNext(next);
 
-            FrameState exitState = loopEarlyExit.stateAfter();
-            if (exitState != null) {
-                FrameState originalExitState = exitState;
-                exitState = exitState.duplicateWithVirtualState();
-                loopEarlyExit.setStateAfter(exitState);
-                merge.setStateAfter(originalExitState);
-                /*
-                 * Using the old exit's state as the merge's state is necessary because some of the
-                 * VirtualState nodes contained in the old exit's state may be shared by other
-                 * dominated VirtualStates. Those dominated virtual states need to see the
-                 * proxy->phi update that are applied below.
-                 * 
-                 * We now update the original fragment's nodes accordingly:
-                 */
-                originalExitState.applyToVirtual(node -> original.nodes.clearAndGrow(node));
-                exitState.applyToVirtual(node -> original.nodes.markAndGrow(node));
-            }
-            FrameState finalExitState = exitState;
-
-            for (Node anchored : loopEarlyExit.anchored().snapshot()) {
-                anchored.replaceFirstInput(loopEarlyExit, merge);
-            }
-
-            boolean newEarlyExitIsLoopExit = newEarlyExit instanceof LoopExitNode;
-            for (ProxyNode vpn : loopEarlyExit.proxies().snapshot()) {
-                if (vpn.hasNoUsages()) {
-                    continue;
+            FrameState exitState = null;
+            if (earlyExit instanceof LoopExitNode) {
+                LoopExitNode earlyLoopExit = (LoopExitNode) earlyExit;
+                exitState = earlyLoopExit.stateAfter();
+                if (exitState != null) {
+                    FrameState originalExitState = exitState;
+                    exitState = exitState.duplicateWithVirtualState();
+                    earlyLoopExit.setStateAfter(exitState);
+                    merge.setStateAfter(originalExitState);
+                    /*
+                     * Using the old exit's state as the merge's state is necessary because some of
+                     * the VirtualState nodes contained in the old exit's state may be shared by
+                     * other dominated VirtualStates. Those dominated virtual states need to see the
+                     * proxy->phi update that are applied below.
+                     *
+                     * We now update the original fragment's nodes accordingly:
+                     */
+                    originalExitState.applyToVirtual(node -> original.nodes.clearAndGrow(node));
+                    exitState.applyToVirtual(node -> original.nodes.markAndGrow(node));
                 }
-                if (vpn.value() == null) {
-                    assert vpn instanceof GuardProxyNode;
-                    vpn.replaceAtUsages(null);
-                    continue;
-                }
-                final ValueNode replaceWith;
-                ValueNode newVpn = prim(newEarlyExitIsLoopExit ? vpn : vpn.value());
-                if (newVpn != null) {
-                    PhiNode phi;
-                    if (vpn instanceof ValueProxyNode) {
-                        phi = graph.addWithoutUnique(new ValuePhiNode(vpn.stamp(), merge));
-                    } else if (vpn instanceof GuardProxyNode) {
-                        phi = graph.addWithoutUnique(new GuardPhiNode(merge));
+            }
+
+            for (Node anchored : earlyExit.anchored().snapshot()) {
+                anchored.replaceFirstInput(earlyExit, merge);
+            }
+
+            if (earlyExit instanceof LoopExitNode) {
+                LoopExitNode earlyLoopExit = (LoopExitNode) earlyExit;
+                FrameState finalExitState = exitState;
+                boolean newEarlyExitIsLoopExit = newEarlyExit instanceof LoopExitNode;
+                for (ProxyNode vpn : earlyLoopExit.proxies().snapshot()) {
+                    if (vpn.hasNoUsages()) {
+                        continue;
+                    }
+                    if (vpn.value() == null) {
+                        assert vpn instanceof GuardProxyNode;
+                        vpn.replaceAtUsages(null);
+                        continue;
+                    }
+                    final ValueNode replaceWith;
+                    ValueNode newVpn = prim(newEarlyExitIsLoopExit ? vpn : vpn.value());
+                    if (newVpn != null) {
+                        PhiNode phi = vpn.createPhi(merge);
+                        phi.addInput(vpn);
+                        phi.addInput(newVpn);
+                        replaceWith = phi;
                     } else {
-                        throw GraalError.shouldNotReachHere();
+                        replaceWith = vpn.value();
                     }
-                    phi.addInput(vpn);
-                    phi.addInput(newVpn);
-                    replaceWith = phi;
-                } else {
-                    replaceWith = vpn.value();
-                }
-                vpn.replaceAtMatchingUsages(replaceWith, usage -> {
-                    if (merge.isPhiAtMerge(usage)) {
-                        return false;
-                    }
-                    if (usage instanceof VirtualState) {
-                        VirtualState stateUsage = (VirtualState) usage;
-                        if (finalExitState != null && finalExitState.isPartOfThisState(stateUsage)) {
+                    vpn.replaceAtMatchingUsages(replaceWith, usage -> {
+                        if (merge.isPhiAtMerge(usage)) {
                             return false;
                         }
-                    }
-                    return true;
-                });
+                        if (usage instanceof VirtualState) {
+                            VirtualState stateUsage = (VirtualState) usage;
+                            if (finalExitState != null && finalExitState.isPartOfThisState(stateUsage)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+                }
             }
         }
     }
