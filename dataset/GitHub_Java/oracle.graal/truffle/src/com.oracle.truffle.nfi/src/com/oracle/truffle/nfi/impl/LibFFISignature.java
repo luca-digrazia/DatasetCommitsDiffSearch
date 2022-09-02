@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,106 +40,46 @@
  */
 package com.oracle.truffle.nfi.impl;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.ImportStatic;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.nfi.impl.FunctionExecuteNode.SignatureExecuteNode;
-import static com.oracle.truffle.nfi.impl.LibFFISignature.SignatureBuilder.NOT_VARARGS;
-import com.oracle.truffle.nfi.impl.LibFFIType.ArrayType;
-import com.oracle.truffle.nfi.impl.LibFFIType.CachedTypeInfo;
 import com.oracle.truffle.nfi.impl.LibFFIType.Direction;
+import com.oracle.truffle.nfi.types.NativeSignature;
 import com.oracle.truffle.nfi.impl.NativeAllocation.FreeDestructor;
-import com.oracle.truffle.nfi.spi.NFIBackendSignatureBuilderLibrary;
-import com.oracle.truffle.nfi.spi.NFIBackendSignatureLibrary;
-import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
-import com.oracle.truffle.nfi.util.ProfiledArrayBuilder;
-import com.oracle.truffle.nfi.util.ProfiledArrayBuilder.ArrayBuilderFactory;
+import com.oracle.truffle.nfi.types.NativeArrayTypeMirror;
+import com.oracle.truffle.nfi.types.NativeTypeMirror;
+import java.util.List;
 
-/**
- * Runtime object representing native signatures. Instances of this class can not be cached in
- * shared AST nodes, since they contain references to native datastructures of libffi.
- *
- * All information that is context and process independent is collected in a separate object,
- * {@link CachedSignatureInfo}. Two {@link LibFFISignature} objects that have the same
- * {@link CachedSignatureInfo} are guaranteed to behave the same semantically.
- */
-@ExportLibrary(NFIBackendSignatureLibrary.class)
 final class LibFFISignature {
 
-    @TruffleBoundary
-    public static LibFFISignature create(NFIContext context, CachedSignatureInfo info, LibFFIType retType, int argCount, int fixedArgCount, LibFFIType[] argTypes) {
-        LibFFIType realRetType = retType;
-        if (retType == null) {
-            realRetType = context.lookupSimpleType(NativeSimpleType.VOID);
-        }
-
-        long cif;
-        if (fixedArgCount == NOT_VARARGS) {
-            cif = context.prepareSignature(realRetType, argCount, argTypes);
-        } else {
-            cif = context.prepareSignatureVarargs(realRetType, argCount, fixedArgCount, argTypes);
-        }
-        return create(cif, info);
-    }
-
-    private static LibFFISignature create(long cif, CachedSignatureInfo info) {
-        LibFFISignature ret = new LibFFISignature(cif, info);
-        NativeAllocation.getGlobalQueue().registerNativeAllocation(ret, new FreeDestructor(cif));
+    public static LibFFISignature create(NFIContext context, NativeSignature signature) {
+        LibFFISignature ret = new LibFFISignature(context, signature);
+        NativeAllocation.getGlobalQueue().registerNativeAllocation(ret, new FreeDestructor(ret.cif));
         return ret;
     }
 
-    @ExportMessage(limit = "3")
-    Object call(Object functionPointer, Object[] args,
-                    @CachedLibrary("functionPointer") InteropLibrary interop,
-                    @Cached BranchProfile toNative,
-                    @Cached BranchProfile error,
-                    @Cached FunctionExecuteNode functionExecute) throws ArityException, UnsupportedTypeException {
-        if (!interop.isPointer(functionPointer)) {
-            toNative.enter();
-            interop.toNative(functionPointer);
-        }
-        long pointer;
-        try {
-            pointer = interop.asPointer(functionPointer);
-        } catch (UnsupportedMessageException e) {
-            error.enter();
-            throw UnsupportedTypeException.create(new Object[]{functionPointer}, "functionPointer", e);
-        }
-        return functionExecute.execute(pointer, this, args);
-    }
+    private final LibFFIType retType;
+    @CompilationFinal(dimensions = 1) private final LibFFIType[] argTypes;
 
-    @ExportMessage
-    @TruffleBoundary
-    static Object createClosure(LibFFISignature signature, Object executable,
-                    @CachedContext(NFILanguageImpl.class) ContextReference<NFIContext> ctxRef) {
-        return LibFFIClosure.create(signature, executable, ctxRef);
-    }
+    private final int primitiveSize;
+    private final int objectCount;
 
-    @TruffleBoundary
-    public static CachedSignatureInfo prepareSignatureInfo(NFILanguageImpl language, CachedTypeInfo retTypeInfo, ArgsState state) {
-        if (retTypeInfo instanceof ArrayType) {
+    private final int realArgCount;
+
+    private final long cif;
+
+    private final Direction allowedCallDirection;
+
+    private LibFFISignature(NFIContext context, NativeSignature signature) {
+        if (signature.getRetType() instanceof NativeArrayTypeMirror) {
             throw new IllegalArgumentException("array type as return value is not supported");
         }
 
-        boolean allowJavaToNativeCall = state.allowJavaToNativeCall;
-        boolean allowNativeToJavaCall = state.allowNativeToJavaCall;
+        boolean allowJavaToNativeCall = true;
+        boolean allowNativeToJavaCall = true;
 
-        switch (retTypeInfo.allowedDataFlowDirection) {
+        this.retType = context.lookupRetType(signature.getRetType());
+
+        switch (retType.allowedDataFlowDirection) {
             /*
              * If the call goes from Java to native, the return value flows from native-to-Java, and
              * vice-versa.
@@ -152,236 +92,103 @@ final class LibFFISignature {
                 break;
         }
 
-        Direction allowedCallDirection;
+        List<NativeTypeMirror> args = signature.getArgTypes();
+        this.argTypes = new LibFFIType[args.size()];
+        for (int i = 0; i < argTypes.length; i++) {
+            LibFFIType argType = context.lookupArgType(args.get(i));
+            if (argType instanceof LibFFIType.VoidType) {
+                throw new IllegalArgumentException("void is not a valid argument type");
+            }
+
+            switch (argType.allowedDataFlowDirection) {
+                case JAVA_TO_NATIVE_ONLY:
+                    allowNativeToJavaCall = false;
+                    break;
+                case NATIVE_TO_JAVA_ONLY:
+                    allowJavaToNativeCall = false;
+                    break;
+            }
+            this.argTypes[i] = argType;
+        }
+
         if (allowNativeToJavaCall) {
             if (allowJavaToNativeCall) {
-                allowedCallDirection = Direction.BOTH;
+                this.allowedCallDirection = Direction.BOTH;
             } else {
-                allowedCallDirection = Direction.NATIVE_TO_JAVA_ONLY;
+                this.allowedCallDirection = Direction.NATIVE_TO_JAVA_ONLY;
             }
         } else {
             if (allowJavaToNativeCall) {
-                allowedCallDirection = Direction.JAVA_TO_NATIVE_ONLY;
+                this.allowedCallDirection = Direction.JAVA_TO_NATIVE_ONLY;
             } else {
                 throw new IllegalArgumentException("invalid signature");
             }
         }
 
-        CachedTypeInfo[] argTypesInfo = new CachedTypeInfo[state.argCount];
-        ArgsState curState = state;
-        for (int i = state.argCount - 1; i >= 0; i--) {
-            argTypesInfo[i] = curState.lastArg;
-            curState = curState.prev;
+        if (signature.isVarargs()) {
+            this.cif = context.prepareSignatureVarargs(this.retType, signature.getFixedArgCount(), this.argTypes);
+        } else {
+            this.cif = context.prepareSignature(this.retType, this.argTypes);
         }
 
-        return new CachedSignatureInfo(language, retTypeInfo, argTypesInfo, state.primitiveSize, state.objectCount, allowedCallDirection);
+        int primSize = 0;
+        int objCount = 0;
+        int argCount = 0;
+
+        for (LibFFIType type : this.argTypes) {
+            int align = type.alignment;
+            if (primSize % align != 0) {
+                primSize += align - (primSize % align);
+            }
+            primSize += type.size;
+            objCount += type.objectCount;
+            if (!type.injectedArgument) {
+                argCount++;
+            }
+        }
+
+        this.primitiveSize = primSize;
+        this.objectCount = objCount;
+        this.realArgCount = argCount;
     }
 
-    private final long cif; // native pointer
-    final CachedSignatureInfo signatureInfo;
-
-    private LibFFISignature(long cif, CachedSignatureInfo signatureInfo) {
-        this.cif = cif;
-        this.signatureInfo = signatureInfo;
+    public NativeArgumentBuffer.Array prepareBuffer() {
+        return new NativeArgumentBuffer.Array(primitiveSize, objectCount);
     }
 
-    /**
-     * This class contains all information about native signatures that can be shared across
-     * contexts. Instances of this class can safely be cached in shared AST. This contains a shared
-     * {@link CallTarget} that can be used to call functions of that signature.
-     */
-    static final class CachedSignatureInfo {
+    public LibFFIType[] getArgTypes() {
+        return argTypes;
+    }
 
-        final CachedTypeInfo retType;
-        @CompilationFinal(dimensions = 1) final CachedTypeInfo[] argTypes;
+    public LibFFIType getRetType() {
+        return retType;
+    }
 
-        final int primitiveSize;
-        final int objectCount;
+    public Direction getAllowedCallDirection() {
+        return allowedCallDirection;
+    }
 
-        final Direction allowedCallDirection;
+    public int getRealArgCount() {
+        return realArgCount;
+    }
 
-        final CallTarget callTarget;
-
-        public CachedSignatureInfo(NFILanguageImpl language, CachedTypeInfo retType, CachedTypeInfo[] argTypes, int primitiveSize, int objectCount, Direction allowedCallDirection) {
-            this.retType = retType;
-            this.argTypes = argTypes;
-            this.primitiveSize = primitiveSize;
-            this.objectCount = objectCount;
-            this.allowedCallDirection = allowedCallDirection;
-
-            this.callTarget = Truffle.getRuntime().createCallTarget(new SignatureExecuteNode(language, this));
-        }
-
-        public NativeArgumentBuffer.Array prepareBuffer() {
-            return new NativeArgumentBuffer.Array(primitiveSize, objectCount);
-        }
-
-        public CachedTypeInfo[] getArgTypes() {
-            return argTypes;
-        }
-
-        public CachedTypeInfo getRetType() {
-            return retType;
-        }
-
-        public Direction getAllowedCallDirection() {
-            return allowedCallDirection;
-        }
-
-        public Object execute(LibFFISignature signature, NFIContext ctx, long functionPointer, NativeArgumentBuffer.Array argBuffer) {
-            assert signature.signatureInfo == this;
-            CompilerAsserts.partialEvaluationConstant(retType);
-            if (retType instanceof LibFFIType.ObjectType) {
-                Object ret = ctx.executeObject(signature.cif, functionPointer, argBuffer.prim, argBuffer.getPatchCount(), argBuffer.patches, argBuffer.objects);
-                if (ret == null) {
-                    return NativePointer.create(ctx.language, 0);
-                } else {
-                    return ret;
-                }
-            } else if (retType instanceof LibFFIType.SimpleType) {
-                LibFFIType.SimpleType simpleType = (LibFFIType.SimpleType) retType;
-                long ret = ctx.executePrimitive(signature.cif, functionPointer, argBuffer.prim, argBuffer.getPatchCount(), argBuffer.patches, argBuffer.objects);
-                return simpleType.fromPrimitive(ret);
+    public Object execute(NFIContext ctx, long functionPointer, NativeArgumentBuffer.Array argBuffer) {
+        CompilerAsserts.partialEvaluationConstant(retType);
+        if (retType instanceof LibFFIType.ObjectType) {
+            Object ret = ctx.executeObject(cif, functionPointer, argBuffer.prim, argBuffer.getPatchCount(), argBuffer.patches, argBuffer.objects);
+            if (ret == null) {
+                return new NativePointer(0);
             } else {
-                NativeArgumentBuffer.Array retBuffer = new NativeArgumentBuffer.Array(retType.size, retType.objectCount);
-                ctx.executeNative(signature.cif, functionPointer, argBuffer.prim, argBuffer.getPatchCount(), argBuffer.patches, argBuffer.objects, retBuffer.prim);
-                return retType.deserializeRet(retBuffer, ctx.language);
+                return ret;
             }
-        }
-    }
-
-    static final class ArgsState {
-
-        static final ArgsState NO_ARGS = new ArgsState(0, 0, 0, true, true, null, null);
-
-        final int argCount;
-
-        final int primitiveSize;
-        final int objectCount;
-
-        final boolean allowJavaToNativeCall;
-        final boolean allowNativeToJavaCall;
-
-        final CachedTypeInfo lastArg;
-        final ArgsState prev;
-
-        public ArgsState(int argCount, int primitiveSize, int objectCount, boolean allowJavaToNativeCall, boolean allowNativeToJavaCall, CachedTypeInfo lastArg, ArgsState prev) {
-            this.argCount = argCount;
-            this.primitiveSize = primitiveSize;
-            this.objectCount = objectCount;
-            this.allowJavaToNativeCall = allowJavaToNativeCall;
-            this.allowNativeToJavaCall = allowNativeToJavaCall;
-            this.lastArg = lastArg;
-            this.prev = prev;
-        }
-
-        ArgsState addArg(CachedTypeInfo typeInfo) {
-            if (typeInfo instanceof LibFFIType.VoidType) {
-                throw new IllegalArgumentException("void is not a valid argument type");
-            }
-
-            boolean newAllowNativeToJavaCall = this.allowNativeToJavaCall;
-            boolean newAllowJavaToNativeCall = this.allowJavaToNativeCall;
-            switch (typeInfo.allowedDataFlowDirection) {
-                case JAVA_TO_NATIVE_ONLY:
-                    newAllowNativeToJavaCall = false;
-                    break;
-                case NATIVE_TO_JAVA_ONLY:
-                    newAllowJavaToNativeCall = false;
-                    break;
-            }
-
-            int align = typeInfo.alignment;
-            int newPrimitiveSize = this.primitiveSize;
-            if (primitiveSize % align != 0) {
-                newPrimitiveSize += align - (primitiveSize % align);
-            }
-            newPrimitiveSize += typeInfo.size;
-
-            int newObjectCount = this.objectCount + typeInfo.objectCount;
-
-            return new ArgsState(argCount + 1, newPrimitiveSize, newObjectCount, newAllowJavaToNativeCall, newAllowNativeToJavaCall, typeInfo, this);
-        }
-    }
-
-    @ExportLibrary(NFIBackendSignatureBuilderLibrary.class)
-    static final class SignatureBuilder {
-
-        static final int NOT_VARARGS = -1;
-
-        ArgsState state;
-        CachedTypeInfo retTypeInfo;
-
-        LibFFIType retType;
-        ProfiledArrayBuilder<LibFFIType> argTypes;
-
-        int fixedArgCount;
-
-        SignatureBuilder(ArrayBuilderFactory factory) {
-            this.state = ArgsState.NO_ARGS;
-            this.fixedArgCount = NOT_VARARGS;
-            this.argTypes = factory.allocate(LibFFIType[]::new);
-        }
-
-        void addArg(LibFFIType arg, ArgsState newState) {
-            assert state.argCount + 1 == newState.argCount;
-            argTypes.add(arg);
-            state = newState;
-        }
-
-        @ExportMessage
-        static class SetReturnType {
-
-            @Specialization
-            static void doSet(SignatureBuilder builder, LibFFIType retType) {
-                builder.retType = retType;
-                builder.retTypeInfo = retType.typeInfo;
-            }
-        }
-
-        @ExportMessage
-        static class AddArgument {
-
-            @Specialization(guards = {"builder.state == oldState", "argType.typeInfo == cachedTypeInfo"})
-            static void doCached(SignatureBuilder builder, LibFFIType argType,
-                            @Cached("builder.state") ArgsState oldState,
-                            @Cached("argType.typeInfo") CachedTypeInfo cachedTypeInfo,
-                            @Cached("oldState.addArg(cachedTypeInfo)") ArgsState newState) {
-                assert builder.state == oldState && argType.typeInfo == cachedTypeInfo;
-                builder.addArg(argType, newState);
-            }
-
-            @Specialization(replaces = "doCached")
-            static void doGeneric(SignatureBuilder builder, LibFFIType argType) {
-                ArgsState newState = builder.state.addArg(argType.typeInfo);
-                builder.addArg(argType, newState);
-            }
-        }
-
-        @ExportMessage
-        void makeVarargs() {
-            fixedArgCount = state.argCount;
-        }
-
-        @ExportMessage
-        @ImportStatic(LibFFISignature.class)
-        static class Build {
-
-            @Specialization(guards = {"builder.state == cachedState", "builder.retTypeInfo == cachedRetType"})
-            static Object doCached(SignatureBuilder builder,
-                            @Cached("builder.state") ArgsState cachedState,
-                            @SuppressWarnings("unused") @Cached("builder.retType.typeInfo") CachedTypeInfo cachedRetType,
-                            @CachedContext(NFILanguageImpl.class) NFIContext ctx,
-                            @Cached("prepareSignatureInfo(ctx.language, cachedRetType, cachedState)") CachedSignatureInfo cachedSigInfo) {
-                return create(ctx, cachedSigInfo, builder.retType, cachedState.argCount, builder.fixedArgCount, builder.argTypes.getFinalArray());
-            }
-
-            @Specialization(replaces = "doCached")
-            static Object doGeneric(SignatureBuilder builder,
-                            @CachedContext(NFILanguageImpl.class) NFIContext ctx) {
-                CachedSignatureInfo sigInfo = prepareSignatureInfo(ctx.language, builder.retType.typeInfo, builder.state);
-                return create(ctx, sigInfo, builder.retType, builder.state.argCount, builder.fixedArgCount, builder.argTypes.getFinalArray());
-            }
+        } else if (retType instanceof LibFFIType.SimpleType) {
+            LibFFIType.SimpleType simpleType = (LibFFIType.SimpleType) retType;
+            long ret = ctx.executePrimitive(cif, functionPointer, argBuffer.prim, argBuffer.getPatchCount(), argBuffer.patches, argBuffer.objects);
+            return simpleType.fromPrimitive(ret);
+        } else {
+            NativeArgumentBuffer.Array retBuffer = new NativeArgumentBuffer.Array(retType.size, retType.objectCount);
+            ctx.executeNative(cif, functionPointer, argBuffer.prim, argBuffer.getPatchCount(), argBuffer.patches, argBuffer.objects, retBuffer.prim);
+            return retType.deserializeRet(retBuffer);
         }
     }
 }

@@ -73,7 +73,7 @@ abstract class FunctionExecuteNode extends Node {
     @Specialization(guards = "receiver.getSignature() == signature")
     protected Object cachedSignature(LibFFIFunction receiver, Object[] args,
                     @Cached("receiver.getSignature()") @SuppressWarnings("unused") LibFFISignature signature,
-                    @Cached("createCachedSignatureCall(signature)") DirectCallNode execute) {
+                    @Cached("createCachedSignatureCall(signature)") DirectCallNode execute) throws ArityException, UnsupportedTypeException {
         return execute.call(receiver.asPointer(), args);
     }
 
@@ -199,7 +199,7 @@ abstract class FunctionExecuteNode extends Node {
                     @CachedLibrary(limit = "ARG_DISPATCH_LIMIT") NativeArgumentLibrary nativeArguments,
                     @CachedLanguage NFILanguageImpl language,
                     @Cached IndirectCallNode callNode,
-                    @SuppressWarnings("unused") @CachedContext(NFILanguageImpl.class) NFIContext ctx) throws ArityException, UnsupportedTypeException {
+                    @CachedContext(NFILanguageImpl.class) NFIContext ctx) throws ArityException, UnsupportedTypeException {
         LibFFISignature signature = receiver.getSignature();
         LibFFIType[] argTypes = signature.getArgTypes();
 
