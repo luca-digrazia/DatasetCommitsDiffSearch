@@ -1355,7 +1355,7 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     public boolean storeLeb128InPool() {
-        return mustPoolLeb128(data, offset, module.storeConstantsPolicy);
+        return mustPoolLeb128(data, offset, module.storeConstantsInPool);
     }
 
     private boolean tryJumpToSection(int targetSectionId) {
