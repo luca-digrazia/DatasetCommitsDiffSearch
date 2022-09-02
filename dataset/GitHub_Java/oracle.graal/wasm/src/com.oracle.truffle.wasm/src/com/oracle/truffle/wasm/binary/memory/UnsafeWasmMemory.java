@@ -31,6 +31,7 @@ package com.oracle.truffle.wasm.binary.memory;
 
 import java.lang.reflect.Field;
 
+import com.oracle.truffle.wasm.binary.Assert;
 import sun.misc.Unsafe;
 
 public class UnsafeWasmMemory implements WasmMemory {
@@ -51,10 +52,8 @@ public class UnsafeWasmMemory implements WasmMemory {
     }
 
     @Override
-    public void validateAddress(long address, int size) {
-        if (address + size > memorySize) {
-            throw new WasmMemoryException("Requested memory address out-of-bounds");
-        }
+    public boolean validateAddress(long address, int size) {
+        return !(address + size > memorySize);
     }
 
     @Override
