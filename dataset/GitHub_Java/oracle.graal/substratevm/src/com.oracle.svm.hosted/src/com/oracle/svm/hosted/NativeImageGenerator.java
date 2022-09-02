@@ -464,7 +464,6 @@ public class NativeImageGenerator {
 
             setSystemPropertiesForImageLate(k);
 
-            ImageSingletonsSupportImpl.HostedManagement.installInThread(new ImageSingletonsSupportImpl.HostedManagement());
             int maxConcurrentThreads = NativeImageOptions.getMaximumNumberOfConcurrentThreads(new OptionValues(optionProvider.getHostedValues()));
             this.buildExecutor = createForkJoinPool(maxConcurrentThreads);
             buildExecutor.submit(() -> {
@@ -513,7 +512,8 @@ public class NativeImageGenerator {
     }
 
     private ForkJoinPool createForkJoinPool(int maxConcurrentThreads) {
-        ImageSingletonsSupportImpl.HostedManagement vmConfig = ImageSingletonsSupportImpl.HostedManagement.getAndAssertExists();
+        ImageSingletonsSupportImpl.HostedManagement vmConfig = new ImageSingletonsSupportImpl.HostedManagement();
+        ImageSingletonsSupportImpl.HostedManagement.installInThread(vmConfig);
         return new ForkJoinPool(
                         maxConcurrentThreads,
                         pool -> new ForkJoinWorkerThread(pool) {

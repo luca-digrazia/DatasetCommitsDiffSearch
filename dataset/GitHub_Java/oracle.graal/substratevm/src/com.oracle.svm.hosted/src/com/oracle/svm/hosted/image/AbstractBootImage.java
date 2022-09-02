@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2007, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,6 +30,7 @@ import java.util.List;
 import org.graalvm.compiler.debug.DebugContext;
 
 import com.oracle.objectfile.ObjectFile;
+import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.hosted.FeatureImpl.BeforeImageWriteAccessImpl;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
@@ -46,7 +49,7 @@ public abstract class AbstractBootImage {
     protected int resultingImageSize; // for statistical output
 
     public enum NativeImageKind {
-        SHARED_LIBRARY {
+        SHARED_LIBRARY(false) {
             @Override
             public String getFilenameSuffix() {
                 switch (ObjectFile.getNativeFormat()) {
@@ -66,32 +69,35 @@ public abstract class AbstractBootImage {
                 return ObjectFile.getNativeFormat() == ObjectFile.Format.PECOFF ? "" : "lib";
             }
         },
-        EXECUTABLE {
-            @Override
-            public String getFilenameSuffix() {
-                return ObjectFile.getNativeFormat() == ObjectFile.Format.PECOFF ? ".exe" : "";
-            }
+        EXECUTABLE(true),
+        STATIC_EXECUTABLE(true);
 
-            @Override
-            public String getFilenamePrefix() {
-                return "";
-            }
-        };
+        public final boolean isExecutable;
+        public final String mainEntryPointName;
 
-        public abstract String getFilenameSuffix();
+        NativeImageKind(boolean executable) {
+            isExecutable = executable;
+            mainEntryPointName = executable ? "main" : "run_main";
+        }
 
-        public abstract String getFilenamePrefix();
+        public String getFilenameSuffix() {
+            return ObjectFile.getNativeFormat() == ObjectFile.Format.PECOFF ? ".exe" : "";
+        }
+
+        public String getFilenamePrefix() {
+            return "";
+        }
 
         public String getFilename(String basename) {
             return getFilenamePrefix() + basename + getFilenameSuffix();
         }
     }
 
-    protected final NativeImageKind kind;
+    protected final NativeImageKind imageKind;
 
     protected AbstractBootImage(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
                     List<HostedMethod> entryPoints, ClassLoader imageClassLoader) {
-        this.kind = k;
+        this.imageKind = k;
         this.universe = universe;
         this.metaAccess = metaAccess;
         this.nativeLibs = nativeLibs;
@@ -101,8 +107,8 @@ public abstract class AbstractBootImage {
         this.imageClassLoader = imageClassLoader;
     }
 
-    public NativeImageKind getBootImageKind() {
-        return kind;
+    public NativeImageKind getImageKind() {
+        return imageKind;
     }
 
     public int getImageSize() {
@@ -117,14 +123,14 @@ public abstract class AbstractBootImage {
      * Build the image. Calling this method is a precondition to calling {@link #write}. It
      * typically finalizes content of the object. It does not build debug information.
      */
-    public abstract void build(DebugContext debug);
+    public abstract void build(String imageName, DebugContext debug);
 
     /**
      * Write the image to the named file. This also writes debug information -- either to the same
      * or a different file, as decided by the implementation of {@link #getOrCreateDebugObjectFile}.
      * If {@link #getOrCreateDebugObjectFile} is not called, no debug information is written.
      */
-    public abstract Path write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config);
+    public abstract LinkerInvocation write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config);
 
     /**
      * Returns the ObjectFile.Section within the image, if any, whose vaddr defines the image's base
@@ -133,15 +139,14 @@ public abstract class AbstractBootImage {
     public abstract ObjectFile.Section getTextSection();
 
     // factory method
-    public static AbstractBootImage create(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
-                    List<HostedMethod> entryPoints, HostedMethod mainEntryPoint, ClassLoader classLoader) {
+    public static AbstractBootImage create(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap,
+                    NativeImageCodeCache codeCache, List<HostedMethod> entryPoints, ClassLoader classLoader) {
         switch (k) {
             case SHARED_LIBRARY:
                 return new SharedLibraryViaCCBootImage(universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, classLoader);
-            case EXECUTABLE:
-                return new ExecutableViaCCBootImage(universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, mainEntryPoint, classLoader);
+            default:
+                return new ExecutableViaCCBootImage(k, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, classLoader);
         }
-        return null;
     }
 
     public abstract String[] makeLaunchCommand(AbstractBootImage.NativeImageKind k, String imageName, Path binPath, Path workPath, java.lang.reflect.Method method);
@@ -158,9 +163,5 @@ public abstract class AbstractBootImage {
 
     public boolean requiresCustomDebugRelocation() {
         return false;
-    }
-
-    public AbstractBootImage.NativeImageKind getKind() {
-        return kind;
     }
 }
