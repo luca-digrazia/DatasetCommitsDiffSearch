@@ -122,6 +122,8 @@ public class CoverageInstrument extends TruffleInstrument {
         CoverageInstrument.factory = factory;
     }
 
+    // @formatter:on
+
     private static PrintStream chooseOutputStream(TruffleInstrument.Env env, OptionKey<String> option) {
         try {
             if (option.hasBeenSet(env.getOptions())) {
