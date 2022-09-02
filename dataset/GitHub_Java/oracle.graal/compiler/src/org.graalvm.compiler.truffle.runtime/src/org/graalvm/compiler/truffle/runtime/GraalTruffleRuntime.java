@@ -107,6 +107,8 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.SlowPathException;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.LayoutFactory;
+import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.stack.InspectedFrame;
@@ -369,6 +371,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                         AbstractAssumption.class,
                         MaterializedFrame.class,
                         FrameWithoutBoxing.class,
+                        BranchProfile.class,
+                        ConditionProfile.class,
         }) {
             m.put(c.getName(), c);
         }
@@ -713,7 +717,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 if (decision.shouldInline()) {
                     OptimizedCallTarget target = decision.getTarget();
                     if (target != optimizedCallTarget) {
-                        target.cancelCompilation("Inlining caller compiled.");
+                        target.cancelInstalledTask(decision.getProfile().getCallNode(), "Inlining caller compiled.");
                     }
                     dequeueInlinedCallSites(decision, optimizedCallTarget);
                 }
@@ -728,7 +732,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         Priority priority = lastTierCompilation ? Priority.LAST_TIER : Priority.FIRST_TIER;
         return getCompileQueue().submitTask(priority, optimizedCallTarget, new BackgroundCompileQueue.Request() {
             @Override
-            protected void execute(CancellableCompileTask task, WeakReference<OptimizedCallTarget> targetRef) {
+            protected void execute(TruffleCompilationTask task, WeakReference<OptimizedCallTarget> targetRef) {
                 OptimizedCallTarget callTarget = targetRef.get();
                 if (callTarget != null) {
                     try {
@@ -736,7 +740,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                             doCompile(callTarget, task);
                         }
                     } finally {
-                        task.finished();
+                        callTarget.resetCompilationTask();
                     }
                 }
             }
@@ -752,7 +756,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     public void finishCompilation(OptimizedCallTarget optimizedCallTarget, CancellableCompileTask task, boolean mayBeAsynchronous) {
-        getListener().onCompilationQueued(optimizedCallTarget);
 
         if (!mayBeAsynchronous) {
             try {
@@ -793,6 +796,17 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
+    public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+        CancellableCompileTask task = optimizedCallTarget.getCompilationTask();
+        if (task != null) {
+            if (task.cancel()) {
+                getListener().onCompilationDequeued(optimizedCallTarget, source, reason);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
         CancellableCompileTask task = optimizedCallTarget.getCompilationTask();
         if (task != null && !task.isCancelled()) {
@@ -808,6 +822,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     public int getCompilationQueueSize() {
         return getCompileQueue().getQueueSize();
+    }
+
+    public boolean isCompiling(OptimizedCallTarget optimizedCallTarget) {
+        return optimizedCallTarget.isCompiling();
     }
 
     /**
@@ -1043,8 +1061,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     /**
      * Gets a closeable that will be used in a try-with-resources statement surrounding the run-loop
-     * of a Truffle compiler thread. In conjunction with {@link #getCompilerIdleDelay()}, this can
-     * be used to release resources held by idle Truffle compiler threads.
+     * of a Truffle compiler thread. In conjunction with
+     * {@link #getCompilerIdleDelay(OptimizedCallTarget)}, this can be used to release resources
+     * held by idle Truffle compiler threads.
      *
      * If a non-null value is returned, its {@link AutoCloseable#close()} must not throw an
      * exception.
@@ -1055,10 +1074,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     /**
      * Gets the time in milliseconds an idle Truffle compiler thread will wait for new tasks before
-     * terminating. A value of {@code < 0} means that Truffle compiler threads block indefinitely
+     * terminating. A value of {@code <= 0} means that Truffle compiler threads block indefinitely
      * waiting for a task and thus never terminate.
      */
-    protected long getCompilerIdleDelay() {
-        return -1;
+    protected long getCompilerIdleDelay(@SuppressWarnings("unused") OptimizedCallTarget callTarget) {
+        return 0;
     }
 }
