@@ -35,14 +35,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.jdwp.JDWPDebuggerController;
-import com.oracle.truffle.espresso.jdwp.JDWPInstrument;
-import org.graalvm.polyglot.Engine;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
@@ -64,6 +59,7 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
+import org.graalvm.polyglot.Engine;
 
 public final class EspressoContext {
 
@@ -81,7 +77,6 @@ public final class EspressoContext {
     private final Set<Thread> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
-    private JDWPDebuggerController controller;
 
     public int getNewId() {
         return klassIdProvider.getAndIncrement();
@@ -184,29 +179,8 @@ public final class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
-        jdwpInit(); // should this happen after spawning the VM?
         spawnVM();
         this.initialized = true;
-    }
-
-    private void jdwpInit() {
-        // enable JDWP instrumenter only if options are set (assumed valid if non-null)
-        if (JDWPOptions != null) {
-            this.controller = env.lookup(env.getInstruments().get(JDWPInstrument.ID), JDWPDebuggerController.class);
-            controller.initialize(JDWPOptions, this);
-        }
-    }
-
-    public Source findOrCreateSource(Method method) {
-        String sourceFile = method.getSourceFile();
-        if (sourceFile == null) {
-            return null;
-        } else {
-            TruffleFile file = env.getInternalTruffleFile(sourceFile);
-            Source source = Source.newBuilder("java", file).content(Source.CONTENT_NONE).build();
-            // sources are interned so no cache needed (hopefully)
-            return source;
-        }
     }
 
     public Meta getMeta() {
@@ -365,9 +339,6 @@ public final class EspressoContext {
             getVM().dispose();
             getJNI().dispose();
         }
-    }
-    public JDWPDebuggerController getJDWPController() {
-        return controller;
     }
 
     public Substitutions getSubstitutions() {
