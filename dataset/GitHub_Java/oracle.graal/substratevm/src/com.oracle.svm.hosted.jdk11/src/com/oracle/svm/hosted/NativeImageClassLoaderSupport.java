@@ -51,8 +51,8 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     private final Function<String, Optional<Module>> moduleFinder;
     private final ModuleLayer.Controller moduleController;
 
-    NativeImageClassLoaderSupport(NativeImageSystemClassLoader nativeImageSystemClassLoader, String[] classpath, String[] modulePath) {
-        super(nativeImageSystemClassLoader, classpath);
+    NativeImageClassLoaderSupport(String[] classpath, String[] modulePath) {
+        super(classpath);
 
         imagemp = Arrays.stream(modulePath).map(Paths::get).collect(Collectors.toUnmodifiableList());
         buildmp = Arrays.stream(System.getProperty("jdk.module.path", "").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toUnmodifiableList());
