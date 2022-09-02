@@ -413,8 +413,7 @@ final class TruffleFromLibGraalEntryPoints {
 
     @TruffleFromLibGraal(CancelInstalledTask)
     static void cancelInstalledTask(Object compilableTruffleAST) {
-        // TODO: implement correctly
-        ((CompilableTruffleAST) compilableTruffleAST).cancelInstalledTask(null, null);
+        ((CompilableTruffleAST) compilableTruffleAST).cancelInstalledTask();
     }
 
     @TruffleFromLibGraal(FindCallNode)
