@@ -444,6 +444,7 @@ final class DynamicDispatchLibraryGen extends LibraryFactory<DynamicDispatchLibr
             } while (true);
         }
 
+        @ExplodeLoop(kind = LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
         @Override
         public boolean accepts(Object receiver_) {
             return true;

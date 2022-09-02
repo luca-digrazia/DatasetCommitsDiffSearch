@@ -106,12 +106,8 @@ final class PolyglotProxy implements TruffleObject {
 
         @Override
         @TruffleBoundary
-        protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
-            try {
-                return ((ProxyInstantiable) proxy).newInstance((Value[]) arguments[ARGUMENT_OFFSET]);
-            } catch (UnsupportedOperationException e) {
-                throw UnsupportedMessageException.create();
-            }
+        protected Object executeImpl(Object proxy, Object[] arguments) {
+            return ((ProxyInstantiable) proxy).newInstance((Value[]) arguments[ARGUMENT_OFFSET]);
         }
     }
 
@@ -141,12 +137,8 @@ final class PolyglotProxy implements TruffleObject {
 
         @Override
         @TruffleBoundary
-        protected Object executeImpl(Object proxy, Object[] arguments) throws UnsupportedMessageException {
-            try {
-                return ((ProxyExecutable) proxy).execute((Value[]) arguments[ARGUMENT_OFFSET]);
-            } catch (UnsupportedOperationException e) {
-                throw UnsupportedMessageException.create();
-            }
+        protected Object executeImpl(Object proxy, Object[] arguments) {
+            return ((ProxyExecutable) proxy).execute((Value[]) arguments[ARGUMENT_OFFSET]);
         }
     }
 

@@ -53,7 +53,7 @@ final class LegacyToLibraryNode extends Node {
 
     final Message message;
 
-    @Child private InteropLibrary interop;
+    @Child private InteropLibrary interop = InteropLibrary.getFactory().createDispatched(LIMIT);
     @Child private InteropAccessNode legacyUnbox;
     @Child private InteropAccessNode legacyIsBoxed;
     @Child private InteropAccessNode legacyToNative;
@@ -61,11 +61,10 @@ final class LegacyToLibraryNode extends Node {
 
     private LegacyToLibraryNode(Message message) {
         this.message = message;
-        this.interop = insert(InteropLibrary.getFactory().createDispatched(LIMIT));
-        this.legacyUnbox = insert(InteropAccessNode.create(Message.UNBOX));
-        this.legacyIsBoxed = insert(InteropAccessNode.create(Message.IS_BOXED));
-        this.legacyToNative = insert(InteropAccessNode.create(Message.TO_NATIVE));
-        this.legacyRemove = insert(InteropAccessNode.create(Message.REMOVE));
+        legacyUnbox = InteropAccessNode.create(Message.UNBOX);
+        legacyIsBoxed = InteropAccessNode.create(Message.IS_BOXED);
+        legacyToNative = InteropAccessNode.create(Message.TO_NATIVE);
+        legacyRemove = InteropAccessNode.create(Message.REMOVE);
     }
 
     static final class AdoptRootNode extends RootNode {
@@ -87,7 +86,12 @@ final class LegacyToLibraryNode extends Node {
 
     static LegacyToLibraryNode create(Message message) {
         if (message instanceof KnownMessage) {
-            return new LegacyToLibraryNode(message);
+            /*
+             * Cached Truffle libraries need to be adopted. This was not necessary for legacy to
+             * library interop nodes, therefore we create a dummy root node and adopt it. This
+             * overhead will go away as soon as all languages migrated.
+             */
+            return new AdoptRootNode().insertAccess(new LegacyToLibraryNode(message));
         }
         throw new IllegalArgumentException();
     }
