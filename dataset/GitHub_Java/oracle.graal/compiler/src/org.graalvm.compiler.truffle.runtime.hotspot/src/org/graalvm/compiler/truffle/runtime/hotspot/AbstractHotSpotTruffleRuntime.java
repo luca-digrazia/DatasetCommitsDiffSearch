@@ -43,6 +43,7 @@ import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompilerRuntime
 import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue;
 import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue.Priority;
 import org.graalvm.compiler.truffle.runtime.CancellableCompileTask;
+import org.graalvm.compiler.truffle.runtime.EngineData;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
@@ -86,6 +87,13 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
     static {
         UNSAFE = getUnsafe();
     }
+
+    private static ThreadLocal<Boolean> inNotifyTransferToInterpreter = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return false;
+        }
+    };
 
     private static Unsafe getUnsafe() {
         try {
@@ -388,8 +396,17 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
     @Override
     public void notifyTransferToInterpreter() {
         CompilerAsserts.neverPartOfCompilation();
-        if (isNotifyTransferToInterpreter()) {
-            TraceTransferToInterpreterHelper.traceTransferToInterpreter(this, this.getTruffleCompiler());
+        if (inNotifyTransferToInterpreter.get()) {
+            return;
+        }
+        inNotifyTransferToInterpreter.set(true);
+        try {
+            EngineData runtimeData = getCurrentEngineData();
+            if (runtimeData.traceTransferToInterpreter) {
+                TraceTransferToInterpreterHelper.traceTransferToInterpreter(this, this.getTruffleCompiler());
+            }
+        } finally {
+            inNotifyTransferToInterpreter.remove();
         }
     }
 

@@ -62,7 +62,6 @@ import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.EngineModeEn
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import org.graalvm.compiler.truffle.runtime.debug.StatisticsListener;
 
 /**
  * Class used to store data used by the compiler in the Engine. Enables "global" compiler state per
@@ -84,7 +83,6 @@ public final class EngineData {
     public final long id;
     @CompilationFinal OptionValues engineOptions;
     final TruffleSplittingStrategy.SplitStatisticsReporter reporter;
-    @CompilationFinal public StatisticsListener statisticsListener;
 
     /*
      * Important while visible, options must not be modified except in loadOptions.
@@ -162,7 +160,6 @@ public final class EngineData {
         this.lastTierCallThreshold = firstTierCallAndLoopThreshold;
         this.callTargetStatisticDetails = getPolyglotOptionValue(options, CompilationStatisticDetails);
         this.callTargetStatistics = getPolyglotOptionValue(options, CompilationStatistics) || this.callTargetStatisticDetails;
-        this.statisticsListener = this.callTargetStatistics ? StatisticsListener.createEngineListener(GraalTruffleRuntime.getRuntime()) : null;
         this.profilingEnabled = getPolyglotOptionValue(options, Profiling);
         this.traceTransferToInterpreter = getPolyglotOptionValue(options, TraceTransferToInterpreter);
     }
