@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage.AccessAPI;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 
@@ -55,9 +56,9 @@ import com.oracle.truffle.api.TruffleLanguage.Env;
  * contexts for isolated execution of guest language code.
  * <p>
  * A {@link TruffleContext context} consists of a {@link TruffleLanguage#createContext(Env) language
- * context} instance for each {@link Env#getInternalLanguages() installed language}. The current
- * language context is {@link TruffleLanguage#createContext(Env) created} eagerly and can be
- * accessed using a {@link ContextReference context reference} or statically with
+ * context} instance for each {@link Env#getLanguages() installed language}. The current language
+ * context is {@link TruffleLanguage#createContext(Env) created} eagerly and can be accessed using a
+ * {@link ContextReference context reference} or statically with
  * {@link TruffleLanguage#getCurrentContext(Class)} after the context was
  * {@link TruffleContext#enter() entered}.
  * <p>
@@ -89,31 +90,31 @@ public final class TruffleContext implements AutoCloseable {
             }
         } : null;
     }
-    final Object polyglotContext;
+    final Object impl;
     final boolean closeable;
 
     TruffleContext(Object impl) {
-        this.polyglotContext = impl;
+        this.impl = impl;
         this.closeable = false;
     }
 
     private TruffleContext(TruffleLanguage.Env env, Map<String, Object> config) {
-        this.polyglotContext = LanguageAccessor.engineAccess().createInternalContext(env.getPolyglotLanguageContext(), config, this);
+        this.impl = AccessAPI.engineAccess().createInternalContext(env.getVMObject(), config, this);
         this.closeable = false;
         // Initialized after this TruffleContext instance is fully set up
-        LanguageAccessor.engineAccess().initializeInternalContext(env.getPolyglotLanguageContext(), polyglotContext);
+        AccessAPI.engineAccess().initializeInternalContext(env.getVMObject(), impl);
     }
 
     /**
      * Creates closeable context representation for use by a language.
      */
-    private TruffleContext(Object polyglotContext, boolean closeable) {
-        this.polyglotContext = polyglotContext;
+    private TruffleContext(Object impl, boolean closeable) {
+        this.impl = impl;
         this.closeable = closeable;
     }
 
     private TruffleContext() {
-        this.polyglotContext = null;
+        this.impl = null;
         this.closeable = false;
     }
 
@@ -125,7 +126,7 @@ public final class TruffleContext implements AutoCloseable {
      */
     @TruffleBoundary
     public TruffleContext getParent() {
-        return LanguageAccessor.engineAccess().getParentContext(polyglotContext);
+        return AccessAPI.engineAccess().getParentContext(impl);
     }
 
     /**
@@ -149,7 +150,7 @@ public final class TruffleContext implements AutoCloseable {
      * @since 0.27
      */
     public Object enter() {
-        Object prev = LanguageAccessor.engineAccess().enterInternalContext(polyglotContext);
+        Object prev = AccessAPI.engineAccess().enterInternalContext(impl);
         if (CONTEXT_ASSERT_STACK != null) {
             verifyEnter(prev);
         }
@@ -170,7 +171,7 @@ public final class TruffleContext implements AutoCloseable {
         if (CONTEXT_ASSERT_STACK != null) {
             verifyLeave(prev);
         }
-        LanguageAccessor.engineAccess().leaveInternalContext(polyglotContext, prev);
+        AccessAPI.engineAccess().leaveInternalContext(impl, prev);
     }
 
     /**
@@ -192,7 +193,7 @@ public final class TruffleContext implements AutoCloseable {
         if (!closeable) {
             throw new UnsupportedOperationException("It's not possible to close a foreign context.");
         }
-        LanguageAccessor.engineAccess().closeInternalContext(polyglotContext);
+        AccessAPI.engineAccess().closeInternalContext(impl);
     }
 
     @TruffleBoundary
@@ -248,7 +249,7 @@ public final class TruffleContext implements AutoCloseable {
         @TruffleBoundary
         public TruffleContext build() {
             TruffleContext context = new TruffleContext(sourceEnvironment, config);
-            return new TruffleContext(context.polyglotContext, true);
+            return new TruffleContext(context.impl, true);
         }
     }
 }
