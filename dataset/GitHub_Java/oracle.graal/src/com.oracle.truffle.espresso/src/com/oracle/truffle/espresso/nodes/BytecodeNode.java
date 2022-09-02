@@ -2254,9 +2254,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         switch (kind) {
             case Long    : frame.setLong(stackSlots[slot], (long) value); break;
             case Object  : putObjectOrReturnAddress(frame, slot, value);  break;
-            default      :
-                CompilerDirectives.transferToInterpreter();
-                throw EspressoError.shouldNotReachHere();
+            default      : throw EspressoError.shouldNotReachHere();
         }
         // @formatter:on
     }
