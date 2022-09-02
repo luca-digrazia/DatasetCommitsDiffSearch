@@ -38,10 +38,7 @@ import org.graalvm.compiler.phases.OptimisticOptimizations;
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
-import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.graal.pointsto.meta.HostedProviders;
-
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * This is an interface for the functionality that the hosting VM must support.
@@ -81,8 +78,6 @@ public interface HostVM {
     default String getImageName() {
         return null;
     }
-
-    void checkType(ResolvedJavaType type, AnalysisUniverse universe);
 
     void checkMethod(BigBang bb, AnalysisMethod method, StructuredGraph graph);
 }
