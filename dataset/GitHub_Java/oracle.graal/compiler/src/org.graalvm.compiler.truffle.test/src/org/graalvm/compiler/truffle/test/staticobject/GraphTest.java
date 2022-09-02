@@ -67,103 +67,73 @@ public class GraphTest extends PartialEvaluationTest {
 
     @Theory
     public void allocation(StaticObjectTestEnvironment te) {
-        te.context.enter();
-        try {
-            StructuredGraph graph = partialEval(te, new AllocationNode(te));
-            assertNoInvokes(graph);
-            if (te.arrayBased) {
-                // The array that stores primitive fields
-                assertCount(graph, VirtualArrayNode.class, 1);
-            }
-            assertCount(graph, VirtualInstanceNode.class, 1);
-        } finally {
-            te.context.leave();
+        StructuredGraph graph = partialEval(te, new AllocationNode(te));
+        assertNoInvokes(graph);
+        if (te.arrayBased) {
+            // The array that stores primitive fields
+            assertCount(graph, VirtualArrayNode.class, 1);
         }
+        assertCount(graph, VirtualInstanceNode.class, 1);
     }
 
     @Theory
     public void readOnce(StaticObjectTestEnvironment te) {
-        te.context.enter();
-        try {
-            StructuredGraph graph = partialEval(te, new ReadOnceNode(te));
-            assertNoInvokes(graph);
+        StructuredGraph graph = partialEval(te, new ReadOnceNode(te));
+        assertNoInvokes(graph);
 
-            if (te.arrayBased) {
-                assertCount(graph, RawLoadNode.class, 1);
-            } else {
-                assertCount(graph, LoadFieldNode.class, 1);
-            }
-        } finally {
-            te.context.leave();
+        if (te.arrayBased) {
+            assertCount(graph, RawLoadNode.class, 1);
+        } else {
+            assertCount(graph, LoadFieldNode.class, 1);
         }
     }
 
     @Theory
     public void readMultipleAndAdd(StaticObjectTestEnvironment te) {
-        te.context.enter();
-        try {
-            StructuredGraph graph = partialEval(te, new ReadMultipleAndSumNode(te));
-            assertNoInvokes(graph);
+        StructuredGraph graph = partialEval(te, new ReadMultipleAndSumNode(te));
+        assertNoInvokes(graph);
 
-            if (te.arrayBased) {
-                assertCount(graph, RawLoadNode.class, 1);
-            } else {
-                assertCount(graph, LoadFieldNode.class, 1);
-            }
-            assertCount(graph, AddNode.class, 2);
-        } finally {
-            te.context.leave();
+        if (te.arrayBased) {
+            assertCount(graph, RawLoadNode.class, 1);
+        } else {
+            assertCount(graph, LoadFieldNode.class, 1);
         }
+        assertCount(graph, AddNode.class, 2);
     }
 
     @Theory
     public void writeOnce(StaticObjectTestEnvironment te) {
-        te.context.enter();
-        try {
-            StructuredGraph graph = partialEval(te, new WriteOnceNode(te));
-            assertNoInvokes(graph);
+        StructuredGraph graph = partialEval(te, new WriteOnceNode(te));
+        assertNoInvokes(graph);
 
-            if (te.arrayBased) {
-                assertCount(graph, RawStoreNode.class, 1);
-            } else {
-                assertCount(graph, StoreFieldNode.class, 1);
-            }
-        } finally {
-            te.context.leave();
+        if (te.arrayBased) {
+            assertCount(graph, RawStoreNode.class, 1);
+        } else {
+            assertCount(graph, StoreFieldNode.class, 1);
         }
     }
 
     @Theory
     public void writeMultiple(StaticObjectTestEnvironment te) {
-        te.context.enter();
-        try {
-            StructuredGraph graph = partialEval(te, new WriteMultipleNode(te));
-            assertNoInvokes(graph);
+        StructuredGraph graph = partialEval(te, new WriteMultipleNode(te));
+        assertNoInvokes(graph);
 
-            if (te.arrayBased) {
-                assertCount(graph, RawStoreNode.class, 3);
-            } else {
-                assertCount(graph, StoreFieldNode.class, 1);
-            }
-        } finally {
-            te.context.leave();
+        if (te.arrayBased) {
+            assertCount(graph, RawStoreNode.class, 3);
+        } else {
+            assertCount(graph, StoreFieldNode.class, 1);
         }
     }
 
     @Theory
     public void allocateSetAndGet(StaticObjectTestEnvironment te) {
-        te.context.enter();
-        try {
-            StructuredGraph graph = partialEval(te, new AllocateSetAndGetNode(te));
-            assertNoInvokes(graph);
-            assertCount(graph, VirtualInstanceNode.class, 0);
-            assertCount(graph, RawLoadNode.class, 0);
-            assertCount(graph, LoadFieldNode.class, 0);
-            assertCount(graph, RawStoreNode.class, 0);
-            assertCount(graph, StoreFieldNode.class, 0);
-        } finally {
-            te.context.leave();
-        }
+        StructuredGraph graph = partialEval(te, new AllocateSetAndGetNode(te));
+        assertNoInvokes(graph);
+        assertCount(graph, VirtualInstanceNode.class, 0);
+        assertCount(graph, RawLoadNode.class, 0);
+        assertCount(graph, LoadFieldNode.class, 0);
+        assertCount(graph, RawStoreNode.class, 0);
+        assertCount(graph, StoreFieldNode.class, 0);
     }
 
     private StructuredGraph partialEval(StaticObjectTestEnvironment te, StaticObjectAbstractNode node) {
