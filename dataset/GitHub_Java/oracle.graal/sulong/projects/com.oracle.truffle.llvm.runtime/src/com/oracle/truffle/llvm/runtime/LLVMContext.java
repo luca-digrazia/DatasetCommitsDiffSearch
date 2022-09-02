@@ -170,7 +170,7 @@ public final class LLVMContext {
         }
     }
 
-    LLVMContext(LLVMLanguage language, Env env, Configuration activeConfiguration, String languageHome) {
+    public LLVMContext(LLVMLanguage language, Env env, Configuration activeConfiguration, String languageHome) {
         this.language = language;
         this.env = env;
         this.activeConfiguration = activeConfiguration;
@@ -225,7 +225,7 @@ public final class LLVMContext {
             this.ctxRef = ctx.getLanguage().getContextReference();
             this.stackPointer = rootFrame.findFrameSlot(LLVMStack.FRAME_ID);
 
-            LLVMFunctionDescriptor initContextDescriptor = ctx.globalScope.getFunction("@__sulong_init_context");
+            LLVMFunctionDescriptor initContextDescriptor = ctx.globalScope.getFunction("__sulong_init_context");
             RootCallTarget initContextFunction = initContextDescriptor.getLLVMIRFunction();
             this.initContext = DirectCallNode.create(initContextFunction);
         }
@@ -245,7 +245,7 @@ public final class LLVMContext {
         }
     }
 
-    void initialize() {
+    public void initialize() {
         assert this.threadingStack == null;
         this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), parseStackSize(env.getOptions().get(SulongEngineOption.STACK_SIZE)));
         for (ContextExtension ext : contextExtensions) {
@@ -259,7 +259,7 @@ public final class LLVMContext {
         }
     }
 
-    private static long parseStackSize(String v) {
+    public static long parseStackSize(String v) {
         String valueString = v.trim().toLowerCase();
         long scale = 1;
         if (valueString.endsWith("k")) {
@@ -337,14 +337,14 @@ public final class LLVMContext {
         return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(value));
     }
 
-    void finalizeContext() {
+    public void finalizeContext() {
         // the following cases exist for cleanup:
         // - exit() or interop: execute all atexit functions, shutdown stdlib, flush IO, and execute
         // destructors
         // - _exit(), _Exit(), or abort(): no cleanup necessary
         if (cleanupNecessary) {
             try {
-                RootCallTarget disposeContext = globalScope.getFunction("@__sulong_dispose_context").getLLVMIRFunction();
+                RootCallTarget disposeContext = globalScope.getFunction("__sulong_dispose_context").getLLVMIRFunction();
                 try (StackPointer stackPointer = threadingStack.getStack().newFrame()) {
                     disposeContext.call(stackPointer);
                 }
@@ -382,7 +382,7 @@ public final class LLVMContext {
         }
     }
 
-    void dispose(LLVMMemory memory) {
+    public void dispose(LLVMMemory memory) {
         printNativeCallStatistic();
 
         if (isInitialized()) {
@@ -429,6 +429,10 @@ public final class LLVMContext {
             }
         }
         return null;
+    }
+
+    public boolean hasContextExtension(Class<?> type) {
+        return getContextExtensionOrNull(type) != null;
     }
 
     public int getByteAlignment(Type type) {
@@ -894,10 +898,10 @@ public final class LLVMContext {
         }
     }
 
-    private static class DynamicLinkChain {
+    public static class DynamicLinkChain {
         private final ArrayList<LLVMScope> scopes;
 
-        DynamicLinkChain() {
+        public DynamicLinkChain() {
             this.scopes = new ArrayList<>();
         }
 
