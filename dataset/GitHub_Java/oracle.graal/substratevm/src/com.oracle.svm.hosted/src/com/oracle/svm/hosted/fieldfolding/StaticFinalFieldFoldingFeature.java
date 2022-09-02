@@ -218,6 +218,10 @@ final class StaticFinalFieldFoldingFeature implements GraalFeature {
      * class initializer, it is verified that there is no illegal store to an optimized field.
      */
     void onAnalysisMethodParsed(AnalysisMethod method, StructuredGraph graph) {
+        if (graph == null) {
+            return;
+        }
+
         boolean isClassInitializer = method.isClassInitializer();
         Map<AnalysisField, JavaConstant> optimizableFields = isClassInitializer ? new HashMap<>() : null;
         Set<AnalysisField> ineligibleFields = isClassInitializer ? new HashSet<>() : null;
@@ -281,7 +285,7 @@ final class StaticFinalFieldFoldingFeature implements GraalFeature {
              * the order in which graphs are parsed during static analysis does not affect the
              * outcome of the optimizable check below.
              */
-            field.getDeclaringClass().getClassInitializer().ensureGraphParsed(bb);
+            field.getDeclaringClass().getClassInitializer().ensureGraphParsed(bb, false);
         }
 
         if (foldedFieldValues.containsKey(field)) {
@@ -346,7 +350,7 @@ final class StaticFinalFieldFoldingNodePlugin implements NodePlugin {
          * StaticFinalFieldFoldingFeature#onAnalysisMethodParsed} determines which fields can be
          * optimized.
          */
-        classInitializer.ensureGraphParsed(feature.bb);
+        classInitializer.ensureGraphParsed(feature.bb, false);
 
         JavaConstant initializedValue = feature.foldedFieldValues.get(aField);
         if (initializedValue == null) {
