@@ -382,9 +382,7 @@ final class LLDBMemoryValue implements LLVMDebugValue {
         if (LLVMManagedPointer.isInstance(pointerRead)) {
             return LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(pointerRead));
         }
-
-        return LLVMPointer.isInstance(pointerRead) && LLVMPointer.cast(pointerRead).getExportType() != null;
-
+        return false;
     }
 
     @Override

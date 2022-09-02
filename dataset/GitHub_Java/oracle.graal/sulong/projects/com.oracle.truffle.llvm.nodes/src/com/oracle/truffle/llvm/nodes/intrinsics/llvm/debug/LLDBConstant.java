@@ -347,7 +347,7 @@ abstract class LLDBConstant implements LLVMDebugValue {
                 return LLVMManagedPointer.isInstance(target);
             }
 
-            return bitOffset == 0L && pointer.getExportType() != null;
+            return false;
         }
 
         @Override
