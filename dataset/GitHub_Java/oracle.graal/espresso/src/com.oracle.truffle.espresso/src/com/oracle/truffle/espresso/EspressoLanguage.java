@@ -53,7 +53,6 @@ import com.oracle.truffle.espresso.descriptors.Utf8ConstantTable;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
-import com.oracle.truffle.espresso.nodes.EspressoMethodNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.EspressoStatementNode;
 import com.oracle.truffle.espresso.nodes.interop.DestroyVMNode;
@@ -155,12 +154,6 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
             }
             method = bytecodeNode.getMethod();
             scopeNode = bytecodeNode;
-        } else if (espressoNode instanceof EspressoMethodNode) {
-            // e.g. NativeMethodNode
-            EspressoMethodNode methodNode = (EspressoMethodNode) espressoNode;
-            method = methodNode.getMethod();
-            scopeNode = methodNode;
-            currentBci = 0;
         } else {
             return super.findLocalScopes(context, espressoNode, frame);
         }
@@ -198,7 +191,7 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         Node currentNode = input;
         boolean known = false;
         while (currentNode != null && !known) {
-            if (currentNode instanceof QuickNode || currentNode instanceof BytecodeNode || currentNode instanceof EspressoStatementNode || currentNode instanceof EspressoMethodNode) {
+            if (currentNode instanceof QuickNode || currentNode instanceof BytecodeNode || currentNode instanceof EspressoStatementNode) {
                 known = true;
             } else if (currentNode instanceof EspressoRootNode) {
                 EspressoRootNode rootNode = (EspressoRootNode) currentNode;
