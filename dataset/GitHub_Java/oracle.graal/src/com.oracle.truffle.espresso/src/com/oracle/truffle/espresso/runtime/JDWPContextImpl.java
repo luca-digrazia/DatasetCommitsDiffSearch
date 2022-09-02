@@ -666,11 +666,6 @@ public final class JDWPContextImpl implements JDWPContext {
                 JDWPLogger.log("Updating sub class %s for redefined super class", JDWPLogger.LogLevel.REDEFINE, subKlass.getName());
                 subKlass.onSuperKlassUpdate();
             }
-
-            // mark the removed classes "removed"
-            for (ObjectKlass removedInnerClass : removedInnerClasses) {
-                removedInnerClass.removedByRedefintion();
-            }
         } catch (RedefintionNotSupportedException ex) {
             return ex.getErrorCode();
         } finally {
