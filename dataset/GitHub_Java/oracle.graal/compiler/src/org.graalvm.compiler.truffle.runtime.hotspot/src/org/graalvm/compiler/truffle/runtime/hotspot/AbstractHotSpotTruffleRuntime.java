@@ -49,6 +49,7 @@ import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
 import org.graalvm.compiler.truffle.runtime.TruffleCallBoundary;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -148,7 +149,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
     private volatile Throwable truffleCompilerInitializationException;
 
     public AbstractHotSpotTruffleRuntime() {
-        super(Arrays.asList(HotSpotOptimizedCallTarget.class, InstalledCode.class));
+        super(Arrays.asList(HotSpotOptimizedCallTarget.class));
 
         List<ResolvedJavaMethod> boundaryMethods = new ArrayList<>();
         MetaAccessProvider metaAccess = getMetaAccess();
@@ -248,7 +249,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
                 EngineData engineData = callTarget.engine;
                 profilingEnabled = engineData.profilingEnabled;
                 TruffleCompiler compiler = newTruffleCompiler();
-                compiler.initialize(getOptionsForCompiler(callTarget), callTarget, true);
+                compiler.initialize(TruffleRuntimeOptions.getOptionsForCompiler(callTarget), callTarget, true);
                 truffleCompiler = compiler;
                 traceTransferToInterpreter = engineData.traceTransferToInterpreter;
                 truffleCompilerInitialized = true;
@@ -348,7 +349,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
     }
 
     @Override
-    public BackgroundCompileQueue getCompileQueue() {
+    protected BackgroundCompileQueue getCompileQueue() {
         return lazy();
     }
 
@@ -425,7 +426,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
     @Override
     public final boolean isProfilingEnabled() {
         if (profilingEnabled == null) {
-            return true;
+            profilingEnabled = getEngineData(null).profilingEnabled;
         }
         return profilingEnabled;
     }
