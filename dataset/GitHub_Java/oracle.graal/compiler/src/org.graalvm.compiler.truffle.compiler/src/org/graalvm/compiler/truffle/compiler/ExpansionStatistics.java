@@ -37,6 +37,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -56,8 +57,6 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilationTier;
 
-import com.oracle.truffle.api.dsl.Specialization;
-
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -73,6 +72,7 @@ final class ExpansionStatistics {
     private final Map<CompilationTier, Map<ResolvedJavaMethod, Stats>> methodExpansionStatistics = new HashMap<>();
     private final Map<CompilationTier, Map<NodeClassKey, Stats>> nodeExpansionStatistics = new HashMap<>();
     private final Map<CompilationTier, Map<NodeSpecializationKey, Stats>> specializationExpansionStatistics = new HashMap<>();
+    private final ConcurrentHashMap<ResolvedJavaMethod, Boolean> isSpecializationMethodCache = new ConcurrentHashMap<>();
 
     private ExpansionStatistics(
                     Set<CompilationTier> traceMethodExpansion, Set<CompilationTier> traceNodeExpansion,
@@ -182,7 +182,7 @@ final class ExpansionStatistics {
             combineExpansionStatistics(tier, this.nodeExpansionStatistics, classSums);
 
             Map<NodeSpecializationKey, Stats> specializationSums = new HashMap<>();
-            nodeTree.acceptStats(specializationSums, (tree) -> new NodeSpecializationKey(tree), compilable.getName());
+            nodeTree.acceptStats(specializationSums, (tree) -> new NodeSpecializationKey(tree, isSpecializationMethodCache), compilable.getName());
 
             combineExpansionStatistics(tier, this.specializationExpansionStatistics, specializationSums);
         }
@@ -268,7 +268,8 @@ final class ExpansionStatistics {
 
     private static void printHistogramStats(PrintWriter w, String indent, int maxLabelLength, String label, Stats stats) {
         String sourceString = formatSourceAndCompilation(stats.maxCompilation, stats.maxSourcePosition);
-        w.printf("%s%-" + (maxLabelLength - indent.length()) + "s %8d %8d %-16s %8d %-16s %8d %-16s %6d %6d %7d %6d | %10s %7s %s%n",
+        int useWidth = Math.max(maxLabelLength - indent.length(), 10);
+        w.printf("%s%-" + (useWidth) + "s %8d %8d %-16s %8d %-16s %8d %-16s %6d %6d %7d %6d | %10s %7s %s%n",
                         indent,
                         label,
                         stats.count.getCount(),
@@ -299,7 +300,6 @@ final class ExpansionStatistics {
         for (Node node : graph.getNodes()) {
             NodeSourcePosition nodeSourcePosition = node.getNodeSourcePosition();
             TreeNode tree = resolveMethodTree(root, nodeSourcePosition);
-            assert tree != root;
             Block block = cfg.blockFor(node);
             double frequency;
             if (block != null) {
@@ -503,9 +503,9 @@ final class ExpansionStatistics {
         private final NodeClassKey classKey;
         private final Set<ResolvedJavaMethod> specializations;
 
-        NodeSpecializationKey(TreeNode tree) {
+        NodeSpecializationKey(TreeNode tree, ConcurrentHashMap<ResolvedJavaMethod, Boolean> isSpecializationCache) {
             this.classKey = new NodeClassKey(tree);
-            this.specializations = tree.findSpecializationMethods();
+            this.specializations = tree.findSpecializationMethods(isSpecializationCache);
         }
 
         @Override
@@ -726,7 +726,7 @@ final class ExpansionStatistics {
             this.label = label;
         }
 
-        Set<ResolvedJavaMethod> findSpecializationMethods() {
+        Set<ResolvedJavaMethod> findSpecializationMethods(ConcurrentHashMap<ResolvedJavaMethod, Boolean> cache) {
             Set<ResolvedJavaMethod> specializations = new HashSet<>();
             int nodeId = getTruffleNodeId(position);
 
@@ -739,25 +739,34 @@ final class ExpansionStatistics {
                         break;
                     }
                     ResolvedJavaMethod method = currentPos.getMethod();
-                    if (method != null && method.getAnnotation(Specialization.class) != null) {
+                    if (method != null && isSpecializationMethod(method, cache)) {
                         specializations.add(currentPos.getMethod());
                     }
                     currentPos = currentPos.getCaller();
                 }
             }
-            findSpecializationMethodsWithNodeId(specializations, nodeId);
+            findSpecializationMethodsWithNodeId(specializations, nodeId, cache);
 
             return specializations;
         }
 
-        private void findSpecializationMethodsWithNodeId(Set<ResolvedJavaMethod> specializations, int nodeId) {
+        private static boolean isSpecializationMethod(ResolvedJavaMethod method, ConcurrentHashMap<ResolvedJavaMethod, Boolean> cache) {
+            /*
+             * We cache because libgraal jni transitions are expensive and we need to query this
+             * property many times for the methods. If GR-25553 gets to be implemented then we
+             * should just use the normal annotation API that is internally cached.
+             */
+            return cache.computeIfAbsent(method, (m) -> TruffleCompilerRuntime.getRuntime().isSpecializationMethod(m));
+        }
+
+        private void findSpecializationMethodsWithNodeId(Set<ResolvedJavaMethod> specializations, int nodeId, ConcurrentHashMap<ResolvedJavaMethod, Boolean> cache) {
             for (Node node : graalNodes) {
                 NodeSourcePosition currentPos = node.getNodeSourcePosition();
                 while (currentPos != null) {
                     SourceLanguagePosition sourceLang = currentPos.getSourceLanguage();
                     if (sourceLang != null && sourceLang.getNodeId() == nodeId) {
                         ResolvedJavaMethod method = currentPos.getMethod();
-                        if (method != null && method.getAnnotation(Specialization.class) != null) {
+                        if (method != null && isSpecializationMethod(method, cache)) {
                             specializations.add(currentPos.getMethod());
                         }
                     }
@@ -765,7 +774,7 @@ final class ExpansionStatistics {
                 }
             }
             for (TreeNode child : children.values()) {
-                child.findSpecializationMethodsWithNodeId(specializations, nodeId);
+                child.findSpecializationMethodsWithNodeId(specializations, nodeId, cache);
             }
         }
 
@@ -904,7 +913,9 @@ final class ExpansionStatistics {
         private void printRec(PrintWriter writer, int width, String sep) {
             Sums shallowStats = createSums();
             Sums deepStats = createRecursiveSum();
-            writer.printf("%s%-" + (width - sep.length()) + "s %8.2f | %5d %7d %7d %5d %5d %7d %6d | %10d %5d %6d %5d %5d %7d %6d | %s %n", sep,
+            // useWidth must not become 0 or smaller.
+            int useWidth = Math.max(width - sep.length(), 10);
+            writer.printf("%s%-" + (useWidth) + "s %8.2f | %5d %7d %7d %5d %5d %7d %6d | %10d %5d %6d %5d %5d %7d %6d | %s %n", sep,
                             getLabel(),
                             getFrequency(),
                             deepStats.count, deepStats.size, deepStats.cycles,
