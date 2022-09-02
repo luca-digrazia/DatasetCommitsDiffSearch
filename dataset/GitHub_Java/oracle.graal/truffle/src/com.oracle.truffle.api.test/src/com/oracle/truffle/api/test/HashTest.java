@@ -46,7 +46,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.StopIterationException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownKeyException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
@@ -120,7 +119,7 @@ public class HashTest extends AbstractPolyglotTest {
             if ((i & 1) == 0) {
                 Object expectedValue = i;
                 assertExisting(hash, key, interop);
-                assertEquals(expectedValue, interop.readHashValueOrDefault(hash, key, "failure"));
+                assertEquals(expectedValue, interop.readHashValue(hash, key));
             } else {
                 assertNonExisting(hash, key, interop);
             }
@@ -139,21 +138,21 @@ public class HashTest extends AbstractPolyglotTest {
         Map<Object, Integer> expected2 = new HashMap<>();
         while (interop.hasIteratorNextElement(iterator)) {
             Object entry = interop.getIteratorNextElement(iterator);
-            assertTrue(interop.hasArrayElements(entry));
-            Object key = interop.readArrayElement(entry, 0);
-            int value = (int) interop.readArrayElement(entry, 1);
+            assertTrue(interop.isHashEntry(entry));
+            Object key = interop.getHashEntryKey(entry);
+            int value = (int) interop.getHashEntryValue(entry);
             int expectedValue = expected.remove(key);
             assertEquals(expectedValue, value);
             int newValue = -1 * value;
-            interop.writeArrayElement(entry, 1, newValue);
+            interop.setHashEntryValue(entry, newValue);
             expected2.put(key, newValue);
         }
         assertTrue(expected.isEmpty());
         iterator = interop.getHashEntriesIterator(hash);
         while (interop.hasIteratorNextElement(iterator)) {
             Object entry = interop.getIteratorNextElement(iterator);
-            Object key = interop.readArrayElement(entry, 0);
-            int value = (int) interop.readArrayElement(entry, 1);
+            Object key = interop.getHashEntryKey(entry);
+            int value = (int) interop.getHashEntryValue(entry);
             int expectedValue = expected2.remove(key);
             assertEquals(expectedValue, value);
         }
@@ -229,21 +228,21 @@ public class HashTest extends AbstractPolyglotTest {
         Map<Object, Integer> expected2 = new HashMap<>();
         while (iterator.hasIteratorNextElement()) {
             Value entry = iterator.getIteratorNextElement();
-            assertTrue(entry.hasArrayElements());
-            Object key = keyFactory.unbox(entry.getArrayElement(0));
-            int value = entry.getArrayElement(1).asInt();
+            assertTrue(entry.isHashEntry());
+            Object key = keyFactory.unbox(entry.getHashEntryKey());
+            int value = entry.getHashEntryValue().asInt();
             int expectedValue = expected.remove(key);
             assertEquals(expectedValue, value);
             int newValue = -1 * value;
-            entry.setArrayElement(1, newValue);
+            entry.setHashEntryValue(newValue);
             expected2.put(key, newValue);
         }
         assertTrue(expected.isEmpty());
         iterator = hash.getHashEntriesIterator();
         while (iterator.hasIteratorNextElement()) {
             Value entry = iterator.getIteratorNextElement();
-            Object key = keyFactory.unbox(entry.getArrayElement(0));
-            int value = entry.getArrayElement(1).asInt();
+            Object key = keyFactory.unbox(entry.getHashEntryKey());
+            int value = entry.getHashEntryValue().asInt();
             int expectedValue = expected2.remove(key);
             assertEquals(expectedValue, value);
         }
@@ -301,6 +300,7 @@ public class HashTest extends AbstractPolyglotTest {
             assertEquals(value, hash.getHashValue(key).asInt());
             expected.put(keyFactory.box(context, key), value);
         }
+        Map<Object, Integer> expected2 = new HashMap<>();
         Iterator<Map.Entry<Object, Object>> iterator = map.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Object, Object> entry = iterator.next();
@@ -308,8 +308,20 @@ public class HashTest extends AbstractPolyglotTest {
             int value = (int) entry.getValue();
             int expectedValue = expected.remove(key);
             assertEquals(expectedValue, value);
+            int newValue = -1 * value;
+            entry.setValue(newValue);
+            expected2.put(key, newValue);
         }
         assertTrue(expected.isEmpty());
+        iterator = map.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Object, Object> entry = iterator.next();
+            Object key = entry.getKey();
+            int value = (int) entry.getValue();
+            int expectedValue = expected2.remove(key);
+            assertEquals(expectedValue, value);
+        }
+        assertTrue(expected2.isEmpty());
         for (int i = 0; i < count; i += inc) {
             Object key = keyFactory.create(i);
             assertTrue(hash.hasHashEntry(key));
@@ -371,71 +383,34 @@ public class HashTest extends AbstractPolyglotTest {
     @ExportLibrary(InteropLibrary.class)
     static final class HashEntry implements TruffleObject {
         final int hashCode;
-        final Object[] kvPair;
+        final Object key;
+        Object value;
 
         HashEntry(int hashCode, Object key, Object value) {
             this.hashCode = hashCode;
-            this.kvPair = new Object[]{key, value};
+            this.key = key;
+            this.value = value;
         }
 
         @ExportMessage
         @SuppressWarnings("static-method")
-        boolean hasArrayElements() {
+        boolean isHashEntry() {
             return true;
         }
 
         @ExportMessage
-        @SuppressWarnings("static-method")
-        long getArraySize() {
-            return 2;
+        Object getHashEntryKey() {
+            return key;
         }
 
         @ExportMessage
-        @SuppressWarnings("static-method")
-        boolean isArrayElementReadable(long index) {
-            return index >= 0 && index < 2;
+        Object getHashEntryValue() {
+            return value;
         }
 
         @ExportMessage
-        Object readArrayElement(long index) throws UnsupportedMessageException {
-            if (isArrayElementReadable(index)) {
-                return kvPair[(int) index];
-            } else {
-                throw UnsupportedMessageException.create();
-            }
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        boolean isArrayElementModifiable(long index) {
-            return index == 1;
-        }
-
-        @ExportMessage
-        void writeArrayElement(long index, Object value) throws UnsupportedMessageException {
-            if (index == 1) {
-                this.kvPair[1] = value;
-            } else {
-                throw UnsupportedMessageException.create();
-            }
-        }
-
-        @ExportMessage
-        @SuppressWarnings({"static-method", "unused"})
-        boolean isArrayElementRemovable(long index) {
-            return false;
-        }
-
-        @ExportMessage
-        @SuppressWarnings({"static-method", "unused"})
-        boolean isArrayElementInsertable(long index) {
-            return false;
-        }
-
-        @ExportMessage
-        @SuppressWarnings({"static-method", "unused"})
-        void removeArrayElement(long index) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
+        void setHashEntryValue(Object newValue) {
+            this.value = newValue;
         }
     }
 
@@ -517,20 +492,20 @@ public class HashTest extends AbstractPolyglotTest {
         }
 
         @ExportMessage
-        Object readHashValue(Object key) throws UnknownKeyException, UnsupportedMessageException {
+        Object readHashValue(Object key) throws UnknownKeyException {
             int addr = get(key);
             if (addr == -1) {
                 throw UnknownKeyException.create(key);
             } else {
-                return store[addr].readArrayElement(1);
+                return store[addr].value;
             }
         }
 
         @ExportMessage
-        void writeHashEntry(Object key, Object value) throws UnsupportedMessageException {
+        void writeHashEntry(Object key, Object value) {
             int addr = get(key);
             if (addr != -1) {
-                store[addr].writeArrayElement(1, value);
+                store[addr].value = value;
             } else {
                 int hashCode = hashCode(key);
                 HashEntry e = new HashEntry(hashCode, key, value);
@@ -560,17 +535,17 @@ public class HashTest extends AbstractPolyglotTest {
 
         private int get(Object key) {
             int hash = hashCode(key);
-            int address = hash % store.length;
-            int end = address;
+            int addr = hash % store.length;
+            int end = addr;
             do {
-                HashEntry e = store[address];
+                HashEntry e = store[addr];
                 if (e == null) {
                     return -1;
-                } else if (e.hashCode == hash && equals(e.kvPair[0], key)) {
-                    return address;
+                } else if (e.hashCode == hash && equals(e.key, key)) {
+                    return addr;
                 }
-                address = (address + 1) % store.length;
-            } while (address != end);
+                addr = (addr + 1) % store.length;
+            } while (addr != end);
             return -1;
         }
 
