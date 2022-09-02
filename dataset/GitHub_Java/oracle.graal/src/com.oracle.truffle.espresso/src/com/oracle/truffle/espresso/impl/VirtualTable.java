@@ -46,8 +46,8 @@ public class VirtualTable {
             tmp = new ArrayList<>();
         }
         for (Method m : declaredMethods) {
-            if (!m.isStatic() && m.getName() != Symbol.Name.CLINIT && m.getName() != Symbol.Name.INIT) {
-                // Do not bloat the vtable with methods that cannot be called through
+            if (m.getName() != Symbol.Name.CLINIT && m.getName() != Symbol.Name.INIT) {
+                // Do not bloat the vtable with these two methods that cannot be called through
                 // virtual invocation.
                 checkOverride(superKlass, m, tmp, thisKlass, overrides);
             }
@@ -71,9 +71,6 @@ public class VirtualTable {
         if (!overrides.isEmpty()) {
             int count = 1;
             for (Method override : overrides) {
-                if (override.isFinalFlagSet()) {
-                    throw m.getDeclaringKlass().getMeta().throwExWithMessage(VerifyError.class, "Overriding final method: " + override);
-                }
                 override.invalidateLeaf();
                 int pos = override.getVTableIndex();
                 if (count > 1) {
