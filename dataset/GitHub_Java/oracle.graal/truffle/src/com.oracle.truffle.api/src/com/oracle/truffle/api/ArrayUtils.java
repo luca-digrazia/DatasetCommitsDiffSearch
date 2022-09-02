@@ -207,28 +207,23 @@ public final class ArrayUtils {
      * @since 19.3
      */
     public static int indexOfWithOrMask(byte[] haystack, int fromIndex, int length, byte[] needle, byte[] mask) {
-        checkArgsIndexOf(haystack.length, fromIndex, length);
-        if (mask != null) {
-            checkMaskLengthIndexOf(needle.length, mask.length);
-        }
+        checkArgsIndexOf(haystack.length, fromIndex, length, needle.length, mask.length);
         if (needle.length == 0) {
             return fromIndex;
         }
         if (length - needle.length < 0) {
             return -1;
         } else if (needle.length == 1) {
-            return runIndexOfWithOrMask(haystack, fromIndex, fromIndex + length, needle[0], mask == null ? 0 : mask[0]);
+            return runIndexOfWithOrMask(haystack, fromIndex, fromIndex + length, needle[0], mask[0]);
         } else {
             int max = fromIndex + length - (needle.length - 2);
             int index = fromIndex;
-            byte mask0 = mask == null ? 0 : mask[0];
-            byte mask1 = mask == null ? 0 : mask[1];
             while (index < max - 1) {
-                index = runIndexOf2ConsecutiveWithOrMask(haystack, index, max, needle[0], needle[1], mask0, mask1);
+                index = runIndexOf2ConsecutiveWithOrMask(haystack, index, max, needle[0], needle[1], mask[0], mask[1]);
                 if (index < 0) {
                     return -1;
                 }
-                if (needle.length == 2 || regionEqualsWithOrMask(haystack, index, needle, 0, needle.length, mask)) {
+                if (mask.length == 2 || regionEqualsWithOrMask(haystack, index, needle, 0, mask.length, mask)) {
                     return index;
                 }
                 index++;
@@ -250,28 +245,23 @@ public final class ArrayUtils {
      * @since 19.3
      */
     public static int indexOfWithOrMask(char[] haystack, int fromIndex, int length, char[] needle, char[] mask) {
-        checkArgsIndexOf(haystack.length, fromIndex, length);
-        if (mask != null) {
-            checkMaskLengthIndexOf(needle.length, mask.length);
-        }
+        checkArgsIndexOf(haystack.length, fromIndex, length, needle.length, mask.length);
         if (needle.length == 0) {
             return fromIndex;
         }
         if (length - needle.length < 0) {
             return -1;
         } else if (needle.length == 1) {
-            return runIndexOfWithOrMask(haystack, fromIndex, fromIndex + length, needle[0], mask == null ? 0 : mask[0]);
+            return runIndexOfWithOrMask(haystack, fromIndex, fromIndex + length, needle[0], mask[0]);
         } else {
-            char mask0 = mask == null ? 0 : mask[0];
-            char mask1 = mask == null ? 0 : mask[1];
             int max = fromIndex + length - (needle.length - 2);
             int index = fromIndex;
             while (index < max - 1) {
-                index = runIndexOf2ConsecutiveWithOrMask(haystack, index, max, needle[0], needle[1], mask0, mask1);
+                index = runIndexOf2ConsecutiveWithOrMask(haystack, index, max, needle[0], needle[1], mask[0], mask[1]);
                 if (index < 0) {
                     return -1;
                 }
-                if (needle.length == 2 || regionEqualsWithOrMask(haystack, index, needle, 0, needle.length, mask)) {
+                if (mask.length == 2 || regionEqualsWithOrMask(haystack, index, needle, 0, mask.length, mask)) {
                     return index;
                 }
                 index++;
@@ -293,28 +283,23 @@ public final class ArrayUtils {
      * @since 19.3
      */
     public static int indexOfWithOrMask(String haystack, int fromIndex, int length, String needle, String mask) {
-        checkArgsIndexOf(haystack.length(), fromIndex, length);
-        if (mask != null) {
-            checkMaskLengthIndexOf(needle.length(), mask.length());
-        }
+        checkArgsIndexOf(haystack.length(), fromIndex, length, needle.length(), mask.length());
         if (needle.isEmpty()) {
             return fromIndex;
         }
         if (length - needle.length() < 0) {
             return -1;
         } else if (needle.length() == 1) {
-            return runIndexOfWithOrMask(haystack, fromIndex, fromIndex + length, needle.charAt(0), mask == null ? 0 : mask.charAt(0));
+            return runIndexOfWithOrMask(haystack, fromIndex, fromIndex + length, needle.charAt(0), mask.charAt(0));
         } else {
-            char mask0 = mask == null ? 0 : mask.charAt(0);
-            char mask1 = mask == null ? 0 : mask.charAt(1);
             int max = fromIndex + length - (needle.length() - 2);
             int index = fromIndex;
             while (index < max - 1) {
-                index = runIndexOf2ConsecutiveWithOrMask(haystack, index, max, needle.charAt(0), needle.charAt(1), mask0, mask1);
+                index = runIndexOf2ConsecutiveWithOrMask(haystack, index, max, needle.charAt(0), needle.charAt(1), mask.charAt(0), mask.charAt(1));
                 if (index < 0) {
                     return -1;
                 }
-                if (needle.length() == 2 || regionEqualsWithOrMask(haystack, index, needle, 0, needle.length(), mask)) {
+                if (mask.length() == 2 || regionEqualsWithOrMask(haystack, index, needle, 0, mask.length(), mask)) {
                     return index;
                 }
                 index++;
@@ -323,16 +308,13 @@ public final class ArrayUtils {
         }
     }
 
-    private static void checkArgsIndexOf(int hayStackLength, int fromIndex, int length) {
+    private static void checkArgsIndexOf(int hayStackLength, int fromIndex, int length, int needleLength, int maskLength) {
         if (fromIndex < 0 || length < 0) {
             illegalArgumentException("fromIndex and length must be positive");
         }
         if (fromIndex + length > hayStackLength) {
             illegalArgumentException("length out of range");
         }
-    }
-
-    private static void checkMaskLengthIndexOf(int needleLength, int maskLength) {
         if (needleLength != maskLength) {
             illegalArgumentException("mask and needle length must be equal");
         }
