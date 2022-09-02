@@ -42,7 +42,6 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.tools.agentscript.AgentScript;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -84,11 +83,6 @@ final class AgentObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean isMemberReadable(String member) {
-        return true;
-    }
-
-    @ExportMessage
     static boolean hasMembers(AgentObject obj) {
         return true;
     }
@@ -98,19 +92,10 @@ final class AgentObject implements TruffleObject {
         return new Object[0];
     }
 
-    @ExportMessage
-    Object readMember(String name) throws UnknownIdentifierException {
-        switch (name) {
-            case "version":
-                return AgentScript.VERSION;
-        }
-        throw UnknownIdentifierException.create(name);
-    }
-
     @CompilerDirectives.TruffleBoundary
     @ExportMessage
     static Object invokeMember(AgentObject obj, String member, Object[] args,
-                    @CachedLibrary(limit = "0") InteropLibrary interop) throws UnknownIdentifierException, UnsupportedMessageException {
+                    @CachedLibrary(limit = "1") InteropLibrary interop) throws UnknownIdentifierException, UnsupportedMessageException {
         Instrumenter instrumenter = obj.env.getInstrumenter();
         switch (member) {
             case "on":
