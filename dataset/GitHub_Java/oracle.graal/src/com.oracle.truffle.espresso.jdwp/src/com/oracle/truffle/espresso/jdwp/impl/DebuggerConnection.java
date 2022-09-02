@@ -123,6 +123,7 @@ public final class DebuggerConnection implements JDWPCommands {
         public void run() {
             while (!Thread.currentThread().isInterrupted()) {
                 DebuggerCommand debuggerCommand = awaitNextCommand(); // blocking
+                //System.out.println("got a " + debuggerCommand.kind + " command from debugger");
 
                 if (debuggerCommand != null) {
                     Object thread = debuggerCommand.getThread();
@@ -524,7 +525,7 @@ public final class DebuggerConnection implements JDWPCommands {
                         }
                     }
                 } catch (Exception e) {
-                    JDWPLogger.log("Failed to run future for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
+                    e.printStackTrace();
                 }
             }
         }

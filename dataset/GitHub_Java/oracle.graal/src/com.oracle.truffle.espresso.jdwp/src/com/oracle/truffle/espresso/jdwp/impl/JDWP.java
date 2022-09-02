@@ -41,8 +41,6 @@ final class JDWP {
 
     public static final String JAVA_LANG_OBJECT = "Ljava/lang/Object;";
 
-    private JDWP() {}
-
     static class VirtualMachine {
         public static final int ID = 1;
 
@@ -67,8 +65,7 @@ final class JDWP {
                 // get the requested classes
                 PacketStream input = new PacketStream(packet);
                 String signature = input.readString();
-                // we know it's a class type in the format Lsomething;
-                String slashName = signature.substring(1, signature.length() - 1);
+                String slashName = ClassNameUtils.fromInternalObjectNametoSlashName(signature);
                 KlassRef[] loaded = context.findLoadedClass(slashName);
 
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);

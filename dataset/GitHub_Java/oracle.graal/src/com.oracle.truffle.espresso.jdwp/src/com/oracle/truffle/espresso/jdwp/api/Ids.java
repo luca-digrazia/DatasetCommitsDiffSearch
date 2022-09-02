@@ -41,8 +41,8 @@ public final class Ids<T> {
      * The array will be expanded whenever an ID for a new entity
      * is requested.
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private WeakReference<T>[] objects;
+    @SuppressWarnings("unchecked")
+    private WeakReference<T>[] objects = new WeakReference[1];
 
     /**
      * A special object representing the null value.
@@ -51,8 +51,8 @@ public final class Ids<T> {
     private final T nullObject;
 
     public Ids(T nullObject) {
+        objects[0] = new WeakReference<>(nullObject);
         this.nullObject = nullObject;
-        objects = new WeakReference[]{new WeakReference<>(nullObject)};
     }
 
     /**
@@ -103,7 +103,7 @@ public final class Ids<T> {
     Generate a unique ID for a given object. Expand the underlying array and
     insert the object at the last index in the new array.
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     private synchronized long generateUniqueId(T object) {
         long id = uniqueID++;
         assert objects.length == id - 1;

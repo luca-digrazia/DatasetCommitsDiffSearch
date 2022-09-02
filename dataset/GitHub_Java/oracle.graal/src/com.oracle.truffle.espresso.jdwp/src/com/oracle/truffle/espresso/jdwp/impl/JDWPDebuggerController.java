@@ -376,6 +376,7 @@ public class JDWPDebuggerController {
 
             boolean hit = false;
             for (Breakpoint bp : event.getBreakpoints()) {
+                //System.out.println("BP at suspension point: " + bp.getLocationDescription());
 
                 BreakpointInfo info = breakpointInfos.get(bp);
                 suspendPolicy = info.getSuspendPolicy();
@@ -582,8 +583,9 @@ public class JDWPDebuggerController {
                 getMethod.setAccessible(true);
                 return getMethod.invoke(value);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to call getRealValue reflectively", e);
+                e.printStackTrace();
             }
+            return null;
         }
 
         private RootNode findCurrentRoot(DebugStackFrame frame) {
@@ -594,8 +596,9 @@ public class JDWPDebuggerController {
                 getRoot.setAccessible(true);
                 return (RootNode) getRoot.invoke(frame);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to call findCurrentRoot reflectively", e);
+                e.printStackTrace();
             }
+            return null;
         }
 
         private Throwable getRawException(DebugException exception) {
@@ -605,7 +608,8 @@ public class JDWPDebuggerController {
                 method.setAccessible(true);
                 return (Throwable) method.invoke(exception);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to call getRawException reflectively", e);
+                e.printStackTrace();
+                return exception;
             }
         }
 
