@@ -88,7 +88,7 @@ import org.graalvm.polyglot.PolyglotException;
 
 public abstract class Launcher {
     private static final boolean STATIC_VERBOSE = Boolean.getBoolean("org.graalvm.launcher.verbose");
-    static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
+    static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot") || Boolean.getBoolean("com.oracle.truffle.aot");
 
     private Engine tempEngine;
 
@@ -453,7 +453,7 @@ public abstract class Launcher {
 
     @SuppressWarnings("fallthrough")
     final boolean runPolyglotAction() {
-        OptionCategory helpCategory = helpDebug ? OptionCategory.INTERNAL : (helpExpert ? OptionCategory.EXPERT : OptionCategory.USER);
+        OptionCategory helpCategory = helpDebug ? OptionCategory.DEBUG : (helpExpert ? OptionCategory.EXPERT : OptionCategory.USER);
 
         switch (versionAction) {
             case PrintAndContinue:
@@ -497,7 +497,7 @@ public abstract class Launcher {
                 if (!descriptor.getName().startsWith("engine.") && !descriptor.getName().startsWith("compiler.")) {
                     continue;
                 }
-                if (!descriptor.isDeprecated() && sameCategory(descriptor, helpCategory)) {
+                if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == helpCategory.ordinal()) {
                     engineOptions.add(asPrintableOption(descriptor));
                 }
             }
@@ -528,7 +528,7 @@ public abstract class Launcher {
         for (Instrument instrument : instruments) {
             List<PrintableOption> options = new ArrayList<>();
             for (OptionDescriptor descriptor : instrument.getOptions()) {
-                if (!descriptor.isDeprecated() && sameCategory(descriptor, optionCategory)) {
+                if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
                     options.add(asPrintableOption(descriptor));
                 }
             }
@@ -554,7 +554,7 @@ public abstract class Launcher {
         for (Language language : languages) {
             List<PrintableOption> options = new ArrayList<>();
             for (OptionDescriptor descriptor : language.getOptions()) {
-                if (!descriptor.isDeprecated() && sameCategory(descriptor, optionCategory)) {
+                if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
                     options.add(asPrintableOption(descriptor));
                 }
             }
@@ -572,13 +572,6 @@ public abstract class Launcher {
                 }
             }
         }
-    }
-
-    @SuppressWarnings("deprecation")
-    private static boolean sameCategory(OptionDescriptor descriptor, OptionCategory optionCategory) {
-        return descriptor.getCategory().ordinal() == optionCategory.ordinal() ||
-                        (optionCategory.ordinal() == OptionCategory.INTERNAL.ordinal() &&
-                                        descriptor.getCategory().ordinal() == OptionCategory.DEBUG.ordinal());
     }
 
     boolean parsePolyglotOption(String defaultOptionPrefix, Map<String, String> options, String arg) {
@@ -788,7 +781,7 @@ public abstract class Launcher {
     }
 
     static void printOption(OptionCategory optionCategory, OptionDescriptor descriptor) {
-        if (!descriptor.isDeprecated() && sameCategory(descriptor, optionCategory)) {
+        if (!descriptor.isDeprecated() && descriptor.getCategory().ordinal() == optionCategory.ordinal()) {
             printOption(asPrintableOption(descriptor));
         }
     }
