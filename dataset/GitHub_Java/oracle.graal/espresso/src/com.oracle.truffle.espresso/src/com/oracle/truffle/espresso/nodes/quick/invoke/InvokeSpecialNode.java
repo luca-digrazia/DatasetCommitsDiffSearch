@@ -58,7 +58,7 @@ public final class InvokeSpecialNode extends QuickNode {
             if (removedByRedefintion()) {
                 // accept a slow path once the method has been removed
                 // put method behind a boundary to avoid a deopt loop
-                handleRemovedMethod();
+                handleRemovedMethod(method);
             } else {
                 method = method.getMethod().getMethodVersion();
             }
@@ -74,7 +74,7 @@ public final class InvokeSpecialNode extends QuickNode {
     }
 
     @TruffleBoundary
-    private void handleRemovedMethod() {
+    private static void handleRemovedMethod(MethodVersion method) {
         try {
             ClassRedefinition.lock();
 
