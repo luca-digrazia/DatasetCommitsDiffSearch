@@ -27,6 +27,7 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
 package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -69,13 +70,4 @@ public class WasmIfNode extends WasmNode {
         return returnTypeId;
     }
 
-    @Override
-    public int intConstantLength() {
-        return trueBranch.intConstantLength() + falseBranch.intConstantLength();
-    }
-
-    @Override
-    public int branchTableLength() {
-        return trueBranch.branchTableLength() + falseBranch.branchTableLength();
-    }
 }
