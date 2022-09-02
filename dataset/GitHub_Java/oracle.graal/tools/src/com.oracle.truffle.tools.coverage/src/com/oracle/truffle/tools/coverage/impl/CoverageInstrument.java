@@ -50,7 +50,7 @@ import com.oracle.truffle.tools.coverage.SourceCoverage;
 @Registration(id = CoverageInstrument.ID, name = "Code Coverage", version = CoverageInstrument.VERSION, services = CoverageTracker.class)
 public class CoverageInstrument extends TruffleInstrument {
 
-    public static final String ID = "codecoverage";
+    public static final String ID = "coverage";
     static final String VERSION = "0.1.0";
     static final OptionType<Output> CLI_OUTPUT_TYPE = new OptionType<>("Output",
                     new Function<String, Output>() {
@@ -73,7 +73,8 @@ public class CoverageInstrument extends TruffleInstrument {
     static final OptionKey<Boolean> ENABLED = new OptionKey<>(false);
     @Option(help = "Keep count of each element's coverage (default: false).", category = OptionCategory.USER, stability = OptionStability.STABLE)
     static final OptionKey<Boolean> Count = new OptionKey<>(false);
-    @Option(name = "Output", help = "Can be: human readable 'histogram' (per file coverage summary) or 'detailed' (per line coverage summary), machine readable 'json', tool compliant 'lcov'. (default: histogram)", category = OptionCategory.USER, stability = OptionStability.STABLE)
+    @Option(name = "Output", help = "Can be: human readable 'histogram' (per file coverage summary) or 'detailed' (per line coverage summary), machine readable 'json', tool compliant 'lcov'. (default: histogram)",
+            category = OptionCategory.USER, stability = OptionStability.STABLE)
     static final OptionKey<Output> OUTPUT = new OptionKey<>(Output.HISTOGRAM, CLI_OUTPUT_TYPE);
     @Option(name = "FilterRootName", help = "Wildcard filter for program roots. (eg. Math.*, default:*).", category = OptionCategory.USER, stability = OptionStability.STABLE)
     static final OptionKey<Object[]> FILTER_ROOT = new OptionKey<>(new Object[0], WildcardHandler.WILDCARD_FILTER_TYPE);
@@ -87,8 +88,8 @@ public class CoverageInstrument extends TruffleInstrument {
     static final OptionKey<Boolean> TRACK_INTERNAL = new OptionKey<>(false);
     @Option(name = "OutputFile", help = "Save output to the given file. Output is printed to standard output stream by default.", category = OptionCategory.USER, stability = OptionStability.STABLE)
     static final OptionKey<String> OUTPUT_FILE = new OptionKey<>("");
-    @Option(name = "StrictLines", help = "Consider a source code line covered only if covered in it's entirety. (default: true)", category = OptionCategory.USER, stability = OptionStability.STABLE)
-    static final OptionKey<Boolean> STRICT_LINES = new OptionKey<>(true);
+    @Option(help = "Consider a source code line covered only if covered in it's entirety. (default: true)", category = OptionCategory.USER, stability = OptionStability.EXPERIMENTAL)
+    static final OptionKey<Boolean> StrictLines = new OptionKey<>(true);
     // @formatter:on
 
     private static Function<Env, CoverageTracker> factory;
@@ -120,8 +121,6 @@ public class CoverageInstrument extends TruffleInstrument {
         }
         CoverageInstrument.factory = factory;
     }
-
-    // @formatter:on
 
     private static PrintStream chooseOutputStream(TruffleInstrument.Env env, OptionKey<String> option) {
         try {
@@ -172,23 +171,24 @@ public class CoverageInstrument extends TruffleInstrument {
     @Override
     protected void onDispose(Env env) {
         if (enabled) {
-            PrintStream out = chooseOutputStream(env, OUTPUT_FILE);
             SourceCoverage[] coverage = tracker.getCoverage();
             final OptionValues options = env.getOptions();
-            final boolean strictLines = STRICT_LINES.getValue(options);
-            switch (OUTPUT.getValue(options)) {
-                case HISTOGRAM:
-                    new CoverageCLI(out, coverage, strictLines).printHistogramOutput();
-                    break;
-                case DETAILED:
-                    new CoverageCLI(out, coverage, strictLines).printLinesOutput();
-                    break;
-                case JSON:
-                    new JSONPrinter(out, coverage).print();
-                    break;
-                case LCOV:
-                    new LCOVPrinter(out, coverage, strictLines).print();
-                    break;
+            final boolean strictLines = StrictLines.getValue(options);
+            try (PrintStream out = chooseOutputStream(env, OUTPUT_FILE)) {
+                switch (OUTPUT.getValue(options)) {
+                    case HISTOGRAM:
+                        new CoverageCLI(out, coverage, strictLines).printHistogramOutput();
+                        break;
+                    case DETAILED:
+                        new CoverageCLI(out, coverage, strictLines).printLinesOutput();
+                        break;
+                    case JSON:
+                        new JSONPrinter(out, coverage).print();
+                        break;
+                    case LCOV:
+                        new LCOVPrinter(out, coverage, strictLines).print();
+                        break;
+                }
             }
             tracker.close();
         }

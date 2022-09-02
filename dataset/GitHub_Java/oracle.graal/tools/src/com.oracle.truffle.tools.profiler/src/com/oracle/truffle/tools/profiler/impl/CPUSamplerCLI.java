@@ -127,9 +127,6 @@ class CPUSamplerCLI extends ProfilerCLI {
     @Option(name = "OutputFile", help = "Save output to the given file. Output is printed to output stream by default.", category = OptionCategory.USER, stability = OptionStability.STABLE) //
     static final OptionKey<String> OUTPUT_FILE = new OptionKey<>("");
 
-    @Option(name = "MinSamples", help = "Remove elements from output if they have less samples than this value (default: 0).", category = OptionCategory.USER, stability = OptionStability.STABLE) //
-    static final OptionKey<Integer> MIN_SAMPLES = new OptionKey<>(0);
-
     static void handleOutput(TruffleInstrument.Env env, CPUSampler sampler) {
         try (PrintStream out = chooseOutputStream(env, OUTPUT_FILE)) {
             if (sampler.hasStackOverflowed()) {
@@ -141,13 +138,12 @@ class CPUSamplerCLI extends ProfilerCLI {
                 return;
             }
             Boolean summariseThreads = env.getOptions().get(SUMMARISE_THREADS);
-            Integer minSamples = env.getOptions().get(MIN_SAMPLES);
             switch (env.getOptions().get(OUTPUT)) {
                 case HISTOGRAM:
-                    printSamplingHistogram(out, sampler, summariseThreads, minSamples);
+                    printSamplingHistogram(out, sampler, summariseThreads);
                     break;
                 case CALLTREE:
-                    printSamplingCallTree(out, sampler, summariseThreads, minSamples);
+                    printSamplingCallTree(out, sampler, summariseThreads);
                     break;
                 case JSON:
                     printSamplingJson(out, sampler);
@@ -214,7 +210,7 @@ class CPUSamplerCLI extends ProfilerCLI {
         }
     }
 
-    private static void printSamplingHistogram(PrintStream out, CPUSampler sampler, boolean summariseThreads, Integer minSamples) {
+    private static void printSamplingHistogram(PrintStream out, CPUSampler sampler, boolean summariseThreads) {
         int maxLength = 10;
         Map<Thread, List<List<ProfilerNode<CPUSampler.Payload>>>> linesPerThread = new HashMap<>();
         final Set<Map.Entry<Thread, Collection<ProfilerNode<CPUSampler.Payload>>>> entrySet = summariseThreads ? makeOneEntryMap(sampler).entrySet() : sampler.getThreadToNodesMap().entrySet();
@@ -255,7 +251,7 @@ class CPUSamplerCLI extends ProfilerCLI {
             out.println(title);
             out.println(sep);
             for (List<ProfilerNode<CPUSampler.Payload>> line : entry.getValue()) {
-                printAttributes(out, sampler, "", line, maxLength, false, minSamples);
+                printAttributes(out, sampler, "", line, maxLength, false);
             }
             out.println(sep);
         }
@@ -267,7 +263,7 @@ class CPUSamplerCLI extends ProfilerCLI {
         return oneElementMap;
     }
 
-    private static void printSamplingCallTree(PrintStream out, CPUSampler sampler, Boolean summariseThreads, Integer minSamples) {
+    private static void printSamplingCallTree(PrintStream out, CPUSampler sampler, Boolean summariseThreads) {
         Collection<ProfilerNode<CPUSampler.Payload>> actualRoots = new ArrayList<>();
         Map<Thread, Collection<ProfilerNode<CPUSampler.Payload>>> threadToNodesMap = summariseThreads ? makeOneEntryMap(sampler) : sampler.getThreadToNodesMap();
         for (Collection<ProfilerNode<CPUSampler.Payload>> node : threadToNodesMap.values()) {
@@ -285,12 +281,12 @@ class CPUSamplerCLI extends ProfilerCLI {
             }
             out.println(title);
             out.println(sep);
-            printSamplingCallTreeRec(sampler, maxLength, "", node.getValue(), out, minSamples);
+            printSamplingCallTreeRec(sampler, maxLength, "", node.getValue(), out);
             out.println(sep);
         }
     }
 
-    private static void printSamplingCallTreeRec(CPUSampler sampler, int maxRootLength, String prefix, Collection<ProfilerNode<CPUSampler.Payload>> children, PrintStream out, Integer minSamples) {
+    private static void printSamplingCallTreeRec(CPUSampler sampler, int maxRootLength, String prefix, Collection<ProfilerNode<CPUSampler.Payload>> children, PrintStream out) {
         List<ProfilerNode<CPUSampler.Payload>> sortedChildren = new ArrayList<>(children);
         Collections.sort(sortedChildren, new Comparator<ProfilerNode<CPUSampler.Payload>>() {
             @Override
@@ -303,8 +299,8 @@ class CPUSamplerCLI extends ProfilerCLI {
             if (treeNode == null) {
                 continue;
             }
-            boolean printed = printAttributes(out, sampler, prefix, Arrays.asList(treeNode), maxRootLength, true, minSamples);
-            printSamplingCallTreeRec(sampler, maxRootLength, printed ? prefix + " " : prefix, treeNode.getChildren(), out, minSamples);
+            boolean printed = printAttributes(out, sampler, prefix, Arrays.asList(treeNode), maxRootLength, true);
+            printSamplingCallTreeRec(sampler, maxRootLength, printed ? prefix + " " : prefix, treeNode.getChildren(), out);
 
         }
     }
@@ -334,7 +330,7 @@ class CPUSamplerCLI extends ProfilerCLI {
         return x2 >= y1 && y2 >= x1;
     }
 
-    private static boolean printAttributes(PrintStream out, CPUSampler sampler, String prefix, List<ProfilerNode<CPUSampler.Payload>> nodes, int maxRootLength, boolean callTree, Integer minSamples) {
+    private static boolean printAttributes(PrintStream out, CPUSampler sampler, String prefix, List<ProfilerNode<CPUSampler.Payload>> nodes, int maxRootLength, boolean callTree) {
         long samplePeriod = sampler.getPeriod();
         long samples = sampler.getSampleCount();
 
@@ -360,11 +356,11 @@ class CPUSamplerCLI extends ProfilerCLI {
         }
 
         long totalSamples = totalInterpreted + totalCompiled;
-        if (totalSamples <= minSamples) {
+        if (totalSamples <= 0L) {
             // hide methods without any cost
             return false;
         }
-        assert totalSamples <= samples;
+        assert totalSamples < samples;
         ProfilerNode<CPUSampler.Payload> firstNode = nodes.get(0);
         SourceSection sourceSection = firstNode.getSourceSection();
         String rootName = firstNode.getRootName();
