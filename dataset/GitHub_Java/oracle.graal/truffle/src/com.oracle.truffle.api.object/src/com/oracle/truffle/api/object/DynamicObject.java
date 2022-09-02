@@ -99,8 +99,7 @@ public abstract class DynamicObject implements TruffleObject {
         @Specialization(limit = "1", guards = "cachedShape == receiver.getShape()")
         @SuppressWarnings("unused")
         static boolean doCachedShape(DynamicObject receiver,
-                        @Shared("cachedShape") @Cached("receiver.getShape()") Shape cachedShape,
-                        @Shared("cachedTypeClass") @Cached(value = "receiver.getShape().getObjectType().getClass()", allowUncached = true) Class<? extends ObjectType> typeClass) {
+                        @Shared("cachedShape") @Cached("receiver.getShape()") Shape cachedShape) {
             return true;
         }
 
@@ -115,10 +114,8 @@ public abstract class DynamicObject implements TruffleObject {
     static class Dispatch {
 
         @Specialization(limit = "1", guards = "cachedShape == receiver.getShape()")
-        @SuppressWarnings("unused")
-        static Class<?> doCachedShape(DynamicObject receiver,
-                        @Shared("cachedShape") @Cached("receiver.getShape()") Shape cachedShape,
-                        @Shared("cachedTypeClass") @Cached(value = "receiver.getShape().getObjectType().getClass()", allowUncached = true) Class<? extends ObjectType> typeClass) {
+        static Class<?> doCachedShape(@SuppressWarnings("unused") DynamicObject receiver,
+                        @Shared("cachedShape") @Cached("receiver.getShape()") Shape cachedShape) {
             return cachedShape.getObjectType().dispatch();
         }
 
