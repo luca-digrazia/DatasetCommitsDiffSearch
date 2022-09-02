@@ -72,8 +72,7 @@ public class ELFObjectFile extends ObjectFile {
     private long processorSpecificFlags; // FIXME: to encapsulate (EF_* in elf.h)
     private final boolean runtimeDebugInfoGeneration;
 
-    private ELFObjectFile(int pageSize, ELFMachine machine, boolean runtimeDebugInfoGeneration) {
-        super(pageSize);
+    private ELFObjectFile(ELFMachine machine, boolean runtimeDebugInfoGeneration) {
         this.runtimeDebugInfoGeneration = runtimeDebugInfoGeneration;
         // Create the elements of an empty ELF file:
         // 1. create header
@@ -85,16 +84,16 @@ public class ELFObjectFile extends ObjectFile {
         sht = new SectionHeaderTable(/* shstrtab */);
     }
 
-    public ELFObjectFile(int pageSize, ELFMachine machine) {
-        this(pageSize, machine, false);
+    public ELFObjectFile(ELFMachine machine) {
+        this(machine, false);
     }
 
-    public ELFObjectFile(int pageSize) {
-        this(pageSize, false);
+    public ELFObjectFile() {
+        this(false);
     }
 
-    public ELFObjectFile(int pageSize, boolean runtimeDebugInfoGeneration) {
-        this(pageSize, System.getProperty("svm.targetArch") == null ? ELFMachine.getSystemNativeValue() : ELFMachine.from(System.getProperty("svm.targetArch")), runtimeDebugInfoGeneration);
+    public ELFObjectFile(boolean runtimeDebugInfoGeneration) {
+        this(System.getProperty("svm.targetArch") == null ? ELFMachine.getSystemNativeValue() : ELFMachine.from(System.getProperty("svm.targetArch")), runtimeDebugInfoGeneration);
     }
 
     @Override
