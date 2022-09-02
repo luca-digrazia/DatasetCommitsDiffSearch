@@ -101,9 +101,6 @@ class SubstrateTruffleOptions {
 
 public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
 
-    private static final int DEBUG_TEAR_DOWN_TIMEOUT = 2_000;
-    private static final int PRODUCTION_TEAR_DOWN_TIMEOUT = 10_000;
-
     private CallMethods hostedCallMethods;
     private volatile BackgroundCompileQueue compileQueue;
     private volatile boolean initialized;
@@ -138,17 +135,14 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
             RuntimeOptionValues.singleton().update(Deoptimizer.Options.TraceDeoptimization, true);
         }
         installDefaultListeners();
-        RuntimeSupport.getRuntimeSupport().addTearDownHook(this::teardown);
     }
 
-    private void teardown() {
-        long timeout = SubstrateUtil.assertionsEnabled() ? DEBUG_TEAR_DOWN_TIMEOUT : PRODUCTION_TEAR_DOWN_TIMEOUT;
-        getCompileQueue().shutdownAndAwaitTermination(timeout);
-
-        TruffleCompiler tcp = truffleCompiler;
-        if (tcp != null) {
-            ((SubstrateTruffleCompiler) tcp).teardown();
-        }
+    @Override
+    protected void addShutdownHook(Runnable hook) {
+        // Shutdown hooks run only in an application with a Java main method, but these do not tear
+        // down the isolate in the end, so we need a tear-down hook for explicitly created isolates.
+        super.addShutdownHook(hook);
+        RuntimeSupport.getRuntimeSupport().addTearDownHook(hook);
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
