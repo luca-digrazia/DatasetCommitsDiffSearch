@@ -25,7 +25,7 @@
 package com.oracle.svm.hosted.c;
 
 import static org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.NOT_LIKELY_PROBABILITY;
+import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -39,7 +39,6 @@ import java.util.stream.IntStream;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
-import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.BeginNode;
@@ -85,6 +84,7 @@ import com.oracle.svm.hosted.image.RelocatableBuffer;
 import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -126,59 +126,66 @@ public class CGlobalDataFeature implements GraalFeature {
         Registration r = new Registration(invocationPlugins, CGlobalData.class);
         r.register1("get", Receiver.class, new InvocationPlugin() {
             @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+            public boolean apply(GraphBuilderContext builderContext, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 ValueNode cGlobalDataNode = receiver.get();
                 if (cGlobalDataNode.isConstant()) {
                     CGlobalDataImpl<?> data = (CGlobalDataImpl<?>) SubstrateObjectConstant.asObject(cGlobalDataNode.asConstant());
                     CGlobalDataInfo info = CGlobalDataFeature.this.map.get(data);
-                    b.addPush(targetMethod.getSignature().getReturnKind(), new CGlobalDataLoadAddressNode(info));
+                    builderContext.addPush(targetMethod.getSignature().getReturnKind(), new CGlobalDataLoadAddressNode(info));
                 } else {
-                    ConstantNode registry = ConstantNode.forConstant(nonConstantRegistryJavaConstant, b.getMetaAccess(), b.getGraph());
+                    ConstantNode nonConstantRegistryNode = ConstantNode.forConstant(nonConstantRegistryJavaConstant, builderContext.getMetaAccess(), builderContext.getGraph());
 
-                    ValueNode info = (ValueNode) b.handleReplacedInvoke(InvokeKind.Virtual, b.getMetaAccess().lookupJavaMethod(getCGlobalDataInfoMethod),
-                                    new ValueNode[]{registry, cGlobalDataNode}, false);
-                    b.pop(info.getStackKind());
-                    info = b.nullCheckedValue(info);
+                    ResolvedJavaMethod getCGlobalDataInfoResolvedMethod = builderContext.getMetaAccess().lookupJavaMethod(getCGlobalDataInfoMethod);
+                    ValueNode cGlobalDataInfo = (ValueNode) builderContext.handleReplacedInvoke(InvokeKind.Virtual, getCGlobalDataInfoResolvedMethod,
+                                    new ValueNode[]{nonConstantRegistryNode, cGlobalDataNode}, false);
+                    builderContext.pop(cGlobalDataInfo.getStackKind());
 
-                    ResolvedJavaType infoType = b.getMetaAccess().lookupJavaType(CGlobalDataInfo.class);
-                    if (infoType instanceof AnalysisType) {
-                        ((AnalysisType) infoType).registerAsReachable();
+                    ResolvedJavaType resolvedJavaType = builderContext.getMetaAccess().lookupJavaType(CGlobalDataInfo.class);
+                    if (resolvedJavaType instanceof AnalysisType) {
+                        ((AnalysisType) resolvedJavaType).registerAsReachable();
                     }
 
-                    ValueNode offset = b.add(LoadFieldNode.create(b.getAssumptions(), info, b.getMetaAccess().lookupJavaField(offsetField)));
-                    CGlobalDataLoadAddressNode baseAddress = b.add(new CGlobalDataLoadAddressNode(cGlobalDataBaseAddress));
+                    ResolvedJavaField offset = builderContext.getMetaAccess().lookupJavaField(offsetField);
+                    ValueNode offsetFieldNode = builderContext.add(LoadFieldNode.create(builderContext.getAssumptions(), cGlobalDataInfo, offset)); // cGlobalDataInfo.offset
 
+                    CGlobalDataLoadAddressNode cGlobalDataBaseAddressNode = builderContext.add(new CGlobalDataLoadAddressNode(cGlobalDataBaseAddress));
                     /* Both operands should have the same bits size */
-                    ValueNode offsetWidened = b.getGraph().addOrUnique(SignExtendNode.create(offset, IntegerStamp.getBits(baseAddress.stamp(NodeView.DEFAULT)), NodeView.DEFAULT));
-                    ValueNode address = b.add(new AddNode(baseAddress, offsetWidened));
+                    ValueNode cGlobalDataInfoOffsetWidened = builderContext.getGraph()
+                                    .addOrUnique(SignExtendNode.create(offsetFieldNode, IntegerStamp.getBits(cGlobalDataBaseAddressNode.stamp(NodeView.DEFAULT)), NodeView.DEFAULT));
+                    OffsetAddressNode cGlobalDataAddress = builderContext.add(new OffsetAddressNode(cGlobalDataBaseAddressNode, cGlobalDataInfoOffsetWidened));
 
-                    /* Do not dereference the address if CGlobalDataInfo is not a reference */
-                    ValueNode isSymbolReference = b.add(LoadFieldNode.create(b.getAssumptions(), info, b.getMetaAccess().lookupJavaField(isSymbolReferenceField)));
-                    LogicNode condition = IntegerEqualsNode.create(isSymbolReference, ConstantNode.forBoolean(false, b.getGraph()), NodeView.DEFAULT);
-                    ReadNode readValue = b.add(new ReadNode(b.add(OffsetAddressNode.create(address)), NamedLocationIdentity.ANY_LOCATION,
-                                    baseAddress.stamp(NodeView.DEFAULT), OnHeapMemoryAccess.BarrierType.NONE));
+                    /* Should not dereference the address if CGlobalDataInfo is not a reference */
+                    ResolvedJavaField isSymbolReference = builderContext.getMetaAccess().lookupJavaField(isSymbolReferenceField);
+                    ValueNode isSymbolReferenceNode = builderContext.add(LoadFieldNode.create(builderContext.getAssumptions(), cGlobalDataInfo, isSymbolReference)); // cGlobalDataInfo.isSymbolReference
+                    LogicNode logicNode = IntegerEqualsNode.create(isSymbolReferenceNode, ConstantNode.forBoolean(false, builderContext.getGraph()), NodeView.DEFAULT);
 
-                    AbstractBeginNode trueBegin = b.add(new BeginNode());
+                    AddNode calculatedAddress = builderContext.add(new AddNode(cGlobalDataAddress.getBase(), cGlobalDataAddress.getOffset()));
+                    ReadNode cGlobalDataValue = builderContext.add(new ReadNode(
+                                    cGlobalDataAddress,
+                                    NamedLocationIdentity.ANY_LOCATION,
+                                    cGlobalDataBaseAddressNode.stamp(NodeView.DEFAULT),
+                                    OnHeapMemoryAccess.BarrierType.NONE));
+
+                    AbstractBeginNode trueBegin = builderContext.add(new BeginNode());
                     FixedWithNextNode predecessor = (FixedWithNextNode) trueBegin.predecessor();
                     predecessor.setNext(null);
-                    AbstractBeginNode falseBegin = b.add(new BeginNode());
+                    AbstractBeginNode falseBegin = builderContext.add(new BeginNode());
                     trueBegin.setNext(null);
-                    IfNode ifNode = b.add(new IfNode(condition, trueBegin, falseBegin, NOT_LIKELY_PROBABILITY));
+                    IfNode ifNode = builderContext.add(new IfNode(logicNode, trueBegin, falseBegin, VERY_SLOW_PATH_PROBABILITY));
                     falseBegin.setNext(null);
                     predecessor.setNext(ifNode);
 
-                    EndNode thenEnd = b.add(new EndNode());
+                    EndNode thenEnd = builderContext.add(new EndNode());
                     trueBegin.setNext(thenEnd);
-                    EndNode elseEnd = b.add(new EndNode());
+                    EndNode elseEnd = builderContext.add(new EndNode());
                     falseBegin.setNext(elseEnd);
-
-                    AbstractMergeNode merge = b.add(new MergeNode());
+                    AbstractMergeNode merge = builderContext.add(new MergeNode());
                     merge.addForwardEnd(thenEnd);
                     merge.addForwardEnd(elseEnd);
-                    ValuePhiNode phiNode = new ValuePhiNode(StampFactory.pointer(), merge, new ValueNode[]{address, readValue});
-                    phiNode.inferStamp();
-                    b.push(targetMethod.getSignature().getReturnKind(), b.getGraph().addOrUnique(phiNode));
-                    b.setStateAfter(merge);
+
+                    ValuePhiNode phiNode = new ValuePhiNode(cGlobalDataBaseAddressNode.stamp(NodeView.DEFAULT), merge, new ValueNode[]{calculatedAddress, cGlobalDataValue});
+                    builderContext.push(targetMethod.getSignature().getReturnKind(), builderContext.getGraph().addOrUnique(phiNode));
+                    builderContext.setStateAfter(merge);
                 }
                 return true;
             }
