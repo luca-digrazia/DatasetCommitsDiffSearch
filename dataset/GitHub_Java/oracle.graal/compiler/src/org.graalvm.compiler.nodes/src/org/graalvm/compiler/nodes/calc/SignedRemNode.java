@@ -46,7 +46,7 @@ public class SignedRemNode extends IntegerDivRemNode implements LIRLowerable {
 
     public static final NodeClass<SignedRemNode> TYPE = NodeClass.create(SignedRemNode.class);
 
-    public SignedRemNode(ValueNode x, ValueNode y, GuardingNode zeroCheck) {
+    protected SignedRemNode(ValueNode x, ValueNode y, GuardingNode zeroCheck) {
         this(TYPE, x, y, zeroCheck);
     }
 

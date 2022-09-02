@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2019, Arm Limited. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Arm Limited and affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -159,8 +159,61 @@ public class IntegerDivRemConstantTest extends GraalCompilerTest {
         test("intRemNegativeConstant", Integer.MIN_VALUE);
     }
 
+    @SuppressWarnings("divzero")
+    public static int intRemZero(int val) {
+        return val % 0;
+    }
+
+    @Test
+    public void testIntRemZero() {
+        test("intRemZero", -10);
+        test("intRemZero", 0);
+        test("intRemZero", 4256);
+        test("intRemZero", Integer.MAX_VALUE);
+        test("intRemZero", Integer.MIN_VALUE);
+    }
+
+    public static int intRemMax(int val) {
+        return val % Integer.MAX_VALUE;
+    }
+
+    @Test
+    public void testIntRemMax() {
+        test("intRemMax", -10);
+        test("intRemMax", 0);
+        test("intRemMax", 4256);
+        test("intRemMax", Integer.MAX_VALUE);
+        test("intRemMax", Integer.MIN_VALUE);
+    }
+
+    public static int intRemMin(int val) {
+        return val % Integer.MIN_VALUE;
+    }
+
+    @Test
+    public void testIntRemMin() {
+        test("intRemMin", -10);
+        test("intRemMin", 0);
+        test("intRemMin", 4256);
+        test("intRemMin", Integer.MAX_VALUE);
+        test("intRemMin", Integer.MIN_VALUE);
+    }
+
     public static long longRemPositiveConstant(long val) {
         return val % 35170432;
+    }
+
+    public static int intRemPowerOf2(int val) {
+        return val % 4;
+    }
+
+    @Test
+    public void testIntRemPowerOf2() {
+        test("intRemPowerOf2", -10);
+        test("intRemPowerOf2", 0);
+        test("intRemPowerOf2", 4256);
+        test("intRemPowerOf2", Integer.MAX_VALUE);
+        test("intRemPowerOf2", Integer.MIN_VALUE);
     }
 
     @Test
@@ -183,5 +236,58 @@ public class IntegerDivRemConstantTest extends GraalCompilerTest {
         test("longRemNegativeConstant", 147065L);
         test("longRemNegativeConstant", Long.MAX_VALUE);
         test("longRemNegativeConstant", Long.MIN_VALUE);
+    }
+
+    @SuppressWarnings("divzero")
+    public static long longRemZero(long val) {
+        return val % 0;
+    }
+
+    @Test
+    public void testLongRemZero() {
+        test("longRemZero", -43L);
+        test("longRemZero", 0L);
+        test("longRemZero", 147065L);
+        test("longRemZero", Long.MAX_VALUE);
+        test("longRemZero", Long.MIN_VALUE);
+    }
+
+    public static long longRemMax(long val) {
+        return val % Long.MAX_VALUE;
+    }
+
+    @Test
+    public void testLongRemMax() {
+        test("longRemMax", -43L);
+        test("longRemMax", 0L);
+        test("longRemMax", 147065L);
+        test("longRemMax", Long.MAX_VALUE);
+        test("longRemMax", Long.MIN_VALUE);
+    }
+
+    public static long longRemMin(long val) {
+        return val % Long.MIN_VALUE;
+    }
+
+    @Test
+    public void testLongRemMin() {
+        test("longRemMin", -43L);
+        test("longRemMin", 0L);
+        test("longRemMin", 147065L);
+        test("longRemMin", Long.MAX_VALUE);
+        test("longRemMin", Long.MIN_VALUE);
+    }
+
+    public static long longRemPowerOf2(long val) {
+        return val % 4L;
+    }
+
+    @Test
+    public void testLongRemPowerOf2() {
+        test("longRemPowerOf2", -43L);
+        test("longRemPowerOf2", 0L);
+        test("longRemPowerOf2", 147065L);
+        test("longRemPowerOf2", Long.MAX_VALUE);
+        test("longRemPowerOf2", Long.MIN_VALUE);
     }
 }
