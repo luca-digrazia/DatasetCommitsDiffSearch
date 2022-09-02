@@ -26,7 +26,6 @@ package org.graalvm.compiler.truffle.runtime;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
@@ -89,26 +88,17 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
     }
 
     public void awaitCompletion(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        try {
-            future.get(timeout, unit);
-        } catch (CancellationException e) {
-            // Ignored
-        }
+        future.get(timeout, unit);
     }
 
     public void awaitCompletion() throws ExecutionException, InterruptedException {
-        try {
-            future.get();
-        } catch (CancellationException e) {
-            // Ignored
-        }
+        future.get();
     }
 
     public synchronized boolean cancel() {
         if (!cancelled) {
             cancelled = true;
             if (!started) {
-                future.cancel(false);
                 finished();
             }
             return true;
@@ -227,17 +217,14 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
         return false;
     }
 
-    /**
-     * @return false if the target reference is null (i.e. if the target was garbage-collected.
-     */
-    boolean updateWeight(long currentTime) {
+    double updateWeight(long currentTime) {
         OptimizedCallTarget target = targetRef.get();
         if (target == null) {
-            return false;
+            return -1.0;
         }
         long elapsed = currentTime - lastTime;
         if (elapsed < 1_000_000) {
-            return true;
+            return lastWeight;
         }
         int count = target.getCallAndLoopCount();
         double weight = rate(count, elapsed) * count;
@@ -245,7 +232,7 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
         lastCount = count;
         lastWeight = weight;
         assert weight >= 0.0 : "weight must be positive";
-        return true;
+        return weight;
     }
 
     private double rate(int count, long elapsed) {
