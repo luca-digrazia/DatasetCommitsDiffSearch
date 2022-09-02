@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -292,19 +292,6 @@ public class OptionProcessor extends AbstractProcessor {
         VariableElement stabilityElement = ElementUtils.getAnnotationValue(VariableElement.class, annotation, "stability");
         String stability = stabilityElement != null ? stabilityElement.getSimpleName().toString() : null;
 
-        String deprecationMessage = ElementUtils.getAnnotationValue(String.class, annotation, "deprecationMessage");
-        if (deprecationMessage.length() != 0) {
-            if (!deprecated) {
-                error(element, elementAnnotation, "Deprecation message can be specified only for deprecated options.");
-                return false;
-            }
-            char firstChar = deprecationMessage.charAt(0);
-            if (!Character.isUpperCase(firstChar)) {
-                error(element, elementAnnotation, "Option deprecation message must start with upper case letter.");
-                return false;
-            }
-        }
-
         for (String group : groupPrefixStrings) {
             String name;
             if (group.isEmpty() && optionName.isEmpty()) {
@@ -319,7 +306,7 @@ public class OptionProcessor extends AbstractProcessor {
                     name = group + "." + optionName;
                 }
             }
-            info.options.add(new OptionInfo(name, help, field, elementAnnotation, deprecated, category, stability, optionMap, deprecationMessage));
+            info.options.add(new OptionInfo(name, help, field, elementAnnotation, deprecated, category, stability, optionMap));
         }
         return true;
     }
@@ -451,7 +438,6 @@ public class OptionProcessor extends AbstractProcessor {
         builder.end(); // newBuilder call
         if (info.deprecated) {
             builder.startCall("", "deprecated").string("true").end();
-            builder.startCall("", "deprecationMessage").doubleQuote(info.deprecationMessage).end();
         } else {
             builder.startCall("", "deprecated").string("false").end();
         }
@@ -474,9 +460,8 @@ public class OptionProcessor extends AbstractProcessor {
         final AnnotationMirror annotation;
         final String category;
         final String stability;
-        final String deprecationMessage;
 
-        OptionInfo(String name, String help, VariableElement field, AnnotationMirror annotation, boolean deprecated, String category, String stability, boolean optionMap, String deprecationMessage) {
+        OptionInfo(String name, String help, VariableElement field, AnnotationMirror annotation, boolean deprecated, String category, String stability, boolean optionMap) {
             this.name = name;
             this.help = help;
             this.field = field;
@@ -485,7 +470,6 @@ public class OptionProcessor extends AbstractProcessor {
             this.category = category;
             this.stability = stability;
             this.optionMap = optionMap;
-            this.deprecationMessage = deprecationMessage;
         }
 
         @Override

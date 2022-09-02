@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.debugger.jdwp;
 
-import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
@@ -42,8 +41,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 class JDWP {
-
-    public static Object suspenStartupLock = new Object();
 
     public static final String JAVA_LANG_STRING = "Ljava/lang/String;";
 
@@ -83,7 +80,8 @@ class JDWP {
                         ObjectKlass objectKlass = (ObjectKlass) klass;
                         reply.writeInt(ClassStatusConstants.fromEspressoStatus(objectKlass.getState()));
                     } else {
-                        reply.writeInt(ClassStatusConstants.fromEspressoStatus(ObjectKlass.INITIALIZED));
+                        // TODO(Gregersen) - not implemented for arrays and primitive types
+                        throw new RuntimeException("not implementet yet");
                     }
                 }
 
@@ -151,7 +149,7 @@ class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeBoolean(true); // canWatchFieldModification
                 reply.writeBoolean(true); // canWatchFieldAccess
-                reply.writeBoolean(true); // canGetBytecodes
+                reply.writeBoolean(false); // canGetBytecodes
                 reply.writeBoolean(true); // canGetSyntheticAttribute
                 reply.writeBoolean(false); // canGetOwnedMonitorInfo
                 reply.writeBoolean(false); // canGetCurrentContendedMonitor
@@ -169,7 +167,7 @@ class JDWP {
                 // TODO(Gregersen) - figure out what capabilities we want to expose
                 reply.writeBoolean(true); // canWatchFieldModification
                 reply.writeBoolean(true); // canWatchFieldAccess
-                reply.writeBoolean(true); // canGetBytecodes
+                reply.writeBoolean(false); // canGetBytecodes
                 reply.writeBoolean(true); // canGetSyntheticAttribute
                 reply.writeBoolean(false); // canGetOwnedMonitorInfo
                 reply.writeBoolean(false); // canGetCurrentContendedMonitor
@@ -178,11 +176,11 @@ class JDWP {
                 reply.writeBoolean(false); // canAddMethod
                 reply.writeBoolean(false); // canUnrestrictedlyRedefineClasses
                 reply.writeBoolean(false); // canPopFrames
-                reply.writeBoolean(true); // canUseInstanceFilters
+                reply.writeBoolean(false); // canUseInstanceFilters
                 reply.writeBoolean(false); // canGetSourceDebugExtension
-                reply.writeBoolean(true); // canRequestVMDeathEvent
-                reply.writeBoolean(true); // canSetDefaultStratum
-                reply.writeBoolean(true); // canGetInstanceInfo
+                reply.writeBoolean(false); // canRequestVMDeathEvent
+                reply.writeBoolean(false); // canSetDefaultStratum
+                reply.writeBoolean(false); // canGetInstanceInfo
                 reply.writeBoolean(false); // canRequestMonitorEvents
                 reply.writeBoolean(false); // canGetMonitorFrameInfo
                 reply.writeBoolean(false); // canUseSourceNameFilters
@@ -384,25 +382,6 @@ class JDWP {
                 return reply;
             }
         }
-
-        static class CONSTANT_POOL {
-            public static final int ID = 18;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                long refTypeId = input.readLong();
-                Klass refType = (Klass) Ids.fromId((int) refTypeId);
-
-                ConstantPool pool = refType.getConstantPool();
-                reply.writeInt(pool.length() + 1);
-                // TODO(Gregersen) - raw bytes of the contant pool
-                // byte[] bytes = pool.
-
-                return reply;
-            }
-        }
     }
 
     static class ClassType {
@@ -426,35 +405,6 @@ class JDWP {
                     ObjectKlass superKlass = refType.getSuperKlass();
                     reply.writeLong(Ids.getIdAsLong(superKlass));
                 }
-                return reply;
-            }
-        }
-
-        static class SET_VALUES {
-
-            public static final int ID = 2;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                long classId = input.readLong();
-                Klass refType = (Klass) Ids.fromId((int) classId);
-                int values = input.readInt();
-
-                for (int i = 0; i < values; i++) {
-                    long fieldId = input.readLong();
-                    Field field = (Field) Ids.fromId((int)fieldId);
-                    byte tag = TagConstants.fromJavaKind(field.getKind());
-                    if (tag == TagConstants.OBJECT) {
-                        if (JAVA_LANG_STRING.equals(field.getType().toString())) {
-                            tag = TagConstants.STRING;
-                        }
-                    }
-                    Object value = readValue(tag, input);
-                    field.set(refType.getStatics(), value);
-                }
-
                 return reply;
             }
         }
@@ -519,27 +469,6 @@ class JDWP {
                 return reply;
             }
         }
-
-        static class BYTECODES {
-            public static final int ID = 3;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                input.readLong(); // ref type
-                long methodId = input.readLong();
-                Method method = (Method) Ids.fromId((int) methodId);
-
-                byte[] code = method.getCode();
-
-                reply.writeInt(code.length);
-                reply.writeByteArray(code);
-
-                return reply;
-            }
-        }
-
         static class VARIABLE_TABLE_WITH_GENERIC {
             public static final int ID = 5;
 
@@ -636,31 +565,6 @@ class JDWP {
                     writeValue(tag, value, reply, true);
                 }
                 return reply;
-            }
-        }
-
-        static class SET_VALUES {
-            public static final int ID = 3;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long objectId = input.readLong();
-                StaticObject staticObject = (StaticObject) Ids.fromId((int) objectId);
-                int numFields = input.readInt();
-
-                for (int i = 0; i < numFields; i++) {
-                    long fieldId = input.readLong();
-                    Field field = (Field) Ids.fromId((int) fieldId);
-                    byte tag = TagConstants.fromJavaKind(field.getKind());
-                    if (tag == TagConstants.OBJECT) {
-                        if (JAVA_LANG_STRING.equals(field.getType().toString())) {
-                            tag = TagConstants.STRING;
-                        }
-                    }
-                    Object value = readValue(tag, input);
-                    field.set(staticObject, value);
-                }
-                return new PacketStream().replyPacket().id(packet.id);
             }
         }
 
@@ -993,12 +897,7 @@ class JDWP {
                 if (((ArrayKlass) array.getKlass()).getDimension() > 1) {
                     tag = TagConstants.ARRAY;
                 }
-                setArrayValues(meta, input, index, values, array, tag);
 
-                return new PacketStream().replyPacket().id(packet.id);
-            }
-
-            private static void setArrayValues(Meta meta, PacketStream input, int index, int values, StaticObject array, byte tag) {
                 for (int i = index; i < index + values; i++) {
                     switch (tag) {
                         case TagConstants.BOOLEAN:
@@ -1050,35 +949,7 @@ class JDWP {
                         default: throw EspressoError.shouldNotReachHere();
                     }
                 }
-            }
-        }
-    }
-
-    static class ClassLoaderReference {
-        public static final int ID = 14;
-
-        static class VISIBLE_CLASSES {
-
-            public static final int ID = 1;
-
-            static PacketStream createReply(Packet packet, EspressoContext context) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                long classLoaderId = input.readLong();
-
-                StaticObject classLoader = (StaticObject) Ids.fromId((int) classLoaderId);
-
-                // TODO(Gregersen) - we will need all classes for which this classloader was the initiating loader
-                Klass[] klasses = context.getRegistries().getLoadedClassesByLoader(classLoader);
-
-                reply.writeInt(klasses.length);
-
-                for (Klass klass : klasses) {
-                    reply.writeByte(TypeTag.getKind(klass));
-                    reply.writeLong(Ids.getIdAsLong(klass));
-                }
-                return reply;
+                return new PacketStream().replyPacket().id(packet.id);
             }
         }
     }

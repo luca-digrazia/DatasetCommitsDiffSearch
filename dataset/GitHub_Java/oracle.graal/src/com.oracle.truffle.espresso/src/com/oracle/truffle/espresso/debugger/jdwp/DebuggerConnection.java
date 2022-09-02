@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.debugger.jdwp;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.debugger.BreakpointInfo;
 import com.oracle.truffle.espresso.debugger.SourceLocation;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -42,14 +41,14 @@ public class DebuggerConnection implements JDWPCommands {
         this.controller = controller;
     }
 
-    public void doProcessCommands(boolean suspend) {
+    public void doProcessCommands() {
         // fire up two threads, one for the low-level connection to receive packets
         // and one for processing the debugger commands from a queue
         Thread commandProcessor = new Thread(new CommandProcessorThread(), "jdwp-command-processor");
         commandProcessor.setDaemon(true);
         commandProcessor.start();
 
-        Thread jdwpTransport = new Thread(new JDWPTransportThread(suspend), "jdwp-transport");
+        Thread jdwpTransport = new Thread(new JDWPTransportThread(), "jdwp-transport");
         jdwpTransport.setDaemon(true);
         jdwpTransport.start();
     }
@@ -125,60 +124,15 @@ public class DebuggerConnection implements JDWPCommands {
 
     private class JDWPTransportThread implements Runnable {
 
-        @CompilerDirectives.CompilationFinal
-        private boolean started;
         private RequestedJDWPEvents requestedJDWPEvents = new RequestedJDWPEvents(connection);
-        // constant used to allow for initial startup sequence debugger commands to occur before
-        // waking up the main Espresso startup thread
-        private static final int GRACE_PERIOD = 100;
-
-        public JDWPTransportThread(boolean suspend) {
-            this.started = !suspend;
-        }
 
         @Override
         public void run() {
-
-            long time = -1;
-            long limit = 0;
-
             while(!Thread.currentThread().isInterrupted()) {
                 try {
-                    if (!started) {
-                        // in startup sequence
-                        if (time == -1) {
-                            // first packet processed
-                            processPacket(Packet.fromByteArray(connection.readPacket()));
-                            time = System.currentTimeMillis();
-                            limit = time + GRACE_PERIOD;
-                        } else {
-                            long currentTime = System.currentTimeMillis();
-                            if (currentTime > limit) {
-                                started = true;
-                                // allow the main thread to continue starting up the program
-                                synchronized (JDWP.suspenStartupLock) {
-                                    JDWP.suspenStartupLock.notifyAll();
-                                }
-                                processPacket(Packet.fromByteArray(connection.readPacket()));
-                            } else {
-                                // check if a packet is available
-                                if(connection.isAvailable()) {
-                                    processPacket(Packet.fromByteArray(connection.readPacket()));
-                                    time = System.currentTimeMillis();
-                                    limit = time + GRACE_PERIOD;
-                                } else {
-                                    try {
-                                        Thread.sleep(10);
-                                    } catch (InterruptedException e) {
-                                        Thread.interrupted();
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        processPacket(Packet.fromByteArray(connection.readPacket()));
-                    }
                     // blocking call
+                    Packet packet = Packet.fromByteArray(connection.readPacket());
+                    processPacket(packet);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -252,9 +206,6 @@ public class DebuggerConnection implements JDWPCommands {
                             case JDWP.ReferenceType.METHODS_WITH_GENERIC.ID:
                                 reply = JDWP.ReferenceType.METHODS_WITH_GENERIC.createReply(packet);
                                 break;
-                            //case JDWP.ReferenceType.CONSTANT_POOL.ID:
-                            //    reply = JDWP.ReferenceType.CONSTANT_POOL.createReply(packet);
-                            //    break;
                         }
                         break;
                     }
@@ -263,9 +214,6 @@ public class DebuggerConnection implements JDWPCommands {
                             case JDWP.ClassType.SUPERCLASS.ID:
                                 reply = JDWP.ClassType.SUPERCLASS.createReply(packet);
                                 break;
-                            case JDWP.ClassType.SET_VALUES.ID:
-                                reply = JDWP.ClassType.SET_VALUES.createReply(packet);
-                                break;
                         }
                         break;
                     }
@@ -273,9 +221,6 @@ public class DebuggerConnection implements JDWPCommands {
                         switch (packet.cmd) {
                             case JDWP.METHOD.LINE_TABLE.ID:
                                 reply = JDWP.METHOD.LINE_TABLE.createReply(packet);
-                                break;
-                            case JDWP.METHOD.BYTECODES.ID:
-                                reply = JDWP.METHOD.BYTECODES.createReply(packet);
                                 break;
                             case JDWP.METHOD.VARIABLE_TABLE_WITH_GENERIC.ID:
                                 reply = JDWP.METHOD.VARIABLE_TABLE_WITH_GENERIC.createReply(packet);
@@ -290,9 +235,6 @@ public class DebuggerConnection implements JDWPCommands {
                                 break;
                             case JDWP.ObjectReference.GET_VALUES.ID:
                                 reply = JDWP.ObjectReference.GET_VALUES.createReply(packet);
-                                break;
-                            case JDWP.ObjectReference.SET_VALUES.ID:
-                                reply = JDWP.ObjectReference.SET_VALUES.createReply(packet);
                                 break;
                             case JDWP.ObjectReference.INVOKE_METHOD.ID:
                                 reply = JDWP.ObjectReference.INVOKE_METHOD.createReply(packet);
@@ -358,15 +300,6 @@ public class DebuggerConnection implements JDWPCommands {
                             }
                             default:
                                 break;
-                        }
-                        break;
-                    }
-                    case JDWP.ClassLoaderReference.ID: {
-                        switch (packet.cmd) {
-                            case JDWP.ClassLoaderReference.VISIBLE_CLASSES.ID: {
-                                reply = JDWP.ClassLoaderReference.VISIBLE_CLASSES.createReply(packet, controller.getContext());
-                                break;
-                            }
                         }
                         break;
                     }

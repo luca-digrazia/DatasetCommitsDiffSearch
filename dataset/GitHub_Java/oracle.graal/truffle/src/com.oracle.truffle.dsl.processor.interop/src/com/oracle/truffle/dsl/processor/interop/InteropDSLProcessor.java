@@ -1,30 +1,47 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.dsl.processor.interop;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,6 +50,7 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.FilerException;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
+import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -41,16 +59,12 @@ import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic.Kind;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.CanResolve;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.dsl.processor.ExpectError;
+import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.TruffleTypes;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
 /**
@@ -58,15 +72,34 @@ import com.oracle.truffle.dsl.processor.java.ElementUtils;
  */
 public final class InteropDSLProcessor extends AbstractProcessor {
 
-    static final List<Message> KNOWN_MESSAGES = Arrays.asList(new Message[]{Message.READ, Message.WRITE, Message.IS_NULL, Message.IS_EXECUTABLE,
-                    Message.IS_BOXED, Message.HAS_SIZE, Message.GET_SIZE, Message.KEY_INFO, Message.KEYS, Message.UNBOX, Message.IS_POINTER,
-                    Message.AS_POINTER, Message.TO_NATIVE,
-                    Message.createExecute(0), Message.createInvoke(0), Message.createNew(0)});
+    static final Set<String> KNOWN_MESSAGES = new HashSet<>();
+
+    static {
+        KNOWN_MESSAGES.add("READ");
+        KNOWN_MESSAGES.add("WRITE");
+        KNOWN_MESSAGES.add("REMOVE");
+        KNOWN_MESSAGES.add("UNBOX");
+        KNOWN_MESSAGES.add("GET_SIZE");
+        KNOWN_MESSAGES.add("HAS_SIZE");
+        KNOWN_MESSAGES.add("IS_NULL");
+        KNOWN_MESSAGES.add("IS_BOXED");
+        KNOWN_MESSAGES.add("IS_EXECUTABLE");
+        KNOWN_MESSAGES.add("IS_INSTANTIABLE");
+        KNOWN_MESSAGES.add("HAS_KEYS");
+        KNOWN_MESSAGES.add("KEYS");
+        KNOWN_MESSAGES.add("KEY_INFO");
+        KNOWN_MESSAGES.add("IS_POINTER");
+        KNOWN_MESSAGES.add("AS_POINTER");
+        KNOWN_MESSAGES.add("TO_NATIVE");
+        KNOWN_MESSAGES.add("EXECUTE");
+        KNOWN_MESSAGES.add("NEW");
+        KNOWN_MESSAGES.add("INVOKE");
+    }
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> annotations = new HashSet<>();
-        annotations.add("com.oracle.truffle.api.interop.MessageResolution");
+        annotations.add(TruffleTypes.MessageResolution_Name);
         return annotations;
     }
 
@@ -77,22 +110,26 @@ public final class InteropDSLProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        if (roundEnv.processingOver()) {
-            return false;
+        if (!roundEnv.processingOver()) {
+            process0(roundEnv);
         }
-        process0(roundEnv);
-        return true;
+        return false;
     }
 
     private void process0(RoundEnvironment roundEnv) {
-        for (Element e : roundEnv.getElementsAnnotatedWith(MessageResolution.class)) {
-            try {
-                processElement(e);
-            } catch (Throwable ex) {
-                ex.printStackTrace();
-                String message = "Uncaught error in " + this.getClass();
-                processingEnv.getMessager().printMessage(Kind.ERROR, message + ": " + ElementUtils.printException(ex), e);
+        try {
+            ProcessorContext context = ProcessorContext.enter(processingEnv);
+            for (Element e : roundEnv.getElementsAnnotatedWith(ElementUtils.castTypeElement(context.getTypes().MessageResolution))) {
+                try {
+                    processElement(e);
+                } catch (Throwable ex) {
+                    ex.printStackTrace();
+                    String message = "Uncaught error in " + this.getClass();
+                    processingEnv.getMessager().printMessage(Kind.ERROR, message + ": " + ElementUtils.printException(ex), e);
+                }
             }
+        } finally {
+            ProcessorContext.leave();
         }
     }
 
@@ -100,7 +137,8 @@ public final class InteropDSLProcessor extends AbstractProcessor {
         if (e.getKind() != ElementKind.CLASS) {
             return;
         }
-        MessageResolution messageImplementations = e.getAnnotation(MessageResolution.class);
+        TruffleTypes types = ProcessorContext.getInstance().getTypes();
+        AnnotationMirror messageImplementations = ElementUtils.findAnnotationMirror(e, types.MessageResolution);
         if (messageImplementations == null) {
             return;
         }
@@ -125,7 +163,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             if (innerClass.getKind() != ElementKind.CLASS) {
                 continue;
             }
-            if (innerClass.getAnnotation(CanResolve.class) != null) {
+            if (ElementUtils.findAnnotationMirror(innerClass, types.CanResolve) != null) {
                 receiverChecks.add((TypeElement) innerClass);
             }
         }
@@ -153,7 +191,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             if (innerClass.getKind() != ElementKind.CLASS) {
                 continue;
             }
-            if (innerClass.getAnnotation(Resolve.class) != null) {
+            if (ElementUtils.findAnnotationMirror(innerClass, types.Resolve) != null) {
                 elements.add((TypeElement) innerClass);
             }
 
@@ -164,7 +202,7 @@ public final class InteropDSLProcessor extends AbstractProcessor {
         // Process inner classes with an @Resolve annotation
         boolean generationSuccessfull = true;
         for (TypeElement elem : elements) {
-            generationSuccessfull &= processResolveClass(elem.getAnnotation(Resolve.class), messageImplementations, elem, factoryGenerator);
+            generationSuccessfull &= processResolveClass(ElementUtils.findAnnotationMirror(elem, types.Resolve), messageImplementations, elem, factoryGenerator);
         }
         if (!generationSuccessfull) {
             return;
@@ -185,11 +223,11 @@ public final class InteropDSLProcessor extends AbstractProcessor {
         }
     }
 
-    private boolean processLanguageCheck(MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator factoryGenerator)
-                    throws IOException {
+    private boolean processLanguageCheck(AnnotationMirror messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator factoryGenerator) {
         LanguageCheckGenerator generator = new LanguageCheckGenerator(processingEnv, messageResolutionAnnotation, element, factoryGenerator);
 
-        if (!ElementUtils.typeEquals(element.getSuperclass(), Utils.getTypeMirror(processingEnv, com.oracle.truffle.api.nodes.Node.class))) {
+        TruffleTypes types = ProcessorContext.getInstance().getTypes();
+        if (!ElementUtils.typeEquals(element.getSuperclass(), types.Node)) {
             emitError(ElementUtils.getQualifiedName(element) + " must extend com.oracle.truffle.api.nodes.Node.", element);
             return false;
         }
@@ -222,26 +260,21 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             return false;
         }
 
-        try {
-            generator.generate();
-        } catch (FilerException ex) {
-            emitError("Language check class with same name already exists", element);
-            return false;
-        }
-        factoryGenerator.addLanguageCheckHandler(generator.getRootNodeFactoryInvokation());
+        factoryGenerator.addLanguageCheckHandler(generator);
         return true;
     }
 
-    private boolean processResolveClass(Resolve resolveAnnotation, MessageResolution messageResolutionAnnotation, TypeElement element, ForeignAccessFactoryGenerator factoryGenerator)
-                    throws IOException {
+    private boolean processResolveClass(AnnotationMirror resolveAnnotation, AnnotationMirror messageResolutionAnnotation, TypeElement element,
+                    ForeignAccessFactoryGenerator factoryGenerator) {
         MessageGenerator currentGenerator = MessageGenerator.getGenerator(processingEnv, resolveAnnotation, messageResolutionAnnotation, element, factoryGenerator);
 
+        TruffleTypes types = ProcessorContext.getInstance().getTypes();
         if (currentGenerator == null) {
-            emitError("Unknown message type: " + resolveAnnotation.message(), element);
+            emitError("Unknown message type: " + ElementUtils.getAnnotationValue(String.class, resolveAnnotation, "message"), element);
             return false;
         }
 
-        if (!ElementUtils.typeEquals(element.getSuperclass(), Utils.getTypeMirror(processingEnv, com.oracle.truffle.api.nodes.Node.class))) {
+        if (!ElementUtils.typeEquals(element.getSuperclass(), types.Node)) {
             emitError(ElementUtils.getQualifiedName(element) + " must extend com.oracle.truffle.api.nodes.Node.", element);
             return false;
         }
@@ -270,14 +303,14 @@ public final class InteropDSLProcessor extends AbstractProcessor {
         List<? extends VariableElement> params = methods.get(0).getParameters();
         int argumentSize = params.size();
 
-        if (params.size() > 0 && ElementUtils.typeEquals(params.get(0).asType(), Utils.getTypeMirror(processingEnv, VirtualFrame.class))) {
+        if (params.size() > 0 && ElementUtils.typeEquals(params.get(0).asType(), types.VirtualFrame)) {
             argumentSize -= 1;
         }
         for (ExecutableElement m : methods) {
             params = m.getParameters();
 
             int paramsSize = params.size();
-            if (params.size() > 0 && ElementUtils.typeEquals(params.get(0).asType(), Utils.getTypeMirror(processingEnv, VirtualFrame.class))) {
+            if (params.size() > 0 && ElementUtils.typeEquals(params.get(0).asType(), types.VirtualFrame)) {
                 paramsSize -= 1;
             }
 
@@ -295,40 +328,31 @@ public final class InteropDSLProcessor extends AbstractProcessor {
             }
         }
 
-        try {
-            currentGenerator.generate();
-        } catch (FilerException ex) {
-            emitError("Message resolution class with same name already exists", element);
-            return false;
+        String message = ElementUtils.getAnnotationValue(String.class, resolveAnnotation, "message");
+        if (!Utils.getMessage(processingEnv, message)) {
+            message = currentGenerator.getMessageName();
         }
-        Object currentMessage = Utils.getMessage(processingEnv, resolveAnnotation.message());
-        factoryGenerator.addMessageHandler(currentMessage, currentGenerator.getRootNodeFactoryInvokation());
+        factoryGenerator.addMessageHandler(message, currentGenerator);
         return true;
     }
 
-    private static boolean isReceiverNonStaticInner(MessageResolution message) {
-        try {
-            message.receiverType();
-            throw new AssertionError();
-        } catch (MirroredTypeException mte) {
-            // This exception is always thrown: use the mirrors to inspect the class
-            DeclaredType type = (DeclaredType) mte.getTypeMirror();
-            TypeElement element = (TypeElement) type.asElement();
-            if (element.getNestingKind() == NestingKind.MEMBER || element.getNestingKind() == NestingKind.LOCAL) {
-                for (Modifier modifier : element.getModifiers()) {
-                    if (modifier.compareTo(Modifier.STATIC) == 0) {
-                        return false;
-                    }
+    private static boolean isReceiverNonStaticInner(AnnotationMirror message) {
+        DeclaredType type = (DeclaredType) ElementUtils.getAnnotationValue(TypeMirror.class, message, "receiverType");
+        TypeElement element = (TypeElement) type.asElement();
+        if (element.getNestingKind() == NestingKind.MEMBER || element.getNestingKind() == NestingKind.LOCAL) {
+            for (Modifier modifier : element.getModifiers()) {
+                if (modifier.compareTo(Modifier.STATIC) == 0) {
+                    return false;
                 }
-                return true;
-            } else {
-                return false;
             }
+            return true;
+        } else {
+            return false;
         }
     }
 
     private boolean isInstanceMissing(String receiverTypeFullClassName) {
-        for (Element elem : this.processingEnv.getElementUtils().getTypeElement(receiverTypeFullClassName).getEnclosedElements()) {
+        for (Element elem : ElementUtils.getTypeElement(this.processingEnv, receiverTypeFullClassName).getEnclosedElements()) {
             if (elem.getKind().equals(ElementKind.METHOD)) {
                 ExecutableElement method = (ExecutableElement) elem;
                 if (method.getSimpleName().toString().equals("isInstance")) {
@@ -340,11 +364,12 @@ public final class InteropDSLProcessor extends AbstractProcessor {
     }
 
     private boolean isInstanceHasWrongSignature(String receiverTypeFullClassName) {
-        for (Element elem : this.processingEnv.getElementUtils().getTypeElement(receiverTypeFullClassName).getEnclosedElements()) {
+        TruffleTypes types = ProcessorContext.getInstance().getTypes();
+        for (Element elem : ElementUtils.getTypeElement(this.processingEnv, receiverTypeFullClassName).getEnclosedElements()) {
             if (elem.getKind().equals(ElementKind.METHOD)) {
                 ExecutableElement method = (ExecutableElement) elem;
                 if (method.getSimpleName().toString().equals("isInstance") && method.getParameters().size() == 1 &&
-                                ElementUtils.typeEquals(method.getParameters().get(0).asType(), Utils.getTypeMirror(processingEnv, TruffleObject.class))) {
+                                ElementUtils.typeEquals(method.getParameters().get(0).asType(), types.TruffleObject)) {
                     return false;
                 }
             }
