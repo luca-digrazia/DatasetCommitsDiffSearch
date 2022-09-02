@@ -66,7 +66,7 @@ import org.graalvm.compiler.lir.LabelRef;
 import org.graalvm.compiler.lir.Opcode;
 import org.graalvm.compiler.lir.StandardOp.BlockEndOp;
 import org.graalvm.compiler.lir.StandardOp.LoadConstantOp;
-import org.graalvm.compiler.lir.StandardOp.ZapRegistersOp;
+import org.graalvm.compiler.lir.StandardOp.SaveRegistersOp;
 import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.lir.aarch64.AArch64BreakpointOp;
 import org.graalvm.compiler.lir.aarch64.AArch64Call;
@@ -269,9 +269,8 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
 
         private final SharedMethod method;
 
-        public SubstrateLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, FrameMapBuilder frameMapBuilder, RegisterAllocationConfig registerAllocationConfig,
-                        CallingConvention callingConvention, SharedMethod method) {
-            super(compilationId, lir, frameMapBuilder, registerAllocationConfig, callingConvention);
+        public SubstrateLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, FrameMapBuilder frameMapBuilder, CallingConvention callingConvention, SharedMethod method) {
+            super(compilationId, lir, frameMapBuilder, callingConvention);
             this.method = method;
 
             if (method.canDeoptimize() || method.isDeoptTarget()) {
@@ -360,7 +359,7 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
         }
 
         @Override
-        public ZapRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
+        public SaveRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
             throw unimplemented();
         }
 
@@ -886,11 +885,11 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
     }
 
     @Override
-    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterAllocationConfig registerAllocationConfig, StructuredGraph graph, Object stub) {
+    public LIRGenerationResult newLIRGenerationResult(CompilationIdentifier compilationId, LIR lir, RegisterConfig registerConfig, StructuredGraph graph, Object stub) {
         SharedMethod method = (SharedMethod) graph.method();
         CallingConvention callingConvention = CodeUtil.getCallingConvention(getCodeCache(), method.isEntryPoint() ? SubstrateCallingConventionType.NativeCallee
                         : SubstrateCallingConventionType.JavaCallee, method, this);
-        return new SubstrateLIRGenerationResult(compilationId, lir, newFrameMapBuilder(registerAllocationConfig.getRegisterConfig()), registerAllocationConfig, callingConvention, method);
+        return new SubstrateLIRGenerationResult(compilationId, lir, newFrameMapBuilder(registerConfig), callingConvention, method);
     }
 
     @Override
