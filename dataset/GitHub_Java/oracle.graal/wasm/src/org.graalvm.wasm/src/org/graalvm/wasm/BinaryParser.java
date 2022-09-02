@@ -957,12 +957,8 @@ public class BinaryParser extends BinaryStreamParser {
         int numElements = readVectorLength();
         for (int elemSegmentId = 0; elemSegmentId != numElements; ++elemSegmentId) {
             int tableIndex = readUnsignedInt32();
-            // At the moment, WebAssembly (1.0, MVP) only supports one table instance, thus the only
-            // valid
+            // At the moment, WebAssembly only supports one table instance, thus the only valid
             // table index is 0.
-            // Support for different table indices and "segment flags" might be added in the future
-            // (see
-            // https://github.com/WebAssembly/bulk-memory-operations/blob/master/proposals/bulk-memory-operations/Overview.md#element-segments).
             Assert.assertIntEqual(tableIndex, 0, "Invalid table index");
 
             // Table offset expression must be a constant expression with result type i32.
@@ -1315,9 +1311,9 @@ public class BinaryParser extends BinaryStreamParser {
         }
 
         // Convert min and max to longs to avoid checking bounds on overflowed values.
+        long longMin = out[0] & 0xFFFFFFFFL;
+        long longMax = out[1] & 0xFFFFFFFFL;
         Assert.assertLongLessOrEqual(longMin, k, "Invalid " + minName);
-        long longMin = unsignedInt32ToLong(out[0]);
-        long longMax = unsignedInt32ToLong(out[1]);
         if (out[1] != -1) {
             Assert.assertLongLessOrEqual(longMax, k, "Invalid " + maxName);
             Assert.assertLongLessOrEqual(longMin, longMax, "Invalid " + minName);
