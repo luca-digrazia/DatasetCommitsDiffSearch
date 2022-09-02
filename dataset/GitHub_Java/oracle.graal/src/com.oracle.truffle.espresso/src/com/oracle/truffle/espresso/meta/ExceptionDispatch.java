@@ -38,7 +38,21 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 public final class ExceptionDispatch implements ContextAccess {
     private final Meta meta;
 
-    private final ObjectKlass java_lang_runtimeException;
+    @CompilerDirectives.CompilationFinal(dimensions = 1) //
+    private ObjectKlass[] fastExceptionKlasses;
+
+    private void initExceptionKlasses() {
+        fastExceptionKlasses = new ObjectKlass[]{
+                        meta.java_lang_NullPointerException,
+                        meta.java_lang_ClassCastException,
+                        meta.java_lang_IllegalArgumentException,
+                        meta.java_lang_ArrayIndexOutOfBoundsException,
+                        meta.java_lang_StringIndexOutOfBoundsException,
+                        meta.java_lang_IndexOutOfBoundsException,
+                        meta.java_lang_ArrayStoreException,
+                        meta.java_lang_ArithmeticException
+        };
+    }
 
     @Override
     public EspressoContext getContext() {
@@ -52,7 +66,7 @@ public final class ExceptionDispatch implements ContextAccess {
 
     public ExceptionDispatch(Meta meta) {
         this.meta = meta;
-        this.java_lang_runtimeException = meta.java_lang_RuntimeException;
+        initExceptionKlasses();
     }
 
     /**
@@ -61,18 +75,18 @@ public final class ExceptionDispatch implements ContextAccess {
     @ExplodeLoop
     StaticObject initEx(ObjectKlass klass, StaticObject message, StaticObject cause) {
         if (!CompilerDirectives.inInterpreter() && CompilerDirectives.isPartialEvaluationConstant(klass)) {
-            if (StaticObject.isNull(klass.getDefiningClassLoader()) && java_lang_runtimeException.isAssignableFrom(klass))
-                return fastPath(klass, message, cause);
+            for (ObjectKlass k : fastExceptionKlasses) {
+                if (k == klass) {
+                    return fastPath(klass, message, cause);
+                }
+            }
         }
         return slowPath(klass, message, cause);
     }
 
     private StaticObject fastPath(ObjectKlass klass, StaticObject message, StaticObject cause) {
         StaticObject ex = klass.allocateInstance();
-
-        // TODO: Remove this when truffle exceptions are reworked.
         InterpreterToVM.fillInStackTrace(ex, false, meta);
-
         if (message != null) {
             ex.setField(meta.java_lang_Throwable_message, message);
         }
