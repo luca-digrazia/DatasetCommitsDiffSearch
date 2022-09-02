@@ -64,14 +64,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@link InitializeSymbolsNode} creates the symbol of all defined functions and globals, and put
- * them into the symbol table.
+ * Allocates global storage for a module and initializes the global table.
  *
- * @see InitializeScopeNode
- * @see InitializeGlobalNode
- * @see InitializeModuleNode
- * @see InitializeExternalNode
- * @see InitializeOverwriteNode
+ * see Runner.InitializeGlobalNode see Runner.InitializeModuleNode see Runner.InitializeExternalNode
+ * see Runner.InitializeOverwriteNode
  */
 public final class InitializeSymbolsNode extends LLVMNode {
 
