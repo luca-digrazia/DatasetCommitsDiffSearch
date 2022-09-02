@@ -51,7 +51,6 @@ import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.FixedNode;
-import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeNode;
@@ -93,6 +92,7 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.graph.MergeableState;
 import org.graalvm.compiler.phases.graph.PostOrderNodeIterator;
+import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopy;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode;
 import org.graalvm.compiler.replacements.nodes.MacroNode;
@@ -124,7 +124,6 @@ import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.nodes.AnalysisArraysCopyOfNode;
 import com.oracle.graal.pointsto.nodes.UnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.nodes.UnsafePartitionStoreNode;
-import com.oracle.graal.pointsto.phases.InlineBeforeAnalysis;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
 import jdk.vm.ci.code.BytecodePosition;
@@ -160,45 +159,46 @@ public class MethodTypeFlowBuilder {
 
     @SuppressWarnings("try")
     private boolean parse() {
-        AnalysisParsedGraph analysisParsedGraph = method.ensureGraphParsed(bb);
+        /*
+         * When we intend to strengthen Graal graphs, then the graph needs to be preserved. Type
+         * flow nodes references Graal IR nodes directly as their source position.
+         * 
+         * When we create separate StaticAnalysisResults objects, then Graal graphs are not needed
+         * after static analysis and clearing them reduces memory usage.
+         */
+        boolean clearCache = !bb.strengthenGraalGraphs();
+        AnalysisParsedGraph analysisParsedGraph = method.ensureGraphParsed(bb, clearCache);
+
         if (analysisParsedGraph.isIntrinsic()) {
             method.registerAsIntrinsicMethod();
         }
 
-        if (analysisParsedGraph.getEncodedGraph() == null) {
+        graph = analysisParsedGraph.getGraph();
+        if (graph == null) {
             return false;
         }
-        graph = InlineBeforeAnalysis.decodeGraph(bb, method, analysisParsedGraph);
 
-        try (DebugContext.Scope s = graph.getDebug().scope("MethodTypeFlowBuilder", graph)) {
-            if (!bb.strengthenGraalGraphs()) {
-                /*
-                 * Register used types and fields before canonicalization can optimize them. When
-                 * parsing graphs again for compilation, we need to have all types, methods, fields
-                 * of the original graph registered properly.
-                 */
-                registerUsedElements(false);
-            }
-            CanonicalizerPhase.create().apply(graph, bb.getProviders());
+        /*
+         * Need a debug context for the current thread, parsing can have happened in a different
+         * thread.
+         */
+        DebugContext.Description description = new DebugContext.Description(method, method.getClass().getSimpleName() + ":" + method.getId());
+        graph.resetDebug(new DebugContext.Builder(bb.getOptions(), new GraalDebugHandlersFactory(bb.getProviders().getSnippetReflection())).description(description).build());
 
-            // Do it again after canonicalization changed type checks and field accesses.
-            registerUsedElements(true);
-
+        if (!bb.strengthenGraalGraphs()) {
             /*
-             * When we intend to strengthen Graal graphs, then the graph needs to be preserved. Type
-             * flow nodes references Graal IR nodes directly as their source position.
-             *
-             * When we create separate StaticAnalysisResults objects, then Graal graphs are not
-             * needed after static analysis.
+             * Register used types and fields before canonicalization can optimize them. When
+             * parsing graphs again for compilation, we need to have all types, methods, fields of
+             * the original graph registered properly.
              */
-            if (bb.strengthenGraalGraphs()) {
-                method.setAnalyzedGraph(graph);
-            }
-
-            return true;
-        } catch (Throwable ex) {
-            throw graph.getDebug().handle(ex);
+            registerUsedElements(false);
         }
+        CanonicalizerPhase.create().apply(graph, bb.getProviders());
+
+        // Do it again after canonicalization changed type checks and field accesses.
+        registerUsedElements(true);
+
+        return true;
     }
 
     public void registerUsedElements(boolean registerEmbeddedRoots) {
@@ -250,19 +250,6 @@ public class MethodTypeFlowBuilder {
                     if (registerEmbeddedRoots) {
                         registerEmbeddedRoot(cn);
                     }
-                }
-
-            } else if (n instanceof FrameState) {
-                FrameState node = (FrameState) n;
-                AnalysisMethod frameStateMethod = (AnalysisMethod) node.getMethod();
-                if (frameStateMethod != null) {
-                    /*
-                     * All types referenced in (possibly inlined) frame states must be reachable,
-                     * because these classes will be reachable from stack walking metadata. This
-                     * metadata is only constructed after AOT compilation, so the image heap
-                     * scanning during static analysis does not see these classes.
-                     */
-                    frameStateMethod.getDeclaringClass().registerAsReachable();
                 }
 
             } else if (n instanceof ForeignCall) {
@@ -1178,7 +1165,7 @@ public class MethodTypeFlowBuilder {
             } else if (n instanceof InvokeNode || n instanceof InvokeWithExceptionNode) {
                 Invoke invoke = (Invoke) n;
                 if (invoke.callTarget() instanceof MethodCallTargetNode) {
-                    guarantee(bb.strengthenGraalGraphs() || invoke.stateAfter().outerFrameState() == null,
+                    guarantee(invoke.stateAfter().outerFrameState() == null,
                                     "Outer FrameState of %s must be null, but was %s. A non-null outer FrameState indicates that a method inlining has happened, but inlining should only happen after analysis.",
                                     invoke.stateAfter(), invoke.stateAfter().outerFrameState());
                     MethodCallTargetNode target = (MethodCallTargetNode) invoke.callTarget();
