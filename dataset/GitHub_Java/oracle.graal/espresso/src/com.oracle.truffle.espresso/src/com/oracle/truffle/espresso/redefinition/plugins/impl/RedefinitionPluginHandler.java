@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.redefinition.plugins.impl;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -36,38 +35,40 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
-import com.oracle.truffle.espresso.redefinition.ClassLoadListener;
+import com.oracle.truffle.espresso.redefinition.DefineKlassListener;
 import com.oracle.truffle.espresso.redefinition.plugins.api.ClassLoadAction;
 import com.oracle.truffle.espresso.redefinition.plugins.api.InternalRedefinitionPlugin;
-import com.oracle.truffle.espresso.redefinition.plugins.api.TriggerClass;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public final class RedefinitionPluginHandler implements RedefineListener, ClassLoadListener {
+public final class RedefinitionPluginHandler implements RedefineListener, DefineKlassListener {
 
     private final EspressoContext context;
-    private final Set<InternalRedefinitionPlugin> internalPlugins = Collections.synchronizedSet(new HashSet<>(1));
-    private final Map<Symbol<Symbol.Type>, Set<TriggerClass>> internalTriggers;
-    private final Map<Symbol<Symbol.Type>, List<ClassLoadAction>> classLoadActions = Collections.synchronizedMap(new HashMap<>());
+
+    // internal plugins are immediately activated during context
+    // initialization, so no need for synchronization on this set
+    private final Set<InternalRedefinitionPlugin> internalPlugins = new HashSet<>(1);
+    private final Map<Symbol<Symbol.Type>, List<ClassLoadAction>> classLoadActions = new HashMap<>();
 
     // The guest language HotSwap plugin handler passed
     // onto us if guest plugins are present at runtime.
     private ExternalPluginHandler externalPluginHandler;
 
-    private RedefinitionPluginHandler(EspressoContext espressoContext, Map<Symbol<Symbol.Type>, Set<TriggerClass>> triggers) {
+    private RedefinitionPluginHandler(EspressoContext espressoContext) {
         this.context = espressoContext;
-        this.internalTriggers = triggers;
     }
 
     @TruffleBoundary
     public void registerClassLoadAction(String className, ClassLoadAction action) {
-        Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(className);
-        List<ClassLoadAction> list = classLoadActions.get(type);
-        if (list == null) {
-            list = Collections.synchronizedList(new ArrayList<>());
-            classLoadActions.put(type, list);
+        synchronized (classLoadActions) {
+            Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(className);
+            List<ClassLoadAction> list = classLoadActions.get(type);
+            if (list == null) {
+                list = new ArrayList<>();
+                classLoadActions.put(type, list);
+            }
+            list.add(action);
         }
-        list.add(action);
     }
 
     public void registerExternalHotSwapHandler(StaticObject handler) {
@@ -78,76 +79,70 @@ public final class RedefinitionPluginHandler implements RedefineListener, ClassL
 
     public static RedefinitionPluginHandler create(EspressoContext espressoContext) {
         // we use ServiceLoader to load all Espresso internal Plugins
+        RedefinitionPluginHandler handler = new RedefinitionPluginHandler(espressoContext);
         ServiceLoader<InternalRedefinitionPlugin> serviceLoader = ServiceLoader.load(InternalRedefinitionPlugin.class);
         Iterator<InternalRedefinitionPlugin> pluginIterator = serviceLoader.iterator();
 
-        Map<Symbol<Symbol.Type>, Set<TriggerClass>> triggers = new HashMap<>();
         while (pluginIterator.hasNext()) {
             InternalRedefinitionPlugin plugin = pluginIterator.next();
-            for (TriggerClass triggerClass : plugin.getTriggerClasses()) {
-                Symbol<Symbol.Type> triggerType = espressoContext.getTypes().fromClassGetName(triggerClass.getClassName());
-                Set<TriggerClass> triggerClasses = triggers.get(triggerType);
-                if (triggerClasses == null) {
-                    triggerClasses = new HashSet<>(1);
-                }
-                triggerClasses.add(triggerClass);
-                triggers.put(triggerType, triggerClasses);
-            }
+            handler.activatePlugin(plugin);
+            espressoContext.registerRedefinitionPlugin(plugin);
         }
-        RedefinitionPluginHandler handler = new RedefinitionPluginHandler(espressoContext, triggers);
         espressoContext.getRegistries().registerListener(handler);
         return handler;
     }
 
+    private void activatePlugin(InternalRedefinitionPlugin plugin) {
+        internalPlugins.add(plugin);
+        plugin.activate(context, this);
+    }
+
     @TruffleBoundary
     @Override
-    public void onClassLoad(ObjectKlass klass) {
-        // internal plugins
-        Symbol<Symbol.Type> type = klass.getType();
-        if (internalTriggers.containsKey(type)) {
-            Set<TriggerClass> triggerClasses = internalTriggers.get(type);
-            for (TriggerClass triggerClass : triggerClasses) {
-                if (!internalPlugins.contains(triggerClass.getPlugin())) {
-                    triggerClass.getPlugin().activate(klass.getContext(), this);
-                    internalPlugins.add(triggerClass.getPlugin());
+    public void onKlassDefined(ObjectKlass klass) {
+        synchronized (classLoadActions) {
+            Symbol<Symbol.Type> type = klass.getType();
+            List<ClassLoadAction> loadActions = classLoadActions.get(type);
+            if (loadActions != null) {
+                // fire all registered load actions
+                Iterator<ClassLoadAction> it = loadActions.iterator();
+                while (it.hasNext()) {
+                    ClassLoadAction loadAction = it.next();
+                    loadAction.fire(klass);
                 }
-                triggerClass.fire(klass);
+                // free up memory after firing all actions
+                classLoadActions.remove(type);
             }
-        }
-        // fire registered load actions
-        List<ClassLoadAction> loadActions = classLoadActions.getOrDefault(type, Collections.emptyList());
-        Iterator<ClassLoadAction> it = loadActions.iterator();
-        while (it.hasNext()) {
-            ClassLoadAction loadAction = it.next();
-            loadAction.fire(klass);
-            it.remove();
-        }
-        if (loadActions.isEmpty()) {
-            classLoadActions.remove(type);
         }
     }
 
-    // listener methods
     @Override
-    public boolean rerunClinit(ObjectKlass klass, boolean changed) {
+    public boolean shouldRerunClassInitializer(ObjectKlass klass, boolean changed) {
+        boolean rerun = false;
         // internal plugins
         for (InternalRedefinitionPlugin plugin : internalPlugins) {
-            if (plugin.reRunClinit(klass, changed)) {
-                return true;
+            if (plugin.shouldRerunClassInitializer(klass, changed)) {
+                rerun = true;
+                break;
             }
         }
         // external plugins
         if (externalPluginHandler != null) {
-            return externalPluginHandler.rerunClassInit(klass, changed);
+            rerun |= externalPluginHandler.shouldRerunClassInitializer(klass, changed);
         }
-        return false;
+        return rerun;
     }
 
     @Override
-    public void postRedefition(ObjectKlass[] changedKlasses) {
+    public void postRedefinition(ObjectKlass[] changedKlasses) {
         // internal plugins
         for (InternalRedefinitionPlugin plugin : internalPlugins) {
-            plugin.postClassRedefinition(changedKlasses);
+            try {
+                plugin.postClassRedefinition(changedKlasses);
+            } catch (Throwable t) {
+                // don't let individual plugin errors cause failure
+                // to run other post redefinition plugins
+            }
         }
         // external plugins
         if (externalPluginHandler != null) {
@@ -156,10 +151,10 @@ public final class RedefinitionPluginHandler implements RedefineListener, ClassL
     }
 
     @Override
-    public void addExtraReloadClasses(List<RedefineInfo> redefineInfos, List<RedefineInfo> additional) {
+    public void collectExtraClassesToReload(List<RedefineInfo> redefineInfos, List<RedefineInfo> additional) {
         // internal plugins
         for (InternalRedefinitionPlugin plugin : internalPlugins) {
-            plugin.fillExtraReloadClasses(redefineInfos, additional);
+            plugin.collectExtraClassesToReload(redefineInfos, additional);
         }
     }
 }

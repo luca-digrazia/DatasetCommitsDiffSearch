@@ -146,10 +146,6 @@ public final class ClassRedefinition {
         }
     }
 
-    public static boolean isRedefineThread() {
-        return redefineThread == Thread.currentThread();
-    }
-
     public void addExtraReloadClasses(List<RedefineInfo> redefineInfos, List<RedefineInfo> additional) {
         redefineListener.collectExtraClassesToReload(redefineInfos, additional);
     }

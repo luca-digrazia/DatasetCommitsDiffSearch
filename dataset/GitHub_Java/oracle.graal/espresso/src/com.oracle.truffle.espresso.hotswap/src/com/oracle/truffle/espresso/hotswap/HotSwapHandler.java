@@ -47,23 +47,19 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 final class HotSwapHandler {
 
     private static HotSwapHandler theHandler;
 
-    private final Set<HotSwapPlugin> plugins = new HashSet<>();
+    private final Set<HotSwapPlugin> plugins = Collections.synchronizedSet(new HashSet<>());
     private final Map<Class<?>, Set<HotSwapAction>> hotSwapActions = new HashMap<>();
-    private final List<HotSwapAction> postHotSwapActions = new ArrayList<>();
+    private final List<HotSwapAction> postHotSwapActions = Collections.synchronizedList(new ArrayList<>());
     private final Map<Class<?>, Boolean> staticInitializerHotSwap = new HashMap<>();
     private final Map<Class<?>, List<HotSwapAction>> staticReInitCallBacks = new HashMap<>();
     private final ServiceWatcher serviceWatcher = new ServiceWatcher();
-    private final ExecutorService hotSwapExecutor;
 
     private HotSwapHandler() {
-        hotSwapExecutor = Executors.newSingleThreadExecutor();
     }
 
     static HotSwapHandler create() {
@@ -77,20 +73,20 @@ final class HotSwapHandler {
         return false;
     }
 
-    synchronized void addPlugin(HotSwapPlugin plugin) {
+    void addPlugin(HotSwapPlugin plugin) {
         plugins.add(plugin);
     }
 
-    public synchronized void registerHotSwapAction(Class<?> klass, HotSwapAction action) {
+    public void registerHotSwapAction(Class<?> klass, HotSwapAction action) {
         hotSwapActions.putIfAbsent(klass, new HashSet<>());
         hotSwapActions.get(klass).add(action);
     }
 
-    public synchronized void registerPostHotSwapAction(HotSwapAction action) {
+    public void registerPostHotSwapAction(HotSwapAction action) {
         postHotSwapActions.add(action);
     }
 
-    public synchronized void registerStaticClassInitHotSwap(Class<?> klass, boolean onChange, HotSwapAction callback) {
+    public void registerStaticClassInitHotSwap(Class<?> klass, boolean onChange, HotSwapAction callback) {
         if (!staticInitializerHotSwap.containsKey(klass)) {
             staticInitializerHotSwap.put(klass, onChange);
         } else if (!onChange) {
@@ -106,51 +102,27 @@ final class HotSwapHandler {
         }
     }
 
-    public synchronized void registerMetaInfServicesListener(Class<?> service, ClassLoader loader, HotSwapAction callback) {
+    public void registerMetaInfServicesListener(Class<?> service, ClassLoader loader, HotSwapAction callback) {
         serviceWatcher.addServiceWatcher(service, loader, callback);
     }
 
     @SuppressWarnings("unused")
-    public synchronized void postHotSwap(Class<?>[] changedClasses) {
-        // use a dedicated thread to fire all post hotswap actions
-        // to allow the calling thread to complete the HotSwap operation
-        hotSwapExecutor.execute(() -> {
-            // fire all registered specific HotSwap actions
-            for (Class<?> klass : changedClasses) {
-                Set<HotSwapAction> actions = hotSwapActions.getOrDefault(klass, Collections.emptySet());
-                for (HotSwapAction action : actions) {
-                    try {
-                        action.fire();
-                    } catch (Throwable t) {
-                        // don't let reload failures block all
-                        // other hotswap actions to be fired
-                    }
-                }
-            }
-            // fire a generic HotSwap plugin listener
-            for (HotSwapPlugin plugin : plugins) {
-                try {
-                    plugin.postHotSwap(changedClasses);
-                } catch (Throwable t) {
-                    // don't let reload failures block all
-                    // other plugins
-                }
-
-            }
-            // fire all registered generic post HotSwap actions
-            for (HotSwapAction postHotSwapAction : postHotSwapActions) {
-                try {
-                    postHotSwapAction.fire();
-                } catch (Throwable t) {
-                    // don't let reload failures block all
-                    // other actions
-                }
-            }
-        });
+    public void postHotSwap(Class<?>[] changedClasses) {
+        // fire all registered HotSwap actions
+        for (Class<?> klass : changedClasses) {
+            Set<HotSwapAction> actions = hotSwapActions.getOrDefault(klass, Collections.emptySet());
+            actions.forEach(HotSwapAction::fire);
+        }
+        // fire a generic HotSwap plugin listener
+        for (HotSwapPlugin plugin : plugins) {
+            plugin.postHotSwap(changedClasses);
+        }
+        // fire all registered post HotSwap actions
+        postHotSwapActions.forEach(HotSwapAction::fire);
     }
 
     @SuppressWarnings("unused")
-    public synchronized boolean shouldRerunClassInitializer(Class<?> klass, boolean changed) {
+    public boolean shouldRerunClassInitializer(Class<?> klass, boolean changed) {
         if (staticInitializerHotSwap.containsKey(klass)) {
             boolean onlyOnChange = staticInitializerHotSwap.get(klass);
             boolean rerun = !onlyOnChange || changed;
