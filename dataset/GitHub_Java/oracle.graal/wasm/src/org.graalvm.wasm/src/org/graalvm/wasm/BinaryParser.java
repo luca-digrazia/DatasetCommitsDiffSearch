@@ -500,7 +500,9 @@ public class BinaryParser extends BinaryStreamParser {
                     state.useIntConstant(continuationReturnLength);
                     // This instruction is stack-polymorphic.
                     if ((peek1() & 0xFF) == Instructions.END) {
-                        state.setStackSize(state.getStackState(0) + state.getContinuationReturnLength(0));
+                        while (state.stackSize() > state.getStackState(0) + state.getContinuationReturnLength(0)) {
+                            state.pop();
+                        }
                     }
                     break;
                 }
@@ -554,7 +556,9 @@ public class BinaryParser extends BinaryStreamParser {
                     if ((peek1() & 0xFF) == Instructions.END) {
                         final int targetStackSize = state.getStackState(0);
                         final int continuationReturnLength = state.getContinuationReturnLength(0);
-                        state.setStackSize(targetStackSize + continuationReturnLength);
+                        while (state.stackSize() > targetStackSize + continuationReturnLength) {
+                            state.pop();
+                        }
                     }
                     break;
                 }
@@ -569,7 +573,9 @@ public class BinaryParser extends BinaryStreamParser {
                     if ((peek1() & 0xFF) == Instructions.END) {
                         final int targetStackSize = state.getStackState(0);
                         final int continuationReturnLength = state.getContinuationReturnLength(0);
-                        state.setStackSize(targetStackSize + continuationReturnLength);
+                        while (state.stackSize() > targetStackSize + continuationReturnLength) {
+                            state.pop();
+                        }
                     }
                     break;
                 }
@@ -969,7 +975,7 @@ public class BinaryParser extends BinaryStreamParser {
         // interpretation.
         // Correct the stack pointer to the value it would have in case there were no branch
         // instructions.
-        state.setStackSize(returnTypeId != ValueTypes.VOID_TYPE ? initialStackPointer + 1 : initialStackPointer);
+        state.setStackPointer(returnTypeId != ValueTypes.VOID_TYPE ? initialStackPointer + 1 : initialStackPointer);
 
         return Truffle.getRuntime().createLoopNode(loopBlock);
     }
@@ -991,7 +997,7 @@ public class BinaryParser extends BinaryStreamParser {
         // interpretation.
         // Correct the stack pointer to the value it would have in case there were no branch
         // instructions.
-        state.setStackSize(blockTypeId != ValueTypes.VOID_TYPE ? initialStackPointer : initialStackPointer - 1);
+        state.setStackPointer(blockTypeId != ValueTypes.VOID_TYPE ? initialStackPointer : initialStackPointer - 1);
 
         // Read false branch, if it exists.
         WasmNode falseBranchBlock;
@@ -1013,7 +1019,7 @@ public class BinaryParser extends BinaryStreamParser {
                 // abstract interpretation.
                 // Correct the stack pointer to the value it would have in case there were no branch
                 // instructions.
-                state.setStackSize(initialStackPointer);
+                state.setStackPointer(initialStackPointer);
             }
         } else {
             if (blockTypeId != ValueTypes.VOID_TYPE) {
