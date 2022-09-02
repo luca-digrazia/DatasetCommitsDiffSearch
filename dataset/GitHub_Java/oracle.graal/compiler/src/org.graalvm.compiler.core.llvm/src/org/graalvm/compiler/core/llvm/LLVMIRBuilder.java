@@ -548,7 +548,6 @@ public class LLVMIRBuilder {
             result = buildCall(callee, args);
             addCallSiteAttribute(result, "statepoint-id", Long.toString(statepointId));
         } else {
-
             LLVMTypeRef calleeType = typeOf(callee);
             LLVMTypeRef statepointType = functionType(tokenType(), true, longType(), intType(), calleeType, intType(), intType());
 
@@ -567,7 +566,6 @@ public class LLVMIRBuilder {
             LLVMTypeRef resultType = getReturnType(LLVM.LLVMGetElementType(calleeType));
             LLVMTypeRef gcResultType = functionType(resultType, tokenType());
             result = buildIntrinsicCall("llvm.experimental.gc.result." + intrinsicType(resultType), gcResultType, token);
-
         }
         return result;
     }
@@ -858,10 +856,6 @@ public class LLVMIRBuilder {
 
     LLVMValueRef buildCttz(LLVMValueRef a) {
         return buildIntrinsicOp("cttz", a, constantBoolean(true));
-    }
-
-    LLVMValueRef buildCtpop(LLVMValueRef a) {
-        return buildIntrinsicOp("ctpop", a);
     }
 
     /* Conversions */
