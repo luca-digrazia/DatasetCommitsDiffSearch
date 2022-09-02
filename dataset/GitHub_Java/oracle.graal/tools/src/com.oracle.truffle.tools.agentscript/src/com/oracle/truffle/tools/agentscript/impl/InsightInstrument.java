@@ -39,25 +39,19 @@ import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionStability;
-import org.graalvm.polyglot.Value;
 import org.graalvm.tools.insight.Insight;
 
 // @formatter:off
@@ -65,20 +59,17 @@ import org.graalvm.tools.insight.Insight;
     id = Insight.ID,
     name = InsightInstrument.NAME,
     version = Insight.VERSION,
-    services = { Function.class, BiConsumer.class }
+    services = { Function.class }
 )
 // @formatter:on
 public class InsightInstrument extends TruffleInstrument {
     static final String NAME = "Insight";
 
-    @Option(stability = OptionStability.STABLE, name = "", help = "Use provided file as an insight script", category = OptionCategory.USER) //
+    @Option(stability = OptionStability.EXPERIMENTAL, name = "", help = "Use provided file as an insight script", category = OptionCategory.USER) //
     static final OptionKey<String> SCRIPT = new OptionKey<>("");
 
     private Env env;
     private final IgnoreSources ignoreSources = new IgnoreSources();
-
-    private final List<String> symbolNames = new ArrayList<>();
-    private final List<Object> symbols = new ArrayList<>();
 
     @Override
     protected OptionDescriptors getOptionDescriptors() {
@@ -88,10 +79,8 @@ public class InsightInstrument extends TruffleInstrument {
     @Override
     protected void onCreate(Env tmp) {
         this.env = tmp;
-        final Function<?, ?> registerScripts = registerScriptsAPI(this);
-        env.registerService(registerScripts);
-        final BiConsumer<?, ?> registerSymbols = registerSymbolsAPI(this);
-        env.registerService(registerSymbols);
+        final Function<?, ?> api = functionApi(this);
+        env.registerService(api);
         final String path = env.getOptions().get(option());
         if (path != null && path.length() > 0) {
             registerAgentScript(() -> {
@@ -123,23 +112,6 @@ public class InsightInstrument extends TruffleInstrument {
         return SCRIPT;
     }
 
-    boolean onlyInsight() {
-        return true;
-    }
-
-    final void registerSymbol(String name, Value value) {
-        synchronized (symbolNames) {
-            symbolNames.add(name);
-            if (value.isNumber()) {
-                symbols.add(value.as(Number.class));
-            } else if (value.isString()) {
-                symbols.add(value.asString());
-            } else {
-                symbols.add(value.as(TruffleObject.class));
-            }
-        }
-    }
-
     final AutoCloseable registerAgentScript(final Supplier<Source> src) {
         final Instrumenter instrumenter = env.getInstrumenter();
         class InitializeAgent implements ContextsListener, AutoCloseable {
@@ -149,12 +121,10 @@ public class InsightInstrument extends TruffleInstrument {
 
             @CompilerDirectives.TruffleBoundary
             synchronized boolean initializeAgentObject() {
-                if (insight == null) {
+                if (agent == null) {
                     AgentObject.Data sharedData = new AgentObject.Data();
                     insight = new AgentObject(null, env, ignoreSources, sharedData);
-                    if (!onlyInsight()) {
-                        agent = new AgentObject("Warning: 'agent' is deprecated. Use 'insight'.\n", env, ignoreSources, sharedData);
-                    }
+                    agent = new AgentObject("Warning: 'agent' is deprecated. Use 'insight'.\n", env, ignoreSources, sharedData);
                     return true;
                 }
                 return false;
@@ -165,27 +135,13 @@ public class InsightInstrument extends TruffleInstrument {
                 if (initializeAgentObject()) {
                     Source script = src.get();
                     ignoreSources.ignoreSource(script);
-                    List<String> argNames = new ArrayList<>();
-                    List<Object> args = new ArrayList<>();
-                    argNames.add("insight");
-                    args.add(insight);
-                    if (agent != null) {
-                        argNames.add("agent");
-                        args.add(agent);
-                    }
-
-                    synchronized (symbolNames) {
-                        argNames.addAll(symbolNames);
-                        args.addAll(symbols);
-                    }
-
                     CallTarget target;
                     try {
-                        target = env.parse(script, argNames.toArray(new String[0]));
+                        target = env.parse(script, "insight", "agent");
                     } catch (Exception ex) {
                         throw InsightException.raise(ex);
                     }
-                    target.call(args.toArray());
+                    target.call(insight, agent);
                 }
             }
 
@@ -232,9 +188,6 @@ public class InsightInstrument extends TruffleInstrument {
                 if (agent != null) {
                     agent.onClosed();
                 }
-                if (insight != null) {
-                    insight.onClosed();
-                }
             }
 
             @Override
@@ -250,9 +203,6 @@ public class InsightInstrument extends TruffleInstrument {
                 if (agent != null) {
                     agent.onClosed();
                 }
-                if (insight != null) {
-                    insight.onClosed();
-                }
                 if (agentBinding != null) {
                     agentBinding.dispose();
                 }
@@ -267,7 +217,7 @@ public class InsightInstrument extends TruffleInstrument {
     protected void onDispose(Env tmp) {
     }
 
-    private static Function<?, ?> registerScriptsAPI(InsightInstrument insight) {
+    private static Function<?, ?> functionApi(InsightInstrument agentScript) {
         Function<org.graalvm.polyglot.Source, AutoCloseable> f = (text) -> {
             final Source.LiteralBuilder b = Source.newBuilder(text.getLanguage(), text.getCharacters(), text.getName());
             b.uri(text.getURI());
@@ -275,14 +225,9 @@ public class InsightInstrument extends TruffleInstrument {
             b.internal(text.isInternal());
             b.interactive(text.isInteractive());
             Source src = b.build();
-            return insight.registerAgentScript(() -> src);
+            return agentScript.registerAgentScript(() -> src);
         };
         return maybeProxy(Function.class, f);
-    }
-
-    private static BiConsumer<?, ?> registerSymbolsAPI(InsightInstrument insight) {
-        BiConsumer<String, Value> f = insight::registerSymbol;
-        return maybeProxy(BiConsumer.class, f);
     }
 
     static <Interface> Interface maybeProxy(Class<Interface> type, Interface delegate) {
@@ -295,11 +240,7 @@ public class InsightInstrument extends TruffleInstrument {
 
     private static <Interface> Interface proxy(Class<Interface> type, Interface delegate) {
         InvocationHandler handler = (Object proxy, Method method, Object[] args) -> {
-            try {
-                return method.invoke(delegate, args);
-            } catch (InvocationTargetException ex) {
-                throw ex.getCause();
-            }
+            return method.invoke(delegate, args);
         };
         return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, handler));
     }
