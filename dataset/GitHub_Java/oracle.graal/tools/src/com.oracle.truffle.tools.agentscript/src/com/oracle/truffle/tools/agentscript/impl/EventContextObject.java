@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,28 +25,27 @@
 package com.oracle.truffle.tools.agentscript.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.NodeLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 @SuppressWarnings("unused")
 @ExportLibrary(InteropLibrary.class)
-final class EventContextObject extends AbstractContextObject {
+final class EventContextObject implements TruffleObject {
+    private static final ArrayObject MEMBERS = ArrayObject.array(
+                    "name", "source", "characters",
+                    "line", "startLine", "endLine",
+                    "column", "startColumn", "endColumn");
     private final EventContext context;
+    @CompilerDirectives.CompilationFinal private String name;
+    @CompilerDirectives.CompilationFinal(dimensions = 1) private int[] values;
 
     EventContextObject(EventContext context) {
         this.context = context;
@@ -78,7 +77,52 @@ final class EventContextObject extends AbstractContextObject {
 
     @ExportMessage
     Object readMember(String member) throws UnknownIdentifierException {
-        return super.readMember(member);
+        int index;
+        switch (member) {
+            case "name":
+                if (name == null) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    name = context.getInstrumentedNode().getRootNode().getName();
+                }
+                return name;
+            case "characters":
+                CompilerDirectives.transferToInterpreter();
+                return context.getInstrumentedSourceSection().getCharacters().toString();
+            case "source":
+                return new SourceEventObject(context.getInstrumentedSourceSection().getSource());
+            case "line":
+            case "startLine":
+                index = 0;
+                break;
+            case "endLine":
+                index = 1;
+                break;
+            case "column":
+            case "startColumn":
+                index = 2;
+                break;
+            case "endColumn":
+                index = 3;
+                break;
+            default:
+                throw UnknownIdentifierException.create(member);
+        }
+        if (values == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            values = valuesForContext();
+        }
+        return values[index];
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private int[] valuesForContext() {
+        final SourceSection section = context.getInstrumentedSourceSection();
+        return new int[]{
+                        section.getStartLine(),
+                        section.getEndLine(),
+                        section.getStartColumn(),
+                        section.getEndColumn()
+        };
     }
 
     @ExportMessage
@@ -98,53 +142,16 @@ final class EventContextObject extends AbstractContextObject {
             VariablesObject vars = (VariablesObject) args[0];
             return vars.getReturnValue();
         }
-        if ("iterateFrames".equals(member)) {
-            return iterateFrames(args, obj);
-        }
         throw UnknownIdentifierException.create(member);
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private static Object iterateFrames(Object[] args, EventContextObject obj) {
-        if (args.length == 0 || !(args[0] instanceof VariablesObject)) {
-            return NullObject.nullCheck(null);
-        }
-        VariablesObject vars = (VariablesObject) args[0];
-        Truffle.getRuntime().iterateFrames((frameInstance) -> {
-            if (frameInstance.getCallNode() == null) {
-                // skip top most record about the instrument
-                return null;
-            }
-            final Frame frame = frameInstance.getFrame(FrameInstance.FrameAccess.READ_ONLY);
-            NodeLibrary lib = NodeLibrary.getUncached();
-            InteropLibrary iop = InteropLibrary.getUncached();
-            final Node n = frameInstance.getCallNode() == null ? obj.getInstrumentedNode() : frameInstance.getCallNode();
-            boolean scope = lib.hasScope(n, frame);
-            if (scope) {
-                try {
-                    Object frameVars = lib.getScope(n, frame, false);
-                    LocationObject location = new LocationObject(n);
-                    iop.execute(args[1], location, frameVars);
-                } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException ex) {
-                    Logger.getLogger(EventContextObject.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-            return null;
-        });
-        return NullObject.nullCheck(null);
     }
 
     @ExportMessage
     static boolean isMemberInvocable(EventContextObject obj, String member) {
-        return "returnNow".equals(member) || "returnValue".equals(member) || "iterateFrames".equals(member);
+        return "returnNow".equals(member) || "returnValue".equals(member);
     }
 
     Node getInstrumentedNode() {
         return context.getInstrumentedNode();
     }
 
-    @Override
-    SourceSection getInstrumentedSourceSection() {
-        return context.getInstrumentedSourceSection();
-    }
 }

@@ -38,7 +38,6 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.StopIterationException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -188,90 +187,63 @@ final class AgentObject implements TruffleObject {
         if (args.length > 2) {
             final InteropLibrary iop = InteropLibrary.getFactory().getUncached();
             final Object config = args[2];
-            Map<String, Object> map = new LinkedHashMap<>();
-            if (iop.hasHashEntries(config)) {
-                Object it = iop.getHashEntriesIterator(config);
-                while (iop.hasIteratorNextElement(it)) {
-                    try {
-                        Object keyAndValue = iop.getIteratorNextElement(it);
-                        Object key;
-                        Object value;
-                        try {
-                            key = iop.readArrayElement(keyAndValue, 0);
-                            value = iop.readArrayElement(keyAndValue, 1);
-                        } catch (InvalidArrayIndexException ex) {
-                            CompilerDirectives.shouldNotReachHere(ex);
-                            continue;
-                        }
-                        String type = iop.asString(key);
-                        map.put(type, value);
-                    } catch (StopIterationException ex) {
-                        break;
-                    }
+            Object allMembers = iop.getMembers(config, false);
+            long allMembersSize = iop.getArraySize(allMembers);
+            for (int i = 0; i < allMembersSize; i++) {
+                Object atI;
+                try {
+                    atI = iop.readArrayElement(allMembers, i);
+                } catch (InvalidArrayIndexException ex) {
+                    continue;
                 }
-            } else {
-                Object allMembers = iop.getMembers(config, false);
-                long allMembersSize = iop.getArraySize(allMembers);
-                for (int i = 0; i < allMembersSize; i++) {
-                    Object atI;
-                    try {
-                        atI = iop.readArrayElement(allMembers, i);
-                    } catch (InvalidArrayIndexException ex) {
-                        continue;
-                    }
-                    String type = iop.asString(atI);
-                    Object value;
-                    try {
-                        value = iop.readMember(config, type);
-                    } catch (UnknownIdentifierException ex) {
-                        continue;
-                    }
-                    map.put(type, value);
-                }
-            }
-            for (Map.Entry<String, Object> entry : map.entrySet()) {
-                String type = entry.getKey();
+                String type = iop.asString(atI);
                 switch (type) {
                     case "expressions":
-                        if (isSet(iop, map, "expressions")) {
+                        if (isSet(iop, config, "expressions")) {
                             allTags.add(StandardTags.ExpressionTag.class);
                         }
                         break;
                     case "statements":
-                        if (isSet(iop, map, "statements")) {
+                        if (isSet(iop, config, "statements")) {
                             allTags.add(StandardTags.StatementTag.class);
                         }
                         break;
                     case "roots":
-                        if (isSet(iop, map, "roots")) {
+                        if (isSet(iop, config, "roots")) {
                             allTags.add(StandardTags.RootBodyTag.class);
                         }
                         break;
-                    case "rootNameFilter": {
-                        Object fn = map.get("rootNameFilter");
-                        if (fn != null && !iop.isNull(fn)) {
-                            if (iop.isString(fn)) {
-                                builder.rootNameIs(new RegexNameFilter(iop.asString(fn)));
-                            } else {
-                                if (!iop.isExecutable(fn)) {
-                                    throw new IllegalArgumentException("rootNameFilter should be a string, a regular expression!");
+                    case "rootNameFilter":
+                        try {
+                            Object fn = iop.readMember(config, "rootNameFilter");
+                            if (fn != null && !iop.isNull(fn)) {
+                                if (iop.isString(fn)) {
+                                    builder.rootNameIs(new RegexNameFilter(iop.asString(fn)));
+                                } else {
+                                    if (!iop.isExecutable(fn)) {
+                                        throw new IllegalArgumentException("rootNameFilter should be a string, a regular expression!");
+                                    }
+                                    builder.rootNameIs(new RootNameFilter(fn));
                                 }
-                                builder.rootNameIs(new RootNameFilter(fn));
                             }
+                        } catch (UnknownIdentifierException ex) {
+                            // OK
                         }
                         break;
-                    }
-                    case "sourceFilter": {
-                        Object fn = map.get("sourceFilter");
-                        if (fn != null && !iop.isNull(fn)) {
-                            if (!iop.isExecutable(fn)) {
-                                throw new IllegalArgumentException("sourceFilter has to be a function!");
+                    case "sourceFilter":
+                        try {
+                            Object fn = iop.readMember(config, "sourceFilter");
+                            if (fn != null && !iop.isNull(fn)) {
+                                if (!iop.isExecutable(fn)) {
+                                    throw new IllegalArgumentException("sourceFilter has to be a function!");
+                                }
+                                SourceFilter filter = SourceFilter.newBuilder().sourceIs(new AgentSourceFilter(fn)).build();
+                                builder.sourceFilter(filter);
                             }
-                            SourceFilter filter = SourceFilter.newBuilder().sourceIs(new AgentSourceFilter(fn)).build();
-                            builder.sourceFilter(filter);
+                        } catch (UnknownIdentifierException ex) {
+                            // OK
                         }
                         break;
-                    }
                     default:
                         throw InsightException.unknownAttribute(type);
                 }
@@ -292,12 +264,14 @@ final class AgentObject implements TruffleObject {
         return false;
     }
 
-    private static boolean isSet(InteropLibrary iop, Map<String, Object> map, String property) {
-        Object value = map.get(property);
+    private static boolean isSet(InteropLibrary iop, Object obj, String property) {
         try {
-            return iop.isBoolean(value) && iop.asBoolean(value);
-        } catch (UnsupportedMessageException ex) {
+            Object value = iop.readMember(obj, property);
+            return Boolean.TRUE.equals(value);
+        } catch (UnknownIdentifierException ex) {
             return false;
+        } catch (InteropException ex) {
+            throw InsightException.raise(ex);
         }
     }
 
