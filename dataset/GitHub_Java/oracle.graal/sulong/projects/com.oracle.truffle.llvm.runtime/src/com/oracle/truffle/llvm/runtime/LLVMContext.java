@@ -611,31 +611,23 @@ public final class LLVMContext {
 
     @TruffleBoundary
     public void setGlobalStorage(LLVMGlobal descriptor, LLVMPointer value) {
-        synchronized (globalStorageMap) {
-            assert descriptor != null;
-            assert value != null;
-            globalStorageMap.put(descriptor, value);
-        }
+        assert descriptor != null;
+        assert value != null;
+        globalStorageMap.put(descriptor, value);
     }
 
     @TruffleBoundary
     public void replaceGlobalStorage(LLVMGlobal descriptor, LLVMPointer oldValue, LLVMPointer newValue) {
-        synchronized (globalStorageMap) {
-            assert descriptor != null;
-            assert oldValue != null;
-            assert newValue != null;
-            globalStorageMap.replace(descriptor, oldValue, newValue);
-        }
+        assert descriptor != null;
+        assert oldValue != null;
+        assert newValue != null;
+        globalStorageMap.replace(descriptor, oldValue, newValue);
     }
 
     @TruffleBoundary
     public LLVMPointer getGlobalStorage(LLVMGlobal descriptor) {
-        synchronized (globalStorageMap) {
-            assert descriptor != null;
-            assert globalStorageMap.containsKey(descriptor);
-            LLVMPointer value = globalStorageMap.get(descriptor);
-            return value;
-        }
+        assert descriptor != null;
+        return globalStorageMap.get(descriptor);
     }
 
     public DynamicObject getGlobalStorage() {
