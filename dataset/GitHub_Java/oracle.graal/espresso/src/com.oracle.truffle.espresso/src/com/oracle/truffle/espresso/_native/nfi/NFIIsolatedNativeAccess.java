@@ -24,42 +24,88 @@ package com.oracle.truffle.espresso._native.nfi;
 
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.Objects;
 
-import com.oracle.truffle.espresso._native.NativeAccess;
-import com.oracle.truffle.espresso._native.NativeAccessProvider;
-import com.oracle.truffle.espresso._native.NativeSignature;
-import org.graalvm.options.OptionValues;
+import org.graalvm.home.HomeFinder;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.espresso.EspressoOptions;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso._native.Buffer;
+import com.oracle.truffle.espresso._native.NativeAccess;
+import com.oracle.truffle.espresso._native.NativeSignature;
 import com.oracle.truffle.espresso._native.NativeType;
 import com.oracle.truffle.espresso._native.Pointer;
+import com.oracle.truffle.espresso._native.RawPointer;
 import com.oracle.truffle.espresso._native.TruffleByteBuffer;
+import com.oracle.truffle.espresso.impl.EmptyKeysArray;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
 
+/**
+ * Isolated native linking namespace based on glibc's dlmopen.
+ *
+ * <p>
+ * dlmopen was ported from Solaris, but the glibc port is buggy and crash-prone; to improve the
+ * situation, a tiny native library (libeden.so) is used to hook certain methods and avoid crashes.
+ *
+ * The isolated namespaces have limitations:
+ * <ul>
+ * <li>Maximum of 16 namespaces (hardcoded in glibc), isolated namespaces cannot be reused.
+ * <li>malloc/free cannot cross the namespace boundary e.g. malloc outside, free inside.
+ * <li>External threads TLS storage is not initialized correctly for libraries inside the linking
+ * namespaces.
+ * <li>Spurious crashes when binding non-existing symbols. Use <code>LD_DEBUG=unused</code> as a
+ * workaround.
+ * </ul>
+ */
 final class NFIIsolatedNativeAccess extends NFINativeAccess {
 
-    final @Pointer TruffleObject edenLibrary;
-    final @Pointer TruffleObject malloc;
-    final @Pointer TruffleObject free;
-    final @Pointer TruffleObject realloc;
+    private final @Pointer TruffleObject edenLibrary;
+    private final @Pointer TruffleObject malloc;
+    private final @Pointer TruffleObject free;
+    private final @Pointer TruffleObject realloc;
+    private final @Pointer TruffleObject ctypeInit;
+    private final @Pointer TruffleObject dlsym;
+    private final DefaultLibrary defaultLibrary;
 
-    public NFIIsolatedNativeAccess(EspressoContext context) {
-        super(context);
+    NFIIsolatedNativeAccess(TruffleLanguage.Env env) {
+        super(env);
         // libeden.so must be the first library loaded in the isolated namespace.
-        Path espressoLibraryPath = context.getVmProperties().espressoHome().resolve("lib");
+        Path espressoHome = HomeFinder.getInstance().getLanguageHomes().get(EspressoLanguage.ID);
+        Path espressoLibraryPath = espressoHome.resolve("lib");
         this.edenLibrary = loadLibrary(Collections.singletonList(espressoLibraryPath), "eden", true);
         this.malloc = lookupAndBindSymbol(edenLibrary, "malloc", NativeSignature.create(NativeType.POINTER, NativeType.LONG));
         this.realloc = lookupAndBindSymbol(edenLibrary, "realloc", NativeSignature.create(NativeType.POINTER, NativeType.POINTER, NativeType.LONG));
         this.free = lookupAndBindSymbol(edenLibrary, "free", NativeSignature.create(NativeType.VOID, NativeType.POINTER));
+        this.dlsym = lookupAndBindSymbol(edenLibrary, "dlsym", NativeSignature.create(NativeType.POINTER, NativeType.POINTER, NativeType.POINTER));
+        this.ctypeInit = lookupAndBindSymbol(edenLibrary, "eden_ctypeInit", NativeSignature.create(NativeType.VOID));
+        /*
+         * The default library provided by NFI does not work inside (dlmopen) isolated namespaces
+         * because is based on calling dlsym located outside the isolated namespace. libeden.so,
+         * loaded inside the isolated namespace provides a dlsym shim inside the namespace.
+         */
+        this.defaultLibrary = new DefaultLibrary(this.dlsym, rtldDefault());
+    }
+
+    private TruffleObject rtldDefault() {
+        TruffleObject getRTLD_DEFAULT = lookupAndBindSymbol(edenLibrary, "eden_RTLD_DEFAULT", NativeSignature.create(NativeType.POINTER));
+        try {
+            return (TruffleObject) InteropLibrary.getUncached().execute(getRTLD_DEFAULT);
+        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
     }
 
     @Override
@@ -67,6 +113,62 @@ final class NFIIsolatedNativeAccess extends NFINativeAccess {
         CompilerAsserts.neverPartOfCompilation();
         String nfiSource = String.format("load(RTLD_LAZY|ISOLATED_NAMESPACE) '%s'", libraryPath);
         return loadLibraryHelper(nfiSource);
+    }
+
+    @Override
+    public @Pointer TruffleObject loadDefaultLibrary() {
+        return defaultLibrary;
+    }
+
+    @ExportLibrary(InteropLibrary.class)
+    static class DefaultLibrary implements TruffleObject {
+
+        final @Pointer TruffleObject dlsym;
+        final @Pointer TruffleObject rtldDefault;
+
+        DefaultLibrary(@Pointer TruffleObject dlsym, @Pointer TruffleObject rtldDefault) {
+            this.dlsym = Objects.requireNonNull(dlsym);
+            this.rtldDefault = Objects.requireNonNull(rtldDefault);
+        }
+
+        @ExportMessage
+        boolean isMemberReadable(@SuppressWarnings("unused") String member) {
+            return true;
+        }
+
+        @ExportMessage
+        Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+            return EmptyKeysArray.INSTANCE;
+        }
+
+        @ExportMessage
+        boolean hasMembers() {
+            return true;
+        }
+
+        @ExportMessage
+        Object readMember(String member,
+                        @CachedLibrary("this.dlsym") InteropLibrary interop,
+                        @CachedLibrary(limit = "2") InteropLibrary isNullInterop,
+                        @Cached BranchProfile error) throws UnknownIdentifierException {
+            try {
+                Object result = interop.execute(dlsym, this.rtldDefault, TruffleByteBuffer.allocateDirectStringUTF8(member));
+                if (isNullInterop.isNull(result)) {
+                    error.enter();
+                    throw UnknownIdentifierException.create(member);
+                }
+                return result;
+            } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw EspressoError.shouldNotReachHere(e);
+            }
+        }
+
+        @ExportMessage
+        @SuppressWarnings({"static-method", "unused"})
+        Object toDisplayString(boolean allowSideEffects) {
+            return "nfi-dlmopen default library";
+        }
     }
 
     @Override
@@ -119,15 +221,25 @@ final class NFIIsolatedNativeAccess extends NFINativeAccess {
         }
     }
 
-    public final class Provider implements NativeAccessProvider {
+    @Override
+    public void prepareThread() {
+        try {
+            uncachedInterop.execute(ctypeInit);
+        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere(e);
+        }
+    }
+
+    public static final class Provider implements NativeAccess.Provider {
         @Override
         public String id() {
             return "nfi-dlmopen";
         }
 
         @Override
-        public NativeAccess create(EspressoContext context) {
-            return new NFIIsolatedNativeAccess(context);
+        public NativeAccess create(TruffleLanguage.Env env) {
+            return new NFIIsolatedNativeAccess(env);
         }
     }
 }
