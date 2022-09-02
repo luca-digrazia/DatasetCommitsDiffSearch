@@ -296,16 +296,6 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
 
     }
 
-    @ExportLibrary(value = InteropLibrary.class, delegateTo = "delegate")
-    static final class Wrapper implements TruffleObject {
-
-        final Object delegate;
-
-        Wrapper(Object delegate) {
-            this.delegate = delegate;
-        }
-    }
-
     @Test
     public void testGetMetaObject() throws UnsupportedMessageException {
         GetMetaObjectTest v = new GetMetaObjectTest();
@@ -354,16 +344,13 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
         assertFails(() -> l.hasMetaObject(v), AssertionError.class);
         assertFails(() -> l.getMetaObject(v), AssertionError.class);
 
-        Wrapper wrapper = new Wrapper(v);
-        InteropLibrary wrapperLibrary = createLibrary(InteropLibrary.class, wrapper);
         v.hasMetaObject = true;
         v.getMetaObject = () -> testMeta;
-        testMeta.isMetaObject = true;
-        testMeta.isMetaInstance = (o) -> o == v;
-        testMeta.getMetaQualifiedName = () -> "testQualifiedName";
         testMeta.getMetaSimpleName = () -> "testSimpleName";
-        assertTrue(wrapperLibrary.hasMetaObject(wrapper));
-        assertSame(testMeta, wrapperLibrary.getMetaObject(wrapper));
+        testMeta.isMetaInstance = (o) -> false;
+        assertFails(() -> l.hasMetaObject(v), AssertionError.class);
+        assertFails(() -> l.getMetaObject(v), AssertionError.class);
+
     }
 
     @Test

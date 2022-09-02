@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -56,6 +56,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
+import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @RunWith(Parameterized.class)
@@ -71,12 +72,12 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
     }
 
-    public static class ValidSubClass extends ValidClass {
+    public static final class ValidSubClass extends ValidClass {
 
     }
 
-    @ExportLibrary(value = DefaultLibrary.class, receiverClass = ValidClass.class)
-    static class ValidImpl {
+    @ExportLibrary(value = DefaultLibrary.class, receiverType = ValidClass.class)
+    static final class ValidImpl {
         @ExportMessage
         static int abstractMethod(ValidClass receiver) {
             return 43;
@@ -86,6 +87,7 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
     @GenerateLibrary
     @DefaultExport(IntegerImpl.class)
     @DefaultExport(ValidImpl.class)
+    @DefaultExport(PrimitiveArrayExport.class)
     public abstract static class DefaultLibrary extends Library {
 
         public int foo(@SuppressWarnings("unused") Object receiver) {
@@ -96,7 +98,7 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
     }
 
-    @ExportLibrary(value = DefaultLibrary.class, receiverClass = Integer.class)
+    @ExportLibrary(value = DefaultLibrary.class, receiverType = Integer.class)
     static class IntegerImpl {
 
         @ExportMessage
@@ -111,7 +113,7 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
     }
 
     @ExportLibrary(DefaultLibrary.class)
-    static class Custom {
+    static final class Custom {
 
         final int value;
 
@@ -127,6 +129,16 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
         @ExportMessage
         int abstractMethod() {
             return value;
+        }
+
+    }
+
+    @ExportLibrary(value = DefaultLibrary.class, receiverType = int[].class)
+    static class PrimitiveArrayExport {
+
+        @ExportMessage
+        static int abstractMethod(int[] receiver) {
+            return receiver.length;
         }
 
     }
@@ -148,13 +160,16 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
         assertEquals(43, createLibrary(DefaultLibrary.class, new ValidClass()).abstractMethod(new ValidClass()));
         assertEquals(43, createLibrary(DefaultLibrary.class, new ValidSubClass()).abstractMethod(new ValidSubClass()));
+
+        int[] testArray = new int[42];
+        assertEquals(42, createLibrary(DefaultLibrary.class, testArray).abstractMethod(testArray));
     }
 
-    public static class OtherClass {
+    public static final class OtherClass {
 
     }
 
-    @ExportLibrary(value = DefaultErrorLibrary2.class, receiverClass = OtherClass.class)
+    @ExportLibrary(value = DefaultErrorLibrary2.class, receiverType = OtherClass.class)
     @ExpectError("Library specification DefaultErrorLibrary2 has errors. Please resolve them first.")
     static class UnreachableDefault {
 
@@ -175,7 +190,7 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
     }
 
-    @ExportLibrary(value = DefaultErrorLibrary4.class, receiverClass = Object.class)
+    @ExportLibrary(value = DefaultErrorLibrary4.class, receiverType = Object.class)
     @ExpectError("Library specification DefaultErrorLibrary4 has errors. Please resolve them first.")
     static class ObjectDefault4 {
 
@@ -186,7 +201,7 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
     }
 
-    @ExportLibrary(value = DefaultErrorLibrary4.class, receiverClass = String.class)
+    @ExportLibrary(value = DefaultErrorLibrary4.class, receiverType = String.class)
     @ExpectError("Library specification DefaultErrorLibrary4 has errors. Please resolve them first.")
     static class StringDefault4 {
 
@@ -209,10 +224,11 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
     }
 
-    @ExportLibrary(value = DefaultErrorLibrary3.class, receiverClass = OtherClass.class)
-    @ExpectError("The following message(s) of library DefaultErrorLibrary3 are abstract%")
+    @ExportLibrary(value = DefaultErrorLibrary3.class, receiverType = OtherClass.class)
+    @ExpectError({
+                    "The following message(s) of library DefaultErrorLibrary3 are abstract%",
+    })
     abstract static class AbstractDefault {
-
     }
 
     @GenerateLibrary
@@ -221,17 +237,21 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
 
         public abstract int abstractMethod(Object receiver);
 
+        public int m0(Object receiver) {
+            return 42;
+        }
+
     }
 
     @ExportLibrary(value = DefaultLibrary.class)
-    @ExpectError("The following message(s) of library DefaultLibrary%")
-    static class DefaultExportError1 {
+    @ExpectError({"The following message(s) of library DefaultLibrary%",
+                    "Exported library DefaultLibrary does not export any messages and therefore has no effect.%"})
+    static final class DefaultExportError1 {
 
     }
 
-    @ExpectError("The annotated type 'DefaultExportError2' is not specified using @DefaultExport in the library 'DefaultLibrary'. " +
-                    "Using explicit receiver classes is only supported for default exports or receiver types that implement DynamicDispatch.")
-    @ExportLibrary(value = DefaultLibrary.class, receiverClass = Integer.class)
+    @ExpectError("Using explicit receiver types is only supported%")
+    @ExportLibrary(value = DefaultLibrary.class, receiverType = Integer.class)
     static class DefaultExportError2 {
 
         @ExpectError("Exported methods with explicit receiver must be static.")
@@ -241,9 +261,8 @@ public class DefaultExportTest extends AbstractParametrizedLibraryTest {
         }
     }
 
-    @ExpectError("The annotated type 'DefaultExportError3' is not specified using @DefaultExport in the library 'DefaultLibrary'. " +
-                    "Using explicit receiver classes is only supported for default exports or receiver types that implement DynamicDispatch.")
-    @ExportLibrary(value = DefaultLibrary.class, receiverClass = Integer.class)
+    @ExpectError("Using explicit receiver types is only supported%")
+    @ExportLibrary(value = DefaultLibrary.class, receiverType = Integer.class)
     static class DefaultExportError3 {
 
         @ExportMessage
