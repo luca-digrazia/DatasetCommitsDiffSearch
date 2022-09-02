@@ -22,18 +22,20 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Debugger;
-import com.oracle.truffle.espresso.jdwp.impl.DebuggerController;
+import com.oracle.truffle.espresso.jdwp.impl.JDWPDebuggerController;
+import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
 
 /**
- * Main entry point for setting up JDWP. The class looks up the JDWP instrument and initializes
- * communication with the debugger.
+ * Main entry point for setting up JDWP. The class looks up the JDWP instrument
+ * and initializes communication with the debugger.
  */
 public final class JDWPSetup {
 
-    private DebuggerController controller;
+    private JDWPDebuggerController controller;
 
-    public void setup(Debugger debugger, DebuggerController control, JDWPOptions options, JDWPContext context) {
+    public void setup(Debugger debugger, JDWPDebuggerController control, JDWPOptions options, JDWPContext context) {
         control.initialize(debugger, options, context, false);
         this.controller = control;
     }
