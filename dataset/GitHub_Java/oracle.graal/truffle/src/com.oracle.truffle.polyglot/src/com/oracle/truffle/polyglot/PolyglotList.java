@@ -189,8 +189,9 @@ class PolyglotList<T> extends AbstractList<T> implements HostWrapper {
             final Type valueType;
 
             Key(Class<?> receiverClass, Class<?> valueClass, Type valueType) {
-                this.receiverClass = Objects.requireNonNull(receiverClass);
-                this.valueClass = Objects.requireNonNull(valueClass);
+                assert receiverClass != null;
+                this.receiverClass = receiverClass;
+                this.valueClass = valueClass;
                 this.valueType = valueType;
             }
 

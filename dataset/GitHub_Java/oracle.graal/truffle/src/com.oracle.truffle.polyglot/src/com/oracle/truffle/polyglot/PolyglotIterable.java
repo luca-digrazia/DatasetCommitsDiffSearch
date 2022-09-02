@@ -145,8 +145,10 @@ class PolyglotIterable<T> implements Iterable<T>, HostWrapper {
             private final Type valueType;
 
             Key(Class<?> receiverClass, Class<?> valueClass, Type valueType) {
-                this.receiverClass = Objects.requireNonNull(receiverClass);
-                this.valueClass = Objects.requireNonNull(valueClass);
+                assert receiverClass != null;
+                assert valueClass != null;
+                this.receiverClass = receiverClass;
+                this.valueClass = valueClass;
                 this.valueType = valueType;
             }
 
