@@ -43,6 +43,8 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.oracle.truffle.wasm.binary.WasmLanguage;
+import com.oracle.truffle.wasm.binary.WasmOptions;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
@@ -66,11 +68,9 @@ public abstract class WasmSuiteBase extends WasmTestBase {
             Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
             context.eval(source);
             Value function = context.getBindings("wasm").getMember("_main");
-            Value resetGlobals = context.getBindings("wasm").getMember("_wasm_suite_reset_globals");
             if (WasmTestOptions.TRIGGER_GRAAL) {
                 for (int i = 0; i !=  10_000_000; ++i) {
-                    System.out.println(function.execute());
-                    resetGlobals.execute();
+                    function.execute();
                 }
             }
             final Value result = function.execute();
@@ -199,14 +199,12 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                         collectedCases.add(testCase(testName, expected(Long.parseLong(resultValue)), f.toFile()));
                         break;
                     case "float":
-                        collectedCases.add(testCase(testName, expectedFloat(Float.parseFloat(resultValue), 0.0001f), f.toFile()));
+                        collectedCases.add(testCase(testName, expected(Float.parseFloat(resultValue), 0.0001f), f.toFile()));
                         break;
                     case "double":
-                        collectedCases.add(testCase(testName, expectedDouble(Double.parseDouble(resultValue), 0.0001f), f.toFile()));
+                        collectedCases.add(testCase(testName, expected(Double.parseDouble(resultValue), 0.0001f), f.toFile()));
                         break;
                     default:
-                        // TODO: We should throw an exception here if the result type is not known,
-                        //  and have an explicit type for exception throws.
                         collectedCases.add(testCase(testName, expectedThrows(resultValue), f.toFile()));
                         break;
                 }
@@ -231,11 +229,11 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Object.class)));
     }
 
-    protected static WasmTestCaseData expectedFloat(float expectedValue, float delta) {
+    protected static WasmTestCaseData expected(float expectedValue, float delta) {
         return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Float.class), delta));
     }
 
-    protected static WasmTestCaseData expectedDouble(double expectedValue, float delta) {
+    protected static WasmTestCaseData expected(double expectedValue, float delta) {
         return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Double.class), delta));
     }
 
