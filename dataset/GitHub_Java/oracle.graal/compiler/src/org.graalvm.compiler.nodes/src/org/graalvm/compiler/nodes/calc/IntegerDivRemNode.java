@@ -37,6 +37,7 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
+import org.graalvm.compiler.nodes.spi.LoweringTool;
 
 @NodeInfo(cycles = CYCLES_32, size = SIZE_1)
 public abstract class IntegerDivRemNode extends FixedBinaryNode implements Lowerable, IterableNodeType {
@@ -81,6 +82,11 @@ public abstract class IntegerDivRemNode extends FixedBinaryNode implements Lower
 
     public final Type getType() {
         return type;
+    }
+
+    @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
     }
 
     @Override

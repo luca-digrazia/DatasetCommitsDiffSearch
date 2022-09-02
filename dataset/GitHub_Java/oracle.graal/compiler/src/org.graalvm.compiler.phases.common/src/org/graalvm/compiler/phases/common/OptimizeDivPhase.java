@@ -41,9 +41,6 @@ import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.calc.SignedDivNode;
 import org.graalvm.compiler.nodes.calc.SignedRemNode;
 import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.phases.Phase;
 
 import jdk.vm.ci.code.CodeUtil;
@@ -52,12 +49,12 @@ public class OptimizeDivPhase extends Phase {
 
     @Override
     protected void run(StructuredGraph graph) {
-        for (IntegerDivRemNode rem : graph.getNodes().filter(IntegerDivRemNode.class)) {
+        for (IntegerDivRemNode rem : graph.getNodes(IntegerDivRemNode.TYPE)) {
             if (rem instanceof SignedRemNode && divByNonZeroConstant(rem)) {
                 optimizeRem(rem);
             }
         }
-        for (IntegerDivRemNode div : graph.getNodes().filter(IntegerDivRemNode.class)) {
+        for (IntegerDivRemNode div : graph.getNodes(IntegerDivRemNode.TYPE)) {
             if (div instanceof SignedDivNode && divByNonZeroConstant(div)) {
                 optimizeSignedDiv((SignedDivNode) div);
             }
@@ -69,7 +66,7 @@ public class OptimizeDivPhase extends Phase {
         return 5.0f;
     }
 
-    protected final boolean divByNonZeroConstant(IntegerDivRemNode divRemNode) {
+    protected static boolean divByNonZeroConstant(IntegerDivRemNode divRemNode) {
         return divRemNode.getY().isConstant() && divRemNode.getY().asJavaConstant().asLong() != 0;
     }
 
@@ -111,7 +108,7 @@ public class OptimizeDivPhase extends Phase {
         return SignedDivNode.create(rem.getX(), rem.getY(), rem.getZeroCheck(), NodeView.DEFAULT);
     }
 
-    protected final static void optimizeSignedDiv(SignedDivNode div) {
+    protected static void optimizeSignedDiv(SignedDivNode div) {
         ValueNode forX = div.getX();
         long c = div.getY().asJavaConstant().asLong();
         assert c != 1 && c != -1 && c != 0;

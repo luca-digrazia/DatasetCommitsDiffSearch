@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -70,7 +70,7 @@ public class SwitchDyingLoopTest extends GraalCompilerTest {
 
     @Test
     public void test() {
-        CanonicalizerPhase canonicalizerPhase = createCanonicalizerPhase();
+        CanonicalizerPhase canonicalizerPhase = new CanonicalizerPhase();
         HighTierContext highTierContext = getDefaultHighTierContext();
         StructuredGraph graph = parseEager("snippet", StructuredGraph.AllowAssumptions.YES);
         // there should be 1 loop and 1 switch

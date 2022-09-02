@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.core.phases;
 
+import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
 import static org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality.Required;
 
 import org.graalvm.compiler.core.common.GraalOptions;
@@ -32,6 +33,7 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
 import org.graalvm.compiler.phases.common.ExpandLogicPhase;
@@ -44,7 +46,7 @@ import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
 
-public class LowTier extends BaseTier<LowTierContext> {
+public class LowTier extends PhaseSuite<LowTierContext> {
 
     static class Options {
 
@@ -56,9 +58,13 @@ public class LowTier extends BaseTier<LowTierContext> {
     }
 
     public LowTier(OptionValues options) {
-        CanonicalizerPhase canonicalizer = createCanonicalizerPhase(options);
-        CanonicalizerPhase canonicalizerWithoutGVN = createCanonicalizerPhase(options);
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+        CanonicalizerPhase canonicalizerWithoutGVN = new CanonicalizerPhase();
         canonicalizerWithoutGVN.disableGVN();
+        if (ImmutableCode.getValue(options)) {
+            canonicalizer.disableReadCanonicalization();
+            canonicalizerWithoutGVN.disableReadCanonicalization();
+        }
 
         if (Options.ProfileCompiledMethods.getValue(options)) {
             appendPhase(new ProfileCompiledMethodsPhase());

@@ -184,8 +184,8 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                     realCondition = realCondition.mirror();
                 }
                 return optimizeConditional(constant, (ConditionalNode) nonConstant, constantReflection, realCondition, unorderedIsTrue);
-            } else if (nonConstant instanceof AbstractNormalizeCompareNode) {
-                return optimizeNormalizeCompare(constantReflection, metaAccess, options, smallestCompareWidth, constant, (AbstractNormalizeCompareNode) nonConstant, mirrored, view);
+            } else if (nonConstant instanceof NormalizeCompareNode) {
+                return optimizeNormalizeCompare(constantReflection, metaAccess, options, smallestCompareWidth, constant, (NormalizeCompareNode) nonConstant, mirrored, view);
             } else if (nonConstant instanceof ConvertNode) {
                 ConvertNode convert = (ConvertNode) nonConstant;
                 boolean multiUsage = (convert.asNode().hasMoreThanOneUsage() && convert.getValue().hasExactlyOneUsage());
@@ -241,7 +241,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
 
         @SuppressWarnings("unused")
         protected LogicNode optimizeNormalizeCompare(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
-                        Constant constant, AbstractNormalizeCompareNode normalizeNode, boolean mirrored, NodeView view) {
+                        Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored, NodeView view) {
             throw new PermanentBailoutException("NormalizeCompareNode connected to %s (%s %s %s)", this, constant, normalizeNode, mirrored);
         }
 
@@ -333,26 +333,6 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             assert condition == CanonicalCondition.BT;
             assert x.getStackKind().isNumericInteger();
             comparison = IntegerBelowNode.create(constantReflection, metaAccess, options, smallestCompareWidth, x, y, view);
-        }
-
-        return comparison;
-    }
-
-    public static LogicNode createFloatCompareNode(StructuredGraph graph, CanonicalCondition condition, ValueNode x, ValueNode y, boolean unorderedIsTrue, NodeView view) {
-        LogicNode result = createFloatCompareNode(condition, x, y, unorderedIsTrue, view);
-        return (result.graph() == null ? graph.addOrUniqueWithInputs(result) : result);
-    }
-
-    public static LogicNode createFloatCompareNode(CanonicalCondition condition, ValueNode x, ValueNode y, boolean unorderedIsTrue, NodeView view) {
-        assert x.getStackKind() == y.getStackKind();
-        assert x.getStackKind().isNumericFloat();
-
-        LogicNode comparison;
-        if (condition == CanonicalCondition.EQ) {
-            comparison = FloatEqualsNode.create(x, y, view);
-        } else {
-            assert condition == CanonicalCondition.LT;
-            comparison = FloatLessThanNode.create(x, y, unorderedIsTrue, view);
         }
 
         return comparison;

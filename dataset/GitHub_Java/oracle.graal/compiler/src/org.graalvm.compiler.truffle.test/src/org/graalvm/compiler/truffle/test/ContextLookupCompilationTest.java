@@ -542,9 +542,9 @@ public class ContextLookupCompilationTest extends PartialEvaluationTest {
     private static void resetSingleContextState() {
         try {
             Class<?> c = Class.forName("com.oracle.truffle.polyglot.PolyglotContextImpl");
-            java.lang.reflect.Method m = c.getDeclaredMethod("resetSingleContextState", boolean.class);
+            java.lang.reflect.Method m = c.getDeclaredMethod("resetSingleContextState");
             m.setAccessible(true);
-            m.invoke(null, false);
+            m.invoke(null);
         } catch (Exception e) {
             throw new AssertionError(e);
         }
