@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
 import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
@@ -35,6 +34,9 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,8 +49,7 @@ public class VMEventListenerImpl implements VMEventListener {
     private final JDWPDebuggerController debuggerController;
     private HashMap<Integer, ClassPrepareRequest> classPrepareRequests = new HashMap<>();
     private HashMap<Integer, BreakpointInfo> breakpointRequests = new HashMap<>();
-    private final FieldBreakpointInfos fieldBreakpointInfos = new FieldBreakpointInfos();
-
+    private HashMap<FieldRef, List<FieldBreakpointInfo>> fieldBreakpoints = new HashMap<>();
     private int threadStartedRequestId;
     private int threadDeathRequestId;
 
@@ -107,7 +108,6 @@ public class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    @CompilerDirectives.TruffleBoundary
     public void removeClassPrepareRequest(int requestId) {
         classPrepareRequests.remove(requestId);
     }
@@ -118,7 +118,6 @@ public class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    @CompilerDirectives.TruffleBoundary
     public void removeBreakpointRequest(int requestId) {
         BreakpointInfo remove = breakpointRequests.remove(requestId);
         Breakpoint breakpoint = remove.getBreakpoint();
@@ -127,27 +126,47 @@ public class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void addFieldBreakpointRequest(FieldBreakpointInfo info) {
-        fieldBreakpointInfos.addInfo(info);
+        List<FieldBreakpointInfo> infos = fieldBreakpoints.get(info.getField());
+        if (infos == null) {
+            infos = new ArrayList<>();
+            fieldBreakpoints.put(info.getField(), infos);
+        }
+        infos.add(info);
+        fieldBreakpoints.put(info.getField(), infos);
     }
 
     @Override
     public void removedFieldBreakpoint(int requestId) {
-        fieldBreakpointInfos.removeInfo(requestId);
+        Iterator<Map.Entry<FieldRef, List<FieldBreakpointInfo>>> it = fieldBreakpoints.entrySet().iterator();
+
+        while (it.hasNext()) {
+            Map.Entry<FieldRef, List<FieldBreakpointInfo>> entry = it.next();
+
+            Iterator<FieldBreakpointInfo> infoIt = entry.getValue().iterator();
+
+            while (infoIt.hasNext()) {
+                FieldBreakpointInfo info = infoIt.next();
+                if (info.getRequestId() == requestId) {
+                    infoIt.remove();
+                    return;
+                }
+            }
+        }
     }
 
     @Override
     public boolean hasFieldModificationBreakpoint(FieldRef field, Object receiver, Object value) {
-        context.getIds().getIdAsLong(field);
-
-        FieldBreakpointInfo[] infos = fieldBreakpointInfos.getInfos(field);
-        for (FieldBreakpointInfo info : infos) {
-            if (info.isModificationBreakpoint()) {
-                // OK, tell the Debug API to suspend the thread now
-                info.setReceiver(receiver);
-                info.setValue(value);
-                debuggerController.prepareFieldBreakpoint(info);
-                debuggerController.suspend(context.getHost2GuestThread(Thread.currentThread()));
-                return true;
+        if (fieldBreakpoints.containsKey(field)) {
+            List<FieldBreakpointInfo> infos = fieldBreakpoints.get(field);
+            for (FieldBreakpointInfo info : infos) {
+                if (info.isModificationBreakpoint()) {
+                    // OK, tell the Debug API to suspend the thread now
+                    info.setReceiver(receiver);
+                    info.setValue(value);
+                    debuggerController.prepareFieldBreakpoint(info);
+                    debuggerController.suspend(context.getHost2GuestThread(Thread.currentThread()));
+                    return true;
+                }
             }
         }
         return false;
@@ -155,21 +174,22 @@ public class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public boolean hasFieldAccessBreakpoint(FieldRef field, Object receiver) {
-        FieldBreakpointInfo[] infos = fieldBreakpointInfos.getInfos(field);
-        for (FieldBreakpointInfo info : infos) {
-            if (info.isAccessBreakpoint()) {
-                // OK, tell the Debug API to suspend the thread now
-                info.setReceiver(receiver);
-                debuggerController.prepareFieldBreakpoint(info);
-                debuggerController.suspend(context.getHost2GuestThread(Thread.currentThread()));
-                return true;
+        if (fieldBreakpoints.containsKey(field)) {
+            List<FieldBreakpointInfo> infos = fieldBreakpoints.get(field);
+            for (FieldBreakpointInfo info : infos) {
+                if (info.isAccessBreakpoint()) {
+                    // OK, tell the Debug API to suspend the thread now
+                    info.setReceiver(receiver);
+                    debuggerController.prepareFieldBreakpoint(info);
+                    debuggerController.suspend(context.getHost2GuestThread(Thread.currentThread()));
+                    return true;
+                }
             }
         }
         return false;
     }
 
     @Override
-    @CompilerDirectives.TruffleBoundary
     public void classPrepared(KlassRef klass, Object guestThread) {
         // prepare the event and ship
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
