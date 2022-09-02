@@ -278,7 +278,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         invokeStaticMethod("com.oracle.truffle.api.impl.TruffleLocator", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.interop.Message", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.impl.HomeFinder", "resetNativeImageState", Collections.emptyList());
-        invokeStaticMethod("com.oracle.truffle.api.library.LibraryFactory", "resetNativeImageState", Collections.emptyList());
     }
 
     public static boolean useTruffleCompiler() {
