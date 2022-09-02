@@ -74,8 +74,7 @@ public class ChildContextTest extends AbstractPolyglotTest {
 
         @Override
         protected CallTarget parse(ParsingRequest request) throws Exception {
-            Source source = Source.newBuilder(InternalLang.ID, "", "").build();
-            return getCurrentContext(PublicLang.class).env.parseInternal(source);
+            return getCurrentContext(PublicLang.class).env.parseInternal(Source.newBuilder(InternalLang.ID, "", "").build());
         }
     }
 
