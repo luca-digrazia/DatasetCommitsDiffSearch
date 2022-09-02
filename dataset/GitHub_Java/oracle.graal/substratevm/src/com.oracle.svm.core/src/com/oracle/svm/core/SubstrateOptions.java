@@ -441,10 +441,9 @@ public class SubstrateOptions {
     };
 
     public static void defaultDebugInfoValueUpdateHandler(EconomicMap<OptionKey<?>, Object> values, @SuppressWarnings("unused") Integer oldValue, Integer newValue) {
-        /* Force update of TrackNodeSourcePosition */
+        // force update of TrackNodeSourcePosition and DeleteLocalSymbols
         TrackNodeSourcePosition.update(values, newValue > 0);
         if (OS.WINDOWS.isCurrent()) {
-            /* Keep symbols on Windows. The symbol table is part of the pdb-file. */
             DeleteLocalSymbols.update(values, newValue == 0);
         }
     }
