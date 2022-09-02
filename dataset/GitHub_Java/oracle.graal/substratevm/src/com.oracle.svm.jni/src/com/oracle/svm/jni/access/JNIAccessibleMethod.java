@@ -136,23 +136,11 @@ public final class JNIAccessibleMethod extends JNIAccessibleMember {
     }
 
     private boolean anyMatchIgnoreReturnType(ResolvedJavaType sub) {
-        try {
-            for (ResolvedJavaMethod method : sub.getDeclaredMethods()) {
-                if (descriptor.matchesIgnoreReturnType(method)) {
-                    return true;
-                }
+        for (ResolvedJavaMethod method : sub.getDeclaredMethods()) {
+            if (descriptor.matchesIgnoreReturnType(method)) {
+                return true;
             }
-            return false;
-
-        } catch (LinkageError ex) {
-            /*
-             * Ignore any linkage errors due to looking up the declared methods. Unfortunately, it
-             * is not possible to look up methods (even a single declared method with a known
-             * signature using reflection) if any other method of the class references a missing
-             * type. In this case, we have to assume that the subclass does not have a matching
-             * method.
-             */
-            return false;
         }
+        return false;
     }
 }
