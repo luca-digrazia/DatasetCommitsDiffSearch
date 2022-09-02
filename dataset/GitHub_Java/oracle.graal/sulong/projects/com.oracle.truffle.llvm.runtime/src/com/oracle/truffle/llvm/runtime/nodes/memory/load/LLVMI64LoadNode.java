@@ -36,7 +36,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMVarArgCompoundValue;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
@@ -45,6 +44,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
+@GenerateUncached
 public abstract class LLVMI64LoadNode extends LLVMLoadNode {
 
     public static LLVMI64LoadNode create() {
@@ -53,7 +53,6 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
 
     public abstract long executeWithTarget(Object address) throws UnexpectedResultException;
 
-    @GenerateUncached
     public abstract static class LLVMI64OffsetLoadNode extends LLVMOffsetLoadNode {
 
         public static LLVMI64OffsetLoadNode create() {
@@ -61,6 +60,8 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
         }
 
         public abstract long executeWithTarget(LLVMPointer receiver, long offset) throws UnexpectedResultException;
+
+        public abstract Object executeWithTargetGeneric(LLVMPointer receiver, long offset);
 
         @Specialization(guards = "!isAutoDerefHandle(language, addr)")
         protected long doI64Native(LLVMNativePointer addr, long offset,
@@ -130,11 +131,4 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
                     @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
         return nativeRead.readGenericI64(addr.getObject(), addr.getOffset());
     }
-
-    @Specialization(rewriteOn = UnexpectedResultException.class)
-    protected long doI64Native(LLVMVarArgCompoundValue value,
-                    @Cached LLVMI64LoadNode recursionNode) throws UnexpectedResultException {
-        return recursionNode.executeWithTarget(value.getAddr());
-    }
-
 }

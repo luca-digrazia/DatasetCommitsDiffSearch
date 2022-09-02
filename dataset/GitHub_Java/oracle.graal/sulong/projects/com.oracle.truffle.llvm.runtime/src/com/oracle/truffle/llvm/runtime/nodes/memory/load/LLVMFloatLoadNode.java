@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -44,6 +43,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
+@GenerateUncached
 public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
 
     public static LLVMFloatLoadNode create() {
@@ -52,7 +52,6 @@ public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
 
     public abstract float executeWithTarget(Object address);
 
-    @GenerateUncached
     public abstract static class LLVMFloatOffsetLoadNode extends LLVMOffsetLoadNode {
 
         public static LLVMFloatOffsetLoadNode create() {
@@ -68,7 +67,6 @@ public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
         }
 
         @Specialization(guards = "isAutoDerefHandle(language, addr)")
-        @GenerateAOT.Exclude
         protected static float doFloatDerefHandle(LLVMNativePointer addr, long offset,
                         @Cached LLVMDerefHandleGetReceiverNode getReceiver,
                         @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -77,7 +75,6 @@ public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
         }
 
         @Specialization(limit = "3")
-        @GenerateAOT.Exclude
         protected static float doFloatManaged(LLVMManagedPointer addr, long offset,
                         @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
             return nativeRead.readFloat(addr.getObject(), addr.getOffset() + offset);
@@ -91,7 +88,6 @@ public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
     }
 
     @Specialization(guards = "isAutoDerefHandle(language, addr)")
-    @GenerateAOT.Exclude
     protected static float doFloatDerefHandle(LLVMNativePointer addr,
                     @Cached LLVMDerefHandleGetReceiverNode getReceiver,
                     @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -100,7 +96,6 @@ public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
     }
 
     @Specialization(limit = "3")
-    @GenerateAOT.Exclude
     protected static float doFloatManaged(LLVMManagedPointer addr,
                     @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
         return nativeRead.readFloat(addr.getObject(), addr.getOffset());

@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.parser;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
@@ -231,7 +232,7 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
             System.out.println();
         }
 
-        return LLVMLanguage.createCallTarget(rootNode);
+        return Truffle.getRuntime().createCallTarget(rootNode);
     }
 
     private HashSet<Integer> getDebugValues() {
