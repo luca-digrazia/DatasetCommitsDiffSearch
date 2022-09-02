@@ -35,7 +35,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TimerTask;
@@ -159,7 +159,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     private static URL[] verifyClassPathAndConvertToURLs(String[] classpath) {
-        return new LinkedHashSet<>(Arrays.asList(classpath)).stream().flatMap(ImageClassLoader::toClassPathEntries).map(v -> {
+        return new HashSet<>(Arrays.asList(classpath)).stream().flatMap(ImageClassLoader::toClassPathEntries).map(v -> {
             try {
                 return v.toAbsolutePath().toUri().toURL();
             } catch (MalformedURLException e) {
@@ -321,13 +321,8 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             if (compilationExecutor != null) {
                 compilationExecutor.shutdownNow();
             }
-            if (e.getReason().isPresent()) {
-                NativeImageGeneratorRunner.info(e.getReason().get());
-                return 0;
-            } else {
-                /* InterruptImageBuilding without explicit reason is exit code 3 */
-                return 3;
-            }
+            e.getReason().ifPresent(NativeImageGeneratorRunner::info);
+            return 3;
         } catch (FallbackFeature.FallbackImageRequest e) {
             reportUserException(e, parsedHostedOptions, NativeImageGeneratorRunner::warn);
             return 2;
