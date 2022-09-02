@@ -93,14 +93,9 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VaLis
 import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativeVarargsAreaStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativeVarargsAreaStackAllocationNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.NativeProfiledMemMove;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI64LoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMPointerLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVM80BitFloatStoreNode.LLVM80BitFloatOffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI32StoreNode.LLVMI32OffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI64StoreNode.LLVMI64OffsetStoreNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMPointerStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMPointerStoreNode.LLVMPointerOffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -227,7 +222,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
     private LLVMPointer regSaveAreaPtr;
     private OverflowArgArea overflowArgArea;
 
-    private LLVMNativePointer nativized;
+    private LLVMPointer nativized;
     private LLVMPointer overflowArgAreaBaseNativePtr;
 
     private final LLVMRootNode rootNode;
@@ -425,9 +420,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "vaList.isNativized()")
-        static int readNativeI32(LLVMX86_64VaListStorage vaList, long offset,
-                        @Cached LLVMI32LoadNode.LLVMI32OffsetLoadNode offsetLoad) {
-            return offsetLoad.executeWithTarget(vaList.nativized, offset);
+        static int readNativeI32(LLVMX86_64VaListStorage vaList, long offset, @CachedLibrary(limit = "1") LLVMManagedReadLibrary nativeReadLibrary) {
+            return nativeReadLibrary.readI32(vaList.nativized, offset);
         }
     }
 
@@ -448,9 +442,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "vaList.isNativized()")
-        static LLVMPointer readNativePointer(LLVMX86_64VaListStorage vaList, long offset,
-                        @Cached LLVMPointerLoadNode.LLVMPointerOffsetLoadNode offsetLoad) {
-            return offsetLoad.executeWithTarget(vaList.nativized, offset);
+        static LLVMPointer readNativePointer(LLVMX86_64VaListStorage vaList, long offset, @CachedLibrary(limit = "1") LLVMManagedReadLibrary nativeReadLibrary) {
+            return nativeReadLibrary.readPointer(vaList.nativized, offset);
         }
     }
 
@@ -503,9 +496,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "vaList.isNativized()")
-        static void writeNative(LLVMX86_64VaListStorage vaList, long offset, int value,
-                        @Cached LLVMI32OffsetStoreNode offsetStore) {
-            offsetStore.executeWithTarget(vaList.nativized, offset, value);
+        static void writeNative(LLVMX86_64VaListStorage vaList, long offset, int value, @CachedLibrary(limit = "1") LLVMManagedWriteLibrary nativeWriteLibrary) {
+            nativeWriteLibrary.writeI32(vaList.nativized, offset, value);
         }
     }
 
@@ -538,9 +530,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "vaList.isNativized()")
-        static void writeNative(LLVMX86_64VaListStorage vaList, long offset, LLVMPointer value,
-                        @Cached LLVMPointerStoreNode.LLVMPointerOffsetStoreNode offsetStore) {
-            offsetStore.executeWithTarget(vaList.nativized, offset, value);
+        static void writeNative(LLVMX86_64VaListStorage vaList, long offset, LLVMPointer value, @CachedLibrary(limit = "1") LLVMManagedWriteLibrary nativeWriteLibrary) {
+            nativeWriteLibrary.writePointer(vaList.nativized, offset, value);
         }
     }
 
@@ -913,7 +904,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         // Therefore toNative is put behind the Truffle boundary and FrameAccess.MATERIALIZE is
         // used as a workaround.
         VirtualFrame frame = (VirtualFrame) Truffle.getRuntime().getCurrentFrame().getFrame(FrameAccess.MATERIALIZE);
-        nativized = LLVMNativePointer.cast(allocaNode.executeGeneric(frame));
+        nativized = LLVMPointer.cast(allocaNode.executeGeneric(frame));
 
         if (overflowArgArea == null) {
             // toNative is called before the va_list is initialized by va_start. It happens in
@@ -1049,7 +1040,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
 
     @ExportMessage
     long asPointer() {
-        return nativized == null ? 0L : nativized.asNative();
+        return nativized == null ? 0L : LLVMNativePointer.cast(nativized).asNative();
     }
 
     /**
@@ -1293,7 +1284,6 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
      * index for the input offset and uses the <code>gpIdx</code> and <code>fpIdx</code> arrays to
      * translate <code>reg_save_area</code> index to the real arguments index.
      */
-    @ExportLibrary(LLVMManagedReadLibrary.class)
     @ExportLibrary(NativeTypeLibrary.class)
     public static final class RegSaveArea extends ArgsArea {
 
@@ -1358,7 +1348,6 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
      * stored in the <code>overflow_area</code>. The <code>offsets</code> array serves to map
      * offsets to the indices of that array.
      */
-    @ExportLibrary(LLVMManagedReadLibrary.class)
     @ExportLibrary(NativeTypeLibrary.class)
     public static final class OverflowArgArea extends ArgsArea implements Cloneable {
         private final long[] offsets;
@@ -1544,9 +1533,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "isNativePointer(x.getAddr())")
-        byte compoundObjectConversionNative(LLVMVarArgCompoundValue x, int offset,
-                        @Cached LLVMI8LoadNode.LLVMI8OffsetLoadNode offsetLoad) {
-            return offsetLoad.executeWithTarget(LLVMNativePointer.cast(x.getAddr()), offset);
+        byte compoundObjectConversionNative(LLVMVarArgCompoundValue x, int offset, @CachedLibrary(limit = "1") LLVMManagedReadLibrary compObjReadLib) {
+            return compObjReadLib.readI8(x.getAddr(), offset);
         }
 
         @Specialization(guards = "!isNativePointer(x.getAddr())")
@@ -1709,9 +1697,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "isNativePointer(x.getAddr())")
-        int compoundObjectConversion(LLVMVarArgCompoundValue x, int offset,
-                        @Cached LLVMI32LoadNode.LLVMI32OffsetLoadNode offsetLoad) {
-            return offsetLoad.executeWithTarget(LLVMNativePointer.cast(x.getAddr()), offset);
+        int compoundObjectConversion(LLVMVarArgCompoundValue x, int offset, @CachedLibrary(limit = "1") LLVMManagedReadLibrary compObjReadLib) {
+            return compObjReadLib.readI32(x.getAddr(), offset);
         }
 
         @Specialization(guards = "!isNativePointer(x.getAddr())")
@@ -1789,10 +1776,9 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "isNativePointer(x.getAddr())")
-        long compoundObjectConversion(LLVMVarArgCompoundValue x, int offset,
-                        @Cached LLVMI64LoadNode.LLVMI64OffsetLoadNode offsetLoad) {
+        long compoundObjectConversion(LLVMVarArgCompoundValue x, int offset, @CachedLibrary(limit = "1") LLVMManagedReadLibrary compObjReadLib) {
             try {
-                return offsetLoad.executeWithTarget(LLVMNativePointer.cast(x.getAddr()), offset);
+                return compObjReadLib.readI64(x.getAddr(), offset);
             } catch (UnexpectedResultException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new UnsupportedOperationException("Should not get here");
@@ -1844,9 +1830,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         @Specialization(guards = "isNativePointer(x.getAddr())")
-        LLVMPointer compoundObjectConversion(LLVMVarArgCompoundValue x, int offset,
-                        @Cached LLVMPointerLoadNode.LLVMPointerOffsetLoadNode offsetLoad) {
-            return offsetLoad.executeWithTarget(LLVMNativePointer.cast(x.getAddr()), offset);
+        LLVMPointer compoundObjectConversion(LLVMVarArgCompoundValue x, int offset, @CachedLibrary(limit = "1") LLVMManagedReadLibrary compObjReadLib) {
+            return compObjReadLib.readPointer(x.getAddr(), offset);
         }
 
         @Specialization(guards = "!isNativePointer(x.getAddr())")
