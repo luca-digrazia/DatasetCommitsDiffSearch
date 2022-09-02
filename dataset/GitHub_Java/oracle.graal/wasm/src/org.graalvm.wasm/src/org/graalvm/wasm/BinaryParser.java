@@ -93,6 +93,8 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
+    private static final int[] EMPTY_INT_ARRAY = new int[0];
+
     private static final int MIN_DEFAULT_STACK_SIZE = 1_000_000;
     private static final int MAX_DEFAULT_ASYNC_STACK_SIZE = 10_000_000;
 
@@ -407,13 +409,20 @@ public class BinaryParser extends BinaryStreamParser {
                         "Stack size must match the return type length at the function end", Failure.RETURN_SIZE_MISMATCH);
         rootNode.setBody(bodyBlock);
 
+        /* Push a frame slot to the frame descriptor for every local. */
+        rootNode.codeEntry().initLocalSlots(rootNode.getFrameDescriptor());
+
         /* Initialize the Truffle-related components required for execution. */
-        rootNode.codeEntry().setIntConstants(state.intConstants());
+        if (state.intConstants().length > 0) {
+            rootNode.codeEntry().setIntConstants(state.intConstants());
+        } else {
+            rootNode.codeEntry().setIntConstants(EMPTY_INT_ARRAY);
+        }
         if (state.branchTables().length > 0) {
             rootNode.codeEntry().setBranchTables(state.branchTables());
         }
         rootNode.codeEntry().setProfileCount(state.profileCount());
-        rootNode.codeEntry().initStackLocals(rootNode.getFrameDescriptor(), state.maxStackSize());
+        rootNode.codeEntry().initStack(rootNode.getFrameDescriptor(), state.maxStackSize());
     }
 
     private ByteArrayList readCodeEntryLocals() {

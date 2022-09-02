@@ -248,8 +248,6 @@ import static org.graalvm.wasm.constants.Instructions.UNREACHABLE;
 
 public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
-    private static final double HIGH_PROBABILITY = 0.99999;
-
     /**
      * The number of integers in the int constant table used by this node.
      */
@@ -353,14 +351,20 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         int profileOffset = initialProfileOffset;
         int offset = startOffset;
         final WasmCodeEntry codeEntry = codeEntry();
-        WasmMemory memory = instance().memory();
+        final WasmMemory memory = instance().memory();
         final byte[] data = codeEntry.data();
         final int[] intConstants = codeEntry.intConstants();
         final int[] profileCounters = codeEntry.profileCounters();
+        HostCompilerDirectives.consume(memory.byteSize());
+        HostCompilerDirectives.consume(data.length);
+        HostCompilerDirectives.consume(intConstants.length);
+        HostCompilerDirectives.consume(profileCounters.length);
+        HostCompilerDirectives.consume(locals.length);
+        HostCompilerDirectives.consume(stack.length);
         final int blockByteLength = byteLength();
         final int offsetLimit = startOffset + blockByteLength;
         try {
-            while (CompilerDirectives.injectBranchProbability(HIGH_PROBABILITY, offset < offsetLimit)) {
+            while (offset < offsetLimit) {
                 byte byteOpcode = BinaryStreamParser.rawPeek1(data, offset);
                 int opcode = byteOpcode & 0xFF;
                 offset++;
@@ -404,13 +408,10 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         // - A value larger than 0 indicates that we need to branch to a level
                         // "shallower" than the current loop block
                         // (break out of the loop and even further).
-                        int unwindCounter = executeLoopNode(childrenOffset, frame);
+                        int unwindCounter = executeLoopNode(loopNode, frame);
                         if (unwindCounter > 0) {
                             return unwindCounter - 1;
                         }
-
-                        // The unwind counter cannot be 0 at this point.
-                        assert unwindCounter == -1 : "Unwind counter after loop exit: " + unwindCounter;
 
                         childrenOffset++;
                         offset += loopBody.byteLength();
@@ -480,7 +481,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         intConstantOffset++;
                         // endregion
 
-                        boolean condition = WasmCodeEntry.profileCondition(profileCounters, profileOffset, popBoolean(stack, stackPointer));
+                        boolean condition = codeEntry.profileCondition(profileCounters, profileOffset, popBoolean(stack, stackPointer));
                         ++profileOffset;
 
                         if (condition) {
@@ -543,12 +544,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         byte returnType = function.returnType();
                         int numArgs = function.numArguments();
 
+                        childrenOffset++;
+
                         Object[] args = createArgumentsForCall(stack, function.typeIndex(), numArgs, stackPointer);
                         stackPointer -= args.length;
 
                         Object result = executeDirectCall(childrenOffset, args);
-                        childrenOffset++;
-
                         // At the moment, WebAssembly functions may return up to one value.
                         // As per the WebAssembly specification,
                         // this restriction may be lifted in the future.
@@ -634,13 +635,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         }
 
                         // Invoke the resolved function.
+                        childrenOffset++;
+
                         int numArgs = instance().symbolTable().functionTypeArgumentCount(expectedFunctionTypeIndex);
                         Object[] args = createArgumentsForCall(stack, expectedFunctionTypeIndex, numArgs, stackPointer);
                         stackPointer -= args.length;
 
                         final Object result = executeIndirectCallNode(childrenOffset, target, args);
-                        childrenOffset++;
-
                         // At the moment, WebAssembly functions may return up to one value.
                         // As per the WebAssembly specification, this restriction may be lifted in
                         // the future.
@@ -747,25 +748,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         global_set(context, stack, stackPointer, index);
                         break;
                     }
-                    case I32_LOAD: {
-                        /* The memAlign hint is not currently used or taken into account. */
-                        int memAlignOffsetDelta = offsetDelta(data, offset);
-                        offset += memAlignOffsetDelta;
-
-                        // region Load LEB128 Unsigned32 -> memOffset
-                        long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int memOffset = (int) loBits(valueLength);
-                        int offsetDelta = hiBits(valueLength);
-                        offset += offsetDelta;
-                        // endregion
-
-                        int baseAddress = popInt(stack, stackPointer - 1);
-                        int address = baseAddress + memOffset;
-
-                        int value = memory.load_i32(this, address);
-                        pushInt(stack, stackPointer - 1, value);
-                        break;
-                    }
+                    case I32_LOAD:
                     case I64_LOAD:
                     case F32_LOAD:
                     case F64_LOAD:
@@ -1347,9 +1330,10 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @BytecodeInterpreterSwitchBoundary
-    private int executeLoopNode(int childrenOffset, VirtualFrame frame) {
-        final LoopNode loopNode = (LoopNode) children[childrenOffset];
+    private static int executeLoopNode(LoopNode loopNode, VirtualFrame frame) {
         int unwindCounter = (Integer) loopNode.execute(frame);
+        // The unwind counter cannot be 0 at this point.
+        assert unwindCounter == -1 : "Unwind counter after loop exit: " + unwindCounter;
         return unwindCounter;
     }
 

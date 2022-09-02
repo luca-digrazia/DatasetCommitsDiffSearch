@@ -45,7 +45,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import org.graalvm.wasm.collection.IntArrayList;
 
 public final class WasmCodeEntry {
     private final WasmFunction function;
@@ -54,7 +53,8 @@ public final class WasmCodeEntry {
     @CompilationFinal(dimensions = 1) private int[] intConstants;
     @CompilationFinal(dimensions = 2) private int[][] branchTables;
     @CompilationFinal(dimensions = 1) private int[] profileCounters;
-    @CompilationFinal private FrameSlot stackLocalsSlot;
+    @CompilationFinal private FrameSlot stackSlot;
+    @CompilationFinal private FrameSlot localsSlot;
     @CompilationFinal private int maxStackSize;
 
     public WasmCodeEntry(WasmFunction function, byte[] data) {
@@ -73,8 +73,12 @@ public final class WasmCodeEntry {
         return data;
     }
 
-    public void initStackLocals(FrameDescriptor frameDescriptor, int maximumStackSize) {
-        this.stackLocalsSlot = frameDescriptor.addFrameSlot(0, FrameSlotKind.Object);
+    public void initLocalSlots(FrameDescriptor frameDescriptor) {
+        this.localsSlot = frameDescriptor.addFrameSlot(1, FrameSlotKind.Object);
+    }
+
+    public void initStack(FrameDescriptor frameDescriptor, int maximumStackSize) {
+        this.stackSlot = frameDescriptor.addFrameSlot(0, FrameSlotKind.Object);
         this.maxStackSize = maximumStackSize;
     }
 
@@ -82,8 +86,12 @@ public final class WasmCodeEntry {
         return maxStackSize;
     }
 
-    public FrameSlot stackLocalsSlot() {
-        return stackLocalsSlot;
+    public FrameSlot stackSlot() {
+        return stackSlot;
+    }
+
+    public FrameSlot localsSlot() {
+        return localsSlot;
     }
 
     public void setLocalTypes(byte[] localTypes) {
@@ -118,8 +126,6 @@ public final class WasmCodeEntry {
     public void setProfileCount(int size) {
         if (size > 0) {
             this.profileCounters = new int[size];
-        } else {
-            this.profileCounters = IntArrayList.EMPTY_INT_ARRAY;
         }
     }
 
@@ -149,7 +155,7 @@ public final class WasmCodeEntry {
      * @param condition Condition value
      * @return {@code condition}
      */
-    public static boolean profileCondition(int[] counters, int index, boolean condition) {
+    public boolean profileCondition(int[] counters, int index, boolean condition) {
         // locals required to guarantee no overflow in multi-threaded environments
         int tf = counters[index];
         int t = tf >>> 16;
