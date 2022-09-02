@@ -24,7 +24,6 @@
 package com.oracle.truffle.espresso.runtime;
 
 import java.lang.reflect.Array;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,7 +32,6 @@ import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
-import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.jdwp.api.CallFrame;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
@@ -62,7 +60,6 @@ public final class JDWPContextImpl implements JDWPContext {
     private final EspressoContext context;
     private final Ids<Object> ids;
     private JDWPSetup setup;
-    private VMListener eventListener = new EmptyListener();
 
     public JDWPContextImpl(EspressoContext context) {
         this.context = context;
@@ -76,9 +73,9 @@ public final class JDWPContextImpl implements JDWPContext {
             Debugger debugger = env.lookup(env.getInstruments().get("debugger"), Debugger.class);
             DebuggerController control = env.lookup(env.getInstruments().get(JDWPInstrument.ID), DebuggerController.class);
             setup.setup(debugger, control, context.JDWPOptions, this);
-            eventListener = control.getEventListener();
+            return control.getEventListener();
         }
-        return eventListener;
+        return new EmptyListener();
     }
 
     public void finalizeContext() {
@@ -99,12 +96,7 @@ public final class JDWPContextImpl implements JDWPContext {
 
     @Override
     public boolean isValidThread(Object thread) {
-        if (thread instanceof StaticObject) {
-            StaticObject staticObject = (StaticObject) thread;
-            return context.getMeta().Thread.isAssignableFrom(staticObject.getKlass());
-        } else {
-            return false;
-        }
+        return context.isValidThread(thread);
     }
 
     @Override
@@ -503,34 +495,5 @@ public final class JDWPContextImpl implements JDWPContext {
     public void exit(int exitCode) {
         // TODO - implement proper system exit for Espresso
         // tracked here: /browse/GR-20496
-    }
-
-    public void holdEvents() {
-        eventListener.holdEvents();
-    }
-
-    @Override
-    public void releaseEvents() {
-        eventListener.releaseEvents();
-    }
-
-    @Override
-    public List<Path> getClassPath() {
-        return context.getVmProperties().classpath();
-    }
-
-    @Override
-    public List<Path> getBootClassPath() {
-        return context.getVmProperties().bootClasspath();
-    }
-
-    @Override
-    public int getCatchLocation(MethodRef method, Object guestException, int bci) {
-        if (guestException instanceof StaticObject) {
-            Method guestMethod = (Method) method;
-            return guestMethod.getCatchLocation(bci, (StaticObject) guestException);
-        } else {
-            return -1;
-        }
     }
 }
