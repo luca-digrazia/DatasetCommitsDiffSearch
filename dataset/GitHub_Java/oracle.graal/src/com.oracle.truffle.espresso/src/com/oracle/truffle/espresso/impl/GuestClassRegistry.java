@@ -92,10 +92,7 @@ public final class GuestClassRegistry extends ClassRegistry {
     }
 
     @Override
-    public ObjectKlass defineKlass(Symbol<Type> type, final byte[] bytes) {
-        ObjectKlass klass = super.defineKlass(type, bytes);
-        // Register class in guest CL. Mimics HotSpot behavior.
-        ClassLoader_addClass.invokeDirect(classLoader, klass.mirror());
-        return klass;
+    public Method getAddClass() {
+        return ClassLoader_addClass;
     }
 }
