@@ -101,11 +101,10 @@ public class WindowsSystemPropertiesSupport extends SystemPropertiesSupport {
 
     @Override
     protected String userDirValue() {
-        int maxLength = WinBase.MAX_PATH;
-        WCharPointer userDir = StackValue.get(maxLength, WCharPointer.class);
-        int length = WinBase.GetCurrentDirectoryW(maxLength, userDir);
-        VMError.guarantee(length > 0 && length < maxLength, "Could not determine value of user.dir");
-        return toJavaString(userDir, WordFactory.unsigned(length));
+        CCharPointer path = StackValue.get(WinBase.MAX_PATH, CCharPointer.class);
+        int result = WinBase.GetCurrentDirectoryA(WinBase.MAX_PATH, path);
+        VMError.guarantee(result > 0, "Could not determine value of user.dir");
+        return CTypeConversion.toJavaString(path);
     }
 
     @Override
