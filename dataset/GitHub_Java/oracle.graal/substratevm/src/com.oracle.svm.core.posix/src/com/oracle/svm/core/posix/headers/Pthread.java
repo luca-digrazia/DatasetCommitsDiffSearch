@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,26 @@
  */
 package com.oracle.svm.core.posix.headers;
 
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.constant.CConstant;
 import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.function.CFunction.Transition;
+import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
+import org.graalvm.nativeimage.impl.InternalPlatform.DARWIN_AND_JNI;
+import org.graalvm.nativeimage.impl.InternalPlatform.LINUX_AND_JNI;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 
+import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.posix.headers.Time.timespec;
+import com.oracle.svm.core.thread.VMThreads.OSThreadHandle;
+import com.oracle.svm.core.thread.VMThreads.OSThreadId;
 
 //Checkstyle: stop
 
@@ -46,6 +51,7 @@ import com.oracle.svm.core.posix.headers.Time.timespec;
  * Definitions manually translated from the C header file pthread.h.
  */
 @CContext(PosixDirectives.class)
+@Platforms({DARWIN_AND_JNI.class, LINUX_AND_JNI.class})
 @CLibrary("pthread")
 public class Pthread {
 
@@ -53,7 +59,7 @@ public class Pthread {
      * Thread identifiers. The structure of the attribute type is not exposed on purpose.
      */
 
-    public interface pthread_t extends WordBase {
+    public interface pthread_t extends OSThreadHandle, OSThreadId {
     }
 
     @CPointerTo(nameOfCType = "pthread_t")
@@ -145,8 +151,8 @@ public class Pthread {
 
     /* Detach state. */
 
-    // FIXME: @CConstant
-    // FIXME: public static native int PTHREAD_CREATE_JOINABLE();
+    @CConstant
+    public static native int PTHREAD_CREATE_JOINABLE();
 
     @CConstant
     public static native int PTHREAD_CREATE_DETACHED();
@@ -166,7 +172,7 @@ public class Pthread {
     // FIXME: public static native int PTHREAD_MUTEX_ADAPTIVE_NP();
 
     @CConstant
-    public static native int PTHREAD_STACK_MIN();
+    public static native UnsignedWord PTHREAD_STACK_MIN();
 
     @CConstant
     public static native int PTHREAD_MUTEX_NORMAL();
@@ -269,6 +275,9 @@ public class Pthread {
     @CFunction
     public static native int pthread_join(pthread_t th, WordPointer thread_return);
 
+    @CFunction(value = "pthread_join", transition = Transition.NO_TRANSITION)
+    public static native int pthread_join_no_transition(pthread_t th, WordPointer thread_return);
+
     /**
      * Check whether thread TH has terminated. If yes return the status of the thread in
      * *THREAD_RETURN, if THREAD_RETURN is not NULL.
@@ -292,7 +301,8 @@ public class Pthread {
     public static native int pthread_detach(pthread_t th);
 
     /** Obtain the identifier of the current thread. */
-    @CFunction
+    @CFunction(transition = Transition.NO_TRANSITION)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     public static native pthread_t pthread_self();
 
     /** Compare two thread identifiers. */
@@ -309,7 +319,7 @@ public class Pthread {
     public static native int pthread_attr_init(pthread_attr_t attr);
 
     /** Destroy thread attribute *ATTR. */
-    @CFunction
+    @CFunction(transition = Transition.NO_TRANSITION)
     public static native int pthread_attr_destroy(pthread_attr_t attr);
 
     /** Get detach state attribute. */
@@ -324,7 +334,7 @@ public class Pthread {
     public static native int pthread_attr_setdetachstate(pthread_attr_t attr, int detachstate);
 
     /** Get the size of the guard area created for stack overflow protection. */
-    @CFunction
+    @CFunction(transition = Transition.NO_TRANSITION)
     public static native int pthread_attr_getguardsize(pthread_attr_t attr, WordPointer guardsize);
 
     /** Set the size of the guard area created for stack overflow protection. */
@@ -387,7 +397,7 @@ public class Pthread {
     public static native int pthread_attr_setstacksize(pthread_attr_t attr, UnsignedWord stacksize);
 
     /** Return the previously set address for the stack. */
-    @CFunction
+    @CFunction(transition = Transition.NO_TRANSITION)
     public static native int pthread_attr_getstack(pthread_attr_t attr, WordPointer stackaddr, WordPointer stacksize);
 
     /**
@@ -426,7 +436,7 @@ public class Pthread {
      * TH. It shall be called on uninitialized ATTR and destroyed with pthread_attr_destroy when no
      * longer needed.
      */
-    @CFunction
+    @CFunction(transition = Transition.NO_TRANSITION)
     public static native int pthread_getattr_np(pthread_t th, pthread_attr_t attr);
 
     /* Functions for scheduling control. */
@@ -444,14 +454,6 @@ public class Pthread {
     /** Set the scheduling priority for TARGET_THREAD. */
     @CFunction
     public static native int pthread_setschedprio(pthread_t target_thread, int prio);
-
-    /** Get thread name visible in the kernel and its interfaces. */
-    @CFunction
-    public static native int pthread_getname_np(pthread_t target_thread, CCharPointer buf, UnsignedWord buflen);
-
-    /** Set thread name visible in the kernel and its interfaces. */
-    @CFunction
-    public static native int pthread_setname_np(pthread_t target_thread, CCharPointer name);
 
     /** Determine level of concurrency. */
     @CFunction
