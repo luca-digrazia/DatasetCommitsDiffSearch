@@ -2,7 +2,6 @@ package com.oracle.truffle.espresso.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
@@ -13,6 +12,7 @@ import com.oracle.truffle.espresso.jdwp.impl.ClassObjectId;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.impl.TagConstants;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
+import com.oracle.truffle.espresso.impl.NullKlass;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -28,12 +28,12 @@ public final class JDWPContextImpl implements JDWPContext {
 
     private final EspressoContext context;
     private final JDWPVirtualMachine vm;
-    private final Ids<Object> ids;
+    private final Ids ids;
 
     public JDWPContextImpl(EspressoContext context) {
         this.context = context;
         this.vm = new EspressoVirtualMachine();
-        this.ids = new Ids<>(StaticObject.NULL);
+        this.ids = new Ids(StaticObject.NULL);
     }
 
     public void jdwpInit() {
@@ -44,7 +44,7 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public Ids<Object> getIds() {
+    public Ids getIds() {
         return ids;
     }
 
@@ -65,7 +65,7 @@ public final class JDWPContextImpl implements JDWPContext {
 
     @Override
     public KlassRef getNullKlass() {
-        return Klass.NULL_KLASS;
+        return NullKlass.getKlass(context);
     }
 
     @Override

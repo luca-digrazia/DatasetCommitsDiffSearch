@@ -23,15 +23,16 @@
 
 package com.oracle.truffle.espresso.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
+import com.oracle.truffle.espresso.impl.ContextAccess;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.espresso.impl.ContextAccess;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
 class EspressoThreadManager implements ContextAccess {
 
@@ -122,10 +123,12 @@ class EspressoThreadManager implements ContextAccess {
             }
         }
         pushThread((int) host.getId(), guest);
+        VMEventListeners.getDefault().threadStarted(guest);
     }
 
     public void unregisterThread(StaticObject thread) {
         activeThreads.remove(thread);
+        VMEventListeners.getDefault().threadDied(thread);
     }
 
     /**
@@ -157,17 +160,13 @@ class EspressoThreadManager implements ContextAccess {
             return guestReferenceHandlerThread;
         }
         Object[] threads = guestThreads;
-        if (threads[0] == null) {
-            // no registered guest threads yet
-            return null;
-        }
         int index = id - (int) threads[0];
         assert index > 0 && index < guestThreads.length;
-        if (threads[index] == null) {
-            // a guest thread has not yet been created for this host thread
-            return null;
-        }
         return (StaticObject) threads[index];
+    }
+
+    public StaticObject getMainThread() {
+        return guestMainThread;
     }
 
     private void pushThread(int id, StaticObject self) {

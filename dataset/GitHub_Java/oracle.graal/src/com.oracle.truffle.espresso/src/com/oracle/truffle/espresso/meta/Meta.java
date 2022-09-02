@@ -924,9 +924,6 @@ public final class Meta implements ContextAccess {
         if (hostObject instanceof StaticObject) {
             return hostObject;
         }
-        if (hostObject instanceof StaticObject[]) {
-            return hostObject;
-        }
 
         if (hostObject instanceof Boolean ||
                         hostObject instanceof Byte ||

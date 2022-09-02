@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.classfile.SignatureAttribute;
@@ -32,8 +31,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.ModifiedUTF8;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.jdwp.impl.FieldBreakpointInfo;
-import com.oracle.truffle.espresso.jdwp.impl.StableBoolean;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -246,64 +243,6 @@ public final class Field extends Member<Type> implements FieldRef {
     @Override
     public void setValue(Object self, Object value) {
         set((StaticObject) self, value);
-    }
-
-    private final StableBoolean hasActiveBreakpoints = new StableBoolean(false);
-
-    // array with maximum size 2, one access info and/or one modification info.
-    private FieldBreakpointInfo[] infos = null;
-
-    @Override
-    public boolean hasActiveBreakpoint() {
-        return hasActiveBreakpoints.get();
-    }
-
-    @Override
-    public FieldBreakpointInfo[] getFieldBreakpointInfos() {
-        return infos;
-    }
-
-    @Override
-    public void addFieldBreakpointInfo(FieldBreakpointInfo info) {
-        if (infos == null) {
-            infos = new FieldBreakpointInfo[] {info};
-            return;
-        }
-
-        int length = infos.length;
-        FieldBreakpointInfo[] temp = new FieldBreakpointInfo[length + 1];
-        System.arraycopy(infos, 0, temp, 0, length);
-        temp[length] = info;
-        infos = temp;
-        hasActiveBreakpoints.set(true);
-    }
-
-    @Override
-    public void removeFieldBreakpointInfo(int requestId) {
-        // shrink the array to avoid null values
-        switch (infos.length) {
-            case 0: throw new RuntimeException("Field: " + getNameAsString() + " should contain field breakpoint info");
-            case 1:
-                infos = null;
-                hasActiveBreakpoints.set(false);
-                return;
-            case 2:
-                FieldBreakpointInfo[] temp = new FieldBreakpointInfo[1];
-                FieldBreakpointInfo info = infos[0];
-                if (info.getRequestId() == requestId) {
-                    // remove index 0, but keep info at index 1
-                    temp[0] = infos[1];
-                    infos = temp;
-                    return;
-                }
-                info = infos[1];
-                if (info.getRequestId() == requestId) {
-                    // remove index 1, but keep info at index 0
-                    temp[0] = infos[0];
-                    infos = temp;
-                    return;
-                }
-        }
     }
 
     //endregion jdwp-specific
