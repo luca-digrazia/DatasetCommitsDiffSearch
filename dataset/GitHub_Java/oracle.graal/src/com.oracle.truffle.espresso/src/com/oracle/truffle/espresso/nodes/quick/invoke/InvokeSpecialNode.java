@@ -30,9 +30,7 @@ import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
-import com.oracle.truffle.espresso.nodes.OperandStack;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public final class InvokeSpecialNode extends QuickNode {
     @CompilationFinal protected MethodVersion method;
@@ -45,7 +43,8 @@ public final class InvokeSpecialNode extends QuickNode {
     }
 
     @Override
-    public int execute(VirtualFrame frame, final OperandStack stack) {
+    public int execute(final VirtualFrame frame) {
+        BytecodeNode root = getBytecodesNode();
         if (!method.getAssumption().isValid()) {
             // update to the latest method version and grab a new direct call target
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -54,15 +53,16 @@ public final class InvokeSpecialNode extends QuickNode {
             adoptChildren();
         }
         // TODO(peterssen): IsNull Node?
-        Object[] args = BytecodeNode.popArguments(stack, top, true, method.getMethod().getParsedSignature());
-        nullCheck((StaticObject) args[0]); // nullcheck receiver
+        Object receiver = nullCheck(root.peekReceiver(frame, top, method.getMethod()));
+        Object[] args = root.peekAndReleaseArguments(frame, top, true, method.getMethod().getParsedSignature());
+        assert receiver == args[0] : "receiver must be the first argument";
         Object result = directCallNode.call(args);
-        return (getResultAt() - top) + BytecodeNode.putKind(stack, getResultAt(), result, method.getMethod().getReturnKind());
+        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, method.getMethod().getReturnKind());
     }
 
     @Override
-    public boolean producedForeignObject(OperandStack stack) {
-        return method.getMethod().getReturnKind().isObject() && BytecodeNode.peekObject(stack, getResultAt()).isForeignObject();
+    public boolean producedForeignObject(VirtualFrame frame) {
+        return method.getMethod().getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
     }
 
     private int getResultAt() {
