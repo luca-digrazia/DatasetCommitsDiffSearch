@@ -368,7 +368,6 @@ public class AgentObjectTest {
 
     @Test
     public void internalScriptsAreIgnored() throws Exception {
-        int[] closeCounter = {0};
         try (Context c = AgentObjectFactory.newContext()) {
             Value agent = AgentObjectFactory.createAgentObject(c);
             AgentScriptAPI agentAPI = agent.as(AgentScriptAPI.class);
@@ -384,7 +383,6 @@ public class AgentObjectTest {
                 ")",
                 "sample.px"
             ).internal(true).build();
-            // @formatter:on
 
             final AgentScriptAPI.OnSourceLoadedHandler listener = (ev) -> {
                 if (ev.name().equals(sampleScript.getName())) {
@@ -402,15 +400,11 @@ public class AgentObjectTest {
                 expressionCounter[0]++;
             }, AgentObjectFactory.createConfig(true, false, false, null));
 
-            agentAPI.on("close", () -> {
-                closeCounter[0]++;
-            });
-
+            // @formatter:on
             c.eval(sampleScript);
 
             assertEquals("No expressions entered & exited", 0, expressionCounter[0]);
         }
-        assertEquals("Close is reported", 1, closeCounter[0]);
     }
 
     @Test
