@@ -32,6 +32,7 @@ import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateRecompile;
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationAction.None;
 import static jdk.vm.ci.meta.DeoptimizationReason.ClassCastException;
+import static jdk.vm.ci.meta.DeoptimizationReason.JavaSubroutineMismatch;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
 import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
 import static jdk.vm.ci.meta.DeoptimizationReason.UnreachedCode;
@@ -2737,9 +2738,8 @@ public class BytecodeParser implements GraphBuilderContext {
         int retAddress = scope.nextReturnAddress();
         ConstantNode returnBciNode = getJsrConstant(retAddress);
         LogicNode guard = IntegerEqualsNode.create(getConstantReflection(), getMetaAccess(), options, null, local, returnBciNode, NodeView.DEFAULT);
-        if (!guard.isTautology()) {
-            throw new JsrNotSupportedBailout("cannot statically decide jsr return address " + local);
-        }
+        guard = graph.addOrUniqueWithInputs(guard);
+        append(new FixedGuardNode(guard, JavaSubroutineMismatch, InvalidateReprofile));
         if (!successor.getJsrScope().equals(scope.pop())) {
             throw new JsrNotSupportedBailout("unstructured control flow (ret leaves more than one scope)");
         }
@@ -3436,6 +3436,7 @@ public class BytecodeParser implements GraphBuilderContext {
             probability = getProfileProbability(canonicalizedCondition.mustNegate());
         }
 
+        probability = clampProbability(probability);
         genIf(condition, trueSuccessor, falseSuccessor, probability);
     }
 
@@ -3457,10 +3458,10 @@ public class BytecodeParser implements GraphBuilderContext {
             // the probability coming from profile is about the original condition
             probability = 1 - probability;
         }
-        return clampProbability(probability);
+        return probability;
     }
 
-    private double extractInjectedProbability(IntegerEqualsNode condition) {
+    private static double extractInjectedProbability(IntegerEqualsNode condition) {
         // Propagate injected branch probability if any.
         IntegerEqualsNode equalsNode = condition;
         BranchProbabilityNode probabilityNode = null;
@@ -3474,7 +3475,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         if (probabilityNode != null && probabilityNode.getProbability().isConstant() && other != null && other.isConstant()) {
-            double probabilityValue = clampProbability(probabilityNode.getProbability().asJavaConstant().asDouble());
+            double probabilityValue = probabilityNode.getProbability().asJavaConstant().asDouble();
             return other.asJavaConstant().asInt() == 0 ? 1.0 - probabilityValue : probabilityValue;
         }
         return -1;
@@ -4322,7 +4323,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    @SuppressWarnings("try")
     protected void genInstanceOf(ResolvedJavaType resolvedType, ValueNode objectIn) {
         ValueNode object = objectIn;
         TypeReference checkedType = TypeReference.createTrusted(graph.getAssumptions(), resolvedType);
@@ -4357,20 +4357,18 @@ public class BytecodeParser implements GraphBuilderContext {
         int value = getStream().readUByte(next);
         if (next <= currentBlock.endBci && (value == Bytecodes.IFEQ || value == Bytecodes.IFNE)) {
             getStream().next();
-            try (DebugCloseable context = openNodeContext()) {
-                BciBlock firstSucc = currentBlock.getSuccessor(0);
-                BciBlock secondSucc = currentBlock.getSuccessor(1);
-                if (firstSucc != secondSucc) {
-                    boolean negate = value != Bytecodes.IFNE;
-                    if (negate) {
-                        BciBlock tmp = firstSucc;
-                        firstSucc = secondSucc;
-                        secondSucc = tmp;
-                    }
-                    genIf(instanceOfNode, firstSucc, secondSucc, getProfileProbability(negate));
-                } else {
-                    appendGoto(firstSucc);
+            BciBlock firstSucc = currentBlock.getSuccessor(0);
+            BciBlock secondSucc = currentBlock.getSuccessor(1);
+            if (firstSucc != secondSucc) {
+                boolean negate = value != Bytecodes.IFNE;
+                if (negate) {
+                    BciBlock tmp = firstSucc;
+                    firstSucc = secondSucc;
+                    secondSucc = tmp;
                 }
+                genIf(instanceOfNode, firstSucc, secondSucc, getProfileProbability(negate));
+            } else {
+                appendGoto(firstSucc);
             }
         } else {
             // Most frequent for value is IRETURN, followed by ISTORE.
