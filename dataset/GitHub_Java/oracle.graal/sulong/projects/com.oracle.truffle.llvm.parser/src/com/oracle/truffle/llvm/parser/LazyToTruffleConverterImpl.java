@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.parser;
 
 import java.io.PrintWriter;
 import java.lang.reflect.Field;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -81,7 +80,6 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMUnpackVarargsNodeGen;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -300,6 +298,8 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         return false;
     }
 
+    private static final Long[] EMPTY_LONGS_ARRAY = {};
+
     /**
      * Create an expression node that, when executed, will provide an address where the respective
      * argument should either be copied from or copied into. This is important when passing struct
@@ -309,30 +309,22 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
      * @param baseAddress Base address from which to calculate the offsets.
      * @param sourceType Type to index into.
      * @param indices List of indices to reach a member or element from the base address.
-     */
-    private LLVMExpressionNode getTargetAddress(LLVMExpressionNode baseAddress, Type sourceType, ArrayDeque<Long> indices) {
-        NodeFactory nf = runtime.getNodeFactory();
+     **/
+    private LLVMExpressionNode getTargetAddress(LLVMExpressionNode baseAddress, Type sourceType, List<Long> indices) {
+        LLVMExpressionNode[] indexNodes = new LLVMExpressionNode[indices.size()];
 
-        int indicesSize = indices.size();
-        Long[] indicesArr = new Long[indicesSize];
-        LLVMExpressionNode[] indexNodes = new LLVMExpressionNode[indicesSize];
-
-        int i = indicesSize - 1;
-        for (Long idx : indices) {
-            indicesArr[i] = idx;
-            indexNodes[i] = nf.createLiteral(idx.longValue(), PrimitiveType.I64);
-            i--;
+        for (int i = indices.size() - 1; i >= 0; i--) {
+            indexNodes[i] = runtime.getNodeFactory().createLiteral(indices.get(i).longValue(), PrimitiveType.I64);
         }
-        assert i == -1;
 
-        PrimitiveType[] indexTypes = new PrimitiveType[indicesSize];
+        PrimitiveType[] indexTypes = new PrimitiveType[indices.size()];
         Arrays.fill(indexTypes, PrimitiveType.I64);
 
         LLVMExpressionNode nestedGEPs = CommonNodeFactory.createNestedElementPointerNode(
-                        nf,
+                        runtime.getNodeFactory(),
                         dataLayout,
                         indexNodes,
-                        indicesArr,
+                        indices.toArray(EMPTY_LONGS_ARRAY),
                         indexTypes,
                         baseAddress,
                         sourceType);
@@ -341,16 +333,30 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
     }
 
     /**
-     * This function creates a list of statements that, together, copy a value of type
-     * {@code topLevelPointerType} from argument {@code argIndex} to the frame slot {@code
-     * slot} by recursing over the structure of {@code topLevelPointerType}.
+     * This method, along with
+     * {@link LazyToTruffleConverterImpl#copyStructArgumentsToFrame}
+     * , are visiting (potentially nested) structs and arrays that are passed byval. This one just
+     * copies the list of visited "indices" so far.
      *
+     * @param initializers The accumulator where copy statements are going to be inserted.
+     * @param indices List of indices to reach this member or element from the toplevel object.
+     * @param i Current member or element's index.
+     * @param elementType The current member or element's type.
+     */
+    private void elementOrMemberHelper(List<LLVMStatementNode> initializers, NodeFactory nodeFactory, FrameSlot slot, int argIndex, PointerType topLevelPointerType, List<Long> indices, long i,
+                    Type elementType) {
+        indices.add(i);
+        copyStructArgumentsToFrame(initializers, nodeFactory, slot, argIndex, topLevelPointerType, elementType, indices);
+        indices.remove(indices.size() - 1);
+    }
+
+    /**
      * The recursive cases go over the elements (for arrays) and over the members (for structs). The
      * base case is for everything else ("primitives"), where cascades of getelementptrs are created
      * for reading from the source and writing into the target frame slot. The cascades of
      * getelementptr nodes are created by the calls to
-     * {@link LazyToTruffleConverterImpl#getTargetAddress} and then used to load or store from the
-     * source and into the destination respectively.
+     * {@link LazyToTruffleConverterImpl#getTargetAddress} and then
+     * used to load or store from the source and into the destination respectively.
      *
      * @param initializers The accumulator where copy statements are going to be inserted.
      * @param slot Target frame slot.
@@ -358,21 +364,22 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
      * @param indices List of indices to reach this member or element from the toplevel object.
      */
     private void copyStructArgumentsToFrame(List<LLVMStatementNode> initializers, NodeFactory nodeFactory, FrameSlot slot, int argIndex, PointerType topLevelPointerType, Type currentType,
-                    ArrayDeque<Long> indices) {
-        if (currentType instanceof StructureType || currentType instanceof ArrayType) {
-            AggregateType t = (AggregateType) currentType;
+                    List<Long> indices) {
+        if (currentType instanceof StructureType) {
+            StructureType t = (StructureType) currentType;
 
-            for (long i = 0; i < t.getNumberOfElements(); i++) {
-                indices.push(i);
-                copyStructArgumentsToFrame(initializers, nodeFactory, slot, argIndex, topLevelPointerType, t.getElementType(i), indices);
-                indices.pop();
+            for (int i = 0; i < t.getNumberOfElements(); i++) {
+                elementOrMemberHelper(initializers, nodeFactory, slot, argIndex, topLevelPointerType, indices, i, t.getElementType(i));
+            }
+        } else if (currentType instanceof ArrayType) {
+            ArrayType t = (ArrayType) currentType;
+
+            for (int i = 0; i < t.getNumberOfElements(); i++) {
+                elementOrMemberHelper(initializers, nodeFactory, slot, argIndex, topLevelPointerType, indices, i, t.getElementType(i));
             }
         } else {
             LLVMExpressionNode targetAddress = getTargetAddress(CommonNodeFactory.createFrameRead(topLevelPointerType, slot), topLevelPointerType.getPointeeType(), indices);
-            /*
-             * In case the source is a varargs list (va_list), we need to create a node that would
-             * unpack it if it is, and do nothing if it isn't.
-             */
+            /* In case the source is a varargs list (va_list), we need to create a node that would unpack it if it is, and do nothing if it isn't. */
             LLVMExpressionNode argMaybeUnpack = LLVMUnpackVarargsNodeGen.create(nodeFactory.createFunctionArgNode(argIndex, topLevelPointerType));
             LLVMExpressionNode sourceAddress = getTargetAddress(argMaybeUnpack, topLevelPointerType.getPointeeType(), indices);
             LLVMExpressionNode sourceLoadNode = CommonNodeFactory.createLoad(currentType, sourceAddress);
@@ -411,7 +418,7 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
 
                 formalParamInits.add(nodeFactory.createFrameWrite(pointerType, allocation, slot));
 
-                ArrayDeque<Long> indices = new ArrayDeque<>();
+                List<Long> indices = new ArrayList<>();
                 copyStructArgumentsToFrame(formalParamInits, nodeFactory, slot, argIndex++, pointerType, pointeeType, indices);
             } else {
                 LLVMExpressionNode parameterNode = nodeFactory.createFunctionArgNode(argIndex++, parameter.getType());
