@@ -60,7 +60,6 @@ import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
 import com.oracle.graal.pointsto.infrastructure.WrappedJavaType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.graal.pointsto.util.AnalysisFuture;
-import com.oracle.graal.pointsto.util.AtomicUtils;
 import com.oracle.graal.pointsto.util.ConcurrentLightHashSet;
 import com.oracle.svm.util.UnsafePartitionKind;
 
@@ -74,6 +73,8 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
+
+import static com.oracle.graal.pointsto.util.AtomicUtils.atomicMark;
 
 public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Comparable<AnalysisType> {
 
@@ -544,7 +545,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     }
 
     public boolean registerAsInHeap() {
-        boolean firstAttempt = AtomicUtils.atomicMark(isInHeap);
+        boolean firstAttempt = atomicMark(isInHeap);
         if (firstAttempt) {
             assert isArray() || (isInstanceClass() && !Modifier.isAbstract(getModifiers())) : this;
             universe.hostVM.checkForbidden(this, UsageKind.InHeap);
@@ -557,7 +558,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
      * @param node For future use and debugging
      */
     public boolean registerAsAllocated(Node node) {
-        boolean firstAttempt = AtomicUtils.atomicMark(isAllocated);
+        boolean firstAttempt = atomicMark(isAllocated);
         if (firstAttempt) {
 
             assert isArray() || (isInstanceClass() && !Modifier.isAbstract(getModifiers())) : this;
@@ -580,7 +581,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
             for (AnalysisType iface : interfaces) {
                 iface.registerAsReachable();
             }
-            if (AtomicUtils.atomicMark(isReachable)) {
+            if (atomicMark(isReachable)) {
                 universe.hostVM.checkForbidden(this, UsageKind.Reachable);
                 if (isArray()) {
                     /*

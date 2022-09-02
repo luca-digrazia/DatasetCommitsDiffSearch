@@ -44,13 +44,14 @@ import com.oracle.graal.pointsto.flow.FieldTypeFlow;
 import com.oracle.graal.pointsto.flow.MethodTypeFlow;
 import com.oracle.graal.pointsto.infrastructure.OriginalFieldProvider;
 import com.oracle.graal.pointsto.typestate.TypeState;
-import com.oracle.graal.pointsto.util.AtomicUtils;
 import com.oracle.graal.pointsto.util.ConcurrentLightHashSet;
 import com.oracle.svm.util.UnsafePartitionKind;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
+
+import static com.oracle.graal.pointsto.util.AtomicUtils.atomicMark;
 
 public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
 
@@ -259,13 +260,13 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
     }
 
     public boolean registerAsAccessed() {
-        boolean firstAttempt = AtomicUtils.atomicMark(isAccessed);
+        boolean firstAttempt = atomicMark(isAccessed);
         notifyUpdateAccessInfo();
         return firstAttempt;
     }
 
     public boolean registerAsRead(MethodTypeFlow method) {
-        boolean firstAttempt = AtomicUtils.atomicMark(isRead);
+        boolean firstAttempt = atomicMark(isRead);
         notifyUpdateAccessInfo();
         if (readBy != null && method != null) {
             readBy.put(method, Boolean.TRUE);
@@ -280,7 +281,7 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
      *            for an unsafe accessed field.
      */
     public boolean registerAsWritten(MethodTypeFlow method) {
-        boolean firstAttempt = AtomicUtils.atomicMark(isWritten);
+        boolean firstAttempt = atomicMark(isWritten);
         notifyUpdateAccessInfo();
         if (writtenBy != null && method != null) {
             writtenBy.put(method, Boolean.TRUE);
