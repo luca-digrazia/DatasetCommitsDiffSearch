@@ -86,6 +86,8 @@ public class JDKInitializationFeature implements Feature {
 
         RuntimeClassInitialization.initializeAtBuildTime("jdk.nio", "Core JDK classes are initialized at build time");
 
+        RuntimeClassInitialization.initializeAtBuildTime("org.ietf.jgss", "Core JDK classes are initialized at build time");
+
         RuntimeClassInitialization.initializeAtBuildTime("sun.invoke", "Core JDK classes are initialized at build time");
 
         RuntimeClassInitialization.initializeAtBuildTime("sun.launcher", "Core JDK classes are initialized at build time");
