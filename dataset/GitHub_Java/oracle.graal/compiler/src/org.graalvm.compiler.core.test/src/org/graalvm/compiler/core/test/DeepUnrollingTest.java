@@ -59,8 +59,6 @@ public class DeepUnrollingTest extends SubprocessTest {
         return v;
     }
 
-    private static final int ACCEPTABLE_FACTOR = 50;
-
     public void loopTest() {
         // warmup
         time("reference");
@@ -68,9 +66,7 @@ public class DeepUnrollingTest extends SubprocessTest {
         long reference = time("reference");
         long loops = time("loops");
         // observed ratio is ~20-30x. Pathological case before fix was ~300x
-        if (loops > reference * ACCEPTABLE_FACTOR) {
-            fail("Compilation of the loop nest is too slow. loops: %dms > %d * reference: %dms", loops, ACCEPTABLE_FACTOR, reference);
-        }
+        assertTrue("Compilation of the loop nest is too slow", loops < reference * 45);
     }
 
     public long time(String methodName) {
