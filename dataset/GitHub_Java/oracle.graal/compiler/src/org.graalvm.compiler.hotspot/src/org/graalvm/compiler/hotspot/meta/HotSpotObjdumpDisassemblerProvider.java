@@ -39,7 +39,6 @@ import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.CompilationResult.CodeAnnotation;
 import org.graalvm.compiler.code.DisassemblerProvider;
 import org.graalvm.compiler.serviceprovider.ServiceProvider;
-import org.graalvm.util.CollectionsUtil;
 
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.CodeUtil;
@@ -57,31 +56,28 @@ import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
 import jdk.vm.ci.services.Services;
 
 /**
- * A provider that uses the {@code GNU objdump} utility to disassemble code.
+ * This disassembles the code immediatly with objdump.
  */
 @ServiceProvider(DisassemblerProvider.class)
 public class HotSpotObjdumpDisassemblerProvider extends HotSpotDisassemblerProvider {
 
-    private final String objdump = getObjdump();
-
+    /**
+     * Uses objdump to disassemble the compiled code.
+     */
     @Override
     public String disassembleCompiledCode(CodeCacheProvider codeCache, CompilationResult compResult) {
-        if (objdump == null) {
-            return null;
-        }
         File tmp = null;
         try {
             tmp = File.createTempFile("compiledBinary", ".bin");
             try (FileOutputStream fos = new FileOutputStream(tmp)) {
                 fos.write(compResult.getTargetCode());
             }
-
             String[] cmdline;
             String arch = Services.getSavedProperties().get("os.arch");
-            if (arch.equals("amd64") || arch.equals("x86_64")) {
-                cmdline = new String[]{objdump, "-D", "-b", "binary", "-M", "x86-64", "-m", "i386", tmp.getAbsolutePath()};
+            if (arch.equals("amd64")) {
+                cmdline = new String[]{"objdump", "-D", "-b", "binary", "-M", "x86-64", "-m", "i386", tmp.getAbsolutePath()};
             } else if (arch.equals("aarch64")) {
-                cmdline = new String[]{objdump, "-D", "-b", "binary", "-m", "aarch64", tmp.getAbsolutePath()};
+                cmdline = new String[]{"objdump", "-D", "-b", "binary", "-m", "aarch64", tmp.getAbsolutePath()};
             } else {
                 return null;
             }
@@ -120,99 +116,43 @@ public class HotSpotObjdumpDisassemblerProvider extends HotSpotDisassemblerProvi
 
             Process proc = Runtime.getRuntime().exec(cmdline);
             InputStream is = proc.getInputStream();
-            StringBuilder sb = new StringBuilder();
 
             InputStreamReader isr = new InputStreamReader(is);
-            try (BufferedReader br = new BufferedReader(isr)) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    Matcher m = p.matcher(line);
-                    if (m.find()) {
-                        int address = Integer.parseInt(m.group(2), 16);
-                        String annotation = annotations.get(address);
-                        if (annotation != null) {
-                            annotation = annotation.replace("\n", "\n; ");
-                            sb.append("; ").append(annotation).append('\n');
-                        }
-                        line = m.replaceAll("0x$1");
+            BufferedReader br = new BufferedReader(isr);
+            String line;
+
+            StringBuilder sb = new StringBuilder();
+            while ((line = br.readLine()) != null) {
+                Matcher m = p.matcher(line);
+                if (m.find()) {
+                    int address = Integer.parseInt(m.group(2), 16);
+                    String annotation = annotations.get(address);
+                    if (annotation != null) {
+                        annotation = annotation.replace("\n", "\n; ");
+                        sb.append("; ").append(annotation).append('\n');
                     }
-                    sb.append(line).append("\n");
+                    line = m.replaceAll("0x$1");
                 }
+                sb.append(line).append("\n");
             }
-            try (BufferedReader ebr = new BufferedReader(new InputStreamReader(proc.getErrorStream()))) {
-                String errLine = ebr.readLine();
-                if (errLine != null) {
-                    System.err.println("Error output from executing: " + CollectionsUtil.mapAndJoin(cmdline, e -> quoteShellArg(String.valueOf(e)), " "));
-                    System.err.println(errLine);
-                    while ((errLine = ebr.readLine()) != null) {
-                        System.err.println(errLine);
-                    }
-                }
+            BufferedReader ebr = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
+            while ((line = ebr.readLine()) != null) {
+                System.err.println(line);
             }
+            ebr.close();
             return sb.toString();
         } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        } finally {
             if (tmp != null) {
                 tmp.delete();
             }
+            e.printStackTrace();
+            return null;
         }
-    }
-
-    /**
-     * Pattern for a single shell command argument that does not need to quoted.
-     */
-    private static final Pattern SAFE_SHELL_ARG = Pattern.compile("[A-Za-z0-9@%_\\-\\+=:,\\./]+");
-
-    /**
-     * Reliably quote a string as a single shell command argument.
-     */
-    public static String quoteShellArg(String arg) {
-        if (arg.isEmpty()) {
-            return "\"\"";
-        }
-        Matcher m = SAFE_SHELL_ARG.matcher(arg);
-        if (m.matches()) {
-            return arg;
-        }
-        // See http://stackoverflow.com/a/1250279
-        return "'" + arg.replace("'", "'\"'\"'") + "'";
-    }
-
-    /**
-     * Searches for a valid GNU objdump executable.
-     */
-    private static String getObjdump() {
-        // On macOS, `brew install binutils` will provide
-        // an executable named gobjdump
-        for (String candidate : new String[]{"objdump", "gobjdump"}) {
-            try {
-                String[] cmd = {candidate, "--version"};
-                Process proc = Runtime.getRuntime().exec(cmd);
-                InputStream is = proc.getInputStream();
-                int exitValue = proc.waitFor();
-                if (exitValue == 0) {
-                    byte[] buf = new byte[is.available()];
-                    int pos = 0;
-                    while (pos < buf.length) {
-                        int read = is.read(buf, pos, buf.length - pos);
-                        pos += read;
-                    }
-                    String output = new String(buf);
-                    if (output.contains("GNU objdump")) {
-                        return candidate;
-                    }
-                }
-            } catch (IOException | InterruptedException e) {
-            }
-        }
-        return null;
     }
 
     private static void putAnnotation(Map<Integer, String> annotations, int idx, String txt) {
-        String newAnnotation = annotations.getOrDefault(idx, "") + "\n" + txt;
-        annotations.put(idx, newAnnotation);
+        String newAnnoation = annotations.getOrDefault(idx, "") + "\n" + txt;
+        annotations.put(idx, newAnnoation);
     }
 
     @Override
