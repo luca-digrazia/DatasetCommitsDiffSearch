@@ -2,43 +2,24 @@
  * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
-
 package com.oracle.truffle.espresso.polyglot;
 
 /**
@@ -268,12 +249,15 @@ public final class Interop {
     // region Exception Messages
 
     /**
-     * Returns <code>true</code> if the receiver value represents a throwable exception/error.
+     * Returns <code>true</code> if the receiver value represents a throwable exception/error}.
      * Invoking this message does not cause any observable side-effects. Returns <code>false</code>
      * by default.
      * <p>
      * Objects must only return <code>true</code> if they support {@link #throwException} as well.
      * If this method is implemented then also {@link #throwException(Object)} must be implemented.
+     *
+     * The following simplified {@code TryCatchNode} shows how the exceptions should be handled by
+     * languages.
      *
      * @see #throwException(Object)
      * @since 19.3
@@ -298,6 +282,9 @@ public final class Interop {
      * Returns {@link ExceptionType exception type} of the receiver. Throws
      * {@code UnsupportedMessageException} when the receiver is not an {@link #isException(Object)
      * exception}.
+     * <p>
+     * For a sample {@code TryCatchNode} implementation see {@link #isException(Object)
+     * isException}.
      *
      * @see #isException(Object)
      * @see ExceptionType
@@ -706,8 +693,6 @@ public final class Interop {
 
     // region Identity Messages
 
-    // isIdenticalOrUndefined is not exposed to keep the API tidy.
-
     /**
      * Returns <code>true</code> if two values represent the the identical value, else
      * <code>false</code>. Two values are identical if and only if they have specified identity
@@ -720,19 +705,19 @@ public final class Interop {
      * This method has the following properties:
      * <ul>
      * <li>It is <b>not</b> <i>reflexive</i>: for any value {@code x},
-     * {@code Interop.isIdentical(x, x)} may return {@code false} if the object does not support
+     * {@code lib.isIdentical(x, x, lib)} may return {@code false} if the object does not support
      * identity, else <code>true</code>. This method is reflexive if {@code x} supports identity. A
-     * value supports identity if {@code Interop.isIdentical(x, x)} returns <code>true</code>. The
+     * value supports identity if {@code lib.isIdentical(x, x, lib)} returns <code>true</code>. The
      * method {@link #hasIdentity(Object)} may be used to document this intent explicitly.
      * <li>It is <i>symmetric</i>: for any values {@code x} and {@code y},
-     * {@code Interop.isIdentical(x, y)} returns {@code true} if and only if
-     * {@code Interop.isIdentical(y, x)} returns {@code true}.
+     * {@code lib.isIdentical(x, y, yLib)} returns {@code true} if and only if
+     * {@code lib.isIdentical(y, x, xLib)} returns {@code true}.
      * <li>It is <i>transitive</i>: for any values {@code x}, {@code y}, and {@code z}, if
-     * {@code Interop.isIdentical(x, y)} returns {@code true} and
-     * {@code Interop.isIdentical(y, z)} returns {@code true}, then
-     * {@code Interop.isIdentical(x, z)} returns {@code true}.
+     * {@code lib.isIdentical(x, y, yLib)} returns {@code true} and
+     * {@code lib.isIdentical(y, z, zLib)} returns {@code true}, then
+     * {@code lib.isIdentical(x, z, zLib)} returns {@code true}.
      * <li>It is <i>consistent</i>: for any values {@code x} and {@code y}, multiple invocations of
-     * {@code Interop.isIdentical(x, y)} consistently returns {@code true} or consistently return
+     * {@code lib.isIdentical(x, y, yLib)} consistently returns {@code true} or consistently return
      * {@code false}.
      * </ul>
      * <p>
@@ -746,11 +731,43 @@ public final class Interop {
      * violate the symmetric property.
      * <p>
      * This method performs double dispatch by forwarding calls to
-     * isIdenticalOrUndefined with receiver and other value first and then
+     * {@link #isIdenticalOrUndefined(Object, Object)} with receiver and other value first and then
      * with reversed parameters if the result was undefined. This allows the receiver and the other
-     * value to negotiate identity semantics.
+     * value to negotiate identity semantics. This method is supposed to be exported only if the
+     * receiver represents a wrapper that forwards messages. In such a case the isIdentical message
+     * should be forwarded to the delegate value. Otherwise, the {isIdenticalOrUndefined(Object,
+     * Object)} should be exported instead.
      * <p>
      * This method must not cause any observable side-effects.
+     * <p>
+     * Cached usage example:
+     *
+     * <pre>
+     * abstract class IsIdenticalUsage extends Node {
+     *
+     *     abstract boolean execute(Object left, Object right);
+     *
+     *     &#64;Specialization(limit = "3")
+     *     public boolean isIdentical(Object left, Object right,
+     *                     &#64;CachedLibrary("left") InteropLibrary leftInterop,
+     *                     &#64;CachedLibrary("right") InteropLibrary rightInterop) {
+     *         return leftInterop.isIdentical(left, right, rightInterop);
+     *     }
+     * }
+     * </pre>
+     * <p>
+     * Uncached usage example:
+     *
+     * <pre>
+     * &#64;TruffleBoundary
+     * public static boolean isIdentical(Object left, Object right) {
+     *     return InteropLibrary.getUncached(left).isIdentical(left, right,
+     *                     InteropLibrary.getUncached(right));
+     * }
+     * </pre>
+     *
+     * For a full example please refer to the SLEqualNode of the SimpleLanguage example
+     * implementation.
      *
      * @since 20.2
      */
@@ -760,9 +777,10 @@ public final class Interop {
      * Returns <code>true</code> if and only if the receiver specifies identity, else
      * <code>false</code>. This method is a short-cut for
      * <code>isIdentical(receiver, receiver)</code>. This message cannot be exported. To add
-     * identity support to the receiver export isIdenticalOrUndefined(Object, Object)
+     * identity support to the receiver export {@link #isIdenticalOrUndefined(Object, Object)}
      * instead.
      *
+     * @see #isIdenticalOrUndefined(Object, Object)
      * @since 20.2
      */
     public static boolean hasIdentity(Object receiver) {
@@ -787,10 +805,11 @@ public final class Interop {
      * integers for objects that are not the same.
      * </ul>
      * This method must not cause any observable side-effects. If this method is implemented then
-     * also isIdenticalOrUndefined(Object, Object) must be implemented.
+     * also {@link #isIdenticalOrUndefined(Object, Object)} must be implemented.
      *
      * @throws UnsupportedMessageException if and only if {@link #hasIdentity(Object)} returns
      *             <code>false</code> for the same receiver.
+     * @see #isIdenticalOrUndefined(Object, Object)
      * @see #isIdentical(Object, Object)
      * @since 20.2
      */
