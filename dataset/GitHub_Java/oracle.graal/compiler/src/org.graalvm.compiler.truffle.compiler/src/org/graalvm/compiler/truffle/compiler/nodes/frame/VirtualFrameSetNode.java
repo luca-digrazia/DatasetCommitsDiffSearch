@@ -30,18 +30,19 @@ import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
+import org.graalvm.compiler.nodes.virtual.VirtualFrameSetNodeInterface;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
-import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 
 import jdk.vm.ci.meta.JavaKind;
 
+import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
+
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
-public final class VirtualFrameSetNode extends VirtualFrameAccessorNode implements Virtualizable {
+public final class VirtualFrameSetNode extends VirtualFrameAccessorNode implements Virtualizable, VirtualFrameSetNodeInterface {
     public static final NodeClass<VirtualFrameSetNode> TYPE = NodeClass.create(VirtualFrameSetNode.class);
 
     @Input private ValueNode value;
@@ -56,13 +57,10 @@ public final class VirtualFrameSetNode extends VirtualFrameAccessorNode implemen
         ValueNode tagAlias = tool.getAlias(frame.virtualFrameTagArray);
         ValueNode dataAlias = tool.getAlias(
                         TruffleCompilerRuntime.getRuntime().getJavaKindForFrameSlotKind(accessTag) == JavaKind.Object ? frame.virtualFrameObjectArray : frame.virtualFramePrimitiveArray);
-        ValueNode counterpartAlias = tool.getAlias(
-                        TruffleCompilerRuntime.getRuntime().getJavaKindForFrameSlotKind(accessTag) == JavaKind.Object ? frame.virtualFramePrimitiveArray : frame.virtualFrameObjectArray);
 
         if (tagAlias instanceof VirtualObjectNode && dataAlias instanceof VirtualObjectNode) {
             VirtualObjectNode tagVirtual = (VirtualObjectNode) tagAlias;
             VirtualObjectNode dataVirtual = (VirtualObjectNode) dataAlias;
-            VirtualObjectNode counterPartVirtual = (VirtualObjectNode) counterpartAlias;
 
             if (frameSlotIndex < tagVirtual.entryCount() && frameSlotIndex < dataVirtual.entryCount()) {
                 tool.setVirtualEntry(tagVirtual, frameSlotIndex, getConstant(accessTag));
@@ -70,8 +68,6 @@ public final class VirtualFrameSetNode extends VirtualFrameAccessorNode implemen
                 ValueNode dataEntry = tool.getEntry(dataVirtual, frameSlotIndex);
                 if (dataEntry.getStackKind() == value.getStackKind()) {
                     if (tool.setVirtualEntry(dataVirtual, frameSlotIndex, value, value.getStackKind(), -1)) {
-                        tool.setVirtualEntry(counterPartVirtual, frameSlotIndex,
-                                        ConstantNode.defaultForKind(counterPartVirtual.entryKind(tool.getMetaAccessExtensionProvider(), frameSlotIndex), graph()));
                         tool.delete();
                         return;
                     }
@@ -84,5 +80,15 @@ public final class VirtualFrameSetNode extends VirtualFrameAccessorNode implemen
          * do not have a FrameState to use for the memory store.
          */
         insertDeoptimization(tool);
+    }
+
+    @Override
+    public int frameSlotIndex() {
+        return frameSlotIndex;
+    }
+
+    @Override
+    public ValueNode value() {
+        return value;
     }
 }
