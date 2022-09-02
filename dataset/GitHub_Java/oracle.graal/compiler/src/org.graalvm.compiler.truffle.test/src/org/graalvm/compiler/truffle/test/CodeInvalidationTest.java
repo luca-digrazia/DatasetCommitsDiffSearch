@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,9 @@
 package org.graalvm.compiler.truffle.test;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -33,7 +36,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
@@ -43,10 +45,13 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.impl.DefaultTruffleRuntime;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
@@ -57,9 +62,6 @@ import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class CodeInvalidationTest extends AbstractPolyglotTest {
-
-    private static final String NODE_REPLACE_SUCCESSFUL = "Node replace successful!";
-
     abstract static class BaseNode extends Node {
         abstract Object execute(VirtualFrame frame);
     }
@@ -99,7 +101,7 @@ public class CodeInvalidationTest extends AbstractPolyglotTest {
         @Override
         public Object execute(@SuppressWarnings("unused") VirtualFrame frame) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw new RuntimeException(NODE_REPLACE_SUCCESSFUL);
+            throw new RuntimeException("Node replace successful!");
         }
     }
 
@@ -115,19 +117,39 @@ public class CodeInvalidationTest extends AbstractPolyglotTest {
         }
 
         FrameSlot getLoopIndex() {
-            if (loopIndexSlot == null) {
+            FrameSlot indexSlot = loopIndexSlot;
+            if (indexSlot == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                loopIndexSlot = getRootNode().getFrameDescriptor().findOrAddFrameSlot("loopIndex" + getLoopDepth());
+                synchronized (this) {
+                    indexSlot = loopIndexSlot;
+                    if (indexSlot == null) {
+                        FrameDescriptor descriptor = getRootNode().getFrameDescriptor();
+                        indexSlot = descriptor.findOrAddFrameSlot("loopIndex" + getLoopDepth());
+                        // System.out.println(Thread.currentThread().getId() + ": Loop index slot
+                        // added to descriptor " + System.identityHashCode(descriptor));
+                        loopIndexSlot = indexSlot;
+                    }
+                }
             }
-            return loopIndexSlot;
+            return indexSlot;
         }
 
         FrameSlot getResult() {
-            if (loopResultSlot == null) {
+            FrameSlot resultSlot = loopResultSlot;
+            if (resultSlot == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                loopResultSlot = getRootNode().getFrameDescriptor().findOrAddFrameSlot("loopResult" + getLoopDepth());
+                synchronized (this) {
+                    resultSlot = loopResultSlot;
+                    if (resultSlot == null) {
+                        FrameDescriptor descriptor = getRootNode().getFrameDescriptor();
+                        resultSlot = descriptor.findOrAddFrameSlot("loopResult" + getLoopDepth());
+                        // System.out.println(Thread.currentThread().getId() + ": Loop result slot
+                        // added to descriptor " + System.identityHashCode(descriptor));
+                        loopResultSlot = resultSlot;
+                    }
+                }
             }
-            return loopResultSlot;
+            return resultSlot;
         }
 
         private int getLoopDepth() {
@@ -150,7 +172,8 @@ public class CodeInvalidationTest extends AbstractPolyglotTest {
             try {
                 return frame.getObject(loopResultSlot);
             } catch (FrameSlotTypeException e) {
-                throw CompilerDirectives.shouldNotReachHere();
+                CompilerDirectives.transferToInterpreter();
+                throw new AssertionError(e);
             }
         }
 
@@ -240,20 +263,21 @@ public class CodeInvalidationTest extends AbstractPolyglotTest {
         WhileLoopNode testedCode = new WhileLoopNode(1000000000, nodeToInvalidate);
         LoopNode loopNode = testedCode.loop;
 
+        /*
+         * Make sure we use the same call target for the single source that we use. Otherwise
+         * storing the frame slots in member fields of WholeLoopNode wouldn't work as the
+         * WhileLoopNode is pre-created before the parsing, and so it can be used only in one call
+         * target (root node).
+         */
+        CallTarget[] callTarget = new CallTarget[1];
         setupEnv(Context.create(), new ProxyLanguage() {
-            /**
-             * Makes sure we use the same call target for the single source that we use. Otherwise
-             * storing the frame slots in member fields of WhileLoopNode wouldn't work as the
-             * WhileLoopNode is pre-created before the parsing, and so it can be used only in one
-             * call target (root node).
-             */
-            private CallTarget target;
+            private final List<CallTarget> targets = new LinkedList<>(); // To prevent from GC
 
             @Override
             protected synchronized CallTarget parse(ParsingRequest request) {
                 com.oracle.truffle.api.source.Source source = request.getSource();
-                if (target == null) {
-                    target = Truffle.getRuntime().createCallTarget(new RootNode(languageInstance) {
+                if (callTarget[0] == null) {
+                    callTarget[0] = Truffle.getRuntime().createCallTarget(new RootNode(languageInstance) {
 
                         @Node.Child private volatile BaseNode child = testedCode;
 
@@ -269,7 +293,8 @@ public class CodeInvalidationTest extends AbstractPolyglotTest {
 
                     });
                 }
-                return target;
+                targets.add(callTarget[0]);
+                return callTarget[0];
             }
 
             @Override
@@ -281,25 +306,41 @@ public class CodeInvalidationTest extends AbstractPolyglotTest {
         Source source = Source.newBuilder(ProxyLanguage.ID, "", "DummySource").build();
         // First execution should compile the loop.
         context.eval(source);
-        Future<?> future1;
-        Future<?> future2;
-        OptimizedCallTarget loopCallTarget = ((OptimizedOSRLoopNode) loopNode).getCompiledOSRLoop();
-        Assert.assertNotNull(loopCallTarget);
-        Assert.assertTrue(loopCallTarget.isValid());
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
-            future1 = executor.submit(new RunCode(context, source, null));
-            nodeToInvalidate.latch.await();
-            future2 = executor.submit(new RunCode(context, source, nodeToInvalidate));
-            future1.get();
-            future2.get();
-            Assert.fail();
-        } catch (ExecutionException e) {
-            Assert.assertTrue(e.getCause() instanceof PolyglotException);
-            Assert.assertEquals("java.lang.RuntimeException: " + NODE_REPLACE_SUCCESSFUL, e.getCause().getMessage());
-        } finally {
-            executor.shutdownNow();
-            executor.awaitTermination(100, TimeUnit.SECONDS);
+        if (!(Truffle.getRuntime() instanceof DefaultTruffleRuntime)) {
+            Future<?> future1;
+            Future<?> future2;
+            OptimizedCallTarget loopCallTarget = (OptimizedCallTarget) getLoopNodeCallTarget(loopNode);
+            Assert.assertNotNull(loopCallTarget);
+            Assert.assertTrue(loopCallTarget.isValid());
+            ExecutorService executor = Executors.newFixedThreadPool(2);
+            try {
+                future1 = executor.submit(new RunCode(context, source, null));
+                nodeToInvalidate.latch.await();
+                future2 = executor.submit(new RunCode(context, source, nodeToInvalidate));
+                future1.get();
+                future2.get();
+                Assert.fail();
+            } catch (ExecutionException e) {
+                Assert.assertTrue(e.getCause() instanceof PolyglotException);
+                Assert.assertEquals(e.getCause().getMessage(), "java.lang.RuntimeException: Node replace successful!");
+            } finally {
+                executor.shutdownNow();
+                executor.awaitTermination(100, TimeUnit.SECONDS);
+            }
         }
+    }
+
+    private static Object getLoopNodeCallTarget(LoopNode loopNode) {
+        Object toRet = null;
+        if (loopNode instanceof ReplaceObserver) {
+            try {
+                Field callTargetField = loopNode.getClass().getSuperclass().getDeclaredField("compiledOSRLoop");
+                callTargetField.setAccessible(true);
+                toRet = callTargetField.get(loopNode);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                throw new AssertionError("Unable to obtain OSR call target of a loop node!", e);
+            }
+        }
+        return toRet;
     }
 }
