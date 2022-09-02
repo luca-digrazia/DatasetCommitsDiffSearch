@@ -24,21 +24,30 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import java.util.regex.Pattern;
 
-public class ClassPrepareRequest {
+public final class ClassPrepareRequest {
 
-    private final Pattern pattern;
-    private final int requestId;
+    private final RequestFilter filter;
 
-    ClassPrepareRequest(Pattern pattern, int requestId) {
-        this.pattern = pattern;
-        this.requestId = requestId;
+    ClassPrepareRequest(RequestFilter filter) {
+        this.filter = filter;
     }
 
-    public Pattern getPattern() {
-        return pattern;
+    public Pattern[] getPatterns() {
+        if (filter.getIncludePatterns().length == 0) {
+            return new Pattern[]{Pattern.compile("")};
+        }
+        return filter.getIncludePatterns();
     }
 
     public int getRequestId() {
-        return requestId;
+        return filter.getRequestId();
+    }
+
+    public Object getThread() {
+        return filter.getThread();
+    }
+
+    public byte getSuspendPolicy() {
+        return filter.getSuspendPolicy();
     }
 }

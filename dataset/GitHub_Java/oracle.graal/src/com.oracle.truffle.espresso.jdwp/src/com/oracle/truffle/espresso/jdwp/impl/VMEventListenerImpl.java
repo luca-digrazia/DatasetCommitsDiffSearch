@@ -72,13 +72,13 @@ public final class VMEventListenerImpl implements VMEventListener {
     private final Map<Object, Object> currentContendedMonitor = new HashMap<>();
     private final ThreadLocal<Object> earlyReturns = new ThreadLocal<>();
     private final Map<Object, Map<Object, MonitorInfo>> monitorInfos = new HashMap<>();
-    private final Object initialThread;
+    private final Object mainThread;
 
-    public VMEventListenerImpl(DebuggerController controller, Object initialThread) {
+    public VMEventListenerImpl(DebuggerController controller, Object mainThread) {
         this.debuggerController = controller;
         this.context = controller.getContext();
         this.ids = context.getIds();
-        this.initialThread = initialThread;
+        this.mainThread = mainThread;
     }
 
     public void setConnection(SocketConnection connection) {
@@ -288,7 +288,6 @@ public final class VMEventListenerImpl implements VMEventListener {
                         if (holdEvents) {
                             heldEvents.add(stream);
                         } else {
-                            JDWPLogger.log("SENDING CLASS PREPARE EVENT FOR KLASS: %s WITH THREAD %s", JDWPLogger.LogLevel.THREAD, klass.getNameAsString(), context.getThreadName(prepareThread));
                             connection.queuePacket(stream);
                         }
                         return null;
@@ -311,9 +310,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void breakpointHit(BreakpointInfo info, CallFrame frame, Object currentThread) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(info.getSuspendPolicy());
@@ -339,9 +335,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void methodBreakpointHit(MethodBreakpointEvent methodEvent, Object currentThread, CallFrame frame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
         MethodBreakpointInfo info = methodEvent.getInfo();
 
@@ -375,9 +368,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void fieldAccessBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = writeSharedFieldInformation(event, currentThread, callFrame, RequestedJDWPEvents.FIELD_ACCESS);
         if (holdEvents) {
             heldEvents.add(stream);
@@ -388,9 +378,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void fieldModificationBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = writeSharedFieldInformation(event, currentThread, callFrame, RequestedJDWPEvents.FIELD_MODIFICATION);
 
         // value about to be set
@@ -443,9 +430,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, CallFrame[] callFrames) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         CallFrame top = callFrames[0];
@@ -495,9 +479,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void stepCompleted(SteppingInfo info, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         if (info.isPopFrames()) {
             // send reply packet when "step" is completed
             PacketStream reply = new PacketStream().replyPacket().id(info.getRequestId());
@@ -535,9 +516,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     private void sendMonitorContendedEnterEvent(MonitorEvent monitorEvent, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(monitorEvent.getFilter().getSuspendPolicy());
@@ -577,9 +555,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     private void sendMonitorContendedEnteredEvent(MonitorEvent monitorEvent, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(monitorEvent.getFilter().getSuspendPolicy());
@@ -619,9 +594,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     public void sendMonitorWaitEvent(Object monitor, long timeout, RequestFilter filter, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(filter.getSuspendPolicy());
@@ -693,9 +665,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     private void sendMonitorWaitedEvent(Object monitor, boolean timedOut, RequestFilter filter, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(filter.getSuspendPolicy());
@@ -872,13 +841,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    public void sendInitialThreadStartedEvents() {
-        for (Object allGuestThread : context.getAllGuestThreads()) {
-            threadStarted(allGuestThread);
-        }
-    }
-
-    @Override
     public MonitorInfo getMonitorInfo(Object guestThread, Object monitor) {
         Map<Object, MonitorInfo> monitorInfoMap = monitorInfos.get(guestThread);
         if (monitorInfoMap != null) {
@@ -958,7 +920,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeInt(1);
         stream.writeByte(RequestedJDWPEvents.VM_START);
         stream.writeInt(vmStartRequestId != -1 ? vmStartRequestId : 0);
-        stream.writeLong(context.getIds().getIdAsLong(initialThread));
+        stream.writeLong(context.getIds().getIdAsLong(mainThread));
         connection.queuePacket(stream);
     }
 
