@@ -31,7 +31,6 @@ import static org.graalvm.compiler.nodeinfo.InputType.Value;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
 
-import org.graalvm.compiler.core.common.memory.MemoryOrderMode;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
@@ -43,7 +42,6 @@ import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
 import org.graalvm.compiler.nodes.calc.ObjectEqualsNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.OrderedMemoryAccess;
 import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
@@ -53,11 +51,12 @@ import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.word.LocationIdentity;
 
+import jdk.vm.ci.code.MemoryBarriers;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 @NodeInfo(allowedUsageTypes = {Value, Memory}, cycles = CYCLES_8, size = SIZE_8)
-public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryCheckpoint implements OrderedMemoryAccess, Lowerable, SingleMemoryKill, Virtualizable {
+public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryCheckpoint implements Lowerable, SingleMemoryKill, Virtualizable {
     public static final NodeClass<AbstractUnsafeCompareAndSwapNode> TYPE = NodeClass.create(AbstractUnsafeCompareAndSwapNode.class);
     @Input ValueNode object;
     @Input ValueNode offset;
@@ -65,15 +64,15 @@ public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryChe
     @Input ValueNode newValue;
     protected final JavaKind valueKind;
     protected final LocationIdentity locationIdentity;
-    protected final MemoryOrderMode memoryOrder;
+    protected final int memoryBarrier;
 
     public AbstractUnsafeCompareAndSwapNode(NodeClass<? extends AbstractMemoryCheckpoint> c, Stamp stamp, ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue,
                     JavaKind valueKind, LocationIdentity locationIdentity) {
-        this(c, stamp, object, offset, expected, newValue, valueKind, locationIdentity, MemoryOrderMode.VOLATILE);
+        this(c, stamp, object, offset, expected, newValue, valueKind, locationIdentity, MemoryBarriers.LOAD_LOAD | MemoryBarriers.LOAD_STORE | MemoryBarriers.STORE_LOAD | MemoryBarriers.STORE_STORE);
     }
 
     public AbstractUnsafeCompareAndSwapNode(NodeClass<? extends AbstractMemoryCheckpoint> c, Stamp stamp, ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue,
-                    JavaKind valueKind, LocationIdentity locationIdentity, MemoryOrderMode memoryOrder) {
+                    JavaKind valueKind, LocationIdentity locationIdentity, int memoryBarrier) {
         super(c, stamp);
         this.object = object;
         this.offset = offset;
@@ -81,7 +80,7 @@ public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryChe
         this.newValue = newValue;
         this.valueKind = valueKind;
         this.locationIdentity = locationIdentity;
-        this.memoryOrder = memoryOrder;
+        this.memoryBarrier = memoryBarrier;
     }
 
     public ValueNode object() {
@@ -104,9 +103,8 @@ public abstract class AbstractUnsafeCompareAndSwapNode extends AbstractMemoryChe
         return valueKind;
     }
 
-    @Override
-    public MemoryOrderMode getMemoryOrder() {
-        return memoryOrder;
+    public final int getMemoryBarrier() {
+        return memoryBarrier;
     }
 
     @Override

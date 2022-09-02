@@ -25,6 +25,7 @@
 package org.graalvm.compiler.replacements.aarch64;
 
 import static org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.registerPlatformSpecificUnsafePlugins;
+import static org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.registerUnsafeAtomicsPlugins;
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.COS;
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.EXP;
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG;
@@ -32,7 +33,6 @@ import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.Una
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.SIN;
 import static org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.TAN;
 
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.lir.aarch64.AArch64ArithmeticLIRGeneratorTool.RoundingMode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -50,7 +50,6 @@ import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.nodes.java.AtomicReadAndAddNode;
 import org.graalvm.compiler.nodes.java.AtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.spi.Replacements;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.UnsafeAccessPlugin;
 import org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.UnsafeGetPlugin;
 import org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.UnsafePutPlugin;
@@ -69,12 +68,13 @@ import sun.misc.Unsafe;
 
 public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
     @Override
-    public void register(Plugins plugins, Replacements replacements, Architecture arch, boolean explicitUnsafeNullChecks, boolean registerForeignCallMath, boolean useFMAIntrinsics,
-                    OptionValues options) {
-        register(plugins, replacements, explicitUnsafeNullChecks, registerForeignCallMath, useFMAIntrinsics, options);
+    public void register(Plugins plugins, Replacements replacements, Architecture arch, boolean explicitUnsafeNullChecks, boolean registerForeignCallMath,
+                    boolean emitJDK9StringSubstitutions, boolean useFMAIntrinsics) {
+        register(plugins, replacements, explicitUnsafeNullChecks, registerForeignCallMath, emitJDK9StringSubstitutions, useFMAIntrinsics);
     }
 
-    public static void register(Plugins plugins, Replacements replacements, boolean explicitUnsafeNullChecks, boolean registerForeignCallMath, boolean useFMAIntrinsics, OptionValues options) {
+    public static void register(Plugins plugins, Replacements replacements, boolean explicitUnsafeNullChecks,
+                    boolean registerForeignCallMath, boolean emitJDK9StringSubstitutions, boolean useFMAIntrinsics) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
         invocationPlugins.defer(new Runnable() {
             @Override
@@ -82,15 +82,13 @@ public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
                 registerIntegerLongPlugins(invocationPlugins, JavaKind.Int, replacements);
                 registerIntegerLongPlugins(invocationPlugins, JavaKind.Long, replacements);
                 registerMathPlugins(invocationPlugins, registerForeignCallMath, useFMAIntrinsics);
-                if (GraalOptions.EmitJDK9PlusStringSubstitutions.getValue(options) && JavaVersionUtil.JAVA_SPEC >= 9) {
+                if (emitJDK9StringSubstitutions) {
                     registerStringLatin1Plugins(invocationPlugins, replacements);
                     registerStringUTF16Plugins(invocationPlugins, replacements);
                 }
                 registerUnsafePlugins(invocationPlugins, replacements, explicitUnsafeNullChecks);
-                // This is temporarily disabled until we implement correct emitting of the CAS
-                // instructions of the proper width.
                 registerPlatformSpecificUnsafePlugins(invocationPlugins, replacements, explicitUnsafeNullChecks,
-                                new JavaKind[]{JavaKind.Int, JavaKind.Long, JavaKind.Object});
+                                new JavaKind[]{JavaKind.Boolean, JavaKind.Byte, JavaKind.Char, JavaKind.Short, JavaKind.Int, JavaKind.Long, JavaKind.Object});
             }
         });
     }
@@ -319,12 +317,14 @@ public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
     private static void registerUnsafePlugins(InvocationPlugins plugins, Replacements replacements, boolean explicitUnsafeNullChecks) {
         registerUnsafePlugins(new Registration(plugins, Unsafe.class), explicitUnsafeNullChecks,
                         new JavaKind[]{JavaKind.Int, JavaKind.Long, JavaKind.Object}, "Object");
+        Registration r = new Registration(plugins, "jdk.internal.misc.Unsafe", replacements);
+        JavaKind[] supportedJavaKinds = {JavaKind.Boolean, JavaKind.Byte, JavaKind.Char, JavaKind.Short, JavaKind.Int, JavaKind.Long, JavaKind.Object};
         if (JavaVersionUtil.JAVA_SPEC > 8) {
-            Registration r = new Registration(plugins, "jdk.internal.misc.Unsafe", replacements);
-            registerUnsafePlugins(r, explicitUnsafeNullChecks, new JavaKind[]{JavaKind.Int, JavaKind.Long, JavaKind.Object},
-                            JavaVersionUtil.JAVA_SPEC <= 11 ? "Object" : "Reference");
+            registerUnsafePlugins(r, explicitUnsafeNullChecks, supportedJavaKinds, JavaVersionUtil.JAVA_SPEC <= 11 ? "Object" : "Reference");
             registerUnsafeUnalignedPlugins(r, explicitUnsafeNullChecks);
         }
+        registerUnsafeAtomicsPlugins(r, false, explicitUnsafeNullChecks, "weakCompareAndSet", new String[]{"", "Acquire", "Release", "Plain"}, supportedJavaKinds);
+        registerUnsafeAtomicsPlugins(r, false, explicitUnsafeNullChecks, "compareAndExchange", new String[]{"Acquire", "Release"}, supportedJavaKinds);
     }
 
     private static void registerUnsafeUnalignedPlugins(Registration r, boolean explicitUnsafeNullChecks) {
