@@ -1152,17 +1152,17 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
     }
 
     private CodeTree createReceiverCast(ExportsLibrary library, TypeMirror sourceType, TypeMirror targetType, CodeTree receiver, boolean cached) {
-        CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
+        CodeTree cast;
         if (!cached || library.isFinalReceiver()) {
-            builder.string("(").maybeCast(sourceType, targetType).tree(receiver).string(")");
+            cast = CodeTreeBuilder.createBuilder().maybeCast(sourceType, targetType).tree(receiver).build();
         } else {
             if (library.needsDynamicDispatch()) {
-                builder.maybeCast(context.getType(Object.class), targetType).startCall("dynamicDispatch_.cast").tree(receiver).end();
+                cast = CodeTreeBuilder.createBuilder().maybeCast(context.getType(Object.class), targetType).startCall("dynamicDispatch_.cast").tree(receiver).end().build();
             } else {
-                builder.startStaticCall(types.CompilerDirectives, "castExact").tree(receiver).string("receiverClass_").end();
+                cast = CodeTreeBuilder.createBuilder().startStaticCall(types.CompilerDirectives, "castExact").tree(receiver).string("receiverClass_").end().build();
             }
         }
-        return builder.build();
+        return cast;
 
     }
 
