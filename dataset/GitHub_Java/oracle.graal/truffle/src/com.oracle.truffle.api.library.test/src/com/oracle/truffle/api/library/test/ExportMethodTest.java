@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -400,9 +400,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError({"The following message(s) of library ExportsTestLibrary2 are abstract and must be exported %",
-                    "Exported library ExportsTestLibrary2 does not export any messages and therefore has no effect. Remove the export declaration to resolve this."
-    })
+    @ExpectError("The following message(s) of library ExportsTestLibrary2 are abstract and must be exported %")
     @ExportLibrary(ExportsTestLibrary2.class)
     static class ExportsTestObjectError5 {
 
@@ -410,8 +408,9 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     @ExportLibrary(ExportsTestLibrary1.class)
     @ExportLibrary(ExportsTestLibrary2.class)
-    @ExpectError({"The message name 'foo' is ambiguous for libraries ExportsTestLibrary1 and ExportsTestLibrary2. Disambiguate the library by specifying the library explicitely using " +
-                    "@ExportMessage(library=Library.class)."})
+    @ExpectError({"The following message(s) of library ExportsTestLibrary2 are abstract and must be exported using:%",
+                    "The message name 'foo' is ambiguous for libraries ExportsTestLibrary1 and ExportsTestLibrary2. Disambiguate the library by specifying the library explicitely using " +
+                                    "@ExportMessage(library=Library.class)."})
     static class ExportsTestObjectError6 {
 
         @ExportMessage
@@ -420,7 +419,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("Class declares @ExportMessage annotations but does not export any libraries. Exported messages cannot be resoved without exported library. Add @ExportLibrary(MyLibrary.class) to the class ot resolve this.")
+    @ExpectError("No libraries exported. Use @ExportLibrary(MyLibrary.class) on the enclosing type to export libraries.")
     static class ExportsTestObjectError7 {
 
         @ExportMessage
@@ -439,9 +438,8 @@ public class ExportMethodTest extends AbstractLibraryTest {
     }
 
     @ExportLibrary(ExportsTestLibrary3.class)
-    @ExpectError({"The method has the same name 'foo1' as a message in the exported library ExportsTestLibrary3. Did you forget to export it? Use @ExportMessage to export the message, @Ignore to " +
-                    "ignore this warning, rename the method or reduce the visibility of the method to private to resolve this warning.",
-                    "Exported library ExportsTestLibrary3 does not export any messages and therefore has no effect. Remove the export declaration to resolve this."})
+    @ExpectError("The method has the same name 'foo1' as a message in the exported library ExportsTestLibrary3. Did you forget to export it? Use @ExportMessage to export the message, @Ignore to " +
+                    "ignore this warning, rename the method or reduce the visibility of the method to private to resolve this warning.")
     static class ExportsTestObjectError9 {
 
         String foo1() {
@@ -450,7 +448,6 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     }
 
-    @ExpectError("Exported library ExportsTestLibrary3 does not export any messages and therefore has no effect. Remove the export declaration to resolve this.")
     @ExportLibrary(ExportsTestLibrary3.class)
     static class ExportsTestObjectError10 {
         @ExportMessage.Ignore
@@ -561,7 +558,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("Class declares @ExportMessage annotations but does not export any libraries. Exported messages cannot be resoved without exported library. Add @ExportLibrary(MyLibrary.class) to the class ot resolve this.")
+    @ExpectError("No libraries exported. Use @ExportLibrary(MyLibrary.class) on the enclosing type to export libraries.")
     static class ExportsTestObjectError15 {
         @ExportMessage
         public int intArg(int arg) {
