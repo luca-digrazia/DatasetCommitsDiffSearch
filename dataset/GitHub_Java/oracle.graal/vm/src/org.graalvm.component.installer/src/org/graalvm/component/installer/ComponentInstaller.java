@@ -48,6 +48,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -150,16 +151,12 @@ public class ComponentInstaller extends Launcher {
         globalOptions.put(Commands.LONG_OPTION_AUTO_YES, Commands.OPTION_AUTO_YES);
 
         globalOptions.put(Commands.OPTION_NON_INTERACTIVE, "");
-        globalOptions.put(Commands.LONG_OPTION_NON_INTERACTIVE, Commands.OPTION_NON_INTERACTIVE);
 
         globalOptions.put(Commands.OPTION_PRINT_VERSION, "");
         globalOptions.put(Commands.OPTION_SHOW_VERSION, "");
 
         globalOptions.put(Commands.LONG_OPTION_PRINT_VERSION, Commands.OPTION_PRINT_VERSION);
         globalOptions.put(Commands.LONG_OPTION_SHOW_VERSION, Commands.OPTION_SHOW_VERSION);
-
-        globalOptions.put(Commands.OPTION_IGNORE_CATALOG_ERRORS, "");
-        globalOptions.put(Commands.LONG_OPTION_IGNORE_CATALOG_ERRORS, Commands.OPTION_IGNORE_CATALOG_ERRORS);
 
         // for simplicity, these options are global, but still commands that use them should
         // declare them explicitly.
@@ -824,10 +821,10 @@ public class ComponentInstaller extends Launcher {
     }
 
     public void launch(List<String> args) {
-        maybeNativeExec(args, args, false);
+        maybeNativeExec(args, false, new LinkedHashMap<>());
         // // Uncomment for debugging jvmmode launcher
         // if (System.getProperty("test.wrap") != null) {
-        // maybeExec(args, args, false, VMType.Native);
+        // maybeExec(args, false, Collections.emptyMap(), VMType.Native);
         // System.exit(
         // executeJVMMode(System.getProperty("java.class.path"), args, args) // NOI18N
         // );
@@ -877,14 +874,15 @@ public class ComponentInstaller extends Launcher {
      * 
      * @param jvmArgs JVM arguments for the process
      * @param remainingArgs program arguments
+     * @param polyglotOptions useless
      */
     @Override
-    protected void executeJVM(String classpath, List<String> jvmArgs, List<String> remainingArgs) {
+    protected void executeJVM(String classpath, List<String> jvmArgs, List<String> remainingArgs, Map<String, String> polyglotOptions) {
         if (SystemUtils.isWindows()) {
             int retcode = executeJVMMode(classpath, jvmArgs, remainingArgs);
             System.exit(retcode);
         } else {
-            super.executeJVM(classpath, jvmArgs, remainingArgs);
+            super.executeJVM(classpath, jvmArgs, remainingArgs, polyglotOptions);
         }
     }
 
