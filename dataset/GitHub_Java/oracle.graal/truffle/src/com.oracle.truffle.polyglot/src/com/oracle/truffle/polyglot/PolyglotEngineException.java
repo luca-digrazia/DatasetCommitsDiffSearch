@@ -40,11 +40,10 @@
  */
 package com.oracle.truffle.polyglot;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.Env;
 import org.graalvm.polyglot.Context;
 
-import java.util.NoSuchElementException;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleLanguage.Env;
 
 /**
  * Represents an expected user exception caused by the polyglot engine. It is wrapped such that it
@@ -157,10 +156,4 @@ final class PolyglotEngineException extends RuntimeException {
         return new PolyglotEngineException(new ArrayIndexOutOfBoundsException(message));
     }
 
-    static PolyglotEngineException bufferIndexOutOfBounds(String message) {
-        return new PolyglotEngineException(new IndexOutOfBoundsException(message));
-
-    static PolyglotEngineException noSuchElement(String message) {
-        return new PolyglotEngineException(new NoSuchElementException(message));
-    }
 }

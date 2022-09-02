@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.polyglot;
 
-import com.oracle.truffle.api.CallTarget;
-
 import java.util.concurrent.atomic.AtomicInteger;
 
 final class PolyglotThread extends Thread {
@@ -50,13 +48,10 @@ final class PolyglotThread extends Thread {
 
     Object context;
 
-    final CallTarget callTarget;
-
     PolyglotThread(PolyglotLanguageContext languageContext, Runnable runnable, ThreadGroup group, long stackSize) {
         super(group, runnable, createDefaultName(languageContext), stackSize);
         this.languageContext = languageContext;
         setUncaughtExceptionHandler(languageContext.getPolyglotExceptionHandler());
-        this.callTarget = ThreadSpawnRootNode.lookup(languageContext, runnable, this);
     }
 
     PolyglotThread(PolyglotLanguageContext languageContext, Runnable runnable, ThreadGroup group) {
@@ -77,56 +72,24 @@ final class PolyglotThread extends Thread {
 
     @Override
     public void run() {
-        // always call through a HostToGuestRootNode so that stack/frame
-        // walking can determine in which context the frame was executed
-        callTarget.call(languageContext, null);
+        Object prev;
+        try {
+            prev = languageContext.enterThread(this);
+        } catch (PolyglotEngineException polyglotException) {
+            if (polyglotException.closingContext) {
+                return;
+            } else {
+                throw polyglotException;
+            }
+        }
+        assert prev == null;
+        try {
+            super.run();
+        } finally {
+            languageContext.leaveThread(prev, this);
+        }
     }
 
     private static final AtomicInteger THREAD_INIT_NUMBER = new AtomicInteger(0);
 
-    private static final class ThreadSpawnRootNode extends HostToGuestRootNode {
-
-        private final PolyglotThread thread;
-        private final Runnable runnable;
-
-        ThreadSpawnRootNode(PolyglotThread thread, Runnable runnable) {
-            this.thread = thread;
-            this.runnable = runnable;
-        }
-
-        @Override
-        protected Class<?> getReceiverType() {
-            return Object.class; // not used, so can be any class
-        }
-
-        @Override
-        protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
-            Object prev;
-            try {
-                prev = languageContext.enterThread(thread);
-            } catch (PolyglotEngineException polyglotException) {
-                if (polyglotException.closingContext) {
-                    return null;
-                } else {
-                    throw polyglotException;
-                }
-            }
-            assert prev == null; // is this assertion correct?
-            try {
-                runnable.run();
-            } finally {
-                languageContext.leaveThread(prev, thread);
-            }
-            return null;
-        }
-
-        public static CallTarget lookup(PolyglotLanguageContext languageContext, Runnable runnable, PolyglotThread thread) {
-            ThreadSpawnRootNode threadSpawnRootNode = new ThreadSpawnRootNode(thread, runnable);
-            CallTarget target = lookupHostCodeCache(languageContext, threadSpawnRootNode, CallTarget.class);
-            if (target == null) {
-                target = installHostCodeCache(languageContext, threadSpawnRootNode, createTarget(threadSpawnRootNode), CallTarget.class);
-            }
-            return target;
-        }
-    }
 }

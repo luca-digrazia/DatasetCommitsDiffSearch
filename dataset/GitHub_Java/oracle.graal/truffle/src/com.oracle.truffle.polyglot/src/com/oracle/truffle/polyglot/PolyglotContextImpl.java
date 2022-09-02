@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.polyglot;
 
-import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
 import static com.oracle.truffle.polyglot.EngineAccessor.LANGUAGE;
 
 import java.io.IOException;
@@ -390,7 +389,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             if (singleContext.contextThreadLocal.isSet()) {
                 return singleContext.singleContext;
             } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+                CompilerDirectives.transferToInterpreter();
                 return null;
             }
         } else {
@@ -418,15 +417,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     /**
      * May be used anywhere to lookup the context.
-     *
-     * @throws IllegalStateException when there is no current context available.
      */
     static PolyglotContextImpl requireContext() {
         PolyglotContextImpl context = currentNotEntered();
-        if (context == null) {
-            CompilerDirectives.transferToInterpreter();
-            throw PolyglotEngineException.illegalState("There is no current context available.");
-        }
+        assert context != null : "No current context available.";
         return context;
     }
 
@@ -844,35 +838,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     @Override
-    public Value parse(String languageId, Object sourceImpl) {
-        PolyglotLanguage language = requirePublicLanguage(languageId);
-        PolyglotLanguageContext languageContext = getContext(language);
-        try {
-            Object prev = engine.enterIfNeeded(this);
-            try {
-                Source source = (Source) sourceImpl;
-                languageContext.checkAccess(null);
-                languageContext.ensureInitialized(null);
-                CallTarget target = languageContext.parseCached(null, source, null);
-                return languageContext.asValue(new PolyglotParsedEval(languageContext, source, target));
-            } finally {
-                engine.leaveIfNeeded(prev, this);
-            }
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e);
-        }
-    }
-
-    @Override
     public Value eval(String languageId, Object sourceImpl) {
         PolyglotLanguage language = requirePublicLanguage(languageId);
         PolyglotLanguageContext languageContext = getContext(language);
         try {
             Object prev = engine.enterIfNeeded(this);
             try {
-                Source source = (Source) sourceImpl;
                 languageContext.checkAccess(null);
                 languageContext.ensureInitialized(null);
+                com.oracle.truffle.api.source.Source source = (com.oracle.truffle.api.source.Source) sourceImpl;
                 CallTarget target = languageContext.parseCached(null, source, null);
                 Object result = target.call(PolyglotImpl.EMPTY_ARGS);
                 Value hostValue;
@@ -904,7 +878,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     @TruffleBoundary
-    static void printResult(PolyglotLanguageContext languageContext, Object result) {
+    private static void printResult(PolyglotLanguageContext languageContext, Object result) {
         if (!LANGUAGE.isVisible(languageContext.env, result)) {
             return;
         }
@@ -912,7 +886,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         try {
             stringResult = UNCACHED.asString(UNCACHED.toDisplayString(languageContext.getLanguageView(result), true));
         } catch (UnsupportedMessageException e) {
-            throw shouldNotReachHere(e);
+            throw new AssertionError(e);
         }
         try {
             OutputStream out = languageContext.context.config.out;
