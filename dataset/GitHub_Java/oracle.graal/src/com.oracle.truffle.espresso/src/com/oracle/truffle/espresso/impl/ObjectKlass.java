@@ -75,7 +75,8 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal(dimensions = 1) //
     private Method[] declaredMethods;
 
-    @CompilationFinal(dimensions = 1) private Method[] mirandaMethods;
+    @CompilationFinal(dimensions = 1)
+    private Method[] mirandaMethods;
 
     @CompilationFinal int mirandasStartIndex;
 
@@ -378,7 +379,7 @@ public final class ObjectKlass extends Klass {
     }
 
     public final Field lookupHiddenField(Symbol<Name> name) {
-        for (Field f : fieldTable) {
+        for (Field f: fieldTable) {
             if (f.getName() == name && f.isHidden()) {
                 return f;
             }
@@ -451,6 +452,18 @@ public final class ObjectKlass extends Klass {
         return staticFieldTable;
     }
 
+//    final void setMirandas(ArrayList<InterfaceTables.Miranda> mirandas) {
+//        this.mirandasStartIndex = declaredMethods.length;
+//        Method[] declaredAndMirandaMethods = new Method[declaredMethods.length + mirandas.size()];
+//        System.arraycopy(declaredMethods, 0, declaredAndMirandaMethods, 0, declaredMethods.length);
+//        int pos = declaredMethods.length;
+//        for (InterfaceTables.Miranda miranda : mirandas) {
+//            miranda.setDeclaredMethodPos(pos);
+//            declaredAndMirandaMethods[pos++] = new Method(miranda.method);
+//        }
+//        this.declaredMethods = declaredAndMirandaMethods;
+//    }
+
     final void setMirandas(ArrayList<InterfaceTables.Miranda> mirandas) {
         Method[] declaredAndMirandaMethods = new Method[mirandas.size()];
         int pos = 0;
@@ -465,7 +478,7 @@ public final class ObjectKlass extends Klass {
         if (mirandaMethods == null) {
             return null;
         }
-        for (Method miranda : mirandaMethods) {
+        for (Method miranda: mirandaMethods) {
             if (miranda.getName() == methodName && miranda.getRawSignature() == signature) {
                 return miranda;
             }

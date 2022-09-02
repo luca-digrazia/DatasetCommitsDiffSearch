@@ -478,7 +478,18 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return null;
     }
 
-    public abstract Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature);
+    public abstract Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature); /*{
+        methodLookupCount.inc();
+        // TODO(peterssen): Improve lookup performance.
+        Method method = lookupDeclaredMethod(methodName, signature);
+        if (method == null && type == Type.MethodHandle) {
+            method = lookupPolysigMethod(methodName, signature);
+        }
+        if (method == null && getSuperKlass() != null) {
+            method = getSuperKlass().lookupMethod(methodName, signature);
+        }
+        return method;
+    }*/
 
     public abstract Method vtableLookup(int vtableIndex);
 

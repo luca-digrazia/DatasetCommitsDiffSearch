@@ -97,6 +97,11 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
+    public final Method itableLookup(Klass interfKlass, int itableIndex) {
+        return getSuperKlass().itableLookup(interfKlass, itableIndex);
+    }
+
+    @Override
     public boolean isLocal() {
         return false;
     }
