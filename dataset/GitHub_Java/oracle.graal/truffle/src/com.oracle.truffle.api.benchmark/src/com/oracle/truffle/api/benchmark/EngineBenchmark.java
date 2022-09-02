@@ -402,6 +402,11 @@ public class EngineBenchmark extends TruffleBenchmark {
             return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(result));
         }
 
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return object instanceof BenchmarkObjectConstant;
+        }
+
     }
 
     static final class BenchmarkContext {
@@ -540,21 +545,6 @@ public class EngineBenchmark extends TruffleBenchmark {
         @ExportMessage
         protected final long asPointer() {
             return longValue;
-        }
-
-        @ExportMessage
-        protected final boolean hasLanguage() {
-            return true;
-        }
-
-        @ExportMessage
-        protected final Class<? extends TruffleLanguage<?>> getLanguage() {
-            return BenchmarkTestLanguage.class;
-        }
-
-        @ExportMessage
-        protected final Object toDisplayString(boolean allowSideEffects) {
-            return "displayString";
         }
 
     }
