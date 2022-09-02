@@ -24,6 +24,10 @@
  */
 package org.graalvm.compiler.microbenchmarks.graal;
 
+import static org.graalvm.compiler.microbenchmarks.graal.GraalBenchmark.Defaults.FORKS;
+import static org.graalvm.compiler.microbenchmarks.graal.GraalBenchmark.Defaults.MEASUREMENT_ITERATIONS;
+import static org.graalvm.compiler.microbenchmarks.graal.GraalBenchmark.Defaults.WARMUP_ITERATIONS;
+
 import org.graalvm.compiler.api.test.ModuleSupport;
 
 import org.openjdk.jmh.annotations.Fork;
@@ -35,11 +39,17 @@ import org.openjdk.jmh.annotations.Warmup;
  * for each benchmark option. Individual options can be overridden in the subclasses or by an
  * individual benchmark.
  */
-@Warmup(iterations = 8, time = 5)
-@Measurement(iterations = 5, time = 5)
-@Fork(3)
+@Warmup(iterations = WARMUP_ITERATIONS, time = 5)
+@Measurement(iterations = MEASUREMENT_ITERATIONS, time = 5)
+@Fork(FORKS)
 public class GraalBenchmark {
     static {
         ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler");
+    }
+
+    public static class Defaults {
+        public static final int MEASUREMENT_ITERATIONS = 5;
+        public static final int WARMUP_ITERATIONS = 8;
+        public static final int FORKS = 3;
     }
 }
