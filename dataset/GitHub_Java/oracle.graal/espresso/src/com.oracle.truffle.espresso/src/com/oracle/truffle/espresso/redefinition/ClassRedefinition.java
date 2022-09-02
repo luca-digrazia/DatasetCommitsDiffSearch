@@ -30,8 +30,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
@@ -65,6 +68,8 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 public final class ClassRedefinition {
 
+    @CompilationFinal static volatile RedefineAssumption current = new RedefineAssumption();
+
     private static final Object redefineLock = new Object();
     private static volatile boolean locked = false;
     private static Thread redefineThread = null;
@@ -96,6 +101,21 @@ public final class ClassRedefinition {
         this.redefineListener = listener;
     }
 
+    public static void lock() {
+        synchronized (redefineLock) {
+            check();
+            locked = true;
+        }
+    }
+
+    public static void unlock() {
+        synchronized (redefineLock) {
+            check();
+            locked = false;
+            redefineLock.notifyAll();
+        }
+    }
+
     public static void begin() {
         synchronized (redefineLock) {
             while (locked) {
@@ -108,12 +128,14 @@ public final class ClassRedefinition {
             // the redefine thread is privileged
             redefineThread = Thread.currentThread();
             locked = true;
+            current.assumption.invalidate();
         }
     }
 
     public static void end() {
         synchronized (redefineLock) {
             locked = false;
+            current = new RedefineAssumption();
             redefineThread = null;
             redefineLock.notifyAll();
         }
@@ -131,14 +153,19 @@ public final class ClassRedefinition {
         redefineListener.postRedefinition(changedKlasses);
     }
 
+    private static class RedefineAssumption {
+        private final Assumption assumption = Truffle.getRuntime().createAssumption();
+    }
+
     public static void check() {
-        // block until redefinition is done
-        if (locked) {
+        RedefineAssumption ra = current;
+        if (!ra.assumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             if (redefineThread == Thread.currentThread()) {
                 // let the redefine thread pass
                 return;
             }
-            CompilerDirectives.transferToInterpreter();
+            // block until redefinition is done
             synchronized (redefineLock) {
                 while (locked) {
                     try {
@@ -596,7 +623,7 @@ public final class ClassRedefinition {
         }
         oldKlass.redefineClass(packet, refreshSubClasses, ids);
         if (redefineListener.shouldRerunClassInitializer(oldKlass, packet.detectedChange.clinitChanged())) {
-            context.rerunclinit(oldKlass);
+            context.getJdwpContext().rerunclinit(oldKlass);
         }
     }
 
