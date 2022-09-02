@@ -289,15 +289,15 @@ public abstract class TVMCI {
         final Accessor.NodeSupport nodesAccess = TVMCIAccessor.nodesAccess();
         final EngineSupport engineAccess = TVMCIAccessor.engineAccess();
 
-        final Object polyglotEngine;
+        final Object sourceVM;
         if (rootNode == null) {
-            polyglotEngine = engineAccess.getCurrentPolyglotEngine();
+            sourceVM = engineAccess.getCurrentVM();
         } else {
-            polyglotEngine = nodesAccess.getPolyglotEngine(rootNode);
+            sourceVM = nodesAccess.getSourceVM(rootNode);
         }
 
-        if (polyglotEngine != null) {
-            return engineAccess.getOrCreateRuntimeData(polyglotEngine, constructor);
+        if (sourceVM != null) {
+            return engineAccess.getOrCreateRuntimeData(sourceVM, constructor);
         } else {
             if (fallbackEngineData == null) {
                 fallbackEngineData = engineAccess.getOrCreateRuntimeData(null, constructor);
@@ -340,8 +340,8 @@ public abstract class TVMCI {
     protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
     }
 
-    protected void applyPolyglotEngine(RootNode from, RootNode to) {
-        TVMCIAccessor.nodesAccess().applyPolyglotEngine(from, to);
+    protected void applyVMObject(RootNode from, RootNode to) {
+        TVMCIAccessor.nodesAccess().applyVMObject(from, to);
     }
 
 }

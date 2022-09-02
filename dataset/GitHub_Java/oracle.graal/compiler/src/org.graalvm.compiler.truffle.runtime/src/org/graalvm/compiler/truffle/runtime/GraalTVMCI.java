@@ -193,8 +193,8 @@ final class GraalTVMCI extends TVMCI {
     }
 
     @Override
-    protected void applyPolyglotEngine(@SuppressWarnings("unused") RootNode from, RootNode to) {
-        super.applyPolyglotEngine(from, to);
+    protected void applyVMObject(@SuppressWarnings("unused") RootNode from, RootNode to) {
+        super.applyVMObject(from, to);
     }
 
 }
