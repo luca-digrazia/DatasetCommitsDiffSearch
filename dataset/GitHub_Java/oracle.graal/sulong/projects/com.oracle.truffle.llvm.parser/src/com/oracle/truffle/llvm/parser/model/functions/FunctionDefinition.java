@@ -34,7 +34,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
 import com.oracle.truffle.llvm.parser.metadata.MDString;
 import com.oracle.truffle.llvm.parser.metadata.MDSubprogram;
@@ -49,12 +48,7 @@ import com.oracle.truffle.llvm.parser.model.enums.Visibility;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
-import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
@@ -100,10 +94,7 @@ public final class FunctionDefinition extends FunctionSymbol implements Constant
     }
 
     public String getDisplayName() {
-        /*
-         * For LLVM code produced from C++ sources, function.name stores the linkage name, but not
-         * 'original' C++ name.
-         */
+        // for LLVM from C++, function.name stores the linkage name, but not 'original' C++ name
         if (mdAttachments != null && mdAttachments.size() > 0) {
             for (MDAttachment mdAttachment : mdAttachments) {
                 if (mdAttachment.getValue() instanceof MDSubprogram) {
@@ -222,16 +213,5 @@ public final class FunctionDefinition extends FunctionSymbol implements Constant
     @Override
     public boolean isExternal() {
         return Linkage.isExternal(getLinkage());
-    }
-
-    @Override
-    public boolean isExternalWeak() {
-        return getLinkage() == Linkage.EXTERN_WEAK;
-    }
-
-    @Override
-    public LLVMExpressionNode createNode(LLVMParserRuntime runtime, DataLayout dataLayout, GetStackSpaceFactory stackFactory) {
-        LLVMFunction value = runtime.lookupFunction(getName());
-        return CommonNodeFactory.createLiteral(value, getType());
     }
 }
