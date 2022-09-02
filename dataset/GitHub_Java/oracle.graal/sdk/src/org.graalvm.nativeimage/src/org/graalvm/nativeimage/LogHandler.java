@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -114,9 +114,7 @@ public interface LogHandler {
      *
      * @since 20.3
      */
-    default boolean fatalContext(CCharPointer context, UnsignedWord length) {
-        return true;
-    }
+    boolean fatalContext(CCharPointer context, UnsignedWord length);
 
     /**
      * Exit the VM because a fatal, non-recoverable error situation has been detected. The

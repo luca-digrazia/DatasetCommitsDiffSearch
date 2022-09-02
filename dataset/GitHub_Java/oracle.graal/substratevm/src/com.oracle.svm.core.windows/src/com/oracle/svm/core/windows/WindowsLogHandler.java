@@ -34,9 +34,9 @@ import org.graalvm.word.UnsignedWord;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.core.windows.headers.FileAPI;
 import com.oracle.svm.core.windows.headers.LibC;
+import com.oracle.svm.core.windows.headers.SynchAPI;
 
 @AutomaticFeature
 @Platforms(Platform.WINDOWS.class)
@@ -66,10 +66,16 @@ public class WindowsLogHandler implements LogHandler {
     }
 
     @Override
+    @SuppressWarnings("unused")
+    public boolean fatalContext(CCharPointer context, UnsignedWord length) {
+        return true; /* unconditionally dump details */
+    }
+
+    @Override
     public void fatalError() {
         if (SubstrateUtil.isPrintDiagnosticsInProgress()) {
             // Delay the shutdown a bit if another thread has something important to report.
-            VMThreads.singleton().nativeSleep(3000);
+            SynchAPI.Sleep(3000);
         }
         LibC.abort();
     }

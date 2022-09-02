@@ -52,32 +52,33 @@ final class Target_com_oracle_svm_core_util_VMError {
      * VMError, which let the svm just print the type name of VMError.
      */
 
-    @NeverInline("Accessing instruction pointer of the caller frame")
     @Uninterruptible(reason = "Allow VMError to be used in uninterruptible code.", mayBeInlined = true)
     @Substitute
     private static RuntimeException shouldNotReachHere() {
-        throw VMErrorSubstitutions.shouldNotReachHere(KnownIntrinsics.readReturnAddress(), null, null);
+        throw shouldNotReachHere(null, null);
     }
 
-    @NeverInline("Accessing instruction pointer of the caller frame")
     @Uninterruptible(reason = "Allow VMError to be used in uninterruptible code.", mayBeInlined = true)
     @Substitute
     private static RuntimeException shouldNotReachHere(String msg) {
-        throw VMErrorSubstitutions.shouldNotReachHere(KnownIntrinsics.readReturnAddress(), msg, null);
+        throw shouldNotReachHere(msg, null);
     }
 
-    @NeverInline("Accessing instruction pointer of the caller frame")
     @Uninterruptible(reason = "Allow VMError to be used in uninterruptible code.", mayBeInlined = true)
     @Substitute
     private static RuntimeException shouldNotReachHere(Throwable ex) {
-        throw VMErrorSubstitutions.shouldNotReachHere(KnownIntrinsics.readReturnAddress(), null, ex);
+        throw shouldNotReachHere(null, ex);
     }
 
-    @NeverInline("Accessing instruction pointer of the caller frame")
+    @NeverInline("Prevent change of safepoint status and disabling of stack overflow check to leak into caller, especially when caller is not uninterruptible")
     @Uninterruptible(reason = "Allow VMError to be used in uninterruptible code.")
     @Substitute
     private static RuntimeException shouldNotReachHere(String msg, Throwable ex) {
-        throw VMErrorSubstitutions.shouldNotReachHere(KnownIntrinsics.readReturnAddress(), msg, ex);
+        ThreadStackPrinter.printBacktrace();
+        VMThreads.StatusSupport.setStatusIgnoreSafepoints();
+        StackOverflowCheck.singleton().disableStackOverflowChecksForFatalError();
+        VMErrorSubstitutions.shutdown(msg, ex);
+        return null;
     }
 
     @Substitute
@@ -96,19 +97,10 @@ public class VMErrorSubstitutions {
 
     private static final RawBufferLog fatalContextMessageWriter = new RawBufferLog();
 
-    @Uninterruptible(reason = "Allow VMError to be used in uninterruptible code.")
-    static RuntimeException shouldNotReachHere(CodePointer callerIP, String msg, Throwable ex) {
-        ThreadStackPrinter.printBacktrace();
-        VMThreads.StatusSupport.setStatusIgnoreSafepoints();
-        StackOverflowCheck.singleton().disableStackOverflowChecksForFatalError();
-        VMErrorSubstitutions.shutdown(callerIP, msg, ex);
-        return null;
-    }
-
     @Uninterruptible(reason = "Allow use in uninterruptible code.", calleeMustBe = false)
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate during printing diagnostics.")
-    static void shutdown(CodePointer callerIP, String msg, Throwable ex) {
-        doShutdown(callerIP, msg, ex);
+    static void shutdown(String msg, Throwable ex) {
+        doShutdown(msg, ex);
     }
 
     @NeverInline("Uses memory allocation in the stack frame.")
@@ -141,9 +133,9 @@ public class VMErrorSubstitutions {
     }
 
     @NeverInline("Starting a stack walk in the caller frame")
-    private static void doShutdown(CodePointer callerIP, String msg, Throwable ex) {
+    private static void doShutdown(String msg, Throwable ex) {
         try {
-            if (fatalContext(callerIP, msg, ex)) {
+            if (fatalContext(KnownIntrinsics.readReturnAddress(), msg, ex)) {
                 Log log = Log.log();
                 log.autoflush(true);
 

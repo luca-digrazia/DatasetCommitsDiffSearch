@@ -27,7 +27,6 @@ package com.oracle.svm.core.log;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
-import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
@@ -37,13 +36,13 @@ import org.graalvm.word.UnsignedWord;
  * A {@link LogHandler} that can use provided function pointers for each operation. If a function
  * pointer is missing, it forwards the operation to the delegate set in the constructor.
  */
-public class FunctionPointerLogHandler implements LogHandlerExtension {
+public class FunctionPointerLogHandler implements LogHandler {
 
     private final LogHandler delegate;
 
     private LogFunctionPointer logFunctionPointer;
-    private LogFunctionPointer fatalLogFunctionPointer;
     private VoidFunctionPointer flushFunctionPointer;
+    private FatalContextFunctionPointer fatalContextFunctionPointer;
     private VoidFunctionPointer fatalErrorFunctionPointer;
 
     public FunctionPointerLogHandler(LogHandler delegate) {
@@ -69,17 +68,17 @@ public class FunctionPointerLogHandler implements LogHandlerExtension {
     }
 
     @Override
-    public boolean fatalContext(CodePointer callerIP, String msg, Throwable ex) {
-        boolean res = true;
-        if (delegate instanceof LogHandlerExtension) {
-            res = ((LogHandlerExtension) delegate).fatalContext(callerIP, msg, ex);
+    public boolean fatalContext(CCharPointer bytes, UnsignedWord length) {
+        if (fatalContextFunctionPointer.isNonNull()) {
+            return fatalContextFunctionPointer.invoke(bytes, length);
+        } else if (delegate != null) {
+            return delegate.fatalContext(bytes, length);
         }
-        if (res && fatalLogFunctionPointer.isNonNull()) {
-            // Switch output to the function pointer that may redirect
-            // to a log file instead of to stdout or stderr.
-            logFunctionPointer = fatalLogFunctionPointer;
-        }
-        return res;
+        return true;
+    }
+
+    public CFunctionPointer getFatalContextFunctionPointer() {
+        return fatalContextFunctionPointer;
     }
 
     @Override
@@ -107,7 +106,7 @@ public class FunctionPointerLogHandler implements LogHandlerExtension {
 
     interface FatalContextFunctionPointer extends CFunctionPointer {
         @InvokeCFunctionPointer
-        boolean invoke(CodePointer callerIP, String msg, Throwable ex);
+        boolean invoke(CCharPointer bytes, UnsignedWord length);
     }
 
     /**
@@ -121,11 +120,11 @@ public class FunctionPointerLogHandler implements LogHandlerExtension {
         if (optionString.equals("_log")) {
             handler(optionString).logFunctionPointer = (LogFunctionPointer) extraInfo;
             return true;
-        } else if (optionString.equals("_fatal_log")) {
-            handler(optionString).fatalLogFunctionPointer = (LogFunctionPointer) extraInfo;
-            return true;
         } else if (optionString.equals("_flush_log")) {
             handler(optionString).flushFunctionPointer = (VoidFunctionPointer) extraInfo;
+            return true;
+        } else if (optionString.equals("_fatal_context")) {
+            handler(optionString).fatalContextFunctionPointer = (FatalContextFunctionPointer) extraInfo;
             return true;
         } else if (optionString.equals("_fatal")) {
             handler(optionString).fatalErrorFunctionPointer = (VoidFunctionPointer) extraInfo;
