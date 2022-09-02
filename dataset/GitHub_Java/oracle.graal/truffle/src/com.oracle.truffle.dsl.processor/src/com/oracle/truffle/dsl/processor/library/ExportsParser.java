@@ -110,9 +110,6 @@ import com.oracle.truffle.dsl.processor.parser.NodeParser;
 
 public class ExportsParser extends AbstractParser<ExportsData> {
 
-    public static final String EXECUTE_PREFIX = "execute";
-    public static final String EXECUTE_SUFFIX = "_";
-
     public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(ExportMessage.class, ExportLibrary.class);
 
     @Override
@@ -823,7 +820,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
 
         syntheticExecute = CodeExecutableElement.clone(message.getExecutable());
         // temporarily set to execute* to allow the parser to parse it
-        syntheticExecute.setSimpleName(CodeNames.of(EXECUTE_PREFIX + ElementUtils.firstLetterUpperCase(message.getName()) + EXECUTE_SUFFIX));
+        syntheticExecute.setSimpleName(CodeNames.of("execute" + ElementUtils.firstLetterUpperCase(message.getName())));
         syntheticExecute.getParameters().set(0, new CodeVariableElement(exportedMessage.getReceiverType(), "receiver"));
         syntheticExecute.getModifiers().add(Modifier.ABSTRACT);
         syntheticExecute.setVarArgs(false);
