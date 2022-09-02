@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -87,21 +87,5 @@ public class PythonTests extends RegexTestBase {
     @Test
     public void gr28787() {
         expectSyntaxError("\\", "", PyErrorMessages.BAD_ESCAPE_END_OF_PATTERN);
-    }
-
-    @Test
-    public void gr29318() {
-        // \11 is a backreference to group 11
-        expectSyntaxError("\\11", "", PyErrorMessages.invalidGroupReference("11"));
-        test("()()()()()()()()()()()\\11", "", "", 0, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        // \011 is an octal escape
-        test("\\011", "", "\011", 0, true, 0, 1);
-        // \111 is an octal escape (\111 = I)
-        test("\\111", "", "I", 0, true, 0, 1);
-        // \111 is an octal escape and it is followed by a literal 1
-        test("\\1111", "", "I1", 0, true, 0, 2);
-        // \11 is a backreference to group 11 and it is followed by a literal 9
-        expectSyntaxError("\\119", "", PyErrorMessages.invalidGroupReference("11"));
-        test("()()()()()()()()()()()\\119", "", "9", 0, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 }

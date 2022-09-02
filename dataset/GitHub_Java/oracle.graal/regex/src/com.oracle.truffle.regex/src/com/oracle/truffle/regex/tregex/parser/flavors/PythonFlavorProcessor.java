@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -439,10 +439,6 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
 
     private void retreat() {
         advance(-1);
-    }
-
-    private void retreat(int len) {
-        advance(-len);
     }
 
     private void advance(int len) {
@@ -936,19 +932,6 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      */
     private boolean backreference() {
         if (curChar() >= '1' && curChar() <= '9') {
-            // if there are three octal digits following a backslash,
-            // always treat that as an octal escape
-            String octalEscape = getUpTo(3, PythonFlavorProcessor::isOctDigit);
-            if (octalEscape.length() == 3) {
-                int codePoint = Integer.parseInt(octalEscape, 8);
-                if (codePoint > 0377) {
-                    throw syntaxErrorAtRel(PyErrorMessages.invalidOctalEscape(octalEscape), 1 + octalEscape.length());
-                }
-                emitChar(codePoint);
-                return true;
-            } else {
-                retreat(octalEscape.length());
-            }
             String number = getUpTo(2, PythonFlavorProcessor::isDecDigit);
             int groupNumber = Integer.parseInt(number);
             if (groupNumber > groups) {
@@ -958,7 +941,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             if (getLocalFlags().isIgnoreCase()) {
                 bailOut("case insensitive backreferences not supported");
             } else {
-                emitSnippet("(?:\\" + number + ")");
+                emitSnippet("\\" + number);
             }
             return true;
         } else {
