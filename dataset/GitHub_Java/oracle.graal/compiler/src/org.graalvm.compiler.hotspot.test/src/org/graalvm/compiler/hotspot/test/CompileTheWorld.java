@@ -246,8 +246,8 @@ public final class CompileTheWorld {
          * Native memory containing {@linkplain OptionsEncoder encoded} {@link OptionValues}.
          */
         static class OptionsBuffer {
-            private Long address;
-            final byte[] encoded;
+            private long address;
+            final int size;
             final int hash;
 
             OptionsBuffer(OptionValues options) {
@@ -258,22 +258,24 @@ public final class CompileTheWorld {
                     Object value = cursor.getValue();
                     map.put(key.getName(), value);
                 }
-                encoded = OptionsEncoder.encode(map);
+                byte[] encoded = OptionsEncoder.encode(map);
+                size = encoded.length;
                 hash = Arrays.hashCode(encoded);
+                address = UNSAFE.allocateMemory(encoded.length);
+                UNSAFE.copyMemory(encoded, ARRAY_BYTE_BASE_OFFSET, null, address, size);
             }
 
             long getAddress() {
-                if (address == null) {
-                    address = UNSAFE.allocateMemory(encoded.length);
-                    UNSAFE.copyMemory(encoded, ARRAY_BYTE_BASE_OFFSET, null, address, encoded.length);
+                if (address == 0) {
+                    throw new IllegalStateException();
                 }
                 return address;
             }
 
             void free() {
-                if (address != null) {
+                if (address != 0) {
                     UNSAFE.freeMemory(address);
-                    address = null;
+                    address = 0;
                 }
             }
         }
@@ -284,22 +286,23 @@ public final class CompileTheWorld {
          */
         static class StackTraceBuffer {
             final int size;
-            private Long address;
+            private long address;
 
             StackTraceBuffer(int size) {
                 this.size = size;
+                address = UNSAFE.allocateMemory(size);
             }
 
             void free() {
-                if (address != null) {
+                if (address != 0L) {
                     UNSAFE.freeMemory(address);
-                    address = null;
+                    address = 0L;
                 }
             }
 
             long getAddress() {
-                if (address == null) {
-                    address = UNSAFE.allocateMemory(size);
+                if (address == 0) {
+                    throw new IllegalStateException();
                 }
                 return address;
             }
@@ -1114,7 +1117,7 @@ public final class CompileTheWorld {
                                 installAsDefault,
                                 shouldPrintMetrics(LibGraalScope.current().getIsolate()),
                                 options.getAddress(),
-                                options.encoded.length,
+                                options.size,
                                 options.hash,
                                 stackTraceBufferAddress,
                                 stackTraceBuffer.size);
