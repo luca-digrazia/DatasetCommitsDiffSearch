@@ -99,17 +99,6 @@ public final class WasmTable {
     }
 
     /**
-     * Shrinks this table's size to its {@link #declaredMinSize()} initial size}, and sets all
-     * elements to {@code null}.
-     * <p>
-     * Note: this does not restore content from elements section. For this, use
-     * {@link org.graalvm.wasm.BinaryParser#resetTableState}.
-     */
-    public void reset() {
-        elements = new Object[declaredMinSize];
-    }
-
-    /**
      * The current size of this table instance.
      */
     public int size() {
@@ -152,12 +141,11 @@ public final class WasmTable {
     }
 
     /**
-     * Sets element at {@code index}.
+     * Gets element at {@code index}.
      *
      * @throws IndexOutOfBoundsException if the index is negative or greater or equal to table size
      */
     public void set(int index, Object element) {
-        ensureSizeAtLeast(index + 1);
         elements[index] = element;
     }
 
