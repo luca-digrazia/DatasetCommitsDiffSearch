@@ -904,12 +904,8 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    public int JVM_GetInterfaceVersion() {
-        if (getContext().getJavaVersion().java8OrEarlier()) {
-            return JniEnv.JVM_INTERFACE_VERSION_8;
-        } else {
-            return JniEnv.JVM_INTERFACE_VERSION_11;
-        }
+    public static int JVM_GetInterfaceVersion() {
+        return JniEnv.JVM_INTERFACE_VERSION;
     }
 
     public void dispose() {
@@ -2593,15 +2589,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     public boolean JVM_HasReferencePendingList() {
         return getContext().hasReferencePendingList();
-    }
-
-    @VmImpl
-    @JniImpl
-    public void JVM_InitializeFromArchive(@Host(Class.class) StaticObject cls) {
-        /*
-         * Used to reduce boot time of certain initializations through CDS (/ex: module
-         * initialization). Currently unsupported.
-         */
     }
 
     // Checkstyle: resume method name check

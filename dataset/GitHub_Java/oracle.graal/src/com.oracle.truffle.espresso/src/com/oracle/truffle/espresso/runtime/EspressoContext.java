@@ -288,9 +288,10 @@ public final class EspressoContext {
         }
         try {
             synchronized (pendingLock) {
-                while (!hasReferencePendingList()) {
-                    pendingLock.wait();
+                if (hasReferencePendingList()) {
+                    return;
                 }
+                pendingLock.wait();
             }
         } catch (InterruptedException e) {
             /* nop */
