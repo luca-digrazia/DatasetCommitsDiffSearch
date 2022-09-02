@@ -29,19 +29,17 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.calc.FloatConvertNode;
 import org.graalvm.compiler.nodes.calc.RemNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
-import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 
 import com.oracle.svm.core.graal.meta.SubstrateBasicLoweringProvider;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
-import com.oracle.svm.core.nodes.CodeSynchronizationNode;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class SubstrateLLVMLoweringProvider extends SubstrateBasicLoweringProvider {
 
-    public SubstrateLLVMLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, PlatformConfigurationProvider platformConfig, TargetDescription target) {
-        super(metaAccess, foreignCalls, platformConfig, target);
+    public SubstrateLLVMLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, TargetDescription target) {
+        super(metaAccess, foreignCalls, target);
     }
 
     @SuppressWarnings("unchecked")
@@ -54,12 +52,8 @@ public class SubstrateLLVMLoweringProvider extends SubstrateBasicLoweringProvide
         } else if (n instanceof RemNode) {
             /* No lowering necessary. */
         } else if (n instanceof FloatConvertNode) {
-            // AMD64 has custom lowerings for ConvertNodes, SubstrateLoweringProvider does not
-            // expect to see a ConvertNode and throws an error, just do nothing here.
-        } else if (n instanceof CodeSynchronizationNode) {
-            /* Remove node */
-            CodeSynchronizationNode syncNode = (CodeSynchronizationNode) n;
-            syncNode.graph().removeFixed(syncNode);
+            // AMD64 has custom lowerings for ConvertNodes, HotSpotLoweringProvider does not expect
+            // to see a ConvertNode and throws an error, just do nothing here.
         } else {
             super.lower(n, tool);
         }
