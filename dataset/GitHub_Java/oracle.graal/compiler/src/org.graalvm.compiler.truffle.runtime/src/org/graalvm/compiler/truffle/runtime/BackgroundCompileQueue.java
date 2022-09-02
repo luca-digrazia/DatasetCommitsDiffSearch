@@ -42,8 +42,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
-import org.graalvm.compiler.truffle.runtime.collection.ArrayQueue;
-import org.graalvm.compiler.truffle.runtime.collection.CustomBlockingQueue;
 
 /**
  * The compilation queue accepts compilation requests, and schedules compilations.
@@ -60,8 +58,7 @@ public class BackgroundCompileQueue {
     protected final GraalTruffleRuntime runtime;
     private final AtomicLong idCounter;
     private volatile ThreadPoolExecutor compilationExecutorService;
-    // private volatile IdlingPriorityBlockingQueue<Runnable> compilationQueue;
-    private volatile BlockingQueue<Runnable> compilationQueue;
+    private volatile IdlingPriorityBlockingQueue<Runnable> compilationQueue;
     private boolean shutdown = false;
     private long delayMillis;
 
@@ -132,11 +129,7 @@ public class BackgroundCompileQueue {
             long compilerIdleDelay = runtime.getCompilerIdleDelay(callTarget);
             long keepAliveTime = compilerIdleDelay >= 0 ? compilerIdleDelay : 0;
 
-            if (callTarget.getOptionValue(PolyglotCompilerOptions.CustomQueue)) {
-                this.compilationQueue = new CustomBlockingQueue<>(new ArrayQueue<>());
-            } else {
-                this.compilationQueue = new IdlingPriorityBlockingQueue<>();
-            }
+            this.compilationQueue = new IdlingPriorityBlockingQueue<>();
             ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(threads, threads,
                             keepAliveTime, TimeUnit.MILLISECONDS,
                             compilationQueue, factory) {
@@ -206,7 +199,7 @@ public class BackgroundCompileQueue {
      * compiled.
      */
     public Collection<OptimizedCallTarget> getQueuedTargets(EngineData engine) {
-        BlockingQueue<Runnable> queue = this.compilationQueue;
+        IdlingPriorityBlockingQueue<Runnable> queue = this.compilationQueue;
         if (queue == null) {
             // queue not initialized
             return Collections.emptyList();
