@@ -26,23 +26,20 @@ package com.oracle.svm.core.genscavenge;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Queue;
 import java.util.TreeMap;
 
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-
 import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.image.AbstractImageHeapLayouter.AbstractImageHeapPartition;
+import com.oracle.svm.core.genscavenge.AbstractImageHeapLayouter.AbstractImageHeapPartition;
 import com.oracle.svm.core.image.ImageHeapObject;
 
 /**
  * An unstructured image heap partition that just contains a linear sequence of image heap objects.
  */
-@Platforms(Platform.HOSTED_ONLY.class)
 public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
     private final boolean hugeObjects;
 
@@ -52,9 +49,18 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
     long startOffset = -1;
     long endOffset = -1;
 
+    private final int minimumObjectSize;
+
     ChunkedImageHeapPartition(String name, boolean writable, boolean hugeObjects) {
         super(name, writable);
         this.hugeObjects = hugeObjects;
+
+        /* Cache to prevent frequent lookups of the object layout from ImageSingletons. */
+        minimumObjectSize = ConfigurationValues.getObjectLayout().getMinimumObjectSize();
+    }
+
+    boolean usesUnalignedObjects() {
+        return hugeObjects;
     }
 
     void layout(ChunkedImageHeapAllocator allocator) {
@@ -66,12 +72,12 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
     }
 
     private void layoutInUnalignedChunks(ChunkedImageHeapAllocator allocator) {
-        allocator.maybeFinishAlignedChunk();
+        allocator.finishAlignedChunk();
         allocator.alignBetweenChunks(getStartAlignment());
         startOffset = allocator.getPosition();
 
         for (ImageHeapObject info : getObjects()) { // No need to sort by size
-            appendAllocatedObject(info, allocator.allocateUnalignedChunkForObject(info.getSize()));
+            appendAllocatedObject(info, allocator.allocateUnalignedChunkForObject(info, isWritable()));
         }
 
         allocator.alignBetweenChunks(getEndAlignment());
@@ -96,13 +102,13 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
             if (info == null) {
                 allocator.startNewAlignedChunk();
             } else {
-                appendAllocatedObject(info, allocator.allocateObjectInAlignedChunk(info.getSize()));
+                appendAllocatedObject(info, allocator.allocateObjectInAlignedChunk(info, isWritable()));
             }
         }
     }
 
-    private static ImageHeapObject dequeueBestFit(NavigableMap<Long, Queue<ImageHeapObject>> objects, long nbytes) {
-        if (nbytes < ConfigurationValues.getObjectLayout().getMinimumObjectSize()) {
+    private ImageHeapObject dequeueBestFit(NavigableMap<Long, Queue<ImageHeapObject>> objects, long nbytes) {
+        if (nbytes < minimumObjectSize) {
             return null;
         }
         Map.Entry<Long, Queue<ImageHeapObject>> entry = objects.floorEntry(nbytes);
@@ -119,7 +125,7 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
 
     private static NavigableMap<Long, Queue<ImageHeapObject>> createSortedObjectsMap(List<ImageHeapObject> objects) {
         ImageHeapObject[] sorted = objects.toArray(new ImageHeapObject[0]);
-        Arrays.sort(sorted, new ImageHeapObject.SizeComparator());
+        Arrays.sort(sorted, new SizeComparator());
 
         NavigableMap<Long, Queue<ImageHeapObject>> map = new TreeMap<>();
         Queue<ImageHeapObject> currentQueue = null;
@@ -162,5 +168,12 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
     @Override
     public long getSize() {
         return getEndOffset() - getStartOffset();
+    }
+
+    private static class SizeComparator implements Comparator<ImageHeapObject> {
+        @Override
+        public int compare(ImageHeapObject o1, ImageHeapObject o2) {
+            return Long.signum(o1.getSize() - o2.getSize());
+        }
     }
 }
