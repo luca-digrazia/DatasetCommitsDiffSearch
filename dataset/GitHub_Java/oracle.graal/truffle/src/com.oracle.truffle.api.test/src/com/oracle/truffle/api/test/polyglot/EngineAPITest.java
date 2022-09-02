@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -68,7 +68,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.option.OptionProcessorTest.OptionTestInstrument1;
 import org.graalvm.polyglot.Value;
-import org.junit.Assume;
 
 public class EngineAPITest {
 
@@ -208,9 +207,8 @@ public class EngineAPITest {
 
     @Test
     public void testExperimentalOptionException() {
-        Assume.assumeFalse(Boolean.getBoolean("polyglot.engine.AllowExperimentalOptions"));
-        AbstractPolyglotTest.assertFails(() -> Engine.newBuilder().option("optiontestinstr1.StringOption2", "Hello").build(), IllegalArgumentException.class, e -> {
-            assertEquals("Option 'optiontestinstr1.StringOption2' is experimental and must be enabled with allowExperimentalOptions(boolean) in Context.Builder or Engine.Builder. Do not use experimental options in production environments.",
+        ValueAssert.assertFails(() -> Engine.newBuilder().option("optiontestinstr1.StringOption2", "Hello").build(), IllegalArgumentException.class, e -> {
+            assertEquals("Option 'optiontestinstr1.StringOption2' is experimental and must be enabled with allowExperimentalOptions(). Do not use experimental options in production environments.",
                             e.getMessage());
         });
     }
@@ -358,7 +356,7 @@ public class EngineAPITest {
         }
     }
 
-    public static Object resetSingleContextState(boolean reuse) {
+    private static Object resetSingleContextState(boolean reuse) {
         try {
             Class<?> c = Class.forName("com.oracle.truffle.polyglot.PolyglotContextImpl");
             Method m = c.getDeclaredMethod("resetSingleContextState", boolean.class);
