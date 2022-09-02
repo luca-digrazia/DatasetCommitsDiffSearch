@@ -43,11 +43,9 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 import com.oracle.truffle.tools.utils.json.JSONArray;
 import com.oracle.truffle.tools.utils.json.JSONObject;
@@ -86,7 +84,7 @@ import com.oracle.truffle.tools.chromeinspector.types.Location;
 import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
 import com.oracle.truffle.tools.chromeinspector.types.Scope;
 import com.oracle.truffle.tools.chromeinspector.types.Script;
-import com.oracle.truffle.tools.chromeinspector.util.LineSearch;
+import java.util.concurrent.locks.Lock;
 
 import org.graalvm.collections.Pair;
 
@@ -279,13 +277,6 @@ public final class InspectorDebugger extends DebuggerDomain {
         if (scriptId == null) {
             throw new CommandProcessException("A scriptId required.");
         }
-        CharSequence characters = getScript(scriptId).getCharacters();
-        JSONObject json = new JSONObject();
-        json.put("scriptSource", characters.toString());
-        return new Params(json);
-    }
-
-    private Script getScript(String scriptId) throws CommandProcessException {
         Script script;
         try {
             script = scriptsHandler.getScript(Integer.parseInt(scriptId));
@@ -295,7 +286,9 @@ public final class InspectorDebugger extends DebuggerDomain {
         } catch (NumberFormatException nfe) {
             throw new CommandProcessException(nfe.getMessage());
         }
-        return script;
+        JSONObject json = new JSONObject();
+        json.put("scriptSource", script.getCharacters().toString());
+        return new Params(json);
     }
 
     @Override
@@ -471,23 +464,6 @@ public final class InspectorDebugger extends DebuggerDomain {
             parentScope = null;
         }
         return parentScope;
-    }
-
-    @Override
-    public Params searchInContent(String scriptId, String query, boolean caseSensitive, boolean isRegex) throws CommandProcessException {
-        if (scriptId.isEmpty() || query.isEmpty()) {
-            throw new CommandProcessException("Must specify both scriptId and query.");
-        }
-        Source source = getScript(scriptId).getSource();
-        JSONArray matchLines;
-        try {
-            matchLines = LineSearch.matchLines(source, query, caseSensitive, isRegex);
-        } catch (PatternSyntaxException ex) {
-            throw new CommandProcessException(ex.getDescription());
-        }
-        JSONObject match = new JSONObject();
-        match.put("properties", matchLines);
-        return new Params(match);
     }
 
     @Override
