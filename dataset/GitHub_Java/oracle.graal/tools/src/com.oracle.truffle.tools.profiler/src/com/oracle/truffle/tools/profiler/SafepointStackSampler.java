@@ -38,7 +38,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
@@ -121,7 +120,6 @@ final class SafepointStackSampler {
         for (SyntheticFrame syntheticFrame : syntheticFrames.values()) {
             perThreadSamples.add(syntheticFrame.stackSample());
         }
-        assert perThreadSamples.stream().map(e -> e.thread).collect(Collectors.toSet()).size() == perThreadSamples.size();
         return perThreadSamples;
     }
 
@@ -276,10 +274,6 @@ final class SafepointStackSampler {
         protected void perform(Access access) {
             if (cancelled) {
                 // too late to do anything
-                return;
-            }
-            if (syntheticFrames.containsKey(access.getThread())) {
-                // We have a synthetic frame for this thread which will be added manually.
                 return;
             }
             StackVisitor visitor = fetchStackVisitor();
