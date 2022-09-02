@@ -30,6 +30,7 @@ import static com.oracle.truffle.espresso.classfile.Constants.JVM_ACC_WRITTEN_FL
 
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -260,7 +261,7 @@ public final class ObjectKlass extends Klass {
                     if (getContext().isMainThreadCreated()) {
                         if (getContext().getJDWPListener() != null) {
                             prepareThread = getContext().getGuestThreadFromHost(Thread.currentThread());
-                            getContext().getJDWPListener().classPrepared(this, prepareThread);
+                            getContext().getJDWPListener().classPrepared(this, prepareThread, false);
                         }
                     }
                     if (getSuperKlass() != null) {
@@ -530,9 +531,22 @@ public final class ObjectKlass extends Klass {
     public Method itableLookup(Klass interfKlass, int index) {
         assert (index >= 0) : "Undeclared interface method";
         try {
-            return itable[fastLookup(interfKlass, iKlassTable)][index];
+            return itable[findITableIndex(interfKlass)][index];
         } catch (IndexOutOfBoundsException e) {
             throw Meta.throwExceptionWithMessage(getMeta().java_lang_IncompatibleClassChangeError, "Class " + getName() + " does not implement interface " + interfKlass.getName());
+        }
+    }
+
+    private int findITableIndex(Klass interfKlass) {
+        if (itableLength < 5) {
+            for (int i = 0; i < itableLength; i++) {
+                if (iKlassTable[i] == interfKlass) {
+                    return i;
+                }
+            }
+            return -1;
+        } else {
+            return Arrays.binarySearch(iKlassTable, interfKlass, KLASS_ID_COMPARATOR);
         }
     }
 
