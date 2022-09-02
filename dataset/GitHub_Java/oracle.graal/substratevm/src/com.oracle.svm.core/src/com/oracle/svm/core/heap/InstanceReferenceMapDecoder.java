@@ -36,7 +36,7 @@ import com.oracle.svm.core.util.NonmovableByteArrayReader;
 @DuplicatedInNativeCode
 public class InstanceReferenceMapDecoder {
     @AlwaysInline("de-virtualize calls to ObjectReferenceVisitor")
-    public static boolean walkOffsetsFromPointer(Pointer baseAddress, NonmovableArray<Byte> referenceMapEncoding, long referenceMapIndex, ObjectReferenceVisitor visitor, Object holderObject) {
+    public static boolean walkOffsetsFromPointer(Pointer baseAddress, NonmovableArray<Byte> referenceMapEncoding, long referenceMapIndex, ObjectReferenceVisitor visitor) {
         assert referenceMapIndex >= CodeInfoQueryResult.EMPTY_REFERENCE_MAP;
         assert referenceMapEncoding.isNonNull();
 
@@ -53,7 +53,7 @@ public class InstanceReferenceMapDecoder {
 
             Pointer objRef = baseAddress.add(offset);
             for (int c = 0; c < count; c++) {
-                final boolean visitResult = visitor.visitObjectReferenceInline(objRef, 0, compressed, holderObject);
+                final boolean visitResult = visitor.visitObjectReferenceInline(objRef, 0, compressed);
                 if (!visitResult) {
                     return false;
                 }

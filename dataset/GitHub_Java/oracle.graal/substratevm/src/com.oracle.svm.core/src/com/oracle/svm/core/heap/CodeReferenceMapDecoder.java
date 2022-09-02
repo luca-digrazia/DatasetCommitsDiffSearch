@@ -61,7 +61,6 @@ public class CodeReferenceMapDecoder {
 
         Pointer objRef = (Pointer) baseAddress;
         long idx = referenceMapIndex;
-        boolean firstRun = true;
         while (true) {
             /*
              * The following code is copied from TypeReader.getUV() and .getSV() because we cannot
@@ -105,12 +104,11 @@ public class CodeReferenceMapDecoder {
             }
 
             boolean derived = false;
-            if (!firstRun && gap < 0) {
+            if (gap < 0) {
                 /* Derived pointer run */
                 gap = -(gap + 1);
                 derived = true;
             }
-            firstRun = false;
 
             objRef = objRef.add(WordFactory.unsigned(gap));
             boolean compressed = (count < 0);

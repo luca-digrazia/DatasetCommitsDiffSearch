@@ -22,36 +22,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.hub;
+package com.oracle.svm.core.annotate;
 
-import com.oracle.svm.core.annotate.DuplicatedInNativeCode;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-@DuplicatedInNativeCode
-public enum HubType {
-    // instance hubs
-    Instance(0),
-    InstanceReference(1),
-    // other hubs
-    Other(2),
-    // array hubs
-    TypeArray(4),
-    ObjectArray(5);
-
-    private final int value;
-
-    HubType(int value) {
-        this.value = value;
-    }
-
-    public int getValue() {
-        return value;
-    }
-
-    public static boolean isInstance(int hubType) {
-        return hubType <= InstanceReference.getValue();
-    }
-
-    public static boolean isArray(int hubType) {
-        return hubType >= TypeArray.getValue();
-    }
+/**
+ * Documents that a value or logic is duplicated in native code so it must not be changed or moved
+ * without adapting native code as well.
+ */
+@Retention(RetentionPolicy.SOURCE)
+@Target(value = {ElementType.METHOD, ElementType.TYPE, ElementType.FIELD})
+public @interface DuplicatedInNativeCode {
 }
