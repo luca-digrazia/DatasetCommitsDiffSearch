@@ -52,16 +52,15 @@ import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
 
 import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.ProcessProperties;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.JavaMainWrapper.JavaMainSupport;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.heap.Heap;
-import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 
