@@ -529,7 +529,7 @@ public class BinaryReader extends BinaryStreamReader {
         /* Initialize the Truffle-related components required for execution. */
         rootNode.codeEntry().setByteConstants(state.byteConstants());
         rootNode.codeEntry().setIntConstants(state.intConstants());
-        rootNode.codeEntry().setLongConstants(state.longConstants());
+        rootNode.codeEntry().setNumericLiterals(state.numericLiterals());
         rootNode.codeEntry().setBranchTables(state.branchTables());
         rootNode.codeEntry().initStackSlots(rootNode.getFrameDescriptor(), state.maxStackSize());
     }
@@ -581,10 +581,10 @@ public class BinaryReader extends BinaryStreamReader {
         int startOffset = offset();
         int startByteConstantOffset = state.byteConstantOffset();
         int startIntConstantOffset = state.intConstantOffset();
-        int startLongConstantOffset = state.longConstantOffset();
+        int startNumericLiteralOffset = state.numericLiteralOffset();
         int startBranchTableOffset = state.branchTableOffset();
         WasmBlockNode currentBlock = new WasmBlockNode(module, codeEntry, startOffset, returnTypeId, continuationTypeId, startStackSize,
-                        startByteConstantOffset, startIntConstantOffset, startLongConstantOffset, startBranchTableOffset);
+                        startByteConstantOffset, startIntConstantOffset, startNumericLiteralOffset, startBranchTableOffset);
 
         // Push the type length of the current block's continuation.
         // Used when branching out of nested blocks (br and br_if instructions).
@@ -639,7 +639,7 @@ public class BinaryReader extends BinaryStreamReader {
                     // levels up, so the amount of values it should leave in the stack depends on the branch target.
                     // Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     int unwindLevel = readLabelIndex(bytesConsumed);
-                    state.useLongConstant(unwindLevel);
+                    state.saveNumericLiteral(unwindLevel);
                     state.useByteConstant(bytesConsumed[0]);
                     state.useIntConstant(state.getStackState(unwindLevel));
                     state.useIntConstant(state.getContinuationReturnLength(unwindLevel));
@@ -654,7 +654,7 @@ public class BinaryReader extends BinaryStreamReader {
                     // levels up, so the amount of values it should leave in the stack depends on the branch target.
                     // Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     int unwindLevel = readLabelIndex(bytesConsumed);
-                    state.useLongConstant(unwindLevel);
+                    state.saveNumericLiteral(unwindLevel);
                     state.useByteConstant(bytesConsumed[0]);
                     state.useIntConstant(state.getStackState(unwindLevel));
                     state.useIntConstant(state.getContinuationReturnLength(unwindLevel));
@@ -691,13 +691,12 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 }
                 case RETURN: {
-                    state.useLongConstant(state.stackStateCount());
                     state.useIntConstant(state.getRootBlockReturnLength());
                     break;
                 }
                 case CALL: {
                     int functionIndex = readFunctionIndex(bytesConsumed);
-                    state.useLongConstant(functionIndex);
+                    state.saveNumericLiteral(functionIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     WasmFunction function = module.symbolTable().function(functionIndex);
                     state.pop(function.numArguments());
@@ -719,7 +718,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case CALL_INDIRECT: {
                     int expectedFunctionTypeIndex = readTypeIndex(bytesConsumed);
-                    state.useLongConstant(expectedFunctionTypeIndex);
+                    state.saveNumericLiteral(expectedFunctionTypeIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     int numArguments = module.symbolTable().functionTypeArgumentCount(expectedFunctionTypeIndex);
                     int returnLength = module.symbolTable().getFunctionTypeReturnTypeLength(expectedFunctionTypeIndex);
@@ -742,7 +741,7 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 case LOCAL_GET: {
                     int localIndex = readLocalIndex(bytesConsumed);
-                    state.useLongConstant(localIndex);
+                    state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.get");
@@ -751,7 +750,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case LOCAL_SET: {
                     int localIndex = readLocalIndex(bytesConsumed);
-                    state.useLongConstant(localIndex);
+                    state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.set");
@@ -762,7 +761,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case LOCAL_TEE: {
                     int localIndex = readLocalIndex(bytesConsumed);
-                    state.useLongConstant(localIndex);
+                    state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
@@ -772,7 +771,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case GLOBAL_GET: {
                     int index = readLocalIndex(bytesConsumed);
-                    state.useLongConstant(index);
+                    state.saveNumericLiteral(index);
                     state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntLessOrEqual(index, module.symbolTable().maxGlobalIndex(),
                                     "Invalid global index for global.get.");
@@ -781,7 +780,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case GLOBAL_SET: {
                     int index = readLocalIndex(bytesConsumed);
-                    state.useLongConstant(index);
+                    state.saveNumericLiteral(index);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(index, module.symbolTable().maxGlobalIndex(),
@@ -813,7 +812,7 @@ public class BinaryReader extends BinaryStreamReader {
                     // but we need to store it's byte length, so that we can skip it during execution.
                     state.useByteConstant(bytesConsumed[0]);
                     int offset = readUnsignedInt32(bytesConsumed);  // offset
-                    state.useLongConstant(offset);
+                    state.saveNumericLiteral(offset);
                     state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntGreater(state.stackSize(), 0, String.format("load instruction 0x%02X requires at least one element in the stack", opcode));
                     state.pop();   // Base address.
@@ -834,7 +833,7 @@ public class BinaryReader extends BinaryStreamReader {
                     // but we need to store it's byte length, so that we can skip it during execution.
                     state.useByteConstant(bytesConsumed[0]);
                     int offset = readUnsignedInt32(bytesConsumed);  // offset
-                    state.useLongConstant(offset);
+                    state.saveNumericLiteral(offset);
                     state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntGreater(state.stackSize(), 1, String.format("store instruction 0x%02X requires at least two elements in the stack", opcode));
                     state.pop();  // Value to store.
@@ -856,27 +855,27 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case I32_CONST: {
                     int value = readSignedInt32(bytesConsumed);
-                    state.useLongConstant(value);
+                    state.saveNumericLiteral(value);
                     state.useByteConstant(bytesConsumed[0]);
                     state.push();
                     break;
                 }
                 case I64_CONST: {
                     long value = readSignedInt64(bytesConsumed);
-                    state.useLongConstant(value);
+                    state.saveNumericLiteral(value);
                     state.useByteConstant(bytesConsumed[0]);
                     state.push();
                     break;
                 }
                 case F32_CONST: {
                     int value = readFloatAsInt32();
-                    state.useLongConstant(value);
+                    state.saveNumericLiteral(value);
                     state.push();
                     break;
                 }
                 case F64_CONST: {
                     long value = readFloatAsInt64();
-                    state.useLongConstant(value);
+                    state.saveNumericLiteral(value);
                     state.push();
                     break;
                 }
@@ -1066,7 +1065,7 @@ public class BinaryReader extends BinaryStreamReader {
         currentBlock.setByteLength(offset() - startOffset);
         currentBlock.setByteConstantLength(state.byteConstantOffset() - startByteConstantOffset);
         currentBlock.setIntConstantLength(state.intConstantOffset() - startIntConstantOffset);
-        currentBlock.setLongConstantLength(state.longConstantOffset() - startLongConstantOffset);
+        currentBlock.setNumericLiteralLength(state.numericLiteralOffset() - startNumericLiteralOffset);
         currentBlock.setBranchTableLength(state.branchTableOffset() - startBranchTableOffset);
         // TODO: Restore this check, when we fix the case where the block contains a return instruction.
         // checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
@@ -1095,7 +1094,7 @@ public class BinaryReader extends BinaryStreamReader {
         byte blockTypeId = readBlockType();
         int initialStackPointer = state.stackSize();
         int initialByteConstantOffset = state.byteConstantOffset();
-        int initialNumericLiteralOffset = state.longConstantOffset();
+        int initialNumericLiteralOffset = state.numericLiteralOffset();
 
         // Pop the condition value from the stack.
         state.pop();
@@ -1136,7 +1135,7 @@ public class BinaryReader extends BinaryStreamReader {
         }
 
         return new WasmIfNode(module, codeEntry, trueBranchBlock, falseBranchBlock, offset() - startOffset, blockTypeId, initialStackPointer,
-                state.byteConstantOffset() - initialByteConstantOffset, state.longConstantOffset() - initialNumericLiteralOffset);
+                state.byteConstantOffset() - initialByteConstantOffset, state.numericLiteralOffset() - initialNumericLiteralOffset);
     }
 
     private void readElementSection() {

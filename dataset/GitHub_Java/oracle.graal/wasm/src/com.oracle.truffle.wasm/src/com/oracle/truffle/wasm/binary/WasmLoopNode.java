@@ -32,24 +32,23 @@ package com.oracle.truffle.wasm.binary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.wasm.binary.constants.TargetOffset;
 
 // TODO: Remove this, as it's just an unnecessary indirection, and space overhead.
 public class WasmLoopNode extends WasmNode {
     @Child private LoopNode loopNode;
 
     WasmLoopNode(WasmBlockNode block) {
-        super(block.module(), block.codeEntry(), block.byteLength(), block.byteConstantLength(), block.longConstantLength());
+        super(block.module(), block.codeEntry(), block.byteLength(), block.byteConstantLength(), block.numericLiteralLength());
         this.loopNode = Truffle.getRuntime().createLoopNode(block);
     }
 
     @Override
-    public TargetOffset execute(WasmContext context, VirtualFrame frame) {
-        return (TargetOffset) this.loopNode.execute(frame);
+    public int execute(WasmContext context, VirtualFrame frame) {
+        return this.loopNode.executeLoopWithStatus(frame);
     }
 
     @Override
     public byte returnTypeId() {
-        return ((WasmBlockNode) this.loopNode.getRepeatingNode()).returnTypeId();
+        return 0;
     }
 }
