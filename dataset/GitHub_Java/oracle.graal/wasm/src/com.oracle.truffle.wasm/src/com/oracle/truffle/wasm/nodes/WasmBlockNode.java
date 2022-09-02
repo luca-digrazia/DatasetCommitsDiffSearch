@@ -290,7 +290,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         return rawContextReference;
     }
 
-    @SuppressWarnings("hiding")
     public final void initialize(WasmNode[] nestedControlTable, Node[] callNodeTable, int byteLength, int byteConstantLength,
                     int intConstantLength, int longConstantLength, int branchTableLength) {
         initialize(byteLength);
@@ -2259,7 +2258,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F32_CONVERT_I32_U: {
                     stackPointer--;
                     int x = popInt(frame, stackPointer);
-                    float result = x;
+                    float result = (float) x;
                     pushFloat(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i32(0x%08X) = %f [f32]", x, result);
@@ -2269,7 +2268,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F32_CONVERT_I64_U: {
                     stackPointer--;
                     long x = pop(frame, stackPointer);
-                    float result = x;
+                    float result = (float) x;
                     pushFloat(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i64(0x%016X) = %f [f32]", x, result);
@@ -2282,7 +2281,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F64_CONVERT_I32_U: {
                     stackPointer--;
                     int x = popInt(frame, stackPointer);
-                    double result = x;
+                    double result = (double) x;
                     pushDouble(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i32(0x%08X) = %f [f64]", x, result);
@@ -2292,7 +2291,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F64_CONVERT_I64_U: {
                     stackPointer--;
                     long x = pop(frame, stackPointer);
-                    double result = x;
+                    double result = (double) x;
                     pushDouble(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i64(0x%016X) = %f [f64]", x, result);
@@ -2352,10 +2351,9 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @ExplodeLoop
-    private Object[] createArgumentsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointerOffset) {
+    private Object[] createArgumentsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointer) {
         CompilerAsserts.partialEvaluationConstant(numArgs);
         Object[] args = new Object[numArgs];
-        int stackPointer = stackPointerOffset;
         for (int i = numArgs - 1; i >= 0; --i) {
             stackPointer--;
             byte type = module().symbolTable().getFunctionTypeArgumentTypeAt(function.typeIndex(), i);

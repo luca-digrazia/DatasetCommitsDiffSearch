@@ -38,10 +38,10 @@ import com.oracle.truffle.wasm.WasmModule;
 import com.oracle.truffle.wasm.constants.TargetOffset;
 
 // TODO: Make this a singleton instance.
-public class WasmEmptyNode extends WasmNode {
+public final class WasmEmptyNode extends WasmNode {
 
     public WasmEmptyNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int byteLength) {
-        super(wasmModule, codeEntry, byteLength, 0, 0);
+        super(wasmModule, codeEntry, byteLength);
     }
 
     @Override
@@ -55,5 +55,24 @@ public class WasmEmptyNode extends WasmNode {
         return VOID_TYPE;
     }
 
-}
+    @Override
+    int byteConstantLength() {
+        return 0;
+    }
 
+    @Override
+    int intConstantLength() {
+        return 0;
+    }
+
+    @Override
+    int longConstantLength() {
+        return 0;
+    }
+
+    @Override
+    int branchTableLength() {
+        return 0;
+    }
+
+}

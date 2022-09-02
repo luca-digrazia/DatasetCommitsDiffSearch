@@ -30,7 +30,6 @@
 package com.oracle.truffle.wasm.nodes;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.wasm.WasmCodeEntry;
@@ -38,8 +37,9 @@ import com.oracle.truffle.wasm.WasmContext;
 import com.oracle.truffle.wasm.WasmModule;
 import com.oracle.truffle.wasm.constants.TargetOffset;
 
-public class WasmIfNode extends WasmNode {
-    private static final TruffleLogger logger = TruffleLogger.getLogger("wasm");
+import static com.oracle.truffle.wasm.WasmTracing.trace;
+
+public final class WasmIfNode extends WasmNode {
 
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final int initialStackPointer;
@@ -48,8 +48,8 @@ public class WasmIfNode extends WasmNode {
 
     private final ConditionProfile condition = ConditionProfile.createCountingProfile();
 
-    public WasmIfNode(WasmModule wasmModule, WasmCodeEntry codeEntry, WasmNode trueBranch, WasmNode falseBranch, int byteLength, byte returnTypeId, int initialStackPointer, int byteConstantLength, int numericLiteralLength) {
-        super(wasmModule, codeEntry, byteLength, byteConstantLength, numericLiteralLength);
+    public WasmIfNode(WasmModule wasmModule, WasmCodeEntry codeEntry, WasmNode trueBranch, WasmNode falseBranch, int byteLength, byte returnTypeId, int initialStackPointer) {
+        super(wasmModule, codeEntry, byteLength);
         this.returnTypeId = returnTypeId;
         this.initialStackPointer = initialStackPointer;
         this.trueBranch = trueBranch;
@@ -74,12 +74,22 @@ public class WasmIfNode extends WasmNode {
     }
 
     @Override
-    public int intConstantLength() {
+    int byteConstantLength() {
+        return trueBranch.byteConstantLength() + falseBranch.byteConstantLength();
+    }
+
+    @Override
+    int intConstantLength() {
         return trueBranch.intConstantLength() + falseBranch.intConstantLength();
     }
 
     @Override
-    public int branchTableLength() {
+    int longConstantLength() {
+        return trueBranch.longConstantLength() + falseBranch.longConstantLength();
+    }
+
+    @Override
+    int branchTableLength() {
         return trueBranch.branchTableLength() + falseBranch.branchTableLength();
     }
 }

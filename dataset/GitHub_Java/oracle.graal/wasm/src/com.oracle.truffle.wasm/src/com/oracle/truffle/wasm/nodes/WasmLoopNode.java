@@ -36,11 +36,11 @@ import com.oracle.truffle.wasm.WasmContext;
 import com.oracle.truffle.wasm.constants.TargetOffset;
 
 // TODO: Remove this, as it's just an unnecessary indirection, and space overhead.
-public class WasmLoopNode extends WasmNode {
+public final class WasmLoopNode extends WasmNode {
     @Child private LoopNode loopNode;
 
     public WasmLoopNode(WasmBlockNode block) {
-        super(block.module(), block.codeEntry(), block.byteLength(), block.byteConstantLength(), block.longConstantLength());
+        super(block.module(), block.codeEntry(), block.byteLength());
         this.loopNode = Truffle.getRuntime().createLoopNode(block);
     }
 
@@ -52,5 +52,25 @@ public class WasmLoopNode extends WasmNode {
     @Override
     public byte returnTypeId() {
         return ((WasmBlockNode) this.loopNode.getRepeatingNode()).returnTypeId();
+    }
+
+    @Override
+    int byteConstantLength() {
+        return ((WasmBlockNode) loopNode.getRepeatingNode()).byteConstantLength();
+    }
+
+    @Override
+    int intConstantLength() {
+        return ((WasmBlockNode) loopNode.getRepeatingNode()).intConstantLength();
+    }
+
+    @Override
+    int longConstantLength() {
+        return ((WasmBlockNode) loopNode.getRepeatingNode()).longConstantLength();
+    }
+
+    @Override
+    int branchTableLength() {
+        return ((WasmBlockNode) loopNode.getRepeatingNode()).branchTableLength();
     }
 }
