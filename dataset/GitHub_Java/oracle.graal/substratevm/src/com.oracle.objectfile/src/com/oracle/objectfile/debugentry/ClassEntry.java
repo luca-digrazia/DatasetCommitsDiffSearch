@@ -140,7 +140,7 @@ public class ClassEntry extends StructureTypeEntry {
         /* Add details of fields and field types */
         debugInstanceTypeInfo.fieldInfoProvider().forEach(debugFieldInfo -> this.processField(debugFieldInfo, debugInfoBase, debugContext));
         /* Add details of methods and method types */
-        debugInstanceTypeInfo.methodInfoProvider().forEach(methodFieldInfo -> this.methods.add(this.processMethod(methodFieldInfo, debugInfoBase, debugContext, false)));
+        debugInstanceTypeInfo.methodInfoProvider().forEach(methodFieldInfo -> this.methods.add(this.processMethod(methodFieldInfo, debugInfoBase, debugContext)));
         /* Sort methods to improve lookup speed */
         this.methods.sort(MethodEntry::compareTo);
     }
@@ -275,7 +275,7 @@ public class ClassEntry extends StructureTypeEntry {
         interfaceClassEntry.addImplementor(this, debugContext);
     }
 
-    protected MethodEntry processMethod(DebugMethodInfo debugMethodInfo, DebugInfoBase debugInfoBase, DebugContext debugContext, boolean fromRangeInfo) {
+    protected MethodEntry processMethod(DebugMethodInfo debugMethodInfo, DebugInfoBase debugInfoBase, DebugContext debugContext) {
         String methodName = debugInfoBase.uniqueDebugString(debugMethodInfo.name());
         String resultTypeName = TypeEntry.canonicalize(debugMethodInfo.valueType());
         int modifiers = debugMethodInfo.modifiers();
@@ -302,8 +302,7 @@ public class ClassEntry extends StructureTypeEntry {
          * substitution
          */
         FileEntry methodFileEntry = debugInfoBase.ensureFileEntry(fileName, filePath, cachePath);
-        return new MethodEntry(methodFileEntry, debugMethodInfo.symbolNameForMethod(), methodName, this, resultType,
-                        paramTypeArray, paramNameArray, modifiers, debugMethodInfo.isDeoptTarget(), fromRangeInfo);
+        return new MethodEntry(methodFileEntry, methodName, this, resultType, paramTypeArray, paramNameArray, modifiers, debugMethodInfo.isDeoptTarget());
     }
 
     @Override
@@ -344,13 +343,13 @@ public class ClassEntry extends StructureTypeEntry {
         return superClass;
     }
 
-    public Range makePrimaryRange(StringTable stringTable, MethodEntry method, int lo, int hi, int primaryLine) {
+    public Range makePrimaryRange(String symbolName, StringTable stringTable, MethodEntry method, int lo, int hi, int primaryLine) {
         FileEntry fileEntryToUse = method.fileEntry;
         if (fileEntryToUse == null) {
             /* Last chance is the class's file entry. */
             fileEntryToUse = this.fileEntry;
         }
-        return new Range(stringTable, method, fileEntryToUse, lo, hi, primaryLine);
+        return new Range(symbolName, stringTable, method, fileEntryToUse, lo, hi, primaryLine);
     }
 
     public MethodEntry getMethodEntry(DebugMethodInfo debugMethodInfo, DebugInfoBase debugInfoBase, DebugContext debugContext) {
@@ -363,14 +362,13 @@ public class ClassEntry extends StructureTypeEntry {
             MethodEntry methodEntry = methodIterator.next();
             int comparisonResult = methodEntry.compareTo(methodName, paramSignature, returnTypeName);
             if (comparisonResult == 0) {
-                methodEntry.setInRange();
                 return methodEntry;
             } else if (comparisonResult > 0) {
                 methodIterator.previous();
                 break;
             }
         }
-        MethodEntry newMethodEntry = processMethod(debugMethodInfo, debugInfoBase, debugContext, true);
+        MethodEntry newMethodEntry = processMethod(debugMethodInfo, debugInfoBase, debugContext);
         methodIterator.add(newMethodEntry);
         return newMethodEntry;
     }
@@ -379,9 +377,5 @@ public class ClassEntry extends StructureTypeEntry {
         List<MethodEntry> copy = new ArrayList<>(list);
         copy.sort(MethodEntry::compareTo);
         return list.equals(copy);
-    }
-
-    public List<MethodEntry> getMethods() {
-        return methods;
     }
 }
