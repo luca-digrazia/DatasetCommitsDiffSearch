@@ -497,7 +497,7 @@ public abstract class VMThreads {
      * {@link #OSThreadHandleTL} is not set yet.
      */
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    protected abstract OSThreadHandle getCurrentOSThreadHandle();
+    public abstract OSThreadHandle getCurrentOSThreadHandle();
 
     /**
      * Returns a unique identifier for the current thread.
@@ -510,9 +510,7 @@ public abstract class VMThreads {
      * semantics. May only be used in very specific situations, e.g., when printing diagnostics.
      */
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public void nativeSleep(@SuppressWarnings("unused") int milliseconds) {
-        throw VMError.shouldNotReachHere();
-    }
+    public abstract void nativeSleep(int milliseconds);
 
     @Uninterruptible(reason = "Called from uninterruptible verification code.", mayBeInlined = true)
     public boolean verifyThreadIsAttached(IsolateThread thread) {

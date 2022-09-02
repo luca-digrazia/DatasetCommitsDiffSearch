@@ -31,7 +31,6 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.UnsignedWord;
 
-import com.oracle.svm.core.SubstrateDiagnostics;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.log.Log;
@@ -68,7 +67,7 @@ public class WindowsLogHandler implements LogHandler {
 
     @Override
     public void fatalError() {
-        if (SubstrateDiagnostics.isInProgress()) {
+        if (SubstrateUtil.isPrintDiagnosticsInProgress()) {
             // Delay the shutdown a bit if another thread has something important to report.
             VMThreads.singleton().nativeSleep(3000);
         }

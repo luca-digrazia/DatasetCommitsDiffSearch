@@ -65,7 +65,9 @@ class SubstrateSegfaultHandlerFeature implements Feature {
         if (!ImageSingletons.contains(SubstrateSegfaultHandler.class)) {
             return; /* No segfault handler. */
         }
-        ImageSingletons.add(IsolateCreationWatcher.class, new SingleIsolateSegfaultSetup());
+        SingleIsolateSegfaultSetup singleIsolateSegfaultSetup = new SingleIsolateSegfaultSetup();
+        ImageSingletons.add(IsolateCreationWatcher.class, singleIsolateSegfaultSetup);
+        ImageSingletons.add(SingleIsolateSegfaultSetup.class, singleIsolateSegfaultSetup);
 
         VMError.guarantee(ImageSingletons.contains(RegisterDumper.class));
         RuntimeSupport.getRuntimeSupport().addStartupHook(new SubstrateSegfaultHandlerStartupHook());
@@ -98,7 +100,7 @@ public abstract class SubstrateSegfaultHandler {
     @RestrictHeapAccess(access = NO_ALLOCATION, reason = "Must not allocate in segfault handler.", overridesCallers = true)
     protected static boolean tryEnterIsolate(RegisterDumper.Context context) {
         // Check if we have sufficient information to enter the correct isolate.
-        Isolate isolate = SingleIsolateSegfaultSetup.singleton().getIsolate();
+        Isolate isolate = ImageSingletons.lookup(SingleIsolateSegfaultSetup.class).getIsolate();
         if (isolate.rawValue() != -1) {
             // There is only a single isolate, so lets attach to that isolate.
             int error = CEntryPointActions.enterAttachThreadFromCrashHandler(isolate);
@@ -146,7 +148,7 @@ public abstract class SubstrateSegfaultHandler {
 
         PointerBase sp = RegisterDumper.singleton().getSP(context);
         PointerBase ip = RegisterDumper.singleton().getIP(context);
-        SubstrateDiagnostics.print(log, (Pointer) sp, (CodePointer) ip, context);
+        SubstrateUtil.printDiagnostics(log, (Pointer) sp, (CodePointer) ip, context);
 
         log.string("Segfault detected, aborting process. Use runtime option -R:-InstallSegfaultHandler if you don't want to use SubstrateSegfaultHandler.").newline();
         log.newline();
@@ -162,10 +164,6 @@ public abstract class SubstrateSegfaultHandler {
          * subsequent segfault occurs.
          */
         private static final CGlobalData<Pointer> baseIsolate = CGlobalDataFactory.createWord();
-
-        public static SingleIsolateSegfaultSetup singleton() {
-            return (SingleIsolateSegfaultSetup) ImageSingletons.lookup(IsolateCreationWatcher.class);
-        }
 
         @Override
         @Uninterruptible(reason = "Called from uninterruptible method")

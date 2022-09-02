@@ -31,11 +31,11 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.FixedWithNextNode;
+import org.graalvm.compiler.nodes.DeoptimizingFixedWithNextNode;
+import org.graalvm.compiler.nodes.DeoptimizingNode.DeoptBefore;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.word.LocationIdentity;
 
 import com.oracle.svm.core.c.function.CEntryPointActions;
@@ -43,7 +43,7 @@ import com.oracle.svm.core.c.function.CEntryPointActions;
 import jdk.vm.ci.meta.JavaKind;
 
 @NodeInfo(cycles = CYCLES_8, size = SIZE_8, allowedUsageTypes = {InputType.Memory})
-public final class CEntryPointEnterNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill {
+public final class CEntryPointEnterNode extends DeoptimizingFixedWithNextNode implements Lowerable, SingleMemoryKill, DeoptBefore {
 
     public static final NodeClass<CEntryPointEnterNode> TYPE = NodeClass.create(CEntryPointEnterNode.class);
 
@@ -65,16 +65,16 @@ public final class CEntryPointEnterNode extends FixedWithNextNode implements Low
         return new CEntryPointEnterNode(EnterAction.CreateIsolate, parameters, false, false);
     }
 
-    public static CEntryPointEnterNode attachThread(ValueNode isolate, boolean ensureJavaThread) {
-        return new CEntryPointEnterNode(EnterAction.AttachThread, isolate, ensureJavaThread, false);
+    public static CEntryPointEnterNode attachThread(ValueNode isolate, boolean ensureJavaThread, boolean inCrashHandler) {
+        return new CEntryPointEnterNode(EnterAction.AttachThread, isolate, ensureJavaThread, inCrashHandler);
     }
 
     public static CEntryPointEnterNode enter(ValueNode isolateThread) {
         return new CEntryPointEnterNode(EnterAction.Enter, isolateThread, false, false);
     }
 
-    public static CEntryPointEnterNode enterIsolate(ValueNode isolate, boolean isCrashHandler) {
-        return new CEntryPointEnterNode(EnterAction.EnterIsolate, isolate, false, isCrashHandler);
+    public static CEntryPointEnterNode enterIsolate(ValueNode isolate) {
+        return new CEntryPointEnterNode(EnterAction.EnterIsolate, isolate, false, false);
     }
 
     protected CEntryPointEnterNode(EnterAction enterAction, ValueNode parameter, boolean ensureJavaThread, boolean isCrashHandler) {
@@ -102,14 +102,18 @@ public final class CEntryPointEnterNode extends FixedWithNextNode implements Low
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        if (tool.getLoweringStage() == LoweringTool.StandardLoweringStage.LOW_TIER) {
-            tool.getLowerer().lower(this, tool);
-        }
-    }
-
-    @Override
     public LocationIdentity getKilledLocationIdentity() {
         return LocationIdentity.any();
     }
+
+    @Override
+    public boolean canDeoptimize() {
+        return true;
+    }
+
+    @Override
+    public boolean canUseAsStateDuring() {
+        return true;
+    }
+
 }

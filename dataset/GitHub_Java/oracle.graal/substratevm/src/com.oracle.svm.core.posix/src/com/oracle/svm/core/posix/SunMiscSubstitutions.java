@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,79 +24,71 @@
  */
 package com.oracle.svm.core.posix;
 
-import java.io.Console;
-import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.StackValue;
+import org.graalvm.nativeimage.c.type.CIntPointer;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.CErrorNumber;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
-import com.oracle.svm.core.annotate.NeverInline;
-import com.oracle.svm.core.annotate.RecomputeFieldValue;
+import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.annotate.TargetElement;
+import com.oracle.svm.core.jdk.JDK11OrLater;
+import com.oracle.svm.core.jdk.JDK8OrEarlier;
+import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
-import com.oracle.svm.core.nodes.CFunctionPrologueNode;
 import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.posix.headers.CSunMiscSignal;
 import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Signal;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
+import com.oracle.svm.core.posix.headers.Signal.SignalDispatcher;
+import com.oracle.svm.core.posix.headers.Time;
 import com.oracle.svm.core.util.VMError;
 
-@TargetClass(sun.misc.SharedSecrets.class)
-final class Target_sun_misc_SharedSecrets {
-
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
-    private static sun.misc.JavaIOAccess javaIOAccess;
-
-    @Substitute
-    public static sun.misc.JavaIOAccess getJavaIOAccess() {
-        if (javaIOAccess == null) {
-            javaIOAccess = new sun.misc.JavaIOAccess() {
-                @Override
-                public Console console() {
-                    if (Target_java_io_Console.istty()) {
-                        if (Target_java_lang_System.cons == null) {
-                            Target_java_lang_System.cons = Util_java_io_Console.toConsole(new Target_java_io_Console());
-                        }
-                        return Target_java_lang_System.cons;
-                    }
-                    return null;
-                }
-
-                @Override
-                public Charset charset() {
-                    // This method is called in sun.security.util.Password,
-                    // cons already exists when this method is called
-                    return KnownIntrinsics.unsafeCast(Target_java_lang_System.cons, Target_java_io_Console.class).cs;
-                }
-            };
+@Platforms(Platform.HOSTED_ONLY.class)
+class Package_jdk_internal_misc implements Function<TargetClass, String> {
+    @Override
+    public String apply(TargetClass annotation) {
+        if (JavaVersionUtil.JAVA_SPEC <= 8) {
+            return "sun.misc." + annotation.className();
+        } else {
+            return "jdk.internal.misc." + annotation.className();
         }
-        return javaIOAccess;
-    }
-
-    @Alias private static sun.misc.JavaLangAccess javaLangAccess;
-
-    @Substitute
-    public static sun.misc.JavaLangAccess getJavaLangAccess() {
-        return javaLangAccess;
     }
 }
 
-@TargetClass(sun.misc.Signal.class)
-final class Target_sun_misc_Signal {
+@TargetClass(classNameProvider = Package_jdk_internal_misc.class, className = "Signal")
+final class Target_jdk_internal_misc_Signal {
 
     @Substitute
-    private static int findSignal(String signalName) {
-        return Util_sun_misc_Signal.numberFromName(signalName);
+    @TargetElement(onlyWith = JDK8OrEarlier.class)
+    private static /* native */ int findSignal(String signalName) {
+        return Util_jdk_internal_misc_Signal.numberFromName(signalName);
+    }
+
+    @Substitute
+    @TargetElement(onlyWith = JDK11OrLater.class)
+    private static /* native */ int findSignal0(String signalName) {
+        return Util_jdk_internal_misc_Signal.numberFromName(signalName);
     }
 
     @Substitute
     private static long handle0(int sig, long nativeH) {
-        return Util_sun_misc_Signal.handle0(sig, nativeH);
+        if (!SubstrateOptions.EnableSignalAPI.getValue()) {
+            throw new IllegalArgumentException("Installing signal handlers is not enabled");
+        }
+        return Util_jdk_internal_misc_Signal.handle0(sig, nativeH);
     }
 
     /** The Java side of raising a signal calls the C side of raising a signal. */
@@ -112,7 +106,7 @@ final class Target_sun_misc_Signal {
 }
 
 /** Support for Target_sun_misc_Signal. */
-final class Util_sun_misc_Signal {
+final class Util_jdk_internal_misc_Signal {
 
     /** A thread to dispatch signals as they are raised. */
     private static Thread dispatchThread = null;
@@ -125,7 +119,7 @@ final class Util_sun_misc_Signal {
     /** A map from signal numbers to handlers. */
     private static SignalState[] signalState = null;
 
-    private Util_sun_misc_Signal() {
+    private Util_jdk_internal_misc_Signal() {
         /* All-static class. */
     }
 
@@ -150,6 +144,9 @@ final class Util_sun_misc_Signal {
         }
         updateDispatcher(sig, newDispatcher);
         final Signal.SignalDispatcher oldDispatcher = Signal.signal(sig, newDispatcher);
+        CIntPointer sigset = StackValue.get(CIntPointer.class);
+        sigset.write(1 << (sig - 1));
+        Signal.sigprocmask(Signal.SIG_UNBLOCK(), (Signal.sigset_tPointer) sigset, WordFactory.nullPointer());
         final long result = dispatcherToNativeH(oldDispatcher);
         return result;
     }
@@ -169,7 +166,7 @@ final class Util_sun_misc_Signal {
                     /* Open the C signal handling mechanism. */
                     final int openResult = CSunMiscSignal.open();
                     if (openResult != 0) {
-                        final int openErrno = Errno.errno();
+                        final int openErrno = CErrorNumber.getCErrorNumber();
                         /* Check for the C signal handling mechanism already being open. */
                         if (openErrno == Errno.EBUSY()) {
                             throw new IllegalArgumentException("C signal handling mechanism is in use.");
@@ -177,31 +174,18 @@ final class Util_sun_misc_Signal {
                         /* Report other failure. */
                         Log.log().string("Util_sun_misc_Signal.ensureInitialized: CSunMiscSignal.create() failed.")
                                         .string("  errno: ").signed(openErrno).string("  ").string(Errno.strerror(openErrno)).newline();
-                        VMError.guarantee(false, "Util_sun_misc_Signal.ensureInitialized: CSunMiscSignal.open() failed.");
+                        throw VMError.shouldNotReachHere("Util_sun_misc_Signal.ensureInitialized: CSunMiscSignal.open() failed.");
                     }
 
-                    /* Allocate the table of signal states. */
-                    final int signalCount = Signal.SignalEnum.values().length;
-                    /* Workaround for GR-7858: @Platform @CEnum members. */
-                    final int linuxSignalCount = IsDefined.isLinux() ? Signal.LinuxSignalEnum.values().length : 0;
                     /* Initialize the table of signal states. */
-                    signalState = new SignalState[signalCount + linuxSignalCount];
-                    for (int index = 0; index < signalCount; index += 1) {
-                        final Signal.SignalEnum value = Signal.SignalEnum.values()[index];
-                        signalState[index] = new SignalState(value.name(), value.getCValue());
-                    }
-                    /* Workaround for GR-7858: @Platform @CEnum members. */
-                    if (IsDefined.isLinux()) {
-                        for (int index = 0; index < linuxSignalCount; index += 1) {
-                            final Signal.LinuxSignalEnum value = Signal.LinuxSignalEnum.values()[index];
-                            signalState[signalCount + index] = new SignalState(value.name(), value.getCValue());
-                        }
-                    }
+                    signalState = createSignalStateTable();
 
                     /* Create and start a daemon thread to dispatch to Java signal handlers. */
                     dispatchThread = new Thread(new DispatchThread());
+                    dispatchThread.setName("Signal Dispatcher");
                     dispatchThread.setDaemon(true);
                     dispatchThread.start();
+                    RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> DispatchThread.interrupt(dispatchThread));
 
                     /* Initialization is complete. */
                     initialized = true;
@@ -210,6 +194,30 @@ final class Util_sun_misc_Signal {
                 initializationLock.unlock();
             }
         }
+    }
+
+    /**
+     * Create a table of signal states. This would be straightforward, except for the
+     * platform-specific signals. See GR-7858: @Platform @CEnum members.
+     */
+    private static SignalState[] createSignalStateTable() {
+        /* Fill in the table. */
+        List<SignalState> signalStateList = new ArrayList<>();
+        for (Signal.SignalEnum value : Signal.SignalEnum.values()) {
+            signalStateList.add(new SignalState(value.name(), value.getCValue()));
+        }
+        if (IsDefined.isLinux()) {
+            for (Signal.LinuxSignalEnum value : Signal.LinuxSignalEnum.values()) {
+                signalStateList.add(new SignalState(value.name(), value.getCValue()));
+            }
+        }
+        if (IsDefined.isDarwin()) {
+            for (Signal.DarwinSignalEnum value : Signal.DarwinSignalEnum.values()) {
+                signalStateList.add(new SignalState(value.name(), value.getCValue()));
+            }
+        }
+        final SignalState[] result = signalStateList.toArray(new SignalState[0]);
+        return result;
     }
 
     /** Map from a Java signal name to a signal number. */
@@ -279,6 +287,11 @@ final class Util_sun_misc_Signal {
             /* Nothing to do. */
         }
 
+        static void interrupt(Thread thread) {
+            thread.interrupt();
+            SignalState.wakeUp();
+        }
+
         /**
          * Wait to be notified that a signal has been raised in the C signal handler, then find any
          * that were raised and dispatch to the Java signal handler. The C signal handler increments
@@ -286,22 +299,23 @@ final class Util_sun_misc_Signal {
          */
         @Override
         public void run() {
-            for (; /* break */;) {
-                /* Check if this thread was interrupted before blocking. */
+            while (!Thread.interrupted()) {
+                /*
+                 * Block waiting for one or more signals to be raised. Or a wake up for termination.
+                 */
+                SignalState.await();
                 if (Thread.interrupted()) {
+                    /* Thread was interrupted for termination. */
                     break;
                 }
-                /* Block waiting for one or more signals to be raised. Or a random wake up. */
-                SignalState.await();
                 /* Find any counters that are non-zero. */
-                for (int index = 0; index < signalState.length; index += 1) {
-                    final SignalState entry = signalState[index];
-                    final Signal.SignalDispatcher dispatcher = entry.getDispatcher();
+                for (final SignalState entry : signalState) {
+                    final SignalDispatcher dispatcher = entry.getDispatcher();
                     /* If the handler is the Java signal handler ... */
                     if (dispatcher.equal(CSunMiscSignal.countingHandlerFunctionPointer())) {
                         /* ... and if there are outstanding signals to be dispatched. */
                         if (entry.decrementCount() > 0L) {
-                            Target_sun_misc_Signal.dispatch(entry.getNumber());
+                            Target_jdk_internal_misc_Signal.dispatch(entry.getNumber());
                         }
                     }
                 }
@@ -357,6 +371,11 @@ final class Util_sun_misc_Signal {
             PosixUtils.checkStatusIs0(awaitResult, "Util_sun_misc_Signal.SignalState.await(): CSunMiscSignal.await() failed.");
         }
 
+        protected static void wakeUp() {
+            final int awaitResult = CSunMiscSignal.post();
+            PosixUtils.checkStatusIs0(awaitResult, "Util_sun_misc_Signal.SignalState.post(): CSunMiscSignal.post() failed.");
+        }
+
         /*
          * Decrement a counter towards zero. Returns the original value, or -1 if the signal number
          * is out of range.
@@ -368,50 +387,53 @@ final class Util_sun_misc_Signal {
     }
 }
 
-/** Translated from: jdk/src/share/native/sun/misc/NativeSignalHandler.c?v=Java_1.8.0_40_b10. */
-@TargetClass(className = "sun.misc.NativeSignalHandler")
-final class Target_sun_misc_NativeSignalHandler {
+@AutomaticFeature
+class IgnoreSIGPIPEFeature implements Feature {
 
-    /**
-     * This method gets called from the runnable created in the dispatch(int) method of
-     * {@link sun.misc.Signal}. It is running in a Java thread, but the handler is a C function. So
-     * I transition to native before making the call, and transition back to Java after the call.
-     *
-     * This looks really dangerous: Taking a long parameter and calling through it. If the only way
-     * to get a NativeSignalHandler is from previously-registered native signal handler (see
-     * {@link sun.misc.Signal#handle(sun.misc.Signal, sun.misc.SignalHandler)} then maybe this is
-     * not quite as dangerous as it first seems.
-     */
-    // 033 typedef void (*sig_handler_t)(jint, void *, void *);
-    // 034
-    // 035 JNIEXPORT void JNICALL
-    // 036 Java_sun_misc_NativeSignalHandler_handle0(JNIEnv *env, jclass cls, jint sig, jlong f) {
-    @Substitute
-    static void handle0(int sig, long f) {
-        // 038 /* We've lost the siginfo and context */
-        // 039 (*(sig_handler_t)jlong_to_ptr(f))(sig, NULL, NULL);
-        final Signal.AdvancedSignalDispatcher handler = WordFactory.pointer(f);
-        Util_sun_misc_NativeSignalHandler.handle0WithTransition(handler, sig);
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        RuntimeSupport.getRuntimeSupport().addStartupHook(new IgnoreSIGPIPEStartupHook());
     }
 }
 
-final class Util_sun_misc_NativeSignalHandler {
-
-    /** Transition to native for the call of the handler. */
-    static void handle0WithTransition(Signal.AdvancedSignalDispatcher functionPointer, int sig) {
-        CFunctionPrologueNode.cFunctionPrologue();
-        handle0InNative(functionPointer, sig);
-        CFunctionEpilogueNode.cFunctionEpilogue();
-    }
+final class IgnoreSIGPIPEStartupHook implements Runnable {
 
     /**
-     * This method is called after a transition to native. It can not access anything on the Java
-     * heap.
+     * Ignore SIGPIPE. Reading from a closed pipe, instead of delivering a process-wide signal whose
+     * default action is to terminate the process, will instead return an error code from the
+     * specific write operation.
+     *
+     * From pipe(7}: If all file descriptors referring to the read end of a pipe have been closed,
+     * then a write(2) will cause a SIGPIPE signal to be generated for the calling process. If the
+     * calling process is ignoring this signal, then write(2) fails with the error EPIPE.
      */
-    @Uninterruptible(reason = "Must not stop while in native.")
-    @NeverInline("Provide a return address for the Java frame anchor.")
-    private static void handle0InNative(Signal.AdvancedSignalDispatcher functionPointer, int sig) {
-        functionPointer.dispatch(sig, WordFactory.nullPointer(), WordFactory.nullPointer());
+    @Override
+    public void run() {
+        final SignalDispatcher signalResult = Signal.signal(Signal.SignalEnum.SIGPIPE.getCValue(), Signal.SIG_IGN());
+        VMError.guarantee(signalResult != Signal.SIG_ERR(), "IgnoreSIGPIPEFeature.run: Could not ignore SIGPIPE");
+    }
+}
+
+@TargetClass(className = "jdk.internal.misc.VM", onlyWith = JDK11OrLater.class)
+final class Target_jdk_internal_misc_VM {
+
+    /* Implementation from src/hotspot/share/prims/jvm.cpp#L286 translated to Java. */
+    @Substitute
+    public static long getNanoTimeAdjustment(long offsetInSeconds) {
+        final long maxDiffSecs = 0x0100000000L;
+        final long minDiffSecs = -maxDiffSecs;
+
+        Time.timeval tv = StackValue.get(Time.timeval.class);
+        int status = Time.NoTransitions.gettimeofday(tv, WordFactory.nullPointer());
+        assert status != -1 : "linux error";
+        long seconds = tv.tv_sec();
+        long nanos = tv.tv_usec() * 1000;
+
+        long diff = seconds - offsetInSeconds;
+        if (diff >= maxDiffSecs || diff <= minDiffSecs) {
+            return -1;
+        }
+        return diff * 1000000000 + nanos;
     }
 }
 
