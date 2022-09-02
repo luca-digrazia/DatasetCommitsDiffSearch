@@ -255,6 +255,8 @@ public abstract class Accessor {
 
         public abstract Object getVMFromLanguageObject(Object engineObject);
 
+        public abstract OptionValues getCompilerOptionValues(RootNode rootNode);
+
         public abstract Object lookupHostSymbol(Object vmObject, Env env, String symbolName);
 
         public abstract Object asHostSymbol(Object vmObject, Class<?> symbolClass);
