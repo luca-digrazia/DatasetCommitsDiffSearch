@@ -22,10 +22,6 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
@@ -39,66 +35,14 @@ import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public final class ClassRedefinition {
-
-    @CompilationFinal static volatile RedefineAssumption current = new RedefineAssumption();
-
-    private static final Object redefineLock = new Object();
-    private static volatile boolean locked = false;
-    private static Thread redefineThread = null;
-
-    public static void begin() {
-        // the redefine thread is privileged
-        redefineThread = Thread.currentThread();
-        locked = true;
-        current.assumption.invalidate();
-    }
-
-    public static void end() {
-        synchronized (redefineLock) {
-            current = new RedefineAssumption();
-            locked = false;
-            redefineThread = null;
-            redefineLock.notifyAll();
-        }
-    }
-
-    private static class RedefineAssumption {
-        private final Assumption assumption = Truffle.getRuntime().createAssumption();
-    }
-
-    public static void check() {
-        RedefineAssumption ra = current;
-        if (!ra.assumption.isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            if (redefineThread == Thread.currentThread()) {
-                // let the redefine thread pass
-                return;
-            }
-            // block until redefinition is done
-            synchronized (redefineLock) {
-                while (locked) {
-                    try {
-                        redefineLock.wait();
-                    } catch (InterruptedException e) {
-                        Thread.interrupted();
-                    }
-                }
-            }
-            // re-check in case a new redefinition was kicked off
-            check();
-        }
-    }
 
     private enum RedefinitionSupport {
         METHOD_BODY,
@@ -107,7 +51,7 @@ public final class ClassRedefinition {
         ARBITRARY
     }
 
-    enum ClassChange {
+    private enum ClassChange {
         NO_CHANGE,
         METHOD_BODY_CHANGE,
         ADD_METHOD,
@@ -116,17 +60,13 @@ public final class ClassRedefinition {
         REMOVE_METHOD,
         CLASS_MODIFIERS_CHANGE,
         METHOD_MODIFIERS_CHANGE,
-        CONSTANT_POOL_CHANGE,
-        INVALID
+        CONSTANT_POOL_CHANGE
     }
 
     private static final RedefinitionSupport REDEFINITION_SUPPORT = RedefinitionSupport.REMOVE_METHOD;
 
-    public static List<ChangePacket> detectClassChanges(RedefineInfo[] redefineInfos, EspressoContext context) {
-        List<ChangePacket> result = new ArrayList<>(redefineInfos.length);
-        for (RedefineInfo redefineInfo : redefineInfos) {
-            KlassRef klass = redefineInfo.getKlass();
-            byte[] bytes = redefineInfo.getClassBytes();
+    public static int redefineClass(Klass klass, byte[] bytes, EspressoContext context, Ids<Object> ids, List<ObjectKlass> refreshSubClasses) {
+        try {
             ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), klass.getTypeAsString(), null, context);
             ClassChange classChange;
             DetectedChange detectedChange = new DetectedChange();
@@ -134,53 +74,50 @@ public final class ClassRedefinition {
                 ObjectKlass objectKlass = (ObjectKlass) klass;
                 ParserKlass oldParserKlass = objectKlass.getLinkedKlass().getParserKlass();
                 classChange = detectClassChanges(parserKlass, oldParserKlass, detectedChange);
+            } else if (klass instanceof ArrayKlass) {
+                // array klass, should never happen
+                classChange = ClassChange.SCHEMA_CHANGE;
             } else {
-                // array or primitive klass, should never happen
-                classChange = ClassChange.INVALID;
+                // primitive klass, should never happen
+                classChange = ClassChange.SCHEMA_CHANGE;
             }
-            result.add(new ChangePacket(redefineInfo, parserKlass, classChange, detectedChange));
-        }
-        return result;
-    }
 
-    public static int redefineClass(ChangePacket packet, Ids<Object> ids, List<ObjectKlass> refreshSubClasses) {
-        try {
-            switch (packet.classChange) {
+            switch (classChange) {
                 case METHOD_BODY_CHANGE:
-                    return doRedefineClass(packet, ids, refreshSubClasses);
+                    return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
                 case ADD_METHOD:
                     if (isAddMethodSupported()) {
-                        return doRedefineClass(packet, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
                     } else {
                         return ErrorCodes.ADD_METHOD_NOT_IMPLEMENTED;
                     }
                 case REMOVE_METHOD:
                     if (isRemoveMethodSupported()) {
-                        return doRedefineClass(packet, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
                     } else {
                         return ErrorCodes.DELETE_METHOD_NOT_IMPLEMENTED;
                     }
                 case SCHEMA_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return doRedefineClass(packet, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
                     } else {
                         return ErrorCodes.SCHEMA_CHANGE_NOT_IMPLEMENTED;
                     }
                 case CLASS_MODIFIERS_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return doRedefineClass(packet, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
                     } else {
                         return ErrorCodes.CLASS_MODIFIERS_CHANGE_NOT_IMPLEMENTED;
                     }
                 case METHOD_MODIFIERS_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return doRedefineClass(packet, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
                     } else {
                         return ErrorCodes.METHOD_MODIFIERS_CHANGE_NOT_IMPLEMENTED;
                     }
                 case HIERARCHY_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return doRedefineClass(packet, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
                     } else {
                         return ErrorCodes.HIERARCHY_CHANGE_NOT_IMPLEMENTED;
                     }
@@ -299,7 +236,7 @@ public final class ClassRedefinition {
         }
 
         // find the added methods if any
-        if (oldMethods.length < newMethods.length || !collectedChanges.getRemovedMethods().isEmpty()) {
+        if (oldMethods.length < newMethods.length) {
             for (int i = 0; i < newMethods.length; i++) {
                 ParserMethod newMethod = newMethods[i];
                 boolean found = false;
@@ -316,8 +253,7 @@ public final class ClassRedefinition {
             }
             result = ClassChange.ADD_METHOD;
         }
-        // removed methods are higher order changes
-        if (!collectedChanges.getRemovedMethods().isEmpty()) {
+        if (collectedChanges.getRemovedMethods().size() > 0) {
             result = ClassChange.REMOVE_METHOD;
         }
         return result;
@@ -480,9 +416,24 @@ public final class ClassRedefinition {
         return false;
     }
 
-    private static int doRedefineClass(ChangePacket packet, Ids<Object> ids, List<ObjectKlass> refreshSubClasses) {
-        ObjectKlass oldKlass = (ObjectKlass) packet.info.getKlass();
-        oldKlass.redefineClass(packet, refreshSubClasses, ids);
+    private static int redefineClass(ParserKlass parserKlass, ObjectKlass oldKlass, DetectedChange change, Ids<Object> ids, List<ObjectKlass> refreshSubClasses) {
+        List<ParserMethod> changedMethodBodies = change.getChangedMethodBodies();
+
+        for (ParserMethod changedMethod : changedMethodBodies) {
+            // find the old real method
+            Method method = getDeclaredMethod(oldKlass, changedMethod);
+            method.redefine(changedMethod, parserKlass, ids);
+        }
+        oldKlass.redefineClass(parserKlass, change, refreshSubClasses, ids);
         return 0;
+    }
+
+    private static Method getDeclaredMethod(ObjectKlass oldKlass, ParserMethod changedMethod) {
+        for (Method declaredMethod : oldKlass.getDeclaredMethods()) {
+            if (changedMethod.getName().equals(declaredMethod.getName()) && changedMethod.getSignature().equals(declaredMethod.getDescriptor())) {
+                return declaredMethod;
+            }
+        }
+        return null;
     }
 }

@@ -354,7 +354,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         super(method);
         CompilerAsserts.neverPartOfCompilation();
         CodeAttribute codeAttribute = method.getCodeAttribute();
-        this.bs = new BytecodeStream(codeAttribute.getCode());
+        this.bs = new BytecodeStream(codeAttribute.getOriginalCode());
         FrameSlot[] slots = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
 
         this.locals = Arrays.copyOfRange(slots, 0, codeAttribute.getMaxLocals());
@@ -1618,7 +1618,6 @@ public final class BytecodeNode extends EspressoMethodNode {
         RuntimeConstantPool pool = null;
         InvokeDynamicConstant inDy = null;
         QuickNode quick = null;
-        int indyIndex = -1;
         synchronized (this) {
             if (bs.currentBC(curBCI) == QUICK) {
                 // Check if someone did the job for us. Defer the call until we are out of the lock.
@@ -1626,8 +1625,7 @@ public final class BytecodeNode extends EspressoMethodNode {
             } else {
                 pool = getConstantPool();
                 // fetch indy under lock.
-                indyIndex = bs.readCPI(curBCI);
-                inDy = ((InvokeDynamicConstant) pool.at(indyIndex));
+                inDy = ((InvokeDynamicConstant) pool.at(bs.readCPI(curBCI)));
             }
         }
         if (quick != null) {
@@ -1678,25 +1676,14 @@ public final class BytecodeNode extends EspressoMethodNode {
         Symbol<Type>[] parsedInvokeSignature = getSignatures().parsed(invokeSignature);
         StaticObject methodType = signatureToMethodType(parsedInvokeSignature, accessingKlass, getMeta());
         StaticObject appendix = StaticObject.createArray(meta.java_lang_Object_array, new StaticObject[1]);
-        StaticObject memberName;
-        if (getContext().getJavaVersion() <= 8) {
-            memberName = (StaticObject) meta.java_lang_invoke_MethodHandleNatives_linkCallSite8.invokeDirect(
-                            null,
-                            accessingKlass.mirror(),
-                            bootstrapmethodMethodHandle,
-                            name, methodType,
-                            StaticObject.createArray(meta.java_lang_Object_array, args),
-                            appendix);
-        } else {
-            memberName = (StaticObject) meta.java_lang_invoke_MethodHandleNatives_linkCallSite11.invokeDirect(
-                            null,
-                            accessingKlass.mirror(),
-                            indyIndex,
-                            bootstrapmethodMethodHandle,
-                            name, methodType,
-                            StaticObject.createArray(meta.java_lang_Object_array, args),
-                            appendix);
-        }
+
+        StaticObject memberName = (StaticObject) meta.java_lang_invoke_MethodHandleNatives_linkCallSite.invokeDirect(
+                        null,
+                        accessingKlass.mirror(),
+                        bootstrapmethodMethodHandle,
+                        name, methodType,
+                        StaticObject.createArray(meta.java_lang_Object_array, args),
+                        appendix);
 
         StaticObject unboxedAppendix = appendix.get(0);
 

@@ -40,8 +40,16 @@ final class DetectedChange {
         return Collections.unmodifiableList(changedMethodBodies);
     }
 
+    void addNewMethod(ParserMethod newMethod) {
+        addedMethods.add(newMethod);
+    }
+
     List<ParserMethod> getAddedMethods() {
         return Collections.unmodifiableList(addedMethods);
+    }
+
+    public void addRemovedMethod(ParserMethod removedMethod) {
+        removedMethods.add(removedMethod);
     }
 
     List<ParserMethod> getRemovedMethods() {
@@ -52,13 +60,5 @@ final class DetectedChange {
         ArrayList<ParserMethod> result = new ArrayList<>(addedMethods);
         result.addAll(removedMethods);
         return Collections.unmodifiableList(result);
-    }
-
-    public void addNewMethods(List<ParserMethod> methods) {
-        addedMethods.addAll(methods);
-    }
-
-    public void addRemovedMethods(List<ParserMethod> methods) {
-        removedMethods.addAll(methods);
     }
 }

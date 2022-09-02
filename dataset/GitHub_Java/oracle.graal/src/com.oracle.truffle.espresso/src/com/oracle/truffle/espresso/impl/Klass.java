@@ -234,7 +234,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         if (accessingKlass == null) {
             return true;
         }
-        if (klass.isPublic() || klass.sameRuntimePackage(accessingKlass)) {
+        if (klass.isPublic() || klass.sameRuntimePackage(klass.getDefiningClassLoader(), accessingKlass)) {
             return true;
         }
         return (klass.getMeta().sun_reflect_MagicAccessorImpl.isAssignableFrom(accessingKlass));
@@ -252,9 +252,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         this.superInterfaces = superInterfaces;
         this.id = context.getNewKlassId();
         this.modifiers = modifiers;
-        if (!isArray() && !isPrimitive()) {
-            initRuntimePackage();
-        }
     }
 
     public abstract @Host(ClassLoader.class) StaticObject getDefiningClassLoader();
@@ -907,28 +904,27 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return InterpreterToVM.newObject(this, false);
     }
 
-    @CompilationFinal private Symbol<Name> runtimePackage;
+    // TODO(garcia) Symbolify package ?
+    @CompilationFinal private String runtimePackage;
 
-    public Symbol<Name> getRuntimePackage() {
-        return runtimePackage;
-    }
-
-    private Symbol<Name> initRuntimePackage() {
-        assert !isArray();
-        String hostPkgName = Types.getRuntimePackage(getType());
-        assert !hostPkgName.endsWith(";");
-        if (hostPkgName.length() == 0) {
-            return null;
+    public final String getRuntimePackage() {
+        String pkg = runtimePackage;
+        if (runtimePackage == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            assert !isArray();
+            pkg = Types.getRuntimePackage(getType());
+            assert !pkg.endsWith(";");
+            runtimePackage = pkg;
         }
-        return getNames().getOrCreate(hostPkgName);
+        return pkg;
     }
 
     public Symbol<Name> getName() {
         return name;
     }
 
-    public boolean sameRuntimePackage(Klass other) {
-        return this.getDefiningClassLoader() == other.getDefiningClassLoader() && this.getRuntimePackage().equals(other.getRuntimePackage());
+    public boolean sameRuntimePackage(StaticObject classLoader, Klass other) {
+        return getDefiningClassLoader() == classLoader && this.getRuntimePackage().equals(other.getRuntimePackage());
     }
 
     // region jdwp-specific
@@ -999,15 +995,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     @Override
     public Object getKlassObject() {
         return mirror();
-    }
-
-    public Klass nest() {
-        return this;
-    }
-
-    @SuppressWarnings("unused")
-    public boolean nestMembersCheck(Klass k) {
-        return false;
     }
 
     @Override
