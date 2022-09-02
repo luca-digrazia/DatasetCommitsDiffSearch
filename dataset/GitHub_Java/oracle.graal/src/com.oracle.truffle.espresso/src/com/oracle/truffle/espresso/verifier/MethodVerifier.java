@@ -520,14 +520,8 @@ public final class MethodVerifier implements ContextAccess {
      */
     public static void verify(Method m) {
         CodeAttribute codeAttribute = m.getCodeAttribute();
-        if ((m.isAbstract() || m.isNative()) && codeAttribute != null) {
-            throw new ClassFormatError("Abstract method has code: " + m);
-        }
         if (codeAttribute == null) {
-            if (m.isAbstract() || m.isNative()) {
-                return;
-            }
-            throw new ClassFormatError("Concrete method has no code attribute: " + m);
+            return;
         }
         new MethodVerifier(codeAttribute, m).verify();
     }
