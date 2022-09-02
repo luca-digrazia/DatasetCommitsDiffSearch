@@ -39,7 +39,6 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 
 public abstract class ToI32 extends ForeignToLLVM {
 
@@ -88,16 +87,15 @@ public abstract class ToI32 extends ForeignToLLVM {
         return getSingleStringCharacter(value);
     }
 
-    @Specialization(limit = "5", guards = {"foreigns.isForeign(obj)", "interop.isNumber(foreigns.asForeign(obj))"})
+    @Specialization(limit = "5", guards = {"notLLVM(obj)", "interop.isNumber(obj)"})
     protected int fromForeign(Object obj,
-                    @CachedLibrary("obj") LLVMAsForeignLibrary foreigns,
-                    @CachedLibrary(limit = "3") InteropLibrary interop,
+                    @CachedLibrary("obj") InteropLibrary interop,
                     @Cached BranchProfile exception) {
         try {
-            return interop.asInt(foreigns.asForeign(obj));
+            return interop.asInt(obj);
         } catch (UnsupportedMessageException ex) {
             exception.enter();
-            throw new LLVMPolyglotException(this, "Polyglot number %s cannot be converted to i32", foreigns.asForeign(obj));
+            throw new LLVMPolyglotException(this, "Polyglot number %s cannot be converted to i32", obj);
         }
     }
 
