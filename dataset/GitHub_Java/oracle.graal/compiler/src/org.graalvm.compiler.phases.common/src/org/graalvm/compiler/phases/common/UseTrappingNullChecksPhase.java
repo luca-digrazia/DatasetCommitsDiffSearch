@@ -262,7 +262,8 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
                         // Opportunity for implicit null check as part of an existing read found!
                         fixedAccessNode.setStateBefore(deopt.stateBefore());
                         fixedAccessNode.setNullCheck(true);
-                        fixedAccessNode.setImplicitDeoptimization(deoptReasonAndAction, deoptSpeculation);
+                        fixedAccessNode.setDeoptReasonAndAction(deoptReasonAndAction);
+                        fixedAccessNode.setDeoptSpeculation(deoptSpeculation);
                         graph.removeSplit(ifNode, nonTrappingContinuation);
                         trappingNullCheck = fixedAccessNode;
                         counterTrappingNullCheckExistingRead.increment(debug);
