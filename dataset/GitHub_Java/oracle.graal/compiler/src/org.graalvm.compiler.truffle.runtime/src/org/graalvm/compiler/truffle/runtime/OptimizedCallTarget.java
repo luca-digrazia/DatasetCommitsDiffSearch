@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
-import com.oracle.truffle.api.impl.Accessor;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
@@ -325,11 +324,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return runtime().forObject(getNodeRewritingAssumption());
     }
 
-    @Override
-    public boolean isTrivial() {
-        return GraalRuntimeAccessor.NODES.isTrivial(rootNode);
-    }
-
     /**
      * @return an existing or the newly initialized node rewriting assumption.
      */
@@ -483,7 +477,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
     protected final Object profiledPERoot(Object[] originalArguments) {
         Object[] args = originalArguments;
-        if (GraalCompilerDirectives.inFirstTier()) {
+        if (CompilerDirectives.inFirstTier()) {
             firstTierCall();
         }
         if (CompilerDirectives.inCompiledCode()) {
@@ -629,13 +623,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     public final boolean isSubmittedForCompilation() {
         return compilationTask != null;
-    }
-
-    public final void waitForCompilation() {
-        CancellableCompileTask task = compilationTask;
-        if (task != null) {
-            runtime().finishCompilation(this, task, false);
-        }
     }
 
     /**
@@ -852,10 +839,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     final void onLoopCount(int count) {
-        assert count >= 0;
-        int oldLoopCallCount = this.callAndLoopCount;
-        int newLoopCallCount = oldLoopCallCount + count;
-        this.callAndLoopCount = newLoopCallCount >= oldLoopCallCount ? newLoopCallCount : Integer.MAX_VALUE;
+        callAndLoopCount += count;
     }
 
     @Override
