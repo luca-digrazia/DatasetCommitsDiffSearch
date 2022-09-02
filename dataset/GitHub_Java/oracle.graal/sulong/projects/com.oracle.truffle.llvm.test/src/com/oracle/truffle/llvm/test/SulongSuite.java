@@ -48,6 +48,7 @@ import com.oracle.truffle.llvm.test.options.TestOptions;
 @RunWith(Parameterized.class)
 public final class SulongSuite extends BaseSuiteHarness {
 
+    @SuppressWarnings("unused")
     private static final boolean IS_MAC = System.getProperty("os.name").toLowerCase().indexOf("mac") >= 0;
     @Parameter(value = 0) public Path path;
     @Parameter(value = 1) public String testName;
@@ -55,8 +56,8 @@ public final class SulongSuite extends BaseSuiteHarness {
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
         Path suitesPath = new File(TestOptions.TEST_SUITE_PATH).toPath();
-        try {
-            Stream<Path> destDirs = Files.walk(suitesPath).filter(path -> path.endsWith("ref.out")).map(Path::getParent);
+        try (Stream<Path> files = Files.walk(suitesPath)) {
+            Stream<Path> destDirs = files.filter(path -> path.endsWith("ref.out")).map(Path::getParent);
             return destDirs.map(testPath -> new Object[]{testPath, suitesPath.relativize(testPath).toString()}).collect(Collectors.toList());
         } catch (IOException e) {
             throw new AssertionError("Test cases not found", e);
@@ -68,7 +69,7 @@ public final class SulongSuite extends BaseSuiteHarness {
         return f -> {
             boolean isBC = f.getFileName().toString().endsWith(".bc");
             boolean isOut = f.getFileName().toString().endsWith(".out");
-            return isBC || (isOut && !IS_MAC);
+            return isBC || isOut;
         };
     }
 
