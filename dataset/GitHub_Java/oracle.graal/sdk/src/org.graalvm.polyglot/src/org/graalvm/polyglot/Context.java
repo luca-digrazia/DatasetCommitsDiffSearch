@@ -47,11 +47,9 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -538,12 +536,12 @@ public final class Context implements AutoCloseable {
      * Converts a host value to a polyglot {@link Value value} representation. This conversion is
      * applied implicitly whenever {@link Value#execute(Object...) execution} or
      * {@link Value#newInstance(Object...) instantiation} arguments are provided,
-     * {@link Value#putMember(String, Object) members}, {@link Value#setArrayElement(long, Object)
-     * array elements} and {@link Value#setIteratorElement(Object) iterator elements} are set or
-     * when a value is returned by a {@link Proxy polyglot proxy}. It is not required nor efficient
-     * to explicitly convert to polyglot values before performing these operations. This method is
-     * useful to convert a {@link Value#as(Class) mapped} host value back to a polyglot value while
-     * preserving the identity.
+     * {@link Value#putMember(String, Object) members} and
+     * {@link Value#setArrayElement(long, Object) array elements} are set or when a value is
+     * returned by a {@link Proxy polyglot proxy}. It is not required nor efficient to explicitly
+     * convert to polyglot values before performing these operations. This method is useful to
+     * convert a {@link Value#as(Class) mapped} host value back to a polyglot value while preserving
+     * the identity.
      * <p>
      * When a host value is converted to a polyglot value the following rules apply:
      * <ol>
@@ -570,12 +568,10 @@ public final class Context implements AutoCloseable {
      * object}. Host objects expose all their public java fields and methods as
      * {@link Value#getMember(String) members}. In addition, Java arrays and subtypes of
      * {@link List} will be interpreted as a value with {@link Value#hasArrayElements() array
-     * elements}. The subtypes of {@link Iterable} will be interpreted as a value with
-     * {@link Value#hasArrayIterator()} array iterator}. The subtypes of {@link Iterator} will be
-     * interpreted as an {@link Value#isIterator() iterator} value. And single method interfaces
-     * annotated with {@link FunctionalInterface} are {@link Value#execute(Object...) executable}
-     * directly. Java {@link Class} instances are interpreted as {@link Value#canInstantiate()
-     * instantiable}, but they do not expose Class methods as members.
+     * elements} and single method interfaces annotated with {@link FunctionalInterface} are
+     * {@link Value#execute(Object...) executable} directly. Java {@link Class} instances are
+     * interpreted as {@link Value#canInstantiate() instantiable}, but they do not expose Class
+     * methods as members.
      * </ol>
      * <p>
      * <b>Basic Examples:</b>
@@ -771,26 +767,17 @@ public final class Context implements AutoCloseable {
 
     /**
      * Use this method to interrupt this context. The interruption is non-destructive meaning the
-     * context is still usable after this method finishes. Please note that guest finally blocks are
-     * executed during interrupt. A context thread may not be interruptiple if it uses
-     * non-interruptible waiting or executes non-interruptible host code.
-     * 
-     * This method may be used as a "soft exit", meaning that it can be used before
-     * {@link #close(boolean) close(true)} is executed.
+     * context is still usable after this method finished.
      *
      * @param timeout specifies the duration the interrupt method will wait for the active threads
      *            of the context to be finished. Setting the duration to {@link Duration#ZERO 0}
      *            means wait indefinitely.
      * @throws IllegalStateException in case the context is entered in the current thread.
-     * @throws TimeoutException in case the interrupt was not successful, i.e., not all threads were
-     *             finished within the specified time limit.
      *
      * @since 20.3
      */
-    public void interrupt(Duration timeout) throws TimeoutException {
-        if (!impl.interrupt(this, timeout)) {
-            throw new TimeoutException("Interrupt timed out.");
-        }
+    public void interrupt(Duration timeout) {
+        impl.interrupt(this, timeout);
     }
 
     /**

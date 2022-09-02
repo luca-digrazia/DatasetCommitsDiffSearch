@@ -70,7 +70,6 @@ import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -99,6 +98,7 @@ import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.NodeLibrary;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -159,11 +159,6 @@ import com.oracle.truffle.api.source.SourceSection;
  * <li><code>SPAWN(&lt;function&gt;)</code> - calls the function in a new thread</li>
  * <li><code>JOIN()</code> - waits for all spawned threads</li>
  * </ul>
- * </p>
- * <p>
- * The language uses shared context policy, because of the CONTEXT statement that creates and enters
- * inner context. The code executed in the inner context is parsed in the outer context, so the
- * context cannot be stored in the nodes, because the nodes can be shared by may different contexts.
  * </p>
  */
 @Registration(id = InstrumentationTestLanguage.ID, name = InstrumentationTestLanguage.NAME, version = "2.0", services = {SpecialService.class}, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
@@ -1680,36 +1675,30 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         @TruffleBoundary
         private void joinSpawnedThreads() {
             InstrumentContext context = lookupContextReference(InstrumentationTestLanguage.class).get();
-            InstrumentationTestLanguage.joinSpawnedThreads(context, false);
+            List<Thread> threads;
+            do {
+                threads = new ArrayList<>();
+                synchronized (context.spawnedThreads) {
+                    for (Thread t : context.spawnedThreads) {
+                        if (t.isAlive()) {
+                            threads.add(t);
+                        }
+                    }
+                }
+                for (Thread t : threads) {
+                    try {
+                        t.join();
+                    } catch (InterruptedException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }
+            } while (!threads.isEmpty());
         }
 
         @Override
         protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
             return new JoinNode(cloneUninitialized(children, materializedTags));
         }
-    }
-
-    private static void joinSpawnedThreads(InstrumentContext context, boolean noInterrupt) {
-        List<Thread> threads;
-        do {
-            threads = new ArrayList<>();
-            synchronized (context.spawnedThreads) {
-                for (Thread t : context.spawnedThreads) {
-                    if (t.isAlive()) {
-                        threads.add(t);
-                    }
-                }
-            }
-            for (Thread t : threads) {
-                try {
-                    t.join();
-                } catch (InterruptedException ex) {
-                    if (!noInterrupt) {
-                        throw new RuntimeException(ex);
-                    }
-                }
-            }
-        } while (!threads.isEmpty());
     }
 
     private static class RecursiveCallNode extends InstrumentedNode {
@@ -1875,7 +1864,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
             try {
                 Thread.sleep(timeToSleep);
             } catch (InterruptedException e) {
-                throw new AssertionError(e);
+                throw new AssertionError();
             }
         }
 
@@ -3163,11 +3152,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         public String fileExtension() {
             return FILENAME_EXTENSION;
         }
-    }
-
-    @Override
-    protected void finalizeContext(InstrumentContext context) {
-        joinSpawnedThreads(context, true);
     }
 }
 
