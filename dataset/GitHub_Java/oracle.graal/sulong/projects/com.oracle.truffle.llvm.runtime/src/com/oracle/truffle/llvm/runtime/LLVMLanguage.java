@@ -61,7 +61,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import org.graalvm.options.OptionDescriptors;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -206,7 +205,7 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     @Override
     protected ExecutableNode parse(InlineParsingRequest request) {
-        Collection<Scope> globalScopes = findTopScopes(getCurrentContext(LLVMLanguage.class));
+        Iterable<Scope> globalScopes = findTopScopes(getCurrentContext(LLVMLanguage.class));
         final com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.antlr.DebugExprParser d = new com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.antlr.DebugExprParser(request, globalScopes,
                         getCurrentContext(LLVMLanguage.class));
         try {
@@ -255,7 +254,7 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     }
 
     @Override
-    protected Collection<Scope> findTopScopes(LLVMContext context) {
+    protected Iterable<Scope> findTopScopes(LLVMContext context) {
         Scope scope = Scope.newBuilder("llvm-global", context.getGlobalScope()).build();
         return Collections.singleton(scope);
     }
