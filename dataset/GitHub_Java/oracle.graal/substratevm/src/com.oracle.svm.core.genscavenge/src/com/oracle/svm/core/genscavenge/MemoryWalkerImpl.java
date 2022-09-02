@@ -24,17 +24,17 @@
  */
 package com.oracle.svm.core.genscavenge;
 
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.MemoryWalker;
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.code.CodeInfoTable;
-import com.oracle.svm.core.thread.JavaVMOperation;
+import com.oracle.svm.core.code.ImageCodeInfo;
+import com.oracle.svm.core.thread.VMOperation;
 
 public class MemoryWalkerImpl extends MemoryWalker {
 
@@ -52,13 +52,13 @@ public class MemoryWalkerImpl extends MemoryWalker {
     }
 
     /** A VMOperation that walks memory. */
-    protected static final class MemoryWalkerVMOperation extends JavaVMOperation {
+    protected static final class MemoryWalkerVMOperation extends VMOperation {
 
         private MemoryWalker.Visitor memoryWalkerVisitor;
         private boolean result;
 
         protected MemoryWalkerVMOperation(MemoryWalker.Visitor memoryVisitor) {
-            super("MemoryWalkerImpl.visitMemory", SystemEffect.SAFEPOINT);
+            super("MemoryWalkerImpl.visitMemory", CallerEffect.BLOCKS_CALLER, SystemEffect.CAUSES_SAFEPOINT);
             this.memoryWalkerVisitor = memoryVisitor;
             this.result = false;
         }
@@ -69,10 +69,11 @@ public class MemoryWalkerImpl extends MemoryWalker {
             ThreadLocalAllocation.disableThreadLocalAllocation();
             boolean continueVisiting = true;
             if (continueVisiting) {
-                continueVisiting = HeapImpl.getHeapImpl().walkMemory(memoryWalkerVisitor);
+                continueVisiting = HeapImpl.getHeapImpl().walkHeap(memoryWalkerVisitor);
             }
             if (continueVisiting) {
-                continueVisiting = CodeInfoTable.getImageCodeCache().walkImageCode(memoryWalkerVisitor);
+                final ImageCodeInfo imageCodeInfo = ImageSingletons.lookup(ImageCodeInfo.class);
+                continueVisiting = imageCodeInfo.walkImageCode(memoryWalkerVisitor);
             }
             if (continueVisiting) {
                 continueVisiting = CodeInfoTable.getRuntimeCodeCache().walkRuntimeMethods(memoryWalkerVisitor);
@@ -90,7 +91,7 @@ public class MemoryWalkerImpl extends MemoryWalker {
 class MemoryWalkerFeature implements Feature {
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.UseCardRememberedSetHeap.getValue();
+        return HeapOptions.UseCardRememberedSetHeap.getValue();
     }
 
     @Override

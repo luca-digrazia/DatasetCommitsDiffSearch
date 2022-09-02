@@ -41,6 +41,7 @@ import com.oracle.svm.core.MemoryWalker;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.config.ConfigurationValues;
+import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.log.Log;
@@ -62,6 +63,11 @@ import com.oracle.svm.core.util.UnsignedUtils;
  * <p>
  * Objects in a AlignedHeapChunk have to be promoted by copying from their current HeapChunk to a
  * destination HeapChunk.
+ * <p>
+ * An Object in an AlignedHeapChunk can be pinned, by pinning the whole AlignedHeapChunk, so that
+ * promotion does not copy the objects in the AlignedHeapChunk, but moves the whole AlignedHeapChunk
+ * from one Space to another, that is, without changing the addresses of any of the Objects in the
+ * AlignedHeapChunk.
  *
  * An AlignedHeapChunk is laid out:
  *
@@ -375,6 +381,12 @@ public class AlignedHeapChunk extends HeapChunk {
             final Log verifyLog = HeapImpl.getHeapImpl().getHeapVerifierImpl().getWitnessLog().string("[AlignedHeapChunk.verify:");
             verifyLog.string("  identifier: ").hex(that).string("  superclass fails to verify]").newline();
         }
+        /* AlignedHeapChunks should not be pinned. */
+        if (result && that.getPinned()) {
+            result = false;
+            final Log verifyLog = HeapImpl.getHeapImpl().getHeapVerifierImpl().getWitnessLog().string("[AlignedHeapChunk.verify:");
+            verifyLog.string("  identifier: ").hex(that).string("  isPinned.]").newline();
+        }
         /* Verify the object headers. */
         if (result && !verifyHeaders(that)) {
             result = false;
@@ -399,7 +411,7 @@ public class AlignedHeapChunk extends HeapChunk {
         Pointer current = getAlignedHeapChunkStart(that);
         while (current.belowThan(that.getTop())) {
             trace.newline().string("  current: ").hex(current);
-            final UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointer(current);
+            final UnsignedWord header = ObjectHeader.readHeaderFromPointer(current);
             if (!ObjectHeaderImpl.getObjectHeaderImpl().isAlignedHeader(header)) {
                 trace.string("  does not have an aligned header: ").hex(header).string("  returns: false").string("]").newline();
                 return false;
