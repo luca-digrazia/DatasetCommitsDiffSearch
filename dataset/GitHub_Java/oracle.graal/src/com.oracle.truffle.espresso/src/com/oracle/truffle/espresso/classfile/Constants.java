@@ -49,12 +49,9 @@ public final class Constants {
     public static final int ACC_MANDATED = 0x00008000;
     public static final int ACC_MODULE = 0x00008000;
 
-    // Not part of the spec, used internally by the VM.
-    public static final int ACC_FINALIZER = 0x00010000;
-
     public static final int JVM_RECOGNIZED_CLASS_MODIFIERS = ACC_PUBLIC |
                     ACC_FINAL |
-                    ACC_SUPER | // Only very old compilers.
+                    // ACC_SUPER | // Only very old compilers.
                     ACC_INTERFACE |
                     ACC_ABSTRACT |
                     ACC_ANNOTATION |
@@ -99,9 +96,7 @@ public final class Constants {
     public static final int SAME_FRAME_BOUND = 64;
     public static final int SAME_LOCALS_1_STACK_ITEM_BOUND = 128;
     public static final int SAME_LOCALS_1_STACK_ITEM_EXTENDED = 247;
-    public static final int CHOP_BOUND = 251;
     public static final int SAME_FRAME_EXTENDED = 251;
-    public static final int APPEND_FRAME_BOUND = 255;
     public static final int FULL_FRAME = 255;
 
     //@formatter:off
