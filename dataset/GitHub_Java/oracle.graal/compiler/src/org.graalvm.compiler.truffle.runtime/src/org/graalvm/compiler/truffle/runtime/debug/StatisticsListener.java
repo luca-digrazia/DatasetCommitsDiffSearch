@@ -350,7 +350,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
                 graalTierNodeStatistics.printStatistics(out, Function.identity(), false, true);
             }
         }
-        TruffleLogger logger = runtimeData.getEngineLogger();
+        TruffleLogger logger = runtimeData.getLogger();
         logger.log(Level.INFO, logMessage.toString());
     }
 
