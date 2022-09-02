@@ -40,9 +40,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ForkJoinTask;
 
-import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Pair;
-import org.graalvm.collections.UnmodifiableEconomicSet;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
@@ -646,11 +644,6 @@ public class UniverseBuilder {
         return IMMUTABLE_TYPES.contains(clazz);
     }
 
-    /** These classes must never have a separate hash code field. */
-    private static final Class<?>[] CLASSES_WITHOUT_HASH_CODE_FIELD = new Class<?>[]{
-                    FillerObject.class, // for size reasons, instances should never be accessed
-    };
-
     @SuppressWarnings("try")
     private void collectHashCodeFieldInfo(BigBang bb) {
 
@@ -666,11 +659,6 @@ public class UniverseBuilder {
 
         DebugContext debug = bb.getDebug();
         try (Indent ignore = debug.logAndIndent("check types for which identityHashCode is invoked")) {
-            EconomicSet<HostedType> typesWithoutHashCodeField = EconomicSet.create();
-            for (Class<?> type : CLASSES_WITHOUT_HASH_CODE_FIELD) {
-                Optional<HostedType> hType = hMetaAccess.optionalLookupJavaType(type);
-                hType.ifPresent(typesWithoutHashCodeField::add);
-            }
 
             // Check which types may be a parameter of System.identityHashCode (which is invoked by
             // Object.hashCode).
@@ -680,29 +668,36 @@ public class UniverseBuilder {
             assert thisParamState != null;
             Iterable<AnalysisType> typesNeedHashCode = thisParamState.types();
             if (typesNeedHashCode == null || thisParamState.isUnknown() || methodFlow.isSaturated(bb, paramFlow)) {
+
                 /*
                  * If the identityHashCode parameter type is unknown or it is saturated then all
                  * classes need to get the hashCode field.
                  */
+
                 debug.log("all types need a hashCode field");
                 for (HostedType hType : hUniverse.getTypes()) {
-                    maybeSetNeedHashCodeField(hType, typesWithoutHashCodeField);
+                    if (hType.isInstanceClass()) {
+                        ((HostedInstanceClass) hType).setNeedHashCodeField();
+                    }
                 }
-                maybeSetNeedHashCodeField(hUniverse.getObjectClass(), typesWithoutHashCodeField);
+                hUniverse.getObjectClass().setNeedHashCodeField();
             } else {
+
                 // Mark all parameter types of System.identityHashCode to have a hash-code field.
+
                 for (AnalysisType type : typesNeedHashCode) {
                     debug.log("type %s is argument to identityHashCode", type);
-                    maybeSetNeedHashCodeField(hUniverse.lookup(type), typesWithoutHashCodeField);
+
+                    /*
+                     * Array types get a hash-code field by default. So we only have to deal with
+                     * instance types here.
+                     */
+                    if (type.isInstanceClass()) {
+                        HostedInstanceClass hType = (HostedInstanceClass) hUniverse.lookup(type);
+                        hType.setNeedHashCodeField();
+                    }
                 }
             }
-        }
-    }
-
-    private static void maybeSetNeedHashCodeField(HostedType hType, UnmodifiableEconomicSet<HostedType> typesWithoutHashCodeField) {
-        // Array types get a hash code field by default, so we only have to deal with instance types
-        if (hType.isInstanceClass() && !typesWithoutHashCodeField.contains(hType)) {
-            ((HostedInstanceClass) hType).setNeedHashCodeField();
         }
     }
 
@@ -723,18 +718,12 @@ public class UniverseBuilder {
         }
 
         if (HybridLayout.isHybrid(clazz)) {
-            /* Set start after array length field */
             assert startSize == ConfigurationValues.getObjectLayout().getArrayLengthOffset();
             int fieldSize = ConfigurationValues.getObjectLayout().sizeInBytes(JavaKind.Int);
             startSize += fieldSize;
 
-            /*
-             * Set start after bitset field, if the hybrid class has one. For now, only DynamicHubs
-             * can have bitsets.
-             */
-            if (clazz.equals(hMetaAccess.lookupJavaType(DynamicHub.class))) {
-                startSize += (hUniverse.numInterfaceBits + Byte.SIZE - 1) / Byte.SIZE;
-            }
+            assert clazz.equals(hMetaAccess.lookupJavaType(DynamicHub.class)) : "currently only DynamicHub may be a hybrid class";
+            startSize += (hUniverse.numInterfaceBits + Byte.SIZE - 1) / Byte.SIZE;
         }
 
         // Sort so that a) all Object fields are consecutive, and b) bigger types come first.
