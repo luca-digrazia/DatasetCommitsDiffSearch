@@ -424,7 +424,7 @@ public final class InspectorInstrument extends TruffleInstrument {
                     }
                     if (serverEndpoint == null) {
                         InspectorServer server;
-                        interceptor.resetSessionEndpoint(); // A new endpoint is going to be opened
+                        interceptor.close(token);
                         server = InspectorServer.get(socketAddress, token, pathContainingToken, executionContext, debugBreak, secure, keyStoreOptions, connectionWatcher, iss);
                         String wsAddress = server.getWSAddress(token);
                         wss = server;

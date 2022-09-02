@@ -147,11 +147,7 @@ public final class InspectorTester {
     }
 
     public void sendMessage(String message) {
-        try {
-            exec.inspect.sendText(message);
-        } catch (IOException e) {
-            fail(e.getLocalizedMessage());
-        }
+        exec.inspect.sendText(message);
     }
 
     public String getMessages(boolean waitForSome) throws InterruptedException {
@@ -330,11 +326,7 @@ public final class InspectorTester {
             } catch (Throwable t) {
                 error = t;
             } finally {
-                try {
-                    inspect.sendClose();
-                } catch (IOException e) {
-                    fail(e.getLocalizedMessage());
-                }
+                inspect.sendClose();
                 inspect = null;
                 inspectorContext = null;
                 evalValue = null;

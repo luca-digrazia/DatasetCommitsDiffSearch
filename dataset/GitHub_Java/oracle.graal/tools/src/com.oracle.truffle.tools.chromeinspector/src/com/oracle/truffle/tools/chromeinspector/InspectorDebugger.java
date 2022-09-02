@@ -253,7 +253,7 @@ public final class InspectorDebugger extends DebuggerDomain {
         }
         JSONObject json = new JSONObject();
         JSONArray arr = new JSONArray();
-        Source source = script.getSourceLoaded();
+        Source source = script.getSource();
         if (source.hasCharacters() && source.getLength() > 0) {
             int lc = source.getLineCount();
             int l1 = start.getLine();

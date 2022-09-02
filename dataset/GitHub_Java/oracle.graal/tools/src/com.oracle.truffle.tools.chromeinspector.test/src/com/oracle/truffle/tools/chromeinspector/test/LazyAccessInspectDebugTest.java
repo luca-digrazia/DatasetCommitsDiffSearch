@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,17 @@
  */
 package com.oracle.truffle.tools.chromeinspector.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.graalvm.polyglot.Source;
+import org.junit.Test;
+
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -35,7 +45,8 @@ import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.api.interop.KeyInfo;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -45,28 +56,30 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.polyglot.ProxyInteropObject;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 import com.oracle.truffle.tck.DebuggerTester;
-import com.oracle.truffle.tools.chromeinspector.ScriptsHandler;
 import com.oracle.truffle.tools.chromeinspector.types.Script;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.graalvm.polyglot.Source;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import org.junit.Test;
 
 /**
- * Test that properties that have {@link KeyInfo#READ_SIDE_EFFECTS} flag are not read eagerly, but
- * on a request only.
+ * Test that properties that have {@link InteropLibrary#hasMemberReadSideEffects(Object, String)}
+ * flag are not read eagerly, but on a request only.
  */
 public class LazyAccessInspectDebugTest {
 
     private static final String READ_READY = "readReady";
     private static final String READ_LAZY = "readLazy";
 
+    private static final String INVOKE_GETTER1 = "\"functionDeclaration\":" +
+                    "\"function invokeGetter(arrayStr){let result=this;const properties=JSON.parse(arrayStr);for(let i=0,n=properties.length;i<n;++i)\\nresult=result[properties[i]];return result;}\"";
+    private static final String INVOKE_GETTER2 = "\"functionDeclaration\":" +
+                    "\"function remoteFunction(propName) { return this[propName]; }\"";
+    private static final String INVOKE_GETTER3 = "\"functionDeclaration\":" +
+                    "\"function invokeGetter(arrayStr) {\\n      let result = this;\\n      const properties = JSON.parse(arrayStr);\\n      for (let i = 0, n = properties.length; i < n; ++i) {" +
+                    "\\n        result = result[properties[i]];\\n      }\\n      return result;\\n    }\"";
+
     // @formatter:off   The default formatting makes unnecessarily big indents and illogical line breaks
     // CheckStyle: stop line length check
     @Test
     public void testReadWithSideEffects() throws Exception {
-        final AtomicBoolean readLazyFlag = new AtomicBoolean(false);
+        final AtomicInteger readLazyCount = new AtomicInteger(0);
         InspectorTester tester = InspectorTester.start(true);
         tester.sendMessage("{\"id\":1,\"method\":\"Runtime.enable\"}");
         tester.sendMessage("{\"id\":2,\"method\":\"Debugger.enable\"}");
@@ -75,11 +88,11 @@ public class LazyAccessInspectDebugTest {
                         "{\"result\":{},\"id\":2}\n"));
         tester.sendMessage("{\"id\":3,\"method\":\"Runtime.runIfWaitingForDebugger\"}");
         assertTrue(tester.compareReceivedMessages(
-                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n" +
-                        "{\"result\":{},\"id\":3}\n"));
-        ProxyLanguage.setDelegate(new ReadWithSideEffectsLanguage(readLazyFlag));
+                        "{\"result\":{},\"id\":3}\n" +
+                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n"));
+        ProxyLanguage.setDelegate(new ReadWithSideEffectsLanguage(readLazyCount));
         Source source = Source.newBuilder(ProxyLanguage.ID, "1", "ReadWithSideEffects.test").build();
-        String sourceURI = ScriptsHandler.getNiceStringFromURI(source.getURI());
+        String sourceURI = InspectorTester.getStringURI(source.getURI());
         String hash = new Script(0, null, DebuggerTester.getSourceImpl(source)).getHash();
         tester.eval(source);
         long id = tester.getContextId();
@@ -91,50 +104,73 @@ public class LazyAccessInspectDebugTest {
         assertTrue(tester.compareReceivedMessages(
                         "{\"method\":\"Debugger.paused\",\"params\":{\"reason\":\"other\",\"hitBreakpoints\":[]," +
                                 "\"callFrames\":[{\"callFrameId\":\"0\",\"functionName\":\"TestRootNode\"," +
-                                                 "\"scopeChain\":[{\"name\":\"TestRootNode\",\"type\":\"local\",\"object\":{\"description\":\"TestRootNode\",\"type\":\"object\",\"objectId\":\"1\"}}]," +
+                                                 "\"scopeChain\":[{\"name\":\"TestRootNode\",\"type\":\"local\",\"object\":{\"description\":\"TestRootNode\",\"type\":\"object\",\"objectId\":\"1\"}}," +
+                                                                 "{\"name\":\"top\",\"type\":\"global\",\"object\":{\"description\":\"top\",\"type\":\"object\",\"objectId\":\"2\"}}]," +
+                                                 "\"this\":{\"subtype\":\"null\",\"description\":\"null\",\"type\":\"object\",\"objectId\":\"3\"}," +
                                                  "\"functionLocation\":{\"scriptId\":\"0\",\"columnNumber\":0,\"lineNumber\":0}," +
-                                                 "\"location\":{\"scriptId\":\"0\",\"columnNumber\":0,\"lineNumber\":0}}]}}\n"));
+                                                 "\"location\":{\"scriptId\":\"0\",\"columnNumber\":0,\"lineNumber\":0}," +
+                                                 "\"url\":\"" + sourceURI + "\"" +
+                                                 "}]}}\n"));
         // Ask for local variables
         tester.sendMessage("{\"id\":1,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"1\"}}");
         assertTrue(tester.compareReceivedMessages(
                         "{\"result\":{\"result\":[{\"isOwn\":true,\"enumerable\":true," +
-                                "\"name\":\"o\",\"value\":{\"description\":\"Object LazyReadObject\",\"className\":\"Object\",\"type\":\"object\",\"objectId\":\"2\"},\"configurable\":true,\"writable\":true}]," +
+                                "\"name\":\"o\",\"value\":{\"description\":\"Object LazyReadObject\",\"className\":\"Object\",\"type\":\"object\",\"objectId\":\"4\"},\"configurable\":true,\"writable\":true}]," +
                                 "\"internalProperties\":[]},\"id\":1}\n"));
         // Ask for properties of 'o':
-        tester.sendMessage("{\"id\":2,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"2\"}}");
+        tester.sendMessage("{\"id\":2,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"4\"}}");
         assertTrue(tester.compareReceivedMessages(
                         "{\"result\":{\"result\":[" +
-                                "{\"isOwn\":true,\"enumerable\":true,\"name\":\"readReady\",\"value\":{\"description\":\"42\",\"type\":\"number\",\"value\":42},\"configurable\":true,\"writable\":true}," +
-                                "{\"isOwn\":true,\"get\":{\"description\":\"\",\"className\":\"Function\",\"type\":\"function\",\"objectId\":\"4\"},\"enumerable\":true,\"name\":\"readLazy\",\"configurable\":true,\"writable\":true}]," +
+                                "{\"isOwn\":true,\"enumerable\":true,\"name\":\"readReady\",\"value\":{\"description\":\"42\",\"type\":\"number\",\"value\":42},\"configurable\":true,\"writable\":false}," +
+                                "{\"isOwn\":true,\"get\":{\"description\":\"\",\"className\":\"Function\",\"type\":\"function\",\"objectId\":\"6\"},\"enumerable\":true,\"name\":\"readLazy\",\"configurable\":true,\"writable\":false}]," +
                                 "\"internalProperties\":[]},\"id\":2}\n"));
         // The lazy value was not read yet:
-        assertFalse(readLazyFlag.get());
+        assertEquals(0, readLazyCount.get());
         // Invoke the lazy read (getter):
         tester.sendMessage("{\"id\":10,\"method\":\"Runtime.callFunctionOn\",\"params\":" +
-                        "{\"objectId\":\"2\"," +
-                         "\"functionDeclaration\":\"function invokeGetter(arrayStr){let result=this;const properties=JSON.parse(arrayStr);for(let i=0,n=properties.length;i<n;++i)\\nresult=result[properties[i]];return result;}\"," +
+                        "{\"objectId\":\"4\"," +
+                         INVOKE_GETTER1 + "," +
                          "\"arguments\":[{\"value\":\"[\\\"readLazy\\\"]\"}]," +
                          "\"silent\":true}}");
         assertTrue(tester.compareReceivedMessages(
                         "{\"result\":{\"result\":{\"description\":\"43\",\"type\":\"number\",\"value\":43}},\"id\":10}\n"));
         // The lazy value was read now:
-        assertTrue(readLazyFlag.get());
-        readLazyFlag.set(false);
+        assertEquals(1, readLazyCount.get());
         // Test an alternate getter function:
         tester.sendMessage("{\"id\":11,\"method\":\"Runtime.callFunctionOn\",\"params\":" +
-                        "{\"objectId\":\"2\"," +
-                         "\"functionDeclaration\":\"function remoteFunction(propName) { return this[propName]; }\"," +
+                        "{\"objectId\":\"4\"," +
+                         INVOKE_GETTER2 + "," +
                          "\"arguments\":[{\"value\":\"readLazy\"}]," +
                          "\"silent\":true}}");
         assertTrue(tester.compareReceivedMessages(
                         "{\"result\":{\"result\":{\"description\":\"43\",\"type\":\"number\",\"value\":43}},\"id\":11}\n"));
-        assertTrue(readLazyFlag.get());
+        assertEquals(2, readLazyCount.get());
+
+        // Test lazy scope property:
+        tester.sendMessage("{\"id\":20,\"method\":\"Runtime.getProperties\",\"params\":{\"objectId\":\"2\"}}");
+        assertTrue(tester.compareReceivedMessages(
+                        "{\"result\":{\"result\":[{\"isOwn\":true,\"enumerable\":true,\"name\":\"readReady\",\"value\":{\"description\":\"42\",\"type\":\"number\",\"value\":42},\"configurable\":true,\"writable\":false}," +
+                                                 "{\"isOwn\":true,\"get\":{\"description\":\"\",\"className\":\"Function\",\"type\":\"function\",\"objectId\":\"8\"},\"enumerable\":true,\"name\":\"readLazy\",\"configurable\":true,\"writable\":false}]," +
+                                "\"internalProperties\":[]},\"id\":20}\n"));
+        assertEquals(2, readLazyCount.get());
+        // Invoke the lazy read (getter):
+        tester.sendMessage("{\"id\":21,\"method\":\"Runtime.callFunctionOn\",\"params\":" +
+                        "{\"objectId\":\"2\"," +
+                         INVOKE_GETTER3 + "," +
+                         "\"arguments\":[{\"value\":\"[\\\"readLazy\\\"]\"}]," +
+                         "\"silent\":true}}");
+        assertTrue(tester.compareReceivedMessages(
+                        "{\"result\":{\"result\":{\"description\":\"43\",\"type\":\"number\",\"value\":43}},\"id\":21}\n"));
+        // The lazy value was read now:
+        assertEquals(3, readLazyCount.get());
 
         tester.sendMessage("{\"id\":100,\"method\":\"Debugger.resume\"}");
         assertTrue(tester.compareReceivedMessages(
                         "{\"result\":{},\"id\":100}\n" +
                         "{\"method\":\"Debugger.resumed\"}\n"));
 
+        // Reset the delegate so that we can GC the tested Engine
+        ProxyLanguage.setDelegate(new ProxyLanguage());
         tester.finish();
     }
     // @formatter:on
@@ -142,10 +178,10 @@ public class LazyAccessInspectDebugTest {
 
     static class ReadWithSideEffectsLanguage extends ProxyLanguage {
 
-        private final AtomicBoolean readLazyFlag;
+        private final AtomicInteger readLazyCount;
 
-        ReadWithSideEffectsLanguage(AtomicBoolean readLazyFlag) {
-            this.readLazyFlag = readLazyFlag;
+        ReadWithSideEffectsLanguage(AtomicInteger readLazyCount) {
+            this.readLazyCount = readLazyCount;
         }
 
         @Override
@@ -167,6 +203,11 @@ public class LazyAccessInspectDebugTest {
                 return "Object";
             }
             return super.findMetaObject(context, value);
+        }
+
+        @Override
+        protected Iterable<Scope> findTopScopes(LanguageContext context) {
+            return Collections.singletonList(Scope.newBuilder("top", new LazyReadObject()).build());
         }
 
         final class TestRootNode extends RootNode {
@@ -248,30 +289,34 @@ public class LazyAccessInspectDebugTest {
             }
 
             @Override
-            public Object keys() throws UnsupportedMessageException {
+            protected boolean hasMembers() {
+                return true;
+            }
+
+            @Override
+            protected Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
                 return new Keys();
             }
 
             @Override
-            public int keyInfo(String key) {
-                if (READ_READY.equals(key)) {
-                    return KeyInfo.READABLE | KeyInfo.MODIFIABLE;
-                } else if (READ_LAZY.equals(key)) {
-                    return KeyInfo.READABLE | KeyInfo.READ_SIDE_EFFECTS | KeyInfo.MODIFIABLE;
-                } else {
-                    return KeyInfo.NONE;
-                }
+            protected boolean isMemberReadable(String member) {
+                return READ_READY.equals(member) || READ_LAZY.equals(member);
             }
 
             @Override
-            public Object read(String key) throws UnsupportedMessageException, UnknownIdentifierException {
-                if (READ_READY.equals(key)) {
+            protected boolean hasMemberReadSideEffects(String member) {
+                return READ_LAZY.equals(member);
+            }
+
+            @Override
+            protected Object readMember(String member) throws UnsupportedMessageException, UnknownIdentifierException {
+                if (READ_READY.equals(member)) {
                     return 42;
-                } else if (READ_LAZY.equals(key)) {
-                    readLazyFlag.set(true);
+                } else if (READ_LAZY.equals(member)) {
+                    readLazyCount.incrementAndGet();
                     return 43;
                 } else {
-                    throw UnknownIdentifierException.raise(key);
+                    throw UnknownIdentifierException.create(member);
                 }
             }
         }
@@ -279,34 +324,32 @@ public class LazyAccessInspectDebugTest {
         private static class Keys extends ProxyInteropObject {
 
             @Override
-            public boolean hasSize() {
+            protected boolean hasArrayElements() {
                 return true;
             }
 
             @Override
-            public int getSize() {
+            protected long getArraySize() throws UnsupportedMessageException {
                 return 2;
             }
 
             @Override
-            public int keyInfo(Number key) {
-                if (key.intValue() == 0 || key.intValue() == 1) {
-                    return KeyInfo.READABLE;
-                } else {
-                    return KeyInfo.NONE;
-                }
+            protected boolean isArrayElementReadable(long index) {
+                return index >= 0 && index < 2;
             }
 
             @Override
-            public Object read(Number key) throws UnsupportedMessageException, UnknownIdentifierException {
-                if (key.intValue() == 0) {
-                    return READ_READY;
-                } else if (key.intValue() == 1) {
-                    return READ_LAZY;
-                } else {
-                    throw UnknownIdentifierException.raise(key.toString());
+            protected Object readArrayElement(long index) throws UnsupportedMessageException, InvalidArrayIndexException {
+                switch ((int) index) {
+                    case 0:
+                        return READ_READY;
+                    case 1:
+                        return READ_LAZY;
+                    default:
+                        throw InvalidArrayIndexException.create(index);
                 }
             }
+
         }
     }
 }
