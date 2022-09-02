@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.except;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -63,8 +62,7 @@ public abstract class LLVMException extends RuntimeException implements TruffleE
 
     @SuppressWarnings("sync-override")
     @Override
-    @CompilerDirectives.TruffleBoundary
     public final Throwable fillInStackTrace() {
-        return super.fillInStackTrace();
+        return this;
     }
 }
