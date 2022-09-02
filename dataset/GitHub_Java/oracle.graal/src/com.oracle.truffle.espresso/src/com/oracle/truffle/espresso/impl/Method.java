@@ -151,7 +151,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return getMethodVersion().pool;
     }
 
-    public LinkedMethod getLinkedMethod() {
+    private LinkedMethod getLinkedMethod() {
         return getMethodVersion().linkedMethod;
     }
 
@@ -932,13 +932,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         RuntimeConstantPool runtimePool = new RuntimeConstantPool(getContext(), newKlass.getConstantPool(), getDeclaringKlass().getDefiningClassLoader());
         MethodVersion oldVersion = methodVersion;
         methodVersion = new MethodVersion(runtimePool, newLinkedMethod, (CodeAttribute) newMethod.getAttribute(Name.Code));
-        oldVersion.getAssumption().invalidate();
-        ids.replaceObject(oldVersion, methodVersion);
-    }
-
-    void onSubclassMethodChanged(Ids<Object> ids) {
-        MethodVersion oldVersion = methodVersion;
-        methodVersion = new MethodVersion(oldVersion.pool, oldVersion.linkedMethod, oldVersion.getCodeAttribute());
         oldVersion.getAssumption().invalidate();
         ids.replaceObject(oldVersion, methodVersion);
     }

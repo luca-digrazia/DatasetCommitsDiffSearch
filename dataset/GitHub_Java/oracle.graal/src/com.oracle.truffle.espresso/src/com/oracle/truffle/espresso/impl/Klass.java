@@ -250,7 +250,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         this.type = type;
         this.superKlass = superKlass;
         this.superInterfaces = superInterfaces;
-        this.id = context.getNewKlassId();
+        this.id = context.getNewId();
         this.modifiers = modifiers;
     }
 
@@ -995,15 +995,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     @Override
     public Object getKlassObject() {
         return mirror();
-    }
-
-    public Klass nest() {
-        return this;
-    }
-
-    @SuppressWarnings("unused")
-    public boolean nestMembersCheck(Klass k) {
-        return false;
     }
 
     @Override
