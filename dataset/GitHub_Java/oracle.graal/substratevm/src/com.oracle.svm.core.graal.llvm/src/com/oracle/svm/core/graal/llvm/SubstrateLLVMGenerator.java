@@ -42,7 +42,6 @@ import org.graalvm.compiler.core.llvm.LLVMUtils.LLVMKindTool;
 import org.graalvm.compiler.core.llvm.LLVMUtils.LLVMVariable;
 import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.nativeimage.c.constant.CEnum;
 import org.graalvm.util.GuardedAnnotationAccess;
 
 import com.oracle.svm.core.SubstrateUtil;
@@ -81,7 +80,6 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     private final boolean isEntryPoint;
     private List<String> aliases;
     private final boolean canModifySpecialRegisters;
-    private final boolean returnsCEnum;
 
     SubstrateLLVMGenerator(Providers providers, LLVMGenerationResult generationResult, ResolvedJavaMethod method, LLVMContextRef context, int debugLevel) {
         super(providers, generationResult, method, new LLVMIRBuilder(SubstrateUtil.uniqueShortName(method), context, shouldTrackPointers(method)),
@@ -100,9 +98,6 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
                 aliases.add(entryPointSymbolName);
             }
         }
-
-        ResolvedJavaType returnType = method.getSignature().getReturnType(null).resolve(null);
-        this.returnsCEnum = returnType.isEnum() && GuardedAnnotationAccess.isAnnotationPresent(returnType, CEnum.class);
     }
 
     boolean isEntryPoint() {
@@ -152,14 +147,6 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     }
 
     @Override
-    protected LLVMValueRef convertEnumReturnValue(LLVMValueRef longValue) {
-        if (returnsCEnum) {
-            return builder.buildTrunc(longValue, JavaKind.Int.getBitCount());
-        }
-        return super.convertEnumReturnValue(longValue);
-    }
-
-    @Override
     public void emitFarReturn(AllocatableValue result, Value sp, Value setjmpBuffer) {
         /* Exception unwinding is handled by libunwind */
         throw unimplemented();
@@ -182,16 +169,13 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     }
 
     @Override
-    protected JavaKind getTypeKind(ResolvedJavaType type, boolean forMainFunction) {
-        if (forMainFunction && isEntryPoint && type.isEnum() && GuardedAnnotationAccess.isAnnotationPresent(type, CEnum.class)) {
-            return JavaKind.Int;
-        }
+    protected JavaKind getTypeKind(ResolvedJavaType type) {
         return ((HostedType) type).getStorageKind();
     }
 
     @Override
-    protected LLVM.LLVMTypeRef[] getLLVMFunctionArgTypes(ResolvedJavaMethod method, boolean forMainFunction) {
-        LLVM.LLVMTypeRef[] parameterTypes = super.getLLVMFunctionArgTypes(method, forMainFunction);
+    protected LLVM.LLVMTypeRef[] getLLVMFunctionArgTypes(ResolvedJavaMethod method) {
+        LLVM.LLVMTypeRef[] parameterTypes = super.getLLVMFunctionArgTypes(method);
         LLVM.LLVMTypeRef[] newParameterTypes = parameterTypes;
         if (!isEntryPoint(method) && registerStackSlots.length > 0) {
             newParameterTypes = new LLVM.LLVMTypeRef[registerStackSlots.length + parameterTypes.length];

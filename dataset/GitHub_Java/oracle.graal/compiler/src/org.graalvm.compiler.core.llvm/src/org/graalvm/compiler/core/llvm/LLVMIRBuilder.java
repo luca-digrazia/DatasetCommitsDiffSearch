@@ -276,7 +276,7 @@ public class LLVMIRBuilder {
         return integerType(16);
     }
 
-    public LLVMTypeRef intType() {
+    LLVMTypeRef intType() {
         return integerType(32);
     }
 
@@ -834,7 +834,7 @@ public class LLVMIRBuilder {
         return buildBinaryNumberOp(a, b, LLVM::LLVMBuildAdd, LLVM::LLVMBuildFAdd);
     }
 
-    public LLVMValueRef buildSub(LLVMValueRef a, LLVMValueRef b) {
+    LLVMValueRef buildSub(LLVMValueRef a, LLVMValueRef b) {
         return buildBinaryNumberOp(a, b, LLVM::LLVMBuildSub, LLVM::LLVMBuildFSub);
     }
 
@@ -1026,7 +1026,7 @@ public class LLVMIRBuilder {
         return value;
     }
 
-    public LLVMValueRef buildTrunc(LLVMValueRef value, int toBits) {
+    LLVMValueRef buildTrunc(LLVMValueRef value, int toBits) {
         return LLVM.LLVMBuildTrunc(builder, value, integerType(toBits), DEFAULT_INSTR_NAME);
     }
 
@@ -1139,6 +1139,10 @@ public class LLVMIRBuilder {
 
     LLVMValueRef buildAtomicAdd(LLVMValueRef address, LLVMValueRef value) {
         return buildAtomicRMW(LLVM.LLVMAtomicRMWBinOpAdd, address, value);
+    }
+
+    public LLVMValueRef buildAtomicSub(LLVMValueRef address, LLVMValueRef value) {
+        return buildAtomicRMW(LLVM.LLVMAtomicRMWBinOpSub, address, value);
     }
 
     private LLVMValueRef buildAtomicRMW(int operation, LLVMValueRef address, LLVMValueRef value) {
