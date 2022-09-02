@@ -52,11 +52,11 @@ public class JavaVersion {
         return java9OrLater();
     }
 
-    public boolean varHandlesEnabled() {
+    public boolean newPolymorphicSignatures() {
         return java9OrLater();
     }
 
-    public boolean compactStringsEnabled() {
+    public boolean byteArrayStrings() {
         return java9OrLater();
     }
 

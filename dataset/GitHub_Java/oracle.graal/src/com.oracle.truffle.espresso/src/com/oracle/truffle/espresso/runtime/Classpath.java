@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,6 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -37,7 +34,62 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-public class Classpath {
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+
+public final class Classpath {
+    public static final String JAVA_BASE = "java.base";
+
+    /**
+     * Creates a classpath {@link Entry} from a given file system path.
+     *
+     * @param name a file system path denoting a classpath entry
+     */
+    public static Entry createEntry(String name) {
+        final File pathFile = new File(name);
+        if (pathFile.isDirectory()) {
+            return new Directory(pathFile);
+        } else {
+            // regular file.
+
+            EspressoContext context = EspressoLanguage.getCurrentContext();
+            if (context.getJavaVersion().modulesEnabled()) {
+                JImageLibrary library = context.jimageLibrary();
+                TruffleObject image = library.open(name);
+                if (!InteropLibrary.getUncached().isNull(image)) {
+                    return new Modules(pathFile, library, image);
+                }
+            }
+            if (name.endsWith(".zip") || name.endsWith(".jar")) {
+                if (pathFile.exists() && pathFile.isFile()) {
+                    return new Archive(pathFile);
+                }
+            }
+        }
+        return new PlainFile(pathFile);
+    }
+
+    /**
+     * Creates a classpath {@link Entry} from a given file system path, but forces it to never be a
+     * modules entry. Useful if trying to obtain a classpath {@link Entry} when there is no
+     * {@link EspressoContext} available.
+     * 
+     * @param name a file system path denoting a classpath entry
+     */
+    public static Entry createNonModuleEntry(String name) {
+        final File pathFile = new File(name);
+        if (pathFile.isDirectory()) {
+            return new Directory(pathFile);
+        } else if (name.endsWith(".zip") || name.endsWith(".jar")) {
+            if (pathFile.exists() && pathFile.isFile()) {
+                return new Archive(pathFile);
+            }
+        }
+        return new PlainFile(pathFile);
+    }
 
     private static final List<Entry> EMPTY_LIST = Collections.emptyList();
 
@@ -104,6 +156,7 @@ public class Classpath {
         public ZipFile zipFile() {
             return null;
         }
+
     }
 
     /**
@@ -114,7 +167,7 @@ public class Classpath {
 
         private final File file;
 
-        public PlainFile(File file) {
+        PlainFile(File file) {
             this.file = file;
         }
 
@@ -137,12 +190,14 @@ public class Classpath {
         public boolean contains(String path) {
             return false;
         }
+
     }
 
     /**
      * Represents a classpath entry that is a path to an existing directory.
      */
     public static final class Directory extends Entry {
+
         private final File directory;
 
         public Directory(File directory) {
@@ -177,6 +232,7 @@ public class Classpath {
         public boolean contains(String path) {
             return new File(directory, File.separatorChar == '/' ? path : path.replace('/', File.separatorChar)).exists();
         }
+
     }
 
     /**
@@ -185,9 +241,10 @@ public class Classpath {
     static final class Archive extends Entry {
 
         private final File file;
+
         private ZipFile zipFile;
 
-        public Archive(File file) {
+        Archive(File file) {
             this.file = file;
         }
 
@@ -236,6 +293,42 @@ public class Classpath {
         public boolean isArchive() {
             return true;
         }
+
+    }
+
+    /**
+     * Represents a classpath entry that is a path to a jimage modules file.
+     */
+    static final class Modules extends Entry {
+        private File file;
+
+        private JImageHelper helper;
+
+        Modules(File file, JImageLibrary library, TruffleObject jimage) {
+            this.file = file;
+            this.helper = new JImageHelper(library, jimage);
+        }
+
+        @Override
+        public File file() {
+            return file;
+        }
+
+        @Override
+        public boolean contains(String path) {
+            byte[] classBytes = helper.getClassBytes(path);
+            return classBytes != null;
+        }
+
+        @Override
+        ClasspathFile readFile(String archiveName, String fsPath) {
+            byte[] classBytes = helper.getClassBytes(archiveName);
+            if (classBytes == null) {
+                return null;
+            }
+            return new ClasspathFile(classBytes, this, fsPath);
+        }
+
     }
 
     /**
@@ -245,23 +338,6 @@ public class Classpath {
      */
     public List<Entry> entries() {
         return entries;
-    }
-
-    /**
-     * Creates a classpath {@link Entry} from a given file system path.
-     *
-     * @param name a file system path denoting a classpath entry
-     */
-    public static Entry createEntry(String name) {
-        final File pathFile = new File(name);
-        if (pathFile.isDirectory()) {
-            return new Directory(pathFile);
-        } else if (name.endsWith(".zip") || name.endsWith(".jar")) {
-            if (pathFile.exists() && pathFile.isFile()) {
-                return new Archive(pathFile);
-            }
-        }
-        return new PlainFile(pathFile);
     }
 
     /**
@@ -309,13 +385,16 @@ public class Classpath {
             for (String extDirPath : extDirs.split(File.pathSeparator)) {
                 final File extDir = new File(extDirPath);
                 if (extDir.isDirectory()) {
-                    for (File file : extDir.listFiles()) {
-                        if (file.isDirectory() ||
-                                        (file.isFile() && (file.getName().endsWith(".jar") || file.getName().endsWith(".zip")))) {
-                            if (buf.length() != 0) {
-                                buf.append(File.pathSeparatorChar);
+                    File[] contents = extDir.listFiles();
+                    if (contents != null) {
+                        for (File file : contents) {
+                            if (file.isDirectory() ||
+                                            (file.isFile() && (file.getName().endsWith(".jar") || file.getName().endsWith(".zip")))) {
+                                if (buf.length() != 0) {
+                                    buf.append(File.pathSeparatorChar);
+                                }
+                                buf.append(file.getAbsolutePath());
                             }
-                            buf.append(file.getAbsolutePath());
                         }
                     }
                 } else {
@@ -384,6 +463,19 @@ public class Classpath {
     public Classpath prepend(String entry) {
         ArrayList<Entry> newEntries = new ArrayList<>(this.entries.size());
         newEntries.add(createEntry(entry));
+        newEntries.addAll(this.entries);
+        return new Classpath(newEntries);
+    }
+
+    /**
+     * Gets a new classpath obtained by prepending a given entry to this class classpath.
+     *
+     * @param entry the entry to prepend to this classpath
+     * @return the result of prepending {@code classpath} to this classpath
+     */
+    public Classpath prepend(Entry entry) {
+        ArrayList<Entry> newEntries = new ArrayList<>(this.entries.size());
+        newEntries.add(entry);
         newEntries.addAll(this.entries);
         return new Classpath(newEntries);
     }
@@ -463,8 +555,7 @@ public class Classpath {
 
     public static byte[] readZipEntry(ZipFile zipFile, ZipEntry zipEntry) throws IOException {
         final byte[] bytes = new byte[(int) zipEntry.getSize()];
-        final InputStream zipStream = new BufferedInputStream(zipFile.getInputStream(zipEntry), bytes.length);
-        try {
+        try (InputStream zipStream = new BufferedInputStream(zipFile.getInputStream(zipEntry), bytes.length)) {
             int offset = 0;
             while (offset < bytes.length) {
                 final int n = zipStream.read(bytes, offset, bytes.length - offset);
@@ -473,8 +564,6 @@ public class Classpath {
                 }
                 offset += n;
             }
-        } finally {
-            zipStream.close();
         }
         return bytes;
     }
