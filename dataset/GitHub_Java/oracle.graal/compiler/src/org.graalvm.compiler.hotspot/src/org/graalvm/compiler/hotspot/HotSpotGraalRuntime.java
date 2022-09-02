@@ -28,7 +28,6 @@ import static jdk.vm.ci.common.InitTimer.timer;
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.HotSpotPrintInlining;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfigAccess.JDK;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -238,43 +237,33 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
      */
     public enum HotSpotGC {
         // Supported GCs
-        Serial(true, "UseSerialGC", true),
-        Parallel(true, "UseParallelGC", true, "UseParallelOldGC", JDK < 15, "UseParNewGC", JDK < 10),
-        CMS(true, "UseConcMarkSweepGC", JDK < 14),
-        G1(true, "UseG1GC", true),
+        Serial(true, "UseSerialGC"),
+        Parallel(true, "UseParallelGC", "UseParallelOldGC", "UseParNewGC"),
+        CMS(true, "UseConcMarkSweepGC"),
+        G1(true, "UseG1GC"),
 
         // Unsupported GCs
-        Epsilon(false, "UseEpsilonGC", true),
-        Z(false, "UseZGC", true);
+        Epsilon(false, "UseEpsilonGC"),
+        Z(false, "UseZGC");
 
-        HotSpotGC(boolean supported,
-                        String flag1, boolean expectFlagPresent1,
-                        String flag2, boolean expectFlagPresent2,
-                        String flag3, boolean expectFlagPresent3) {
+        HotSpotGC(boolean supported, String... flags) {
             this.supported = supported;
-            this.expectFlagsPresent = new boolean[]{expectFlagPresent1, expectFlagPresent2, expectFlagPresent3};
-            this.flags = new String[]{flag1, flag2, flag3};
-        }
-
-        HotSpotGC(boolean supported, String flag, boolean expectFlagPresent) {
-            this.supported = supported;
-            this.expectFlagsPresent = new boolean[]{expectFlagPresent};
-            this.flags = new String[]{flag};
+            this.flags = flags;
         }
 
         final boolean supported;
-        final boolean[] expectFlagsPresent;
         private final String[] flags;
 
         public boolean isSelected(GraalHotSpotVMConfig config) {
-            for (int i = 0; i < flags.length; i++) {
+            for (String flag : flags) {
                 final boolean notPresent = false;
-                if (config.getFlag(flags[i], Boolean.class, notPresent, expectFlagsPresent[i])) {
+                if (config.getFlag(flag, Boolean.class, notPresent)) {
                     return true;
                 }
             }
             return false;
         }
+
     }
 
     private HotSpotGC getSelectedGC() throws GraalError {
