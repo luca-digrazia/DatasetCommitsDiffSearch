@@ -40,7 +40,6 @@ import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugFieldInfo;
 import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugFrameSizeChange;
 import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugInstanceTypeInfo;
 import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugMethodInfo;
-import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugRangeInfo;
 import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugTypeInfo;
 import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugTypeInfo.DebugTypeKind;
 
@@ -100,8 +99,7 @@ public class ClassEntry extends StructureTypeEntry {
         this.fileEntry = fileEntry;
         // methods is a sorted list and we want to be able to add more elements to it while keeping
         // it sorted,
-        // so a LinkedList seems more appropriate than an ArrayList.
-        // (see ensureMethodEntryForDebugRangeInfo)
+        // so a LinkedList seems more appropriate than an ArrayList. (see getMethodEntry)
         this.methods = new LinkedList<>();
         this.primaryEntries = new ArrayList<>();
         this.primaryIndex = new HashMap<>();
@@ -347,11 +345,11 @@ public class ClassEntry extends StructureTypeEntry {
         return superClass;
     }
 
-    public MethodEntry ensureMethodEntryForDebugRangeInfo(DebugRangeInfo debugRangeInfo, DebugInfoBase debugInfoBase, DebugContext debugContext) {
+    public MethodEntry getMethodEntry(DebugMethodInfo debugMethodInfo, DebugInfoBase debugInfoBase, DebugContext debugContext) {
         assert listIsSorted(methods);
-        String methodName = debugInfoBase.uniqueDebugString(debugRangeInfo.name());
-        String paramSignature = debugRangeInfo.paramSignature();
-        String returnTypeName = debugRangeInfo.valueType();
+        String methodName = debugInfoBase.uniqueDebugString(debugMethodInfo.name());
+        String paramSignature = debugMethodInfo.paramSignature();
+        String returnTypeName = debugMethodInfo.valueType();
         ListIterator<MethodEntry> methodIterator = methods.listIterator();
         while (methodIterator.hasNext()) {
             MethodEntry methodEntry = methodIterator.next();
@@ -364,7 +362,7 @@ public class ClassEntry extends StructureTypeEntry {
                 break;
             }
         }
-        MethodEntry newMethodEntry = processMethod(debugRangeInfo, debugInfoBase, debugContext, true);
+        MethodEntry newMethodEntry = processMethod(debugMethodInfo, debugInfoBase, debugContext, true);
         methodIterator.add(newMethodEntry);
         return newMethodEntry;
     }
