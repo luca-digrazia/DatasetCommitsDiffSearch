@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,30 +47,67 @@ import org.graalvm.wasm.WasmFunction;
 import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
-import org.graalvm.wasm.WasmOptions;
+import org.graalvm.wasm.WasmTable;
+import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.predefined.BuiltinModule;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class ImportModule extends BuiltinModule {
-    private final HashMap<String, Pair<WasmFunction, Executable>> functions;
+    private final HashMap<String, Pair<WasmFunction, Object>> functions;
+    private final HashMap<String, WasmMemory> memories;
+    private final HashMap<String, WasmTable> tables;
+    private final HashMap<String, Object> globals;
 
-    public ImportModule(HashMap<String, Pair<WasmFunction, Executable>> functions) {
-        this.functions = functions;
+    public ImportModule() {
+        this.functions = new HashMap<>();
+        this.memories = new HashMap<>();
+        this.tables = new HashMap<>();
+        this.globals = new HashMap<>();
     }
 
     @Override
     protected WasmInstance createInstance(WasmLanguage language, WasmContext context, String name) {
-        final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy = WasmOptions.StoreConstantsPolicy.getValue(context.environment().getOptions());
-        WasmInstance instance = new WasmInstance(new WasmModule(name, null, storeConstantsPolicy), storeConstantsPolicy);
-        for (Map.Entry<String, Pair<WasmFunction, Executable>> entry : functions.entrySet()) {
+        WasmInstance instance = new WasmInstance(context, new WasmModule(name, null));
+        for (Map.Entry<String, Pair<WasmFunction, Object>> entry : functions.entrySet()) {
             final String functionName = entry.getKey();
-            final Pair<WasmFunction, Executable> info = entry.getValue();
+            final Pair<WasmFunction, Object> info = entry.getValue();
             final WasmFunction function = info.getLeft();
             final SymbolTable.FunctionType type = function.type();
-            defineFunction(instance, functionName, type.paramTypes(), type.returnTypes(), new ExecutableNode(context.language(), instance, info.getRight()));
+            defineFunction(instance, functionName, type.paramTypes(), type.returnTypes(), new ExecuteInParentContextNode(context.language(), instance, info.getRight()));
+        }
+        for (Map.Entry<String, WasmMemory> entry : memories.entrySet()) {
+            final String memoryName = entry.getKey();
+            final WasmMemory memory = entry.getValue();
+            defineExternalMemory(instance, memoryName, memory);
+        }
+        for (Map.Entry<String, WasmTable> entry : tables.entrySet()) {
+            final String tableName = entry.getKey();
+            final WasmTable table = entry.getValue();
+            defineExternalTable(instance, tableName, table);
+        }
+        for (Map.Entry<String, Object> entry : globals.entrySet()) {
+            final String globalName = entry.getKey();
+            final Object global = entry.getValue();
+            defineExternalGlobal(instance, globalName, global);
         }
         return instance;
+    }
+
+    public void addFunction(String name, Pair<WasmFunction, Object> info) {
+        functions.put(name, info);
+    }
+
+    public void addMemory(String name, WasmMemory memory) {
+        memories.put(name, memory);
+    }
+
+    public void addTable(String name, WasmTable table) {
+        tables.put(name, table);
+    }
+
+    public void addGlobal(String name, Object global) {
+        globals.put(name, global);
     }
 }
