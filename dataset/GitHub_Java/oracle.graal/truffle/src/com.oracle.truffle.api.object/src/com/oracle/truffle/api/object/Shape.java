@@ -244,7 +244,7 @@ public abstract class Shape {
     public abstract int getPropertyCount();
 
     /**
-     * Get the shape's object type info.
+     * Get the shape's operations.
      *
      * @since 0.8 or earlier
      */
@@ -258,7 +258,7 @@ public abstract class Shape {
     public abstract Shape getRoot();
 
     /**
-     * Checks whether the given object's shape is identical to this shape.
+     * Check whether this shape is identical to the given shape.
      *
      * @since 0.8 or earlier
      */
@@ -387,12 +387,12 @@ public abstract class Shape {
         /**
          * Create a new location compatible with the given initial value.
          *
-         * Use {@link #locationForType(Class)} or {@link Shape#defineProperty(Object, Object, int)}
-         * instead.
-         *
          * @param value the initial value this location is going to be assigned
          * @since 0.8 or earlier
+         * @deprecated use {@link #locationForType(Class)} or
+         *             {@link Shape#defineProperty(Object, Object, int)} instead
          */
+        @Deprecated
         public final Location locationForValue(Object value) {
             return locationForValue(value, false, value != null);
         }

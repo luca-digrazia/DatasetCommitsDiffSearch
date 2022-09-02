@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,11 +41,8 @@
 package com.oracle.truffle.object;
 
 import java.util.EnumSet;
-import java.util.Map;
 import java.util.Objects;
 
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.Location;
@@ -54,7 +51,6 @@ import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.object.Shape.Allocator;
 
 /** @since 0.17 or earlier */
-@SuppressWarnings("deprecation")
 public abstract class LayoutImpl extends Layout {
     private static final int INT_TO_DOUBLE_FLAG = 1;
     private static final int INT_TO_LONG_FLAG = 2;
@@ -66,24 +62,20 @@ public abstract class LayoutImpl extends Layout {
     private final int allowedImplicitCasts;
 
     /** @since 0.17 or earlier */
-    protected LayoutImpl(Class<? extends DynamicObject> clazz, LayoutStrategy strategy, int implicitCastFlags) {
+    protected LayoutImpl(EnumSet<ImplicitCast> allowedImplicitCasts, Class<? extends DynamicObject> clazz, LayoutStrategy strategy) {
         this.strategy = strategy;
         this.clazz = Objects.requireNonNull(clazz);
 
-        this.allowedImplicitCasts = implicitCastFlags;
+        this.allowedImplicitCasts = implicitCastFlags(allowedImplicitCasts);
     }
 
-    protected static int implicitCastFlags(EnumSet<ImplicitCast> allowedImplicitCasts) {
+    static int implicitCastFlags(EnumSet<ImplicitCast> allowedImplicitCasts) {
         return (allowedImplicitCasts.contains(ImplicitCast.IntToDouble) ? INT_TO_DOUBLE_FLAG : 0) | (allowedImplicitCasts.contains(ImplicitCast.IntToLong) ? INT_TO_LONG_FLAG : 0);
     }
 
     /** @since 0.17 or earlier */
     @Override
     public abstract DynamicObject newInstance(Shape shape);
-
-    protected abstract DynamicObject construct(Shape shape);
-
-    protected abstract boolean isLegacyLayout();
 
     /** @since 0.17 or earlier */
     @Override
@@ -102,18 +94,6 @@ public abstract class LayoutImpl extends Layout {
     public final Shape createShape(ObjectType objectType) {
         return createShape(objectType, null);
     }
-
-    @Override
-    public final Shape createShape(ObjectType objectType, Object sharedData, int flags) {
-        return newShape(objectType, sharedData, ShapeImpl.checkObjectFlags(flags), null);
-    }
-
-    @Override
-    protected final Shape buildShape(Object dynamicType, Object sharedData, int flags, Assumption singleContextAssumption) {
-        return newShape(dynamicType, sharedData, flags, null);
-    }
-
-    protected abstract Shape newShape(Object objectType, Object sharedData, int flags, Assumption singleContextAssumption);
 
     /** @since 0.17 or earlier */
     public boolean isAllowedIntToDouble() {
@@ -144,6 +124,12 @@ public abstract class LayoutImpl extends Layout {
     protected abstract Location getPrimitiveArrayLocation();
 
     /** @since 0.17 or earlier */
+    @Deprecated
+    protected int objectFieldIndex(@SuppressWarnings("unused") Location location) {
+        throw new UnsupportedOperationException();
+    }
+
+    /** @since 0.17 or earlier */
     @Override
     public abstract Allocator createAllocator();
 
@@ -157,59 +143,7 @@ public abstract class LayoutImpl extends Layout {
         return "Layout[" + clazz.getName() + "]";
     }
 
-    /**
-     * Resets the state for native image generation.
-     *
-     * NOTE: this method is called reflectively by downstream projects.
-     */
-    static void resetNativeImageState() {
-        assert TruffleOptions.AOT : "Only supported during image generation";
-        ((CoreLayoutFactory) getFactory()).resetNativeImageState();
-    }
-
-    @SuppressWarnings("static-method")
-    protected abstract static class Support extends Access {
-        protected Support() {
-        }
-
-        public final void growAndSetShape(DynamicObject object, Shape oldShape, Shape newShape) {
-            DynamicObjectSupport.growAndSetShape(object, oldShape, newShape);
-        }
-
-        public final void resize(DynamicObject object, Shape thisShape, Shape otherShape) {
-            DynamicObjectSupport.resize(object, thisShape, otherShape);
-        }
-
-        public final void resizeAndSetShape(DynamicObject object, Shape thisShape, Shape otherShape) {
-            DynamicObjectSupport.resizeAndSetShape(object, thisShape, otherShape);
-        }
-
-        public final void invalidateAllPropertyAssumptions(Shape shape) {
-            DynamicObjectSupport.invalidateAllPropertyAssumptions(shape);
-        }
-
-        public final void trimToSize(DynamicObject object, Shape thisShape) {
-            DynamicObjectSupport.trimToSize(object, thisShape);
-        }
-
-        public final Map<Object, Object> archive(DynamicObject object) {
-            return DynamicObjectSupport.archive(object);
-        }
-
-        public final boolean verifyValues(DynamicObject object, Map<Object, Object> archive) {
-            return DynamicObjectSupport.verifyValues(object, archive);
-        }
-
-        protected void arrayCopy(Object[] from, Object[] to, int length) {
-            System.arraycopy(from, 0, to, 0, length);
-        }
-
-        protected void arrayCopy(int[] from, int[] to, int length) {
-            System.arraycopy(from, 0, to, 0, length);
-        }
-    }
-
-    static final class CoreAccess extends Support {
+    static final class CoreAccess extends Access {
         private CoreAccess() {
         }
     }
