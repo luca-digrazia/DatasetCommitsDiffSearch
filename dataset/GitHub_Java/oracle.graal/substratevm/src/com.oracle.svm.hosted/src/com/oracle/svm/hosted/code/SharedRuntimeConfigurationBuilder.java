@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -53,7 +53,6 @@ import com.oracle.svm.core.graal.meta.SubstrateLoweringProvider;
 import com.oracle.svm.core.graal.meta.SubstrateRegisterConfig.ConfigKind;
 import com.oracle.svm.core.graal.meta.SubstrateSnippetReflectionProvider;
 import com.oracle.svm.core.graal.meta.SubstrateStampProvider;
-import com.oracle.svm.core.graal.word.SubstrateWordTypes;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.config.HybridLayout;
@@ -81,7 +80,7 @@ public abstract class SharedRuntimeConfigurationBuilder {
     }
 
     public SharedRuntimeConfigurationBuilder build() {
-        wordTypes = new SubstrateWordTypes(metaAccess, FrameAccess.getWordKind());
+        wordTypes = new WordTypes(metaAccess, FrameAccess.getWordKind());
         Providers p = createProviders(null, null, null, null, null, null, null, null);
         StampProvider stampProvider = createStampProvider(p);
         p = createProviders(null, null, null, null, null, null, stampProvider, null);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,12 +50,20 @@ import static jdk.vm.ci.amd64.AMD64.xmm7;
 
 import java.util.ArrayList;
 
+import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.graal.code.SubstrateCallingConvention;
 import com.oracle.svm.core.graal.code.SubstrateCallingConventionType;
+import com.oracle.svm.core.graal.code.SubstrateRegisterConfigFactory;
 import com.oracle.svm.core.graal.meta.SubstrateRegisterConfig;
+import com.oracle.svm.core.graal.meta.SubstrateRegisterConfig.ConfigKind;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.amd64.AMD64;
@@ -64,6 +72,7 @@ import jdk.vm.ci.code.CallingConvention.Type;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterAttributes;
+import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.code.ValueKindFactory;
@@ -76,10 +85,22 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.meta.ValueKind;
 
-public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
+@AutomaticFeature
+@Platforms(Platform.AMD64.class)
+class SubstrateAMD64RegisterConfigFeature implements Feature {
+    @Override
+    public void afterRegistration(AfterRegistrationAccess access) {
+        ImageSingletons.add(SubstrateRegisterConfigFactory.class, new SubstrateRegisterConfigFactory() {
 
-    public static final Register HEAP_BASE_REGISTER_CANDIDATE = r14;
-    public static final Register THREAD_REGISTER_CANDIDATE = r15;
+            @Override
+            public RegisterConfig newRegisterFactory(ConfigKind config, MetaAccessProvider metaAccess, TargetDescription target, Boolean useStackBasePointer) {
+                return new SubstrateAMD64RegisterConfig(config, metaAccess, target, useStackBasePointer);
+            }
+        });
+    }
+}
+
+public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
 
     private final TargetDescription target;
     private final int nativeParamsStackOffset;
@@ -101,7 +122,6 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
 
         if (OS.getCurrent() == OS.WINDOWS) {
             // This is the Windows 64-bit ABI for parameters.
-            // Note that float parameters also "consume" a general register and vice versa.
             nativeGeneralParameterRegs = new RegisterArray(rcx, rdx, r8, r9);
             javaGeneralParameterRegs = new RegisterArray(rdx, r8, r9, rdi, rsi, rcx);
             xmmParameterRegs = new RegisterArray(xmm0, xmm1, xmm2, xmm3);
@@ -110,8 +130,8 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
             // even though they are passed in registers.
             nativeParamsStackOffset = 4 * target.wordSize;
 
-            heapBaseRegister = SubstrateOptions.SpawnIsolates.getValue() ? HEAP_BASE_REGISTER_CANDIDATE : null;
-            threadRegister = SubstrateOptions.MultiThreaded.getValue() ? THREAD_REGISTER_CANDIDATE : null;
+            heapBaseRegister = SubstrateOptions.SpawnIsolates.getValue() ? r14 : null;
+            threadRegister = SubstrateOptions.MultiThreaded.getValue() ? r15 : null;
 
             ArrayList<Register> regs = new ArrayList<>(valueRegistersSSE.asList());
             regs.remove(rsp);
@@ -127,8 +147,8 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
 
             nativeParamsStackOffset = 0;
 
-            heapBaseRegister = SubstrateOptions.SpawnIsolates.getValue() ? HEAP_BASE_REGISTER_CANDIDATE : null;
-            threadRegister = SubstrateOptions.MultiThreaded.getValue() ? THREAD_REGISTER_CANDIDATE : null;
+            heapBaseRegister = SubstrateOptions.SpawnIsolates.getValue() ? r14 : null;
+            threadRegister = SubstrateOptions.MultiThreaded.getValue() ? r15 : null;
 
             ArrayList<Register> regs = new ArrayList<>(valueRegistersSSE.asList());
             regs.remove(rsp);
@@ -270,11 +290,6 @@ public class SubstrateAMD64RegisterConfig implements SubstrateRegisterConfig {
             JavaKind kind = ObjectLayout.getCallSignatureKind(isEntryPoint, (ResolvedJavaType) parameterTypes[i], metaAccess, target);
             kinds[i] = kind;
 
-            if (type.nativeABI && OS.getCurrent() == OS.WINDOWS) {
-                // Strictly positional: float parameters consume a general register and vice versa
-                currentGeneral = i;
-                currentXMM = i;
-            }
             switch (kind) {
                 case Byte:
                 case Boolean:
