@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,21 +30,31 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.graalvm.compiler.core.common.type.ObjectStamp;
+import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.nodes.ConstantNode;
-import org.graalvm.compiler.nodes.InvokeNode;
+import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
+import org.graalvm.compiler.nodes.LogicNode;
+import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
+import org.graalvm.compiler.nodes.extended.GuardingNode;
+import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.java.MonitorExitNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 
 import com.oracle.graal.pointsto.infrastructure.WrappedJavaMethod;
 import com.oracle.graal.pointsto.meta.HostedProviders;
-import com.oracle.svm.core.hub.ClassSynchronizationSupport;
+import com.oracle.svm.core.graal.nodes.CGlobalDataLoadAddressNode;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
+import com.oracle.svm.core.thread.VMThreads.StatusSupport;
 import com.oracle.svm.hosted.annotation.CustomSubstitutionMethod;
+import com.oracle.svm.hosted.code.SimpleSignature;
 import com.oracle.svm.jni.access.JNIAccessFeature;
 import com.oracle.svm.jni.access.JNINativeLinkage;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
@@ -50,6 +62,7 @@ import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -61,8 +74,6 @@ import jdk.vm.ci.meta.Signature;
  * handles and for unboxing an object return value.
  */
 class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
-    private int maxLocals = -1;
-
     private final JNINativeLinkage linkage;
 
     JNINativeCallWrapperMethod(ResolvedJavaMethod method) {
@@ -78,25 +89,6 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
         String className = unwrapped.getDeclaringClass().getName();
         String descriptor = unwrapped.getSignature().toMethodDescriptor();
         return JNIAccessFeature.singleton().makeLinkage(className, unwrapped.getName(), descriptor);
-    }
-
-    @Override
-    public int getMaxLocals() {
-        if (maxLocals == -1) {
-            maxLocals = 0;
-            Signature sig = getOriginal().getSignature();
-            int count = sig.getParameterCount(false);
-            if (!getOriginal().isStatic()) {
-                maxLocals++;
-            }
-            for (int i = 0; i < count; i++) {
-                maxLocals++;
-                if (sig.getParameterKind(i).needsTwoSlots()) {
-                    maxLocals++;
-                }
-            }
-        }
-        return maxLocals;
     }
 
     @Override
@@ -117,9 +109,15 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
         JNIGraphKit kit = new JNIGraphKit(debug, providers, method);
         StructuredGraph graph = kit.getGraph();
 
-        InvokeNode handleFrame = kit.nativeCallPrologue();
+        InvokeWithExceptionNode handleFrame = kit.nativeCallPrologue();
 
-        ValueNode callAddress = kit.nativeCallAddress(kit.createObject(linkage));
+        ValueNode callAddress;
+        if (linkage.isBuiltInFunction()) {
+            callAddress = kit.unique(new CGlobalDataLoadAddressNode(linkage.getBuiltInAddress()));
+        } else {
+            callAddress = kit.nativeCallAddress(kit.createObject(linkage));
+        }
+
         ValueNode environment = kit.environment();
 
         JavaType javaReturnType = method.getSignature().getReturnType(null);
@@ -127,7 +125,7 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
         List<ValueNode> javaArguments = kit.loadArguments(javaArgumentTypes);
 
         List<ValueNode> jniArguments = new ArrayList<>(2 + javaArguments.size());
-        List<JavaType> jniArgumentTypes = new ArrayList<>(jniArguments.size());
+        List<JavaType> jniArgumentTypes = new ArrayList<>(2 + javaArguments.size());
         JavaType environmentType = providers.getMetaAccess().lookupJavaType(JNIEnvironment.class);
         JavaType objectHandleType = providers.getMetaAccess().lookupJavaType(JNIObjectHandle.class);
         jniArguments.add(environment);
@@ -161,10 +159,9 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
             if (method.isStatic()) {
                 Constant hubConstant = providers.getConstantReflection().asObjectHub(method.getDeclaringClass());
                 DynamicHub hub = (DynamicHub) SubstrateObjectConstant.asObject(hubConstant);
-                Object synchronizationTarget = ClassSynchronizationSupport.synchronizationTarget(hub);
-                monitorObject = ConstantNode.forConstant(SubstrateObjectConstant.forObject(synchronizationTarget), providers.getMetaAccess(), graph);
+                monitorObject = ConstantNode.forConstant(SubstrateObjectConstant.forObject(hub), providers.getMetaAccess(), graph);
             } else {
-                monitorObject = javaArguments.get(0);
+                monitorObject = kit.maybeCreateExplicitNullCheck(javaArguments.get(0));
             }
             MonitorIdNode monitorId = graph.add(new MonitorIdNode(kit.getFrameState().lockDepth(false)));
             MonitorEnterNode monitorEnter = kit.append(new MonitorEnterNode(monitorObject, monitorId));
@@ -174,8 +171,8 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
 
         kit.getFrameState().clearLocals();
 
-        Signature jniSignature = new JNISignature(jniArgumentTypes, jniReturnType);
-        ValueNode returnValue = kit.createCFunctionCall(callAddress, method, jniArguments, jniSignature, true, false);
+        Signature jniSignature = new SimpleSignature(jniArgumentTypes, jniReturnType);
+        ValueNode returnValue = kit.createCFunctionCall(callAddress, jniArguments, jniSignature, StatusSupport.STATUS_IN_NATIVE, false);
 
         if (getOriginal().isSynchronized()) {
             MonitorIdNode monitorId = kit.getFrameState().peekMonitorId();
@@ -185,14 +182,31 @@ class JNINativeCallWrapperMethod extends CustomSubstitutionMethod {
         }
 
         if (javaReturnType.getJavaKind().isObject()) {
-            returnValue = kit.unboxHandle(returnValue);
-            returnValue = kit.castObject(returnValue, (ResolvedJavaType) javaReturnType);
+            returnValue = kit.unboxHandle(returnValue); // before destroying handles in epilogue
         }
         kit.nativeCallEpilogue(handleFrame);
         kit.rethrowPendingException();
+        if (javaReturnType.getJavaKind().isObject()) {
+            // Just before return to always run the epilogue and never suppress a pending exception
+            returnValue = castObject(kit, returnValue, (ResolvedJavaType) javaReturnType);
+        }
         kit.createReturn(returnValue, javaReturnType.getJavaKind());
 
-        assert graph.verify();
-        return graph;
+        return kit.finalizeGraph();
+    }
+
+    private static ValueNode castObject(JNIGraphKit kit, ValueNode object, ResolvedJavaType type) {
+        ValueNode casted = object;
+        if (!type.isJavaLangObject()) { // safe cast to expected type
+            TypeReference typeRef = TypeReference.createTrusted(kit.getAssumptions(), type);
+            LogicNode condition = kit.append(InstanceOfNode.createAllowNull(typeRef, object, null, null));
+            if (!condition.isTautology()) {
+                ObjectStamp stamp = StampFactory.object(typeRef, false);
+                ValueNode expectedClass = kit.createConstant(kit.getConstantReflection().asJavaClass(type), JavaKind.Object);
+                GuardingNode guard = kit.createCheckThrowingBytecodeException(condition, false, BytecodeExceptionKind.CLASS_CAST, object, expectedClass);
+                casted = kit.append(PiNode.create(object, stamp, guard.asNode()));
+            }
+        }
+        return casted;
     }
 }

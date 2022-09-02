@@ -28,6 +28,7 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.java.FrameStateBuilder;
 import org.graalvm.compiler.java.GraphBuilderPhase.Instance;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
@@ -37,6 +38,7 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PiNode;
+import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
@@ -147,16 +149,22 @@ public class HostedGraphKit extends SubstrateGraphKit {
         } else {
             elsePart();
         }
-        BytecodeExceptionNode exception = createBytecodeExceptionObjectNode(exceptionKind, true, arguments);
+        BytecodeExceptionNode exception = append(new BytecodeExceptionNode(getMetaAccess(), exceptionKind, arguments));
+        setStateAfterException(getFrameState(), bci(), exception);
         append(new UnwindNode(exception));
         AbstractMergeNode merge = endIf();
         assert merge == null;
         return failOnTrue ? ifNode.falseSuccessor() : ifNode.trueSuccessor();
     }
 
-    public BytecodeExceptionNode createBytecodeExceptionObjectNode(BytecodeExceptionNode.BytecodeExceptionKind exceptionKind, boolean rethrow, ValueNode... arguments) {
+    public BytecodeExceptionNode createBytecodeExceptionObjectNode(BytecodeExceptionNode.BytecodeExceptionKind exceptionKind, ValueNode... arguments) {
         BytecodeExceptionNode exception = append(new BytecodeExceptionNode(getMetaAccess(), exceptionKind, arguments));
-        setStateAfterException(getFrameState(), bci(), exception, rethrow);
+        FrameStateBuilder frameStateBuilder = getFrameState();
+        if (frameStateBuilder != null) {
+            FrameStateBuilder exceptionState = frameStateBuilder.copy();
+            exceptionState.push(JavaKind.Object, ((StateSplit) exception).asNode());
+            exception.setStateAfter(exceptionState.create(bci(), exception));
+        }
         return exception;
     }
 
