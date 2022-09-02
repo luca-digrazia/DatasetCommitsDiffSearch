@@ -54,11 +54,11 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
 
         private final ModuleEntry module;
         private ArrayList<ModuleEntry> exports = null;
-        private boolean isUnqualifiedExported = false;
+        private boolean isUnqualifiedExports = false;
         private boolean isExportedAllUnnamed = false;
 
         public void addExports(ModuleEntry m) {
-            if (isUnqualifiedExported()) {
+            if (isUnqualifiedExports()) {
                 return;
             }
             synchronized (this) {
@@ -78,21 +78,21 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
             if (isExportedAllUnnamed() && !m.isNamed()) {
                 return true;
             }
-            if (isUnqualifiedExported() || exports == null) {
+            if (isUnqualifiedExports() || exports == null) {
                 return false;
             }
             return contains(m);
         }
 
-        public boolean isUnqualifiedExported() {
-            return module().isOpen() || isUnqualifiedExported;
+        public boolean isUnqualifiedExports() {
+            return module().isOpen() || isUnqualifiedExports;
         }
 
         public void setUnqualifiedExports() {
-            if (isUnqualifiedExported()) {
+            if (isUnqualifiedExports()) {
                 return;
             }
-            isUnqualifiedExported = true;
+            isUnqualifiedExports = true;
             isExportedAllUnnamed = true;
             exports = null;
         }

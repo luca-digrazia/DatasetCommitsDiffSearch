@@ -24,7 +24,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import java.util.HashMap;
-import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 
@@ -79,29 +78,19 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
 
         protected final Symbol<Name> name;
 
-        public Symbol<Name> getName() {
+        Symbol<Name> getName() {
             return name;
-        }
-
-        public String getNameAsString() {
-            if (name == null) {
-                return "unnamed";
-            }
-            return name.toString();
         }
 
         @Override
         public int hashCode() {
-            if (name == null) {
-                return 0;
-            }
             return name.hashCode();
         }
 
         @Override
         public boolean equals(Object obj) {
             if (obj instanceof NamedEntry) {
-                return Objects.equals(((NamedEntry) obj).getName(), this.getName());
+                return ((NamedEntry) obj).getName().equals(this.getName());
             }
             return false;
         }
