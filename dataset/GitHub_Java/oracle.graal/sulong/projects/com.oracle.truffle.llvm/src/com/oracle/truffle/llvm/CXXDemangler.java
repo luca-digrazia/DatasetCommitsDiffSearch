@@ -32,11 +32,12 @@ package com.oracle.truffle.llvm;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 
 import java.util.ArrayList;
+import java.util.Base64;
 
 final class CXXDemangler {
     private static final String NAMESPACE_PREFIX = "_ZN";
     private static final int NAMESPACE_PREFIX_LEN = NAMESPACE_PREFIX.length();
-    private static final String SULONG_NAMESPACE_PREFIX = Runner.SULONG_RENAME_MARKER;
+    private static final String SULONG_NAMESPACE_PREFIX = ParserDriver.SULONG_RENAME_MARKER;
     private static final String SULONG_BASE64_NAMESPACE_SUFFIX = "base64";
     private static final String SULONG_BASE64_NAMESPACE = SULONG_NAMESPACE_PREFIX + SULONG_BASE64_NAMESPACE_SUFFIX;
 
@@ -87,26 +88,27 @@ final class CXXDemangler {
     }
 
     /**
-     * Mangled C++ symbols. To encode the symbols, we use a special namespace (`__sulong` or
-     * `__sulong_base64`) to indicate symbols the are subject to renaming. The library name that
-     * includes the target function is encoded in yet another namespace. If the `__sulong_base64`
-     * namespace is used, the library name is encoded as a base64 encoded string. Example:
+     * Mangled C++ symbols. To encode the symbols, we use a special namespace (`__sulong_import` or
+     * `__sulong_import_base64`) to indicate symbols the are subject to renaming. The library name
+     * that includes the target function is encoded in yet another namespace. If the
+     * `__sulong_import_base64` namespace is used, the library name is encoded as a base64 encoded
+     * string. Example:
      *
      * <pre>
      namespace __cxxabiv1 {
-     namespace __sulong_base64 { // special __sulong namespace
+     namespace __sulong_import_base64 { // special __sulong_import namespace
      namespace bGliYysrYWJpLnNv { // libname in base64 (libc++abi.so)
     
      // the function declaration that will be aliased
      static __cxa_exception* cxa_exception_from_exception_unwind_exception(_Unwind_Exception* unwind_exception);
     
      } // end libc++.so
-     } // end __sulong
+     } // end __sulong_import
     
      ...
     
      // usage of the declared function
-     __cxa_exception *ex = __sulong_base64::bGliYysrYWJpLnNv::cxa_exception_from_exception_unwind_exception(unwindHeader);
+     __cxa_exception *ex = __sulong_import_base64::bGliYysrYWJpLnNv::cxa_exception_from_exception_unwind_exception(unwindHeader);
     
      } // end __cxxabiv1
      * </pre>
@@ -147,11 +149,21 @@ final class CXXDemangler {
                     return rawLibname;
                 }
                 if (namespace.equals(SULONG_BASE64_NAMESPACE)) {
-                    return new String(Runner.decodeBase64(rawLibname));
+                    return new String(decodeBase64(rawLibname));
                 }
             }
         }
         return null;
+    }
+
+    static byte[] decodeBase64(CharSequence charSequence) {
+        byte[] result = new byte[charSequence.length()];
+        for (int i = 0; i < result.length; i++) {
+            char ch = charSequence.charAt(i);
+            assert ch >= 0 && ch <= Byte.MAX_VALUE;
+            result[i] = (byte) ch;
+        }
+        return Base64.getDecoder().decode(result);
     }
 
     static String encodeNamespace(ArrayList<String> namespaces) {

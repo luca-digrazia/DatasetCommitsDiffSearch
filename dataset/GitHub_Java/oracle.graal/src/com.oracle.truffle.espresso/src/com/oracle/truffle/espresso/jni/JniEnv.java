@@ -960,8 +960,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     @JniImpl
     public @Host(Object.class) StaticObject CallObjectMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
-        Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return (result instanceof StaticObject || getContext().SpecCompliancyMode == STRICT) ? (StaticObject) result : StaticObject.NULL;
+        return (StaticObject) callVirtualMethodGeneric(receiver, methodId, varargsPtr);
     }
 
     @SuppressWarnings("unused")
@@ -1037,8 +1036,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         Method method = methodIds.getObject(methodId);
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
-        Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return (result instanceof StaticObject || getContext().SpecCompliancyMode == STRICT) ? (StaticObject) result : StaticObject.NULL;
+        return (StaticObject) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
     @JniImpl
@@ -1140,8 +1138,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         Method method = methodIds.getObject(methodId);
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
-        Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return (result instanceof StaticObject || getContext().SpecCompliancyMode == STRICT) ? (StaticObject) result : StaticObject.NULL;
+        return (StaticObject) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
     @JniImpl
