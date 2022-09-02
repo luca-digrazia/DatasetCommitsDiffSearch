@@ -8,8 +8,8 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
-import com.oracle.truffle.espresso.jdwp.api.JDWPCallFrame;
-import com.oracle.truffle.espresso.jdwp.api.TagConstants;
+import com.oracle.truffle.espresso.jdwp.impl.JDWPCallFrame;
+import com.oracle.truffle.espresso.jdwp.impl.TagConstants;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
@@ -31,24 +31,22 @@ public final class JDWPContextImpl implements JDWPContext {
 
     private final EspressoContext context;
     private final Ids<Object> ids;
-    private JDWPSetup setup;
 
     public JDWPContextImpl(EspressoContext context) {
         this.context = context;
         this.ids = new Ids<>(StaticObject.NULL);
-        this.setup = new JDWPSetup();
     }
 
     public void jdwpInit(TruffleLanguage.Env env) {
         // enable JDWP instrumenter only if options are set (assumed valid if non-null)
         if (context.JDWPOptions != null) {
-            setup.setup(env, context.JDWPOptions, this);
+            JDWPSetup.setup(env, context.JDWPOptions, this);
         }
     }
 
     public void finalizeContext() {
         if (context.JDWPOptions != null) {
-            setup.finalizeSession();
+            JDWPSetup.finalize(this);
         }
     }
 

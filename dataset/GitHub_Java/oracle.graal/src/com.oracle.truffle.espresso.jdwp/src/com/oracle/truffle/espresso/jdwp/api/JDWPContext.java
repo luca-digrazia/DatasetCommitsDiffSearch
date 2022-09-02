@@ -23,16 +23,13 @@
 package com.oracle.truffle.espresso.jdwp.api;
 
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.espresso.jdwp.impl.JDWPCallFrame;
 
 /**
  * Interface that defines required methods for a guest language
  * when implementing JDWP.
  */
 public interface JDWPContext {
-
-    void enterTruffleContext();
-
-    void leaveTruffleContext();
 
     /**
      * Rerturns the guest language representation of a host thread
@@ -81,14 +78,6 @@ public interface JDWPContext {
     Object toGuestString(String string);
 
     /**
-     * Returns a String representation of the guest language object.
-     * Corresponds to toString() in Java.
-     * @param object arbitrary guest language object
-     * @return String representation of the object
-     */
-    String getStringValue(Object object);
-
-    /**
      * Returns the declaring class for an object
      * @param object arbitrary guest language object
      * @return the declaring class of the object
@@ -109,6 +98,14 @@ public interface JDWPContext {
      * @return the null object
      */
     Object getNullObject();
+
+    /**
+     * Returns a String representation of the guest language object.
+     * Corresponds to toString() in Java.
+     * @param object arbitrary guest language object
+     * @return String representation of the object
+     */
+    String getStringValue(Object object);
 
     /**
      * Returns the name of the guest language thread
@@ -252,7 +249,7 @@ public interface JDWPContext {
      * @param thread the guest thread
      * @return an array of the call frames for the thread
      */
-    CallFrame[] getStackTrace(Object thread);
+    JDWPCallFrame[] getStackTrace(Object thread);
 
     /**
      * Determines if the given object is an instance of the given klass.
