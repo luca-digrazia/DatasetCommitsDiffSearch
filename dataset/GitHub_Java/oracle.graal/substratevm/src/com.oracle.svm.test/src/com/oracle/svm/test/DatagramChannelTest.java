@@ -38,15 +38,9 @@ import org.junit.Test;
  */
 public class DatagramChannelTest {
 
-    private static StandardProtocolFamily[] supportedProtocolValues() {
-        /* Disable IPv6 testing as it is not currently supported on the CI infrastructure. */
-        // return StandardProtocolFamily.values();
-        return new StandardProtocolFamily[]{StandardProtocolFamily.INET};
-    }
-
     @Test
     public void testBasicFunctions() throws IOException {
-        for (StandardProtocolFamily family : supportedProtocolValues()) {
+        for (StandardProtocolFamily family : StandardProtocolFamily.values()) {
             try (DatagramChannel a = DatagramChannel.open(family)) {
                 try (DatagramChannel b = DatagramChannel.open(family)) {
 

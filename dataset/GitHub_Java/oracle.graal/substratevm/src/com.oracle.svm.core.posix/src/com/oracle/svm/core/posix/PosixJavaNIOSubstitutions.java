@@ -277,19 +277,19 @@ public final class PosixJavaNIOSubstitutions {
     // Checkstyle: stop
     @TargetClass(className = "sun.nio.ch.IOStatus")
     @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
-    public static final class Target_sun_nio_ch_IOStatus {
+    static final class Target_sun_nio_ch_IOStatus {
         @Alias @TargetElement(name = "EOF")//
-        public static int IOS_EOF;
+        protected static int IOS_EOF;
         @Alias @TargetElement(name = "UNAVAILABLE")//
-        public static int IOS_UNAVAILABLE;
+        protected static int IOS_UNAVAILABLE;
         @Alias @TargetElement(name = "INTERRUPTED")//
-        public static int IOS_INTERRUPTED;
+        protected static int IOS_INTERRUPTED;
         @Alias @TargetElement(name = "UNSUPPORTED")//
-        public static int IOS_UNSUPPORTED;
+        protected static int IOS_UNSUPPORTED;
         @Alias @TargetElement(name = "THROWN")//
-        public static int IOS_THROWN;
+        protected static int IOS_THROWN;
         @Alias @TargetElement(name = "UNSUPPORTED_CASE")//
-        public static int IOS_UNSUPPORTED_CASE;
+        protected static int IOS_UNSUPPORTED_CASE;
     }
 
     @TargetClass(className = "sun.nio.ch.FileDispatcher")
@@ -327,7 +327,7 @@ public final class PosixJavaNIOSubstitutions {
         throw PosixUtils.newIOExceptionWithLastError(msg);
     }
 
-    public static int convertReturnVal(WordBase n, boolean reading) throws IOException {
+    protected static int convertReturnVal(WordBase n, boolean reading) throws IOException {
         return convertReturnVal((int) n.rawValue(), reading);
     }
 
@@ -3459,7 +3459,7 @@ public final class PosixJavaNIOSubstitutions {
                 // 143         if (mime != NULL) {
                 if (mime.isNonNull()) {
                     // 144             jsize len = strlen(mime);
-                    int len = (int) SubstrateUtil.strlen(mime).rawValue();
+                    int len = (int) LibC.strlen(mime).rawValue();
                     // 145             result = (*env)->NewByteArray(env, len);
                     result = new byte[len];
                     // 146             if (result != NULL) {
@@ -3556,7 +3556,7 @@ public final class PosixJavaNIOSubstitutions {
                 // 196         jbyteArray result;
                 byte[] result;
                 // 197         jsize len = strlen(mime);
-                int len = (int) SubstrateUtil.strlen(mime).rawValue();
+                int len = (int) LibC.strlen(mime).rawValue();
                 // 198         result = (*env)->NewByteArray(env, len);
                 result = new byte[len];
                 // 199         if (result != NULL) {
@@ -3870,7 +3870,7 @@ public final class PosixJavaNIOSubstitutions {
                     // 096             if (type != NULL) {
                     if (type.isNonNull()) {
                         // 097                 jsize len = strlen(type);
-                        int len = (int) SubstrateUtil.strlen(type).rawValue();
+                        int len = (int) LibC.strlen(type).rawValue();
                         // 098                 result = (*env)->NewByteArray(env, len);
                         result = new byte[len];
                         // 099                 if (result != NULL) {
