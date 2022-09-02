@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,57 +29,36 @@
  */
 package com.oracle.truffle.llvm.parser.macho;
 
+import com.oracle.truffle.llvm.parser.filereader.ObjectFileReader;
+import com.oracle.truffle.llvm.runtime.Magic;
+import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import org.graalvm.polyglot.io.ByteSequence;
 
-public final class MachOReader {
+public final class MachOReader extends ObjectFileReader {
 
-    private static final long MH_MAGIC = 0xFEEDFACEL;
-    private static final long MH_CIGAM = 0xCEFAEDFEL;
-    private static final long MH_MAGIC_64 = 0xFEEDFACFL;
-    private static final long MH_CIGAM_64 = 0xCFFAEDFEL;
-
-    private static final String INTERMEDIATE_SEGMENT = "";
-    private static final String BITCODE_SECTION = "__bitcode";
-    private static final String WLLVM_SEGMENT = "__WLLVM";
-    private static final String WLLVM_BITCODE_SECTION = "__llvm_bc";
-
-    private static final int MH_OBJECT = 0x1; /* relocatable object file */
-    private static final int MH_EXECUTE = 0x2; /* demand paged executable file */
-    // currently unused types:
-    @SuppressWarnings("unused") private static final int MH_FVMLIB = 0x3;
-    @SuppressWarnings("unused") private static final int MH_CORE = 0x4;
-    @SuppressWarnings("unused") private static final int MH_PRELOAD = 0x5;
-    @SuppressWarnings("unused") private static final int MH_DYLIB = 0x6;
-    @SuppressWarnings("unused") private static final int MH_DYLINKER = 0x7;
-    @SuppressWarnings("unused") private static final int MH_BUNDLE = 0x8;
-    @SuppressWarnings("unused") private static final int MH_DYLIB_STUB = 0x9;
-
-    private final ByteSequence byteSequence;
-    private final boolean bigEndian;
     private final boolean is64Bit;
 
-    private int position;
-
-    private MachOReader(ByteSequence buffer) {
-        this.byteSequence = buffer;
-        this.position = 0;
-
-        int ret = byteSequence.byteAt(position++) & 0xff;
-        ret = (ret << 8) | (byteSequence.byteAt(position++) & 0xff);
-        ret = (ret << 8) | (byteSequence.byteAt(position++) & 0xff);
-        ret = (ret << 8) | (byteSequence.byteAt(position++) & 0xff);
-        long magic = Integer.toUnsignedLong(ret);
-
-        if (!MachOFile.isMachOMagicNumber(magic)) {
-            throw new IllegalArgumentException("Invalid Mach-O file!");
-        }
-
-        is64Bit = isMachO64MagicNumber(magic);
-        bigEndian = !isReversedByteOrder(magic);
+    private MachOReader(ByteSequence buffer, boolean littleEndian, boolean is64Bit) {
+        super(buffer, littleEndian);
+        this.is64Bit = is64Bit;
     }
 
     public static MachOFile create(ByteSequence buffer) {
-        MachOReader reader = new MachOReader(buffer);
+        int position = 0;
+
+        int ret = buffer.byteAt(position++) & 0xff;
+        ret = (ret << 8) | (buffer.byteAt(position++) & 0xff);
+        ret = (ret << 8) | (buffer.byteAt(position++) & 0xff);
+        ret = (ret << 8) | (buffer.byteAt(position++) & 0xff);
+        long magic = Integer.toUnsignedLong(ret);
+
+        if (!MachOFile.isMachOMagicNumber(magic)) {
+            throw new LLVMParserException("Invalid Mach-O file!");
+        }
+
+        boolean is64Bit = isMachO64MagicNumber(magic);
+        MachOReader reader = new MachOReader(buffer, isReversedByteOrder(magic), is64Bit);
+        reader.setPosition(position);
         MachOHeader header = MachOHeader.create(reader);
         MachOLoadCommandTable loadCommandTable = MachOLoadCommandTable.create(header, reader);
         return new MachOFile(header, loadCommandTable, reader.byteSequence);
@@ -89,82 +68,12 @@ public final class MachOReader {
         return is64Bit;
     }
 
-    public byte getByte() {
-        return byteSequence.byteAt(position++);
-    }
-
-    public int position() {
-        return position;
-    }
-
-    public void position(int newPosition) {
-        assert position <= newPosition;
-        position = newPosition;
-    }
-
-    public short getShort() {
-        int ret = getByte() & 0xff;
-        ret = (ret << 8) | (getByte() & 0xff);
-
-        if (bigEndian) {
-            return (short) ret;
-        } else {
-            return Short.reverseBytes((short) ret);
-        }
-    }
-
-    public int getInt() {
-        int ret = getByte() & 0xff;
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-
-        if (bigEndian) {
-            return ret;
-        } else {
-            return Integer.reverseBytes(ret);
-        }
-    }
-
-    public long getLong() {
-        long ret = getByte() & 0xff;
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-        ret = (ret << 8) | (getByte() & 0xff);
-
-        if (bigEndian) {
-            return ret;
-        } else {
-            return Long.reverseBytes(ret);
-        }
-    }
-
     private static boolean isMachO64MagicNumber(long magic) {
-        return magic == MH_MAGIC_64 || magic == MH_CIGAM_64;
+        return magic == Magic.MH_MAGIC_64.magic || magic == Magic.MH_CIGAM_64.magic;
     }
 
     private static boolean isReversedByteOrder(long magic) {
-        return magic == MH_CIGAM || magic == MH_CIGAM_64;
+        return magic == Magic.MH_CIGAM.magic || magic == Magic.MH_CIGAM_64.magic;
     }
 
-    public byte getByte(int pos) {
-        return byteSequence.byteAt(pos++);
-    }
-
-    public int getInt(int pos) {
-        int ret = getByte(pos) & 0xff;
-        ret = (ret << 8) | (getByte(pos + 1) & 0xff);
-        ret = (ret << 8) | (getByte(pos + 2) & 0xff);
-        ret = (ret << 8) | (getByte(pos + 3) & 0xff);
-
-        if (bigEndian) {
-            return ret;
-        } else {
-            return Integer.reverseBytes(ret);
-        }
-    }
 }
