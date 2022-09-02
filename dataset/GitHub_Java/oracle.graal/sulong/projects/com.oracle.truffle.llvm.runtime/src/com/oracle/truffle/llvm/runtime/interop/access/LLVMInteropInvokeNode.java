@@ -54,10 +54,8 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
     }
 
     @Specialization
-    Object doClazz(LLVMPointer receiver, LLVMInteropType.Clazz type, String method, Object[] arguments,
-                    @Cached LLVMInteropMethodInvokeNode invoke,
-                    @Cached(value = "create()", allowUncached = true) LLVMSelfArgumentPackNode selfPackNode,
-                    @CachedLibrary(limit = "5") InteropLibrary interop)
+    Object doClazz(LLVMPointer receiver, LLVMInteropType.Clazz type, String method, Object[] arguments, @Cached LLVMInteropMethodInvokeNode invoke,
+                    @Cached(value = "create()", allowUncached = true) LLVMSelfArgumentPackNode selfPackNode, @CachedLibrary(limit = "5") InteropLibrary interop)
                     throws ArityException, UnknownIdentifierException, UnsupportedTypeException, UnsupportedMessageException {
         Method methodObject = type.findMethodByArgumentsWithSelf(method, selfPackNode.execute(receiver, arguments));
         if (methodObject == null) {
@@ -67,9 +65,7 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
         return invoke.execute(receiver, method, type, methodObject, virtualIndex, selfPackNode.execute(receiver, arguments));
     }
 
-    /**
-     * @param type
-     */
+    @SuppressWarnings("unused")
     @Specialization
     Object doStruct(LLVMPointer receiver, LLVMInteropType.Struct type, String member, Object[] arguments,
                     @CachedLibrary(limit = "5") InteropLibrary interop)
@@ -78,12 +74,7 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
         return interop.execute(readMember, arguments);
     }
 
-    /**
-     * @param receiver
-     * @param type
-     * @param member
-     * @param arguments
-     */
+    @SuppressWarnings("unused")
     @Fallback
     Object doError(LLVMPointer receiver, LLVMInteropType type, String member, Object[] arguments) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();

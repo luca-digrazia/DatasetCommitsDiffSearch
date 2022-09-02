@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.interop.access;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -409,7 +408,7 @@ public abstract class LLVMInteropType implements TruffleObject {
         VTable(Clazz clazz) {
             this.clazz = clazz;
             this.table = new HashMap<>();
-            List<Clazz> list = new LinkedList<>(clazz.getSuperClasses());
+            List<Clazz> list = clazz.getSuperClasses().stream().collect(Collectors.toList());
             list.add(0, clazz);
             do {
                 Clazz c = list.remove(0);
