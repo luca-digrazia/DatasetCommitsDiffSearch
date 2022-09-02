@@ -106,6 +106,7 @@ public final class SVMHost implements HostVM {
 
     private final OptionValues options;
     private final ClassLoader classLoader;
+    private final ClassLoader defaultSystemClassLoader;
     private final ClassInitializationSupport classInitializationSupport;
     private final HostedStringDeduplication stringTable;
     private final UnsafeAutomaticSubstitutionProcessor automaticSubstitutions;
@@ -132,6 +133,7 @@ public final class SVMHost implements HostVM {
     public SVMHost(OptionValues options, ClassLoader classLoader, ClassInitializationSupport classInitializationSupport, UnsafeAutomaticSubstitutionProcessor automaticSubstitutions) {
         this.options = options;
         this.classLoader = classLoader;
+        this.defaultSystemClassLoader = NativeImageSystemClassLoader.singleton().defaultSystemClassLoader;
         this.classInitializationSupport = classInitializationSupport;
         this.stringTable = HostedStringDeduplication.singleton();
         this.classReachabilityListeners = new ArrayList<>();

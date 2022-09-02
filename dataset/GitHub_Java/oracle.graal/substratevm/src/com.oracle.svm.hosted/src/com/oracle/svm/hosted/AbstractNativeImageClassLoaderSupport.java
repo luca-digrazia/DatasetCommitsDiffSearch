@@ -82,11 +82,11 @@ public abstract class AbstractNativeImageClassLoaderSupport {
         buildcp = Collections.unmodifiableList(Arrays.stream(System.getProperty("java.class.path").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toList()));
     }
 
-    List<Path> classpath() {
+    public List<Path> classpath() {
         return Stream.concat(buildcp.stream(), imagecp.stream()).collect(Collectors.toList());
     }
 
-    Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException {
+    public Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException {
         if (module != null) {
             throw new ClassNotFoundException(className,
                             new UnsupportedOperationException("NativeImageClassLoader for Java 8 does not support modules"));
@@ -94,15 +94,15 @@ public abstract class AbstractNativeImageClassLoaderSupport {
         return Class.forName(className, false, classPathClassLoader);
     }
 
-    ClassLoader getClassLoader() {
+    public ClassLoader getClassLoader() {
         return classPathClassLoader;
     }
 
-    abstract List<Path> modulepath();
+    public abstract List<Path> modulepath();
 
-    abstract Optional<Object> findModule(String moduleName);
+    public abstract Optional<Object> findModule(String moduleName);
 
-    abstract void initAllClasses(ForkJoinPool executor, ImageClassLoader imageClassLoader);
+    public abstract void initAllClasses(ForkJoinPool executor, ImageClassLoader imageClassLoader);
 
     protected static class Util {
 

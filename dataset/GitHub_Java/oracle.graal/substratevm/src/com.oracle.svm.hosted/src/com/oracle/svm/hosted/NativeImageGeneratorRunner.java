@@ -110,7 +110,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         }
         int exitStatus;
         try {
-            ImageClassLoader nativeImageClassLoaderSupport = installNativeImageClassLoader(classPath, new String[0]);
+            NativeImageClassLoaderSupport nativeImageClassLoaderSupport = installNativeImageClassLoader(classPath, new String[0]);
             exitStatus = new NativeImageGeneratorRunner().build(arguments.toArray(new String[0]), nativeImageClassLoaderSupport);
         } finally {
             unhookCustomClassLoaders();
@@ -125,7 +125,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         ClassLoader loader = ClassLoader.getSystemClassLoader();
         if (loader instanceof NativeImageSystemClassLoader) {
             NativeImageSystemClassLoader customSystemClassLoader = (NativeImageSystemClassLoader) ClassLoader.getSystemClassLoader();
-            customSystemClassLoader.setNativeImageClassLoader(null);
+            customSystemClassLoader.setDelegate(null);
             Thread.currentThread().setContextClassLoader(customSystemClassLoader.defaultSystemClassLoader);
         }
     }
@@ -145,31 +145,22 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
      * @return NativeImageClassLoaderSupport that exposes the {@code ClassLoader} for image building
      *         via {@link NativeImageClassLoaderSupport#getClassLoader()}.
      */
-    public static ImageClassLoader installNativeImageClassLoader(String[] classpath, String[] modulepath) {
+    public static NativeImageClassLoaderSupport installNativeImageClassLoader(String[] classpath, String[] modulepath) {
         NativeImageSystemClassLoader nativeImageSystemClassLoader = NativeImageSystemClassLoader.singleton();
         NativeImageClassLoaderSupport nativeImageClassLoaderSupport = new NativeImageClassLoaderSupport(nativeImageSystemClassLoader.defaultSystemClassLoader, classpath, modulepath);
-        ClassLoader nativeImageClassLoader = nativeImageClassLoaderSupport.getClassLoader();
-        Thread.currentThread().setContextClassLoader(nativeImageClassLoader);
+        Thread.currentThread().setContextClassLoader(nativeImageClassLoaderSupport.getClassLoader());
         /*
          * Make NativeImageSystemClassLoader delegate to the classLoader provided by
          * NativeImageClassLoaderSupport, enabling resolution of classes and resources during image
          * build-time present on the image classpath and modulepath.
          */
-        nativeImageSystemClassLoader.setNativeImageClassLoader(nativeImageClassLoader);
+        nativeImageSystemClassLoader.setDelegate(nativeImageClassLoaderSupport.getClassLoader());
 
         if (JavaVersionUtil.JAVA_SPEC >= 11 && !nativeImageClassLoaderSupport.imagecp.isEmpty()) {
             ModuleSupport.openModule(JavaVersionUtil.class, null);
         }
 
-        /*
-         * Iterating all classes can already trigger class initialization: We need annotation
-         * information, which triggers class initialization of annotation classes and enum classes
-         * referenced by annotations. Therefore, we need to have the system properties that indicate
-         * "during image build" set up already at this time.
-         */
-        NativeImageGenerator.setSystemPropertiesForImageEarly();
-
-        return new ImageClassLoader(NativeImageGenerator.defaultPlatform(nativeImageClassLoader), nativeImageClassLoaderSupport);
+        return nativeImageClassLoaderSupport;
     }
 
     public static String[] extractImagePathEntries(List<String> arguments, String pathPrefix) {
@@ -221,7 +212,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     @SuppressWarnings("try")
-    private int buildImage(String[] arguments, ImageClassLoader classLoader) {
+    private int buildImage(String[] arguments, NativeImageClassLoaderSupport classLoader) {
         if (!verifyValidJavaVersionAndPlatform()) {
             return 1;
         }
@@ -230,12 +221,13 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         ForkJoinPool compilationExecutor = null;
         OptionValues parsedHostedOptions = null;
         try (StopTimer ignored = totalTimer.start()) {
+            ImageClassLoader imageClassLoader;
             Timer classlistTimer = new Timer("classlist", false);
             try (StopTimer ignored1 = classlistTimer.start()) {
-                classLoader.initAllClasses();
+                imageClassLoader = ImageClassLoader.create(NativeImageGenerator.defaultPlatform(classLoader.getClassLoader()), classLoader);
             }
 
-            HostedOptionParser optionParser = new HostedOptionParser(classLoader);
+            HostedOptionParser optionParser = new HostedOptionParser(imageClassLoader);
             String[] remainingArgs = optionParser.parse(arguments);
             if (remainingArgs.length > 0) {
                 throw UserError.abort("Unknown options: " + Arrays.toString(remainingArgs));
@@ -348,7 +340,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             int maxConcurrentThreads = NativeImageOptions.getMaximumNumberOfConcurrentThreads(parsedHostedOptions);
             analysisExecutor = Inflation.createExecutor(debug, NativeImageOptions.getMaximumNumberOfAnalysisThreads(parsedHostedOptions));
             compilationExecutor = Inflation.createExecutor(debug, maxConcurrentThreads);
-            generator = new NativeImageGenerator(classLoader, optionParser, mainEntryPointData);
+            generator = new NativeImageGenerator(imageClassLoader, optionParser, mainEntryPointData);
             generator.run(entryPoints, javaMainSupport, imageName, imageKind, SubstitutionProcessor.IDENTITY,
                             compilationExecutor, analysisExecutor, optionParser.getRuntimeOptionNames());
         } catch (InterruptImageBuilding e) {
@@ -507,7 +499,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     @Override
-    public int build(String[] args, ImageClassLoader imageClassLoader) {
+    public int build(String[] args, NativeImageClassLoaderSupport imageClassLoader) {
         return buildImage(args, imageClassLoader);
     }
 
