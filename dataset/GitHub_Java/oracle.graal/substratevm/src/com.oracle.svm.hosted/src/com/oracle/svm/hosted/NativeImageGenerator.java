@@ -125,6 +125,7 @@ import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.Feature.OnAnalysisExitAccess;
 import org.graalvm.nativeimage.impl.CConstantValueSupport;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.nativeimage.impl.SizeOfSupport;
 import org.graalvm.word.PointerBase;
 
@@ -289,8 +290,6 @@ public class NativeImageGenerator {
     private AbstractBootImage image;
     private AtomicBoolean buildStarted = new AtomicBoolean();
 
-    private Platform targetPlatform;
-
     public NativeImageGenerator(ImageClassLoader loader, HostedOptionProvider optionProvider) {
         this.loader = loader;
         this.featureHandler = new FeatureHandler();
@@ -303,6 +302,8 @@ public class NativeImageGenerator {
         optionProvider.getRuntimeValues().put(GraalOptions.EagerSnippets, true);
     }
 
+    private static String[] platformPropertyClassPrefixes = {"", Platform.class.getName() + "$", InternalPlatform.class.getName() + "$"};
+
     public static Platform defaultPlatform(ClassLoader classLoader) {
         /*
          * We cannot use a regular hosted option for the platform class: The code that instantiates
@@ -312,10 +313,16 @@ public class NativeImageGenerator {
          */
         String platformClassName = System.getProperty(Platform.PLATFORM_PROPERTY_NAME);
         if (platformClassName != null) {
-            Class<?> platformClass;
-            try {
-                platformClass = classLoader.loadClass(platformClassName);
-            } catch (ClassNotFoundException ex) {
+            Class<?> platformClass = null;
+            for (String prefix : platformPropertyClassPrefixes) {
+                try {
+                    platformClass = classLoader.loadClass(prefix + platformClassName);
+                    break;
+                } catch (ClassNotFoundException ex) {
+                    continue;
+                }
+            }
+            if (platformClass == null) {
                 throw UserError.abort("Could not find platform class " + platformClassName +
                                 " that was specified explicitly on the command line using the system property " + Platform.PLATFORM_PROPERTY_NAME);
             }
@@ -601,7 +608,7 @@ public class NativeImageGenerator {
                 /* release memory taken by graphs for the image writing */
                 hUniverse.getMethods().forEach(HostedMethod::clear);
 
-                codeCache = NativeImageCodeCacheFactory.get().newCodeCache(compileQueue, heap, targetPlatform);
+                codeCache = NativeImageCodeCacheFactory.get().newCodeCache(compileQueue, heap, loader.platform);
                 codeCache.layoutConstants();
                 codeCache.layoutMethods(debug, imageName);
 
@@ -790,9 +797,8 @@ public class NativeImageGenerator {
                     ForkJoinPool analysisExecutor, SnippetReflectionProvider originalSnippetReflection, DebugContext debug) {
         try (Indent ignored = debug.logAndIndent("setup native-image builder")) {
             try (StopTimer ignored1 = new Timer(imageName, "setup").start()) {
-                this.targetPlatform = defaultPlatform(loader.getClassLoader());
-                SubstrateTargetDescription target = createTarget(targetPlatform);
-                ImageSingletons.add(Platform.class, targetPlatform);
+                SubstrateTargetDescription target = createTarget(loader.platform);
+                ImageSingletons.add(Platform.class, loader.platform);
                 ImageSingletons.add(SubstrateTargetDescription.class, target);
 
                 if (javaMainSupport != null) {
@@ -819,7 +825,7 @@ public class NativeImageGenerator {
 
                 AnnotationSubstitutionProcessor annotationSubstitutions = createDeclarativeSubstitutionProcessor(originalMetaAccess, loader, classInitializationSupport);
                 CEnumCallWrapperSubstitutionProcessor cEnumProcessor = new CEnumCallWrapperSubstitutionProcessor();
-                aUniverse = createAnalysisUniverse(options, targetPlatform, target, loader, originalMetaAccess, originalSnippetReflection, annotationSubstitutions, cEnumProcessor,
+                aUniverse = createAnalysisUniverse(options, target, loader, originalMetaAccess, originalSnippetReflection, annotationSubstitutions, cEnumProcessor,
                                 classInitializationSupport, Collections.singletonList(harnessSubstitutions));
 
                 AnalysisMetaAccess aMetaAccess = new SVMAnalysisMetaAccess(aUniverse, originalMetaAccess);
@@ -845,18 +851,17 @@ public class NativeImageGenerator {
         }
     }
 
-    public static AnalysisUniverse createAnalysisUniverse(OptionValues options, Platform platform, TargetDescription target, ImageClassLoader loader, MetaAccessProvider originalMetaAccess,
+    public static AnalysisUniverse createAnalysisUniverse(OptionValues options, TargetDescription target, ImageClassLoader loader, MetaAccessProvider originalMetaAccess,
                     SnippetReflectionProvider originalSnippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions, SubstitutionProcessor cEnumProcessor,
                     ClassInitializationSupport classInitializationSupport, List<SubstitutionProcessor> additionalSubstitutions) {
-        UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = createAutomaticUnsafeSubstitutions(originalSnippetReflection, annotationSubstitutions);
+        UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = createAutomaticUnsafeSubstitutions(originalSnippetReflection, originalMetaAccess, annotationSubstitutions, loader);
         SubstitutionProcessor aSubstitutions = createAnalysisSubstitutionProcessor(originalMetaAccess, originalSnippetReflection, cEnumProcessor, automaticSubstitutions,
                         annotationSubstitutions, additionalSubstitutions);
 
         SVMHost hostVM = new SVMHost(options, loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
-        automaticSubstitutions.init(loader, originalMetaAccess, hostVM);
         AnalysisPolicy analysisPolicy = PointstoOptions.AllocationSiteSensitiveHeap.getValue(options) ? new AllocationSiteSensitiveAnalysisPolicy(options)
                         : new ContextInsensitiveAnalysisPolicy(options);
-        return new AnalysisUniverse(hostVM, target.wordJavaKind, platform, analysisPolicy, aSubstitutions, originalMetaAccess, originalSnippetReflection,
+        return new AnalysisUniverse(hostVM, target.wordJavaKind, loader.platform, analysisPolicy, aSubstitutions, originalMetaAccess, originalSnippetReflection,
                         new SubstrateSnippetReflectionProvider(new SubstrateWordTypes(originalMetaAccess, FrameAccess.getWordKind())));
     }
 
@@ -867,9 +872,11 @@ public class NativeImageGenerator {
         return annotationSubstitutions;
     }
 
-    public static UnsafeAutomaticSubstitutionProcessor createAutomaticUnsafeSubstitutions(SnippetReflectionProvider originalSnippetReflection,
-                    AnnotationSubstitutionProcessor annotationSubstitutions) {
-        return new UnsafeAutomaticSubstitutionProcessor(annotationSubstitutions, originalSnippetReflection);
+    public static UnsafeAutomaticSubstitutionProcessor createAutomaticUnsafeSubstitutions(SnippetReflectionProvider originalSnippetReflection, MetaAccessProvider originalMetaAccess,
+                    AnnotationSubstitutionProcessor annotationSubstitutions, ImageClassLoader loader) {
+        UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = new UnsafeAutomaticSubstitutionProcessor(annotationSubstitutions, originalSnippetReflection);
+        automaticSubstitutions.init(loader, originalMetaAccess);
+        return automaticSubstitutions;
     }
 
     public static SubstitutionProcessor createAnalysisSubstitutionProcessor(MetaAccessProvider originalMetaAccess, SnippetReflectionProvider originalSnippetReflection,
@@ -1508,7 +1515,7 @@ public class NativeImageGenerator {
             classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CContext.class.getSimpleName() + " are always initialized");
         }
         for (CLibrary library : loader.findAnnotations(CLibrary.class)) {
-            nativeLibs.addLibrary(library.value());
+            nativeLibs.addLibrary(library.value(), library.requireStatic());
         }
 
         nativeLibs.finish(tempDirectory());

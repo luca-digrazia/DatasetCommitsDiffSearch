@@ -28,18 +28,29 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CLibrary;
 
-import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.jdklib.JDKLibZipSubstitutions;
-import com.oracle.svm.hosted.jdklib.JDKLibZipFeature;
+import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.TargetClass;
 
 @Platforms(Platform.WINDOWS.class)
-@CLibrary(value = JDKLibZipFeature.CLibraryName, requireStatic = true)
-@AutomaticFeature
-class WindowsJavaZipSubstitutionsFeature extends JDKLibZipFeature {
-}
+@CLibrary(value = "zip", requireStatic = true)
+public final class WindowsJavaZipSubstitutions {
 
-@Platforms(Platform.WINDOWS.class)
-public final class WindowsJavaZipSubstitutions extends JDKLibZipSubstitutions {
     private WindowsJavaZipSubstitutions() {
     }
+}
+
+@TargetClass(className = "java.util.zip.Inflater")
+@Platforms(Platform.WINDOWS.class)
+final class Target_java_util_zip_Inflater {
+
+    @Alias
+    static native void initIDs();
+}
+
+@TargetClass(className = "java.util.zip.Deflater")
+@Platforms(Platform.WINDOWS.class)
+final class Target_java_util_zip_Deflater {
+
+    @Alias
+    static native void initIDs();
 }

@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.core.jdk;
 
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CLibrary;
@@ -39,7 +40,7 @@ import org.graalvm.nativeimage.impl.InternalPlatform;
  * (jvm.lib or libjvm.a).
  *
  */
-@Platforms(InternalPlatform.PLATFORM_JNI.class)
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class, Platform.WINDOWS.class})
 @CLibrary(value = "jvm", requireStatic = true)
 public class Jvm {
 

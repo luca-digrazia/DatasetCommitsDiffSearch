@@ -65,7 +65,7 @@ public @interface CLibrary {
     /**
      * Specifies if static linking is required.
      *
-     * @since 19.1.0
+     * @since 20.0
      */
     boolean requireStatic() default false;
 }
