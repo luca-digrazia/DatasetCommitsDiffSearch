@@ -52,7 +52,6 @@ import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 
 import com.oracle.graal.pointsto.infrastructure.SubstitutionProcessor;
 import com.oracle.graal.pointsto.util.AnalysisError;
-import com.oracle.graal.pointsto.util.AnalysisError.ParsingError;
 import com.oracle.graal.pointsto.util.ParallelExecutionException;
 import com.oracle.graal.pointsto.util.Timer;
 import com.oracle.graal.pointsto.util.Timer.StopTimer;
@@ -326,9 +325,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         } catch (FallbackFeature.FallbackImageRequest e) {
             reportUserException(e, parsedHostedOptions, NativeImageGeneratorRunner::warn);
             return 2;
-        } catch (ParsingError e) {
-            NativeImageGeneratorRunner.reportFatalError(e);
-            return 1;
         } catch (UserException | AnalysisError e) {
             reportUserError(e, parsedHostedOptions);
             return 1;
@@ -338,7 +334,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
                 if (exception instanceof UserException) {
                     reportUserError(exception, parsedHostedOptions);
                     hasUserError = true;
-                } else if (exception instanceof AnalysisError && !(exception instanceof ParsingError)) {
+                } else if (exception instanceof AnalysisError) {
                     reportUserError(exception, parsedHostedOptions);
                     hasUserError = true;
                 }
@@ -473,7 +469,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
 
         public static void main(String[] args) {
             ModuleSupport.exportAndOpenAllPackagesToUnnamed("org.graalvm.truffle", false);
-            ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.ci", false);
             ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler", false);
             ModuleSupport.exportAndOpenAllPackagesToUnnamed("com.oracle.graal.graal_enterprise", true);
             NativeImageGeneratorRunner.main(args);
