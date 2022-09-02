@@ -24,6 +24,8 @@ package com.oracle.truffle.espresso.meta;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
+import java.util.function.Predicate;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -495,18 +497,17 @@ public final class Meta implements ContextAccess {
         if (hostObject instanceof String) {
             return toGuestString((String) hostObject);
         }
-        if (hostObject instanceof StaticObject) {
+        if (hostObject instanceof StaticObject || (hostObject.getClass().isArray() && hostObject.getClass().getComponentType().isPrimitive())) {
             return hostObject;
         }
 
-        if (hostObject instanceof Boolean ||
-                        hostObject instanceof Byte ||
-                        hostObject instanceof Character ||
-                        hostObject instanceof Short ||
-                        hostObject instanceof Integer ||
-                        hostObject instanceof Long ||
-                        hostObject instanceof Float ||
-                        hostObject instanceof Double) {
+        if (Arrays.stream(JavaKind.values()).anyMatch(new Predicate<JavaKind>() {
+            @Override
+            public boolean test(JavaKind c) {
+                return c.toBoxedJavaClass() == hostObject.getClass();
+            }
+        })) {
+            // boxed value
             return hostObject;
         }
 
