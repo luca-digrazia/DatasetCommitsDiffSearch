@@ -25,7 +25,6 @@
 package org.graalvm.compiler.hotspot.sparc.test;
 
 import static org.graalvm.compiler.core.common.GraalOptions.RegisterPressure;
-import static org.graalvm.compiler.core.common.GraalOptions.TraceRA;
 import static org.junit.Assume.assumeTrue;
 
 import org.graalvm.compiler.core.test.backend.AllocatorTest;
@@ -44,12 +43,11 @@ public class SPARCAllocatorTest extends AllocatorTest {
     public void checkSPARC() {
         assumeTrue("skipping SPARC specific test", getTarget().arch instanceof SPARC);
         assumeTrue("RegisterPressure is set -> skip", RegisterPressure.getValue(getInitialOptions()) == null);
-        assumeTrue("TraceRA is set -> skip", !TraceRA.getValue(getInitialOptions()));
     }
 
     @Test
     public void test1() {
-        testAllocation("test1snippet", config.threadLocalHandshakes ? 1 : 2, 0, 0);
+        testAllocation("test1snippet", config.useThreadLocalPolling ? 1 : 2, 0, 0);
     }
 
     public static long test1snippet(long x) {
@@ -58,7 +56,7 @@ public class SPARCAllocatorTest extends AllocatorTest {
 
     @Test
     public void test2() {
-        testAllocation("test2snippet", config.threadLocalHandshakes ? 1 : 2, 0, 0);
+        testAllocation("test2snippet", config.useThreadLocalPolling ? 1 : 2, 0, 0);
     }
 
     public static long test2snippet(long x) {
@@ -67,7 +65,7 @@ public class SPARCAllocatorTest extends AllocatorTest {
 
     @Test
     public void test3() {
-        testAllocation("test3snippet", config.threadLocalHandshakes ? 3 : 4, 0, 0);
+        testAllocation("test3snippet", config.useThreadLocalPolling ? 3 : 4, 0, 0);
     }
 
     public static long test3snippet(long x) {
