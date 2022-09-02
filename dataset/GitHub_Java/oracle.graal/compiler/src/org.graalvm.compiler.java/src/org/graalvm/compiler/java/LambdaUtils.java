@@ -28,77 +28,98 @@ import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.Optional;
-import java.util.function.Supplier;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ConstantPool;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.nodes.FrameState;
-import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.util.Providers;
 
-public final class LambdaUtils {
-    private static final Pattern LAMBDA_PATTERN = Pattern.compile("\\$\\$Lambda\\$\\d+/\\d+");
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
-    private static final GraphBuilderPhase LAMBDA_PARSER_PHASE = new GraphBuilderPhase(buildLambdaParserConfig());
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
-    private static GraphBuilderConfiguration buildLambdaParserConfig() {
+public final class LambdaUtils {
+    private static final Pattern LAMBDA_PATTERN = Pattern.compile("\\$\\$Lambda\\$\\d+[/\\.][^/]+;");
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
+
+    private static GraphBuilderConfiguration buildLambdaParserConfig(ClassInitializationPlugin cip) {
         GraphBuilderConfiguration.Plugins plugins = new GraphBuilderConfiguration.Plugins(new InvocationPlugins());
-        plugins.setClassInitializationPlugin(new NoClassInitializationPlugin());
+        plugins.setClassInitializationPlugin(cip);
         return GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
     }
 
     private LambdaUtils() {
     }
 
+    /**
+     * Creates a stable name for a lambda by hashing all the invokes in the lambda. Lambda class
+     * names are typically created based on an increasing atomic counter (e.g.
+     * {@code Test$$Lambda$23}). A stable name is created by replacing the substring after
+     * {@code "$$Lambda$"} with a hash of the method descriptor for each method invoked by the
+     * lambda.
+     *
+     * @param cip plugin to
+     *            {@link ClassInitializationPlugin#loadReferencedType(org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext, jdk.vm.ci.meta.ConstantPool, int, int)
+     *            load} new types
+     * @param providers providers to use when processing the lambda code
+     * @param lambdaType the lambda type to analyze
+     * @param options options to use when analyzing the lamda code
+     * @param debug debug context to nest the analysis into
+     * @param ctx context to use for the
+     *            {@link DebugContext#scope(java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object)}
+     * @return stable name for the lambda class
+     */
     @SuppressWarnings("try")
-    public static String findStableLambdaName(Providers providers, ResolvedJavaType key, OptionValues options, DebugContext debug, Object ctx) throws RuntimeException {
-        ResolvedJavaMethod[] lambdaProxyMethods = Arrays.stream(key.getDeclaredMethods()).filter(m -> !m.isBridge() && m.isPublic()).toArray(ResolvedJavaMethod[]::new);
+    public static String findStableLambdaName(ClassInitializationPlugin cip, Providers providers, ResolvedJavaType lambdaType, OptionValues options, DebugContext debug, Object ctx)
+                    throws RuntimeException {
+        ResolvedJavaMethod[] lambdaProxyMethods = Arrays.stream(lambdaType.getDeclaredMethods()).filter(m -> !m.isBridge() && m.isPublic()).toArray(ResolvedJavaMethod[]::new);
         assert lambdaProxyMethods.length == 1 : "There must be only one method calling the target.";
         StructuredGraph graph = new StructuredGraph.Builder(options, debug).method(lambdaProxyMethods[0]).build();
-        try (DebugContext.Scope ignored = debug.scope("Lambda target method analysis", graph, key, ctx)) {
+        try (DebugContext.Scope ignored = debug.scope("Lambda target method analysis", graph, lambdaType, ctx)) {
+            GraphBuilderPhase lambdaParserPhase = new GraphBuilderPhase(buildLambdaParserConfig(cip));
             HighTierContext context = new HighTierContext(providers, null, OptimisticOptimizations.NONE);
-            LAMBDA_PARSER_PHASE.apply(graph, context);
+            lambdaParserPhase.apply(graph, context);
         } catch (Throwable e) {
             throw debug.handle(e);
         }
-        Optional<Invoke> lambdaTargetInvokeOption = StreamSupport.stream(graph.getInvokes().spliterator(), false).findFirst();
-        if (!lambdaTargetInvokeOption.isPresent()) {
-            throw new JVMCIError("Lambda without a target invoke.");
+        List<ResolvedJavaMethod> invokedMethods = StreamSupport.stream(graph.getInvokes().spliterator(), false).map((inv) -> inv.getTargetMethod()).collect(Collectors.toList());
+        if (invokedMethods.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("Lambda without a target invoke: ").append(lambdaType.toClassName());
+            for (ResolvedJavaMethod m : lambdaType.getDeclaredMethods()) {
+                sb.append("\n  Method: ").append(m);
+            }
+            throw new JVMCIError(sb.toString());
         }
-        String lambdaTargetName = LambdaUtils.createStableLambdaName(key, lambdaTargetInvokeOption.get().getTargetMethod());
+        String lambdaTargetName = createStableLambdaName(lambdaType, invokedMethods);
         return lambdaTargetName;
     }
 
     public static boolean isLambdaType(ResolvedJavaType type) {
         String typeName = type.getName();
-        return type.isFinalFlagSet() && typeName.contains("/") && /* isVMAnonymousClass */ typeName.contains("$$Lambda$") && /*
-                                                                                                                              * shortcut
-                                                                                                                              * to
-                                                                                                                              * avoid
-                                                                                                                              * regex
-                                                                                                                              */ lambdaMatcher(type.getName()).find();
+        return type.isFinalFlagSet() && typeName.contains("/") && typeName.contains("$$Lambda$") && lambdaMatcher(type.getName()).find();
     }
 
-    private static String createStableLambdaName(ResolvedJavaType lambdaType, ResolvedJavaMethod targetMethod) {
-        assert lambdaMatcher(lambdaType.getName()).find() : "Stable name should be created only for lambda types.";
-        Matcher m = lambdaMatcher(lambdaType.getName());
-        String stableTargetMethod = digest(targetMethod.format("%H.%n(%P)%R"));
-        return m.replaceFirst("\\$\\$Lambda\\$" + stableTargetMethod);
+    private static String createStableLambdaName(ResolvedJavaType lambdaType, List<ResolvedJavaMethod> targetMethods) {
+        final String lambdaName = lambdaType.getName();
+        assert lambdaMatcher(lambdaName).find() : "Stable name should be created only for lambda types: " + lambdaName;
+
+        Matcher m = lambdaMatcher(lambdaName);
+        StringBuilder sb = new StringBuilder();
+        targetMethods.forEach((targetMethod) -> {
+            sb.append(targetMethod.format("%H.%n(%P)%R"));
+        });
+        return m.replaceFirst(Matcher.quoteReplacement("$$Lambda$" + digest(sb.toString()) + ";"));
     }
 
     private static Matcher lambdaMatcher(String value) {
@@ -123,22 +144,4 @@ public final class LambdaUtils {
             throw new JVMCIError(ex);
         }
     }
-
-    private static class NoClassInitializationPlugin implements ClassInitializationPlugin {
-
-        @Override
-        public boolean supportsLazyInitialization(ConstantPool cp) {
-            return true;
-        }
-
-        @Override
-        public void loadReferencedType(GraphBuilderContext builder, ConstantPool cp, int cpi, int bytecode) {
-        }
-
-        @Override
-        public boolean apply(GraphBuilderContext builder, ResolvedJavaType type, Supplier<FrameState> frameState, ValueNode[] classInit) {
-            return false;
-        }
-    }
-
 }
