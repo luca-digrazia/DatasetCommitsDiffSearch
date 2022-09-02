@@ -184,6 +184,12 @@ public final class DebuggerController implements ContextsListener {
         info.setBreakpoint(bp);
     }
 
+    public void clearBreakpoints() {
+        for (Breakpoint breakpoint : debuggerSession.getBreakpoints()) {
+            breakpoint.dispose();
+        }
+    }
+
     public void stepOver(RequestFilter filter) {
         Object thread = filter.getStepInfo().getGuestThread();
         JDWPLogger.log("STEP_OVER for thread: %s", JDWPLogger.LogLevel.STEPPING, getThreadName(thread));
@@ -294,7 +300,8 @@ public final class DebuggerController implements ContextsListener {
         JDWPLogger.log("suspend called for thread: %s with suspension count %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
 
         if (threadSuspension.getSuspensionCount(thread) > 0) {
-            // already suspended
+            // already suspended, so only increase the suspension count
+            threadSuspension.suspendThread(thread);
             return;
         }
 
