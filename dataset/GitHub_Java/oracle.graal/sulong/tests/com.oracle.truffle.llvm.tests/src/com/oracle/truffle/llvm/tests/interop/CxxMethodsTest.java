@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,14 +30,10 @@
 package com.oracle.truffle.llvm.tests.interop;
 
 import org.graalvm.polyglot.Value;
-import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-import com.oracle.truffle.llvm.tests.CommonTestUtils;
-
-@RunWith(CommonTestUtils.ExcludingRunner.class)
 public class CxxMethodsTest extends InteropTestBase {
 
     private static Value allocPoint;
@@ -121,6 +117,7 @@ public class CxxMethodsTest extends InteropTestBase {
             // calculate distance
             Value distanceResult1 = squaredEuclideanDistance.execute(point, point2);
             Value distanceResult2 = squaredEuclideanDistance.execute(point2, point);
+
             Value distanceResult3 = point2.invokeMember("squaredEuclideanDistance", point);
             Value distanceResult4 = point.invokeMember("squaredEuclideanDistance", point2);
 
