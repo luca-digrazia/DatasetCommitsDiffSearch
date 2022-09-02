@@ -44,6 +44,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.automaton.AbstractTransition;
 import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
+import com.oracle.truffle.regex.tregex.parser.ast.PositionAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
@@ -53,7 +54,7 @@ import com.oracle.truffle.regex.tregex.util.json.JsonValue;
  */
 public class PureNFATransition implements AbstractTransition<PureNFAState, PureNFATransition> {
 
-    private final short id;
+    private final int id;
     private final PureNFAState source;
     private final PureNFAState target;
     private final GroupBoundaries groupBoundaries;
@@ -61,7 +62,7 @@ public class PureNFATransition implements AbstractTransition<PureNFAState, PureN
     private final boolean dollarGuard;
     @CompilationFinal(dimensions = 1) private final QuantifierGuard[] quantifierGuards;
 
-    public PureNFATransition(short id, PureNFAState source, PureNFAState target, GroupBoundaries groupBoundaries, boolean caretGuard, boolean dollarGuard, QuantifierGuard[] quantifierGuards) {
+    public PureNFATransition(int id, PureNFAState source, PureNFAState target, GroupBoundaries groupBoundaries, boolean caretGuard, boolean dollarGuard, QuantifierGuard[] quantifierGuards) {
         this.id = id;
         this.source = source;
         this.target = target;
@@ -93,10 +94,16 @@ public class PureNFATransition implements AbstractTransition<PureNFAState, PureN
         return groupBoundaries;
     }
 
+    /**
+     * Transition is guarded by the "^" - {@link PositionAssertion}.
+     */
     public boolean hasCaretGuard() {
         return caretGuard;
     }
 
+    /**
+     * Transition is guarded by the "$" - {@link PositionAssertion}.
+     */
     public boolean hasDollarGuard() {
         return dollarGuard;
     }

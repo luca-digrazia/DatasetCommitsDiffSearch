@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,34 +42,39 @@ package com.oracle.truffle.regex.tregex.automaton;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
-public class SimpleStateIndex<T> implements StateIndex<T>, Iterable<T> {
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
-    @FunctionalInterface
-    public interface IdGetter<T> {
-        short getId(T state);
-    }
+/**
+ * Simple base class for implementors of {@link StateIndex}.
+ */
+public abstract class SimpleStateIndex<T> implements StateIndex<T>, Iterable<T> {
 
-    @FunctionalInterface
-    public interface IdSetter<T> {
-        void setId(T state, short id);
-    }
-
-    private final IdGetter<T> idGetter;
-    private final IdSetter<T> idSetter;
-    private final ArrayList<T> states = new ArrayList<>();
+    private final ArrayList<T> states;
     private StateSet<T> emptySet;
 
-    public SimpleStateIndex(IdGetter<T> idGetter, IdSetter<T> idSetter) {
-        this.idGetter = idGetter;
-        this.idSetter = idSetter;
+    protected SimpleStateIndex() {
+        states = new ArrayList<>();
     }
 
-    public void add(T rootNode) {
-        assert !states.contains(rootNode);
-        idSetter.setId(rootNode, (short) states.size());
-        states.add(rootNode);
+    protected SimpleStateIndex(int size) {
+        states = new ArrayList<>(size);
     }
+
+    public void add(T state) {
+        assert !states.contains(state);
+        setStateId(state, states.size());
+        states.add(state);
+        assert states.get(getStateId(state)) == state;
+    }
+
+    protected abstract int getStateId(T state);
+
+    protected abstract void setStateId(T state, int id);
 
     @Override
     public int getNumberOfStates() {
@@ -77,8 +82,8 @@ public class SimpleStateIndex<T> implements StateIndex<T>, Iterable<T> {
     }
 
     @Override
-    public short getId(T state) {
-        short id = idGetter.getId(state);
+    public int getId(T state) {
+        int id = getStateId(state);
         assert states.get(id) == state;
         return id;
     }
@@ -95,10 +100,6 @@ public class SimpleStateIndex<T> implements StateIndex<T>, Iterable<T> {
         return emptySet;
     }
 
-    public boolean isEmpty() {
-        return states.isEmpty();
-    }
-
     public int size() {
         return states.size();
     }
@@ -110,5 +111,16 @@ public class SimpleStateIndex<T> implements StateIndex<T>, Iterable<T> {
     @Override
     public Iterator<T> iterator() {
         return states.iterator();
+    }
+
+    @TruffleBoundary
+    @Override
+    public Spliterator<T> spliterator() {
+        return Spliterators.spliterator(iterator(), states.size(), Spliterator.DISTINCT | Spliterator.NONNULL);
+    }
+
+    @TruffleBoundary
+    public Stream<T> stream() {
+        return StreamSupport.stream(spliterator(), false);
     }
 }

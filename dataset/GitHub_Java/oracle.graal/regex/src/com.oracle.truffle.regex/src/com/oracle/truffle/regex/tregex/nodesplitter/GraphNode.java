@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -49,7 +49,6 @@ import com.oracle.truffle.regex.tregex.automaton.StateSet;
 import com.oracle.truffle.regex.tregex.dfa.DFAGenerator;
 import com.oracle.truffle.regex.tregex.nodes.dfa.DFAAbstractStateNode;
 import com.oracle.truffle.regex.tregex.nodes.dfa.DFAInitialStateNode;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 
 /**
  * Abstract graph node wrapper with lots of extra fields used by the dominator tree algorithm in
@@ -63,8 +62,8 @@ final class GraphNode implements Comparable<GraphNode> {
     private DFAAbstractStateNode dfaNode;
     private boolean dfaNodeCopied = false;
     private final short[] successorSet;
-    private final StateSet<DFANodeSplit, GraphNode> predecessorSet;
-    private final StateSet<DFANodeSplit, GraphNode> backEdges;
+    private final StateSet<GraphNode> predecessorSet;
+    private final StateSet<GraphNode> backEdges;
 
     private int[] domChildren;
     private int nDomChildren;
@@ -79,7 +78,7 @@ final class GraphNode implements Comparable<GraphNode> {
     GraphNode(DFANodeSplit graph, DFAAbstractStateNode dfaNode, short[] successorSet) {
         this.dfaNode = dfaNode;
         this.successorSet = successorSet;
-        predecessorSet = StateSet.create(graph);
+        predecessorSet = StateSet.createWithBackingSortedArray(graph);
         backEdges = StateSet.create(graph);
         domChildren = NO_DOM_CHILDREN;
     }
@@ -102,7 +101,7 @@ final class GraphNode implements Comparable<GraphNode> {
     void createCopy(DFANodeSplit graph, short dfaNodeId) {
         if (getId() == 0) {
             assert dfaNode instanceof DFAInitialStateNode;
-            throw Exceptions.shouldNotReachHere();
+            throw new UnsupportedOperationException();
         }
         this.copy = new GraphNode(this, dfaNodeId);
         graph.addGraphNode(copy);
@@ -165,13 +164,20 @@ final class GraphNode implements Comparable<GraphNode> {
         return predecessorSet.contains(pre);
     }
 
+    void addPredecessorUnsorted(GraphNode pre) {
+        predecessorSet.addBatch(pre);
+    }
+
+    void sortPredecessors() {
+        predecessorSet.addBatchFinish();
+    }
+
     void addPredecessor(GraphNode pre) {
         predecessorSet.add(pre);
     }
 
     void replacePredecessor(GraphNode pre) {
-        predecessorSet.remove(pre);
-        predecessorSet.add(pre.copy);
+        predecessorSet.replace(pre, pre.copy);
     }
 
     void removePredecessor(GraphNode pre) {

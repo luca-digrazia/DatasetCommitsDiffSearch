@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -63,14 +63,7 @@ public class TRegexOptions {
      * searches. This threshold is only checked in interpreter mode, so it should be sufficiently
      * smaller than the Graal compilation threshold!
      */
-    public static final int TRegexGenerateDFAThresholdCalls = 100;
-
-    /**
-     * If a regex could have processed more than this number of characters without generating a
-     * fully expanded DFA, then we go ahead and generate the fully expanded DFA even before the
-     * {@link #TRegexGenerateDFAThresholdCalls} threshold is met.
-     */
-    public static final int TRegexGenerateDFAThresholdCharacters = 2_000_000;
+    public static final int TRegexGenerateDFAThreshold = 100;
 
     /**
      * Try to pre-calculate results of tree-like expressions (see {@link NFATraceFinderGenerator}).

@@ -40,6 +40,8 @@
  */
 package com.oracle.truffle.regex.tregex.parser.ast;
 
+import com.oracle.truffle.regex.UnsupportedRegexException;
+import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.automaton.AbstractState;
 import com.oracle.truffle.regex.tregex.nfa.ASTTransition;
 
@@ -48,13 +50,11 @@ import com.oracle.truffle.regex.tregex.nfa.ASTTransition;
  * <p>
  * Roughly corresponds to the goal symbol <em>Term</em> in the ECMAScript RegExp syntax. A
  * <em>Term</em> ({@link Term}) can be either an <em>Assertion</em> ({@link PositionAssertion} or
- * {@link RegexASTSubtreeRootNode}) or an <em>Atom</em> ({@link CharacterClass},
- * {@link BackReference} or {@link Group}). <em>Quantifier</em>s are handled by the
- * {@link Group#isLoop()} flag of {@link Group}s.
+ * {@link LookAroundAssertion}) or an <em>Atom</em> ({@link QuantifiableTerm}.
  */
 public abstract class Term extends RegexASTNode implements AbstractState<Term, ASTTransition> {
 
-    private short seqIndex = 0;
+    private int seqIndex = 0;
 
     Term() {
     }
@@ -71,7 +71,10 @@ public abstract class Term extends RegexASTNode implements AbstractState<Term, A
     }
 
     public void setSeqIndex(int seqIndex) {
-        this.seqIndex = (short) seqIndex;
+        this.seqIndex = seqIndex;
+        if (seqIndex > TRegexOptions.TRegexParserTreeMaxNumberOfTermsInSequence) {
+            throw new UnsupportedRegexException("too many terms in a single sequence");
+        }
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,7 +46,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Set;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.automaton.StateIndex;
 import com.oracle.truffle.regex.tregex.automaton.StateSet;
@@ -98,8 +97,11 @@ public final class DFANodeSplit implements StateIndex<GraphNode> {
         flagActive = new CompilationFinalBitSet(graph.size() + EXTRA_INITIAL_CAPACITY);
         for (GraphNode graphNode : graph.getNodes()) {
             for (GraphNode successor : graphNode.getSuccessors(this)) {
-                successor.addPredecessor(graphNode);
+                successor.addPredecessorUnsorted(graphNode);
             }
+        }
+        for (GraphNode n : graph.getNodes()) {
+            n.sortPredecessors();
         }
         graph.setStart(graph.getNodes().get(0));
         domTree = new DominatorTree(graph);
@@ -248,13 +250,14 @@ public final class DFANodeSplit implements StateIndex<GraphNode> {
     }
 
     private void handleScc(GraphNode topNode, Set<GraphNode> scc) throws DFANodeSplitBailoutException {
-        StateSet<DFANodeSplit, GraphNode> msed = StateSet.create(this);
+        StateSet<GraphNode> msed = StateSet.createWithBackingSortedArray(this);
         for (GraphNode n : scc) {
             if (n.getDomTreeDepth() == topNode.getDomTreeDepth() + 1) {
                 n.setWeightAndHeaders(this, n, scc);
-                msed.add(n);
+                msed.addBatch(n);
             }
         }
+        msed.addBatchFinish();
         if (msed.size() <= 1) {
             return;
         }
@@ -273,7 +276,6 @@ public final class DFANodeSplit implements StateIndex<GraphNode> {
         for (GraphNode n : scc) {
             if (n.getHeader() != headerNode) {
                 if (nextId == TRegexOptions.TRegexMaxDFASizeAfterNodeSplitting) {
-                    CompilerDirectives.transferToInterpreter();
                     throw new DFANodeSplitBailoutException();
                 }
                 n.createCopy(this, nextId++);

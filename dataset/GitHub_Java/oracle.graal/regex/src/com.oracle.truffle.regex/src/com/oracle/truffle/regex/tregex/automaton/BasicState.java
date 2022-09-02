@@ -41,6 +41,7 @@
 package com.oracle.truffle.regex.tregex.automaton;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.regex.tregex.parser.ast.PositionAssertion;
 
 /**
  * Abstract base class for states of an automaton.
@@ -60,7 +61,7 @@ public abstract class BasicState<S extends BasicState<S, T>, T extends AbstractT
      */
     protected static final int N_FLAGS = 4;
 
-    private final short id;
+    private final int id;
     @CompilationFinal private byte flags;
     @CompilationFinal(dimensions = 1) private T[] successors;
     @CompilationFinal(dimensions = 1) private T[] predecessors;
@@ -71,22 +72,19 @@ public abstract class BasicState<S extends BasicState<S, T>, T extends AbstractT
      * @param emptyTransitions static final empty array of transitions. This will be shared for all
      *            empty transition arrays.
      */
-    protected BasicState(short id, T[] emptyTransitions) {
+    protected BasicState(int id, T[] emptyTransitions) {
         this(id, (byte) 0, emptyTransitions);
     }
 
-    protected BasicState(short id, byte flags, T[] emptyTransitions) {
+    protected BasicState(int id, byte flags, T[] emptyTransitions) {
         this.id = id;
         this.flags = flags;
         this.successors = emptyTransitions;
         this.predecessors = emptyTransitions;
     }
 
-    /**
-     * Unique ID of this state.
-     */
     @Override
-    public short getId() {
+    public int getId() {
         return id;
     }
 
@@ -114,6 +112,9 @@ public abstract class BasicState<S extends BasicState<S, T>, T extends AbstractT
         return getFlag(FLAG_ANY_INITIAL_STATE);
     }
 
+    /**
+     * Anchored final states are implicitly guarded by a {@code ^}-{@link PositionAssertion}.
+     */
     public boolean isAnchoredInitialState() {
         return getFlag(FLAG_ANCHORED_INITIAL_STATE);
     }
@@ -138,6 +139,9 @@ public abstract class BasicState<S extends BasicState<S, T>, T extends AbstractT
         return getFlag(FLAG_ANY_FINAL_STATE);
     }
 
+    /**
+     * Anchored final states are implicitly guarded by a {@code $}-{@link PositionAssertion}.
+     */
     public boolean isAnchoredFinalState() {
         return getFlag(FLAG_ANCHORED_FINAL_STATE);
     }
@@ -160,6 +164,10 @@ public abstract class BasicState<S extends BasicState<S, T>, T extends AbstractT
 
     public boolean isUnAnchoredInitialState(boolean forward) {
         return forward ? isUnAnchoredInitialState() : isUnAnchoredFinalState();
+    }
+
+    public boolean isInitialState(boolean forward) {
+        return forward ? isInitialState() : isFinalState();
     }
 
     public boolean isFinalState(boolean forward) {
@@ -261,6 +269,10 @@ public abstract class BasicState<S extends BasicState<S, T>, T extends AbstractT
         predecessors[--nPredecessors] = predecessor;
     }
 
+    /**
+     * Returns the current value of {@code nPredecessors} set by {@link #incPredecessors()}, which
+     * is not necessarily the final number of predecessors. Use with caution.
+     */
     protected int getNPredecessors() {
         return nPredecessors;
     }

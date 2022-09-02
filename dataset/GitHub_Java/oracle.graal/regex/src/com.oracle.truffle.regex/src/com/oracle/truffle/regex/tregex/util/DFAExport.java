@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,14 +40,7 @@
  */
 package com.oracle.truffle.regex.tregex.util;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.nio.file.StandardOpenOption;
-import java.util.Map;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
-
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.regex.tregex.dfa.DFAGenerator;
 import com.oracle.truffle.regex.tregex.dfa.DFAStateNodeBuilder;
@@ -59,11 +52,17 @@ import com.oracle.truffle.regex.tregex.matchers.EmptyMatcher;
 import com.oracle.truffle.regex.tregex.matchers.SingleCharMatcher;
 import com.oracle.truffle.regex.tregex.matchers.SingleRangeMatcher;
 import com.oracle.truffle.regex.tregex.nodes.dfa.DFAStateNode;
-import com.oracle.truffle.regex.tregex.nodes.dfa.Matchers.SimpleMatchers;
+
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.StandardOpenOption;
+import java.util.Map;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class DFAExport {
 
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     public static void exportDot(DFAGenerator dfaGenerator, TruffleFile path, boolean shortLabels) {
         DFAStateNodeBuilder[] entryStates = dfaGenerator.getEntryStates();
         Map<DFAStateNodeBuilder, DFAStateNodeBuilder> stateMap = dfaGenerator.getStateMap();
@@ -106,7 +105,7 @@ public class DFAExport {
                     }
                 }
                 for (DFAStateTransitionBuilder t : state.getSuccessors()) {
-                    DotExport.printConnection(writer, dotState(state, shortLabels), dotState(t.getTarget(), shortLabels), t.getCodePointSet().toString());
+                    DotExport.printConnection(writer, dotState(state, shortLabels), dotState(t.getTarget(), shortLabels), t.getMatcherBuilder().toString());
                 }
             }
             writer.write("}");
@@ -120,7 +119,7 @@ public class DFAExport {
         return "S" + (shortLabels ? state.getId() : state.stateSetToString());
     }
 
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     public static void exportUnitTest(DFAStateNode entry, DFAStateNode[] states) {
         System.out.printf("int initialState = %d;\n", entry.getId());
         System.out.printf("DFAStateNode[] states = createStates(%d);\n", states.length);
@@ -131,10 +130,10 @@ public class DFAExport {
             }
             System.out.println(" });");
             System.out.printf("states[%d].setMatchers(new ByteMatcher[] {\n    ", state.getId());
-            printMatcher(((SimpleMatchers) state.getMatchers()).getMatchers()[0]);
-            for (int i = 1; i < state.getMatchers().size(); i++) {
+            printMatcher(state.getMatchers()[0]);
+            for (int i = 1; i < state.getMatchers().length; i++) {
                 System.out.print(",\n    ");
-                printMatcher(((SimpleMatchers) state.getMatchers()).getMatchers()[i]);
+                printMatcher(state.getMatchers()[i]);
             }
             System.out.println("\n});");
             if (state.isFinalState()) {
@@ -148,13 +147,13 @@ public class DFAExport {
             System.out.print("EmptyByteMatcher.create()");
         }
         if (matcher instanceof SingleCharMatcher) {
-            System.out.printf("SingleByteMatcher.create(0x%02x)", ((SingleCharMatcher) matcher).getChar());
+            System.out.printf("SingleByteMatcher.create(0x%02x)", (int) ((SingleCharMatcher) matcher).getChar());
         }
         if (matcher instanceof SingleRangeMatcher) {
-            System.out.printf("RangeByteMatcher.create(0x%02x, 0x%02x)", ((SingleRangeMatcher) matcher).getLo(), ((SingleRangeMatcher) matcher).getHi());
+            System.out.printf("RangeByteMatcher.create(0x%02x, 0x%02x)", (int) ((SingleRangeMatcher) matcher).getLo(), (int) ((SingleRangeMatcher) matcher).getHi());
         }
         if (matcher instanceof BitSetMatcher) {
-            long[] words = ((BitSetMatcher) matcher).getBitSet();
+            long[] words = ((BitSetMatcher) matcher).getBitSet().toLongArray();
             System.out.printf("MultiByteMatcher.create(new CompilationFinalBitSet(new long[] {\n        0x%016xL", words[0]);
             for (int i = 1; i < words.length; i++) {
                 System.out.printf(", 0x%016xL", words[i]);
