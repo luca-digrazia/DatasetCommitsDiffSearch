@@ -77,7 +77,6 @@ import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.UnaryOpLogicNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
@@ -187,7 +186,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
             ControlFlowGraph cfg = ControlFlowGraph.compute(graph, true, true, true, true);
             if (fullSchedule) {
                 if (moveGuards && Options.MoveGuardsUpwards.getValue(graph.getOptions())) {
-                    cfg.visitDominatorTree(new MoveGuardsUpwards(), graph.isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL));
+                    cfg.visitDominatorTree(new MoveGuardsUpwards(), graph.hasValueProxies());
                 }
                 try (DebugContext.Scope scheduleScope = graph.getDebug().scope(SchedulePhase.class)) {
                     SchedulePhase.run(graph, SchedulingStrategy.EARLIEST_WITH_GUARD_ORDER, cfg);
@@ -202,7 +201,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
                 blockToNodes = getBlockToNodes(cfg);
             }
             ControlFlowGraph.RecursiveVisitor<?> visitor = createVisitor(graph, cfg, blockToNodes, nodeToBlock, context);
-            cfg.visitDominatorTree(visitor, graph.isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL));
+            cfg.visitDominatorTree(visitor, graph.hasValueProxies());
         }
     }
 
@@ -298,13 +297,13 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
                                                     guard.getNoDeoptSuccessorPosition());
                                     GuardNode newGuard = node.graph().unique(newlyCreatedGuard);
                                     if (otherGuard.isAlive()) {
-                                        if (trueSuccessor instanceof LoopExitNode && beginNode.graph().isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL)) {
+                                        if (trueSuccessor instanceof LoopExitNode && beginNode.graph().hasValueProxies()) {
                                             otherGuard.replaceAndDelete(ProxyNode.forGuard(newGuard, (LoopExitNode) trueSuccessor));
                                         } else {
                                             otherGuard.replaceAndDelete(newGuard);
                                         }
                                     }
-                                    if (falseSuccessor instanceof LoopExitNode && beginNode.graph().isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL)) {
+                                    if (falseSuccessor instanceof LoopExitNode && beginNode.graph().hasValueProxies()) {
                                         guard.replaceAndDelete(ProxyNode.forGuard(newGuard, (LoopExitNode) falseSuccessor));
                                     } else {
                                         guard.replaceAndDelete(newGuard);
@@ -575,7 +574,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
                 }
 
                 if (node instanceof AbstractBeginNode) {
-                    if (node instanceof LoopExitNode && graph.isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL)) {
+                    if (node instanceof LoopExitNode && graph.hasValueProxies()) {
                         // Condition must not be used down this path.
                         return;
                     }
