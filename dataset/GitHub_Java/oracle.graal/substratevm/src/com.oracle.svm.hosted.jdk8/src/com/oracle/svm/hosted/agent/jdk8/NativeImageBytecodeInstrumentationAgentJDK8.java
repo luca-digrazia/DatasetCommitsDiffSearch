@@ -44,7 +44,12 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
  */
 public class NativeImageBytecodeInstrumentationAgentJDK8 implements NativeImageBytecodeInstrumentationAgentExtension {
 
-    public void addClassInstrumentationTransformer(Instrumentation inst) {
+    @Override
+    public void addClassFileTransformers(Instrumentation inst) {
+        if (!System.getProperty("java.specification.version").equals("1.8")) {
+            return; /* Lambda rewriting is only needed for Java 8 */
+        }
+
         TransformerInterface transformation = NativeImageBytecodeInstrumentationAgentJDK8::applyRewriteLambdasTransformation;
         ClassFileTransformer transformer = AgentSupport.createClassInstrumentationTransformer(transformation);
         inst.addTransformer(transformer);
