@@ -583,15 +583,15 @@ public class FlatNodeGenFactory {
 
     public List<CodeVariableElement> createUncachedFields() {
         List<CodeVariableElement> fields = new ArrayList<>();
-        List<CacheExpression> cacheExpressions = computeUniqueReferenceCaches();
+        List<CacheExpression> cacheExpressions = computeUniqueSupplierCaches();
         for (CacheExpression cache : cacheExpressions) {
             CodeVariableElement supplierField = new CodeVariableElement(modifiers(PRIVATE, FINAL),
-                            cache.getReferenceType(), createElementReferenceName(cache));
+                            cache.getSupplierType(), createSupplierName(cache));
             CodeTreeBuilder builder = supplierField.createInitBuilder();
             if (cache.isCachedContext()) {
-                builder.startCall("lookupContextReference").typeLiteral(cache.getLanguageType()).end();
+                builder.startCall("getContextSupplier").typeLiteral(cache.getLanguageType()).end();
             } else {
-                builder.startCall("lookupLanguageReference").typeLiteral(cache.getLanguageType()).end();
+                builder.startCall("getLanguageSupplier").typeLiteral(cache.getLanguageType()).end();
             }
             fields.add(supplierField);
         }
@@ -749,10 +749,10 @@ public class FlatNodeGenFactory {
         }
 
         if (primaryNode) {
-            List<CacheExpression> cacheExpressions = computeUniqueReferenceCaches();
+            List<CacheExpression> cacheExpressions = computeUniqueSupplierCaches();
             for (CacheExpression cache : cacheExpressions) {
                 CodeVariableElement supplierField = new CodeVariableElement(modifiers(PRIVATE),
-                                cache.getReferenceType(), createElementReferenceName(cache));
+                                cache.getSupplierType(), createSupplierName(cache));
                 supplierField.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(CompilationFinal.class)));
                 clazz.getEnclosedElements().add(supplierField);
             }
@@ -865,10 +865,10 @@ public class FlatNodeGenFactory {
         }
     }
 
-    private List<CacheExpression> computeUniqueReferenceCaches() {
+    private List<CacheExpression> computeUniqueSupplierCaches() {
         List<CacheExpression> cacheExpressions = new ArrayList<>();
-        Set<String> computedContextReferences = new HashSet<>();
-        Set<String> computedLanguageReferences = new HashSet<>();
+        Set<String> computedContextSuppliers = new HashSet<>();
+        Set<String> computedLanguageSuppliers = new HashSet<>();
         for (NodeData sharedNode : this.sharingNodes) {
             List<SpecializationData> specializations = calculateReachableSpecializations(sharedNode);
             for (SpecializationData specialization : specializations) {
@@ -879,17 +879,17 @@ public class FlatNodeGenFactory {
                     TypeMirror languageType = cache.getLanguageType();
                     String qualifiedLanguageTypeName = ElementUtils.getQualifiedName(languageType);
                     if (cache.isCachedLanguage()) {
-                        if (computedLanguageReferences.contains(qualifiedLanguageTypeName)) {
+                        if (computedLanguageSuppliers.contains(qualifiedLanguageTypeName)) {
                             continue;
                         } else {
-                            computedLanguageReferences.add(qualifiedLanguageTypeName);
+                            computedLanguageSuppliers.add(qualifiedLanguageTypeName);
                         }
                     }
                     if (cache.isCachedContext()) {
-                        if (computedContextReferences.contains(qualifiedLanguageTypeName)) {
+                        if (computedContextSuppliers.contains(qualifiedLanguageTypeName)) {
                             continue;
                         } else {
-                            computedContextReferences.add(qualifiedLanguageTypeName);
+                            computedContextSuppliers.add(qualifiedLanguageTypeName);
                         }
                     }
                     cacheExpressions.add(cache);
@@ -1321,7 +1321,6 @@ public class FlatNodeGenFactory {
         CodeExecutableElement method = new CodeExecutableElement(modifiers(), forType.getReturnType(), forType.getName());
         FrameState frameState = FrameState.load(this, forType, Integer.MAX_VALUE, NodeExecutionMode.UNCACHED, method);
         frameState.addParametersTo(method, Integer.MAX_VALUE);
-        method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
 
         if (forType.getMethod() != null) {
             method.getModifiers().addAll(forType.getMethod().getModifiers());
@@ -3822,7 +3821,7 @@ public class FlatNodeGenFactory {
 
     private Collection<IfTriple> persistAndInitializeCache(FrameState frameState, SpecializationData specialization, CacheExpression cache, boolean store, boolean persist) {
         List<IfTriple> triples = new ArrayList<>();
-        triples.addAll(initializeReferences(frameState, cache));
+        triples.addAll(initializeSuppliers(frameState, cache));
         CodeTree init = initializeCache(frameState, specialization, cache);
         if (store) {
             // store as local variable
@@ -3929,15 +3928,15 @@ public class FlatNodeGenFactory {
 
     }
 
-    private static List<IfTriple> initializeReferences(FrameState frameState, CacheExpression cache) {
+    private static List<IfTriple> initializeSuppliers(FrameState frameState, CacheExpression cache) {
         if (cache.isCachedContext() || cache.isCachedLanguage()) {
-            String supplierName = createElementReferenceName(cache);
+            String supplierName = createSupplierName(cache);
 
             CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
             String supplierLocalName = supplierName + "_";
-            builder.declaration(cache.getReferenceType(), supplierLocalName, "this." + supplierName);
+            builder.declaration(cache.getSupplierType(), supplierLocalName, "this." + supplierName);
             builder.startIf().string(supplierLocalName).string(" == null").end().startBlock();
-            String method = cache.isCachedContext() ? "super.lookupContextReference" : "super.lookupLanguageReference";
+            String method = cache.isCachedContext() ? "super.getContextSupplier" : "super.getLanguageSupplier";
             builder.startStatement().string("this.", supplierName).string(" = ").string(supplierLocalName).string(" = ").startCall(method).typeLiteral(cache.getLanguageType()).end().end();
             builder.end();
 
@@ -3947,7 +3946,7 @@ public class FlatNodeGenFactory {
             } else {
                 frameState.setBoolean(supplierInitialized, true);
             }
-            frameState.set(supplierName, new LocalVariable(cache.getReferenceType(), supplierLocalName, null));
+            frameState.set(supplierName, new LocalVariable(cache.getSupplierType(), supplierLocalName, null));
             return Arrays.asList(new IfTriple(builder.build(), null, null));
         }
         return Collections.emptyList();
@@ -4001,7 +4000,7 @@ public class FlatNodeGenFactory {
                 tree = CodeTreeBuilder.singleString("this." + cache.getMergedLibraryIdentifier());
             }
         } else if (cache.isCachedContext() || cache.isCachedLanguage()) {
-            String fieldName = createElementReferenceName(cache);
+            String fieldName = createSupplierName(cache);
             CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
 
             LocalVariable var = frameState.get(fieldName);
@@ -4010,7 +4009,7 @@ public class FlatNodeGenFactory {
             } else {
                 builder.string("this.").string(fieldName);
             }
-            if (!cache.isReference()) {
+            if (!cache.isSupplier()) {
                 builder.string(".get()");
             }
             tree = builder.build();
@@ -4026,11 +4025,11 @@ public class FlatNodeGenFactory {
         return tree;
     }
 
-    private static String createElementReferenceName(CacheExpression cache) {
+    private static String createSupplierName(CacheExpression cache) {
         if (cache.isCachedContext()) {
-            return ElementUtils.firstLetterLowerCase(ElementUtils.getSimpleName(cache.getLanguageType())) + "ContextReference_";
+            return ElementUtils.firstLetterLowerCase(ElementUtils.getSimpleName(cache.getLanguageType())) + "ContextSupplier_";
         } else if (cache.isCachedLanguage()) {
-            return ElementUtils.firstLetterLowerCase(ElementUtils.getSimpleName(cache.getLanguageType())) + "Reference_";
+            return ElementUtils.firstLetterLowerCase(ElementUtils.getSimpleName(cache.getLanguageType())) + "Supplier_";
         } else {
             throw new AssertionError();
         }

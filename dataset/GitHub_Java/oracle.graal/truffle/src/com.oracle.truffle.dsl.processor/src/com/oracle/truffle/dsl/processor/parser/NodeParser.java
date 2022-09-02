@@ -82,6 +82,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.lang.model.element.AnnotationMirror;
@@ -101,8 +102,6 @@ import javax.tools.Diagnostic.Kind;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
@@ -1866,7 +1865,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
                     assumptionExpression.addError("Incompatible return type %s. Assumptions must be assignable to %s or %s.", getSimpleName(expression.getResolvedType()),
                                     getSimpleName(assumptionType), getSimpleName(assumptionArrayType));
                 }
-                if (specialization.isDynamicParameterBound(expression, true)) {
+                if (specialization.isDynamicParameterBound(expression)) {
                     specialization.addError("Assumption expressions must not bind dynamic parameter values.");
                 }
             } catch (InvalidExpressionException e) {
@@ -1904,7 +1903,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 specialization.addError(annotationValue, "Incompatible return type %s. Limit expressions must return %s.", getSimpleName(expression.getResolvedType()),
                                 getSimpleName(expectedType));
             }
-            if (specialization.isDynamicParameterBound(expression, true)) {
+            if (specialization.isDynamicParameterBound(expression)) {
                 specialization.addError(annotationValue, "Limit expressions must not bind dynamic parameter values.");
             }
 
@@ -1995,10 +1994,10 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 TypeMirror languageType = cache.getParameter().getType();
 
                 boolean isLanguage = ElementUtils.isAssignable(languageType, context.getType(TruffleLanguage.class));
-                boolean isLanguageReference = ElementUtils.isAssignable(languageType, context.getType(LanguageReference.class));
+                boolean isLanguageSupplier = ElementUtils.isAssignable(languageType, context.getType(Supplier.class));
 
-                if (!isLanguage && !isLanguageReference) {
-                    cache.addError("Invalid @%s specification. The parameter type must be a subtype of %s or of type LanguageReference<%s>.",
+                if (!isLanguage && !isLanguageSupplier) {
+                    cache.addError("Invalid @%s specification. The parameter type must be a subtype of %s or of type Supplier<%s>.",
                                     CachedLanguage.class.getSimpleName(),
                                     TruffleLanguage.class.getSimpleName(),
                                     TruffleLanguage.class.getSimpleName());
@@ -2006,10 +2005,10 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 }
 
                 TypeMirror supplierType;
-                if (isLanguageReference) {
+                if (isLanguageSupplier) {
                     TypeMirror typeArgument = getFirstTypeArgument(languageType);
                     if (typeArgument == null || !ElementUtils.isAssignable(typeArgument, context.getType(TruffleLanguage.class))) {
-                        cache.addError("Invalid @%s specification. The first type argument of the LanguageReference must be a subtype of '%s'.",
+                        cache.addError("Invalid @%s specification. The first type argument of the Supplier must be a subtype of '%s'.",
                                         CachedLanguage.class.getSimpleName(),
                                         TruffleLanguage.class.getSimpleName());
                     } else {
@@ -2019,20 +2018,20 @@ public final class NodeParser extends AbstractParser<NodeData> {
                     languageType = typeArgument;
                 } else {
                     verifyLanguageType(CachedLanguage.class, cache, languageType);
-                    supplierType = new CodeTypeMirror.DeclaredCodeTypeMirror(context.getTypeElement(LanguageReference.class), Arrays.asList(languageType));
+                    supplierType = new CodeTypeMirror.DeclaredCodeTypeMirror(context.getTypeElement(Supplier.class), Arrays.asList(languageType));
                 }
                 if (cache.hasErrors()) {
                     continue parameters;
                 }
-                String fieldName = ElementUtils.firstLetterLowerCase(ElementUtils.getSimpleName(languageType)) + "Reference_";
+                String fieldName = ElementUtils.firstLetterLowerCase(ElementUtils.getSimpleName(languageType)) + "Supplier_";
                 CodeVariableElement variableElement = new CodeVariableElement(supplierType, fieldName);
                 List<? extends Element> elements = Arrays.asList(variableElement);
                 DSLExpressionResolver localResolver = resolver.copy(elements);
-                DSLExpression accessReference = new DSLExpression.Variable(null, "null");
-                cache.setReferenceType(supplierType);
+                DSLExpression accessSupplier = new DSLExpression.Variable(null, "null");
+                cache.setSupplierType(supplierType);
                 cache.setLanguageType(languageType);
-                cache.setDefaultExpression(resolveCachedExpression(localResolver, cache, null, accessReference, null));
-                cache.setUncachedExpression(resolveCachedExpression(localResolver, cache, null, accessReference, null));
+                cache.setDefaultExpression(resolveCachedExpression(localResolver, cache, null, accessSupplier, null));
+                cache.setUncachedExpression(resolveCachedExpression(localResolver, cache, null, accessSupplier, null));
                 cache.setAlwaysInitialized(true);
             } else if (cache.isCachedContext()) {
                 AnnotationMirror cachedContext = cache.getMessageAnnotation();
@@ -2067,24 +2066,24 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 }
 
                 TypeMirror declaredContextType = parameter.getType();
-                if (ElementUtils.typeEquals(ElementUtils.eraseGenericTypes(parameter.getType()), ElementUtils.eraseGenericTypes(context.getType(ContextReference.class)))) {
+                if (ElementUtils.typeEquals(ElementUtils.eraseGenericTypes(parameter.getType()), ElementUtils.eraseGenericTypes(context.getType(Supplier.class)))) {
                     declaredContextType = getFirstTypeArgument(parameter.getType());
                 }
 
                 if (!ElementUtils.typeEquals(contextType, declaredContextType)) {
-                    cache.addError("Invalid @%s specification. The parameter type must match the context type '%s' or 'ContextReference<%s>'.",
+                    cache.addError("Invalid @%s specification. The parameter type must match the context type '%s' or 'Supplier<%s>'.",
                                     CachedContext.class.getSimpleName(),
                                     ElementUtils.getSimpleName(contextType),
                                     ElementUtils.getSimpleName(contextType));
                     continue parameters;
                 }
-                TypeMirror referenceType = new CodeTypeMirror.DeclaredCodeTypeMirror(context.getTypeElement(ContextReference.class), Arrays.asList(contextType));
+                TypeMirror supplierType = new CodeTypeMirror.DeclaredCodeTypeMirror(context.getTypeElement(Supplier.class), Arrays.asList(contextType));
 
-                DSLExpression accessReference = new DSLExpression.Variable(null, "null");
-                cache.setReferenceType(referenceType);
+                DSLExpression accessSupplier = new DSLExpression.Variable(null, "null");
+                cache.setSupplierType(supplierType);
                 cache.setLanguageType(languageType);
-                cache.setDefaultExpression(resolveCachedExpression(resolver, cache, null, accessReference, null));
-                cache.setUncachedExpression(resolveCachedExpression(resolver, cache, null, accessReference, null));
+                cache.setDefaultExpression(resolveCachedExpression(resolver, cache, null, accessSupplier, null));
+                cache.setUncachedExpression(resolveCachedExpression(resolver, cache, null, accessSupplier, null));
                 cache.setAlwaysInitialized(true);
             }
         }
@@ -2153,8 +2152,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
         }
         specialization.setExcludeCompanion(uncachedSpecialization);
 
-        boolean seenDynamicParameterBound = false;
-
         for (int i = 0; i < libraries.size(); i++) {
             CacheExpression cachedLibrary = libraries.get(i);
             CacheExpression uncachedLibrary = uncachedLibraries.get(i);
@@ -2186,11 +2183,11 @@ public final class NodeParser extends AbstractParser<NodeData> {
             if (receiverExpression == null) {
                 continue;
             }
-            DSLExpression substituteCachedExpression = null;
-            DSLExpression substituteUncachedExpression = null;
+            DSLExpression substituteExpression = null;
 
             // try substitutions
             if (mode == ParseMode.EXPORTED_MESSAGE) {
+
                 Parameter receiverParameter = specialization.findParameterOrDie(specialization.getNode().getChildExecutions().get(0));
                 if (receiverExpression instanceof DSLExpression.Variable) {
                     DSLExpression.Variable variable = (DSLExpression.Variable) receiverExpression;
@@ -2203,25 +2200,21 @@ public final class NodeParser extends AbstractParser<NodeData> {
                                 DSLExpression.Variable nodeReceiver = new DSLExpression.Variable(null, "this");
                                 nodeReceiver.setResolvedTargetType(exportLibraryType);
                                 nodeReceiver.setResolvedVariable(new CodeVariableElement(exportLibraryType, "this"));
-                                substituteCachedExpression = nodeReceiver;
+                                substituteExpression = nodeReceiver;
                             }
                         }
                     }
                 }
-                if (substituteCachedExpression == null && supportsLibraryMerge(receiverExpression, receiverParameter.getVariableElement())) {
-                    substituteCachedExpression = receiverExpression;
+
+                if (substituteExpression == null && supportsLibraryMerge(receiverExpression, receiverParameter.getVariableElement())) {
+                    substituteExpression = receiverExpression;
                     cachedLibrary.setMergedLibrary(true);
                 }
             }
 
-            seenDynamicParameterBound = specialization.isDynamicParameterBound(receiverExpression, false);
-
-            if (substituteCachedExpression != null) {
-                if (substituteUncachedExpression == null) {
-                    substituteUncachedExpression = substituteCachedExpression;
-                }
-                cachedLibrary.setDefaultExpression(substituteCachedExpression);
-                cachedLibrary.setUncachedExpression(substituteUncachedExpression);
+            if (substituteExpression != null) {
+                cachedLibrary.setDefaultExpression(substituteExpression);
+                cachedLibrary.setUncachedExpression(substituteExpression);
                 cachedLibrary.setAlwaysInitialized(true);
                 return null;
             } else {
@@ -2266,9 +2259,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
             specialization.addError("The limit attribute must be specified if @%s is used with a dynamic parameter. E.g. add limit=\"3\" to resolve this.", CachedLibrary.class.getSimpleName());
         }
 
-        if (!seenDynamicParameterBound) {
-            // no uncached version needed if multiple instances of caches are impossible as they are
-            // bound by a cache only.
+        if (!specialization.hasMultipleInstances()) {
             return null;
         }
 

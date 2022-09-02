@@ -83,15 +83,7 @@ abstract class SerializeArgumentLibrary extends Library {
         throw UnsupportedTypeException.create(new Object[]{arg});
     }
 
-    public void putUByte(Object arg, NativeArgumentBuffer buffer) throws UnsupportedTypeException {
-        throw UnsupportedTypeException.create(new Object[]{arg});
-    }
-
     public void putShort(Object arg, NativeArgumentBuffer buffer) throws UnsupportedTypeException {
-        throw UnsupportedTypeException.create(new Object[]{arg});
-    }
-
-    public void putUShort(Object arg, NativeArgumentBuffer buffer) throws UnsupportedTypeException {
         throw UnsupportedTypeException.create(new Object[]{arg});
     }
 
@@ -99,15 +91,7 @@ abstract class SerializeArgumentLibrary extends Library {
         throw UnsupportedTypeException.create(new Object[]{arg});
     }
 
-    public void putUInt(Object arg, NativeArgumentBuffer buffer) throws UnsupportedTypeException {
-        throw UnsupportedTypeException.create(new Object[]{arg});
-    }
-
     public void putLong(Object arg, NativeArgumentBuffer buffer) throws UnsupportedTypeException {
-        throw UnsupportedTypeException.create(new Object[]{arg});
-    }
-
-    public void putULong(Object arg, NativeArgumentBuffer buffer) throws UnsupportedTypeException {
         throw UnsupportedTypeException.create(new Object[]{arg});
     }
 
@@ -157,45 +141,11 @@ abstract class SerializeArgumentLibrary extends Library {
         }
 
         @ExportMessage
-        static void putUByte(Object arg, NativeArgumentBuffer buffer,
-                        @Shared("exception") @Cached BranchProfile exception,
-                        @CachedLibrary("arg") InteropLibrary interop) throws UnsupportedTypeException {
-            try {
-                short nr = interop.asShort(arg);
-                buffer.putInt8((byte) nr);
-            } catch (UnsupportedMessageException ex) {
-                exception.enter();
-                try {
-                    buffer.putInt8(interop.asBoolean(arg) ? (byte) 1 : 0);
-                } catch (UnsupportedMessageException ex2) {
-                    throw UnsupportedTypeException.create(new Object[]{arg});
-                }
-            }
-        }
-
-        @ExportMessage
         static void putShort(Object arg, NativeArgumentBuffer buffer,
                         @Shared("exception") @Cached BranchProfile exception,
                         @CachedLibrary("arg") InteropLibrary interop) throws UnsupportedTypeException {
             try {
                 buffer.putInt16(interop.asShort(arg));
-            } catch (UnsupportedMessageException ex) {
-                exception.enter();
-                try {
-                    buffer.putInt16(interop.asBoolean(arg) ? (short) 1 : 0);
-                } catch (UnsupportedMessageException ex2) {
-                    throw UnsupportedTypeException.create(new Object[]{arg});
-                }
-            }
-        }
-
-        @ExportMessage
-        static void putUShort(Object arg, NativeArgumentBuffer buffer,
-                        @Shared("exception") @Cached BranchProfile exception,
-                        @CachedLibrary("arg") InteropLibrary interop) throws UnsupportedTypeException {
-            try {
-                int nr = interop.asInt(arg);
-                buffer.putInt16((short) nr);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
                 try {
@@ -223,24 +173,6 @@ abstract class SerializeArgumentLibrary extends Library {
         }
 
         @ExportMessage
-        static void putUInt(Object arg, NativeArgumentBuffer buffer,
-                        @Shared("exception") @Cached BranchProfile exception,
-                        @CachedLibrary("arg") InteropLibrary interop) throws UnsupportedTypeException {
-            try {
-                long nr = interop.asLong(arg);
-                buffer.putInt32((int) nr);
-            } catch (UnsupportedMessageException ex) {
-                exception.enter();
-                try {
-                    buffer.putInt32(interop.asBoolean(arg) ? 1 : 0);
-                } catch (UnsupportedMessageException ex2) {
-                    throw UnsupportedTypeException.create(new Object[]{arg});
-                }
-            }
-        }
-
-        @ExportMessage
-        @ExportMessage(name = "putULong")
         static void putLong(Object arg, NativeArgumentBuffer buffer,
                         @Shared("exception") @Cached BranchProfile exception,
                         @CachedLibrary("arg") InteropLibrary interop) throws UnsupportedTypeException {
@@ -331,68 +263,44 @@ abstract class SerializeArgumentLibrary extends Library {
     @ExportLibrary(value = SerializeArgumentLibrary.class, receiverType = Character.class)
     abstract static class CharConversion {
 
-        static int zero() {
+        static short zero() {
             return 0;
         }
 
         @ExportMessage
         static void putByte(Character ch, NativeArgumentBuffer buffer,
                         @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putByte((int) ch, buffer);
-        }
-
-        @ExportMessage
-        static void putUByte(Character ch, NativeArgumentBuffer buffer,
-                        @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putUByte((int) ch, buffer);
+            serialize.putByte((short) ch.charValue(), buffer);
         }
 
         @ExportMessage
         static void putShort(Character ch, NativeArgumentBuffer buffer,
                         @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putShort((int) ch, buffer);
-        }
-
-        @ExportMessage
-        static void putUShort(Character ch, NativeArgumentBuffer buffer,
-                        @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putUShort((int) ch, buffer);
+            serialize.putShort((short) ch.charValue(), buffer);
         }
 
         @ExportMessage
         static void putInt(Character ch, NativeArgumentBuffer buffer,
                         @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putInt((int) ch, buffer);
-        }
-
-        @ExportMessage
-        static void putUInt(Character ch, NativeArgumentBuffer buffer,
-                        @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putUInt((int) ch, buffer);
+            serialize.putInt((short) ch.charValue(), buffer);
         }
 
         @ExportMessage
         static void putLong(Character ch, NativeArgumentBuffer buffer,
                         @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putLong((int) ch, buffer);
-        }
-
-        @ExportMessage
-        static void putULong(Character ch, NativeArgumentBuffer buffer,
-                        @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putULong((int) ch, buffer);
+            serialize.putLong((short) ch.charValue(), buffer);
         }
 
         @ExportMessage
         static void putFloat(Character ch, NativeArgumentBuffer buffer,
                         @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putFloat((int) ch, buffer);
+            serialize.putFloat((short) ch.charValue(), buffer);
         }
 
         @ExportMessage
         static void putDouble(Character ch, NativeArgumentBuffer buffer,
                         @CachedLibrary("zero()") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
-            serialize.putDouble((int) ch, buffer);
+            serialize.putDouble((short) ch.charValue(), buffer);
         }
     }
 

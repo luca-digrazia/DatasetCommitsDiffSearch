@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -45,9 +45,14 @@ import static com.oracle.truffle.dsl.processor.java.ElementUtils.getAnnotationVa
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
-import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.dsl.processor.ProcessorContext;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Binary;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Call;
@@ -65,14 +70,13 @@ public final class CacheExpression extends MessageContainer {
     private DSLExpression defaultExpression;
     private DSLExpression uncachedExpression;
     private boolean alwaysInitialized = false;
-    private boolean eagerInitialize = false;
     private Message uncachedExpressionError;
     private boolean requiresBoundary;
     private String sharedGroup;
     private boolean mergedLibrary;
 
     private TypeMirror languageType;
-    private TypeMirror referenceType;
+    private TypeMirror supplierType;
 
     public CacheExpression(Parameter sourceParameter, AnnotationMirror sourceAnnotationMirror) {
         this.sourceParameter = sourceParameter;
@@ -93,28 +97,20 @@ public final class CacheExpression extends MessageContainer {
         this.languageType = languageType;
     }
 
-    public boolean isReference() {
+    public boolean isSupplier() {
         if (isCachedLanguage()) {
             return !ElementUtils.typeEquals(getLanguageType(), getParameter().getType());
         } else {
-            return ElementUtils.typeEquals(getReferenceType(), getParameter().getType());
+            return ElementUtils.typeEquals(getSupplierType(), getParameter().getType());
         }
     }
 
-    public boolean isEagerInitialize() {
-        return eagerInitialize;
+    public TypeMirror getSupplierType() {
+        return supplierType;
     }
 
-    public void setEagerInitialize(boolean alreadyInitialized) {
-        this.eagerInitialize = alreadyInitialized;
-    }
-
-    public TypeMirror getReferenceType() {
-        return referenceType;
-    }
-
-    public void setReferenceType(TypeMirror supplierType) {
-        this.referenceType = supplierType;
+    public void setSupplierType(TypeMirror supplierType) {
+        this.supplierType = supplierType;
     }
 
     public TypeMirror getLanguageType() {
@@ -126,7 +122,7 @@ public final class CacheExpression extends MessageContainer {
     }
 
     public AnnotationMirror getSharedGroupMirror() {
-        return ElementUtils.findAnnotationMirror(sourceParameter.getVariableElement(), types.Cached_Shared);
+        return ElementUtils.findAnnotationMirror(sourceParameter.getVariableElement(), Shared.class);
     }
 
     public AnnotationValue getSharedGroupValue() {
@@ -186,23 +182,23 @@ public final class CacheExpression extends MessageContainer {
     }
 
     public boolean isCached() {
-        return isType(types.Cached);
+        return isType(Cached.class);
     }
 
     public boolean isCachedLibrary() {
-        return isType(types.CachedLibrary);
+        return isType(CachedLibrary.class);
     }
 
     public boolean isCachedContext() {
-        return isType(types.CachedContext);
+        return isType(CachedContext.class);
     }
 
     public boolean isCachedLanguage() {
-        return isType(types.CachedLanguage);
+        return isType(CachedLanguage.class);
     }
 
-    private boolean isType(DeclaredType type) {
-        return ElementUtils.typeEquals(sourceAnnotationMirror.getAnnotationType(), type);
+    private boolean isType(Class<?> type) {
+        return ElementUtils.typeEquals(sourceAnnotationMirror.getAnnotationType(), ProcessorContext.getInstance().getType(type));
     }
 
     @Override
@@ -236,6 +232,7 @@ public final class CacheExpression extends MessageContainer {
     }
 
     public String getMergedLibraryIdentifier() {
+        String libraryName = ElementUtils.getSimpleName(getParameter().getType());
         DSLExpression identifierExpression = getDefaultExpression().reduce(new DSLExpressionReducer() {
 
             public DSLExpression visitVariable(Variable binary) {
@@ -263,26 +260,15 @@ public final class CacheExpression extends MessageContainer {
         });
         String expressionText = identifierExpression.asString();
         StringBuilder b = new StringBuilder(expressionText);
-        boolean nextUpperCase = false;
-        int i = 0;
-        while (i < b.length()) {
+        for (int i = 0; i < b.length(); i++) {
             char charAt = b.charAt(i);
-            if (!Character.isJavaIdentifierPart(charAt)) {
+            if (i == '.') {
+                b.setCharAt(i, '_');
+            } else if (!Character.isJavaIdentifierPart(charAt)) {
                 b.deleteCharAt(i);
-                nextUpperCase = true;
-            } else if (nextUpperCase) {
-                nextUpperCase = false;
-                if (i != 0) {
-                    b.setCharAt(i, Character.toUpperCase(b.charAt(i)));
-                }
-                i++;
-            } else {
-                i++;
             }
         }
-        String libraryName = ElementUtils.getSimpleName(getParameter().getType());
-
-        return b.toString() + libraryName + "_";
+        return b.toString() + libraryName;
     }
 
 }

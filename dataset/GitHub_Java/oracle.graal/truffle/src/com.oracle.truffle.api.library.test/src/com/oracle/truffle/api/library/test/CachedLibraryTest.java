@@ -49,7 +49,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.Introspectable;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -123,7 +122,6 @@ public class CachedLibraryTest extends AbstractLibraryTest {
     }
 
     @GenerateUncached
-    @Introspectable
     public abstract static class SimpleNode extends Node {
 
         abstract String execute(Object receiver);
