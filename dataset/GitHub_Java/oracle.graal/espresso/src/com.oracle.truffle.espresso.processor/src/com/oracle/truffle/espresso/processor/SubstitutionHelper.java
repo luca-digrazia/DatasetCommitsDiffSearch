@@ -55,7 +55,7 @@ public class SubstitutionHelper {
         this.implAnnotation = implAnnotation;
         // If the target is a node, obtain the abstract execute* method.
         ExecutableElement targetMethod = isNodeTarget()
-                        ? processor.findNodeExecute(getNodeTarget())
+                        ? EspressoProcessor.findNodeExecute(processor.getMessager(), getNodeTarget())
                         : getMethodTarget();
         this.hasMetaInjection = processor.hasMetaInjection(targetMethod);
         this.hasProfileInjection = processor.hasProfileInjection(targetMethod);
