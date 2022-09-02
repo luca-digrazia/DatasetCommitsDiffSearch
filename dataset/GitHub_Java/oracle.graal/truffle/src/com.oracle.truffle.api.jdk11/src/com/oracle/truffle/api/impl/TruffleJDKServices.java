@@ -40,19 +40,18 @@
  */
 package com.oracle.truffle.api.impl;
 
+import java.lang.invoke.VarHandle;
 import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
 import java.util.Set;
 
-import com.oracle.truffle.api.TruffleRuntimeAccess;
-
 /**
  * JDK 11+ implementation of {@code TruffleJDKServices}.
  */
-public class TruffleJDKServices {
+final class TruffleJDKServices {
 
-    public static void exportTo(ClassLoader loader, String moduleName) {
+    static void exportTo(ClassLoader loader, String moduleName) {
         assert (loader == null) != (moduleName == null) : "exactly one of a class loader or module name is required when exporting Truffle";
         Module truffleModule = TruffleJDKServices.class.getModule();
         Module clientModule;
@@ -64,7 +63,7 @@ public class TruffleJDKServices {
         exportFromTo(truffleModule, clientModule);
     }
 
-    public static void exportTo(Class<?> client) {
+    static void exportTo(Class<?> client) {
         Module truffleModule = TruffleJDKServices.class.getModule();
         exportFromTo(truffleModule, client.getModule());
     }
@@ -81,7 +80,105 @@ public class TruffleJDKServices {
         }
     }
 
-    public static List<Iterable<TruffleRuntimeAccess>> getTruffleRuntimeLoaders() {
-        return Collections.singletonList(ServiceLoader.load(TruffleRuntimeAccess.class));
+    static void addReads(Class<?> client) {
+        Module truffleModule = TruffleJDKServices.class.getModule();
+        Module clientModule = client.getModule();
+        truffleModule.addReads(clientModule);
+    }
+
+    static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
+        return Collections.singletonList(ServiceLoader.load(serviceClass));
+    }
+
+    static <S> void addUses(Class<S> service) {
+        Module module = TruffleJDKServices.class.getModule();
+        if (!module.canUse(service)) {
+            module.addUses(service);
+        }
+    }
+
+    static Object getUnnamedModule(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return null;
+        }
+        return classLoader.getUnnamedModule();
+    }
+
+    static boolean verifyModuleVisibility(Object module, Class<?> memberClass) {
+        Module lookupModule = (Module) module;
+        if (lookupModule == null) {
+            /*
+             * This case may currently happen in AOT as the module support there is not complete.
+             * See GR-19155.
+             */
+            return true;
+        }
+        Module memberModule = memberClass.getModule();
+        if (lookupModule == memberModule) {
+            return true;
+        } else {
+            String pkg = memberClass.getPackageName();
+            if (lookupModule.isNamed()) {
+                if (memberModule.isNamed()) {
+                    // both modules are named. check whether they are exported.
+                    return memberModule.isExported(pkg, lookupModule);
+                } else {
+                    // no access from named modules to unnamed modules
+                    return false;
+                }
+            } else {
+                if (memberModule.isNamed()) {
+                    // unnamed modules see all exported packages
+                    return memberModule.isExported(pkg);
+                } else {
+                    // full access from unnamed modules to unnamed modules
+                    return true;
+                }
+            }
+        }
+    }
+
+    static boolean isNonTruffleClass(Class<?> clazz) {
+        ClassLoader truffleClassLoader = TruffleJDKServices.class.getModule().getClassLoader();
+        ClassLoader classLoader = clazz.getClassLoader();
+        return truffleClassLoader != classLoader;
+    }
+
+    /**
+     * Ensures that loads and stores before the fence will not be reordered with loads and stores
+     * after the fence.
+     */
+    static void fullFence() {
+        VarHandle.fullFence();
+    }
+
+    /**
+     * Ensures that loads before the fence will not be reordered with loads and stores after the
+     * fence.
+     */
+    static void acquireFence() {
+        VarHandle.acquireFence();
+    }
+
+    /**
+     * Ensures that loads and stores before the fence will not be reordered with stores after the
+     * fence.
+     */
+    static void releaseFence() {
+        VarHandle.releaseFence();
+    }
+
+    /**
+     * Ensures that loads before the fence will not be reordered with loads after the fence.
+     */
+    static void loadLoadFence() {
+        VarHandle.loadLoadFence();
+    }
+
+    /**
+     * Ensures that stores before the fence will not be reordered with stores after the fence.
+     */
+    static void storeStoreFence() {
+        VarHandle.storeStoreFence();
     }
 }

@@ -42,12 +42,10 @@ package com.oracle.truffle.api.impl;
 
 import java.util.List;
 
-import com.oracle.truffle.api.TruffleRuntimeAccess;
-
 /**
  * JDK version independent interface to JDK services used by Truffle.
  */
-public final class TruffleJDKServices {
+final class TruffleJDKServices {
 
     private TruffleJDKServices() {
     }
@@ -63,7 +61,7 @@ public final class TruffleJDKServices {
      * @param moduleName the name of the module containing the client. This will be {@code null} if
      *            the client is not deployed as a module.
      */
-    public static void exportTo(ClassLoader loader, String moduleName) {
+    static void exportTo(ClassLoader loader, String moduleName) {
         throw shouldNotReachHere();
     }
 
@@ -72,14 +70,102 @@ public final class TruffleJDKServices {
      *
      * @param client class in a module that requires access to Truffle
      */
-    public static void exportTo(Class<?> client) {
+    static void exportTo(Class<?> client) {
         throw shouldNotReachHere();
     }
 
     /**
-     * Gets the ordered list of loaders for {@link TruffleRuntimeAccess} providers.
+     * Updates Truffle module to read the {@code client}'s module. This method is a no-op if
+     * {@code client} is in the Truffle module, or the Truffle module already reads {@code client}'s
+     * module.
+     *
+     * @param client class in a module that should be added into modules read by the Truffle module.
      */
-    public static List<Iterable<TruffleRuntimeAccess>> getTruffleRuntimeLoaders() {
+    static void addReads(Class<?> client) {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Gets the ordered list of loaders for {@link Service} providers.
+     *
+     * @param serviceClass defines service class
+     */
+    static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Ensures that the Truffle module declares a use of {@code service}.
+     *
+     * @param service a class describing a service about to be loaded by Truffle
+     */
+    static <S> void addUses(Class<S> service) {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Returns the unnamed module configured for a classloader.
+     *
+     * @param classLoader the class loader to return the unnamed module for.
+     */
+    static Object getUnnamedModule(ClassLoader classLoader) {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Returns <code>true</code> if the member class is visible to the given module.
+     *
+     * @param lookupModule the module to use for lookups.
+     * @param memberClass the class or the declaring class of the member to check.
+     */
+    static boolean verifyModuleVisibility(Object lookupModule, Class<?> memberClass) {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Returns <code>true</code> if the class is not part of the truffle framework.
+     *
+     * @param clazz the class to check.
+     */
+    static boolean isNonTruffleClass(Class<?> clazz) {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Ensures that loads and stores before the fence will not be reordered with loads and stores
+     * after the fence.
+     */
+    static void fullFence() {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Ensures that loads before the fence will not be reordered with loads and stores after the
+     * fence.
+     */
+    static void acquireFence() {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Ensures that loads and stores before the fence will not be reordered with stores after the
+     * fence.
+     */
+    static void releaseFence() {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Ensures that loads before the fence will not be reordered with loads after the fence.
+     */
+    static void loadLoadFence() {
+        throw shouldNotReachHere();
+    }
+
+    /**
+     * Ensures that stores before the fence will not be reordered with stores after the fence.
+     */
+    static void storeStoreFence() {
         throw shouldNotReachHere();
     }
 }

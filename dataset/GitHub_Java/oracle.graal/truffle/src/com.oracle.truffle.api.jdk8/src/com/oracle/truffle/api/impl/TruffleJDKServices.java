@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,37 +40,50 @@
  */
 package com.oracle.truffle.api.impl;
 
+import sun.misc.Unsafe;
+
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
 
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntimeAccess;
-
 /**
  * JDK 8 implementation of {@code TruffleJDKServices}.
  */
-public class TruffleJDKServices {
+final class TruffleJDKServices {
 
     @SuppressWarnings("unused")
-    public static void exportTo(ClassLoader loader, String moduleName) {
+    static void exportTo(ClassLoader loader, String moduleName) {
         // No need to do anything on JDK 8
     }
 
     @SuppressWarnings("unused")
-    public static void exportTo(Class<?> client) {
+    static void exportTo(Class<?> client) {
+        // No need to do anything on JDK 8
+    }
+
+    @SuppressWarnings("unused")
+    static void addReads(Class<?> client) {
+        // No need to do anything on JDK 8
+    }
+
+    @SuppressWarnings("unused")
+    static <S> void addUses(Class<S> service) {
         // No need to do anything on JDK 8
     }
 
     /**
      * Gets the ordered list of loaders for {@link TruffleRuntimeAccess} providers.
      */
-    public static List<Iterable<TruffleRuntimeAccess>> getTruffleRuntimeLoaders() {
-        Iterable<TruffleRuntimeAccess> jvmciProviders = getJVMCIProviders();
+    static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
+        // public static List<Iterable<TruffleRuntimeAccess>> getTruffleRuntimeLoaders() {
+        Iterable<Service> jvmciProviders = getJVMCIProviders(serviceClass);
         if (Boolean.getBoolean("truffle.TrustAllTruffleRuntimeProviders")) {
-            ServiceLoader<TruffleRuntimeAccess> standardProviders = ServiceLoader.load(TruffleRuntimeAccess.class);
+            ServiceLoader<Service> standardProviders = ServiceLoader.load(serviceClass);
             return Arrays.asList(jvmciProviders, standardProviders);
         } else {
             return Collections.singletonList(jvmciProviders);
@@ -78,10 +91,10 @@ public class TruffleJDKServices {
     }
 
     /**
-     * Gets the {@link TruffleRuntimeAccess} providers available on the JVMCI class path.
+     * Gets the providers of {@code Service} available on the JVMCI class path.
      */
-    private static Iterable<TruffleRuntimeAccess> getJVMCIProviders() {
-        ClassLoader cl = Truffle.class.getClassLoader();
+    private static <Service> Iterable<Service> getJVMCIProviders(Class<Service> serviceClass) {
+        ClassLoader cl = TruffleJDKServices.class.getClassLoader();
         ClassLoader scl = ClassLoader.getSystemClassLoader();
         while (cl != null) {
             if (cl == scl) {
@@ -97,26 +110,73 @@ public class TruffleJDKServices {
             cl = cl.getParent();
         }
 
-        Class<?> servicesClass;
+        Class<?> jvmciServicesClass;
         try {
             // Access JVMCI via reflection to avoid a hard
             // dependency on JVMCI from Truffle.
-            servicesClass = Class.forName("jdk.vm.ci.services.Services");
+            jvmciServicesClass = Class.forName("jdk.vm.ci.services.Services");
         } catch (ClassNotFoundException e) {
             // JVMCI is unavailable so the default TruffleRuntime will be used
             return null;
         }
 
-        return reflectiveServiceLoaderLoad(servicesClass);
+        return reflectiveServiceLoaderLoad(jvmciServicesClass, serviceClass);
     }
 
     @SuppressWarnings("unchecked")
-    private static Iterable<TruffleRuntimeAccess> reflectiveServiceLoaderLoad(Class<?> servicesClass) {
+    private static <Service> Iterable<Service> reflectiveServiceLoaderLoad(Class<?> servicesClass, Class<Service> serviceClass) {
         try {
             Method m = servicesClass.getDeclaredMethod("load", Class.class);
-            return (Iterable<TruffleRuntimeAccess>) m.invoke(null, TruffleRuntimeAccess.class);
+            return (Iterable<Service>) m.invoke(null, serviceClass);
         } catch (Throwable e) {
-            throw (InternalError) new InternalError().initCause(e);
+            throw new InternalError(e);
         }
     }
+
+    static Object getUnnamedModule(@SuppressWarnings("unused") ClassLoader classLoader) {
+        return null;
+    }
+
+    static boolean verifyModuleVisibility(Object currentModule, @SuppressWarnings("unused") Class<?> memberClass) {
+        assert currentModule == null;
+        return true;
+    }
+
+    static boolean isNonTruffleClass(Class<?> clazz) {
+        // classes on the boot loader should not be cleared
+        return clazz.getClassLoader() != null;
+    }
+
+    static void fullFence() {
+        UNSAFE.fullFence();
+    }
+
+    static void acquireFence() {
+        UNSAFE.loadFence();
+    }
+
+    static void releaseFence() {
+        UNSAFE.storeFence();
+    }
+
+    static void loadLoadFence() {
+        UNSAFE.loadFence();
+    }
+
+    static void storeStoreFence() {
+        UNSAFE.storeFence();
+    }
+
+    static final Unsafe UNSAFE = AccessController.doPrivileged(new PrivilegedAction<Unsafe>() {
+        @Override
+        public Unsafe run() {
+            try {
+                Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafeInstance.setAccessible(true);
+                return (Unsafe) theUnsafeInstance.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
+            }
+        }
+    });
 }
