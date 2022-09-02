@@ -84,7 +84,6 @@ import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.WithExceptionNode;
@@ -372,7 +371,7 @@ public class InliningUtil extends ValueMergeUtil {
         final NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
 
         assert inlineGraph.getGuardsStage().ordinal() >= graph.getGuardsStage().ordinal();
-        assert invokeNode.graph().isBeforeStage(StageFlag.FLOATING_READS) : "inline isn't handled correctly after floating reads phase";
+        assert !invokeNode.graph().isAfterFloatingReadPhase() : "inline isn't handled correctly after floating reads phase";
 
         if (receiverNullCheck && !((MethodCallTargetNode) invoke.callTarget()).isStatic()) {
             nonNullReceiver(invoke);
@@ -589,6 +588,9 @@ public class InliningUtil extends ValueMergeUtil {
             invokeNode.replaceAtUsages(null);
             GraphUtil.killCFG(invoke.next());
         }
+
+        // Copy assumptions from inlinee to caller
+        graph.recordAssumptions(inlineGraph);
 
         // Copy inlined methods from inlinee to caller
         graph.updateMethods(inlineGraph);
