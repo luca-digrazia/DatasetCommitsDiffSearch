@@ -460,7 +460,7 @@ class JDWP {
         }
     }
 
-    static class Methods {
+    static class METHOD {
         public static final int ID = 6;
 
         static class LINE_TABLE {
@@ -737,7 +737,7 @@ class JDWP {
         }
     }
 
-    static class StringReference {
+    static class STRING_REFERENCE {
         public static final int ID = 10;
 
         static class VALUE {
@@ -759,7 +759,7 @@ class JDWP {
         }
     }
 
-    static class ThreadReference {
+    static class THREAD_REFERENCE {
         public static final int ID = 11;
 
         static class NAME {
@@ -908,7 +908,7 @@ class JDWP {
         }
     }
 
-    static class ThreadGroupReference {
+    static class THREAD_GROUP_REFERENCE {
         public static final int ID = 12;
 
         static class NAME {
