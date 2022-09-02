@@ -178,8 +178,8 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
-     * Returns <code>true</code> if this node can be adopted by a parent. This method is intended to
-     * be overriden by subclasses. If nodes need to be statically shared that they must not be
+     * Returns <code>true</code> if this node can be adopated by a parent. This method is intended
+     * to be overriden by subclasses. If nodes need to be statically shared that they must not be
      * adoptable, because otherwise the parent reference might cause a memory leak. If a node is not
      * adoptable then then it is guaranteed that the {@link #getParent() parent} pointer remains
      * <code>null</code> at all times, even if the node is tried to be adopted by a parent.
@@ -510,18 +510,15 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @since 0.8 or earlier
      */
     public final RootNode getRootNode() {
-        Node node = this;
-        Node prev;
-        do {
-            prev = node;
-            node = node.getParent();
-        } while (node != null);
-
-        if (prev instanceof RootNode) {
-            return (RootNode) prev;
-        } else {
-            return null;
+        Node rootNode = this;
+        while (rootNode.getParent() != null) {
+            assert !(rootNode instanceof RootNode) : "root node must not have a parent";
+            rootNode = rootNode.getParent();
         }
+        if (rootNode instanceof RootNode) {
+            return (RootNode) rootNode;
+        }
+        return null;
     }
 
     /**

@@ -104,6 +104,10 @@ public abstract class ExecutableNode extends Node {
         this.engineRef = node.engineRef;
     }
 
+    final void clearEngineRef() {
+        this.engineRef = null;
+    }
+
     final Object getEngine() {
         Object ref = engineRef;
         if (ref instanceof TruffleLanguage<?>) {

@@ -135,6 +135,11 @@ final class NodeAccessor extends Accessor {
         }
 
         @Override
+        public void clearPolyglotEngine(RootNode rootNode) {
+            rootNode.clearEngineRef();
+        }
+
+        @Override
         public void applyPolyglotEngine(RootNode from, RootNode to) {
             to.applyEngineRef(from);
         }
