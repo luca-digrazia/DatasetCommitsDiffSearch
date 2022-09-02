@@ -580,7 +580,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     }
 
     void checkAccess(PolyglotLanguage accessingLanguage) {
-        // Always check context first, as it might be invalidated.
+        context.engine.checkState();
         context.checkClosed();
         if (context.disposing) {
             throw new PolyglotIllegalStateException("The Context is already closed.");
