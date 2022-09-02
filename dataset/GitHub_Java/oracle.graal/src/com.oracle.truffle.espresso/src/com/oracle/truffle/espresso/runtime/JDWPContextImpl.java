@@ -2,16 +2,16 @@ package com.oracle.truffle.espresso.runtime;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.impl.ClassRegistries;
-import com.oracle.truffle.espresso.jdwp.api.FieldRef;
-import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
-import com.oracle.truffle.espresso.jdwp.api.JDWPVirtualMachine;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.impl.ClassObjectId;
-import com.oracle.truffle.espresso.jdwp.api.Ids;
-import com.oracle.truffle.espresso.jdwp.impl.TagConstants;
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.debugger.api.FieldRef;
+import com.oracle.truffle.espresso.debugger.api.JDWPContext;
+import com.oracle.truffle.espresso.debugger.api.JDWPSetup;
+import com.oracle.truffle.espresso.debugger.api.JDWPVirtualMachine;
+import com.oracle.truffle.espresso.debugger.api.MethodRef;
+import com.oracle.truffle.espresso.debugger.api.klassRef;
+import com.oracle.truffle.espresso.debugger.jdwp.ClassObjectId;
+import com.oracle.truffle.espresso.debugger.jdwp.Ids;
+import com.oracle.truffle.espresso.debugger.jdwp.TagConstants;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.NullKlass;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -30,7 +30,7 @@ public final class JDWPContextImpl implements JDWPContext {
     private final JDWPVirtualMachine vm;
     private final Ids ids;
 
-    public JDWPContextImpl(EspressoContext context) {
+    public JDWPContextImpl(EspressoContext context, TruffleLanguage.Env env, EspressoLanguage espressoLanguage) {
         this.context = context;
         this.vm = new EspressoVirtualMachine();
         this.ids = new Ids(StaticObject.NULL);
@@ -49,22 +49,7 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean isString(Object string) {
-        return context.getMeta().isString(string);
-    }
-
-    @Override
-    public boolean isValidThread(Object thread) {
-        return context.isValidThread(thread);
-    }
-
-    @Override
-    public boolean isValidThreadGroup(Object threadGroup) {
-        return context.isValidThreadGroup(threadGroup);
-    }
-
-    @Override
-    public KlassRef getNullKlass() {
+    public klassRef getNullKlass() {
         return NullKlass.getKlass(context);
     }
 
@@ -74,28 +59,14 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public KlassRef[] findLoadedClass(String slashName) {
+    public klassRef[] findLoadedClass(String slashName) {
         Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(slashName);
         return context.getRegistries().findLoadedClassAny(type);
     }
 
     @Override
-    public KlassRef[] getAllLoadedClasses() {
-        return context.getRegistries().getAllLoadedClasses();
-    }
-
-    @Override
-    public KlassRef[] getInitiatedClasses(Object classLoader) {
+    public klassRef[] getInitiatedClasses(Object classLoader) {
         return context.getRegistries().getLoadedClassesByLoader((StaticObject) classLoader);
-    }
-
-    @Override
-    public boolean isValidClassLoader(Object classLoader) {
-        if (classLoader instanceof StaticObject) {
-            StaticObject loader = (StaticObject) classLoader;
-            return context.getRegistries().isClassLoader(loader);
-        }
-        return false;
     }
 
     @Override
@@ -140,7 +111,7 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public KlassRef getKlassFromRootNode(RootNode root) {
+    public klassRef getKlassFromRootNode(RootNode root) {
         if (root != null && root instanceof EspressoRootNode) {
             return ((EspressoRootNode) root).getMethod().getDeclaringKlass();
         }
@@ -156,7 +127,7 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public KlassRef getRefType(Object object) {
+    public klassRef getRefType(Object object) {
         if (object instanceof StaticObject) {
             if (StaticObject.NULL == object) {
                 // null object
@@ -228,21 +199,6 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean isArray(Object array) {
-        if (array instanceof StaticObject) {
-            StaticObject staticObject = (StaticObject) array;
-            return staticObject.isArray();
-        }
-        return false;
-    }
-
-    @Override
-    public boolean verifyArrayLength(Object array, int length) {
-        StaticObject staticObject = (StaticObject) array;
-        return staticObject.length() < length;
-    }
-
-    @Override
     public byte getTypeTag(Object object) {
         StaticObject staticObject = (StaticObject) object;
         byte tag;
@@ -276,7 +232,7 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public void setStaticFieldValue(FieldRef field, KlassRef klassRef, Object value) {
+    public void setStaticFieldValue(FieldRef field, klassRef klassRef, Object value) {
         field.setValue(((ObjectKlass) klassRef).tryInitializeAndGetStatics(), value);
     }
 

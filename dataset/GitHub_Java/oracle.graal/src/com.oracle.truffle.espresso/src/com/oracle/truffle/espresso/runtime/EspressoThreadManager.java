@@ -25,7 +25,7 @@ package com.oracle.truffle.espresso.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
+import com.oracle.truffle.espresso.debugger.api.VMEventListeners;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
@@ -49,7 +49,7 @@ class EspressoThreadManager implements ContextAccess {
 
     public static int DEFAULT_THREAD_ARRAY_SIZE = 8;
 
-    private final Set<StaticObject> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<StaticObject> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<StaticObject, Boolean>());
 
     private final Object threadLock = new Object();
 
@@ -86,8 +86,8 @@ class EspressoThreadManager implements ContextAccess {
     @CompilationFinal private long referenceHandlerThreadId = -1;
     @CompilationFinal private StaticObject guestReferenceHandlerThread = null;
 
-    public StaticObject[] activeThreads() {
-        return activeThreads.toArray(StaticObject.EMPTY_ARRAY);
+    public Iterable<StaticObject> activeThreads() {
+        return activeThreads;
     }
 
     public void registerMainThread(Thread thread, StaticObject self) {
@@ -163,10 +163,6 @@ class EspressoThreadManager implements ContextAccess {
         int index = id - (int) threads[0];
         assert index > 0 && index < guestThreads.length;
         return (StaticObject) threads[index];
-    }
-
-    public StaticObject getMainThread() {
-        return guestMainThread;
     }
 
     private void pushThread(int id, StaticObject self) {
