@@ -78,9 +78,6 @@ public abstract class Message {
     private final List<Class<?>> parameterTypes;
     @CompilationFinal LibraryFactory<Library> library;
 
-    /**
-     * @since 1.0
-     */
     @SuppressWarnings("unchecked")
     protected Message(Class<? extends Library> libraryClass, String messageName, Class<?> returnType, Class<?>... parameterTypes) {
         Objects.requireNonNull(libraryClass);
@@ -176,9 +173,6 @@ public abstract class Message {
         return libraryClass;
     }
 
-    /**
-     * @since 1.0
-     */
     public final LibraryFactory<?> getFactory() {
         return library;
     }
@@ -245,7 +239,6 @@ public abstract class Message {
      *
      * @param libraryName the name of the library this message is contained in.
      * @param messageName the simple name of this message.
-     * @since 1.0
      */
     public static Message resolve(String libraryName, String messageName) {
         return LibraryFactory.resolveMessage(libraryName, messageName, true);
@@ -262,7 +255,7 @@ public abstract class Message {
      * @param messageName the simple name of this message.
      * @param fail whether to fail with an {@link IllegalArgumentException} or return
      *            <code>null</code> if the message was not found.
-     * @since 1.0
+     *
      */
     public static Message resolve(String libraryName, String messageName, boolean fail) {
         return LibraryFactory.resolveMessage(libraryName, messageName, fail);
@@ -277,7 +270,6 @@ public abstract class Message {
      *
      * @param libraryClass the class of the library this message is contained in.
      * @param messageName the simple name of this message.
-     * @since 1.0
      */
     public static Message resolve(Class<? extends Library> libraryClass, String messageName) {
         return LibraryFactory.resolveMessage(libraryClass, messageName, true);
@@ -293,7 +285,6 @@ public abstract class Message {
      * @param messageName the simple name of this message.
      * @param fail whether to fail with an {@link IllegalArgumentException} or return
      *            <code>null</code> if the message was not found.
-     * @since 1.0
      */
     public static Message resolve(Class<? extends Library> libraryClass, String messageName, boolean fail) {
         return LibraryFactory.resolveMessage(libraryClass, messageName, fail);

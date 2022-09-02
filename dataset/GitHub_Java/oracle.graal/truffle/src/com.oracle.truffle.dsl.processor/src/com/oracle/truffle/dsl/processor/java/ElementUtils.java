@@ -79,7 +79,6 @@ import javax.lang.model.type.TypeVariable;
 import javax.lang.model.type.WildcardType;
 import javax.lang.model.util.AbstractAnnotationValueVisitor8;
 import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Types;
 
 import com.oracle.truffle.dsl.processor.CompileErrorException;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
@@ -374,26 +373,16 @@ public class ElementUtils {
         } else if (isObject(to)) {
             return true;
         }
-        if (isInvalidType(from) || isInvalidType(to)) {
-            // workaround for eclipse compiler bug: v4.7.3a throws IllegalArgumentException or
-            // ClassCastException
+        if (from.getKind() == TypeKind.NONE || to.getKind() == TypeKind.NONE) {
+            // workaround for eclipse compiler bug: v4.7.3a throws IllegalArgumentException
             return false;
         }
         ProcessorContext context = ProcessorContext.getInstance();
         if (!(from instanceof CodeTypeMirror) && !(to instanceof CodeTypeMirror)) {
-            Types typeUtils = context.getEnvironment().getTypeUtils();
-            TypeMirror reloadFrom = context.reloadType(from);
-            TypeMirror reloadTo = context.reloadType(to);
-            TypeMirror erasedFrom = typeUtils.erasure(reloadFrom);
-            TypeMirror erasedTo = typeUtils.erasure(reloadTo);
-            return typeUtils.isAssignable(erasedFrom, erasedTo);
+            return context.getEnvironment().getTypeUtils().isAssignable(context.reloadType(from), context.reloadType(to));
         } else {
             return isAssignableImpl(from, to);
         }
-    }
-
-    private static boolean isInvalidType(TypeMirror reloadFrom) {
-        return reloadFrom.getKind() == TypeKind.NONE || reloadFrom.getKind() == TypeKind.ERROR || reloadFrom.getKind() == TypeKind.VOID;
     }
 
     private static boolean isAssignableImpl(TypeMirror from, TypeMirror to) {
@@ -577,8 +566,6 @@ public class ElementUtils {
                 return ((TypeVariable) mirror).asElement().getSimpleName().toString();
             case ERROR:
                 throw new CompileErrorException("Type error " + mirror);
-            case NONE:
-                return "None";
             default:
                 throw new RuntimeException("Unknown type specified " + mirror.getKind() + " mirror: " + mirror);
         }
@@ -705,7 +692,7 @@ public class ElementUtils {
     }
 
     public static boolean isNone(TypeMirror mirror) {
-        return mirror != null && isInvalidType(mirror);
+        return mirror != null && mirror.getKind() == TypeKind.NONE;
     }
 
     public static boolean isVoid(TypeMirror mirror) {
@@ -1588,14 +1575,12 @@ public class ElementUtils {
             return false;
         } else {
             if (visibility == Modifier.PROTECTED) {
-                TypeElement accessedType = findNearestEnclosingType(accessedElement).orElse(null);
-                TypeElement accessingType = findNearestEnclosingType(accessingElement).orElse(null);
-                if (accessedType != null && accessingType != null) {
-                    if (ElementUtils.typeEquals(accessedType.asType(), accessingType.asType())) {
-                        return true;
-                    } else if (ElementUtils.isSubtype(accessingType.asType(), accessedType.asType())) {
-                        return true;
-                    }
+                TypeElement accessedType = findNearestEnclosingType(accessedElement).orElseThrow(AssertionError::new);
+                TypeElement accessingType = findNearestEnclosingType(accessingElement).orElseThrow(AssertionError::new);
+                if (ElementUtils.typeEquals(accessedType.asType(), accessingType.asType())) {
+                    return true;
+                } else if (ElementUtils.isSubtype(accessingType.asType(), accessedType.asType())) {
+                    return true;
                 }
             }
             String thisPackageElement = ElementUtils.getPackageName(accessingElement);
@@ -1621,36 +1606,28 @@ public class ElementUtils {
         return null;
     }
 
-    public static String getReadableReference(Element element, boolean qualifiedType) {
+    public static String getReadableReference(Element element) {
         String parent;
         switch (element.getKind()) {
             case CLASS:
             case INTERFACE:
             case ENUM:
-                if (qualifiedType) {
-                    return getQualifiedName((TypeElement) element);
-                } else {
-                    return getSimpleName((TypeElement) element);
-                }
+                return getQualifiedName((TypeElement) element);
             case PACKAGE:
                 return ((PackageElement) element).getQualifiedName().toString();
             case CONSTRUCTOR:
             case METHOD:
-                parent = getReadableReference(element.getEnclosingElement(), qualifiedType);
+                parent = getReadableReference(element.getEnclosingElement());
                 return parent + "." + getReadableSignature((ExecutableElement) element);
             case PARAMETER:
-                parent = getReadableReference(element.getEnclosingElement(), qualifiedType);
+                parent = getReadableReference(element.getEnclosingElement());
                 return parent + " parameter " + element.getSimpleName().toString();
             case FIELD:
-                parent = getReadableReference(element.getEnclosingElement(), qualifiedType);
+                parent = getReadableReference(element.getEnclosingElement());
                 return parent + "." + element.getSimpleName().toString();
             default:
                 return "Unknown Element";
         }
-    }
-
-    public static String getReadableReference(Element element) {
-        return getReadableReference(element, true);
     }
 
 }

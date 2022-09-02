@@ -66,11 +66,7 @@ import com.oracle.truffle.api.nodes.NodeUtil;
  */
 public abstract class LibraryFactory<T extends Library> {
 
-    private static final ConcurrentHashMap<Class<? extends Library>, LibraryFactory<?>> LIBRARIES;
-
-    static {
-        LIBRARIES = new ConcurrentHashMap<>();
-    }
+    private static final ConcurrentHashMap<Class<? extends Library>, LibraryFactory<?>> LIBRARIES = new ConcurrentHashMap<>();
 
     private final Class<T> libraryClass;
     private final List<Message> messages;
@@ -133,7 +129,6 @@ public abstract class LibraryFactory<T extends Library> {
      *
      * @since 1.0
      */
-    @TruffleBoundary
     public final T createDispatched(int limit) {
         if (limit <= 0) {
             return getUncached();
@@ -152,7 +147,6 @@ public abstract class LibraryFactory<T extends Library> {
      * @see CachedLibrary
      * @since 1.0
      */
-    @TruffleBoundary
     public final T create(Object receiver) {
         Class<?> dispatchClass = dispatch(receiver);
         T cached = cachedCache.get(dispatchClass);
@@ -160,31 +154,14 @@ public abstract class LibraryFactory<T extends Library> {
             assert validateExport(receiver, dispatchClass, cached);
             return cached;
         }
-        LibraryExport<T> export = lookupExport(receiver, dispatchClass);
-        cached = export.createCached(receiver);
-        assert (cached = createAssertionsImpl(export, cached)) != null;
+        LibraryExport<T> exports = lookupExport(receiver, dispatchClass);
+        cached = exports.createCached(receiver);
+        assert (cached = createAssertions(cached)) != null;
         if (!NodeUtil.isAdoptable(cached)) {
             assert cached.accepts(receiver) : String.format("Invalid accepts implementation detected in '%s'", dispatchClass.getName());
             cachedCache.putIfAbsent(dispatchClass, cached);
         }
         return cached;
-    }
-
-    private T createAssertionsImpl(LibraryExport<T> export, T cached) {
-        if (needsAssertions(export)) {
-            return createAssertions(cached);
-        } else {
-            return cached;
-        }
-    }
-
-    private boolean needsAssertions(LibraryExport<T> export) {
-        Class<?> registerClass = export.registerClass;
-        if (export.isDefaultExport() && registerClass != null && registerClass.getName().equals("com.oracle.truffle.api.interop.DefaultTruffleObjectExports")) {
-            return false;
-        } else {
-            return true;
-        }
     }
 
     /**
@@ -195,7 +172,6 @@ public abstract class LibraryFactory<T extends Library> {
      * @see Library#getUncached(Class, Object) for further details.
      * @since 1.0
      */
-    @TruffleBoundary
     public final T getUncached(Object receiver) {
         Class<?> dispatchClass = dispatch(receiver);
         T uncached = uncachedCache.get(dispatchClass);
@@ -203,11 +179,10 @@ public abstract class LibraryFactory<T extends Library> {
             assert validateExport(receiver, dispatchClass, uncached);
             return uncached;
         }
-        LibraryExport<T> export = lookupExport(receiver, dispatchClass);
-        uncached = export.createUncached(receiver);
+        uncached = lookupExport(receiver, dispatchClass).createUncached(receiver);
         assert validateExport(receiver, dispatchClass, uncached);
         assert uncached.accepts(receiver);
-        assert (uncached = createAssertionsImpl(export, uncached)) != null;
+        assert (uncached = createAssertions(uncached)) != null;
         uncachedCache.putIfAbsent(dispatchClass, uncached);
         return uncached;
     }
@@ -322,7 +297,6 @@ public abstract class LibraryFactory<T extends Library> {
      * @see Library
      * @since 1.0
      */
-    @TruffleBoundary
     public static <T extends Library> LibraryFactory<T> resolve(Class<T> library) {
         Objects.requireNonNull(library);
         return resolveImpl(library, true);
@@ -332,8 +306,10 @@ public abstract class LibraryFactory<T extends Library> {
     private static <T extends Library> LibraryFactory<T> resolveImpl(Class<T> library, boolean fail) {
         LibraryFactory<?> lib = LIBRARIES.get(library);
         if (lib == null) {
-            loadGeneratedClass(library);
-            lib = LIBRARIES.get(library);
+            if (!TruffleOptions.AOT) {
+                loadGeneratedClass(library);
+                lib = LIBRARIES.get(library);
+            }
             if (lib == null) {
                 if (fail) {
                     throw new IllegalArgumentException(
@@ -352,7 +328,7 @@ public abstract class LibraryFactory<T extends Library> {
             String generatedClassName = libraryClass.getPackage().getName() + "." + libraryClass.getSimpleName() + "Gen";
             Class<?> loadedClass;
             try {
-                loadedClass = Class.forName(generatedClassName, true, libraryClass.getClassLoader());
+                loadedClass = Class.forName(generatedClassName);
             } catch (ClassNotFoundException e) {
                 return null;
             }
@@ -423,6 +399,8 @@ public abstract class LibraryFactory<T extends Library> {
         return "LibraryFactory [library=" + libraryClass.getName() + "]";
     }
 
+    private static final LibraryFactory<ReflectionLibrary> REFLECTION_FACTORY = LibraryFactory.resolve(ReflectionLibrary.class);
+
     final class ProxyExports extends LibraryExport<T> {
         protected ProxyExports() {
             super(libraryClass, Object.class, true);
@@ -430,12 +408,12 @@ public abstract class LibraryFactory<T extends Library> {
 
         @Override
         public T createUncached(Object receiver) {
-            return createProxy(ReflectionLibrary.getFactory().getUncached(receiver));
+            return createProxy(REFLECTION_FACTORY.getUncached(receiver));
         }
 
         @Override
         public T createCached(Object receiver) {
-            return createProxy(ReflectionLibrary.getFactory().create(receiver));
+            return createProxy(REFLECTION_FACTORY.create(receiver));
         }
     }
 
@@ -483,9 +461,6 @@ public abstract class LibraryFactory<T extends Library> {
         }
 
         static <T extends Library> void register(Class<?> receiverClass, LibraryExport<?>... libs) {
-            for (LibraryExport<?> lib : libs) {
-                lib.registerClass = receiverClass;
-            }
             LibraryExport<?>[] prevLibs = REGISTRY.put(receiverClass, libs);
             if (prevLibs != null) {
                 throw new IllegalStateException("Receiver " + receiverClass + " is already registered.");
@@ -521,8 +496,10 @@ public abstract class LibraryFactory<T extends Library> {
                  * We can omit loading classes in AOT mode as they are resolved eagerly using the
                  * TruffleFeature. We can also omit if the type was already resolved.
                  */
-                loadGeneratedClass(dispatchClass);
-                libs = REGISTRY.get(dispatchClass);
+                if (!TruffleOptions.AOT) {
+                    loadGeneratedClass(dispatchClass);
+                    libs = REGISTRY.get(dispatchClass);
+                }
                 if (libs == null) {
                     throw new AssertionError(String.format("Libraries for class '%s' could not be resolved. Not registered?", dispatchClass.getName()));
                 }
@@ -545,7 +522,7 @@ public abstract class LibraryFactory<T extends Library> {
         static void loadGeneratedClass(Class<?> currentReceiverClass) {
             String generatedClassName = currentReceiverClass.getPackage().getName() + "." + currentReceiverClass.getSimpleName() + "Gen";
             try {
-                Class.forName(generatedClassName, true, currentReceiverClass.getClassLoader());
+                Class.forName(generatedClassName);
             } catch (ClassNotFoundException e) {
                 throw new AssertionError(String.format("Generated class '%s' for class '%s' not found. " +
                                 "Did the Truffle annotation processor run?", generatedClassName, currentReceiverClass.getName()), e);

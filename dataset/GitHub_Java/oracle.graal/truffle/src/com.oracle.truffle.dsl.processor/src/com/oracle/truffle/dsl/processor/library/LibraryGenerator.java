@@ -41,8 +41,6 @@
 package com.oracle.truffle.dsl.processor.library;
 
 import static com.oracle.truffle.dsl.processor.generator.GeneratorUtils.createClass;
-import static com.oracle.truffle.dsl.processor.java.ElementUtils.findExecutableElement;
-import static com.oracle.truffle.dsl.processor.java.ElementUtils.findVariableElement;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.modifiers;
 import static javax.lang.model.element.Modifier.ABSTRACT;
 import static javax.lang.model.element.Modifier.FINAL;
@@ -70,14 +68,12 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.library.DynamicDispatchLibrary;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.LibraryExport;
-import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.library.Message;
 import com.oracle.truffle.api.library.ReflectionLibrary;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.library.LibraryExport;
+import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.NodeCost;
@@ -89,6 +85,7 @@ import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationValue;
 import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
+import com.oracle.truffle.dsl.processor.java.model.CodeTree;
 import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror;
@@ -350,7 +347,6 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
 
         for (MessageObjects message : methods) {
             CodeExecutableElement execute = cachedToUncached.add(CodeExecutableElement.cloneNoAnnotations(message.model.getExecutable()));
-            execute.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
             execute.renameArguments("receiver_");
             removeAbstractModifiers(execute);
             builder = execute.createBuilder();
@@ -382,7 +378,6 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
 
         for (MessageObjects message : methods) {
             CodeExecutableElement execute = uncachedDispatch.add(CodeExecutableElement.cloneNoAnnotations(message.model.getExecutable()));
-            execute.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
             execute.renameArguments("receiver_");
             removeAbstractModifiers(execute);
             builder = execute.createBuilder();
@@ -413,7 +408,6 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
         cachedDispatch.add(GeneratorUtils.createConstructorUsingFields(modifiers(), cachedDispatch));
         for (MessageObjects message : methods) {
             CodeExecutableElement execute = cachedDispatch.add(CodeExecutableElement.cloneNoAnnotations(message.model.getExecutable()));
-            execute.getAnnotationMirrors().add(createExplodeLoop());
             execute.renameArguments("receiver_");
             removeAbstractModifiers(execute);
             builder = execute.createBuilder();
@@ -636,20 +630,6 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
             }
         }
         return newName.toString();
-    }
-
-    private CodeAnnotationMirror createExplodeLoop() {
-        DeclaredType explodeLoopType = context.getDeclaredType(ExplodeLoop.class);
-        CodeAnnotationMirror explodeLoop = new CodeAnnotationMirror(explodeLoopType);
-
-        DeclaredType loopExplosionKind = context.getDeclaredType(ExplodeLoop.LoopExplosionKind.class);
-        if (loopExplosionKind != null) {
-            VariableElement kindValue = findVariableElement(loopExplosionKind, "FULL_EXPLODE_UNTIL_RETURN");
-            if (kindValue != null) {
-                explodeLoop.setElementValue(findExecutableElement(explodeLoopType, "kind"), new CodeAnnotationValue(kindValue));
-            }
-        }
-        return explodeLoop;
     }
 
     private CodeExecutableElement createGenericDispatch(List<MessageObjects> methods, CodeTypeElement messageClass) {
