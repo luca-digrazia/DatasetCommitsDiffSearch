@@ -53,7 +53,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugStackFrame;
@@ -202,7 +201,6 @@ public final class LLVMDebugExprParserTest {
         }
 
         @Override
-        @TruffleBoundary
         public void onSuspend(SuspendedEvent event) {
             final DebugStackFrame frame = event.getTopStackFrame();
 
