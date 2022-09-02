@@ -241,10 +241,10 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                         espressoOptions.put("java.Verify", mode);
                     } else if (arg.startsWith("-Xrunjdwp:")) {
                         String value = arg.substring("-Xrunjdwp:".length());
-                        espressoOptions.put("java.JDWPRunOptions", value);
+                        espressoOptions.put("java.JDWPOptions", value);
                     } else if (arg.startsWith("-agentlib:jdwp=")) {
                         String value = arg.substring("-agentlib:jdwp=".length());
-                        espressoOptions.put("java.JDWPAgentOptions", value);
+                        espressoOptions.put("java.JDWPOptions", value);
                     } else if (arg.startsWith("-Xmn") || arg.startsWith("-Xms") || arg.startsWith("-Xmx") || arg.startsWith("-Xss")) {
                         unrecognized.add("--vm." + arg.substring(1));
                     } else
@@ -432,7 +432,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
             if (versionAction != VersionAction.None) {
                 // The Java version is not known yet, try 8 first.
                 Value version = context.getBindings("java").getMember("sun.misc.Version");
-                if (!version.isNull()) {
+                if (version != null && !version.isNull()) {
                     // Java 8
                     version.invokeMember("print");
                 } else {
