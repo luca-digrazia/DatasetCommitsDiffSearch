@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,66 +26,146 @@ package org.graalvm.compiler.truffle.test.libgraal;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-import com.oracle.truffle.api.nodes.RootNode;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import org.graalvm.compiler.core.CompilationWrapper;
+import org.graalvm.compiler.core.GraalCompilerOptions;
+import org.graalvm.compiler.test.SubprocessUtil;
+import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.common.TruffleCompilation;
+import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
+import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
+import org.graalvm.compiler.truffle.common.TruffleDebugContext;
+import org.graalvm.compiler.truffle.common.TruffleInliningData;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
-import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.test.TestWithPolyglotOptions;
 import org.junit.Test;
 
-public class JNIExceptionWrapperTest {
+import com.oracle.truffle.api.nodes.RootNode;
+
+public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
 
     @Test
-    @SuppressWarnings({"unused", "try"})
     public void testMergedStackTrace() throws Exception {
-        try (TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope runtimeScope = TruffleRuntimeOptions.overrideOptions(
-                        SharedTruffleRuntimeOptions.TruffleBackgroundCompilation, false,
-                        SharedTruffleRuntimeOptions.TruffleCompileImmediately, true,
-                        SharedTruffleRuntimeOptions.TruffleCompilationExceptionsAreThrown, true)) {
-            GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
-            OptimizedCallTarget compilable = (OptimizedCallTarget) runtime.createCallTarget(RootNode.createConstantNode(42));
-            TestListener listener = new TestListener();
-            runtime.addListener(listener);
-            try {
-                compilable.compile(false);
-            } catch (Throwable t) {
-                String message = t.getMessage();
-                int runtimeIndex = findFrame(message, GraalTruffleRuntime.class.getName(), "doCompile");
-                assertNotEquals(-1, runtimeIndex);
-                int listenerIndex = findFrame(message, TestListener.class.getName(), "onCompilationTruffleTierFinished");
-                assertNotEquals(-1, listenerIndex);
-                int compilerIndex = findFrame(message, TruffleCompilerImpl.class.getName(), "compileAST");
-                assertNotEquals(-1, compilerIndex);
-                assertTrue(listenerIndex < compilerIndex);
-                assertTrue(compilerIndex < runtimeIndex);
-            } finally {
-                runtime.removeListener(listener);
+        if (isSilent()) {
+            testMergedStackTraceImpl();
+        } else {
+            SubprocessUtil.Subprocess proc = SubprocessUtil.java(makeSilent(getVmArgs()), "com.oracle.mxtool.junit.MxJUnitWrapper", getClass().getName());
+            int exitCode = proc.exitCode;
+            if (exitCode != 0) {
+                fail(String.format("non-zero exit code %d for command:%n%s", exitCode, proc));
             }
         }
     }
 
-    private static int findFrame(String message, String className, String methodName) {
+    private static boolean isSilent() {
+        Object value = System.getProperty(String.format("graal.%s", GraalCompilerOptions.CompilationFailureAction.getName()));
+        return CompilationWrapper.ExceptionAction.Silent.toString().equals(value);
+    }
+
+    private static List<String> getVmArgs() {
+        // Filter out the LogFile option to prevent overriding of the unit tests log file by a
+        // sub-process.
+        List<String> vmArgs = SubprocessUtil.getVMCommandLine().stream().filter((vmArg) -> !vmArg.contains("LogFile")).collect(Collectors.toList());
+        vmArgs.add(SubprocessUtil.PACKAGE_OPENING_OPTIONS);
+        return vmArgs;
+    }
+
+    private static List<String> makeSilent(List<? extends String> vmArgs) {
+        List<String> newVmArgs = new ArrayList<>();
+        newVmArgs.addAll(vmArgs.stream().filter((vmArg) -> !vmArg.contains(GraalCompilerOptions.CompilationFailureAction.getName())).collect(Collectors.toList()));
+        newVmArgs.add(1, String.format("-Dgraal.%s=%s", GraalCompilerOptions.CompilationFailureAction.getName(), CompilationWrapper.ExceptionAction.Silent.toString()));
+        return newVmArgs;
+    }
+
+    private void testMergedStackTraceImpl() throws Exception {
+        setupContext("engine.CompilationExceptionsAreThrown", Boolean.TRUE.toString(), "engine.CompilationExceptionsAreFatal", Boolean.FALSE.toString());
+        GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
+        OptimizedCallTarget compilable = (OptimizedCallTarget) runtime.createCallTarget(RootNode.createConstantNode(42));
+        TruffleCompiler compiler = runtime.getTruffleCompiler(compilable);
+        try (TruffleCompilation compilation = compiler.openCompilation(compilable)) {
+            try (TruffleDebugContext debug = compiler.openDebugContext(GraalTruffleRuntime.getOptionsForCompiler(compilable), compilation)) {
+                TestListener listener = new TestListener();
+                compiler.doCompile(debug, compilation, GraalTruffleRuntime.getOptionsForCompiler(compilable), new TestTruffleCompilationTask(), listener);
+            }
+        } catch (Throwable t) {
+            String message = t.getMessage();
+            int runtimeIndex = findFrame(message, JNIExceptionWrapperTest.class, "testMergedStackTrace");
+            assertNotEquals(message, -1, runtimeIndex);
+            int listenerIndex = findFrame(message, TestListener.class, "onTruffleTierFinished");
+            assertNotEquals(message, -1, listenerIndex);
+            int compilerIndex = findFrame(message, TruffleCompilerImpl.class, "compileAST");
+            assertNotEquals(message, -1, compilerIndex);
+            assertTrue(listenerIndex < compilerIndex);
+            assertTrue(compilerIndex < runtimeIndex);
+        }
+    }
+
+    private static int findFrame(String message, Class<?> clazz, String methodName) {
         String[] lines = message.split("\n");
-        Pattern pattern = Pattern.compile("\\s*at\\s+" + Pattern.quote(className + '.' + methodName), 0);
+        Pattern pattern = Pattern.compile("at\\s+(.*/)?" + Pattern.quote(clazz.getName() + '.' + methodName));
         for (int i = 0; i < lines.length; i++) {
-            if (pattern.matcher(lines[i]).find()) {
+            if (pattern.matcher(lines[i].trim()).find()) {
                 return i;
             }
         }
         return -1;
     }
 
-    private static final class TestListener implements GraalTruffleRuntimeListener {
+    private static final class TestListener implements TruffleCompilerListener {
 
         @Override
-        public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, TruffleCompilerListener.GraphInfo graph) {
+        public void onTruffleTierFinished(CompilableTruffleAST compilable, TruffleInliningData inliningPlan, GraphInfo graph) {
             throw new RuntimeException("Expected exception");
+        }
+
+        @Override
+        public void onGraalTierFinished(CompilableTruffleAST compilable, GraphInfo graph) {
+        }
+
+        @Override
+        public void onSuccess(CompilableTruffleAST compilable, TruffleInliningData inliningPlan, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo, int tier) {
+        }
+
+        @Override
+        public void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout, int tier) {
+        }
+
+        @Override
+        public void onCompilationRetry(CompilableTruffleAST compilable, int tier) {
+        }
+    }
+
+    private static class TestTruffleCompilationTask implements TruffleCompilationTask {
+        private TruffleInliningData inlining = new TruffleInlining();
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isLastTier() {
+            return true;
+        }
+
+        @Override
+        public TruffleInliningData inliningData() {
+            return inlining;
+        }
+
+        @Override
+        public boolean hasNextTier() {
+            return false;
         }
     }
 }

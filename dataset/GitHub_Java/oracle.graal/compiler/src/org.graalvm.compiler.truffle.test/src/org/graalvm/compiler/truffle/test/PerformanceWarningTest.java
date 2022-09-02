@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,21 +26,32 @@ package org.graalvm.compiler.truffle.test;
 
 import java.io.ByteArrayOutputStream;
 
-import org.graalvm.compiler.debug.LogStream;
-import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.truffle.DefaultTruffleCompiler;
-import org.graalvm.compiler.truffle.GraalTruffleRuntime;
-import org.graalvm.compiler.truffle.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.TruffleCompilerOptions;
-import org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOptionsOverrideScope;
+import org.graalvm.compiler.core.common.CompilationIdentifier;
+import org.graalvm.compiler.debug.DebugCloseable;
+import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.Builder;
+import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
+import org.graalvm.compiler.truffle.common.TruffleInliningData;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
+import org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives;
+import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
+import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
+import org.graalvm.compiler.truffle.runtime.TruffleInlining;
+import org.graalvm.polyglot.Context;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 
-public class PerformanceWarningTest {
+public class PerformanceWarningTest extends TruffleCompilerImplTest {
 
     // Marker object indicating that no performance warnings are expected.
     private static final String[] EMPTY_PERF_WARNINGS = new String[0];
@@ -47,58 +60,116 @@ public class PerformanceWarningTest {
     @SuppressWarnings("unused") private static final VirtualObject1 object1 = new VirtualObject1();
     @SuppressWarnings("unused") private static final VirtualObject2 object2 = new VirtualObject2();
     @SuppressWarnings("unused") private static final SubClass object3 = new SubClass();
+    @SuppressWarnings("unused") private static final L9a object4 = new L9a();
+    @SuppressWarnings("unused") private static final L9b object5 = new L9b();
+    @SuppressWarnings("unused") private static final Boolean inFirstTier = GraalCompilerDirectives.hasNextTier();
+
+    private ByteArrayOutputStream outContent;
+
+    @Before
+    public void setUp() {
+        outContent = new ByteArrayOutputStream();
+        setupContext(Context.newBuilder().logHandler(outContent).allowAllAccess(true).allowExperimentalOptions(true).option("engine.TracePerformanceWarnings", "all").option(
+                        "engine.TreatPerformanceWarningsAsErrors", "all").option("engine.CompilationFailureAction", "ExitVM").build());
+    }
 
     @Test
     public void testVirtualCall() {
-        testHelper(new RootNodeVirtualCall(), "perf warn", "execute");
+        testHelper(new RootNodeVirtualCall(), true, "perf warn", "execute");
     }
 
     @Test
     public void testDeepStack() {
-        testHelper(new RootNodeDeepStack(), "perf warn", "foo", "bar", "execute");
+        testHelper(new RootNodeDeepStack(), true, "perf warn", "foo", "bar", "execute");
     }
 
     @Test
     public void testInstanceOf() {
-        testHelper(new RootNodeInstanceOf(), "perf info", "foo", "bar", "execute");
+        testHelper(new RootNodeInstanceOf(), false, "perf info", "foo", "bar", "execute");
     }
 
     @Test
     public void testCombined() {
-        testHelper(new RootNodeCombined(), "perf info", "perf warn", "foo", "bar", "execute");
+        testHelper(new RootNodeCombined(), true, "perf info", "perf warn", "foo", "bar", "execute");
     }
 
     @Test
     public void testBoundaryCall() {
-        testHelper(new RootNodeBoundaryCall(), EMPTY_PERF_WARNINGS);
+        testHelper(new RootNodeBoundaryCall(), false, EMPTY_PERF_WARNINGS);
     }
 
     @Test
     public void testBoundaryVirtualCall() {
-        testHelper(new RootNodeBoundaryVirtualCall(), EMPTY_PERF_WARNINGS);
+        testHelper(new RootNodeBoundaryVirtualCall(), false, EMPTY_PERF_WARNINGS);
     }
 
     @Test
-    public void testCast() {
-        testHelper(new RootNodeCast(), "perf info", "foo", "bar", "execute");
+    public void testInterfaceCast() {
+        testHelper(new RootNodeInterfaceCast(), false, "perf info", Interface.class.getSimpleName(), "foo", "bar", "execute");
     }
 
     @Test
     public void testSingleImplementor() {
-        testHelper(new RootNodeInterfaceSingleImplementorCall(), "perf info", "type check", "foo");
+        if (GraalServices.hasLookupReferencedType()) {
+            testHelper(new RootNodeInterfaceSingleImplementorCall(), false, EMPTY_PERF_WARNINGS);
+        }
+    }
+
+    @Test
+    public void testSlowClassCast() {
+        testHelper(new RootNodeDeepClass(), false, "perf info", L8.class.getSimpleName(), "foo", "execute");
+    }
+
+    @Test
+    public void testFrameClear() {
+        testHelper(new RootNodeClearFrameClass(new FrameDescriptor("test")), true, "perf warn");
     }
 
     @SuppressWarnings("try")
-    private static void testHelper(RootNode rootNode, String... outputStrings) {
+    private void testHelper(RootNode rootNode, boolean expectException, String... outputStrings) {
+        // Compile and capture output to logger's stream.
+        boolean seenException = false;
+        try {
+            GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
+            OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
+            DebugContext debug = new Builder(runtime.getGraalOptions(OptionValues.class)).build();
+            try (DebugCloseable d = debug.disableIntercept(); DebugContext.Scope s = debug.scope("PerformanceWarningTest")) {
+                final OptimizedCallTarget compilable = target;
+                CompilationIdentifier compilationId = getTruffleCompiler(target).createCompilationIdentifier(compilable);
+                getTruffleCompiler(target).compileAST(compilable.getOptionValues(), debug, compilable, compilationId,
+                                new TruffleCompilerImpl.CancellableTruffleCompilationTask(new TruffleCompilationTask() {
+                                    private TruffleInliningData inlining = new TruffleInlining();
 
-        OptimizedCallTarget target = (OptimizedCallTarget) GraalTruffleRuntime.getRuntime().createCallTarget(rootNode);
+                                    @Override
+                                    public boolean isCancelled() {
+                                        return false;
+                                    }
 
-        // Compile and capture output to TTY.
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        try (TTY.Filter filter = new TTY.Filter(new LogStream(outContent))) {
-            try (TruffleOptionsOverrideScope scope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TraceTrufflePerformanceWarnings, Boolean.TRUE)) {
-                DefaultTruffleCompiler.create(GraalTruffleRuntime.getRuntime()).compileMethod(target, GraalTruffleRuntime.getRuntime(), null);
+                                    @Override
+                                    public boolean isLastTier() {
+                                        return true;
+                                    }
+
+                                    @Override
+                                    public TruffleInliningData inliningData() {
+                                        return inlining;
+                                    }
+
+                                    @Override
+                                    public boolean hasNextTier() {
+                                        return false;
+                                    }
+                                }), null);
+                assertTrue(compilable.isValid());
             }
+        } catch (AssertionError e) {
+            seenException = true;
+            if (!expectException) {
+                throw new AssertionError("Unexpected exception caught." + (outContent.size() > 0 ? '\n' + outContent.toString() : ""), e);
+            }
+        }
+        if (expectException && !seenException) {
+            Assert.assertTrue("Expected exception not caught.", false);
         }
 
         // Check output on TTY.
@@ -107,15 +178,96 @@ public class PerformanceWarningTest {
             Assert.assertEquals("", output);
         } else {
             for (String s : outputStrings) {
-                Assert.assertTrue(String.format("Root node class %s: \"%s\" not found in output \"%s\"", rootNode.getClass(), s, output), output.contains(s));
+                Assert.assertTrue(String.format("Root node class %s: \"%s\" not found in output \"%s\"", rootNode.getClass().getName(), s, output), output.contains(s));
             }
         }
+    }
+
+    @Test
+    public void failedTrivial() {
+        testHelper(new TrivialCallsInnerNode(), true, "perf warn", "trivial");
+    }
+
+    private interface Interface {
+
+        void doVirtual();
+
+        @TruffleBoundary
+        void doBoundaryVirtual();
+
+    }
+
+    private interface SingleImplementedInterface {
+        void doVirtual();
+    }
+
+    private static class VirtualObject1 implements Interface {
+        @Override
+        public void doVirtual() {
+        }
+
+        @Override
+        public void doBoundaryVirtual() {
+        }
+    }
+
+    private static class VirtualObject2 implements Interface {
+        @Override
+        public void doVirtual() {
+        }
+
+        @Override
+        public void doBoundaryVirtual() {
+        }
+    }
+
+    private static class SingleImplementorClass implements SingleImplementedInterface {
+        @Override
+        public void doVirtual() {
+        }
+    }
+
+    private static class SubClass extends SingleImplementorClass {
+    }
+
+    private static class L1 {
+    }
+
+    private static class L2 extends L1 {
+    }
+
+    private static class L3 extends L2 {
+    }
+
+    private static class L4 extends L3 {
+    }
+
+    private static class L5 extends L4 {
+    }
+
+    private static class L6 extends L5 {
+    }
+
+    private static class L7 extends L6 {
+    }
+
+    private static class L8 extends L7 {
+    }
+
+    private static class L9a extends L8 {
+    }
+
+    private static class L9b extends L8 {
     }
 
     private abstract class TestRootNode extends RootNode {
 
         private TestRootNode() {
             super(null);
+        }
+
+        private TestRootNode(FrameDescriptor fd) {
+            super(null, fd);
         }
     }
 
@@ -214,7 +366,7 @@ public class PerformanceWarningTest {
         }
     }
 
-    private final class RootNodeCast extends TestRootNode {
+    private final class RootNodeInterfaceCast extends TestRootNode {
         protected Object obj;
 
         @Override
@@ -233,35 +385,6 @@ public class PerformanceWarningTest {
         }
     }
 
-    private interface Interface {
-
-        void doVirtual();
-
-        @TruffleBoundary
-        void doBoundaryVirtual();
-
-    }
-
-    private static class VirtualObject1 implements Interface {
-        @Override
-        public void doVirtual() {
-        }
-
-        @Override
-        public void doBoundaryVirtual() {
-        }
-    }
-
-    private static class VirtualObject2 implements Interface {
-        @Override
-        public void doVirtual() {
-        }
-
-        @Override
-        public void doBoundaryVirtual() {
-        }
-    }
-
     private final class RootNodeInterfaceSingleImplementorCall extends TestRootNode {
         protected SingleImplementedInterface a;
 
@@ -276,17 +399,73 @@ public class PerformanceWarningTest {
         }
     }
 
-    private interface SingleImplementedInterface {
-        void doVirtual();
-    }
+    private final class RootNodeDeepClass extends TestRootNode {
+        protected Object obj;
 
-    private static class SingleImplementorClass implements SingleImplementedInterface {
         @Override
-        public void doVirtual() {
+        public Object execute(VirtualFrame frame) {
+            foo();
+            return null;
+        }
+
+        @SuppressWarnings("unused")
+        private void foo() {
+            L8 c = (L8) obj;
         }
     }
 
-    private static class SubClass extends SingleImplementorClass {
+    private final class RootNodeClearFrameClass extends TestRootNode {
+        final FrameSlot slot;
+
+        RootNodeClearFrameClass(FrameDescriptor fd) {
+            super(fd);
+            this.slot = fd.addFrameSlot("test");
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            Object[] args = frame.getArguments();
+            if ((boolean) args[0]) {
+                frame.clear(slot);
+            }
+            // Expected Perf warn
+            boundary();
+            return null;
+        }
+
+        @TruffleBoundary
+        private void boundary() {
+        }
     }
 
+    protected class TrivialCallsInnerNode extends RootNode {
+
+        @Child private OptimizedDirectCallNode callNode;
+
+        public TrivialCallsInnerNode() {
+            super(null);
+            final GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
+            this.callNode = (OptimizedDirectCallNode) runtime.createDirectCallNode(runtime.createCallTarget(new RootNode(null) {
+                @Override
+                public Object execute(VirtualFrame frame) {
+                    return 0;
+                }
+            }));
+        }
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            return (int) callNode.call(frame.getArguments()) + 1;
+        }
+
+        @Override
+        protected boolean isTrivial() {
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return "trivial";
+        }
+    }
 }

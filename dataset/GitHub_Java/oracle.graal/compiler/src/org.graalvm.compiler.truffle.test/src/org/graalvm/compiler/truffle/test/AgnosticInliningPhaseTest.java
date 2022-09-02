@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,97 +24,80 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-
 import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
+import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
+import org.graalvm.compiler.truffle.common.TruffleInliningData;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 import org.graalvm.compiler.truffle.compiler.phases.inlining.AgnosticInliningPhase;
-import org.graalvm.compiler.truffle.runtime.NoInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.junit.After;
+import org.graalvm.polyglot.Context;
 import org.junit.Before;
-import org.junit.Test;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.test.ReflectionUtils;
-
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.SpeculationLog;
 
 public class AgnosticInliningPhaseTest extends PartialEvaluationTest {
 
-    private static TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope agnosticInliningScope;
-    private static TruffleCompilerOptions.TruffleOptionsOverrideScope budgetScope;
     protected final TruffleRuntime runtime = Truffle.getRuntime();
-    protected final RootCallTarget dummy = runtime.createCallTarget(new RootNode(null) {
-        @Override
-        public Object execute(VirtualFrame frame) {
-            return null;
-        }
-    });
 
     @Before
     public void before() {
-        agnosticInliningScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleLanguageAgnosticInlining, true);
-        // ensure nothing is inlined so that we can observe the isInlinedNodes
-        budgetScope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleInliningInliningBudget, 1);
+        setupContext(Context.newBuilder().allowAllAccess(true).allowExperimentalOptions(true).option("engine.LanguageAgnosticInlining", Boolean.TRUE.toString()).option("engine.InliningInliningBudget",
+                        "1").build());
     }
 
-    @After
-    public void tearDown() {
-        budgetScope.close();
-        agnosticInliningScope.close();
-    }
+    protected StructuredGraph runLanguageAgnosticInliningPhase(OptimizedCallTarget callTarget) {
+        final PartialEvaluator partialEvaluator = getTruffleCompiler(callTarget).getPartialEvaluator();
+        final CompilationIdentifier compilationIdentifier = new CompilationIdentifier() {
+            @Override
+            public String toString(Verbosity verbosity) {
+                return "";
+            }
+        };
+        final PartialEvaluator.Request request = partialEvaluator.new Request(callTarget.getOptionValues(), getDebugContext(), callTarget, partialEvaluator.rootForCallTarget(callTarget),
+                        compilationIdentifier, getSpeculationLog(),
+                        new TruffleCompilerImpl.CancellableTruffleCompilationTask(new TruffleCompilationTask() {
+                            private TruffleInliningData inlining = new TruffleInlining();
 
-    protected StructuredGraph runLanguageAgnosticInliningPhase(OptimizedCallTarget callTarget) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        final TruffleInlining callNodeProvider = new TruffleInlining(callTarget, new NoInliningPolicy());
-        final PartialEvaluator partialEvaluator = truffleCompiler.getPartialEvaluator();
-        final Class<?> partialEvaluatorClass = partialEvaluator.getClass().getSuperclass();
-        final Method createGraphForPE = partialEvaluatorClass.getDeclaredMethod("createGraphForPE",
-                        DebugContext.class,
-                        String.class,
-                        ResolvedJavaMethod.class,
-                        StructuredGraph.AllowAssumptions.class,
-                        CompilationIdentifier.class,
-                        SpeculationLog.class,
-                        Cancellable.class);
-        ReflectionUtils.setAccessible(createGraphForPE, true);
-        final StructuredGraph graph = (StructuredGraph) createGraphForPE.invoke(partialEvaluator,
-                        getDebugContext(),
-                        "",
-                        rootCallForTarget(callTarget),
-                        StructuredGraph.AllowAssumptions.YES,
-                        new CompilationIdentifier() {
                             @Override
-                            public String toString(Verbosity verbosity) {
-                                return "";
+                            public boolean isCancelled() {
+                                return false;
                             }
-                        },
-                        getSpeculationLog(),
-                        null);
-        final AgnosticInliningPhase agnosticInliningPhase = new AgnosticInliningPhase(partialEvaluator, callNodeProvider, callTarget);
-        agnosticInliningPhase.apply(graph, truffleCompiler.getPartialEvaluator().getProviders());
-        return graph;
+
+                            @Override
+                            public boolean isLastTier() {
+                                return true;
+                            }
+
+                            @Override
+                            public TruffleInliningData inliningData() {
+                                return inlining;
+                            }
+
+                            @Override
+                            public boolean hasNextTier() {
+                                return false;
+                            }
+                        }));
+        final AgnosticInliningPhase agnosticInliningPhase = new AgnosticInliningPhase(partialEvaluator, request);
+        agnosticInliningPhase.apply(request.graph, getTruffleCompiler(callTarget).getPartialEvaluator().getProviders());
+        return request.graph;
     }
 
-    private ResolvedJavaMethod rootCallForTarget(OptimizedCallTarget target) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        final PartialEvaluator partialEvaluator = truffleCompiler.getPartialEvaluator();
-        final Method rootForCallTarget = partialEvaluator.getClass().getSuperclass().getDeclaredMethod("rootForCallTarget", CompilableTruffleAST.class);
-        return (ResolvedJavaMethod) rootForCallTarget.invoke(partialEvaluator, target);
+    protected final OptimizedCallTarget createDummyNode() {
+        return (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
+            @Override
+            public Object execute(VirtualFrame frame) {
+                return null;
+            }
+        });
     }
 
     protected class CallsInnerNodeTwice extends RootNode {

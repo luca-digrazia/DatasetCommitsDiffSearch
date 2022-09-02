@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,9 @@ package org.graalvm.compiler.truffle.common;
  * Describes the state and the configuration of a Truffle compilation.
  */
 public interface TruffleCompilationTask {
+    /**
+     * Determines if this compilation has been cancelled.
+     */
     boolean isCancelled();
 
     /**
@@ -41,4 +44,12 @@ public interface TruffleCompilationTask {
     default boolean isFirstTier() {
         return !isLastTier();
     }
+
+    default int tier() {
+        return isFirstTier() ? 1 : 2;
+    }
+
+    TruffleInliningData inliningData();
+
+    boolean hasNextTier();
 }
