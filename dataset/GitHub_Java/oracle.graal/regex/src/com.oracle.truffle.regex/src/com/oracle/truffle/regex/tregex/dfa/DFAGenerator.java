@@ -805,8 +805,11 @@ public final class DFAGenerator implements JsonConvertible {
 
                 if (doSimpleCG) {
                     assert t.getTransitionSet().size() <= 2;
-                    assert t.getTransitionSet().size() == 1 || t.getTransitionSet().getTransition(0) != nfa.getInitialLoopBackTransition();
-                    simpleCGTransitions[i] = createSimpleCGTransition(t.getTransitionSet().getTransition(0));
+                    NFAStateTransition nfaTransition = t.getTransitionSet().getTransition(0);
+                    if (t.getTransitionSet().size() > 1 && nfaTransition == nfa.getInitialLoopBackTransition()) {
+                        nfaTransition = t.getTransitionSet().getTransition(1);
+                    }
+                    simpleCGTransitions[i] = createSimpleCGTransition(nfaTransition);
                 }
             }
 
