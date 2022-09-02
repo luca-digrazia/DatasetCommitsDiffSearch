@@ -133,6 +133,11 @@ public final class VMEventListenerImpl implements VMEventListener {
         breakpoint.dispose();
     }
 
+    @Override
+    public void clearAllBreakpointRequests() {
+        breakpointRequests.clear();
+    }
+
     private static volatile int fieldBreakpointCount;
 
     @Override
@@ -343,7 +348,7 @@ public final class VMEventListenerImpl implements VMEventListener {
 
         // tagged refType
         KlassRef klass = info.getKlass();
-        stream.writeByte(klass.getTagConstant());
+        stream.writeByte(TypeTag.getKind(klass));
         stream.writeLong(context.getIds().getIdAsLong(klass));
 
         // fieldID

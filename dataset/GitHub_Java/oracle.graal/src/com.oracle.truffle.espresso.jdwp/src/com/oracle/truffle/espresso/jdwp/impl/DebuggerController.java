@@ -300,8 +300,7 @@ public final class DebuggerController implements ContextsListener {
         JDWPLogger.log("suspend called for thread: %s with suspension count %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
 
         if (threadSuspension.getSuspensionCount(thread) > 0) {
-            // already suspended, so only increase the suspension count
-            threadSuspension.suspendThread(thread);
+            // already suspended
             return;
         }
 
