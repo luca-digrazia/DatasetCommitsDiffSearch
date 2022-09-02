@@ -25,9 +25,9 @@ package com.oracle.truffle.espresso.jdwp.api;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -467,7 +467,7 @@ public interface JDWPContext {
      * @param redefineInfos the information about the original class and the new class bytes
      * @return 0 on success or the appropriate {@link ErrorCodes} if an error occur
      */
-    int redefineClasses(RedefineInfo[] redefineInfos);
+    int redefineClasses(List<RedefineInfo> redefineInfos);
 
     /**
      * Exit all monitors that was entered by the frame.
@@ -484,6 +484,30 @@ public interface JDWPContext {
     void abort(int exitCode);
 
     /**
+     * Returns the nearest {@link com.oracle.truffle.api.instrumentation.InstrumentableNode node} or
+     * <code>null</code>. The nodes are traversed by walking the parent node hierarchy.
+     *
+     * @param node the node
+     * @return the nearest instrumentable node
+     */
+    Node getInstrumentableNode(Node node);
+
+    /**
+     * Determines if hostThread is a VM internal thread.
+     *
+     * @param hostThread the thread
+     * @return true if hostThread is a VM internal thread
+     */
+    boolean isSystemThread(Thread hostThread);
+
+    /**
+     * Sets the Truffle context.
+     *
+     * @param con the Truffle context.
+     */
+    void setTruffleContext(TruffleContext con);
+
+    /**
      * Returns the current BCI of the node.
      *
      * @param rawNode the current node
@@ -491,17 +515,4 @@ public interface JDWPContext {
      * @return the current bci
      */
     long getBCI(Node rawNode, Frame frame);
-
-    /**
-     * Returns a node that returns true for
-     * {@link com.oracle.truffle.api.interop.NodeLibrary#hasScope(Object, Frame)} or
-     * <code>null</code> if not present for this root node. The returned node must implement
-     * {@link InstrumentableNode} and return true for {@link InstrumentableNode#isInstrumentable()}
-     *
-     * @param rootNode the root node
-     * @param frame
-     * @return the nearest instrumentable node or null
-     */
-    InstrumentableNode getScopeProviderNode(RootNode rootNode, Frame frame);
-
 }

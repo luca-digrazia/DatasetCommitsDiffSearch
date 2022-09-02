@@ -45,7 +45,7 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
 import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
-import com.oracle.truffle.espresso.jdwp.impl.JDWP;
+import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -291,7 +291,7 @@ public final class InnerClassRedefiner {
             classLoaderRules = new HashMap<>(4);
             renamingRules.put(classLoader, classLoaderRules);
         }
-        JDWP.LOGGER.fine(() -> "Renaming inner class: " + originalName + " to: " + newName);
+        JDWPLogger.log("Renaming inner class: %s to: %s", JDWPLogger.LogLevel.REDEFINE, originalName, newName);
         // add simple class names
         classLoaderRules.put(originalName, newName);
         // add type names
@@ -343,7 +343,7 @@ public final class InnerClassRedefiner {
             for (Klass loadedKlass : loadedKlasses) {
                 if (loadedKlass instanceof ObjectKlass) {
                     ObjectKlass objectKlass = (ObjectKlass) loadedKlass;
-                    Matcher matcher = ANON_INNER_CLASS_PATTERN.matcher(loadedKlass.getNameAsString());
+                    Matcher matcher = ANON_INNER_CLASS_PATTERN.matcher(klass.getNameAsString());
                     if (matcher.matches()) {
                         Symbol<Symbol.Name> outerClassName = getOuterClassName(loadedKlass.getName());
                         if (outerClassName != null && outerClassName.length() > 0) {

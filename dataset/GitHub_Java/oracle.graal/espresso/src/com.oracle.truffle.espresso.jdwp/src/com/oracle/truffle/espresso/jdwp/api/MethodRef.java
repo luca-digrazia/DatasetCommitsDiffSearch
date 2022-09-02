@@ -189,11 +189,18 @@ public interface MethodRef {
     void addMethodHook(MethodHook info);
 
     /**
-     * Remove a method breakpoint with the given info on this method.
+     * Remove a method hook with the given info on this method.
      *
      * @param requestId the ID for the request that set the breakpoint
      */
     void removedMethodHook(int requestId);
+
+    /**
+     * Remove a method hook with the given hook on this method.
+     *
+     * @param hook the method hook
+     */
+    void removedMethodHook(MethodHook hook);
 
     /**
      * Determines if there are any breakpoints set on this method.

@@ -557,16 +557,16 @@ public final class ClassRedefinition {
     }
 
     private static boolean checkLineNumberTable(LineNumberTableAttribute table1, LineNumberTableAttribute table2) {
-        List<LineNumberTableAttribute.Entry> oldEntries = table1.getEntries();
-        List<LineNumberTableAttribute.Entry> newEntries = table2.getEntries();
+        LineNumberTableAttribute.Entry[] oldEntries = table1.getEntries();
+        LineNumberTableAttribute.Entry[] newEntries = table2.getEntries();
 
-        if (oldEntries.size() != newEntries.size()) {
+        if (oldEntries.length != newEntries.length) {
             return true;
         }
 
-        for (int i = 0; i < oldEntries.size(); i++) {
-            LineNumberTableAttribute.Entry oldEntry = oldEntries.get(i);
-            LineNumberTableAttribute.Entry newEntry = newEntries.get(i);
+        for (int i = 0; i < oldEntries.length; i++) {
+            LineNumberTableAttribute.Entry oldEntry = oldEntries[i];
+            LineNumberTableAttribute.Entry newEntry = newEntries[i];
             if (oldEntry.getLineNumber() != newEntry.getLineNumber() || oldEntry.getBCI() != newEntry.getBCI()) {
                 return true;
             }
@@ -658,9 +658,11 @@ public final class ClassRedefinition {
                 context.getRegistries().removeUnloadedKlassConstraint(loadedKlass, type);
             }
             oldKlass.patchClassName(packet.info.getName());
-            classRegistry.onClassRenamed(oldKlass, packet.info.getName(), type);
+            classRegistry.onClassRenamed(oldKlass, packet.info.getName());
 
             InterpreterToVM.setFieldObject(StaticObject.NULL, oldKlass.mirror(), context.getMeta().java_lang_Class_name);
+
+            context.getRegistries().recordConstraint(type, oldKlass, oldKlass.getDefiningClassLoader());
         }
         oldKlass.redefineClass(packet, refreshSubClasses, ids);
         if (redefineListener.rerunClinit(oldKlass, packet.detectedChange.clinitChanged())) {
