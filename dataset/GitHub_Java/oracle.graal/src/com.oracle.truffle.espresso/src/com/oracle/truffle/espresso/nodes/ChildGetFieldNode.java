@@ -8,10 +8,10 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public abstract class ChildGetFieldNode extends Node {
-    final Field field;
-    final int slotCount;
+    protected final Field field;
+    protected final int slotCount;
 
-    ChildGetFieldNode(Field field) {
+    protected ChildGetFieldNode(Field field) {
         this.field = field;
         this.slotCount = field.getKind().getSlotCount();
     }
@@ -38,7 +38,7 @@ public abstract class ChildGetFieldNode extends Node {
 }
 
 class IntGetFieldNode extends ChildGetFieldNode {
-    IntGetFieldNode(Field f) {
+    protected IntGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Int;
     }
@@ -51,20 +51,20 @@ class IntGetFieldNode extends ChildGetFieldNode {
 }
 
 class BooleanGetFieldNode extends ChildGetFieldNode {
-    BooleanGetFieldNode(Field f) {
+    protected BooleanGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Boolean;
     }
 
     @Override
     public int getField(VirtualFrame frame, BytecodeNode root, StaticObject receiver, int at) {
-        root.putInt(frame, at, receiver.getBooleanField(field) ? 1 : 0);
+        root.putInt(frame, at, receiver.getByteField(field));
         return slotCount;
     }
 }
 
 class CharGetFieldNode extends ChildGetFieldNode {
-    CharGetFieldNode(Field f) {
+    protected CharGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Char;
     }
@@ -77,7 +77,7 @@ class CharGetFieldNode extends ChildGetFieldNode {
 }
 
 class ShortGetFieldNode extends ChildGetFieldNode {
-    ShortGetFieldNode(Field f) {
+    protected ShortGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Short;
     }
@@ -90,7 +90,7 @@ class ShortGetFieldNode extends ChildGetFieldNode {
 }
 
 class ByteGetFieldNode extends ChildGetFieldNode {
-    ByteGetFieldNode(Field f) {
+    protected ByteGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Byte;
     }
@@ -103,7 +103,7 @@ class ByteGetFieldNode extends ChildGetFieldNode {
 }
 
 class LongGetFieldNode extends ChildGetFieldNode {
-    LongGetFieldNode(Field f) {
+    protected LongGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Long;
     }
@@ -116,7 +116,7 @@ class LongGetFieldNode extends ChildGetFieldNode {
 }
 
 class FloatGetFieldNode extends ChildGetFieldNode {
-    FloatGetFieldNode(Field f) {
+    protected FloatGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Float;
     }
@@ -129,7 +129,7 @@ class FloatGetFieldNode extends ChildGetFieldNode {
 }
 
 class DoubleGetFieldNode extends ChildGetFieldNode {
-    DoubleGetFieldNode(Field f) {
+    protected DoubleGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Double;
     }
@@ -142,7 +142,7 @@ class DoubleGetFieldNode extends ChildGetFieldNode {
 }
 
 class ObjectGetFieldNode extends ChildGetFieldNode {
-    ObjectGetFieldNode(Field f) {
+    protected ObjectGetFieldNode(Field f) {
         super(f);
         assert f.getKind() == JavaKind.Object;
     }

@@ -15,16 +15,15 @@ public class InlinedGetterNode extends QuickNode {
     private static final int INSTANCE_GETTER_BCI = 1;
     private static final int STATIC_GETTER_BCI = 0;
 
-    final Field field;
-    final Method inlinedMethod;
+    protected final Field field;
+    protected final Method inlinedMethod;
 
     @Child ChildGetFieldNode getFieldNode;
 
-    InlinedGetterNode(Method inlinedMethod) {
+    protected InlinedGetterNode(Method inlinedMethod) {
         this.inlinedMethod = inlinedMethod;
         this.field = getInlinedField(inlinedMethod);
         getFieldNode = ChildGetFieldNode.create(this.field);
-        assert field.isStatic() == inlinedMethod.isStatic();
     }
 
     public static InlinedGetterNode create(Method inlinedMethod, int opCode, int curBCI) {
@@ -40,9 +39,10 @@ public class InlinedGetterNode extends QuickNode {
     @Override
     public int invoke(VirtualFrame frame, int top) {
         BytecodeNode root = (BytecodeNode) getParent();
+        assert field.isStatic() == inlinedMethod.isStatic();
         StaticObject receiver = field.isStatic()
                         ? field.getDeclaringKlass().tryInitializeAndGetStatics()
-                        : nullCheck(root.peekAndReleaseObject(frame, top - 1));
+                        : nullCheck(root.peekObject(frame, top - 1));
         int resultAt = inlinedMethod.isStatic() ? top : (top - 1);
         return (resultAt - top) + getFieldNode.getField(frame, root, receiver, resultAt);
     }
