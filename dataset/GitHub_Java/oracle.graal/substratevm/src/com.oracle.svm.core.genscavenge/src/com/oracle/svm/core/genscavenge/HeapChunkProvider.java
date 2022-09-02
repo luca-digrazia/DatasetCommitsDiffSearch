@@ -133,7 +133,7 @@ final class HeapChunkProvider {
      * system. This method may only be called after the chunks were already removed from the spaces.
      */
     void consumeAlignedChunks(AlignedHeader firstChunk) {
-        assert HeapChunk.getPrevious(firstChunk).isNull() : "prev must be null";
+        assert HeapChunk.getPrevious(firstChunk).isNull();
         AlignedHeader cur = firstChunk;
 
         UnsignedWord minimumHeapSize = HeapPolicy.getMinimumHeapSize();

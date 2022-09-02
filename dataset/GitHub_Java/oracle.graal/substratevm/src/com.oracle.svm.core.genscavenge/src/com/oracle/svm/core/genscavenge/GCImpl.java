@@ -1092,7 +1092,7 @@ public final class GCImpl implements GC {
 
         public void add(AlignedHeader chunks) {
             if (chunks.isNonNull()) {
-                assert HeapChunk.getPrevious(chunks).isNull() : "prev must be null";
+                assert HeapChunk.getPrevious(chunks).isNull();
                 if (firstAligned.isNonNull()) {
                     AlignedHeader lastNewChunk = getLast(chunks);
                     HeapChunk.setNext(lastNewChunk, firstAligned);
@@ -1104,7 +1104,7 @@ public final class GCImpl implements GC {
 
         public void add(UnalignedHeader chunks) {
             if (chunks.isNonNull()) {
-                assert HeapChunk.getPrevious(chunks).isNull() : "prev must be null";
+                assert HeapChunk.getPrevious(chunks).isNull();
                 if (firstUnaligned.isNonNull()) {
                     UnalignedHeader lastNewChunk = getLast(chunks);
                     HeapChunk.setNext(lastNewChunk, firstUnaligned);
