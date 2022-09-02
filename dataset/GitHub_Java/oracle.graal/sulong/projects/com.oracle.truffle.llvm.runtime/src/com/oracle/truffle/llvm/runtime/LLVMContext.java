@@ -90,7 +90,6 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMContext {
     private final List<Path> libraryPaths = new ArrayList<>();
-    private final Object libraryPathsLock = new Object();
     @CompilationFinal private Path internalLibraryPath;
     private final List<ExternalLibrary> externalLibraries = new ArrayList<>();
     private final Object externalLibrariesLock = new Object();
@@ -516,10 +515,8 @@ public final class LLVMContext {
         Path path = Paths.get(p);
         TruffleFile file = getEnv().getTruffleFile(path.toString());
         if (file.isDirectory()) {
-            synchronized (libraryPathsLock) {
-                if (!libraryPaths.contains(path)) {
-                    libraryPaths.add(path);
-                }
+            if (!libraryPaths.contains(path)) {
+                libraryPaths.add(path);
             }
         }
 
@@ -529,9 +526,7 @@ public final class LLVMContext {
 
     List<Path> getLibraryPaths() {
         // TODO (je) should this be unmodifiable?
-        synchronized (libraryPathsLock) {
-            return libraryPaths;
-        }
+        return libraryPaths;
     }
 
     public LLVMLanguage getLanguage() {
