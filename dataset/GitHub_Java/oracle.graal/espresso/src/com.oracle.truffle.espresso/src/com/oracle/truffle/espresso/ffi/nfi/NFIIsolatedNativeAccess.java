@@ -26,7 +26,10 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Objects;
 
-import com.oracle.truffle.espresso.substitutions.Collect;
+import com.oracle.truffle.espresso.ffi.Buffer;
+import com.oracle.truffle.espresso.ffi.NativeAccess;
+import com.oracle.truffle.espresso.ffi.NativeType;
+import com.oracle.truffle.espresso.ffi.TruffleByteBuffer;
 import org.graalvm.home.HomeFinder;
 
 import com.oracle.truffle.api.CompilerAsserts;
@@ -44,12 +47,8 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.ffi.Buffer;
-import com.oracle.truffle.espresso.ffi.NativeAccess;
 import com.oracle.truffle.espresso.ffi.NativeSignature;
-import com.oracle.truffle.espresso.ffi.NativeType;
 import com.oracle.truffle.espresso.ffi.Pointer;
-import com.oracle.truffle.espresso.ffi.TruffleByteBuffer;
 import com.oracle.truffle.espresso.impl.EmptyKeysArray;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
@@ -70,7 +69,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
  * workaround.
  * </ul>
  */
-public final class NFIIsolatedNativeAccess extends NFINativeAccess {
+final class NFIIsolatedNativeAccess extends NFINativeAccess {
 
     private final @Pointer TruffleObject edenLibrary;
     private final @Pointer TruffleObject malloc;
@@ -233,7 +232,6 @@ public final class NFIIsolatedNativeAccess extends NFINativeAccess {
         }
     }
 
-    @Collect(NativeAccess.class)
     public static final class Provider implements NativeAccess.Provider {
         @Override
         public String id() {

@@ -431,6 +431,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         }
     }
 
+    @TruffleBoundary
     public JNIHandles getHandles() {
         return handles;
     }
