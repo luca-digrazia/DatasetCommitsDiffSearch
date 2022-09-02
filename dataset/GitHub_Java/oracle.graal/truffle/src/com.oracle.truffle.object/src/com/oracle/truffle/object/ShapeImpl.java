@@ -560,18 +560,14 @@ public abstract class ShapeImpl extends Shape {
     /** @since 0.17 or earlier */
     @TruffleBoundary
     protected void onPropertyTransition(Property property) {
-        onPropertyTransitionWithKey(property.getKey());
-    }
-
-    final void onPropertyTransitionWithKey(Object propertyKey) {
         if (allowPropertyAssumptions()) {
             PropertyAssumptions propertyAssumptions = getPropertyAssumptions();
             if (propertyAssumptions != null) {
-                propertyAssumptions.invalidatePropertyAssumption(propertyKey);
+                propertyAssumptions.invalidatePropertyAssumption(property.getKey());
             }
         }
         if (sharedData instanceof com.oracle.truffle.api.object.ShapeListener) {
-            ((com.oracle.truffle.api.object.ShapeListener) sharedData).onPropertyTransition(propertyKey);
+            ((com.oracle.truffle.api.object.ShapeListener) sharedData).onPropertyTransition(property.getKey());
         }
     }
 
@@ -1088,7 +1084,7 @@ public abstract class ShapeImpl extends Shape {
     public final boolean hasTransitionWithKey(Object key) {
         for (Transition transition : getTransitionMapForRead().keySet()) {
             if (transition instanceof PropertyTransition) {
-                if (((PropertyTransition) transition).getPropertyKey().equals(key)) {
+                if (((PropertyTransition) transition).getProperty().getKey().equals(key)) {
                     return true;
                 }
             }

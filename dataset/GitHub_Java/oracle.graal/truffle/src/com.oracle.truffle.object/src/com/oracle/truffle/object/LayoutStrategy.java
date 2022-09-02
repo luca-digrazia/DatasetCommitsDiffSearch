@@ -125,34 +125,9 @@ public abstract class LayoutStrategy {
     }
 
     private ShapeImpl defineNewProperty(ShapeImpl oldShape, Object key, Object value, int propertyFlags, long putFlags, LocationFactory locationFactory) {
-        if (!Flags.isConstant(putFlags) && !Flags.isDeclaration(putFlags) && locationFactory == null) {
-            Class<?> locationType = detectLocationType(value);
-            if (locationType != null) {
-                AddPropertyTransition addTransition = new AddPropertyTransition(key, propertyFlags, locationType);
-                ShapeImpl cachedShape = oldShape.queryTransition(addTransition);
-                if (cachedShape != null) {
-                    return ensureValid(cachedShape);
-                }
-            }
-        }
-
         Location location = createLocationForValue(oldShape, value, putFlags, locationFactory);
         Property property = Property.create(key, location, propertyFlags);
-        return addProperty(oldShape, property);
-    }
-
-    protected Class<?> detectLocationType(Object value) {
-        if (value instanceof Integer) {
-            return int.class;
-        } else if (value instanceof Double) {
-            return double.class;
-        } else if (value instanceof Long) {
-            return long.class;
-        } else if (value instanceof Boolean) {
-            return boolean.class;
-        } else {
-            return Object.class;
-        }
+        return oldShape.addProperty(property);
     }
 
     private Location createLocationForValue(ShapeImpl oldShape, Object value, long putFlags, LocationFactory locationFactory) {
@@ -472,7 +447,7 @@ public abstract class LayoutStrategy {
         ShapeImpl current = shape;
         ShapeImpl root = shape.getRoot();
         while (current != root) {
-            if (current.getTransitionFromParent() instanceof AddPropertyTransition && ((AddPropertyTransition) current.getTransitionFromParent()).getPropertyKey().equals(propertyName)) {
+            if (current.getTransitionFromParent() instanceof AddPropertyTransition && ((AddPropertyTransition) current.getTransitionFromParent()).getProperty().getKey().equals(propertyName)) {
                 return current;
             }
             current = current.getParent();
