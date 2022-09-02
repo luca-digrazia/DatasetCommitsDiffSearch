@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,9 +42,9 @@ package com.oracle.truffle.api.interop;
 
 final class NumberUtils {
 
-    private static final double DOUBLE_MAX_SAFE_INTEGER = 9007199254740991d; // 2 ** 53 - 1
+    static final double DOUBLE_MAX_SAFE_INTEGER = 9007199254740991d; // 2 ** 53 - 1
     static final long LONG_MAX_SAFE_DOUBLE = 9007199254740991L; // 2 ** 53 - 1
-    private static final float FLOAT_MAX_SAFE_INTEGER = 16777215f; // 2 ** 24 - 1
+    static final float FLOAT_MAX_SAFE_INTEGER = 16777215f; // 2 ** 24 - 1
     static final int INT_MAX_SAFE_FLOAT = 16777215; // 2 ** 24 - 1
 
     private NumberUtils() {
@@ -72,11 +72,11 @@ final class NumberUtils {
     }
 
     static boolean isNegativeZero(double d) {
-        return Double.doubleToRawLongBits(d) == Double.doubleToRawLongBits(-0d);
+        return d == 0d && Double.doubleToRawLongBits(d) == Double.doubleToRawLongBits(-0d);
     }
 
     static boolean isNegativeZero(float f) {
-        return Float.floatToRawIntBits(f) == Float.floatToRawIntBits(-0f);
+        return f == 0f && Float.floatToRawIntBits(f) == Float.floatToRawIntBits(-0f);
     }
 
 }

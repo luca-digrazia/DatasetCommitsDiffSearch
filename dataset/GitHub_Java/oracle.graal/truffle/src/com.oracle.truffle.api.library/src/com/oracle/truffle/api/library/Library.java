@@ -51,9 +51,6 @@ import com.oracle.truffle.api.nodes.Node;
  */
 public abstract class Library extends Node {
 
-    /***
-     * @since 1.0
-     */
     protected Library() {
     }
 

@@ -60,11 +60,6 @@ public final class ArityException extends InteropException {
         this.actualArity = actualArity;
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @since 1.0
-     */
     @Override
     public String getMessage() {
         return "Arity error - expected: " + expectedArity + " actual: " + actualArity;
@@ -99,7 +94,6 @@ public final class ArityException extends InteropException {
      * @since 1.0
      */
     public static ArityException create(int expectedArity, int actualArity) {
-        CompilerDirectives.transferToInterpreter();
         return new ArityException(expectedArity, actualArity);
     }
 
