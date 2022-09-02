@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,12 +55,12 @@ public final class GraalFrameInstance implements FrameInstance {
     static {
         try {
             CALL_DIRECT = OptimizedCallTarget.class.getDeclaredMethod("callDirect", Node.class, Object[].class);
-            CALL_INLINED = OptimizedCallTarget.class.getDeclaredMethod("partialEvaluationRootForInlining", Node.class, Object[].class);
-            CALL_INLINED_AGNOSTIC = OptimizedCallTarget.class.getDeclaredMethod("partialEvaluationRootForAgnosticInlining", Object[].class);
+            CALL_INLINED = OptimizedCallTarget.class.getDeclaredMethod("callInlined", Node.class, Object[].class);
+            CALL_INLINED_AGNOSTIC = OptimizedCallTarget.class.getDeclaredMethod("callInlinedAgnostic", Object[].class);
             CALL_INLINED_FORCED = OptimizedCallTarget.class.getDeclaredMethod("callInlinedForced", Node.class, Object[].class);
             CALL_INDIRECT = OptimizedCallTarget.class.getDeclaredMethod("callIndirect", Node.class, Object[].class);
 
-            CALL_TARGET_METHOD = OptimizedCallTarget.class.getDeclaredMethod("executeRootNode", VirtualFrame.class);
+            CALL_TARGET_METHOD = OptimizedCallTarget.class.getDeclaredMethod("callProxy", VirtualFrame.class);
             CALL_OSR_METHOD = OptimizedOSRLoopNode.OSRRootNode.class.getDeclaredMethod("callProxy", OSRRootNode.class, VirtualFrame.class);
         } catch (NoSuchMethodException | SecurityException e) {
             throw new InternalError(e);
