@@ -33,8 +33,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.graalvm.nativeimage.ImageSingletons;
-
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
@@ -54,20 +52,16 @@ public class CAnnotationProcessor {
 
     private final NativeCodeContext codeCtx;
     private final NativeLibraries nativeLibs;
-    private CCompilerInvoker compilerInvoker;
-    private Path tempDirectory;
+    private final CCompilerInvoker compilerInvoker;
+    private final Path tempDirectory;
 
     private NativeCodeInfo codeInfo;
     private QueryCodeWriter writer;
 
-    public CAnnotationProcessor(NativeLibraries nativeLibs, NativeCodeContext codeCtx) {
+    public CAnnotationProcessor(NativeLibraries nativeLibs, NativeCodeContext codeCtx, CCompilerInvoker compilerInvoker) {
         this.nativeLibs = nativeLibs;
         this.codeCtx = codeCtx;
-        if (!ImageSingletons.contains(CCompilerInvoker.class)) {
-            assert CAnnotationProcessorCache.Options.UseCAPCache.getValue();
-            return;
-        }
-        this.compilerInvoker = ImageSingletons.lookup(CCompilerInvoker.class);
+        this.compilerInvoker = compilerInvoker;
         this.tempDirectory = compilerInvoker.tempDirectory;
     }
 

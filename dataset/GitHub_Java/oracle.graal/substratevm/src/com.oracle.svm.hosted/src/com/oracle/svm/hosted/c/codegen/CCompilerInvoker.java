@@ -290,7 +290,6 @@ public abstract class CCompilerInvoker {
                         .command(compilerCommand)
                         .directory(tempDirectory.toFile())
                         .redirectErrorStream(true);
-        pb.environment().put("LC_ALL", "C");
         CompilerInfo result = null;
         Process process = null;
         try {

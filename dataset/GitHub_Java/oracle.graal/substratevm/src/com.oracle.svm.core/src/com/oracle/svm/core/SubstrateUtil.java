@@ -379,7 +379,7 @@ public class SubstrateUtil {
         }
 
         try {
-            DiagnosticThunkRegister.getSingleton().callDiagnosticThunks(log);
+            DiagnosticThunkRegister.getSingleton().callDiagnosticThunks();
         } catch (Exception e) {
             dumpException(log, "callThunks", e);
         }
@@ -597,7 +597,7 @@ public class SubstrateUtil {
 
         /** The method to be supplied by the implementor. */
         @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate during printing diagnostics.")
-        void invokeWithoutAllocation(Log log);
+        void invokeWithoutAllocation();
     }
 
     public static class DiagnosticThunkRegister {
@@ -635,9 +635,9 @@ public class SubstrateUtil {
         /* } Checkstyle: disallow synchronization. */
 
         /** Call each registered diagnostic thunk. */
-        void callDiagnosticThunks(Log log) {
+        void callDiagnosticThunks() {
             for (int i = 0; i < diagnosticThunkRegistry.length; i += 1) {
-                diagnosticThunkRegistry[i].invokeWithoutAllocation(log);
+                diagnosticThunkRegistry[i].invokeWithoutAllocation();
             }
         }
     }
