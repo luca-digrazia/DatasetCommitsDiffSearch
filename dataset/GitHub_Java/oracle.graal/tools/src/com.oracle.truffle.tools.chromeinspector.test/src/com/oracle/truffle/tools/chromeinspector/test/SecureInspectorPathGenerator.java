@@ -24,6 +24,7 @@
  */
 package com.oracle.truffle.tools.chromeinspector.test;
 
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -60,10 +61,14 @@ public class SecureInspectorPathGenerator {
     }
 
     private static byte[] generateSecureRawToken() {
-        // 256 bits of entropy ought to be enough for everybody
-        final byte[] tokenRaw = new byte[32];
-        new SecureRandom().nextBytes(tokenRaw);
-        return tokenRaw;
+        try {
+            // 256 bits of entropy ought to be enough for everybody
+            final byte[] tokenRaw = new byte[32];
+            SecureRandom.getInstanceStrong().nextBytes(tokenRaw);
+            return tokenRaw;
+        } catch (NoSuchAlgorithmException e) {
+            throw new AssertionError(e);
+        }
     }
 
 }
