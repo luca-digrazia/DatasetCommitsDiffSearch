@@ -42,16 +42,12 @@ import com.oracle.truffle.api.Option;
 
 import jdk.vm.ci.common.NativeImageReinitialize;
 
-public final class TruffleDebugOptions {
+final class TruffleDebugOptions {
 
     @NativeImageReinitialize private static volatile OptionValuesImpl optionValues;
 
     private TruffleDebugOptions() {
         throw new IllegalStateException("No instance allowed.");
-    }
-
-    public static boolean verboseBailouts() {
-        return getValue(CompilationBailoutAsFailure);
     }
 
     static <T> T getValue(final OptionKey<T> key) {
@@ -65,7 +61,7 @@ public final class TruffleDebugOptions {
     /**
      * Shadows {@code org.graalvm.compiler.debug.DebugOptions.PrintGraphTarget}.
      */
-    enum PrintGraphTarget {
+    public enum PrintGraphTarget {
         File,
         Network,
         Disable;
@@ -103,9 +99,5 @@ public final class TruffleDebugOptions {
     }
 
     // Initialized by the options of the same name in org.graalvm.compiler.debug.DebugOptions
-    @Option(help = "", category = OptionCategory.INTERNAL) //
-    static final OptionKey<PrintGraphTarget> PrintGraph = new OptionKey<>(File, PrintGraphTarget.getOptionType());
-    // Initialized by the options of the same name in org.graalvm.compiler.core.GraalCompilerOptions
-    @Option(help = "", category = OptionCategory.USER) //
-    static final OptionKey<Boolean> CompilationBailoutAsFailure = new OptionKey<>(false);
+    @Option(help = "", category = OptionCategory.INTERNAL) public static final OptionKey<PrintGraphTarget> PrintGraph = new OptionKey<>(File, PrintGraphTarget.getOptionType());
 }
