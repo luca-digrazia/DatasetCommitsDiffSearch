@@ -950,8 +950,8 @@ public class BytecodeParser implements GraphBuilderContext {
         }
         String filterValue = DebugOptions.MethodFilter.getValue(options);
         if (filterValue != null) {
-            MethodFilter filter = MethodFilter.parse(filterValue);
-            if (!filter.matches(tmethod)) {
+            MethodFilter[] filters = MethodFilter.parse(filterValue);
+            if (!MethodFilter.matches(filters, tmethod)) {
                 return 0;
             }
         }
@@ -4331,33 +4331,19 @@ public class BytecodeParser implements GraphBuilderContext {
         if (intrinsicContext != null) {
             constantPool.loadReferencedType(cpi, bytecode);
         } else if (graphBuilderConfig.eagerResolving()) {
-            Object lock = loadReferenceTypeLock();
-            if (lock != null) {
-                synchronized (lock) {
-                    loadReferenceType(cpi, bytecode);
+            /*
+             * Since we're potentially triggering class initialization here, we need synchronization
+             * to mitigate the potential for class initialization related deadlock being caused by
+             * the compiler (e.g., https://github.com/graalvm/graal-core/pull/232/files#r90788550).
+             */
+            synchronized (BytecodeParser.class) {
+                ClassInitializationPlugin classInitializationPlugin = graphBuilderConfig.getPlugins().getClassInitializationPlugin();
+                if (classInitializationPlugin != null) {
+                    classInitializationPlugin.loadReferencedType(this, constantPool, cpi, bytecode);
+                } else {
+                    constantPool.loadReferencedType(cpi, bytecode);
                 }
-            } else {
-                loadReferenceType(cpi, bytecode);
             }
-        }
-    }
-
-    /**
-     * Gets the object to lock when resolving and initializing a type referenced by a constant pool
-     * entry.
-     *
-     * @return {@code null} if no synchronization is necessary
-     */
-    protected Object loadReferenceTypeLock() {
-        return BytecodeParser.class;
-    }
-
-    private void loadReferenceType(int cpi, int bytecode) {
-        ClassInitializationPlugin classInitializationPlugin = graphBuilderConfig.getPlugins().getClassInitializationPlugin();
-        if (classInitializationPlugin != null) {
-            classInitializationPlugin.loadReferencedType(this, constantPool, cpi, bytecode);
-        } else {
-            constantPool.loadReferencedType(cpi, bytecode);
         }
     }
 
