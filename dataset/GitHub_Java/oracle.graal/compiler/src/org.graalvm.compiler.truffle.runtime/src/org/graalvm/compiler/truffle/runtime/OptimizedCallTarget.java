@@ -1306,8 +1306,4 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             }
         }
     }
-
-    final void setNonTrivialNodeCount(int nonTrivialNodeCount) {
-        this.cachedNonTrivialNodeCount = nonTrivialNodeCount;
-    }
 }
