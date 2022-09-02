@@ -49,7 +49,6 @@ import org.graalvm.compiler.truffle.runtime.CancellableCompileTask;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.LoopNodeFactory;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -262,7 +261,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
             // Single threaded compilation does not require cancellation.
             doCompile(TruffleRuntimeOptions.getOptions(), optimizedCallTarget, null);
         } catch (com.oracle.truffle.api.OptimizationFailedException e) {
-            if (optimizedCallTarget.getOptionValue(PolyglotCompilerOptions.CompilationExceptionsArePrinted)) {
+            if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationExceptionsArePrinted)) {
                 Log.log().string(printStackTraceToString(e));
             }
         }
