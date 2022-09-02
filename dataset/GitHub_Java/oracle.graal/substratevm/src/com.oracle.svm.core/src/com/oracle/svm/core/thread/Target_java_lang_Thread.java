@@ -111,13 +111,6 @@ final class Target_java_lang_Thread {
     @Delete//
     static int threadInitNumber;
 
-    /*
-     * For unstarted threads created during image generation like the main thread, we do not want to
-     * inherit a (more or less random) access control context.
-     */
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    private AccessControlContext inheritedAccessControlContext;
-
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ThreadStatusRecomputation.class) //
     int threadStatus;
 
@@ -331,7 +324,7 @@ final class Target_java_lang_Thread {
     private StackTraceElement[] getStackTrace() {
         if (JavaThreads.fromTarget(this) == Thread.currentThread()) {
             /* We can walk our own stack without a VMOperation. */
-            return StackTraceUtils.getStackTrace(false, KnownIntrinsics.readCallerStackPointer());
+            return StackTraceUtils.getStackTrace(false, KnownIntrinsics.readCallerStackPointer(), KnownIntrinsics.readReturnAddress());
         } else {
             return JavaThreads.getStackTrace(JavaThreads.fromTarget(this));
         }
