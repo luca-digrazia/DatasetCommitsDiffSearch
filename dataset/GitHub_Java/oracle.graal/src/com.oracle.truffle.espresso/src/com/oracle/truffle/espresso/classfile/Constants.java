@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2016 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -19,7 +19,8 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- */
+ *******************************************************************************/
+
 package com.oracle.truffle.espresso.classfile;
 
 public final class Constants {
@@ -51,8 +52,6 @@ public final class Constants {
     // Not part of the spec, used internally by the VM.
     public static final int ACC_FINALIZER = 0x00010000;
     public static final int ACC_INNER_CLASS = 0x00020000;
-
-    public static final int JVM_ACC_WRITTEN_FLAGS = 0x00007FFF;
 
     public static final int JVM_RECOGNIZED_CLASS_MODIFIERS = ACC_PUBLIC |
                     ACC_FINAL |
