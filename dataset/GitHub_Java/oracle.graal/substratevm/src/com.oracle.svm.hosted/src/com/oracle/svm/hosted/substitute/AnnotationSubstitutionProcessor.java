@@ -202,7 +202,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
                 }
 
                 PolymorphicSignatureWrapperMethod wrapperMethod = new PolymorphicSignatureWrapperMethod(substitutionBaseMethod, method);
-                SubstitutionMethod substitutionMethod = new SubstitutionMethod(method, wrapperMethod, false, true);
+                SubstitutionMethod substitutionMethod = new SubstitutionMethod(method, wrapperMethod);
                 synchronized (methodSubstitutions) {
                     /*
                      * It may happen that, during analysis, two threads are trying to register the
@@ -380,7 +380,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             }
             registerAsDeleted(annotated, original, deleteAnnotation);
         } else if (substituteAnnotation != null) {
-            SubstitutionMethod substitution = new SubstitutionMethod(original, annotated, false, true);
+            SubstitutionMethod substitution = new SubstitutionMethod(original, annotated);
             if (substituteAnnotation.polymorphicSignature()) {
                 register(polymorphicMethodSubstitutions, annotated, original, substitution);
             }
@@ -578,7 +578,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         ResolvedJavaType annotated = metaAccess.lookupJavaType(annotatedClass);
 
         for (int i = 0; i < ARRAY_DIMENSIONS; i++) {
-            ResolvedJavaType substitution = new SubstitutionType(original, annotated, true);
+            ResolvedJavaType substitution = new SubstitutionType(original, annotated);
             register(typeSubstitutions, annotated, original, substitution);
 
             original = original.getArrayClass();
@@ -640,7 +640,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         if (original == null) {
             /* Optional target that is not present, so nothing to do. */
         } else if (substituteAnnotation != null) {
-            SubstitutionMethod substitution = new SubstitutionMethod(original, annotated, true, true);
+            SubstitutionMethod substitution = new SubstitutionMethod(original, annotated, true);
             if (substituteAnnotation.polymorphicSignature()) {
                 register(polymorphicMethodSubstitutions, annotated, original, substitution);
             }
@@ -664,7 +664,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         if (original == null) {
             /* Optional target that is not present, so nothing to do. */
         } else {
-            register(fieldSubstitutions, annotated, original, new SubstitutionField(original, annotated, true));
+            register(fieldSubstitutions, annotated, original, new SubstitutionField(original, annotated));
         }
     }
 
