@@ -25,11 +25,6 @@
  */
 package com.oracle.svm.util;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
-import org.graalvm.compiler.java.LambdaUtils;
 import org.graalvm.word.WordBase;
 
 /**
@@ -47,25 +42,25 @@ public class SerializationChecksumCalculator {
      * This class is for JVMCI Agent.
      */
     public abstract static class JVMCIAgentCalculator {
-        public String calculateChecksum(String targetConstructorClassName,
+        public long calculateChecksum(String targetConstructorClassName,
                         String serializationClassName,
-                        WordBase serializationClass) throws NoSuchAlgorithmException {
+                        WordBase serializationClass) {
+            long checksum = 0L;
             if (isClassAbstract(serializationClass)) {
-                return "0";
+                return checksum;
             }
-            MessageDigest md = createMessageDigest();
             if (targetConstructorClassName != null && targetConstructorClassName.length() > 0) {
                 String currentClassName = serializationClassName;
                 WordBase currentClass = serializationClass;
                 while (!targetConstructorClassName.equals(currentClassName)) {
                     long classSUID = calculateFromComputeDefaultSUID(currentClass);
-                    updateMessageDigest(md, classSUID);
+                    checksum = checksum * 31 + classSUID;
                     currentClass = getSuperClass(currentClass);
                     currentClassName = getClassName(currentClass);
                 }
-                updateMessageDigest(md, targetConstructorClassName);
+                checksum = checksum * 31 + targetConstructorClassName.hashCode();
             }
-            return messageDigestResult(md);
+            return checksum;
         }
 
         protected abstract String getClassName(WordBase clazz);
@@ -76,31 +71,6 @@ public class SerializationChecksumCalculator {
 
         protected abstract boolean isClassAbstract(WordBase clazz);
 
-    }
-
-    private static MessageDigest createMessageDigest() throws NoSuchAlgorithmException {
-        return MessageDigest.getInstance("MD5");
-    }
-
-    private static void updateMessageDigest(MessageDigest md, long value) {
-        byte[] longBytes = {
-                        (byte) value,
-                        (byte) (value >> 8),
-                        (byte) (value >> 16),
-                        (byte) (value >> 24),
-                        (byte) (value >> 32),
-                        (byte) (value >> 40),
-                        (byte) (value >> 48),
-                        (byte) (value >> 56)};
-        md.update(longBytes);
-    }
-
-    private static String messageDigestResult(MessageDigest md) {
-        return LambdaUtils.toHex(md.digest());
-    }
-
-    private static void updateMessageDigest(MessageDigest md, String value) {
-        md.update(value.getBytes(StandardCharsets.UTF_8));
     }
 
     private static class Holder {
@@ -122,26 +92,26 @@ public class SerializationChecksumCalculator {
      * This class is for regular Java usage.
      */
     public abstract static class JavaCalculator {
-        public String calculateChecksum(String targetConstructorClassName,
+        public long calculateChecksum(String targetConstructorClassName,
                         String serializationClassName,
-                        Class<?> serializationClass) throws NoSuchAlgorithmException {
+                        Class<?> serializationClass) {
+            long checksum = 0L;
             if (isClassAbstract(serializationClass)) {
-                return "0";
+                return checksum;
             }
-            MessageDigest md = createMessageDigest();
             if (targetConstructorClassName != null && targetConstructorClassName.length() > 0) {
                 Holder.printWarning();
                 String currentClassName = serializationClassName;
                 Class<?> currentClass = serializationClass;
                 while (!targetConstructorClassName.equals(currentClassName)) {
                     long classSUID = calculateFromComputeDefaultSUID(currentClass);
-                    updateMessageDigest(md, classSUID);
+                    checksum = checksum * 31 + classSUID;
                     currentClass = getSuperClass(currentClass);
                     currentClassName = getClassName(currentClass);
                 }
-                updateMessageDigest(md, targetConstructorClassName);
+                checksum = checksum * 31 + targetConstructorClassName.hashCode();
             }
-            return messageDigestResult(md);
+            return checksum;
         }
 
         protected abstract String getClassName(Class<?> clazz);
