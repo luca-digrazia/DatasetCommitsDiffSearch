@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,14 +32,11 @@ package com.oracle.truffle.llvm.runtime.nodes.cast;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.nodes.cast.LLVMToI64Node.LLVMBitcastToI64Node;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.nodes.cast.LLVMToDoubleNodeGen.LLVMBitcastToDoubleNodeGen;
@@ -64,13 +61,11 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
         throw new IllegalStateException("abstract node LLVMToDoubleNode used");
     }
 
-    @Specialization(guards = {"isForeignNumber(from, foreigns, interop)"})
+    @Specialization(guards = {"isForeign(from)"})
     protected double doManagedPointer(LLVMManagedPointer from,
                     @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM,
-                    @Cached("createRecursive()") LLVMToDoubleNode recursive,
-                    @CachedLibrary(limit = "1") LLVMAsForeignLibrary foreigns,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") InteropLibrary interop) {
-        long ptr = (long) toLLVM.executeWithTarget(foreigns.asForeign(from.getObject()));
+                    @Cached("createRecursive()") LLVMToDoubleNode recursive) {
+        long ptr = (long) toLLVM.executeWithTarget(from.getObject());
         return recursive.executeWith(ptr);
     }
 
@@ -86,8 +81,8 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
         return CommonNodeFactory.createForeignToLLVM(ForeignToLLVMType.DOUBLE);
     }
 
-    protected static boolean isForeignNumber(LLVMManagedPointer pointer, LLVMAsForeignLibrary foreigns, InteropLibrary interop) {
-        return foreigns.isForeign(pointer) && interop.isNumber(pointer.getObject());
+    protected boolean isForeign(LLVMManagedPointer pointer) {
+        return pointer.getOffset() == 0 && notLLVM(pointer.getObject());
     }
 
     public abstract static class LLVMSignedCastToDoubleNode extends LLVMToDoubleNode {
@@ -169,10 +164,6 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
         @Specialization
         protected double doDouble(long from) {
-            return doI64(from);
-        }
-
-        public static double doI64(long from) {
             double val = from & Long.MAX_VALUE;
             if (from < 0) {
                 val += LEADING_BIT;
