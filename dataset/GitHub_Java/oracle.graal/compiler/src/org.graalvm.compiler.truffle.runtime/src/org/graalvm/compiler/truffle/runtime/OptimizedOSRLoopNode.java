@@ -75,7 +75,6 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     private final int osrThreshold;
     private final boolean firstTierBackedgeCounts;
-    private volatile boolean compilationDisabled;
 
     private OptimizedOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold, boolean firstTierBackedgeCounts) {
         Objects.requireNonNull(repeatableNode);
@@ -164,7 +163,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             Object status;
             while (repeatableNode.shouldContinue(status = repeatableNode.executeRepeatingWithValue(frame))) {
                 // the baseLoopCount might be updated from a child loop during an iteration.
-                if (++iterations + baseLoopCount > osrThreshold && !compilationDisabled) {
+                if (++iterations + baseLoopCount > osrThreshold) {
                     compileLoop(frame);
                     // The status returned here is CONTINUE_LOOP_STATUS.
                     return status;
@@ -219,6 +218,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                     invalidateOSRTarget(this, "OSR compilation failed or cancelled");
                     return repeatableNode.initialLoopStatus();
                 }
+
                 iterations++;
 
             } while (repeatableNode.shouldContinue(status = repeatableNode.executeRepeatingWithValue(frame)));
@@ -245,9 +245,6 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         atomic(new Runnable() {
             @Override
             public void run() {
-                if (compilationDisabled) {
-                    return;
-                }
                 /*
                  * Compilations need to run atomically as they may be scheduled by multiple threads
                  * at the same time. This strategy lets the first thread win. Later threads will not
@@ -270,14 +267,6 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             speculationLog = GraalTruffleRuntime.getRuntime().createSpeculationLog();
         }
         OptimizedCallTarget osrTarget = GraalTruffleRuntime.getRuntime().createOSRCallTarget(createRootNodeImpl(root, frame.getClass()));
-        if (!osrTarget.acceptForCompilation()) {
-            /*
-             * Don't retry if the target will not be accepted anyway.
-             */
-            compilationDisabled = true;
-            return null;
-        }
-
         osrTarget.setSpeculationLog(speculationLog);
         osrTarget.compile(true);
         return osrTarget;
@@ -295,19 +284,11 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             public void run() {
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target != null) {
-                    resetCompiledOSRLoop();
+                    compiledOSRLoop = null;
                     target.nodeReplaced(oldNode, newNode, reason);
                 }
             }
         });
-    }
-
-    private void resetCompiledOSRLoop() {
-        OptimizedCallTarget target = this.compiledOSRLoop;
-        if (target != null && target.isCompilationFailed()) {
-            this.compilationDisabled = true;
-        }
-        this.compiledOSRLoop = null;
     }
 
     private void invalidateOSRTarget(Object source, CharSequence reason) {
@@ -316,7 +297,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             public void run() {
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target != null) {
-                    resetCompiledOSRLoop();
+                    compiledOSRLoop = null;
                     target.invalidate(source, reason);
                 }
             }
@@ -329,12 +310,11 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     public static LoopNode create(RepeatingNode repeat) {
         // No RootNode accessible here, as repeat is not adopted.
-        EngineData engine = GraalTVMCI.getEngineData(null);
-        OptionValues engineOptions = engine.engineOptions;
+        OptionValues engineOptions = GraalTVMCI.getEngineData(null).engineOptions;
 
         // using static methods with LoopNode return type ensures
         // that only one loop node implementation gets loaded.
-        if (engine.compilation && TruffleRuntimeOptions.getPolyglotOptionValue(engineOptions, PolyglotCompilerOptions.OSR)) {
+        if (TruffleRuntimeOptions.getPolyglotOptionValue(engineOptions, PolyglotCompilerOptions.OSR)) {
             return createDefault(repeat, engineOptions);
         } else {
             return OptimizedLoopNode.create(repeat);
