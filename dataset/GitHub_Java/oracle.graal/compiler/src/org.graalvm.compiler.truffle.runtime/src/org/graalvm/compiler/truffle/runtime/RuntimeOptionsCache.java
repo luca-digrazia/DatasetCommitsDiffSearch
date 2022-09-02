@@ -30,63 +30,55 @@ package org.graalvm.compiler.truffle.runtime;
  */
 class RuntimeOptionsCache {
 
-    private boolean legacySplitting;
-    private boolean splitting;
-    private boolean splittingAllowForcedSplits;
-    private boolean splittingDumpDecisions;
-    private boolean splittingTraceEvents;
-    private boolean traceSplittingSummary;
-    private int splittingMaxCalleeSize;
-    private int splittingMaxPropagationDepth;
+    private static boolean experimentalSplitting;
+    private static boolean experimentalSplittingAllowForcedSplits;
+    private static boolean experimentalSplittingDumpDecisions;
+    private static boolean experimentalSplittingTraceEvents;
+    private static boolean splitting;
+    private static boolean traceSplittingSummary;
+    private static int splittingMaxCalleeSize;
+    private static int splittingMaxPropagationDepth;
 
-    public RuntimeOptionsCache() {
-        reinitialize();
-    }
-
-    void reinitialize() {
-        legacySplitting = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleLegacySplitting);
+    static void reinitialize() {
+        experimentalSplitting = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting);
+        experimentalSplittingAllowForcedSplits = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingAllowForcedSplits);
+        experimentalSplittingDumpDecisions = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingDumpDecisions);
+        experimentalSplittingTraceEvents = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingTraceEvents);
         splitting = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplitting);
-        splittingAllowForcedSplits = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplittingAllowForcedSplits);
-        splittingDumpDecisions = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplittingDumpDecisions);
         splittingMaxCalleeSize = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplittingMaxCalleeSize);
-        splittingMaxPropagationDepth = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplittingMaxPropagationDepth);
-        splittingTraceEvents = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplittingTraceEvents);
+        splittingMaxPropagationDepth = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingMaxPropagationDepth);
         traceSplittingSummary = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleTraceSplittingSummary);
-        if (TruffleRuntimeOptions.getValue(PolyglotCompilerOptions.Mode) == PolyglotCompilerOptions.EngineModeEnum.LATENCY) {
-            splitting = false;
-            // TODO limit inlining.
-        }
     }
 
-     boolean isSplittingDumpDecisions() {
-        return splittingDumpDecisions;
+    static boolean isExperimentalSplittingDumpDecisions() {
+        return experimentalSplittingDumpDecisions;
     }
 
-     boolean isLegacySplitting() {
-        return legacySplitting;
+    static boolean isExperimentalSplitting() {
+        return experimentalSplitting;
     }
 
-     boolean isSplittingAllowForcedSplits() {
-        return splittingAllowForcedSplits;
+    static boolean isExperimentalSplittingAllowForcedSplits() {
+        return experimentalSplittingAllowForcedSplits;
     }
 
-     boolean isSplitting() {
+    static boolean isSplitting() {
         return splitting;
     }
 
-     boolean isSplittingTraceEvents() {
-        return splittingTraceEvents;
+    static boolean isExperimentalSplittingTraceEvents() {
+        return experimentalSplittingTraceEvents;
     }
 
-     boolean isTraceSplittingSummary() {
+    static boolean isTraceSplittingSummary() {
         return traceSplittingSummary;
     }
 
-     int getSplittingMaxCalleeSize() {
+    static int getSplittingMaxCalleeSize() {
         return splittingMaxCalleeSize;
     }
 
-     int getSplittingMaxPropagationDepth() {
+    static int getSplittingMaxPropagationDepth() {
         return splittingMaxPropagationDepth;
     }
 }
