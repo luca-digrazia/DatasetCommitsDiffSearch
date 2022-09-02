@@ -116,16 +116,14 @@ public class RequestedJDWPEvents {
                 FieldBreakpointInfo fieldBreakpointInfo = (FieldBreakpointInfo) filter.getBreakpointInfo();
                 fieldBreakpointInfo.addSuspendPolicy(suspendPolicy);
                 fieldBreakpointInfo.setAccessBreakpoint();
-                fieldBreakpointInfo.getField().addFieldBreakpointInfo(fieldBreakpointInfo);
-                eventListener.increaseFieldBreakpointCount();
+                eventListener.addFieldBreakpointRequest(fieldBreakpointInfo);
                 reply = toReply(packet);
                 break;
             case FIELD_MODIFICATION:
                 fieldBreakpointInfo = (FieldBreakpointInfo) filter.getBreakpointInfo();
                 fieldBreakpointInfo.addSuspendPolicy(suspendPolicy);
                 fieldBreakpointInfo.setModificationBreakpoint();
-                fieldBreakpointInfo.getField().addFieldBreakpointInfo(fieldBreakpointInfo);
-                eventListener.increaseFieldBreakpointCount();
+                eventListener.addFieldBreakpointRequest(fieldBreakpointInfo);
                 reply = toReply(packet);
                 break;
             case THREAD_START:
@@ -138,14 +136,6 @@ public class RequestedJDWPEvents {
                 break;
             case CLASS_UNLOAD:
                 eventListener.addClassUnloadRequestId(packet.id);
-                reply = toReply(packet);
-                break;
-            case VM_START: // no debuggers should ask for this event
-                eventListener.addVMStartRequest(packet.id);
-                reply = toReply(packet);
-                break;
-            case VM_DEATH: // no debuggers should request this event
-                eventListener.addVMDeathRequest(packet.id);
                 reply = toReply(packet);
                 break;
             default:
@@ -290,9 +280,7 @@ public class RequestedJDWPEvents {
                         break;
                     case FIELD_ACCESS:
                     case FIELD_MODIFICATION:
-                        FieldBreakpointInfo info = (FieldBreakpointInfo) requestFilter.getBreakpointInfo();
-                        info.getField().removeFieldBreakpointInfo(requestFilter.getRequestId());
-                        eventListener.decreaseFieldBreakpointCount();
+                        eventListener.removeFieldBreakpoint(requestFilter.getRequestId());
                         break;
                     case CLASS_PREPARE:
                         eventListener.removeClassPrepareRequest(requestFilter.getRequestId());
