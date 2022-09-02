@@ -799,7 +799,7 @@ public class Breakpoint {
                     }
                     DebugException de;
                     if (exception != null) {
-                        de = DebugException.create(session, exception, null, throwLocation, isCatchNodeComputed, catchLocation);
+                        de = new DebugException(session, exception, null, throwLocation, isCatchNodeComputed, catchLocation);
                     } else {
                         de = null;
                     }
