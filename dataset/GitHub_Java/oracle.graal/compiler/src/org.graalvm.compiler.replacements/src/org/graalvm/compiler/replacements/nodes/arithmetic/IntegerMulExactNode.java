@@ -119,9 +119,4 @@ public final class IntegerMulExactNode extends MulNode implements GuardedNode, I
         updateUsagesInterface(this.guard, guard);
         this.guard = guard;
     }
-
-    @Override
-    protected boolean isExact() {
-        return true;
-    }
 }

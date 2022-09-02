@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,7 +50,7 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
 
     protected IntegerExactArithmeticSplitNode(NodeClass<? extends IntegerExactArithmeticSplitNode> c, Stamp stamp, ValueNode x, ValueNode y, AbstractBeginNode next,
                     AbstractBeginNode overflowSuccessor) {
-        super(c, stamp, ProfileSource.INJECTED);
+        super(c, stamp);
         this.x = x;
         this.y = y;
         this.overflowSuccessor = overflowSuccessor;
@@ -68,7 +68,7 @@ public abstract class IntegerExactArithmeticSplitNode extends ControlSplitNode i
     }
 
     @Override
-    public boolean setProbability(AbstractBeginNode successor, double value, ProfileSource profileSource) {
+    public boolean setProbability(AbstractBeginNode successor, double value) {
         // Successor probabilities for arithmetic split nodes are fixed.
         return false;
     }

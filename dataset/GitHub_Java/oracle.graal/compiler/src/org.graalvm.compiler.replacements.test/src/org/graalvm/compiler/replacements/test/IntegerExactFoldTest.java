@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -94,7 +94,7 @@ public class IntegerExactFoldTest extends GraalCompilerTest {
         Node originalNode = graph.getNodes().filter(x -> x instanceof IntegerExactArithmeticNode).first();
         assertNotNull("original node must be in the graph", originalNode);
 
-        createCanonicalizerPhase().apply(graph, getDefaultHighTierContext());
+        new CanonicalizerPhase().apply(graph, getDefaultHighTierContext());
 
         ValueNode node = findNode(graph);
         boolean overflowExpected = node instanceof IntegerExactArithmeticNode;
@@ -109,19 +109,19 @@ public class IntegerExactFoldTest extends GraalCompilerTest {
 
         Node originalNode = graph.getNodes().filter(x -> x instanceof IntegerExactArithmeticNode).first();
         assertNotNull("original node must be in the graph", originalNode);
-        CanonicalizerPhase canonicalizer = createCanonicalizerPhase();
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
         HighTierContext highTierContext = getDefaultHighTierContext();
         new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highTierContext);
         MidTierContext midTierContext = getDefaultMidTierContext();
         new GuardLoweringPhase().apply(graph, midTierContext);
-        createCanonicalizerPhase().apply(graph, midTierContext);
+        new CanonicalizerPhase().apply(graph, midTierContext);
 
         IntegerExactArithmeticSplitNode loweredNode = graph.getNodes().filter(IntegerExactArithmeticSplitNode.class).first();
         assertNotNull("the lowered node must be in the graph", loweredNode);
 
         loweredNode.getX().setStamp(StampFactory.forInteger(bits, lowerBoundA, upperBoundA));
         loweredNode.getY().setStamp(StampFactory.forInteger(bits, lowerBoundB, upperBoundB));
-        createCanonicalizerPhase().apply(graph, midTierContext);
+        new CanonicalizerPhase().apply(graph, midTierContext);
 
         ValueNode node = findNode(graph);
         boolean overflowExpected = node instanceof IntegerExactArithmeticSplitNode;
@@ -144,7 +144,7 @@ public class IntegerExactFoldTest extends GraalCompilerTest {
         String snippet = "snippetInt" + bits;
         StructuredGraph graph = parseEager(getResolvedJavaMethod(operation.getClass(), snippet), AllowAssumptions.NO);
         HighTierContext context = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(graph, context);
+        new CanonicalizerPhase().apply(graph, context);
         return graph;
     }
 

@@ -24,12 +24,12 @@
  */
 package org.graalvm.compiler.replacements.test;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.junit.Test;
 
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.code.InvalidInstalledCodeException;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class IntegerExactExceptionTest extends GraalCompilerTest {
 
@@ -73,7 +73,6 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
             code.executeVarargs(this, Integer.MAX_VALUE);
         } catch (ArithmeticException e) {
             // An ArithmeticException is expected to be thrown.
-            e.printStackTrace(System.out);
         }
 
         if (!code.isValid()) {
@@ -82,12 +81,68 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
                 code.executeVarargs(this, Integer.MAX_VALUE);
             } catch (ArithmeticException e) {
                 // An ArithmeticException is expected to be thrown.
-                e.printStackTrace(System.out);
             }
             assertTrue(code.isValid());
         }
     }
 
+    public void testIntegerExactOverflowWithoutUse1(int input) {
+        Math.addExact(intCounter, input);
+    }
+
+    public void testIntegerExactOverflowWithoutUse2(int input, boolean cond) {
+        if (cond) {
+            Math.addExact(intCounter, input);
+        } else {
+            intCounter = Math.addExact(intCounter, input);
+        }
+    }
+
+    public void testIntegerExactOverflowWithoutUse3() {
+        Math.addExact(Integer.MAX_VALUE, 1);
+    }
+
+    @Test
+    public void testIntegerExactWithoutUse1() throws InvalidInstalledCodeException {
+        ResolvedJavaMethod method = getResolvedJavaMethod("testIntegerExactOverflowWithoutUse1");
+        InstalledCode code = getCode(method);
+
+        boolean gotException = false;
+        try {
+            code.executeVarargs(this, Integer.MAX_VALUE);
+        } catch (ArithmeticException e) {
+            gotException = true;
+        }
+        assertTrue(gotException);
+    }
+
+    @Test
+    public void testIntegerExactWithoutUse2() throws InvalidInstalledCodeException {
+        ResolvedJavaMethod method = getResolvedJavaMethod("testIntegerExactOverflowWithoutUse2");
+        InstalledCode code = getCode(method);
+
+        boolean gotException = false;
+        try {
+            code.executeVarargs(this, Integer.MAX_VALUE, true);
+        } catch (ArithmeticException e) {
+            gotException = true;
+        }
+        assertTrue(gotException);
+    }
+
+    @Test
+    public void testIntegerExactWithoutUse3() throws InvalidInstalledCodeException {
+        ResolvedJavaMethod method = getResolvedJavaMethod("testIntegerExactOverflowWithoutUse3");
+        InstalledCode code = getCode(method);
+
+        boolean gotException = false;
+        try {
+            code.executeVarargs(this);
+        } catch (ArithmeticException e) {
+            gotException = true;
+        }
+        assertTrue(gotException);
+    }
 
     static long longCounter = 10;
 
@@ -129,7 +184,6 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
             code.executeVarargs(this, Long.MAX_VALUE);
         } catch (ArithmeticException e) {
             // An ArithmeticException is expected to be thrown.
-            e.printStackTrace(System.out);
         }
 
         if (!code.isValid()) {
@@ -138,9 +192,48 @@ public class IntegerExactExceptionTest extends GraalCompilerTest {
                 code.executeVarargs(this, Long.MAX_VALUE);
             } catch (ArithmeticException e) {
                 // An ArithmeticException is expected to be thrown.
-                e.printStackTrace(System.out);
             }
             assertTrue(code.isValid());
         }
+    }
+
+    public void testLongExactOverflowWithoutUse1(long input) {
+        Math.addExact(longCounter, input);
+    }
+
+    public void testLongExactOverflowWithoutUse2(long input, boolean cond) {
+        if (cond) {
+            Math.addExact(longCounter, input);
+        } else {
+            longCounter = Math.addExact(longCounter, input);
+        }
+    }
+
+    @Test
+    public void testLongExactWithoutUse1() throws InvalidInstalledCodeException {
+        ResolvedJavaMethod method = getResolvedJavaMethod("testLongExactOverflowWithoutUse1");
+        InstalledCode code = getCode(method);
+
+        boolean gotException = false;
+        try {
+            code.executeVarargs(this, Long.MAX_VALUE);
+        } catch (ArithmeticException e) {
+            gotException = true;
+        }
+        assertTrue(gotException);
+    }
+
+    @Test
+    public void testLongExactWithoutUse2() throws InvalidInstalledCodeException {
+        ResolvedJavaMethod method = getResolvedJavaMethod("testLongExactOverflowWithoutUse2");
+        InstalledCode code = getCode(method);
+
+        boolean gotException = false;
+        try {
+            code.executeVarargs(this, Long.MAX_VALUE, true);
+        } catch (ArithmeticException e) {
+            gotException = true;
+        }
+        assertTrue(gotException);
     }
 }

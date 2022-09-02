@@ -30,7 +30,7 @@ import jdk.vm.ci.meta.JavaKind;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable.BinaryCommutative;
+import org.graalvm.compiler.graph.spi.Canonicalizable;
 import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
@@ -40,31 +40,31 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.BinaryNode;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_4;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_2;
 
-@NodeInfo(cycles = CYCLES_2, size = SIZE_2)
-public final class IntegerAddExactOverflowNode extends IntegerExactOverflowNode implements Simplifiable, BinaryCommutative<ValueNode> {
-    public static final NodeClass<IntegerAddExactOverflowNode> TYPE = NodeClass.create(IntegerAddExactOverflowNode.class);
+@NodeInfo(cycles = CYCLES_4, cyclesRationale = "mul+cmp", size = SIZE_2)
+public class IntegerMulExactOverflowNode extends IntegerExactOverflowNode implements Simplifiable, Canonicalizable.BinaryCommutative<ValueNode> {
+    public static final NodeClass<IntegerMulExactOverflowNode> TYPE = NodeClass.create(IntegerMulExactOverflowNode.class);
 
-    public IntegerAddExactOverflowNode(ValueNode x, ValueNode y) {
+    public IntegerMulExactOverflowNode(ValueNode x, ValueNode y) {
         super(TYPE, x, y);
     }
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         if (forX.isConstant() && !forY.isConstant()) {
-            return new IntegerAddExactOverflowNode(forY, forX).canonical(tool);
+            return new IntegerMulExactOverflowNode(forY, forX).canonical(tool);
         }
         if (forX.isConstant() && forY.isConstant()) {
             return canonicalXYconstant(forX, forY);
         } else if (forY.isConstant()) {
             long c = forY.asJavaConstant().asLong();
-            if (c == 0) {
+            if (c == 1 || c == 0) {
                 return LogicConstantNode.forBoolean(false);
             }
         }
-        if (!IntegerStamp.addCanOverflow((IntegerStamp) forX.stamp(NodeView.DEFAULT), (IntegerStamp) forY.stamp(NodeView.DEFAULT))) {
+        if (!IntegerStamp.multiplicationCanOverflow((IntegerStamp) x.stamp(NodeView.DEFAULT), (IntegerStamp) y.stamp(NodeView.DEFAULT))) {
             return LogicConstantNode.forBoolean(false);
         }
         return this;
@@ -76,26 +76,25 @@ public final class IntegerAddExactOverflowNode extends IntegerExactOverflowNode 
         assert xConst.getJavaKind() == yConst.getJavaKind();
         try {
             if (xConst.getJavaKind() == JavaKind.Int) {
-                Math.addExact(xConst.asInt(), yConst.asInt());
+                Math.multiplyExact(xConst.asInt(), yConst.asInt());
             } else {
                 assert xConst.getJavaKind() == JavaKind.Long;
-                Math.addExact(xConst.asLong(), yConst.asLong());
+                Math.multiplyExact(xConst.asLong(), yConst.asLong());
             }
         } catch (ArithmeticException ex) {
-            // Always overflows
             return LogicConstantNode.forBoolean(true);
         }
-        // Never overflows
         return LogicConstantNode.forBoolean(false);
     }
 
     @Override
     protected IntegerExactArithmeticSplitNode createSplit(Stamp splitStamp, AbstractBeginNode next, AbstractBeginNode overflow) {
-        return new IntegerAddExactSplitNode(splitStamp, x, y, next, overflow);
+        return new IntegerMulExactSplitNode(splitStamp, x, y, next, overflow);
     }
 
     @Override
     protected Class<? extends BinaryNode> getCoupledType() {
-        return IntegerAddExactNode.class;
+        return IntegerMulExactNode.class;
     }
+
 }

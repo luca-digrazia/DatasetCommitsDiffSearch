@@ -117,9 +117,4 @@ public final class IntegerSubExactNode extends SubNode implements GuardedNode, I
         updateUsagesInterface(this.guard, guard);
         this.guard = guard;
     }
-
-    @Override
-    protected boolean isExact() {
-        return true;
-    }
 }

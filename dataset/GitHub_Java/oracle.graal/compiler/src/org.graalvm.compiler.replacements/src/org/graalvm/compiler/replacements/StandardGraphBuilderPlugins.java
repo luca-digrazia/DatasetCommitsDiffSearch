@@ -33,6 +33,8 @@ import static jdk.vm.ci.code.MemoryBarriers.LOAD_STORE;
 import static jdk.vm.ci.code.MemoryBarriers.STORE_LOAD;
 import static jdk.vm.ci.code.MemoryBarriers.STORE_STORE;
 import static org.graalvm.compiler.nodes.NamedLocationIdentity.OFF_HEAP_LOCATION;
+import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.Java11OrEarlier;
+import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.Java8OrEarlier;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -131,7 +133,6 @@ import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerMulExactSplitNo
 import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerSubExactNode;
 import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerSubExactOverflowNode;
 import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerSubExactSplitNode;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
 import org.graalvm.word.LocationIdentity;
 
@@ -187,7 +188,7 @@ public class StandardGraphBuilderPlugins {
         Field coder = null;
         try {
             STRING_VALUE_FIELD = String.class.getDeclaredField("value");
-            if (JavaVersionUtil.JAVA_SPEC > 8) {
+            if (!Java8OrEarlier) {
                 coder = String.class.getDeclaredField("coder");
             }
         } catch (NoSuchFieldException e) {
@@ -211,22 +212,8 @@ public class StandardGraphBuilderPlugins {
                 return false;
             }
         });
-        r.register1("intern", Receiver.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                if (receiver.isConstant()) {
-                    String s = snippetReflection.asObject(String.class, (JavaConstant) receiver.get().asConstant());
-                    if (s != null) {
-                        JavaConstant interned = snippetReflection.forObject(s.intern());
-                        b.addPush(JavaKind.Object, b.add(ConstantNode.forConstant(interned, b.getMetaAccess(), b.getGraph())));
-                        return true;
-                    }
-                }
-                return false;
-            }
-        });
 
-        if (JavaVersionUtil.JAVA_SPEC <= 8) {
+        if (Java8OrEarlier) {
             r.registerMethodSubstitution(StringSubstitutions.class, "equals", Receiver.class, Object.class);
 
             r.register7("indexOf", char[].class, int.class, int.class, char[].class, int.class, int.class, int.class, new StringIndexOfConstantPlugin());
@@ -383,7 +370,7 @@ public class StandardGraphBuilderPlugins {
 
     public static void registerPlatformSpecificUnsafePlugins(InvocationPlugins plugins, BytecodeProvider bytecodeProvider, boolean explicitUnsafeNullChecks, JavaKind[] supportedCasKinds) {
         registerPlatformSpecificUnsafePlugins(supportedCasKinds, new Registration(plugins, Unsafe.class), true, explicitUnsafeNullChecks);
-        if (JavaVersionUtil.JAVA_SPEC > 8) {
+        if (!Java8OrEarlier) {
             registerPlatformSpecificUnsafePlugins(supportedCasKinds, new Registration(plugins, "jdk.internal.misc.Unsafe", bytecodeProvider), false, explicitUnsafeNullChecks);
         }
 
@@ -393,14 +380,14 @@ public class StandardGraphBuilderPlugins {
         if (java8OrEarlier) {
             unsafeCompareAndSwapPluginsRegistrar.register(r, "compareAndSwap", explicitUnsafeNullChecks, new JavaKind[]{JavaKind.Int, JavaKind.Long, JavaKind.Object}, true);
         } else {
-            unsafeCompareAndSwapPluginsRegistrar.register(r, "compareAndSet", explicitUnsafeNullChecks, supportedCasKinds, JavaVersionUtil.JAVA_SPEC <= 11);
-            unsafeCompareAndExchangePluginsRegistrar.register(r, "compareAndExchange", explicitUnsafeNullChecks, supportedCasKinds, JavaVersionUtil.JAVA_SPEC <= 11);
+            unsafeCompareAndSwapPluginsRegistrar.register(r, "compareAndSet", explicitUnsafeNullChecks, supportedCasKinds, Java11OrEarlier);
+            unsafeCompareAndExchangePluginsRegistrar.register(r, "compareAndExchange", explicitUnsafeNullChecks, supportedCasKinds, Java11OrEarlier);
         }
     }
 
     private static void registerUnsafePlugins(InvocationPlugins plugins, BytecodeProvider bytecodeProvider, boolean explicitUnsafeNullChecks) {
         registerUnsafePlugins(new Registration(plugins, Unsafe.class), true, explicitUnsafeNullChecks);
-        if (JavaVersionUtil.JAVA_SPEC > 8) {
+        if (!Java8OrEarlier) {
             registerUnsafePlugins(new Registration(plugins, "jdk.internal.misc.Unsafe", bytecodeProvider), false, explicitUnsafeNullChecks);
         }
     }
@@ -409,7 +396,7 @@ public class StandardGraphBuilderPlugins {
         for (JavaKind kind : JavaKind.values()) {
             if ((kind.isPrimitive() && kind != JavaKind.Void) || kind == JavaKind.Object) {
                 Class<?> javaClass = kind == JavaKind.Object ? Object.class : kind.toJavaClass();
-                String kindName = (kind == JavaKind.Object && !sunMiscUnsafe && !(JavaVersionUtil.JAVA_SPEC <= 11)) ? "Reference" : kind.name();
+                String kindName = (kind == JavaKind.Object && !sunMiscUnsafe && !Java11OrEarlier) ? "Reference" : kind.name();
                 String getName = "get" + kindName;
                 String putName = "put" + kindName;
                 // Object-based accesses
