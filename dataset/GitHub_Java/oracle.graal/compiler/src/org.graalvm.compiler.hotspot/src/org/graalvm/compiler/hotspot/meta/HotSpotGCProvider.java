@@ -43,8 +43,7 @@ public class HotSpotGCProvider implements GCProvider {
     }
 
     private static BarrierSet createBarrierSet(GraalHotSpotVMConfig config) {
-        // Temporarily disable support for ReduceInitialCardMarks - GR-15556
-        boolean useDeferredInitBarriers = false;
+        boolean useDeferredInitBarriers = config.useDeferredInitBarriers;
         if (config.useG1GC) {
             return new G1BarrierSet(useDeferredInitBarriers);
         } else {

@@ -35,16 +35,19 @@ import org.graalvm.compiler.nodes.java.AbstractCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.memory.FixedAccessNode;
 import org.graalvm.compiler.nodes.memory.HeapAccess;
-import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.WriteNode;
+import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
 public class CardTableBarrierSet implements BarrierSet {
-    public CardTableBarrierSet() {
+    private final boolean useDeferredInitBarriers;
+
+    public CardTableBarrierSet(boolean useDeferredInitBarriers) {
+        this.useDeferredInitBarriers = useDeferredInitBarriers;
     }
 
     @Override
@@ -140,16 +143,10 @@ public class CardTableBarrierSet implements BarrierSet {
             case FIELD:
             case ARRAY:
             case UNKNOWN:
-                return writeRequiresBarrier(node, writtenValue);
+                return isNonNullObjectValue(writtenValue) && !isDeferredInit(node);
             default:
                 throw new GraalError("unexpected barrier type: " + barrierType);
         }
-    }
-
-    @SuppressWarnings("unused")
-    protected boolean writeRequiresBarrier(FixedAccessNode node, ValueNode writtenValue) {
-        // Null writes can skip the card mark.
-        return isNonNullObjectValue(writtenValue);
     }
 
     public static boolean needsWriteBarrier(ArrayRangeWrite write) {
@@ -172,6 +169,10 @@ public class CardTableBarrierSet implements BarrierSet {
 
     private static boolean isNonNullObjectValue(ValueNode value) {
         return value.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp && !StampTool.isPointerAlwaysNull(value);
+    }
+
+    private boolean isDeferredInit(FixedAccessNode node) {
+        return node.getLocationIdentity().isInit() && useDeferredInitBarriers;
     }
 
     private static boolean matches(FixedAccessNode node, SerialWriteBarrier barrier) {
