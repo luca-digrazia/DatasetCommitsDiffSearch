@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.tests;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,7 +37,6 @@ import java.util.Collection;
 import java.util.stream.Stream;
 
 import org.graalvm.polyglot.Context;
-import org.junit.AssumptionViolatedException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -44,46 +44,36 @@ import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.tests.options.TestOptions;
 
 @RunWith(Parameterized.class)
 public final class ParserTortureSuite {
 
-    public static final String TEST_DISTRIBUTION = "SULONG_PARSER_TORTURE";
-    public static final String SOURCE = "GCC_SOURCE";
+    private static final Path GCC_SUITE_DIR = new File(TestOptions.EXTERNAL_TEST_SUITE_PATH).toPath();
+    private static final Path GCC_SOURCE_DIR = new File(TestOptions.TEST_SOURCE_PATH).toPath();
+    private static final Path GCC_CONFIG_DIR = new File(TestOptions.PROJECT_ROOT + "/../tests/gcc/compileConfigs").toPath();
 
     @Parameter(value = 0) public Path path;
     @Parameter(value = 1) public String testName;
-    @Parameter(value = 2) public String excludeReason;
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        return ExternalTestCaseCollector.collectTestCases(ParserTortureSuite.class, TEST_DISTRIBUTION);
+        return ExternalTestCaseCollector.collectTestCases(GCC_CONFIG_DIR, GCC_SUITE_DIR, GCC_SOURCE_DIR);
     }
 
     @Test
     public void test() throws IOException {
-        assumeNotExcluded();
         try (Stream<Path> files = Files.walk(path)) {
-            for (Path candidate : (Iterable<Path>) files.filter(CommonTestUtils.isFile).filter(CommonTestUtils.isSulong)::iterator) {
+            for (Path candidate : (Iterable<Path>) files.filter(BaseTestHarness.isFile).filter(BaseTestHarness.isSulong)::iterator) {
 
                 if (!candidate.toAbsolutePath().toFile().exists()) {
                     throw new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist.");
                 }
 
-                try (Context context = Context.newBuilder().option("llvm.parseOnly", String.valueOf(true)).option("llvm.lazyParsing", String.valueOf(false)).allowAllAccess(true).build()) {
+                try (Context context = Context.newBuilder().option("llvm.lazyParsing", String.valueOf(false)).allowAllAccess(true).build()) {
                     context.eval(org.graalvm.polyglot.Source.newBuilder(LLVMLanguage.ID, candidate.toFile()).build());
                 }
             }
         }
-    }
-
-    protected void assumeNotExcluded() {
-        if (getExclusionReason() != null) {
-            throw new AssumptionViolatedException("Test excluded: " + getExclusionReason());
-        }
-    }
-
-    private String getExclusionReason() {
-        return excludeReason;
     }
 }
