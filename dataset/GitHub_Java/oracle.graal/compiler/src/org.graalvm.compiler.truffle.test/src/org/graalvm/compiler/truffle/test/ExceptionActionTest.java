@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.graalvm.compiler.core.GraalCompilerOptions;
 import org.graalvm.compiler.test.SubprocessUtil;
@@ -268,21 +267,21 @@ public class ExceptionActionTest extends TestWithPolyglotOptions {
     }
 
     private static boolean hasExit(Path logFile) {
-        return contains(logFile, Pattern.compile(".*Exiting VM.*"));
+        return contains(logFile, "Exiting VM");
     }
 
     private static boolean hasBailout(Path logFile) {
-        return contains(logFile, Pattern.compile("[\\w.]*BailoutException.*")) || contains(logFile, Pattern.compile(".*Non permanent bailout.*"));
+        return contains(logFile, "BailoutException") || contains(logFile, "Non permanent bailout");
     }
 
     private static boolean hasOptFailedException(Path logFile) {
-        return contains(logFile, Pattern.compile(".*OptimizationFailedException.*"));
+        return contains(logFile, "OptimizationFailedException");
     }
 
-    private static boolean contains(Path logFile, Pattern pattern) {
+    private static boolean contains(Path logFile, String substr) {
         try {
             for (String line : Files.readAllLines(logFile)) {
-                if (pattern.matcher(line).matches()) {
+                if (line.contains(substr)) {
                     return true;
                 }
             }
