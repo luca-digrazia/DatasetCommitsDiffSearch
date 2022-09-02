@@ -73,7 +73,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.StoreInstructio
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.SwitchOldInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.TerminatingInstruction;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnaryOperationInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.UnreachableInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
@@ -204,7 +203,7 @@ public final class LLVMLivenessAnalysis {
         return processedBlocks;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     private LLVMLivenessAnalysisResult computeLivenessAnalysisResult(List<InstructionBlock> blocks, BlockInfo[] blockInfos, ArrayList<InstructionBlock>[] predecessors) {
         ArrayList<NullerInformation>[] nullableWithinBlock = new ArrayList[blocks.size()];
         BitSet[] nullableBeforeBlock = new BitSet[blocks.size()];
@@ -311,7 +310,7 @@ public final class LLVMLivenessAnalysis {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     private static ArrayList<InstructionBlock>[] computePredecessors(List<InstructionBlock> blocks) {
         ArrayList<InstructionBlock>[] result = new ArrayList[blocks.size()];
         for (int i = 0; i < blocks.size(); i++) {
@@ -443,11 +442,6 @@ public final class LLVMLivenessAnalysis {
         public void visit(BinaryOperationInstruction operation) {
             visitLocalRead(operation.getLHS());
             visitLocalRead(operation.getRHS());
-        }
-
-        @Override
-        public void visit(UnaryOperationInstruction operation) {
-            visitLocalRead(operation.getOperand());
         }
 
         @Override
