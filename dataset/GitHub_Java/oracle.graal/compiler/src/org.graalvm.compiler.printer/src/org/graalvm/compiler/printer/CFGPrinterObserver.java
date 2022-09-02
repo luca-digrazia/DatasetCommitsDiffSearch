@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,10 +24,13 @@
  */
 package org.graalvm.compiler.printer;
 
+import static org.graalvm.compiler.debug.DebugOptions.PrintBackendCFG;
+import static org.graalvm.compiler.debug.DebugOptions.PrintCFG;
+
 import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -35,32 +40,32 @@ import java.util.List;
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.DisassemblerProvider;
+import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.alloc.Trace;
 import org.graalvm.compiler.core.common.alloc.TraceBuilderResult;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.core.gen.NodeLIRBuilder;
-import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugDumpHandler;
 import org.graalvm.compiler.debug.DebugDumpScope;
-import org.graalvm.compiler.debug.GraalDebugConfig.Options;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.debug.internal.DebugScope;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.java.BciBlockMapping;
 import org.graalvm.compiler.lir.LIR;
-import org.graalvm.compiler.lir.alloc.trace.GlobalLivenessInfo;
 import org.graalvm.compiler.lir.debug.IntervalDumper;
+import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
-import org.graalvm.compiler.options.UniquePathUtilities;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.JavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.services.Services;
 
 /**
  * Observes compilation events and uses {@link CFGPrinter} to produce a control flow graph for the
@@ -71,18 +76,14 @@ public class CFGPrinterObserver implements DebugDumpHandler {
     private CFGPrinter cfgPrinter;
     private File cfgFile;
     private JavaMethod curMethod;
+    private CompilationIdentifier curCompilation;
     private List<String> curDecorators = Collections.emptyList();
-    private final boolean dumpFrontend;
-
-    public CFGPrinterObserver(boolean dumpFrontend) {
-        this.dumpFrontend = dumpFrontend;
-    }
 
     @Override
-    public void dump(Object object, String format, Object... arguments) {
+    public void dump(Object object, DebugContext debug, boolean forced, String format, Object... arguments) {
         String message = String.format(format, arguments);
         try {
-            dumpSandboxed(object, message);
+            dumpSandboxed(debug, object, forced, message);
         } catch (Throwable ex) {
             TTY.println("CFGPrinter: Exception during output of " + message + ": " + ex);
             ex.printStackTrace();
@@ -94,10 +95,11 @@ public class CFGPrinterObserver implements DebugDumpHandler {
      * debug scope and opens a new compilation scope if this pair does not match the current method
      * and decorator pair.
      */
-    private boolean checkMethodScope() {
+    private boolean checkMethodScope(DebugContext debug) {
         JavaMethod method = null;
+        CompilationIdentifier compilation = null;
         ArrayList<String> decorators = new ArrayList<>();
-        for (Object o : Debug.context()) {
+        for (Object o : debug.context()) {
             if (o instanceof JavaMethod) {
                 method = (JavaMethod) o;
                 decorators.clear();
@@ -106,23 +108,33 @@ public class CFGPrinterObserver implements DebugDumpHandler {
                 if (graph.method() != null) {
                     method = graph.method();
                     decorators.clear();
+                    compilation = graph.compilationId();
                 }
             } else if (o instanceof DebugDumpScope) {
                 DebugDumpScope debugDumpScope = (DebugDumpScope) o;
                 if (debugDumpScope.decorator) {
                     decorators.add(debugDumpScope.name);
                 }
+            } else if (o instanceof CompilationResult) {
+                CompilationResult compilationResult = (CompilationResult) o;
+                compilation = compilationResult.getCompilationId();
             }
         }
 
-        if (method == null) {
+        if (method == null && compilation == null) {
             return false;
         }
 
-        if (!method.equals(curMethod) || !curDecorators.equals(decorators)) {
-            cfgPrinter.printCompilation(method);
-            TTY.println("CFGPrinter: Dumping method %s to %s", method, cfgFile.getAbsolutePath());
+        if (compilation != null) {
+            if (!compilation.equals(curCompilation) || !curDecorators.equals(decorators)) {
+                cfgPrinter.printCompilation(compilation);
+            }
+        } else {
+            if (!method.equals(curMethod) || !curDecorators.equals(decorators)) {
+                cfgPrinter.printCompilation(method);
+            }
         }
+        curCompilation = compilation;
         curMethod = method;
         curDecorators = decorators;
         return true;
@@ -135,30 +147,34 @@ public class CFGPrinterObserver implements DebugDumpHandler {
     private LIR lastLIR = null;
     private IntervalDumper delayedIntervals = null;
 
-    public void dumpSandboxed(Object object, String message) {
-        if (!dumpFrontend && isFrontendObject(object)) {
-            return;
+    public void dumpSandboxed(DebugContext debug, Object object, boolean forced, String message) {
+        OptionValues options = debug.getOptions();
+        if (isFrontendObject(object)) {
+            if (!PrintCFG.getValue(options) && !forced) {
+                return;
+            }
+        } else {
+            if (!PrintBackendCFG.getValue(options) && !forced) {
+                return;
+            }
         }
+        dumpSandboxed(debug, object, message);
+    }
 
+    public void dumpSandboxed(DebugContext debug, Object object, String message) {
+        OptionValues options = debug.getOptions();
         if (cfgPrinter == null) {
-            cfgFile = getCFGPath().toFile();
             try {
-                /*
-                 * Initializing a debug environment multiple times by calling
-                 * DebugEnvironment#initialize will create new CFGPrinterObserver objects that refer
-                 * to the same file path. This means the CFG file may be overridden by another
-                 * instance. Appending to an existing CFG file is not an option as the writing
-                 * happens buffered.
-                 */
+                Path dumpFile = debug.getDumpPath(".cfg", false);
+                cfgFile = dumpFile.toFile();
                 OutputStream out = new BufferedOutputStream(new FileOutputStream(cfgFile));
                 cfgPrinter = new CFGPrinter(out);
-            } catch (FileNotFoundException e) {
-                throw new GraalError("Could not open " + cfgFile.getAbsolutePath());
+            } catch (IOException e) {
+                throw (GraalError) new GraalError("Could not open %s", cfgFile == null ? "[null]" : cfgFile.getAbsolutePath()).initCause(e);
             }
-            TTY.println("CFGPrinter: Output to file %s", cfgFile.getAbsolutePath());
         }
 
-        if (!checkMethodScope()) {
+        if (!checkMethodScope(debug)) {
             return;
         }
         try {
@@ -169,10 +185,10 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             if (object instanceof LIR) {
                 cfgPrinter.lir = (LIR) object;
             } else {
-                cfgPrinter.lir = Debug.contextLookup(LIR.class);
+                cfgPrinter.lir = debug.contextLookup(LIR.class);
             }
-            cfgPrinter.nodeLirGenerator = Debug.contextLookup(NodeLIRBuilder.class);
-            cfgPrinter.livenessInfo = Debug.contextLookup(GlobalLivenessInfo.class);
+            cfgPrinter.nodeLirGenerator = debug.contextLookup(NodeLIRBuilder.class);
+            cfgPrinter.res = debug.contextLookup(LIRGenerationResult.class);
             if (cfgPrinter.nodeLirGenerator != null) {
                 cfgPrinter.target = cfgPrinter.nodeLirGenerator.getLIRGeneratorTool().target();
             }
@@ -180,18 +196,19 @@ public class CFGPrinterObserver implements DebugDumpHandler {
                 cfgPrinter.cfg = (ControlFlowGraph) cfgPrinter.lir.getControlFlowGraph();
             }
 
-            CodeCacheProvider codeCache = Debug.contextLookup(CodeCacheProvider.class);
+            CodeCacheProvider codeCache = debug.contextLookup(CodeCacheProvider.class);
             if (codeCache != null) {
                 cfgPrinter.target = codeCache.getTarget();
             }
 
             if (object instanceof BciBlockMapping) {
                 BciBlockMapping blockMap = (BciBlockMapping) object;
-                cfgPrinter.printCFG(message, blockMap);
-                if (blockMap.code.getCode() != null) {
-                    cfgPrinter.printBytecodes(new BytecodeDisassembler(false).disassemble(blockMap.code));
+                if (blockMap.getBlocks() != null) {
+                    cfgPrinter.printCFG(message, blockMap);
+                    if (blockMap.code.getCode() != null) {
+                        cfgPrinter.printBytecodes(new BytecodeDisassembler(false).disassemble(blockMap.code));
+                    }
                 }
-
             } else if (object instanceof LIR) {
                 // Currently no node printing for lir
                 cfgPrinter.printCFG(message, cfgPrinter.lir.codeEmittingOrder(), false);
@@ -203,28 +220,33 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             } else if (object instanceof ScheduleResult) {
                 cfgPrinter.printSchedule(message, (ScheduleResult) object);
             } else if (object instanceof StructuredGraph) {
+                StructuredGraph graph = (StructuredGraph) object;
                 if (cfgPrinter.cfg == null) {
-                    StructuredGraph graph = (StructuredGraph) object;
-                    cfgPrinter.cfg = ControlFlowGraph.compute(graph, true, true, true, false);
-                    cfgPrinter.printCFG(message, cfgPrinter.cfg.getBlocks(), true);
-                } else {
+                    ScheduleResult scheduleResult = GraalDebugHandlersFactory.tryGetSchedule(debug, graph);
+                    if (scheduleResult != null) {
+                        cfgPrinter.cfg = scheduleResult.getCFG();
+                    }
+                }
+                if (cfgPrinter.cfg != null) {
+                    if (graph.nodeIdCount() > cfgPrinter.cfg.getNodeToBlock().capacity()) {
+                        cfgPrinter.cfg = ControlFlowGraph.compute(graph, true, true, true, false);
+                    }
                     cfgPrinter.printCFG(message, cfgPrinter.cfg.getBlocks(), true);
                 }
-
             } else if (object instanceof CompilationResult) {
                 final CompilationResult compResult = (CompilationResult) object;
-                cfgPrinter.printMachineCode(disassemble(codeCache, compResult, null), message);
+                cfgPrinter.printMachineCode(disassemble(options, codeCache, compResult, null), message);
             } else if (object instanceof InstalledCode) {
-                CompilationResult compResult = Debug.contextLookup(CompilationResult.class);
+                CompilationResult compResult = debug.contextLookup(CompilationResult.class);
                 if (compResult != null) {
-                    cfgPrinter.printMachineCode(disassemble(codeCache, compResult, (InstalledCode) object), message);
+                    cfgPrinter.printMachineCode(disassemble(options, codeCache, compResult, (InstalledCode) object), message);
                 }
             } else if (object instanceof IntervalDumper) {
                 if (lastLIR == cfgPrinter.lir) {
                     cfgPrinter.printIntervals(message, (IntervalDumper) object);
                 } else {
                     if (delayedIntervals != null) {
-                        Debug.log("Some delayed intervals were dropped (%s)", delayedIntervals);
+                        debug.log("Some delayed intervals were dropped (%s)", delayedIntervals);
                     }
                     delayedIntervals = (IntervalDumper) object;
                 }
@@ -238,48 +260,45 @@ public class CFGPrinterObserver implements DebugDumpHandler {
         } finally {
             cfgPrinter.target = null;
             cfgPrinter.lir = null;
+            cfgPrinter.res = null;
             cfgPrinter.nodeLirGenerator = null;
-            cfgPrinter.livenessInfo = null;
             cfgPrinter.cfg = null;
             cfgPrinter.flush();
         }
     }
 
-    private static Path getCFGPath() {
-        return UniquePathUtilities.getPath(DebugScope.getConfig().getOptions(), Options.PrintCFGFileName, Options.DumpPath, "cfg");
-    }
-
-    /** Lazy initialization to delay service lookup until disassembler is actually needed. */
-    static class DisassemblerHolder {
-        private static final DisassemblerProvider disassembler;
-
-        static {
-            DisassemblerProvider selected = null;
-            for (DisassemblerProvider d : GraalServices.load(DisassemblerProvider.class)) {
-                String name = d.getName().toLowerCase();
-                if (name.contains("hcf") || name.contains("hexcodefile")) {
-                    selected = d;
-                    break;
+    private static DisassemblerProvider selectDisassemblerProvider(OptionValues options) {
+        DisassemblerProvider selected = null;
+        String arch = Services.getSavedProperties().get("os.arch");
+        final boolean isAArch64 = arch.equals("aarch64");
+        for (DisassemblerProvider d : GraalServices.load(DisassemblerProvider.class)) {
+            String name = d.getName();
+            if (isAArch64 && name.equals("objdump") && d.isAvailable(options)) {
+                return d;
+            } else if (name.equals("hcf")) {
+                if (!isAArch64) {
+                    return d;
                 }
+                selected = d;
             }
-            if (selected == null) {
-                selected = new DisassemblerProvider() {
-                    @Override
-                    public String getName() {
-                        return "nop";
-                    }
-                };
-            }
-            disassembler = selected;
         }
+        if (selected == null) {
+            selected = new DisassemblerProvider() {
+                @Override
+                public String getName() {
+                    return "nop";
+                }
+            };
+        }
+        return selected;
     }
 
-    private static String disassemble(CodeCacheProvider codeCache, CompilationResult compResult, InstalledCode installedCode) {
-        DisassemblerProvider dis = DisassemblerHolder.disassembler;
+    private static String disassemble(OptionValues options, CodeCacheProvider codeCache, CompilationResult compResult, InstalledCode installedCode) {
+        DisassemblerProvider dis = selectDisassemblerProvider(options);
         if (installedCode != null) {
             return dis.disassembleInstalledCode(codeCache, compResult, installedCode);
         }
-        return dis.disassembleCompiledCode(codeCache, compResult);
+        return dis.disassembleCompiledCode(options, codeCache, compResult);
     }
 
     @Override
@@ -289,6 +308,7 @@ public class CFGPrinterObserver implements DebugDumpHandler {
             cfgPrinter = null;
             curDecorators = Collections.emptyList();
             curMethod = null;
+            curCompilation = null;
         }
     }
 
