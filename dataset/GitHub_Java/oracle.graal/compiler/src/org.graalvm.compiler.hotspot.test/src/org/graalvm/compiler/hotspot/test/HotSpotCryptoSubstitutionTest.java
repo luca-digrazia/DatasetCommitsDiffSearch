@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -80,9 +80,7 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void testAESCryptIntrinsics() throws Exception {
-        String aesEncryptName = HotSpotGraphBuilderPlugins.lookupIntrinsicName(runtime().getVMConfig(), "com/sun/crypto/provider/AESCrypt", "implEncryptBlock", "encryptBlock");
-        String aesDecryptName = HotSpotGraphBuilderPlugins.lookupIntrinsicName(runtime().getVMConfig(), "com/sun/crypto/provider/AESCrypt", "implDecryptBlock", "decryptBlock");
-        if (compileAndInstall("com.sun.crypto.provider.AESCrypt", aesEncryptName, aesDecryptName)) {
+        if (compileAndInstall("com.sun.crypto.provider.AESCrypt", HotSpotGraphBuilderPlugins.aesEncryptName, HotSpotGraphBuilderPlugins.aesDecryptName)) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding"));
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/PKCS5Padding"));
@@ -92,8 +90,9 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
 
     @Test
     public void testCipherBlockChainingIntrinsics() throws Exception {
-        String cbcEncryptName = HotSpotGraphBuilderPlugins.lookupIntrinsicName(runtime().getVMConfig(), "com/sun/crypto/provider/CipherBlockChaining", "implEncrypt", "encrypt");
-        String cbcDecryptName = HotSpotGraphBuilderPlugins.lookupIntrinsicName(runtime().getVMConfig(), "com/sun/crypto/provider/CipherBlockChaining", "implDecrypt", "decrypt");
+        boolean implNames = HotSpotGraphBuilderPlugins.cbcUsesImplNames(runtime().getVMConfig());
+        String cbcEncryptName = implNames ? "implEncrypt" : "encrypt";
+        String cbcDecryptName = implNames ? "implDecrypt" : "decrypt";
         if (compileAndInstall("com.sun.crypto.provider.CipherBlockChaining", cbcEncryptName, cbcDecryptName)) {
             ByteArrayOutputStream actual = new ByteArrayOutputStream();
             actual.write(runEncryptDecrypt(aesKey, "AES/CBC/NoPadding"));

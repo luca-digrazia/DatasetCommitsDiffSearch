@@ -149,13 +149,9 @@ public class HotSpotGraphBuilderPlugins {
         }
 
         if (GeneratePIC.getValue(options)) {
-            plugins.setClassInitializationPlugin(new HotSpotAOTClassInitializationPlugin());
+            plugins.setClassInitializationPlugin(new HotSpotClassInitializationPlugin());
             if (TieredAOT.getValue(options)) {
                 plugins.setProfilingPlugin(new HotSpotAOTProfilingPlugin());
-            }
-        } else {
-            if (config.instanceKlassInitThreadOffset != -1) {
-                plugins.setClassInitializationPlugin(new HotSpotJITClassInitializationPlugin());
             }
         }
 
