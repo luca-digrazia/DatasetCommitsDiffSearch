@@ -538,12 +538,11 @@ public final class Context implements AutoCloseable {
      * Converts a host value to a polyglot {@link Value value} representation. This conversion is
      * applied implicitly whenever {@link Value#execute(Object...) execution} or
      * {@link Value#newInstance(Object...) instantiation} arguments are provided,
-     * {@link Value#putMember(String, Object) members} and
-     * {@link Value#setArrayElement(long, Object) array elements} are set or when a value is
-     * returned by a {@link Proxy polyglot proxy}. It is not required nor efficient to explicitly
-     * convert to polyglot values before performing these operations. This method is useful to
-     * convert a {@link Value#as(Class) mapped} host value back to a polyglot value while preserving
-     * the identity.
+     * {@link Value#putMember(String, Object) members}, {@link Value#setArrayElement(long, Object)
+     * array elements} are set or when a value is returned by a {@link Proxy polyglot proxy}. It is
+     * not required nor efficient to explicitly convert to polyglot values before performing these
+     * operations. This method is useful to convert a {@link Value#as(Class) mapped} host value back
+     * to a polyglot value while preserving the identity.
      * <p>
      * When a host value is converted to a polyglot value the following rules apply:
      * <ol>
@@ -571,11 +570,11 @@ public final class Context implements AutoCloseable {
      * {@link Value#getMember(String) members}. In addition, Java arrays and subtypes of
      * {@link List} will be interpreted as a value with {@link Value#hasArrayElements() array
      * elements}. The subtypes of {@link Iterable} will be interpreted as a value with
-     * {@link Value#hasIterator()} iterator}. The subtypes of {@link Iterator} will be interpreted
-     * as an {@link Value#isIterator() iterator} value. And single method interfaces annotated with
-     * {@link FunctionalInterface} are {@link Value#execute(Object...) executable} directly. Java
-     * {@link Class} instances are interpreted as {@link Value#canInstantiate() instantiable}, but
-     * they do not expose Class methods as members.
+     * {@link Value#hasArrayIterator()} array iterator}. The subtypes of {@link Iterator} will be
+     * interpreted as an {@link Value#isIterator() iterator} value. And single method interfaces
+     * annotated with {@link FunctionalInterface} are {@link Value#execute(Object...) executable}
+     * directly. Java {@link Class} instances are interpreted as {@link Value#canInstantiate()
+     * instantiable}, but they do not expose Class methods as members.
      * </ol>
      * <p>
      * <b>Basic Examples:</b>
