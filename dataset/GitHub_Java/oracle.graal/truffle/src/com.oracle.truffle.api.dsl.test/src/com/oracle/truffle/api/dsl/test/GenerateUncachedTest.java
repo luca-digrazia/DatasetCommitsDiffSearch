@@ -422,6 +422,10 @@ public class GenerateUncachedTest {
             return "s0";
         }
 
+        @Override
+        protected boolean isAdoptable() {
+            return super.isAdoptable();
+        }
     }
 
     @Test
@@ -441,6 +445,10 @@ public class GenerateUncachedTest {
             return "s0";
         }
 
+        @Override
+        protected boolean isAdoptable() {
+            return super.isAdoptable();
+        }
     }
 
     @GenerateUncached
@@ -609,25 +617,6 @@ public class GenerateUncachedTest {
 
         static Object foo(Object o) {
             return o;
-        }
-
-    }
-
-    abstract static class ErrorBaseNode extends Node {
-
-        @Child private Node errorField;
-
-        abstract Object execute();
-
-    }
-
-    @GenerateUncached
-    @ExpectError("Failed to generate code for @GenerateUncached: The node must not declare any instance variables. Found instance variable ErrorBaseNode.errorField. Remove instance variable to resolve this.")
-    abstract static class ErrorFieldInParent1Node extends ErrorBaseNode {
-
-        @Specialization
-        public Object doDefault() {
-            return null;
         }
 
     }

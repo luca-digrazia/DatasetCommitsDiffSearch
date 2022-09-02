@@ -605,15 +605,10 @@ public class FlatNodeGenFactory {
 
         builder.statement("data[0] = 0"); // declare version 0
 
-        boolean needsRewrites = needsRewrites();
-
         FrameState frameState = FrameState.load(this, NodeExecutionMode.SLOW_PATH);
-
-        if (needsRewrites) {
-            builder.tree(state.createLoad(frameState));
-            if (requiresExclude()) {
-                builder.tree(exclude.createLoad(frameState));
-            }
+        builder.tree(state.createLoad(frameState));
+        if (requiresExclude()) {
+            builder.tree(exclude.createLoad(frameState));
         }
 
         int index = 1;
@@ -621,9 +616,7 @@ public class FlatNodeGenFactory {
             builder.startStatement().string("s = ").startNewArray(objectArray, CodeTreeBuilder.singleString("3")).end().end();
             builder.startStatement().string("s[0] = ").doubleQuote(specialization.getMethodName()).end();
 
-            if (needsRewrites) {
-                builder.startIf().tree(state.createContains(frameState, new Object[]{specialization})).end().startBlock();
-            }
+            builder.startIf().tree(state.createContains(frameState, new Object[]{specialization})).end().startBlock();
             builder.startStatement().string("s[1] = (byte)0b01 /* active */").end();
             TypeMirror listType = new DeclaredCodeTypeMirror((TypeElement) context.getDeclaredType(ArrayList.class).asElement(), Arrays.asList(context.getType(Object.class)));
 
@@ -666,17 +659,15 @@ public class FlatNodeGenFactory {
 
                 builder.statement("s[2] = cached");
             }
-            if (needsRewrites) {
-                builder.end();
-                if (mayBeExcluded(specialization)) {
-                    builder.startElseIf().tree(exclude.createContains(frameState, new Object[]{specialization})).end().startBlock();
-                    builder.startStatement().string("s[1] = (byte)0b10 /* excluded */").end();
-                    builder.end();
-                }
-                builder.startElseBlock();
-                builder.startStatement().string("s[1] = (byte)0b00 /* inactive */").end();
+            builder.end();
+            if (mayBeExcluded(specialization)) {
+                builder.startElseIf().tree(exclude.createContains(frameState, new Object[]{specialization})).end().startBlock();
+                builder.startStatement().string("s[1] = (byte)0b10 /* excluded */").end();
                 builder.end();
             }
+            builder.startElseBlock();
+            builder.startStatement().string("s[1] = (byte)0b00 /* inactive */").end();
+            builder.end();
             builder.startStatement().string("data[", String.valueOf(index), "] = s").end();
             index++;
         }
