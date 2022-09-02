@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,7 @@
  */
 package org.graalvm.compiler.hotspot.test;
 
+import org.graalvm.compiler.hotspot.HotSpotBackend;
 import org.graalvm.compiler.replacements.test.MethodSubstitutionTest;
 import org.junit.Test;
 
@@ -30,7 +33,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import sun.misc.Unsafe;
 
 /**
- * Tests the VM independent intrinsification of {@link Unsafe} methods.
+ * Tests the HotSpot dependent intrinsification of {@link Unsafe} methods.
  */
 public class HotSpotUnsafeSubstitutionTest extends MethodSubstitutionTest {
 
@@ -56,7 +59,7 @@ public class HotSpotUnsafeSubstitutionTest extends MethodSubstitutionTest {
 
     @Test
     public void testUnsafeSubstitutions() throws Exception {
-        testGraph("unsafeCopyMemory");
+        testGraph("unsafeCopyMemory", HotSpotBackend.copyMemoryName);
     }
 
     public void unsafeCopyMemory(Object srcBase, long srcOffset, Object dstBase, long dstOffset, long bytes) {
