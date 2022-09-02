@@ -24,71 +24,95 @@
  */
 package com.oracle.svm.core.windows;
 
-import com.oracle.svm.core.annotate.Alias;
-import com.oracle.svm.core.annotate.Substitute;
-import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
-import org.graalvm.nativeimage.PinnedObject;
-import org.graalvm.nativeimage.Platform.WINDOWS;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.word.UnsignedWord;
-import org.graalvm.word.WordFactory;
+import java.io.FileDescriptor;
 
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.c.function.CLibrary;
+import org.graalvm.nativeimage.hosted.Feature;
+
+import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.jni.JNIRuntimeAccess;
+import com.oracle.svm.core.log.Log;
+import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.core.windows.headers.FileAPI;
 
-import java.io.FileDescriptor;
-import java.io.IOException;
+@Platforms(Platform.WINDOWS.class)
+@AutomaticFeature
+@CLibrary(value = "java", requireStatic = true)
+class WindowsJavaIOSubstituteFeature implements Feature {
 
-@TargetClass(java.io.FileDescriptor.class)
-@Platforms(WINDOWS.class)
-final class Target_java_io_FileDescriptor {
-
-    @Alias private long handle;
-
-    @Substitute
-    private static long set(int handle) {
-        if (handle == 0) {
-            return FileAPI.GetStdHandle(FileAPI.STD_INPUT_HANDLE());
-        } else if (handle == 1) {
-            return FileAPI.GetStdHandle(FileAPI.STD_OUTPUT_HANDLE());
-        } else if (handle == 2) {
-            return FileAPI.GetStdHandle(FileAPI.STD_ERROR_HANDLE());
-        } else {
-            return -1;
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        JNIRuntimeAccess.register(access.findClassByName("java.io.WinNTFileSystem"));
+        try {
+            JNIRuntimeAccess.register(FileDescriptor.class.getDeclaredField("handle"));
+        } catch (NoSuchFieldException e) {
+            VMError.shouldNotReachHere("WindowsJavaIOSubstitutionFeature: Error registering class or method: ", e);
         }
     }
+}
 
-    @Substitute
-    public static FileDescriptor standardStream(int handle) {
-        FileDescriptor desc = new FileDescriptor();
-        KnownIntrinsics.unsafeCast(desc, Target_java_io_FileDescriptor.class).handle = set(handle);
-        return (desc);
-    }
+@TargetClass(java.io.FileInputStream.class)
+@Platforms(Platform.WINDOWS.class)
+final class Target_java_io_FileInputStream {
+
+    @Alias
+    static native void initIDs();
+}
+
+@TargetClass(java.io.FileDescriptor.class)
+@Platforms(Platform.WINDOWS.class)
+final class Target_java_io_FileDescriptor {
+
+    @Alias
+    static native void initIDs();
 }
 
 @TargetClass(java.io.FileOutputStream.class)
-@Platforms(WINDOWS.class)
+@Platforms(Platform.WINDOWS.class)
 final class Target_java_io_FileOutputStream {
 
-    /** Temp fix to enable running tests */
-    @SuppressWarnings("unused")
-    @Substitute
-    protected void writeBytes(byte[] bytes, int off, int len, boolean append) throws IOException {
-        PinnedObject bytesPin = PinnedObject.create(bytes);
-        CCharPointer curBuf = bytesPin.addressOfArrayElement(off);
-        UnsignedWord curLen = WordFactory.unsigned(len);
-        if (!WindowsUtils.writeBytes(FileAPI.GetStdHandle(FileAPI.STD_ERROR_HANDLE()), curBuf, curLen)) {
-            throw new IOException("writeBytes failed");
-        }
-    }
+    @Alias
+    static native void initIDs();
+}
+
+@TargetClass(className = "java.io.WinNTFileSystem")
+@Platforms(Platform.WINDOWS.class)
+final class Target_java_io_WinNTFileSystem {
+
+    @Alias
+    static native void initIDs();
 }
 
 /** Dummy class to have a class with the file's name. */
-@Platforms(WINDOWS.class)
+@Platforms(Platform.WINDOWS.class)
 public final class WindowsJavaIOSubstitutions {
 
     /** Private constructor: No instances. */
     private WindowsJavaIOSubstitutions() {
+    }
+
+    public static boolean initIDs() {
+        try {
+            System.loadLibrary("java");
+
+            Target_java_io_FileDescriptor.initIDs();
+            Target_java_io_FileInputStream.initIDs();
+            Target_java_io_FileOutputStream.initIDs();
+            Target_java_io_WinNTFileSystem.initIDs();
+
+            /* Initialize the handles of standard FileDescriptors. */
+            WindowsUtils.setHandle(FileDescriptor.in, FileAPI.GetStdHandle(FileAPI.STD_INPUT_HANDLE()));
+            WindowsUtils.setHandle(FileDescriptor.out, FileAPI.GetStdHandle(FileAPI.STD_OUTPUT_HANDLE()));
+            WindowsUtils.setHandle(FileDescriptor.err, FileAPI.GetStdHandle(FileAPI.STD_ERROR_HANDLE()));
+
+            return true;
+        } catch (UnsatisfiedLinkError e) {
+            Log.log().string("System.loadLibrary failed, " + e).newline();
+            return false;
+        }
     }
 }
