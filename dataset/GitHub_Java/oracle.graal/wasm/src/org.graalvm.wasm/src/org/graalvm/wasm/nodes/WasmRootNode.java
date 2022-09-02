@@ -105,7 +105,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
     public Object executeWithContext(VirtualFrame frame, WasmContext context) {
         // The operand stack is represented as a long array,
-        // and is kept in a dedicated frame slot.x
+        // and is kept in a dedicated frame slot.
         // The reason for this is that the operand stack cannot be passed
         // as an argument to the loop-node's execute method,
         // and must be restored at the beginning of the loop body.
@@ -118,7 +118,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
         // the arguments to the array that holds the locals.
         long[] locals = new long[body.codeEntry().numLocals()];
         frame.setObject(codeEntry.localsSlot(), locals);
-        argumentsToLocals(frame, locals);
+        moveArgumentsToLocals(frame, locals);
 
         // WebAssembly rules dictate that a function's locals must be initialized to zero before
         // function invocation. For more information, check the specification:
@@ -156,7 +156,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
     }
 
     @ExplodeLoop
-    private void argumentsToLocals(VirtualFrame frame, long[] locals) {
+    private void moveArgumentsToLocals(VirtualFrame frame, long[] locals) {
         Object[] args = frame.getArguments();
         int numArgs = body.instance().symbolTable().function(codeEntry().functionIndex()).numArguments();
         assert args.length == numArgs : "Expected number of arguments " + numArgs + ", actual " + args.length;

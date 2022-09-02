@@ -47,10 +47,15 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 
 public final class WasmCodeEntry {
+    private static final Object LOCALS_SLOT_INDEX = 1;
+    private static final Object STACK_SLOT_INDEX = 0;
+
     private final WasmFunction function;
     @CompilationFinal(dimensions = 1) private final byte[] data;
     @CompilationFinal(dimensions = 1) private byte[] localTypes;
+    @CompilationFinal(dimensions = 1) private byte[] byteConstants;
     @CompilationFinal(dimensions = 1) private int[] intConstants;
+    @CompilationFinal(dimensions = 1) private long[] longConstants;
     @CompilationFinal(dimensions = 2) private int[][] branchTables;
     @CompilationFinal(dimensions = 1) private int[] profileCounters;
     @CompilationFinal private FrameSlot stackSlot;
@@ -61,7 +66,9 @@ public final class WasmCodeEntry {
         this.function = function;
         this.data = data;
         this.localTypes = null;
+        this.byteConstants = null;
         this.intConstants = null;
+        this.longConstants = null;
         this.profileCounters = null;
     }
 
@@ -74,11 +81,11 @@ public final class WasmCodeEntry {
     }
 
     public void initLocalSlots(FrameDescriptor frameDescriptor) {
-        this.localsSlot = frameDescriptor.addFrameSlot(1, FrameSlotKind.Object);
+        this.localsSlot = frameDescriptor.addFrameSlot(LOCALS_SLOT_INDEX, FrameSlotKind.Object);
     }
 
     public void initStack(FrameDescriptor frameDescriptor, int maximumStackSize) {
-        this.stackSlot = frameDescriptor.addFrameSlot(0, FrameSlotKind.Object);
+        this.stackSlot = frameDescriptor.addFrameSlot(STACK_SLOT_INDEX, FrameSlotKind.Object);
         this.maxStackSize = maximumStackSize;
     }
 
@@ -102,7 +109,14 @@ public final class WasmCodeEntry {
         return localTypes[index];
     }
 
-    @SuppressWarnings("unused")
+    public byte byteConstant(int index) {
+        return byteConstants[index];
+    }
+
+    public void setByteConstants(byte[] byteConstants) {
+        this.byteConstants = byteConstants;
+    }
+
     public int intConstant(int index) {
         return intConstants[index];
     }
@@ -111,8 +125,12 @@ public final class WasmCodeEntry {
         this.intConstants = intConstants;
     }
 
-    public int[] intConstants() {
-        return intConstants;
+    public long longConstant(int index) {
+        return longConstants[index];
+    }
+
+    public void setLongConstants(long[] longConstants) {
+        this.longConstants = longConstants;
     }
 
     public int[] branchTable(int index) {
@@ -125,7 +143,7 @@ public final class WasmCodeEntry {
 
     public void setProfileCount(int size) {
         if (size > 0) {
-            this.profileCounters = new int[size];
+            this.profileCounters = new int[size * 2];
         }
     }
 
@@ -138,11 +156,11 @@ public final class WasmCodeEntry {
     }
 
     /**
-     * A constant holding the maximum value an {@code int} can have, 2<sup>15</sup>-1. The sum of
+     * A constant holding the maximum value an {@code int} can have, 2<sup>30</sup>-1. The sum of
      * the true and false count must not overflow. This constant is used to check whether one of the
      * counts does not exceed the required maximum value.
      */
-    public static final int CONDITION_COUNT_MAX_VALUE = 0x3fff;
+    public static final int CONDITION_COUNT_MAX_VALUE = 0x3fffffff;
 
     /**
      * Same logic as in {@link com.oracle.truffle.api.profiles.ConditionProfile#profile}.
@@ -153,36 +171,33 @@ public final class WasmCodeEntry {
      */
     public boolean profileCondition(int index, boolean condition) {
         // locals required to guarantee no overflow in multi-threaded environments
-        int tf = this.profileCounters[index];
-        int t = tf >>> 16;
-        int f = tf & 0xffff;
+        int t = this.profileCounters[index * 2];
+        int f = this.profileCounters[index * 2 + 1];
         boolean val = condition;
         if (val) {
-            if (!CompilerDirectives.inInterpreter()) {
-                if (t == 0) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                }
-                if (f == 0) {
-                    // Make this branch fold during PE
-                    val = true;
-                }
-            } else {
+            if (t == 0) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+            }
+            if (f == 0) {
+                // Make this branch fold during PE
+                val = true;
+            }
+            if (CompilerDirectives.inInterpreter()) {
                 if (t < CONDITION_COUNT_MAX_VALUE) {
-                    this.profileCounters[index] = ((t + 1) << 16) | f;
+                    ++this.profileCounters[index * 2];
                 }
             }
         } else {
-            if (!CompilerDirectives.inInterpreter()) {
-                if (f == 0) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                }
-                if (t == 0) {
-                    // Make this branch fold during PE
-                    val = false;
-                }
-            } else {
+            if (f == 0) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+            }
+            if (t == 0) {
+                // Make this branch fold during PE
+                val = false;
+            }
+            if (CompilerDirectives.inInterpreter()) {
                 if (f < CONDITION_COUNT_MAX_VALUE) {
-                    this.profileCounters[index] = (t << 16) | (f + 1);
+                    ++this.profileCounters[index * 2 + 1];
                 }
             }
         }
