@@ -35,7 +35,6 @@ import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -881,31 +880,6 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         return true;
     }
 
-    private static HashSet<Class<?>> badToString;
-
-    /**
-     * This is a helper to identify objects that are encoded as POOL_STRING and have a poor
-     * {@link Object#toString()} implementation where two objects that are
-     * {@link Object#equals(Object)} have different String representations. Only the first mismatch
-     * is reported since this is a systematic issue and reporting every failure would be too much
-     * useless output.
-     */
-    private static synchronized void reportBadToString(Object lookupKey, Object value) {
-        if (badToString == null) {
-            badToString = new HashSet<>();
-        }
-        if (badToString.add(lookupKey.getClass())) {
-            System.err.println("GraphProtocol: toString mismatch for " + lookupKey.getClass() + ": " + value + " != " + lookupKey.toString());
-        }
-    }
-
-    private static boolean checkToString(Object lookupKey, Object value) {
-        if (!lookupKey.toString().equals(value)) {
-            reportBadToString(lookupKey, value);
-        }
-        return true;
-    }
-
     /**
      * This class maintains a limited pool of constants for use by the graph protocol. Once the
      * cache fills up the oldest slots are replaced with new values in a cyclic fashion.
@@ -926,25 +900,17 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         ConstantPool() {
         }
 
-        private static Object getLookupKey(Object key) {
-            // Collections must be converted to a String early since they can be mutated after
-            // being inserted into the map.
-            return (key instanceof Collection) ? key.toString() : key;
-        }
-
-        Character get(Object initialKey, int type) {
-            Object key = getLookupKey(initialKey);
+        Character get(Object key, int type) {
             Object value = map.get(key);
             if (value instanceof String) {
-                Character id = (Character) map.get(value);
-                if (id != null && keys[id].equals(value)) {
-                    assert checkToString(key, value);
+                value = map.get(value);
+                Character id = (Character) value;
+                if (id != null && keys[id] == value) {
                     return id;
                 }
-                value = null;
             }
             Character id = (Character) value;
-            if (id != null && keys[id].equals(key)) {
+            if (id != null && keys[id] == key) {
                 return id;
             }
             if (type == POOL_STRING && !(key instanceof String)) {
@@ -960,7 +926,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             return null;
         }
 
-        char add(Object initialKey, int type) {
+        char add(Object key, int type) {
             char id = nextId++;
             if (nextId == CONSTANT_POOL_MAX_SIZE) {
                 nextId = 0;
@@ -968,7 +934,6 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             if (keys[id] != null) {
                 map.remove(keys[id]);
             }
-            Object key = getLookupKey(initialKey);
             if (type == POOL_STRING && !(key instanceof String)) {
                 // Insert a forwarding entry from the original object to the string representation
                 // and then directly insert the string with the pool id.
