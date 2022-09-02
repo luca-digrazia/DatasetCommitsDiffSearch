@@ -1,10 +1,13 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,9 +25,16 @@
  */
 package org.graalvm.compiler.asm.aarch64;
 
+import static jdk.vm.ci.aarch64.AArch64.CPU;
+import static jdk.vm.ci.aarch64.AArch64.SIMD;
+import static jdk.vm.ci.aarch64.AArch64.cpuRegisters;
+import static jdk.vm.ci.aarch64.AArch64.r0;
+import static jdk.vm.ci.aarch64.AArch64.sp;
+import static jdk.vm.ci.aarch64.AArch64.zr;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADD;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADDS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADR;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ADRP;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.AND;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ANDS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ASRV;
@@ -34,13 +44,17 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BICS
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BLR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.BRK;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CAS;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CCMP;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CLREX;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CLS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CLZ;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CSEL;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CSINC;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CSNEG;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.DC;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.DMB;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.DSB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.EON;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.EOR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.EXTR;
@@ -55,15 +69,22 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FCVT
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FCVTZS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FDIV;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FMADD;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FMAX;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FMIN;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FMOV;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FMSUB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FMUL;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FNEG;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FRINTM;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FRINTN;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FRINTP;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FRINTZ;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FSQRT;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FSUB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.HINT;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.HLT;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ISB;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDADD;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDAR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDAXR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDP;
@@ -76,6 +97,7 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.MADD
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.MOVK;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.MOVN;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.MOVZ;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.MRS;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.MSUB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ORN;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ORR;
@@ -94,6 +116,9 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.STR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.STXR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.SUB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.SUBS;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.SWP;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.TBNZ;
+import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.TBZ;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.UBFM;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.UDIV;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.InstructionType.FP32;
@@ -102,25 +127,25 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.InstructionType.
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.InstructionType.General64;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.InstructionType.floatFromSize;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.InstructionType.generalFromSize;
-import static jdk.vm.ci.aarch64.AArch64.CPU;
-import static jdk.vm.ci.aarch64.AArch64.SIMD;
-import static jdk.vm.ci.aarch64.AArch64.r0;
-import static jdk.vm.ci.aarch64.AArch64.sp;
-import static jdk.vm.ci.aarch64.AArch64.zr;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 
 import org.graalvm.compiler.asm.Assembler;
-import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode;
+import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.GraalError;
 
+import jdk.vm.ci.aarch64.AArch64;
+import jdk.vm.ci.aarch64.AArch64.CPUFeature;
+import jdk.vm.ci.aarch64.AArch64.Flag;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
 
 public abstract class AArch64Assembler extends Assembler {
 
-    public static class LogicalImmediateTable {
+    public static class LogicalBitmaskImmediateEncoding {
 
         private static final Immediate[] IMMEDIATE_TABLE = buildImmediateTable();
 
@@ -129,67 +154,48 @@ public abstract class AArch64Assembler extends Assembler {
         private static final int ImmediateSizeOffset = 22;
 
         /**
-         * Specifies whether immediate can be represented in all cases (YES), as a 64bit instruction
-         * (SIXTY_FOUR_BIT_ONLY) or not at all (NO).
+         * Tests whether an immediate can be encoded for logical instructions.
+         *
+         * @param is64bit if true immediate part of a 64-bit instruction, false if part of a 32-bit
+         *            instruction.
+         * @return whether the value can be encoded.
          */
-        enum Representable {
-            YES,
-            SIXTY_FOUR_BIT_ONLY,
-            NO
+        protected static boolean canEncode(boolean is64bit, long immediate) {
+            assert is64bit || NumUtil.isUnsignedNbit(32, immediate);
+
+            int pos = getImmediateTablePosition(is64bit, immediate);
+            return pos >= 0;
         }
 
         /**
-         * Tests whether an immediate can be encoded for logical instructions.
-         *
-         * @param is64bit if true immediate is considered a 64-bit pattern. If false we may use a
-         *            64-bit instruction to load the 32-bit pattern into a register.
-         * @return enum specifying whether immediate can be used for 32- and 64-bit logical
-         *         instructions ({@code #Representable.YES}), for 64-bit instructions only (
-         *         {@link Representable#SIXTY_FOUR_BIT_ONLY}) or not at all (
-         *         {@link Representable#NO}).
+         * Returns the immediate bitmask encoding for the requested value. Assumes that an encoding
+         * is available.
          */
-        public static Representable isRepresentable(boolean is64bit, long immediate) {
-            int pos = getLogicalImmTablePos(is64bit, immediate);
-            if (pos < 0) {
-                // if 32bit instruction we can try again as 64bit immediate which may succeed.
-                // i.e. 0xffffffff fails as a 32bit immediate but works as 64bit one.
-                if (!is64bit) {
-                    assert NumUtil.isUnsignedNbit(32, immediate);
-                    pos = getLogicalImmTablePos(true, immediate);
-                    return pos >= 0 ? Representable.SIXTY_FOUR_BIT_ONLY : Representable.NO;
-                }
-                return Representable.NO;
-            }
-            Immediate imm = IMMEDIATE_TABLE[pos];
-            return imm.only64bit() ? Representable.SIXTY_FOUR_BIT_ONLY : Representable.YES;
-        }
+        public static int getEncoding(boolean is64bit, long value) {
+            assert is64bit || NumUtil.isUnsignedNbit(32, value);
 
-        public static Representable isRepresentable(int immediate) {
-            return isRepresentable(false, immediate & 0xFFFF_FFFFL);
-        }
-
-        public static int getLogicalImmEncoding(boolean is64bit, long value) {
-            int pos = getLogicalImmTablePos(is64bit, value);
+            int pos = getImmediateTablePosition(is64bit, value);
             assert pos >= 0 : "Value cannot be represented as logical immediate: " + value + ", is64bit=" + is64bit;
             Immediate imm = IMMEDIATE_TABLE[pos];
-            assert is64bit || !imm.only64bit() : "Immediate can only be represented for 64bit, but 32bit instruction specified";
+            assert is64bit || !imm.only64Bit() : "Immediate can only be represented for 64bit, but 32bit instruction specified";
             return IMMEDIATE_TABLE[pos].encoding;
         }
 
         /**
-         * @param is64bit if true also allow 64-bit only encodings to be returned.
+         * @param is64bit if true immediate part of a 64-bit instruction, false if part of a 32-bit
+         *            instruction.
          * @return If positive the return value is the position into the IMMEDIATE_TABLE for the
          *         given immediate, if negative the immediate cannot be encoded.
          */
-        private static int getLogicalImmTablePos(boolean is64bit, long value) {
+        private static int getImmediateTablePosition(boolean is64bit, long value) {
+            assert is64bit || NumUtil.isUnsignedNbit(32, value);
+
             Immediate imm;
             if (!is64bit) {
-                // 32bit instructions can only have 32bit immediates.
-                if (!NumUtil.isUnsignedNbit(32, value)) {
-                    return -1;
-                }
-                // If we have a 32bit instruction (and therefore immediate) we have to duplicate it
-                // across 64bit to find it in the table.
+                /*
+                 * If we have a 32bit instruction (and therefore immediate) we have to duplicate it
+                 * across 64bit to find it in the table.
+                 */
                 imm = new Immediate(value << 32 | value);
             } else {
                 imm = new Immediate(value);
@@ -198,7 +204,7 @@ public abstract class AArch64Assembler extends Assembler {
             if (pos < 0) {
                 return -1;
             }
-            if (!is64bit && IMMEDIATE_TABLE[pos].only64bit()) {
+            if (!is64bit && IMMEDIATE_TABLE[pos].only64Bit()) {
                 return -1;
             }
             return pos;
@@ -208,19 +214,21 @@ public abstract class AArch64Assembler extends Assembler {
          * To quote 5.4.2: [..] an immediate is a 32 or 64 bit pattern viewed as a vector of
          * identical elements of size e = 2, 4, 8, 16, 32 or (in the case of bimm64) 64 bits. Each
          * element contains the same sub-pattern: a single run of 1 to e-1 non-zero bits, rotated by
-         * 0 to e-1 bits. It is encoded in the following: 10-16: rotation amount (6bit) starting
-         * from 1s in the LSB (i.e. 0111->1011->1101->1110) 16-22: This stores a combination of the
-         * number of set bits and the pattern size. The pattern size is encoded as follows (x is
-         * used to store the number of 1 bits - 1) e pattern 2 1111xx 4 1110xx 8 110xxx 16 10xxxx 32
-         * 0xxxxx 64 xxxxxx 22: if set we have an instruction with 64bit pattern?
+         * 0 to e-1 bits. It is encoded in the following: 21..16: rotation amount (6bit) starting
+         * from 1s in the LSB (i.e. 0111->1011->1101->1110) 22:15..10: This stores a combination of
+         * the number of set bits and the pattern size. The pattern size is encoded as follows (x is
+         * used to store the number of 1 bits - 1) e pattern 2 0_11110x 4 0_1110xx 8 0_110xxx 16
+         * 0_10xxxx 32 0_0xxxxx 64 1_xxxxxx.
          */
         private static final class Immediate implements Comparable<Immediate> {
             public final long imm;
+            public final boolean isOnly64Bit;
             public final int encoding;
 
-            Immediate(long imm, boolean is64, int s, int r) {
+            Immediate(long imm, boolean isOnly64Bit, int s, int r) {
                 this.imm = imm;
-                this.encoding = computeEncoding(is64, s, r);
+                this.isOnly64Bit = isOnly64Bit;
+                this.encoding = computeEncoding(isOnly64Bit, s, r);
             }
 
             // Used to be able to binary search for an immediate in the table.
@@ -231,8 +239,8 @@ public abstract class AArch64Assembler extends Assembler {
             /**
              * Returns true if this pattern is only representable as 64bit.
              */
-            public boolean only64bit() {
-                return (encoding & (1 << ImmediateSizeOffset)) != 0;
+            public boolean only64Bit() {
+                return isOnly64Bit;
             }
 
             private static int computeEncoding(boolean is64, int s, int r) {
@@ -248,17 +256,26 @@ public abstract class AArch64Assembler extends Assembler {
 
         private static Immediate[] buildImmediateTable() {
             final int nrImmediates = 5334;
+            final int[] elementSizeEncodings = {
+                            /* 2 */ 0b111100,
+                            /* 4 */ 0b111000,
+                            /* 8 */ 0b110000,
+                            /* 16 */ 0b100000,
+                            /* 32 */ 0b000000,
+                            /* 64 */ 0b000000,
+            };
             final Immediate[] table = new Immediate[nrImmediates];
             int nrImms = 0;
             for (int logE = 1; logE <= 6; logE++) {
+                /* e specifies the element size. */
                 int e = 1 << logE;
                 long mask = NumUtil.getNbitNumberLong(e);
                 for (int nrOnes = 1; nrOnes < e; nrOnes++) {
                     long val = (1L << nrOnes) - 1;
-                    // r specifies how much we rotate the value
+                    /* r specifies how much we rotate the value. */
                     for (int r = 0; r < e; r++) {
                         long immediate = (val >>> r | val << (e - r)) & mask;
-                        // Duplicate pattern to fill whole 64bit range.
+                        /* Duplicate pattern to fill whole 64bit range. */
                         switch (logE) {
                             case 1:
                                 immediate |= immediate << 2;
@@ -285,12 +302,12 @@ public abstract class AArch64Assembler extends Assembler {
                             case 5:
                                 immediate |= immediate << 32;
                                 break;
+                            case 6:
+                                /* No duplication needed (element size is 64bits). */
+                                break;
                         }
-                        // 5 - logE can underflow to -1, but we shift this bogus result
-                        // out of the masked area.
-                        int sizeEncoding = (1 << (5 - logE)) - 1;
-                        int s = ((sizeEncoding << (logE + 1)) & 0x3f) | (nrOnes - 1);
-                        table[nrImms++] = new Immediate(immediate, /* is64bit */e == 64, s, r);
+                        int s = elementSizeEncodings[logE - 1] | (nrOnes - 1);
+                        table[nrImms++] = new Immediate(immediate, /* isOnly64Bit */e == 64, s, r);
                     }
                 }
             }
@@ -319,15 +336,15 @@ public abstract class AArch64Assembler extends Assembler {
     private static final int Rt2Offset = 10;
 
     /* Helper functions */
-    private static int rd(Register reg) {
+    static int rd(Register reg) {
         return reg.encoding << RdOffset;
     }
 
-    private static int rs1(Register reg) {
+    static int rs1(Register reg) {
         return reg.encoding << Rs1Offset;
     }
 
-    private static int rs2(Register reg) {
+    static int rs2(Register reg) {
         return reg.encoding << Rs2Offset;
     }
 
@@ -343,19 +360,14 @@ public abstract class AArch64Assembler extends Assembler {
         return reg.encoding << Rt2Offset;
     }
 
-    private static int rn(Register reg) {
+    static int rn(Register reg) {
         return reg.encoding << RnOffset;
-    }
-
-    private static int maskField(int sizeInBits, int n) {
-        assert NumUtil.isSignedNbit(sizeInBits, n);
-        return n & NumUtil.getNbitNumberInt(sizeInBits);
     }
 
     /**
      * Enumeration of all different instruction kinds: General32/64 are the general instructions
      * (integer, branch, etc.), for 32-, respectively 64-bit operands. FP32/64 is the encoding for
-     * the 32/64bit float operations
+     * the 32/64bit float operations.
      */
     protected enum InstructionType {
         General32(0b00 << 30, 32, true),
@@ -382,7 +394,6 @@ public abstract class AArch64Assembler extends Assembler {
             assert size == 32 || size == 64;
             return size == 32 ? FP32 : FP64;
         }
-
     }
 
     private static final int ImmediateOffset = 10;
@@ -408,6 +419,7 @@ public abstract class AArch64Assembler extends Assembler {
     private static final int AddSubExtendedOp = 0x0B200000;
 
     private static final int MulOp = 0x1B000000;
+    private static final int SignedMulLongOp = 0x9B200000;
     private static final int DataProcessing1SourceOp = 0x5AC00000;
     private static final int DataProcessing2SourceOp = 0x1AC00000;
 
@@ -420,6 +432,7 @@ public abstract class AArch64Assembler extends Assembler {
     private static final int FpImmOffset = 13;
 
     private static final int FpCmpOp = 0x1E202000;
+    private static final int FpCmpeOp = 0x1E202010;
 
     private static final int PcRelImmHiOffset = 5;
     private static final int PcRelImmLoOffset = 29;
@@ -435,27 +448,26 @@ public abstract class AArch64Assembler extends Assembler {
     private static final int ConditionalSelectOp = 0x1A800000;
     private static final int ConditionalConditionOffset = 12;
 
-    private static final int LoadStoreScaledOp = 0b111_0_01_00 << 22;
-    private static final int LoadStoreUnscaledOp = 0b111_0_00_00 << 22;
-
-    private static final int LoadStoreRegisterOp = 0b111_0_00_00_1 << 21 | 0b10 << 10;
-
+    private static final int LoadStoreScaledOp = 0b111_0_01_0_0_0 << 21;
+    private static final int LoadStoreUnscaledOp = 0b111_0_00_0_0_0 << 21;
+    private static final int LoadStorePostIndexedOp = LoadStoreUnscaledOp | 0b01 << 10;
+    private static final int LoadStorePreIndexedOp = LoadStoreUnscaledOp | 0b11 << 10;
+    private static final int LoadStoreRegisterOp = 0b111_0_00_0_0_1 << 21 | 0b10 << 10;
     private static final int LoadLiteralOp = 0x18000000;
-
-    private static final int LoadStorePostIndexedOp = 0b111_0_00_00_0 << 21 | 0b01 << 10;
-    private static final int LoadStorePreIndexedOp = 0b111_0_00_00_0 << 21 | 0b11 << 10;
 
     private static final int LoadStoreUnscaledImmOffset = 12;
     private static final int LoadStoreScaledImmOffset = 10;
     private static final int LoadStoreScaledRegOffset = 12;
     private static final int LoadStoreIndexedImmOffset = 12;
     private static final int LoadStoreTransferSizeOffset = 30;
+    private static final int LoadStoreQuadWordTransferSizeOffset = 23;
     private static final int LoadStoreFpFlagOffset = 26;
-    private static final int LoadLiteralImmeOffset = 5;
+    private static final int LoadLiteralImmOffset = 5;
+    private static final int LoadFlag = 0b1 << 22;
 
-    private static final int LoadStorePairOp = 0b101_0 << 26;
-    @SuppressWarnings("unused") private static final int LoadStorePairPostIndexOp = 0b101_0_001 << 23;
-    @SuppressWarnings("unused") private static final int LoadStorePairPreIndexOp = 0b101_0_011 << 23;
+    private static final int LoadStorePairSignedOffsetOp = 0b101_0_010 << 23;
+    private static final int LoadStorePairPostIndexOp = 0b101_0_001 << 23;
+    private static final int LoadStorePairPreIndexOp = 0b101_0_011 << 23;
     private static final int LoadStorePairImm7Offset = 15;
 
     private static final int LogicalShiftOp = 0x0A000000;
@@ -468,13 +480,21 @@ public abstract class AArch64Assembler extends Assembler {
     private static final int BarrierOp = 0xD503301F;
     private static final int BarrierKindOffset = 8;
 
+    private static final int CASAcquireOffset = 22;
+    private static final int CASReleaseOffset = 15;
+
+    private static final int LDADDAcquireOffset = 23;
+    private static final int LDADDReleaseOffset = 22;
+
     /**
-     * Encoding for all instructions.
+     * Encoding for all base and floating-point instructions.
      */
     public enum Instruction {
         BCOND(0x54000000),
         CBNZ(0x01000000),
         CBZ(0x00000000),
+        TBZ(0x36000000),
+        TBNZ(0x37000000),
 
         B(0x00000000),
         BL(0x80000000),
@@ -482,19 +502,32 @@ public abstract class AArch64Assembler extends Assembler {
         BLR(0x003F0000),
         RET(0x005F0000),
 
+        /*
+         * This instruction does not automatically set the LoadFlag, since it is not set in the
+         * PC-literal addressing mode. Note that this instruction is also used for prefetching
+         * instructions (see prfm(AArch64Address, PrefetchMode) for more info).
+         */
         LDR(0x00000000),
+        /*
+         * This instruction does not set the LoadFlag, as this bit is instead part of the target
+         * size.
+         */
         LDRS(0x00800000),
-        LDXR(0x081f7c00),
-        LDAR(0x8dffc00),
-        LDAXR(0x85ffc00),
+        LDXR(0x08000000 | LoadFlag | 0x1F << Rs2Offset | 0x1F << Rt2Offset),
+        LDAR(0x08808000 | LoadFlag | 0x1F << Rs2Offset | 0x1F << Rt2Offset),
+        LDAXR(0x08008000 | LoadFlag | 0x1F << Rs2Offset | 0x1F << Rt2Offset),
 
         STR(0x00000000),
-        STXR(0x08007c00),
-        STLR(0x089ffc00),
-        STLXR(0x0800fc00),
+        STXR(0x08000000 | 0x1F << Rt2Offset),
+        STLR(0x08808000 | 0x1F << Rs2Offset | 0x1F << Rt2Offset),
+        STLXR(0x08008000 | 0x1F << Rt2Offset),
 
-        LDP(0b1 << 22),
-        STP(0b0 << 22),
+        LDP(LoadFlag),
+        STP(0x00000000),
+
+        CAS(0x08A07C00),
+        LDADD(0x38200000),
+        SWP(0x38208000),
 
         ADR(0x00000000),
         ADRP(0x80000000),
@@ -503,6 +536,8 @@ public abstract class AArch64Assembler extends Assembler {
         ADDS(ADD.encoding | AddSubSetFlag),
         SUB(0x40000000),
         SUBS(SUB.encoding | AddSubSetFlag),
+
+        CCMP(0x7A400000),
 
         NOT(0x00200000),
         AND(0x00000000),
@@ -557,6 +592,9 @@ public abstract class AArch64Assembler extends Assembler {
         FSQRT(0x00018000),
         FNEG(0x00010000),
 
+        FRINTM(0x00050000),
+        FRINTN(0x00040000),
+        FRINTP(0x00048000),
         FRINTZ(0x00058000),
 
         FADD(0x00002000),
@@ -574,20 +612,20 @@ public abstract class AArch64Assembler extends Assembler {
         FCCMP(0x1E200400),
         FCSEL(0x1E200C00),
 
-        INS(0x4e081c00),
-        UMOV(0x4e083c00),
-
-        CNT(0xe205800),
-        USRA(0x6f001400),
-
         HLT(0x00400000),
         BRK(0x00200000),
 
-        CLREX(0xd5033f5f),
+        CLREX(0xD5033F5F),
         HINT(0xD503201F),
         DMB(0x000000A0),
+        DSB(0x00000080),
 
-        BLR_NATIVE(0xc0000000);
+        MRS(0xD5300000),
+        MSR(0xD5100000),
+        DC(0xD5087000),
+        ISB(0x000000C0),
+
+        BLR_NATIVE(0xC0000000);
 
         public final int encoding;
 
@@ -595,6 +633,50 @@ public abstract class AArch64Assembler extends Assembler {
             this.encoding = encoding;
         }
 
+    }
+
+    public enum SystemRegister {
+        FPCR(0b11, 0b011, 0b0100, 0b0100, 0b000),
+        FPSR(0b11, 0b011, 0b0100, 0b0100, 0b001),
+        /* Counter-timer Virtual Count register */
+        CNTVCT_EL0(0b11, 0b011, 0b110, 0b0000, 0b010);
+
+        SystemRegister(int op0, int op1, int crn, int crm, int op2) {
+            this.op0 = op0;
+            this.op1 = op1;
+            this.crn = crn;
+            this.crm = crm;
+            this.op2 = op2;
+        }
+
+        public int encoding() {
+            return op0 << 19 | op1 << 16 | crn << 12 | crm << 8 | op2 << 5;
+        }
+
+        private final int op0;
+        private final int op1;
+        private final int crn;
+        private final int crm;
+        private final int op2;
+    }
+
+    public enum DataCacheOperationType {
+        ZVA(0b011, 0b0100, 0b001),
+        CVAP(0b011, 0b1100, 0b001);
+
+        DataCacheOperationType(int op1, int crm, int op2) {
+            this.op1 = op1;
+            this.crm = crm;
+            this.op2 = op2;
+        }
+
+        public int encoding() {
+            return op1 << 16 | crm << 8 | op2 << 5;
+        }
+
+        private final int op1;
+        private final int crm;
+        private final int op2;
     }
 
     public enum ShiftType {
@@ -628,7 +710,7 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
-     * Condition Flags for branches. See 4.3
+     * Condition Flags for branches. See C1.2.4
      */
     public enum ConditionFlag {
         // Integer | Floating-point meanings
@@ -735,6 +817,14 @@ public abstract class AArch64Assembler extends Assembler {
         super(target);
     }
 
+    public boolean supports(CPUFeature feature) {
+        return ((AArch64) target.arch).getFeatures().contains(feature);
+    }
+
+    public boolean isFlagSet(Flag flag) {
+        return ((AArch64) target.arch).getFlags().contains(flag);
+    }
+
     /* Conditional Branch (5.2.1) */
 
     /**
@@ -808,6 +898,82 @@ public abstract class AArch64Assembler extends Assembler {
         conditionalBranchInstruction(reg, imm21, generalFromSize(size), Instruction.CBZ, pos);
     }
 
+    /**
+     * Test a single bit and branch if the bit is nonzero.
+     *
+     * @param reg general purpose register. May not be null, zero-register or stackpointer.
+     * @param uimm6 Unsigned 6-bit bit index.
+     * @param imm16 signed 16 bit offset
+     */
+    protected void tbnz(Register reg, int uimm6, int imm16) {
+        tbnz(reg, uimm6, imm16, -1);
+    }
+
+    /**
+     * Test a single bit and branch if the bit is zero.
+     *
+     * @param reg general purpose register. May not be null, zero-register or stackpointer.
+     * @param uimm6 Unsigned 6-bit bit index.
+     * @param imm16 signed 16 bit offset
+     */
+    protected void tbz(Register reg, int uimm6, int imm16) {
+        tbz(reg, uimm6, imm16, -1);
+    }
+
+    /**
+     * Test a single bit and branch if the bit is nonzero.
+     *
+     * @param reg general purpose register. May not be null, zero-register or stackpointer.
+     * @param uimm6 Unsigned 6-bit bit index.
+     * @param imm16 signed 16 bit offset
+     * @param pos Position at which instruction is inserted into buffer. -1 means insert at end.
+     */
+    protected void tbnz(Register reg, int uimm6, int imm16, int pos) {
+        assert reg.getRegisterCategory().equals(CPU);
+        assert NumUtil.isUnsignedNbit(6, uimm6);
+        assert NumUtil.isSignedNbit(16, imm16) : String.format("Offset value must fit in 16 bits signed: 0x%x", imm16);
+        assert (imm16 & 3) == 0 : String.format("Lower two bits must be zero: 0x%x", imm16 & 3);
+        // size bit is overloaded as top bit of uimm6 bit index
+        int size = (((uimm6 >> 5) & 1) == 0 ? 32 : 64);
+        // remaining 5 bits are encoded lower down
+        int uimm5 = uimm6 & 0x1F;
+        int imm14 = (imm16 & NumUtil.getNbitNumberInt(16)) >> 2;
+        InstructionType type = generalFromSize(size);
+        int encoding = type.encoding | TBNZ.encoding | (uimm5 << 19) | (imm14 << 5) | rd(reg);
+        if (pos == -1) {
+            emitInt(encoding);
+        } else {
+            emitInt(encoding, pos);
+        }
+    }
+
+    /**
+     * Test a single bit and branch if the bit is zero.
+     *
+     * @param reg general purpose register. May not be null, zero-register or stackpointer.
+     * @param uimm6 Unsigned 6-bit bit index.
+     * @param imm16 signed 16 bit offset
+     * @param pos Position at which instruction is inserted into buffer. -1 means insert at end.
+     */
+    protected void tbz(Register reg, int uimm6, int imm16, int pos) {
+        assert reg.getRegisterCategory().equals(CPU);
+        assert NumUtil.isUnsignedNbit(6, uimm6);
+        assert NumUtil.isSignedNbit(16, imm16) : String.format("Offset value must fit in 16 bits signed: 0x%x", imm16);
+        assert (imm16 & 3) == 0 : String.format("Lower two bits must be zero: 0x%x", imm16 & 3);
+        // size bit is overloaded as top bit of uimm6 bit index
+        int size = (((uimm6 >> 5) & 1) == 0 ? 32 : 64);
+        // remaining 5 bits are encoded lower down
+        int uimm5 = uimm6 & 0x1F;
+        int imm14 = (imm16 & NumUtil.getNbitNumberInt(16)) >> 2;
+        InstructionType type = generalFromSize(size);
+        int encoding = type.encoding | TBZ.encoding | (uimm5 << 19) | (imm14 << 5) | rd(reg);
+        if (pos == -1) {
+            emitInt(encoding);
+        } else {
+            emitInt(encoding, pos);
+        }
+    }
+
     private void conditionalBranchInstruction(Register reg, int imm21, InstructionType type, Instruction instr, int pos) {
         assert reg.getRegisterCategory().equals(CPU);
         int instrEncoding = instr.encoding | CompareBranchOp;
@@ -819,7 +985,7 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     private static int getConditionalBranchImm(int imm21) {
-        assert NumUtil.isSignedNbit(21, imm21) && (imm21 & 0x3) == 0 : "Immediate has to be 21bit signed number and word aligned";
+        assert NumUtil.isSignedNbit(21, imm21) && (imm21 & 0x3) == 0 : String.format("Immediate has to be 21bit signed number and word aligned got value 0x%x", imm21);
         int imm = (imm21 & NumUtil.getNbitNumberInt(21)) >> 2;
         return imm << ConditionalBranchImmOffset;
     }
@@ -848,6 +1014,13 @@ public abstract class AArch64Assembler extends Assembler {
      * @param imm28 Signed 28-bit offset, has to be word aligned.
      */
     public void bl(int imm28) {
+        /*
+         * Currently within Graal all bl instructions will be patched later.
+         *
+         * Hence, for now imm28 should always be 0. If at a later time the imm28 can be a meaningful
+         * value, then this assert can be reevaluated.
+         */
+        assert imm28 == 0;
         unconditionalBranchImmInstruction(imm28, Instruction.BL, -1);
     }
 
@@ -856,8 +1029,10 @@ public abstract class AArch64Assembler extends Assembler {
         int imm = (imm28 & NumUtil.getNbitNumberInt(28)) >> 2;
         int instrEncoding = instr.encoding | UnconditionalBranchImmOp;
         if (pos == -1) {
+            annotatePatchingImmediate(position(), instr, 26, 0, 2);
             emitInt(instrEncoding | imm);
         } else {
+            annotatePatchingImmediate(pos, instr, 26, 0, 2);
             emitInt(instrEncoding | imm, pos);
         }
     }
@@ -896,6 +1071,26 @@ public abstract class AArch64Assembler extends Assembler {
         assert !reg.equals(zr);
         assert !reg.equals(sp);
         emitInt(instr.encoding | UnconditionalBranchRegOp | rs1(reg));
+
+    }
+
+    /**
+     * Returns the log2 size of the number of bytes expected to be transferred.
+     */
+    protected static int getLog2TransferSize(int bitMemoryTransferSize) {
+        switch (bitMemoryTransferSize) {
+            case 8:
+                return 0;
+            case 16:
+                return 1;
+            case 32:
+                return 2;
+            case 64:
+                return 3;
+            case 128:
+                return 4;
+        }
+        throw GraalError.shouldNotReachHere("Unexpected transfer size.");
     }
 
     /* Load-Store Single Register (5.3.1) */
@@ -910,8 +1105,10 @@ public abstract class AArch64Assembler extends Assembler {
     public void ldr(int srcSize, Register rt, AArch64Address address) {
         assert rt.getRegisterCategory().equals(CPU);
         assert srcSize == 8 || srcSize == 16 || srcSize == 32 || srcSize == 64;
-        int transferSize = NumUtil.log2Ceil(srcSize / 8);
-        loadStoreInstruction(LDR, rt, address, General32, transferSize);
+
+        /* When using an immediate or register based addressing mode, then the load flag is set. */
+        int loadFlag = address.getAddressingMode() == AddressingMode.PC_LITERAL ? 0 : LoadFlag;
+        loadStoreInstruction(LDR, rt, address, false, getLog2TransferSize(srcSize), loadFlag);
     }
 
     /**
@@ -925,9 +1122,116 @@ public abstract class AArch64Assembler extends Assembler {
      */
     protected void ldrs(int targetSize, int srcSize, Register rt, AArch64Address address) {
         assert rt.getRegisterCategory().equals(CPU);
-        assert (srcSize == 8 || srcSize == 16 || srcSize == 32) && srcSize != targetSize;
-        int transferSize = NumUtil.log2Ceil(srcSize / 8);
-        loadStoreInstruction(LDRS, rt, address, generalFromSize(targetSize), transferSize);
+        assert srcSize == 8 || srcSize == 16 || srcSize == 32;
+        assert targetSize == 32 || targetSize == 64;
+        assert srcSize != targetSize;
+
+        /* A flag is used to differentiate whether the value should be extended to 32 or 64 bits. */
+        int target32BitFlag = targetSize == 32 ? 1 << 22 : 0;
+        loadStoreInstruction(LDRS, rt, address, false, getLog2TransferSize(srcSize), target32BitFlag);
+    }
+
+    public enum PrefetchMode {
+        PLDL1KEEP(0b00000),
+        PLDL1STRM(0b00001),
+        PLDL2KEEP(0b00010),
+        PLDL2STRM(0b00011),
+        PLDL3KEEP(0b00100),
+        PLDL3STRM(0b00101),
+
+        PLIL1KEEP(0b01000),
+        PLIL1STRM(0b01001),
+        PLIL2KEEP(0b01010),
+        PLIL2STRM(0b01011),
+        PLIL3KEEP(0b01100),
+        PLIL3STRM(0b01101),
+
+        PSTL1KEEP(0b10000),
+        PSTL1STRM(0b10001),
+        PSTL2KEEP(0b10010),
+        PSTL2STRM(0b10011),
+        PSTL3KEEP(0b10100),
+        PSTL3STRM(0b10101);
+
+        private final int encoding;
+
+        PrefetchMode(int encoding) {
+            this.encoding = encoding;
+        }
+
+        private static PrefetchMode[] modes = {
+                        PLDL1KEEP,
+                        PLDL1STRM,
+                        PLDL2KEEP,
+                        PLDL2STRM,
+                        PLDL3KEEP,
+                        PLDL3STRM,
+
+                        null,
+                        null,
+
+                        PLIL1KEEP,
+                        PLIL1STRM,
+                        PLIL2KEEP,
+                        PLIL2STRM,
+                        PLIL3KEEP,
+                        PLIL3STRM,
+
+                        null,
+                        null,
+
+                        PSTL1KEEP,
+                        PSTL1STRM,
+                        PSTL2KEEP,
+                        PSTL2STRM,
+                        PSTL3KEEP,
+                        PSTL3STRM
+        };
+
+        public static PrefetchMode lookup(int enc) {
+            assert enc >= 00 && enc < modes.length;
+            return modes[enc];
+        }
+
+        public Register toRegister() {
+            return cpuRegisters.get(encoding);
+        }
+    }
+
+    /**
+     * Implements a prefetch at a 64-bit aligned address.
+     */
+    public void prfm(AArch64Address address, PrefetchMode mode) {
+        assert mode != null;
+
+        /*
+         * Prefetch instructions are encoded the same as LDR, except:
+         *
+         * 1) They do not have the load flag set [22]
+         *
+         * 2) They have an addressing mode variant flag set (either [31] or [23]).
+         */
+        int prfmFlag;
+        switch (address.getAddressingMode()) {
+            case IMMEDIATE_UNSIGNED_SCALED:
+            case IMMEDIATE_SIGNED_UNSCALED:
+            case BASE_REGISTER_ONLY:
+            case REGISTER_OFFSET:
+            case EXTENDED_REGISTER_OFFSET:
+                prfmFlag = 1 << 23;
+                break;
+            case PC_LITERAL:
+                prfmFlag = 1 << 31;
+                break;
+            default:
+                /* Invalid addressing mode provided. */
+                throw GraalError.shouldNotReachHere();
+        }
+
+        /* The prefetch mode is encoded within rt. */
+        final Register rt = mode.toRegister();
+
+        loadStoreInstruction(LDR, rt, address, false, getLog2TransferSize(64), prfmFlag);
     }
 
     /**
@@ -938,48 +1242,71 @@ public abstract class AArch64Assembler extends Assembler {
      * @param address all addressing modes allowed. May not be null.
      */
     public void str(int destSize, Register rt, AArch64Address address) {
-        assert rt.getRegisterCategory().equals(CPU);
+        assert rt.getRegisterCategory().equals(CPU) : rt;
         assert destSize == 8 || destSize == 16 || destSize == 32 || destSize == 64;
-        int transferSize = NumUtil.log2Ceil(destSize / 8);
-        loadStoreInstruction(STR, rt, address, General64, transferSize);
+        loadStoreInstruction(STR, rt, address, false, getLog2TransferSize(destSize));
     }
 
-    private void loadStoreInstruction(Instruction instr, Register reg, AArch64Address address, InstructionType type, int log2TransferSize) {
-        assert log2TransferSize >= 0 && log2TransferSize < 4;
-        int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
-        int is32Bit = type.width == 32 ? 1 << ImmediateSizeOffset : 0;
-        int isFloat = !type.isGeneral ? 1 << LoadStoreFpFlagOffset : 0;
-        int memop = instr.encoding | transferSizeEncoding | is32Bit | isFloat | rt(reg);
+    private void loadStoreInstruction(Instruction instr, Register reg, AArch64Address address, boolean isFP, int log2TransferSize) {
+        loadStoreInstruction(instr, reg, address, isFP, log2TransferSize, 0);
+    }
+
+    private void loadStoreInstruction(Instruction instr, Register reg, AArch64Address address, boolean isFP, int log2TransferSize, int extraEncoding) {
+        assert log2TransferSize >= 0 && log2TransferSize < (isFP ? 5 : 4);
+        assert address.getBitMemoryTransferSize() == AArch64Address.ANY_SIZE || getLog2TransferSize(address.getBitMemoryTransferSize()) == log2TransferSize;
+
+        int transferSizeEncoding;
+        if (address.getAddressingMode() == AddressingMode.PC_LITERAL) {
+            assert log2TransferSize >= 2 : "PC literal loads only works for load/stores of 32-bit and larger";
+            transferSizeEncoding = (log2TransferSize - 2) << LoadStoreTransferSizeOffset;
+        } else {
+            transferSizeEncoding = ((log2TransferSize & 0x3) << LoadStoreTransferSizeOffset) | ((log2TransferSize >> 2) << LoadStoreQuadWordTransferSizeOffset);
+        }
+
+        int floatFlag = isFP ? 1 << LoadStoreFpFlagOffset : 0;
+        int memOp = extraEncoding | transferSizeEncoding | instr.encoding | floatFlag | rt(reg);
         switch (address.getAddressingMode()) {
-            case IMMEDIATE_SCALED:
-                emitInt(memop | LoadStoreScaledOp | address.getImmediate() << LoadStoreScaledImmOffset | rs1(address.getBase()));
+            case IMMEDIATE_UNSIGNED_SCALED:
+                annotatePatchingImmediate(position(), instr, 12, LoadStoreScaledImmOffset, log2TransferSize);
+                emitInt(memOp | LoadStoreScaledOp | address.getImmediate() << LoadStoreScaledImmOffset | rs1(address.getBase()));
                 break;
-            case IMMEDIATE_UNSCALED:
-                emitInt(memop | LoadStoreUnscaledOp | address.getImmediate() << LoadStoreUnscaledImmOffset | rs1(address.getBase()));
+            case IMMEDIATE_SIGNED_UNSCALED:
+                annotatePatchingImmediate(position(), instr, 9, LoadStoreUnscaledImmOffset, 0);
+                emitInt(memOp | LoadStoreUnscaledOp | address.getImmediate() << LoadStoreUnscaledImmOffset | rs1(address.getBase()));
                 break;
             case BASE_REGISTER_ONLY:
-                emitInt(memop | LoadStoreScaledOp | rs1(address.getBase()));
+                /* Note that this is the same as IMMEDIATE_UNSIGNED_SCALED with no immediate. */
+                emitInt(memOp | LoadStoreScaledOp | rs1(address.getBase()));
                 break;
             case EXTENDED_REGISTER_OFFSET:
             case REGISTER_OFFSET:
                 ExtendType extendType = address.getAddressingMode() == AddressingMode.EXTENDED_REGISTER_OFFSET ? address.getExtendType() : ExtendType.UXTX;
-                boolean shouldScale = address.isScaled() && log2TransferSize != 0;
-                emitInt(memop | LoadStoreRegisterOp | rs2(address.getOffset()) | extendType.encoding << ExtendTypeOffset | (shouldScale ? 1 : 0) << LoadStoreScaledRegOffset | rs1(address.getBase()));
+                int shouldScaleFlag = (address.isRegisterOffsetScaled() ? 1 : 0) << LoadStoreScaledRegOffset;
+                emitInt(memOp | LoadStoreRegisterOp | rs2(address.getOffset()) | extendType.encoding << ExtendTypeOffset | shouldScaleFlag | rs1(address.getBase()));
                 break;
             case PC_LITERAL:
-                assert log2TransferSize >= 2 : "PC literal loads only works for load/stores of 32-bit and larger";
-                transferSizeEncoding = (log2TransferSize - 2) << LoadStoreTransferSizeOffset;
-                emitInt(transferSizeEncoding | isFloat | LoadLiteralOp | rd(reg) | address.getImmediate() << LoadLiteralImmeOffset);
+                annotatePatchingImmediate(position(), instr, 21, LoadLiteralImmOffset, 2);
+                emitInt(transferSizeEncoding | floatFlag | LoadLiteralOp | rd(reg) | address.getImmediate() << LoadLiteralImmOffset);
                 break;
             case IMMEDIATE_POST_INDEXED:
-                emitInt(memop | LoadStorePostIndexedOp | rs1(address.getBase()) | address.getImmediate() << LoadStoreIndexedImmOffset);
+                annotatePatchingImmediate(position(), instr, 9, LoadStoreIndexedImmOffset, 0);
+                emitInt(memOp | LoadStorePostIndexedOp | rs1(address.getBase()) | address.getImmediate() << LoadStoreIndexedImmOffset);
                 break;
             case IMMEDIATE_PRE_INDEXED:
-                emitInt(memop | LoadStorePreIndexedOp | rs1(address.getBase()) | address.getImmediate() << LoadStoreIndexedImmOffset);
+                annotatePatchingImmediate(position(), instr, 9, LoadStoreIndexedImmOffset, 0);
+                emitInt(memOp | LoadStorePreIndexedOp | rs1(address.getBase()) | address.getImmediate() << LoadStoreIndexedImmOffset);
                 break;
             default:
                 throw GraalError.shouldNotReachHere("Unhandled addressing mode: " + address.getAddressingMode());
         }
+    }
+
+    /**
+     * Insert ldp/stp at the specified position.
+     */
+    protected void insertLdpStp(int position, int size, Instruction instr, boolean isFP, Register rt, Register rt2, AArch64Address address) {
+        int instructionEncoding = generateLoadStorePairInstructionEncoding(instr, rt, rt2, address, isFP, getLog2TransferSize(size));
+        emitInt(instructionEncoding, position);
     }
 
     /**
@@ -989,7 +1316,7 @@ public abstract class AArch64Assembler extends Assembler {
      */
     public void ldp(int size, Register rt, Register rt2, AArch64Address address) {
         assert size == 32 || size == 64;
-        loadStorePairInstruction(LDP, rt, rt2, address, generalFromSize(size));
+        loadStorePairInstruction(LDP, rt, rt2, address, false, getLog2TransferSize(size));
     }
 
     /**
@@ -999,26 +1326,33 @@ public abstract class AArch64Assembler extends Assembler {
      */
     public void stp(int size, Register rt, Register rt2, AArch64Address address) {
         assert size == 32 || size == 64;
-        loadStorePairInstruction(STP, rt, rt2, address, generalFromSize(size));
+        loadStorePairInstruction(STP, rt, rt2, address, false, getLog2TransferSize(size));
     }
 
-    private void loadStorePairInstruction(Instruction instr, Register rt, Register rt2, AArch64Address address, InstructionType type) {
-        int scaledOffset = maskField(7, address.getImmediateRaw());  // LDP/STP use a 7-bit scaled
-                                                                     // offset
-        int memop = type.encoding | instr.encoding | scaledOffset << LoadStorePairImm7Offset | rt2(rt2) | rn(address.getBase()) | rt(rt);
+    private static int generateLoadStorePairInstructionEncoding(Instruction instr, Register rt, Register rt2, AArch64Address address, boolean isFP, int log2TransferSize) {
+        assert log2TransferSize >= 2 && log2TransferSize < (isFP ? 5 : 4);
+        assert getLog2TransferSize(address.getBitMemoryTransferSize()) == log2TransferSize;
+
+        int transferSizeEncoding = (log2TransferSize - 2) << (isFP ? 30 : 31);
+        int floatFlag = isFP ? 1 << LoadStoreFpFlagOffset : 0;
+        // LDP/STP uses a 7-bit scaled offset
+        int offset = address.getImmediate();
+        int memOp = transferSizeEncoding | instr.encoding | floatFlag | offset << LoadStorePairImm7Offset | rt2(rt2) | rn(address.getBase()) | rt(rt);
         switch (address.getAddressingMode()) {
-            case IMMEDIATE_SCALED:
-                emitInt(memop | LoadStorePairOp | (0b010 << 23));
-                break;
-            case IMMEDIATE_POST_INDEXED:
-                emitInt(memop | LoadStorePairOp | (0b001 << 23));
-                break;
-            case IMMEDIATE_PRE_INDEXED:
-                emitInt(memop | LoadStorePairOp | (0b011 << 23));
-                break;
+            case IMMEDIATE_PAIR_SIGNED_SCALED:
+                return (memOp | LoadStorePairSignedOffsetOp);
+            case IMMEDIATE_PAIR_POST_INDEXED:
+                return (memOp | LoadStorePairPostIndexOp);
+            case IMMEDIATE_PAIR_PRE_INDEXED:
+                return (memOp | LoadStorePairPreIndexOp);
             default:
                 throw GraalError.shouldNotReachHere("Unhandled addressing mode: " + address.getAddressingMode());
         }
+    }
+
+    private void loadStorePairInstruction(Instruction instr, Register rt, Register rt2, AArch64Address address, boolean isFP, int log2TransferSize) {
+        int instructionEncoding = generateLoadStorePairInstructionEncoding(instr, rt, rt2, address, isFP, log2TransferSize);
+        emitInt(instructionEncoding);
     }
 
     /* Load-Store Exclusive (5.3.6) */
@@ -1032,8 +1366,7 @@ public abstract class AArch64Assembler extends Assembler {
      */
     protected void ldxr(int size, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveLoadInstruction(LDXR, rt, rn, transferSize);
+        exclusiveLoadInstruction(LDXR, rt, rn, getLog2TransferSize(size));
     }
 
     /**
@@ -1048,8 +1381,7 @@ public abstract class AArch64Assembler extends Assembler {
      */
     protected void stxr(int size, Register rs, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveStoreInstruction(STXR, rs, rt, rn, transferSize);
+        exclusiveStoreInstruction(STXR, rs, rt, rn, getLog2TransferSize(size));
     }
 
     /* Load-Acquire/Store-Release (5.3.7) */
@@ -1062,10 +1394,9 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rt general purpose register. May not be null or stackpointer.
      * @param rn general purpose register.
      */
-    protected void ldar(int size, Register rt, Register rn) {
+    public void ldar(int size, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveLoadInstruction(LDAR, rt, rn, transferSize);
+        exclusiveLoadInstruction(LDAR, rt, rn, getLog2TransferSize(size));
     }
 
     /**
@@ -1075,11 +1406,10 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rt general purpose register. May not be null or stackpointer.
      * @param rn general purpose register.
      */
-    protected void stlr(int size, Register rt, Register rn) {
+    public void stlr(int size, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
         // Hack: Passing the zero-register means it is ignored when building the encoding.
-        exclusiveStoreInstruction(STLR, r0, rt, rn, transferSize);
+        exclusiveStoreInstruction(STLR, r0, rt, rn, getLog2TransferSize(size));
     }
 
     /* exclusive access */
@@ -1090,10 +1420,9 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rt general purpose register. May not be null or stackpointer.
      * @param rn general purpose register.
      */
-    public void ldaxr(int size, Register rt, Register rn) {
+    protected void ldaxr(int size, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveLoadInstruction(LDAXR, rt, rn, transferSize);
+        exclusiveLoadInstruction(LDAXR, rt, rn, getLog2TransferSize(size));
     }
 
     /**
@@ -1106,17 +1435,23 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rt general purpose register. May not be null or stackpointer.
      * @param rn general purpose register.
      */
-    public void stlxr(int size, Register rs, Register rt, Register rn) {
+    protected void stlxr(int size, Register rs, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        exclusiveStoreInstruction(STLXR, rs, rt, rn, transferSize);
+        exclusiveStoreInstruction(STLXR, rs, rt, rn, getLog2TransferSize(size));
     }
 
-    private void exclusiveLoadInstruction(Instruction instr, Register reg, Register rn, int log2TransferSize) {
+    /**
+     * Loads data into rt from address and registers address as an exclusive access.
+     *
+     * @param rt general purpose register. May not be null
+     * @param rn general purpose register containing the address specifying where rt is loaded from.
+     * @param log2TransferSize log2Ceil of memory transfer size.
+     */
+    private void exclusiveLoadInstruction(Instruction instr, Register rt, Register rn, int log2TransferSize) {
         assert log2TransferSize >= 0 && log2TransferSize < 4;
-        assert reg.getRegisterCategory().equals(CPU);
+        assert rt.getRegisterCategory().equals(CPU) && rn.getRegisterCategory().equals(CPU);
         int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
-        emitInt(transferSizeEncoding | instr.encoding | 1 << ImmediateSizeOffset | rn(rn) | rt(reg));
+        emitInt(transferSizeEncoding | instr.encoding | rn(rn) | rt(rt));
     }
 
     /**
@@ -1131,25 +1466,94 @@ public abstract class AArch64Assembler extends Assembler {
      */
     private void exclusiveStoreInstruction(Instruction instr, Register rs, Register rt, Register rn, int log2TransferSize) {
         assert log2TransferSize >= 0 && log2TransferSize < 4;
-        assert rt.getRegisterCategory().equals(CPU) && rs.getRegisterCategory().equals(CPU) && !rs.equals(rt);
+        assert rt.getRegisterCategory().equals(CPU) && rs.getRegisterCategory().equals(CPU) && rn.getRegisterCategory().equals(CPU) && (instr == STLR || (!rs.equals(rt) && !rs.equals(rn)));
         int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
         emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rn(rn) | rt(rt));
+    }
+
+    /**
+     * Compare And Swap word or doubleword in memory. This reads a value from an address rn,
+     * compares it against a given value rs, and, if equal, stores the value rt to memory. The value
+     * read from address rn is stored in register rs.
+     *
+     * @param size size of bits read from memory. Must be 8, 16, 32 or 64.
+     * @param rs general purpose register to be compared and loaded. May not be null.
+     * @param rt general purpose register to be conditionally stored. May not be null.
+     * @param rn general purpose register containing the address from which to read.
+     * @param acquire boolean value signifying if the load should use acquire semantics.
+     * @param release boolean value signifying if the store should use release semantics.
+     */
+    public void cas(int size, Register rs, Register rt, Register rn, boolean acquire, boolean release) {
+        assert size == 8 || size == 16 || size == 32 || size == 64;
+        compareAndSwapInstruction(CAS, rs, rt, rn, getLog2TransferSize(size), acquire, release);
+    }
+
+    private void compareAndSwapInstruction(Instruction instr, Register rs, Register rt, Register rn, int log2TransferSize, boolean acquire, boolean release) {
+        assert log2TransferSize >= 0 && log2TransferSize < 4;
+        assert rt.getRegisterCategory().equals(CPU) && rs.getRegisterCategory().equals(CPU) && rn.getRegisterCategory().equals(CPU);
+        int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
+        emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rn(rn) | rt(rt) | (acquire ? 1 : 0) << CASAcquireOffset | (release ? 1 : 0) << CASReleaseOffset);
+    }
+
+    /**
+     * Atomic add. This reads a value from an address rn, stores the value in rt, and adds the value
+     * in rs to it, and stores the result back at address rn. The initial value read from memory is
+     * stored in rt.
+     *
+     * @param size size of operand to read from memory. Must be 8, 16, 32, or 64.
+     * @param rs general purpose register to be added to contents. May not be null.
+     * @param rt general purpose register to be loaded. May not be null.
+     * @param rn general purpose register or stack pointer holding an address from which to load.
+     * @param acquire boolean value signifying if the load should use acquire semantics.
+     * @param release boolean value signifying if the store should use release semantics.
+     */
+    public void ldadd(int size, Register rs, Register rt, Register rn, boolean acquire, boolean release) {
+        assert size == 8 || size == 16 || size == 32 || size == 64;
+        loadAndAddInstruction(LDADD, rs, rt, rn, getLog2TransferSize(size), acquire, release);
+    }
+
+    private void loadAndAddInstruction(Instruction instr, Register rs, Register rt, Register rn, int log2TransferSize, boolean acquire, boolean release) {
+        assert log2TransferSize >= 0 && log2TransferSize < 4;
+        assert rt.getRegisterCategory().equals(CPU) && rs.getRegisterCategory().equals(CPU) && rn.getRegisterCategory().equals(CPU);
+        int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
+        emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rn(rn) | rt(rt) | (acquire ? 1 : 0) << LDADDAcquireOffset | (release ? 1 : 0) << LDADDReleaseOffset);
+    }
+
+    /**
+     * Atomic swap. This reads a value from an address rn, stores the value in rt, and then stores
+     * the value in rs back at address rn.
+     *
+     * @param size size of operand to read from memory. Must be 8, 16, 32, or 64.
+     * @param rs general purpose register to be stored. May not be null.
+     * @param rt general purpose register to be loaded. May not be null.
+     * @param rn general purpose register or stack pointer holding an address from which to load.
+     * @param acquire boolean value signifying if the load should use acquire semantics.
+     * @param release boolean value signifying if the store should use release semantics.
+     */
+    public void swp(int size, Register rs, Register rt, Register rn, boolean acquire, boolean release) {
+        assert size == 8 || size == 16 || size == 32 || size == 64;
+        swapInstruction(SWP, rs, rt, rn, getLog2TransferSize(size), acquire, release);
+    }
+
+    private void swapInstruction(Instruction instr, Register rs, Register rt, Register rn, int log2TransferSize, boolean acquire, boolean release) {
+        assert log2TransferSize >= 0 && log2TransferSize < 4;
+        assert rt.getRegisterCategory().equals(CPU) && rs.getRegisterCategory().equals(CPU) && rn.getRegisterCategory().equals(CPU);
+        int transferSizeEncoding = log2TransferSize << LoadStoreTransferSizeOffset;
+        emitInt(transferSizeEncoding | instr.encoding | rs2(rs) | rn(rn) | rt(rt) | (acquire ? 1 : 0) << LDADDAcquireOffset | (release ? 1 : 0) << LDADDReleaseOffset);
     }
 
     /* PC-relative Address Calculation (5.4.4) */
 
     /**
      * Address of page: sign extends 21-bit offset, shifts if left by 12 and adds it to the value of
-     * the PC with its bottom 12-bits cleared, writing the result to dst.
+     * the PC with its bottom 12-bits cleared, writing the result to dst. No offset is emitted; the
+     * instruction will be patched later.
      *
      * @param dst general purpose register. May not be null, zero-register or stackpointer.
-     * @param imm Signed 33-bit offset with lower 12bits clear.
      */
-    // protected void adrp(Register dst, long imm) {
-    // assert (imm & NumUtil.getNbitNumberInt(12)) == 0 : "Lower 12-bit of immediate must be zero.";
-    // assert NumUtil.isSignedNbit(33, imm);
-    // addressCalculationInstruction(dst, (int) (imm >>> 12), Instruction.ADRP);
-    // }
+    public void adrp(Register dst) {
+        emitInt(ADRP.encoding | PcRelImmOp | rd(dst));
+    }
 
     /**
      * Adds a 21-bit signed offset to the program counter and writes the result to dst.
@@ -1161,6 +1565,13 @@ public abstract class AArch64Assembler extends Assembler {
         emitInt(ADR.encoding | PcRelImmOp | rd(dst) | getPcRelativeImmEncoding(imm21));
     }
 
+    /**
+     * Adds a 21-bit signed offset to the program counter and writes the result to dst.
+     *
+     * @param dst general purpose register. May not be null, zero-register or stackpointer.
+     * @param imm21 Signed 21-bit offset.
+     * @param pos the position in the code that the instruction is emitted.
+     */
     public void adr(Register dst, int imm21, int pos) {
         emitInt(ADR.encoding | PcRelImmOp | rd(dst) | getPcRelativeImmEncoding(imm21), pos);
     }
@@ -1241,6 +1652,10 @@ public abstract class AArch64Assembler extends Assembler {
         emitInt(type.encoding | instr.encoding | AddSubImmOp | encodeAimm(aimm) | rd(dst) | rs1(src));
     }
 
+    public void ccmp(int size, Register x, Register y, int aimm, ConditionFlag condition) {
+        emitInt(generalFromSize(size).encoding | CCMP.encoding | rs1(x) | rs2(y) | encodeAimm(aimm) | condition.encoding << ConditionalConditionOffset);
+    }
+
     /**
      * Encodes arithmetic immediate.
      *
@@ -1267,7 +1682,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @return true if valid arithmetic immediate, false otherwise.
      */
     protected static boolean isAimm(int imm) {
-        return NumUtil.isUnsignedNbit(12, imm) || NumUtil.isUnsignedNbit(12, imm >>> 12) && (imm & 0xfff) == 0;
+        return NumUtil.isUnsignedNbit(12, imm) || (NumUtil.isUnsignedNbit(12, imm >>> 12) && ((imm & 0xfff) == 0));
     }
 
     /* Logical (immediate) (5.4.2) */
@@ -1278,7 +1693,8 @@ public abstract class AArch64Assembler extends Assembler {
      * @param size register size. Has to be 32 or 64.
      * @param dst general purpose register. May not be null or zero-register.
      * @param src general purpose register. May not be null or stack-pointer.
-     * @param bimm logical immediate. See {@link LogicalImmediateTable} for exact definition.
+     * @param bimm logical immediate. See {@link LogicalBitmaskImmediateEncoding} for exact
+     *            definition.
      */
     public void and(int size, Register dst, Register src, long bimm) {
         assert !dst.equals(zr);
@@ -1292,7 +1708,8 @@ public abstract class AArch64Assembler extends Assembler {
      * @param size register size. Has to be 32 or 64.
      * @param dst general purpose register. May not be null or stack-pointer.
      * @param src general purpose register. May not be null or stack-pointer.
-     * @param bimm logical immediate. See {@link LogicalImmediateTable} for exact definition.
+     * @param bimm logical immediate. See {@link LogicalBitmaskImmediateEncoding} for exact
+     *            definition.
      */
     public void ands(int size, Register dst, Register src, long bimm) {
         assert !dst.equals(sp);
@@ -1306,7 +1723,8 @@ public abstract class AArch64Assembler extends Assembler {
      * @param size register size. Has to be 32 or 64.
      * @param dst general purpose register. May not be null or zero-register.
      * @param src general purpose register. May not be null or stack-pointer.
-     * @param bimm logical immediate. See {@link LogicalImmediateTable} for exact definition.
+     * @param bimm logical immediate. See {@link LogicalBitmaskImmediateEncoding} for exact
+     *            definition.
      */
     public void eor(int size, Register dst, Register src, long bimm) {
         assert !dst.equals(zr);
@@ -1320,9 +1738,10 @@ public abstract class AArch64Assembler extends Assembler {
      * @param size register size. Has to be 32 or 64.
      * @param dst general purpose register. May not be null or zero-register.
      * @param src general purpose register. May not be null or stack-pointer.
-     * @param bimm logical immediate. See {@link LogicalImmediateTable} for exact definition.
+     * @param bimm logical immediate. See {@link LogicalBitmaskImmediateEncoding} for exact
+     *            definition.
      */
-    protected void orr(int size, Register dst, Register src, long bimm) {
+    public void orr(int size, Register dst, Register src, long bimm) {
         assert !dst.equals(zr);
         assert !src.equals(sp);
         logicalImmInstruction(ORR, dst, src, bimm, generalFromSize(size));
@@ -1332,12 +1751,12 @@ public abstract class AArch64Assembler extends Assembler {
         // Mask higher bits off, since we always pass longs around even for the 32-bit instruction.
         long bimmValue;
         if (type == General32) {
-            assert (bimm >> 32) == 0 || (bimm >> 32) == -1L : "Higher order bits for 32-bit instruction must either all be 0 or 1.";
+            assert (bimm >> 32) == 0 || ((bimm >> 32) == -1L && (int) bimm < 0) : "Immediate must be either 0x0000_0000_xxxx_xxxx or (0xFFFF_FFFF_xxxx_xxxx | 0x8000_0000)";
             bimmValue = bimm & NumUtil.getNbitNumberLong(32);
         } else {
             bimmValue = bimm;
         }
-        int immEncoding = LogicalImmediateTable.getLogicalImmEncoding(type == General64, bimmValue);
+        int immEncoding = LogicalBitmaskImmediateEncoding.getEncoding(type == General64, bimmValue);
         emitInt(type.encoding | instr.encoding | LogicalImmOp | immEncoding | rd(dst) | rs1(src));
     }
 
@@ -1401,7 +1820,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    protected void bfm(int size, Register dst, Register src, int r, int s) {
+    public void bfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(BFM, dst, src, r, s, generalFromSize(size));
     }
 
@@ -1414,7 +1833,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    protected void ubfm(int size, Register dst, Register src, int r, int s) {
+    public void ubfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(UBFM, dst, src, r, s, generalFromSize(size));
     }
 
@@ -1427,7 +1846,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    protected void sbfm(int size, Register dst, Register src, int r, int s) {
+    public void sbfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(SBFM, dst, src, r, s, generalFromSize(size));
     }
 
@@ -1519,6 +1938,9 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     private void addSubShiftedInstruction(Instruction instr, Register dst, Register src1, Register src2, ShiftType shiftType, int imm, InstructionType type) {
+        assert !dst.equals(sp);
+        assert !src1.equals(sp);
+        assert !src2.equals(sp);
         assert shiftType != ShiftType.ROR;
         assert imm >= 0 && imm < type.width;
         emitInt(type.encoding | instr.encoding | AddSubShiftedOp | imm << ImmediateOffset | shiftType.encoding << ShiftTypeOffset | rd(dst) | rs1(src1) | rs2(src2));
@@ -1569,7 +1991,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param extendType defines how src2 is extended to the same size as src1.
      * @param shiftAmt must be in range 0 to 4.
      */
-    protected void sub(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
+    public void sub(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
         assert !dst.equals(zr);
         assert !src1.equals(zr);
         assert !src2.equals(sp);
@@ -1609,7 +2031,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param shiftType all types allowed, may not be null.
      * @param shiftAmt must be in range 0 to size - 1.
      */
-    protected void and(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+    public void and(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
         logicalRegInstruction(AND, dst, src1, src2, shiftType, shiftAmt, generalFromSize(size));
     }
 
@@ -1637,7 +2059,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param shiftType all types allowed, may not be null.
      * @param shiftAmt must be in range 0 to size - 1.
      */
-    protected void bic(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+    public void bic(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
         logicalRegInstruction(BIC, dst, src1, src2, shiftType, shiftAmt, generalFromSize(size));
     }
 
@@ -1665,7 +2087,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param shiftType all types allowed, may not be null.
      * @param shiftAmt must be in range 0 to size - 1.
      */
-    protected void eon(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+    public void eon(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
         logicalRegInstruction(EON, dst, src1, src2, shiftType, shiftAmt, generalFromSize(size));
     }
 
@@ -1679,7 +2101,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param shiftType all types allowed, may not be null.
      * @param shiftAmt must be in range 0 to size - 1.
      */
-    protected void eor(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+    public void eor(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
         logicalRegInstruction(EOR, dst, src1, src2, shiftType, shiftAmt, generalFromSize(size));
     }
 
@@ -1693,7 +2115,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param shiftType all types allowed, may not be null.
      * @param shiftAmt must be in range 0 to size - 1.
      */
-    protected void orr(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+    public void orr(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
         logicalRegInstruction(ORR, dst, src1, src2, shiftType, shiftAmt, generalFromSize(size));
     }
 
@@ -1707,7 +2129,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param shiftType all types allowed, may not be null.
      * @param shiftAmt must be in range 0 to size - 1.
      */
-    protected void orn(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
+    public void orn(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
         logicalRegInstruction(ORN, dst, src1, src2, shiftType, shiftAmt, generalFromSize(size));
     }
 
@@ -1728,7 +2150,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    protected void asr(int size, Register dst, Register src1, Register src2) {
+    public void asr(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(ASRV, dst, src1, src2, generalFromSize(size));
     }
 
@@ -1740,7 +2162,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    protected void lsl(int size, Register dst, Register src1, Register src2) {
+    public void lsl(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(LSLV, dst, src1, src2, generalFromSize(size));
     }
 
@@ -1752,19 +2174,19 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    protected void lsr(int size, Register dst, Register src1, Register src2) {
+    public void lsr(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(LSRV, dst, src1, src2, generalFromSize(size));
     }
 
     /**
-     * dst = rotateRight(src1, (src2 & log2(size))).
+     * dst = rotateRight(src1, (src2 & (size - 1))).
      *
      * @param size register size. Has to be 32 or 64.
      * @param dst general purpose register. May not be null or stackpointer.
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    protected void ror(int size, Register dst, Register src1, Register src2) {
+    protected void rorv(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(RORV, dst, src1, src2, generalFromSize(size));
     }
 
@@ -1832,7 +2254,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src2 general purpose register. May not be null or the stackpointer.
      * @param condition any condition flag. May not be null.
      */
-    protected void csel(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
+    public void csel(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
         conditionalSelectInstruction(CSEL, dst, src1, src2, condition, generalFromSize(size));
     }
 
@@ -1845,7 +2267,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src2 general purpose register. May not be null or the stackpointer.
      * @param condition any condition flag. May not be null.
      */
-    protected void csneg(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
+    public void csneg(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
         conditionalSelectInstruction(CSNEG, dst, src1, src2, condition, generalFromSize(size));
     }
 
@@ -1880,7 +2302,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src2 general purpose register. May not be null or the stackpointer.
      * @param src3 general purpose register. May not be null or the stackpointer.
      */
-    protected void madd(int size, Register dst, Register src1, Register src2, Register src3) {
+    public void madd(int size, Register dst, Register src1, Register src2, Register src3) {
         mulInstruction(MADD, dst, src1, src2, src3, generalFromSize(size));
     }
 
@@ -1893,7 +2315,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src2 general purpose register. May not be null or the stackpointer.
      * @param src3 general purpose register. May not be null or the stackpointer.
      */
-    protected void msub(int size, Register dst, Register src1, Register src2, Register src3) {
+    public void msub(int size, Register dst, Register src1, Register src2, Register src3) {
         mulInstruction(MSUB, dst, src1, src2, src3, generalFromSize(size));
     }
 
@@ -1912,7 +2334,7 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
-     * unsigned multiply high. dst = (src1 * src2)[127:64]
+     * Unsigned multiply high. dst = (src1 * src2)[127:64]
      *
      * @param dst general purpose register. May not be null or the stackpointer.
      * @param src1 general purpose register. May not be null or the stackpointer.
@@ -1926,7 +2348,7 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
-     * unsigned multiply add-long. xDst = xSrc3 + (wSrc1 * wSrc2)
+     * Unsigned multiply add-long. xDst = xSrc3 + (wSrc1 * wSrc2)
      *
      * @param dst general purpose register. May not be null or the stackpointer.
      * @param src1 general purpose register. May not be null or the stackpointer.
@@ -1942,7 +2364,7 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
-     * signed multiply add-long. xDst = xSrc3 + (wSrc1 * wSrc2)
+     * Signed multiply-add long. xDst = xSrc3 + (wSrc1 * wSrc2)
      *
      * @param dst general purpose register. May not be null or the stackpointer.
      * @param src1 general purpose register. May not be null or the stackpointer.
@@ -1950,11 +2372,21 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src3 general purpose register. May not be null or the stackpointer.
      */
     public void smaddl(Register dst, Register src1, Register src2, Register src3) {
-        assert !dst.equals(sp);
-        assert !src1.equals(sp);
-        assert !src2.equals(sp);
-        assert !src3.equals(sp);
-        emitInt(0b10011011001 << 21 | dst.encoding | rs1(src1) | rs2(src2) | rs3(src3));
+        assert (!dst.equals(sp) && !src1.equals(sp) && !src2.equals(sp) && !src3.equals(sp));
+        smullInstruction(MADD, dst, src1, src2, src3);
+    }
+
+    /**
+     * Signed multiply-sub long. xDst = xSrc3 - (wSrc1 * wSrc2)
+     *
+     * @param dst general purpose register. May not be null or the stackpointer.
+     * @param src1 general purpose register. May not be null or the stackpointer.
+     * @param src2 general purpose register. May not be null or the stackpointer.
+     * @param src3 general purpose register. May not be null or the stackpointer.
+     */
+    public void smsubl(Register dst, Register src1, Register src2, Register src3) {
+        assert (!dst.equals(sp) && !src1.equals(sp) && !src2.equals(sp) && !src3.equals(sp));
+        smullInstruction(MSUB, dst, src1, src2, src3);
     }
 
     private void mulInstruction(Instruction instr, Register dst, Register src1, Register src2, Register src3, InstructionType type) {
@@ -1963,6 +2395,14 @@ public abstract class AArch64Assembler extends Assembler {
         assert !src2.equals(sp);
         assert !src3.equals(sp);
         emitInt(type.encoding | instr.encoding | MulOp | rd(dst) | rs1(src1) | rs2(src2) | rs3(src3));
+    }
+
+    private void smullInstruction(Instruction instr, Register dst, Register src1, Register src2, Register src3) {
+        assert !dst.equals(sp);
+        assert !src1.equals(sp);
+        assert !src2.equals(sp);
+        assert !src3.equals(sp);
+        emitInt(instr.encoding | SignedMulLongOp | rd(dst) | rs1(src1) | rs2(src2) | rs3(src3));
     }
 
     /**
@@ -2006,15 +2446,17 @@ public abstract class AArch64Assembler extends Assembler {
     /**
      * Floating point load.
      *
-     * @param size number of bits read from memory into rt. Must be 32 or 64.
+     * @param size number of bits read from memory into rt. Must be 8, 16, 32, 64 or 128.
      * @param rt floating point register. May not be null.
      * @param address all addressing modes allowed. May not be null.
      */
     public void fldr(int size, Register rt, AArch64Address address) {
         assert rt.getRegisterCategory().equals(SIMD);
-        assert size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        loadStoreInstruction(LDR, rt, address, InstructionType.FP32, transferSize);
+        assert size == 8 || size == 16 || size == 32 || size == 64 || size == 128;
+
+        /* When using an immediate or register based addressing mode, then the load flag is set. */
+        int loadFlag = address.getAddressingMode() == AddressingMode.PC_LITERAL ? 0 : LoadFlag;
+        loadStoreInstruction(LDR, rt, address, true, getLog2TransferSize(size), loadFlag);
     }
 
     /**
@@ -2026,9 +2468,32 @@ public abstract class AArch64Assembler extends Assembler {
      */
     public void fstr(int size, Register rt, AArch64Address address) {
         assert rt.getRegisterCategory().equals(SIMD);
-        assert size == 32 || size == 64;
-        int transferSize = NumUtil.log2Ceil(size / 8);
-        loadStoreInstruction(STR, rt, address, InstructionType.FP64, transferSize);
+        assert size == 8 || size == 16 || size == 32 || size == 64 || size == 128;
+
+        loadStoreInstruction(STR, rt, address, true, getLog2TransferSize(size));
+    }
+
+    /**
+     * Load Pair of Registers calculates an address from a base register value and an immediate
+     * offset, and stores two single, double, or quad words to the calculated address, from two
+     * registers.
+     */
+    public void fldp(int size, Register rt, Register rt2, AArch64Address address) {
+        assert rt.getRegisterCategory().equals(SIMD) && rt2.getRegisterCategory().equals(SIMD);
+        assert size == 32 || size == 64 || size == 128;
+
+        loadStorePairInstruction(LDP, rt, rt2, address, true, getLog2TransferSize(size));
+    }
+
+    /**
+     * Store Pair of Registers calculates an address from a base register value and an immediate
+     * offset, and stores two single, double, or quad words to the calculated address, from two
+     * registers.
+     */
+    public void fstp(int size, Register rt, Register rt2, AArch64Address address) {
+        assert rt.getRegisterCategory().equals(SIMD) && rt2.getRegisterCategory().equals(SIMD);
+        assert size == 32 || size == 64 || size == 128;
+        loadStorePairInstruction(STP, rt, rt2, address, true, getLog2TransferSize(size));
     }
 
     /* Floating-point Move (register) (5.7.2) */
@@ -2041,6 +2506,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src floating point register. May not be null.
      */
     protected void fmov(int size, Register dst, Register src) {
+        assert size == 32 || size == 64;
         fpDataProcessing1Source(FMOV, dst, src, floatFromSize(size));
     }
 
@@ -2052,6 +2518,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src floating point register. May not be null.
      */
     protected void fmovFpu2Cpu(int size, Register dst, Register src) {
+        assert size == 32 || size == 64;
         assert dst.getRegisterCategory().equals(CPU);
         assert src.getRegisterCategory().equals(SIMD);
         fmovCpuFpuInstruction(dst, src, size == 64, Instruction.FMOVFPU2CPU);
@@ -2065,6 +2532,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src general purpose register. May not be null or stack-pointer.
      */
     protected void fmovCpu2Fpu(int size, Register dst, Register src) {
+        assert size == 32 || size == 64;
         assert dst.getRegisterCategory().equals(SIMD);
         assert src.getRegisterCategory().equals(CPU);
         fmovCpuFpuInstruction(dst, src, size == 64, Instruction.FMOVCPU2FPU);
@@ -2088,6 +2556,7 @@ public abstract class AArch64Assembler extends Assembler {
      *            depending on size.
      */
     protected void fmov(int size, Register dst, double imm) {
+        assert size == 32 || size == 64;
         assert dst.getRegisterCategory().equals(SIMD);
         InstructionType type = floatFromSize(size);
         int immEncoding;
@@ -2121,12 +2590,13 @@ public abstract class AArch64Assembler extends Assembler {
             return false;
         }
         // bits[61..54] are all set or all cleared.
-        long pattern = (bits >> 54) & NumUtil.getNbitNumberLong(7);
-        if (pattern != 0 && pattern != NumUtil.getNbitNumberLong(7)) {
+        long pattern = (bits >> 54) & NumUtil.getNbitNumberLong(8);
+        if (pattern != 0 && pattern != NumUtil.getNbitNumberLong(8)) {
             return false;
         }
         // bits[62] and bits[61] are opposites.
-        return ((bits ^ (bits << 1)) & (1L << 62)) != 0;
+        boolean result = ((bits ^ (bits << 1)) & (1L << 62)) != 0;
+        return result;
     }
 
     private static int getFloatImmediate(float imm) {
@@ -2218,8 +2688,41 @@ public abstract class AArch64Assembler extends Assembler {
      * @param dst floating point register. May not be null.
      * @param src floating point register. May not be null.
      */
-    protected void frintz(int size, Register dst, Register src) {
+    public void frintz(int size, Register dst, Register src) {
         fpDataProcessing1Source(FRINTZ, dst, src, floatFromSize(size));
+    }
+
+    /**
+     * Rounds floating-point to integral. Rounds towards nearest with ties to even.
+     *
+     * @param size register size.
+     * @param dst floating point register. May not be null.
+     * @param src floating point register. May not be null.
+     */
+    public void frintn(int size, Register dst, Register src) {
+        fpDataProcessing1Source(FRINTN, dst, src, floatFromSize(size));
+    }
+
+    /**
+     * Rounds floating-point to integral. Rounds towards minus infinity.
+     *
+     * @param size register size.
+     * @param dst floating point register. May not be null.
+     * @param src floating point register. May not be null.
+     */
+    public void frintm(int size, Register dst, Register src) {
+        fpDataProcessing1Source(FRINTM, dst, src, floatFromSize(size));
+    }
+
+    /**
+     * Rounds floating-point to integral. Rounds towards plus infinity.
+     *
+     * @param size register size.
+     * @param dst floating point register. May not be null.
+     * @param src floating point register. May not be null.
+     */
+    public void frintp(int size, Register dst, Register src) {
+        fpDataProcessing1Source(FRINTP, dst, src, floatFromSize(size));
     }
 
     /* Floating-point Arithmetic (1 source) (5.7.6) */
@@ -2320,6 +2823,30 @@ public abstract class AArch64Assembler extends Assembler {
         emitInt(type.encoding | instr.encoding | Fp2SourceOp | rd(dst) | rs1(src1) | rs2(src2));
     }
 
+    /**
+     * dst = src1 > src2 ? src1 : src2.
+     *
+     * @param size register size.
+     * @param dst floating point register. May not be null.
+     * @param src1 floating point register. May not be null.
+     * @param src2 floating point register. May not be null.
+     */
+    public void fmax(int size, Register dst, Register src1, Register src2) {
+        fpDataProcessing2Source(FMAX, dst, src1, src2, floatFromSize(size));
+    }
+
+    /**
+     * dst = src1 < src2 ? src1 : src2.
+     *
+     * @param size register size.
+     * @param dst floating point register. May not be null.
+     * @param src1 floating point register. May not be null.
+     * @param src2 floating point register. May not be null.
+     */
+    public void fmin(int size, Register dst, Register src1, Register src2) {
+        fpDataProcessing2Source(FMIN, dst, src1, src2, floatFromSize(size));
+    }
+
     /* Floating-point Multiply-Add (5.7.9) */
 
     /**
@@ -2331,7 +2858,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src2 floating point register. May not be null.
      * @param src3 floating point register. May not be null.
      */
-    protected void fmadd(int size, Register dst, Register src1, Register src2, Register src3) {
+    public void fmadd(int size, Register dst, Register src1, Register src2, Register src3) {
         fpDataProcessing3Source(FMADD, dst, src1, src2, src3, floatFromSize(size));
     }
 
@@ -2373,6 +2900,20 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
+     * Signalling compares src1 to src2.
+     *
+     * @param size register size.
+     * @param src1 floating point register. May not be null.
+     * @param src2 floating point register. May not be null.
+     */
+    public void fcmpe(int size, Register src1, Register src2) {
+        assert src1.getRegisterCategory().equals(SIMD);
+        assert src2.getRegisterCategory().equals(SIMD);
+        InstructionType type = floatFromSize(size);
+        emitInt(type.encoding | FCMP.encoding | FpCmpeOp | rs1(src1) | rs2(src2));
+    }
+
+    /**
      * Conditional compare. NZCV = fcmp(src1, src2) if condition else uimm4.
      *
      * @param size register size.
@@ -2401,6 +2942,18 @@ public abstract class AArch64Assembler extends Assembler {
         emitInt(type.encoding | FCMPZERO.encoding | FpCmpOp | rs1(src));
     }
 
+    /**
+     * Signalling compare register to 0.0 .
+     *
+     * @param size register size.
+     * @param src floating point register. May not be null.
+     */
+    public void fcmpeZero(int size, Register src) {
+        assert src.getRegisterCategory().equals(SIMD);
+        InstructionType type = floatFromSize(size);
+        emitInt(type.encoding | FCMPZERO.encoding | FpCmpeOp | rs1(src));
+    }
+
     /* Floating-point Conditional Select (5.7.11) */
 
     /**
@@ -2412,7 +2965,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src2 floating point register. May not be null.
      * @param condition every condition allowed. May not be null.
      */
-    protected void fcsel(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
+    public void fcsel(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
         assert dst.getRegisterCategory().equals(SIMD);
         assert src1.getRegisterCategory().equals(SIMD);
         assert src2.getRegisterCategory().equals(SIMD);
@@ -2454,7 +3007,8 @@ public abstract class AArch64Assembler extends Assembler {
         WFE(0x2),
         WFI(0x3),
         SEV(0x4),
-        SEVL(0x5);
+        SEVL(0x5),
+        CSDB(0x14);
 
         private final int encoding;
 
@@ -2481,17 +3035,16 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
-     * Possible barrier definitions for Aarch64. LOAD_LOAD and LOAD_STORE map to the same underlying
-     * barrier.
+     * Barrier definitions for AArch64.
      *
      * We only need synchronization across the inner shareable domain (see B2-90 in the Reference
      * documentation).
      */
     public enum BarrierKind {
-        LOAD_LOAD(0x9, "ISHLD"),
-        LOAD_STORE(0x9, "ISHLD"),
+        LOAD_ANY(0x9, "ISHLD"),
         STORE_STORE(0xA, "ISHST"),
-        ANY_ANY(0xB, "ISH");
+        ANY_ANY(0xB, "ISH"),
+        SYSTEM(0xF, "SYS");
 
         public final int encoding;
         public final String optionName;
@@ -2509,6 +3062,251 @@ public abstract class AArch64Assembler extends Assembler {
      */
     public void dmb(BarrierKind barrierKind) {
         emitInt(DMB.encoding | BarrierOp | barrierKind.encoding << BarrierKindOffset);
+    }
+
+    /**
+     * Data Synchronization Barrier.
+     *
+     * @param barrierKind barrier that is issued. May not be null.
+     */
+    public void dsb(BarrierKind barrierKind) {
+        emitInt(DSB.encoding | BarrierOp | barrierKind.encoding << BarrierKindOffset);
+    }
+
+    /**
+     * Instruction Synchronization Barrier.
+     */
+    public void isb() {
+        emitInt(ISB.encoding | BarrierOp | BarrierKind.SYSTEM.encoding << BarrierKindOffset);
+    }
+
+    /**
+     * C.6.2.194 Move System Register<br>
+     * <p>
+     * Reads an AArch64 System register into a general-purpose register.
+     */
+    public void mrs(Register dst, SystemRegister systemRegister) {
+        emitInt(MRS.encoding | systemRegister.encoding() | rt(dst));
+    }
+
+    /**
+     * C.6.2.196 Move general-purpose register to System Register<br>
+     * <p>
+     * Writes an AArch64 System register from general-purpose register.
+     */
+    public void msr(SystemRegister systemRegister, Register src) {
+        emitInt(MRS.encoding | systemRegister.encoding() | rt(src));
+    }
+
+    public void dc(DataCacheOperationType type, Register src) {
+        emitInt(DC.encoding | type.encoding() | rt(src));
+    }
+
+    public void annotatePatchingImmediate(int pos, Instruction instruction, int operandSizeBits, int offsetBits, int shift) {
+        if (codePatchingAnnotationConsumer != null) {
+            codePatchingAnnotationConsumer.accept(new SingleInstructionAnnotation(pos, instruction, operandSizeBits, offsetBits, shift));
+        }
+    }
+
+    public abstract static class PatchableCodeAnnotation extends CodeAnnotation {
+
+        /**
+         * The position (bytes from the beginning of the method) of the annotated instruction.
+         */
+        public final int instructionPosition;
+
+        PatchableCodeAnnotation(int instructionPosition) {
+            this.instructionPosition = instructionPosition;
+        }
+
+        abstract void patch(int codePos, int relative, byte[] code);
+    }
+
+    /**
+     * Contains methods for patching instructions within AArch64.
+     */
+    public static class PatcherUtil {
+        /**
+         * Convert byte array instruction into an int.
+         */
+        public static int readInstruction(byte[] code, int pos) {
+            return ByteBuffer.wrap(code, pos, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        }
+
+        /**
+         * Write int representation of instruction to byte array.
+         */
+        public static void writeInstruction(byte[] code, int pos, int val) {
+            ByteBuffer.wrap(code, pos, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(val);
+        }
+
+        /**
+         * Method to patch a series a bytes within an instruction.
+         *
+         * @param original Initial instruction value.
+         * @param value The value to be given to the series of bytes.
+         * @param bitsUsed The number of bits to patch within each byte.
+         * @param offsets Where within the bytes the value should be added.
+         * @return New patched instruction value.
+         */
+        public static int patchBitSequence(int original, int value, int[] bitsUsed, int[] offsets) {
+            assert bitsUsed.length == 4 && offsets.length == 4 : "bitsUsed and offsets parameter should be of length 4";
+            int result = 0;
+            int curValue = value;
+            for (int i = 0; i < bitsUsed.length; i++) {
+                int usedBits = bitsUsed[i];
+                if (usedBits == 0) {
+                    // want to retain the original value
+                    result = result | (original & (0xFF << (8 * i)));
+                }
+
+                int offset = offsets[i];
+                int mask = (1 << usedBits) - 1;
+
+                byte patchTarget = (byte) ((original >> (8 * i)) & 0xFF);
+                byte patch = (byte) (((curValue & mask) << offset) & 0xFF);
+                byte retainedPatchTarget = (byte) (patchTarget & ((~(mask << offset)) & 0xFF));
+                int patchValue = (retainedPatchTarget | patch) & 0xFF;
+                result = result | (patchValue << (8 * i));
+                curValue = curValue >> usedBits;
+            }
+            return result;
+        }
+
+        /**
+         * Patches adrp instruction with provided imm21 value.
+         *
+         * @param original Original instruction value.
+         * @param imm21 The value to patch.
+         * @return New patched instruction value.
+         */
+        public static int patchAdrpHi21(int original, int imm21) {
+            assert (imm21 & 0x1FFFFF) == imm21;
+            // adrp imm_hi bits
+            int immHi = (imm21 >> 2) & 0x7FFFF;
+            int immLo = imm21 & 0x3;
+            int[] adrpBits = {3, 8, 8, 2};
+            int[] adrpOffsets = {5, 0, 0, 5};
+            int patch = (immLo << 19) | immHi;
+            return patchBitSequence(original, patch, adrpBits, adrpOffsets);
+        }
+
+        /**
+         * Patches add with provided imm12 value. Note this is expected to be used in conjunction
+         * with an adrp to form a 33-bit pc-relative address.
+         *
+         * @param original Original instruction value.
+         * @param imm12 The value to patch.
+         * @return New patched instruction value.
+         */
+        public static int patchAddLo12(int original, int imm12) {
+            assert (imm12 & 0xFFF) == imm12;
+            int[] addBits = {0, 6, 6, 0};
+            int[] addOffsets = {0, 2, 0, 0};
+            return PatcherUtil.patchBitSequence(original, imm12, addBits, addOffsets);
+        }
+
+        /**
+         * Patches lar (unsigned, scaled) with provided imm12 value. Note this is expected to be
+         * used in conjunction with an adrp to perform a 33-bit pc-relative load.
+         *
+         * @param original Original instruction value.
+         * @param imm12 The *unscaled* value to patch. The method performs all necessary shifting.
+         * @param srcSize The memory operation size. This determines the scaling factor.
+         * @return New patched instruction value.
+         */
+        public static int patchLdrLo12(int original, int imm12, int srcSize) {
+            assert (imm12 & 0xFFF) == imm12;
+            assert srcSize == 64 || srcSize == 32 || srcSize == 16 || srcSize == 8;
+            int shiftSize = srcSize == 64 ? 3 : (srcSize == 32 ? 2 : (srcSize == 16 ? 1 : 0));
+            assert (shiftSize == 0) || ((imm12 & ((1 << shiftSize) - 1)) == 0);
+            int shiftedValue = (imm12 & 0xFFF) >> shiftSize;
+            int[] ldrBits = {0, 6, 6, 0};
+            int[] ldrOffsets = {0, 2, 0, 0};
+            return PatcherUtil.patchBitSequence(original, shiftedValue, ldrBits, ldrOffsets);
+        }
+
+        /**
+         * Patches mov instruction with provided imm16 value.
+         *
+         * @param original Original instruction value.
+         * @param imm16 The value to patch.
+         * @return New patched instruction value.
+         */
+        public static int patchMov(int original, int imm16) {
+            assert (imm16 & 0xFFFF) == imm16;
+            int[] movBits = {3, 8, 5, 0};
+            int[] movOffsets = {5, 0, 0, 0};
+            return PatcherUtil.patchBitSequence(original, imm16, movBits, movOffsets);
+        }
+
+        /**
+         * Computes the page-relative difference between two addresses.
+         */
+        public static int computeRelativePageDifference(long target, long curPos, int pageSize) {
+            int relative = (int) (target / pageSize - curPos / pageSize);
+            return relative;
+        }
+    }
+
+    public static class SingleInstructionAnnotation extends PatchableCodeAnnotation {
+
+        /**
+         * The size of the operand, in bytes.
+         */
+        public final int operandSizeBits;
+        public final int offsetBits;
+        public final Instruction instruction;
+        public final int shift;
+
+        SingleInstructionAnnotation(int instructionPosition, Instruction instruction, int operandSizeBits, int offsetBits, int shift) {
+            super(instructionPosition);
+            this.operandSizeBits = operandSizeBits;
+            this.offsetBits = offsetBits;
+            this.shift = shift;
+            this.instruction = instruction;
+        }
+
+        @Override
+        public String toString() {
+            return "SINGLE_INSTRUCTION";
+        }
+
+        @Override
+        public void patch(int codePos, int relative, byte[] code) {
+            // currently only BL instructions are being patched here
+            assert instruction == Instruction.BL : "trying to patch an unexpected instruction";
+
+            int curValue = relative; // BL is PC-relative
+            assert (curValue & ((1 << shift) - 1)) == 0 : "relative offset has incorrect alignment";
+            curValue = curValue >> shift;
+            GraalError.guarantee(NumUtil.isSignedNbit(operandSizeBits, curValue), "value too large to fit into space");
+
+            // fill in immediate operand of operandSizeBits starting at offsetBits within
+            // instruction
+            int bitsRemaining = operandSizeBits;
+            int offsetRemaining = offsetBits;
+
+            int[] bitsUsed = new int[4];
+            int[] offsets = new int[4];
+
+            for (int i = 0; i < 4; ++i) {
+                if (offsetRemaining >= 8) {
+                    offsetRemaining -= 8;
+                    continue;
+                }
+                offsets[i] = offsetRemaining;
+                // number of bits to be filled within this byte
+                int bits = Math.min(8 - offsetRemaining, bitsRemaining);
+                bitsUsed[i] = bits;
+                bitsRemaining -= bits;
+
+                offsetRemaining = 0;
+            }
+            int originalInst = PatcherUtil.readInstruction(code, instructionPosition);
+            int newInst = PatcherUtil.patchBitSequence(originalInst, curValue, bitsUsed, offsets);
+            PatcherUtil.writeInstruction(code, instructionPosition, newInst);
+        }
     }
 
 }
