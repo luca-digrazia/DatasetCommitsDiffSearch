@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -359,6 +359,11 @@ public class CachedContextTest extends AbstractPolyglotTest {
             return env;
         }
 
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return false;
+        }
+
         public static Env getCurrentContext() {
             return getCurrentContext(CachedContextTestLanguage.class);
         }
@@ -376,6 +381,10 @@ public class CachedContextTest extends AbstractPolyglotTest {
             return env;
         }
 
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return false;
+        }
     }
 
     /*
@@ -391,6 +400,10 @@ public class CachedContextTest extends AbstractPolyglotTest {
             return null;
         }
 
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return false;
+        }
     }
 
     abstract static class CachedLanguageError1Node extends Node {
@@ -465,22 +478,6 @@ public class CachedContextTest extends AbstractPolyglotTest {
         }
     }
 
-    abstract static class CachedLanguageError7Node extends Node {
-
-        abstract Object execute(Object argument);
-
-        /*
-         * Warning expected here as cachedEnv does not bind any dynamic parameter.
-         */
-        @ExpectError("The limit expression has no effect. %")
-        @Specialization(guards = "cachedEnv != null", limit = "3")
-        static String s0(Object value,
-                        @CachedContext(CachedContextTestLanguage.class) Env env,
-                        @Cached("env") Env cachedEnv) {
-            throw new AssertionError();
-        }
-    }
-
     @GenerateLibrary
     public abstract static class CachedContextTestLibrary extends Library {
 
@@ -499,7 +496,7 @@ public class CachedContextTest extends AbstractPolyglotTest {
         }
 
         @ExportMessage
-        final Object m1(@CachedContext(CachedContextTestLanguage.class) Env env) {
+        final Object m1(@CachedContext(CachedContextTestLanguage.class) ContextReference<Env> env) {
             return "m1";
         }
     }
