@@ -57,7 +57,6 @@ import com.oracle.truffle.espresso.jdwp.impl.DebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
 import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
-import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 import com.oracle.truffle.espresso.jdwp.impl.TypeTag;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
@@ -79,12 +78,12 @@ public final class JDWPContextImpl implements JDWPContext {
         this.setup = new JDWPSetup();
     }
 
-    public VMListener jdwpInit(TruffleLanguage.Env env, Object mainThread) {
+    public VMListener jdwpInit(TruffleLanguage.Env env) {
         // enable JDWP instrumenter only if options are set (assumed valid if non-null)
         if (context.JDWPOptions != null) {
             Debugger debugger = env.lookup(env.getInstruments().get("debugger"), Debugger.class);
             DebuggerController control = env.lookup(env.getInstruments().get(JDWPInstrument.ID), DebuggerController.class);
-            setup.setup(debugger, control, context.JDWPOptions, this, mainThread);
+            setup.setup(debugger, control, context.JDWPOptions, this);
             eventListener = control.getEventListener();
         }
         return eventListener;

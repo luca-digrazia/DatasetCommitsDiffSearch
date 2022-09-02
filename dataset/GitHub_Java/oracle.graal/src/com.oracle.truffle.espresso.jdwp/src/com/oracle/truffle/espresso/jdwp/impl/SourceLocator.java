@@ -27,7 +27,7 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
-public class SourceLocator {
+public final class SourceLocator {
 
     private final JDWPContext context;
 
@@ -45,7 +45,7 @@ public class SourceLocator {
         }
 
         // the class was already loaded, so look for the source line
-        for (MethodRef method : klass[0].getDeclaredMethods()) {
+        for (MethodRef method : klass[0].getDeclaredMethodRefs()) {
             // check if line number is in method
             if (method.hasLine(lineNumber)) {
                 return method.getSource();

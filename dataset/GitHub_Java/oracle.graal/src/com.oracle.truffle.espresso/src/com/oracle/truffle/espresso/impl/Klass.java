@@ -86,9 +86,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     private static final String COMPONENT = "component";
     private static final String SUPER = "super";
 
-    // Threshold for using binary search instead of linear search for interface lookup.
-    private static final int LINEAR_SEARCH_THRESHOLD = 4;
-
     @ExportMessage
     final boolean isMemberReadable(String member) {
         if (STATIC_TO_CLASS.equals(member)) {
@@ -290,6 +287,15 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         }
     }
 
+    @Override
+    public final boolean equals(Object obj) {
+        if (!(obj instanceof Klass)) {
+            return false;
+        }
+        Klass that = (Klass) obj;
+        return this.mirror().equals(that.mirror());
+    }
+
     public final ArrayKlass getArrayClass() {
         ArrayKlass ak = arrayClass;
         if (ak == null) {
@@ -326,6 +332,11 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
     protected ArrayKlass createArrayKlass() {
         return new ArrayKlass(this);
+    }
+
+    @Override
+    public final int hashCode() {
+        return getType().hashCode();
     }
 
     @Override
@@ -444,7 +455,16 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
     boolean checkInterfaceSubclassing(Klass other) {
         Klass[] interfaces = other.getTransitiveInterfacesList();
-        return fastLookup(this, interfaces) >= 0;
+        if (interfaces.length < 5) {
+            for (Klass k : interfaces) {
+                if (k == this) {
+                    return true;
+                }
+            }
+            return false;
+        } else {
+            return Arrays.binarySearch(interfaces, this, KLASS_ID_COMPARATOR) >= 0;
+        }
     }
 
     public final Klass findLeastCommonAncestor(Klass other) {
@@ -773,41 +793,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return lookupMethod(methodName, signature, null);
     }
 
-    private static <T> boolean isSorted(T[] array, Comparator<T> comparator) {
-        for (int i = 1; i < array.length; ++i) {
-            if (comparator.compare(array[i - 1], array[i]) > 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    protected final int fastLookup(Klass target, Klass[] klasses) {
-        assert isSorted(klasses, KLASS_ID_COMPARATOR);
-        if (klasses.length <= LINEAR_SEARCH_THRESHOLD) {
-            for (int i = 0; i < klasses.length; i++) {
-                if (klasses[i] == target) {
-                    return i;
-                }
-            }
-        } else {
-            int lo = 0;
-            int hi = klasses.length - 1;
-            while (lo <= hi) {
-                int mid = (lo + hi) >>> 1;
-                int cmp = KLASS_ID_COMPARATOR.compare(target, klasses[mid]);
-                if (cmp < 0) {
-                    hi = mid - 1;
-                } else if (cmp > 0) {
-                    lo = mid + 1;
-                } else {
-                    return mid;
-                }
-            }
-        }
-        return -1; // not found
-    }
-
     /**
      * Give the accessing klass if there is a chance the method to be resolved is a method handle
      * intrinsics.
@@ -1010,9 +995,4 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     // endregion jdwp-specific
-
-    @Override
-    public boolean equals(Object that) {
-        return this == that;
-    }
 }

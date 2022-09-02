@@ -72,8 +72,7 @@ public final class RequestedJDWPEvents {
     }
 
     public CommandResult registerEvent(Packet packet, Commands callback) {
-        ArrayList<Callable<Void>> preFutures = new ArrayList<>();
-        ArrayList<Callable<Void>> postFutures = new ArrayList<>();
+        ArrayList<Callable<Void>> prefutures = new ArrayList<>();
         PacketStream input = new PacketStream(packet);
         JDWPContext context = controller.getContext();
 
@@ -126,13 +125,13 @@ public final class RequestedJDWPEvents {
                 }
                 info.addSuspendPolicy(suspendPolicy);
                 eventListener.addBreakpointRequest(filter.getRequestId(), info);
-                preFutures.add(callback.createMethodEntryBreakpointCommand(info));
+                prefutures.add(callback.createMethodEntryBreakpointCommand(info));
                 break;
             case BREAKPOINT:
                 info = filter.getBreakpointInfo();
                 info.addSuspendPolicy(suspendPolicy);
                 eventListener.addBreakpointRequest(filter.getRequestId(), info);
-                postFutures.add(callback.createLineBreakpointCommand(info));
+                prefutures.add(callback.createLineBreakpointCommand(info));
                 break;
             case EXCEPTION:
                 info = filter.getBreakpointInfo();
@@ -142,11 +141,14 @@ public final class RequestedJDWPEvents {
                 }
                 info.addSuspendPolicy(suspendPolicy);
                 eventListener.addBreakpointRequest(filter.getRequestId(), info);
-                preFutures.add(callback.createExceptionBreakpoint(info));
+                prefutures.add(callback.createExceptionBreakpoint(info));
                 JDWPLogger.log("Submitting new exception breakpoint", JDWPLogger.LogLevel.STEPPING);
                 break;
             case CLASS_PREPARE:
-                eventListener.addClassPrepareRequest(new ClassPrepareRequest(filter));
+                Callable<Void> callable = eventListener.addClassPrepareRequest(new ClassPrepareRequest(filter));
+                if (callable != null) {
+                    prefutures.add(callable);
+                }
                 JDWPLogger.log("Class prepare request received", JDWPLogger.LogLevel.PACKET);
                 break;
             case FIELD_ACCESS:
@@ -201,7 +203,7 @@ public final class RequestedJDWPEvents {
 
         // register the request filter for this event
         controller.getEventFilters().addFilter(filter);
-        return new CommandResult(toReply(packet), preFutures, postFutures);
+        return new CommandResult(toReply(packet), prefutures, null);
     }
 
     private static PacketStream toReply(Packet packet) {

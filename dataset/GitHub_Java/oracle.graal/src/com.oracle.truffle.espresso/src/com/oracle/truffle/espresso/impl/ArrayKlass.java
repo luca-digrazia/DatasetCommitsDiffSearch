@@ -34,8 +34,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
-import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -159,16 +157,6 @@ public final class ArrayKlass extends Klass {
             assert thisDim > otherDim;
             return false;
         }
-    }
-
-    @Override
-    public ModuleEntry module() {
-        return getElementalType().module();
-    }
-
-    @Override
-    public PackageEntry packageEntry() {
-        return getElementalType().packageEntry();
     }
 
     @Override

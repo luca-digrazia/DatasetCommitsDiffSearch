@@ -68,8 +68,8 @@ public abstract class InvokeVirtualNode extends QuickNode {
         return indirectCallNode.call(target.getCallTarget(), arguments);
     }
 
-    InvokeVirtualNode(Method resolutionSeed, int top, int curBCI, int opcode) {
-        super(top, curBCI, opcode);
+    InvokeVirtualNode(Method resolutionSeed, int top, int curBCI) {
+        super(top, curBCI);
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
         this.vtableIndex = resolutionSeed.getVTableIndex();
@@ -100,20 +100,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
         assert receiver != null;
         assert receiver == args[0] : "receiver must be the first argument";
         Object result = executeVirtual(receiver, args);
-        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, resolutionSeed.getReturnKind());
-    }
-
-    @Override
-    public boolean redefined() {
-        return resolutionSeed.isRemovedByRedefition();
-    }
-
-    @Override
-    public boolean producedForeignObject(VirtualFrame frame) {
-        return resolutionSeed.getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
-    }
-
-    private int getResultAt() {
-        return top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
+        int resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
+        return (resultAt - top) + root.putKind(frame, resultAt, result, resolutionSeed.getReturnKind());
     }
 }

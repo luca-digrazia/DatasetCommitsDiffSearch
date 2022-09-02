@@ -203,7 +203,10 @@ public final class ClassRedefinition {
                     switch (change) {
                         case NO_CHANGE:
                             if (constantPoolChanged) {
+                                // determine if the method should be marked changed to
+                                // signal that the old method is now obsolete
                                 if (isObsolete(oldMethod, newMethod, oldParserKlass.getConstantPool(), newParserKlass.getConstantPool())) {
+                                    newMethod.markChanged();
                                     result = ClassChange.METHOD_BODY_CHANGE;
                                     collectedChanges.addMethodBodyChange(newMethod);
                                 }
@@ -211,6 +214,7 @@ public final class ClassRedefinition {
                             break;
                         case METHOD_BODY_CHANGE:
                             result = change;
+                            newMethod.markChanged();
                             collectedChanges.addMethodBodyChange(newMethod);
                             break;
                         default:
