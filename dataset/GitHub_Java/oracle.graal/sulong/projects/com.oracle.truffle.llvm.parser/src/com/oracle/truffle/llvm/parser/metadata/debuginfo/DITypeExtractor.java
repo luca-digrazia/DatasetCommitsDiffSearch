@@ -65,7 +65,6 @@ import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceClassLikeType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceDecoratorType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceEnumLikeType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceInheritanceType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceMemberType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourcePointerType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
@@ -407,12 +406,11 @@ final class DITypeExtractor implements MetadataVisitor {
             }
 
             case DW_TAG_INHERITANCE: {
-                final LLVMSourceInheritanceType inheritanceType = new LLVMSourceInheritanceType("super", size, align, offset, location);
-                parsedTypes.put(mdType, inheritanceType);
+                final LLVMSourceMemberType type = new LLVMSourceMemberType("super", size, align, offset, location);
+                parsedTypes.put(mdType, type);
                 final LLVMSourceType baseType = resolve(mdType.getBaseType());
-                inheritanceType.setElementType(baseType);
-                inheritanceType.setName(() -> String.format("super (%s)", baseType.getName()));
-                inheritanceType.setVirtual(Flags.VIRTUAL.isSetIn(mdType.getFlags()));
+                type.setElementType(baseType);
+                type.setName(() -> String.format("super (%s)", baseType.getName()));
 
                 break;
             }
@@ -505,7 +503,7 @@ final class DITypeExtractor implements MetadataVisitor {
             SymbolImpl symbol = MDValue.getIfInstance(mdSubprogram.getFunction());
             if (symbol != null && symbol instanceof FunctionDefinition) {
                 FunctionDefinition function = (FunctionDefinition) symbol;
-                final DataLayout dataLayout = LLVMLanguage.getLanguage().getDefaultDataLayout();
+                final DataLayout dataLayout = LLVMLanguage.getContext().getLibsulongDataLayout();
                 LLVMSourceType llvmSourceReturnType = LLVMSourceTypeFactory.resolveType(function.getType().getReturnType(), dataLayout);
                 List<LLVMSourceType> typeList = new ArrayList<>();
                 typeList.add(llvmSourceReturnType);
