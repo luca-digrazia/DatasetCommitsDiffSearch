@@ -237,16 +237,16 @@ public abstract class DebugInfoBase {
             String fileName = debugCodeInfo.fileName();
             Path filePath = debugCodeInfo.filePath();
             Path cachePath = debugCodeInfo.cachePath();
-            String className = TypeEntry.canonicalize(debugCodeInfo.ownerType());
-            String methodName = debugCodeInfo.name();
+            String className = TypeEntry.canonicalize(debugCodeInfo.className());
+            String methodName = debugCodeInfo.methodName();
             String symbolName = debugCodeInfo.symbolNameForMethod();
             String paramSignature = debugCodeInfo.paramSignature();
-            String returnTypeName = TypeEntry.canonicalize(debugCodeInfo.valueType());
+            String returnTypeName = TypeEntry.canonicalize(debugCodeInfo.returnTypeName());
             int lo = debugCodeInfo.addressLo();
             int hi = debugCodeInfo.addressHi();
             int primaryLine = debugCodeInfo.line();
             boolean isDeoptTarget = debugCodeInfo.isDeoptTarget();
-            int modifiers = debugCodeInfo.modifiers();
+            int modifiers = debugCodeInfo.getModifiers();
 
             /* Search for a method defining this primary range. */
             ClassEntry classEntry = ensureClassEntry(className);
@@ -257,8 +257,8 @@ public abstract class DebugInfoBase {
             debugCodeInfo.lineInfoProvider().forEach(debugLineInfo -> {
                 String fileNameAtLine = debugLineInfo.fileName();
                 Path filePathAtLine = debugLineInfo.filePath();
-                String classNameAtLine = TypeEntry.canonicalize(debugLineInfo.ownerType());
-                String methodNameAtLine = debugLineInfo.name();
+                String classNameAtLine = TypeEntry.canonicalize(debugLineInfo.className());
+                String methodNameAtLine = debugLineInfo.methodName();
                 String symbolNameAtLine = debugLineInfo.symbolNameForMethod();
                 int loAtLine = lo + debugLineInfo.addressLo();
                 int hiAtLine = lo + debugLineInfo.addressHi();
