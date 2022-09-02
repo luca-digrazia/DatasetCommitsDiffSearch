@@ -38,41 +38,53 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.api.library;
+package com.oracle.truffle.api.library.test.examples.math;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-/**
- * Annotation used on active library receiver to specify the active libraries provided by this Java
- * class.
- */
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE})
-@Repeatable(ExportLibrary.Repeat.class)
-public @interface ExportLibrary {
+@ExportLibrary(VectorLibrary.class)
+final class MyVector {
 
-    /***
-     * The library exported.
-     */
-    Class<? extends Library> value();
+    final double[] array;
 
-    /**
-     * Custom receiver type. -> all methods must be static.
-     *
-     * @return
-     */
-    Class<?> receiverClass() default Void.class;
+    MyVector(int length) {
+        this.array = new double[length];
+    }
 
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.TYPE})
-    public @interface Repeat {
+    @ExportMessage
+    double sum() {
+        double sum = 0;
+        for (double value : array) {
+            sum += value;
+        }
+        return sum;
+    }
 
-        ExportLibrary[] value();
+    @ExportMessage
+    abstract static class Multiply {
 
+        @Specialization
+        static void multiply(MyVector vector, double value) {
+            for (int i = 0; i < vector.array.length; i++) {
+                vector.array[i] *= value;
+            }
+        }
+
+        @Specialization
+        static void multiply(MyVector vector, long value) {
+            for (int i = 0; i < vector.array.length; i++) {
+                vector.array[i] *= value;
+            }
+        }
+
+        @Fallback
+        @SuppressWarnings("unused")
+        static void multiply(MyVector vector, Object value) {
+            throw new UnsupportedOperationException(value.toString());
+        }
     }
 
 }

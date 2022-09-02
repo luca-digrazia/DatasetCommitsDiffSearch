@@ -185,7 +185,7 @@ final class HostObject implements TruffleObject {
         if (isNull()) {
             throw UnsupportedMessageException.create();
         }
-        String[] fields = HostInteropReflect.findUniquePublicMemberNames(getLookupClass(), isStaticClass(), includeInternal);
+        String[] fields = TruffleOptions.AOT ? new String[0] : HostInteropReflect.findUniquePublicMemberNames(getLookupClass(), isStaticClass(), includeInternal);
         return HostObject.forObject(fields, languageContext);
     }
 
@@ -195,7 +195,7 @@ final class HostObject implements TruffleObject {
                     @Shared("readField") @Cached ReadFieldNode readField,
                     @Shared("lookupMethod") @Cached LookupMethodNode lookupMethod,
                     @Cached LookupInnerClassNode lookupInnerClass) throws UnsupportedMessageException, UnknownIdentifierException {
-        if (isNull()) {
+        if (TruffleOptions.AOT || isNull()) {
             throw UnsupportedMessageException.create();
         }
         boolean isStatic = isStaticClass();
@@ -293,7 +293,7 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportMessage
-    static class IsMemberInvocable {
+    static class IsMemberInvokable {
 
         @Specialization(guards = {"receiver.isStaticClass()", "receiver.isStaticClass() == cachedStatic", "receiver.getLookupClass() == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
         static boolean doCached(HostObject receiver, String name,
@@ -555,6 +555,9 @@ final class HostObject implements TruffleObject {
 
     @ExportMessage
     boolean isExecutable(@Shared("lookupFunctionalMethod") @Cached LookupFunctionalMethodNode lookupMethod) {
+        if (TruffleOptions.AOT) {
+            return false;
+        }
         return !isNull() && !isClass() && lookupMethod.execute(getLookupClass()) != null;
     }
 
@@ -562,6 +565,9 @@ final class HostObject implements TruffleObject {
     Object execute(Object[] args,
                     @Shared("hostExecute") @Cached HostExecuteNode doExecute,
                     @Shared("lookupFunctionalMethod") @Cached LookupFunctionalMethodNode lookupMethod) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
+        if (TruffleOptions.AOT) {
+            throw UnsupportedMessageException.create();
+        }
         if (!isNull() && !isClass()) {
             HostMethodDesc method = lookupMethod.execute(getLookupClass());
             if (method != null) {
@@ -583,6 +589,9 @@ final class HostObject implements TruffleObject {
         @Specialization(guards = "receiver.isArrayClass()")
         static Object doArrayCached(HostObject receiver, Object[] args,
                         @CachedLibrary(limit = "1") InteropLibrary indexes) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
+            if (TruffleOptions.AOT) {
+                throw UnsupportedMessageException.create();
+            }
             if (args.length != 1) {
                 throw ArityException.create(1, args.length);
             }
@@ -602,6 +611,9 @@ final class HostObject implements TruffleObject {
                         @Shared("lookupConstructor") @Cached LookupConstructorNode lookupConstructor,
                         @Shared("hostExecute") @Cached HostExecuteNode executeMethod) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
             assert !receiver.isArrayClass();
+            if (TruffleOptions.AOT) {
+                throw UnsupportedMessageException.create();
+            }
             if (receiver.isClass()) {
                 HostMethodDesc constructor = lookupConstructor.execute(receiver.asClass());
                 if (constructor != null) {

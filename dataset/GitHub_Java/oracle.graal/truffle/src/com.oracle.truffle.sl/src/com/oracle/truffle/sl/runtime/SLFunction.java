@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,9 +46,7 @@ import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLogger;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -61,6 +59,8 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.SLUndefinedFunctionRootNode;
+import com.oracle.truffle.sl.nodes.util.SLNormalizeArrayNode;
+import com.oracle.truffle.sl.nodes.util.SLSimplifyNode;
 
 /**
  * Represents a SL function. On the Truffle level, a callable element is represented by a
@@ -80,7 +80,6 @@ import com.oracle.truffle.sl.nodes.SLUndefinedFunctionRootNode;
  * encapsulates a {@link SLUndefinedFunctionRootNode}.
  */
 @ExportLibrary(InteropLibrary.class)
-@SuppressWarnings("static-method")
 public final class SLFunction implements TruffleObject {
 
     public static final int INLINE_CACHE_SIZE = 2;
@@ -137,53 +136,21 @@ public final class SLFunction implements TruffleObject {
         return name;
     }
 
-    @ExportMessage
-    boolean hasLanguage() {
-        return true;
-    }
-
-    @ExportMessage
-    Class<? extends TruffleLanguage<?>> getLanguage() {
-        return SLLanguage.class;
-    }
-
     /**
      * {@link SLFunction} instances are always visible as executable to other languages.
      */
     @SuppressWarnings("static-method")
-    @ExportMessage
-    @TruffleBoundary
-    SourceSection getSourceLocation() {
+    public SourceSection getDeclaredLocation() {
         return getCallTarget().getRootNode().getSourceSection();
     }
 
-    @SuppressWarnings("static-method")
-    @ExportMessage
-    boolean hasSourceLocation() {
-        return true;
-    }
-
     /**
      * {@link SLFunction} instances are always visible as executable to other languages.
      */
+    @SuppressWarnings("static-method")
     @ExportMessage
     boolean isExecutable() {
         return true;
-    }
-
-    @ExportMessage
-    boolean hasMetaObject() {
-        return true;
-    }
-
-    @ExportMessage
-    Object getMetaObject() {
-        return SLType.FUNCTION;
-    }
-
-    @ExportMessage
-    Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
-        return name;
     }
 
     /**
@@ -238,11 +205,14 @@ public final class SLFunction implements TruffleObject {
         protected static Object doDirect(SLFunction function, Object[] arguments,
                         @Cached("function.getCallTargetStable()") Assumption callTargetStable,
                         @Cached("function.getCallTarget()") RootCallTarget cachedTarget,
-                        @Cached("create(cachedTarget)") DirectCallNode callNode) {
+                        @Cached("create(cachedTarget)") DirectCallNode callNode,
+                        @Cached SLSimplifyNode returnNormalize,
+                        @Cached SLNormalizeArrayNode argumentsNormalize) {
 
             /* Inline cache hit, we are safe to execute the cached call target. */
-            Object returnValue = callNode.call(arguments);
-            return returnValue;
+            Object[] normalizedArguments = argumentsNormalize.executeConvert(arguments);
+            Object returnValue = callNode.call(normalizedArguments);
+            return returnNormalize.executeConvert(returnValue);
         }
 
         /**
@@ -252,12 +222,15 @@ public final class SLFunction implements TruffleObject {
          */
         @Specialization(replaces = "doDirect")
         protected static Object doIndirect(SLFunction function, Object[] arguments,
-                        @Cached IndirectCallNode callNode) {
+                        @Cached IndirectCallNode callNode,
+                        @Cached SLSimplifyNode returnNormalize,
+                        @Cached SLNormalizeArrayNode argumentsNormalize) {
             /*
              * SL has a quite simple call lookup: just ask the function for the current call target,
              * and call it.
              */
-            return callNode.call(function.getCallTarget(), arguments);
+            Object returnValue = callNode.call(function.getCallTarget(), argumentsNormalize.executeConvert(arguments));
+            return returnNormalize.executeConvert(returnValue);
         }
     }
 

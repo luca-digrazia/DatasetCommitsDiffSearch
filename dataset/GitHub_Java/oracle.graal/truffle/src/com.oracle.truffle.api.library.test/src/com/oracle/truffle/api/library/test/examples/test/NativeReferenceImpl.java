@@ -38,40 +38,63 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.api.library;
+package com.oracle.truffle.api.library.test.examples.test;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.util.Arrays;
 
-/**
- * Annotation used on active library receiver to specify the active libraries provided by this Java
- * class.
- */
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE})
-@Repeatable(ExportLibrary.Repeat.class)
-public @interface ExportLibrary {
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
 
-    /***
-     * The library exported.
-     */
-    Class<? extends Library> value();
+@ExportLibrary(NativeReferenceLibrary.class)
+public class NativeReferenceImpl {
 
-    /**
-     * Custom receiver type. -> all methods must be static.
-     *
-     * @return
-     */
-    Class<?> receiverClass() default Void.class;
+    public Object[] table;
 
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.TYPE})
-    public @interface Repeat {
+    NativeReferenceImpl(Object[] table) {
+        this.table = table;
+    }
 
-        ExportLibrary[] value();
+    @ExportMessage
+    final Object read(int offset, @Cached IndexComputation compute) {
+        return table[compute.execute(offset)];
+    }
+
+    @ExportMessage
+    static class Write {
+
+        @Specialization(guards = "offset < receiver.table.length")
+        static void doInBounds(NativeReferenceImpl receiver, int offset, Object value,
+                        @Cached IndexComputation compute) {
+            receiver.table[compute.execute(offset)] = value;
+        }
+
+        @Specialization(guards = "offset >= receiver.table.length")
+        static void doOutOfBounds(NativeReferenceImpl receiver, int offset, Object value,
+                        @Cached IndexComputation compute) {
+            receiver.table = Arrays.copyOf(receiver.table, offset + 1);
+        }
+    }
+
+    @GenerateUncached
+    abstract static class IndexComputation extends Node {
+
+        abstract int execute(int index);
+
+        @Specialization(guards = "value == cachedValue")
+        static int doCached(int value,
+                        @Cached("value") int cachedValue,
+                        @Cached("doGeneric(value)") int cachedResult) {
+            return cachedResult;
+        }
+
+        @Specialization(replaces = "doCached")
+        static int doGeneric(int value) {
+            return value / 8;
+        }
 
     }
 

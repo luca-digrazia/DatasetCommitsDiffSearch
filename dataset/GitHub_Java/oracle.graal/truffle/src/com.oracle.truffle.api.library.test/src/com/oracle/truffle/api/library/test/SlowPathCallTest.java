@@ -38,41 +38,63 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.api.library;
+package com.oracle.truffle.api.library.test;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import org.junit.Assert;
+import org.junit.Test;
 
-/**
- * Annotation used on active library receiver to specify the active libraries provided by this Java
- * class.
- */
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE})
-@Repeatable(ExportLibrary.Repeat.class)
-public @interface ExportLibrary {
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.library.GenerateLibrary;
+import com.oracle.truffle.api.library.Library;
 
-    /***
-     * The library exported.
-     */
-    Class<? extends Library> value();
+public class SlowPathCallTest extends AbstractLibraryTest {
 
-    /**
-     * Custom receiver type. -> all methods must be static.
-     *
-     * @return
-     */
-    Class<?> receiverClass() default Void.class;
+    @GenerateLibrary
+    public abstract static class SlowPathCallLibrary extends Library {
 
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.TYPE})
-    public @interface Repeat {
+        public abstract Object someCall(Object receiver);
 
-        ExportLibrary[] value();
+    }
 
+    @ExportLibrary(SlowPathCallLibrary.class)
+    static class MyObject {
+
+        @ExportMessage
+        Object someCall() {
+            return "uncached";
+        }
+
+        @ExportMessage
+        static class SomeCall {
+
+            @Specialization
+            static Object s0(@SuppressWarnings("unused") MyObject receiver) {
+                return "cached";
+            }
+
+        }
+
+    }
+
+    @Test
+    public void doSlowPathCall() {
+        MyObject object = new MyObject();
+
+        Assert.assertEquals("uncached", getUncached(SlowPathCallLibrary.class, object).someCall(object));
+        Assert.assertEquals("cached", createCached(SlowPathCallLibrary.class, object).someCall(object));
+        try {
+            createCached(SlowPathCallLibrary.class, new Object()).someCall(new Object());
+            Assert.fail();
+        } catch (AbstractMethodError e) {
+        }
+        try {
+            Object o = new Object();
+            getUncached(SlowPathCallLibrary.class, o).someCall(o);
+            Assert.fail();
+        } catch (AbstractMethodError e) {
+        }
     }
 
 }

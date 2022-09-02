@@ -38,41 +38,33 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.api.library;
+package com.oracle.truffle.api.library.test.examples.proto;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
 
-/**
- * Annotation used on active library receiver to specify the active libraries provided by this Java
- * class.
- */
-@Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE})
-@Repeatable(ExportLibrary.Repeat.class)
-public @interface ExportLibrary {
+@ExportLibrary(MyLibrary.class)
+public class TestObject {
 
-    /***
-     * The library exported.
-     */
-    Class<? extends Library> value();
+    @ExportMessage
+    int bar(Object arg0) {
+        return (int) arg0;
+    }
 
-    /**
-     * Custom receiver type. -> all methods must be static.
-     *
-     * @return
-     */
-    Class<?> receiverClass() default Void.class;
+    @ExportMessage
+    static class Foo {
 
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.TYPE})
-    public @interface Repeat {
+        @Specialization
+        static int foo(TestObject o, int arg0) {
+            return arg0;
+        }
 
-        ExportLibrary[] value();
-
+        @Specialization
+        static int foo(TestObject o, double arg0) {
+            return (int) arg0;
+        }
     }
 
 }

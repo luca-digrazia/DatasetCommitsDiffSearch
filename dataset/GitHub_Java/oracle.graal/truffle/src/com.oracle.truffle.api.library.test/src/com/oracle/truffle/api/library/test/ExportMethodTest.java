@@ -45,17 +45,20 @@ import static org.junit.Assert.assertSame;
 
 import org.junit.Test;
 
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.test.otherPackage.OtherPackageNode;
-import com.oracle.truffle.api.library.test.otherPackage.OtherPackageNode.InnerDSLNode;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.ExpectError;
 
 @SuppressWarnings({"unused", "static-method"})
@@ -143,6 +146,17 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     @Test
     public void test() {
+        CallTarget target = Truffle.getRuntime().createCallTarget(new RootNode(null) {
+            @Override
+            public Object execute(VirtualFrame frame) {
+                CompilerAsserts.neverPartOfCompilation("my message");
+                return null;
+            }
+        });
+        for (int i = 0; i < 10000; i++) {
+            target.call();
+        }
+
         ExportsTestObject1 o = new ExportsTestObject1();
         assertEquals("foo", getUncached(ExportsTestLibrary1.class, o).foo(o, 42));
     }
@@ -198,21 +212,10 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     // export varargs as non-varargs
     @ExportLibrary(ExportsTestLibrary4.class)
-    static final class ExportsInnerDSLNode {
-
-        @ExportMessage
-        public Object varArgsObject(Object[] args, @Cached InnerDSLNode node) {
-            return args[0];
-        }
-
-    }
-
-    // export varargs as non-varargs
-    @ExportLibrary(ExportsTestLibrary4.class)
     static final class ExportsTestVarArgs {
 
         @ExportMessage
-        public Object varArgsObject(Object[] args, @Cached OtherPackageNode.InnerDSLNode node) {
+        public Object varArgsObject(Object[] args, @Cached CachedTestNode node) {
             return args[0];
         }
 
@@ -314,34 +317,6 @@ public class ExportMethodTest extends AbstractLibraryTest {
     }
 
     abstract static class NoLibrary extends Library {
-    }
-
-    @ExportLibrary(ExportsTestLibrary1.class)
-    static final class ExportsWithCachedBindsToThis {
-
-        static final Object DELEGATE = new ExportsTestStaticWithCachedNode();
-
-        @ExportMessage
-        public String foo(int arg,
-                        @Cached("this") ExportsWithCachedBindsToThis lib) {
-            return "foo";
-        }
-    }
-
-    @ExportLibrary(ExportsTestLibrary1.class)
-    static final class ExportsWithCachedBindsToReceiverMethod {
-
-        static final Object DELEGATE = new ExportsTestStaticWithCachedNode();
-
-        @ExportMessage
-        public String foo(int arg,
-                        @Cached(value = "this.boundMethod()", allowUncached = true) String lib) {
-            return "foo";
-        }
-
-        String boundMethod() {
-            return "boundMethod";
-        }
     }
 
     @ExportLibrary(ExportsTestLibrary1.class)
@@ -559,6 +534,26 @@ public class ExportMethodTest extends AbstractLibraryTest {
                         @ExpectError("Failed to generate code for @GenerateUncached: %") //
                         @Cached DSLNode node) {
             return 42;
+        }
+    }
+
+    @ExportLibrary(ExportsTestLibrary4.class)
+    static class ExportsTestObjectError17 {
+        @ExportMessage
+        public int intArg(int arg,
+                        @ExpectError("Failed to generate code for @GenerateUncached: %")//
+                        @Cached DSLNode node) {
+            return 42;
+        }
+
+        @ExportMessage
+        static class IntArg {
+
+            @Specialization
+            static int intArg(ExportsTestObjectError17 receiver, int arg,
+                            @Cached DSLNode node) {
+                return arg;
+            }
         }
     }
 
