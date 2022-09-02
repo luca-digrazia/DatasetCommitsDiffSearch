@@ -37,6 +37,9 @@ import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.WordPointer;
+import org.graalvm.word.ComparableWord;
+import org.graalvm.word.WordBase;
+import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.util.VMError;
@@ -56,6 +59,8 @@ import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiInterface;
  * A utility class that contains helper methods for JNI/JVMTI that agents can use.
  */
 public final class Support {
+    private static final byte JNI_TRUE = 1;
+    private static final byte JNI_FALSE = 0;
 
     public static boolean isInitialized() {
         boolean initialized = jvmtiEnv.isNonNull();
@@ -181,6 +186,24 @@ public final class Support {
         return handlePtr.read();
     }
 
+    public static byte getByteArgument(int slot) {
+        CIntPointer valuePtr = StackValue.get(CIntPointer.class);
+        if (jvmtiFunctions().GetLocalInt().invoke(jvmtiEnv(), nullHandle(), 0, slot, valuePtr) != JvmtiError.JVMTI_ERROR_NONE) {
+            return 0;
+        }
+        assert (byte) valuePtr.read() == valuePtr.read();
+        return (byte) valuePtr.read();
+    }
+
+    public static boolean getBooleanArgument(int slot) {
+        CIntPointer valuePtr = StackValue.get(CIntPointer.class);
+        if (jvmtiFunctions().GetLocalInt().invoke(jvmtiEnv(), nullHandle(), 0, slot, valuePtr) != JvmtiError.JVMTI_ERROR_NONE) {
+            return false;
+        }
+        assert valuePtr.read() == JNI_TRUE || valuePtr.read() == JNI_FALSE;
+        return valuePtr.read() == JNI_TRUE;
+    }
+
     public static String getClassNameOr(JNIEnvironment env, JNIObjectHandle clazz, String forNullHandle, String forNullNameOrException) {
         if (clazz.notEqual(nullHandle())) {
             JNIObjectHandle clazzName = callObjectMethod(env, clazz, JvmtiAgentBase.singleton().handles().javaLangClassGetName);
@@ -234,18 +257,6 @@ public final class Support {
         return methodName;
     }
 
-    public static JNIObjectHandle getObjectField(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle obj, String name, String signature) {
-        try (CCharPointerHolder nameHolder = toCString(name);
-                        CCharPointerHolder sigHolder = toCString(signature);) {
-            JNIFieldId fieldId = jniFunctions().getGetFieldID().invoke(env, clazz, nameHolder.get(), sigHolder.get());
-            if (nullHandle().notEqual(fieldId)) {
-                return jniFunctions().getGetObjectField().invoke(env, obj, fieldId);
-            } else {
-                return nullHandle();
-            }
-        }
-    }
-
     public static boolean clearException(JNIEnvironment localEnv) {
         if (jniFunctions().getExceptionCheck().invoke(localEnv)) {
             jniFunctions().getExceptionClear().invoke(localEnv);
@@ -286,20 +297,12 @@ public final class Support {
         return jniFunctions().getCallObjectMethodA().invoke(env, obj, method, args);
     }
 
-    public static JNIObjectHandle callObjectMethodLLL(JNIEnvironment env, JNIObjectHandle obj, JNIMethodId method, JNIObjectHandle l0, JNIObjectHandle l1, JNIObjectHandle l2) {
-        JNIValue args = StackValue.get(3, JNIValue.class);
-        args.addressOf(0).setObject(l0);
-        args.addressOf(1).setObject(l1);
-        args.addressOf(2).setObject(l2);
-        return jniFunctions().getCallObjectMethodA().invoke(env, obj, method, args);
-    }
-
-    public static JNIObjectHandle callObjectMethodLLLL(JNIEnvironment env, JNIObjectHandle obj, JNIMethodId method, JNIObjectHandle l0, JNIObjectHandle l1, JNIObjectHandle l2, JNIObjectHandle l3) {
+    public static JNIObjectHandle callObjectMethodBLLZ(JNIEnvironment env, JNIObjectHandle obj, JNIMethodId method, byte b0, JNIObjectHandle l1, JNIObjectHandle l2, boolean z3) {
         JNIValue args = StackValue.get(4, JNIValue.class);
-        args.addressOf(0).setObject(l0);
+        args.addressOf(0).setByte(b0);
         args.addressOf(1).setObject(l1);
         args.addressOf(2).setObject(l2);
-        args.addressOf(3).setObject(l3);
+        args.addressOf(3).setBoolean(z3);
         return jniFunctions().getCallObjectMethodA().invoke(env, obj, method, args);
     }
 
@@ -385,9 +388,11 @@ public final class Support {
         return jniFunctions().getCallIntMethodA().invoke(env, obj, method, args);
     }
 
-    public static JNIObjectHandle newObjectL(JNIEnvironment env, JNIObjectHandle clazz, JNIMethodId ctor, JNIObjectHandle l0) {
-        JNIValue args = StackValue.get(1, JNIValue.class);
+    public static JNIObjectHandle newObjectLLL(JNIEnvironment env, JNIObjectHandle clazz, JNIMethodId ctor, JNIObjectHandle l0, JNIObjectHandle l1, JNIObjectHandle l2) {
+        JNIValue args = StackValue.get(3, JNIValue.class);
         args.addressOf(0).setObject(l0);
+        args.addressOf(1).setObject(l1);
+        args.addressOf(2).setObject(l2);
         return jniFunctions().getNewObjectA().invoke(env, clazz, ctor, args);
     }
 
@@ -410,6 +415,35 @@ public final class Support {
 
     public static void checkJni(int resultCode) {
         guarantee(resultCode == JNIErrors.JNI_OK());
+    }
+
+    public interface WordSupplier<T extends WordBase> {
+        T get();
+    }
+
+    public interface WordFunction<T extends WordBase, R extends WordBase> {
+        R apply(T t);
+    }
+
+    public static class LazyWordValue<T extends ComparableWord> implements WordSupplier<T> {
+        private final WordSupplier<T> supplier;
+        private T value = WordFactory.zero(); // nullHandle() caused warnings
+
+        public static <T extends ComparableWord> LazyWordValue<T> lazyGet(WordSupplier<T> supplier) {
+            return new LazyWordValue<>(supplier);
+        }
+
+        public LazyWordValue(WordSupplier<T> supplier) {
+            this.supplier = supplier;
+        }
+
+        @Override
+        public T get() {
+            if (value.equal(nullHandle())) {
+                value = supplier.get();
+            }
+            return value;
+        }
     }
 
     private Support() {

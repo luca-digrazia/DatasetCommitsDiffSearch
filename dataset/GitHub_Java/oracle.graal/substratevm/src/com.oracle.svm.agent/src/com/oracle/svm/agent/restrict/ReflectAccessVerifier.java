@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,155 +24,154 @@
  */
 package com.oracle.svm.agent.restrict;
 
-import static com.oracle.svm.agent.Support.clearException;
-import static com.oracle.svm.agent.Support.fromCString;
-import static com.oracle.svm.agent.Support.fromJniString;
-import static com.oracle.svm.agent.Support.getClassNameOr;
-import static com.oracle.svm.agent.Support.getClassNameOrNull;
-import static com.oracle.svm.agent.Support.handles;
-import static com.oracle.svm.agent.Support.jniFunctions;
-import static com.oracle.svm.agent.Support.jvmtiEnv;
-import static com.oracle.svm.agent.Support.jvmtiFunctions;
-import static com.oracle.svm.agent.Support.toCString;
+import static com.oracle.svm.configure.trace.LazyValueUtils.lazyValue;
 import static com.oracle.svm.jni.JNIObjectHandles.nullHandle;
+import static com.oracle.svm.jvmtiagentbase.Support.clearException;
+import static com.oracle.svm.jvmtiagentbase.Support.fromCString;
+import static com.oracle.svm.jvmtiagentbase.Support.fromJniString;
+import static com.oracle.svm.jvmtiagentbase.Support.jniFunctions;
+import static com.oracle.svm.jvmtiagentbase.Support.jvmtiEnv;
+import static com.oracle.svm.jvmtiagentbase.Support.jvmtiFunctions;
 import static org.graalvm.word.WordFactory.nullPointer;
 
 import java.util.function.Supplier;
 
+import org.graalvm.compiler.phases.common.LazyValue;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.c.type.WordPointer;
 
-import com.oracle.svm.agent.Agent;
-import com.oracle.svm.agent.Support.WordPredicate;
-import com.oracle.svm.agent.Support.WordSupplier;
-import com.oracle.svm.agent.jvmti.JvmtiError;
+import com.oracle.svm.agent.NativeImageAgent;
 import com.oracle.svm.configure.config.ConfigurationMethod;
-import com.oracle.svm.configure.config.TypeConfiguration;
 import com.oracle.svm.configure.trace.AccessAdvisor;
+import com.oracle.svm.core.util.WordPredicate;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIFieldId;
 import com.oracle.svm.jni.nativeapi.JNIMethodId;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
+import com.oracle.svm.jvmtiagentbase.Support;
+import com.oracle.svm.jvmtiagentbase.Support.WordFunction;
+import com.oracle.svm.jvmtiagentbase.Support.WordSupplier;
+import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiError;
 
-import jdk.vm.ci.meta.MetaUtil;
-
+/**
+ * In restriction mode, decides whether to permit or deny individual reflective accesses, using
+ * {@link AccessAdvisor} to decide additional exemptions from its own rules, such as system classes.
+ */
 public class ReflectAccessVerifier extends AbstractAccessVerifier {
+    private final TypeAccessChecker typeAccessChecker;
+    private final NativeImageAgent agent;
 
-    public ReflectAccessVerifier(TypeConfiguration configuration, AccessAdvisor advisor) {
-        super(configuration, advisor);
+    public ReflectAccessVerifier(TypeAccessChecker typeAccessChecker, AccessAdvisor advisor, NativeImageAgent agent) {
+        super(advisor);
+        this.typeAccessChecker = typeAccessChecker;
+        this.agent = agent;
     }
 
-    public boolean verifyForName(JNIEnvironment env, JNIObjectHandle callerClass, JNIObjectHandle name) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+    public boolean verifyForName(JNIEnvironment env, JNIObjectHandle callerClass, String className, WordSupplier<JNIObjectHandle> loadClass) {
+        if (shouldApproveWithoutChecks(lazyValue(className), lazyClassNameOrNull(env, callerClass))) {
             return true;
         }
-        String className = fromJniString(env, name);
-        if (className != null && configuration.get(className) != null) {
+        return className == null || typeAccessChecker.isClassAccessible(className, loadClass);
+    }
+
+    public boolean verifyLoadClass(JNIEnvironment env, JNIObjectHandle callerClass, String className, WordSupplier<JNIObjectHandle> loadClass) {
+        LazyValue<String> lazyName = lazyValue(className);
+        LazyValue<String> callerClassName = lazyClassNameOrNull(env, callerClass);
+        if (shouldApproveWithoutChecks(lazyName, callerClassName)) {
             return true;
         }
-        try (CCharPointerHolder message = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit access to class: " + className)) {
-            beforeThrow(message);
-            jniFunctions().getThrowNew().invoke(env, handles().javaLangClassNotFoundException, message.get());
+        if (accessAdvisor.shouldIgnoreLoadClass(lazyName, callerClassName)) {
+            return true;
         }
-        return false;
+        return className == null || typeAccessChecker.isClassAccessible(className, loadClass);
     }
 
     public boolean verifyGetField(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle name, JNIObjectHandle result, JNIObjectHandle declaring, JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+        if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
             return true;
         }
         JNIFieldId field = jniFunctions().getFromReflectedField().invoke(env, result);
-        if (field.isNonNull() && isFieldAccessible(env, clazz, () -> fromJniString(env, name), field, declaring)) {
-            return true;
-        }
-        try (CCharPointerHolder message = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit access to field: " +
-                        getClassNameOr(env, clazz, "(null)", "(?)") + "." + fromJniString(env, name))) {
-            beforeThrow(message);
-            jniFunctions().getThrowNew().invoke(env, handles().javaLangNoSuchFieldException, message.get());
-        }
-        return false;
+        return field.isNull() || typeAccessChecker.isFieldAccessible(env, clazz, () -> fromJniString(env, name), field, declaring);
     }
 
-    public boolean verifyGetMethod(JNIEnvironment env, JNIObjectHandle clazz, String name, Object paramTypesArray, JNIObjectHandle result, JNIObjectHandle declaring, JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+    public boolean verifyObjectFieldOffset(JNIEnvironment env, JNIObjectHandle name, JNIObjectHandle declaring, JNIObjectHandle callerClass) {
+        if (shouldApproveWithoutChecks(env, declaring, callerClass)) {
+            return true;
+        }
+        return typeAccessChecker.isFieldUnsafeAccessible(() -> fromJniString(env, name), declaring);
+    }
+
+    public boolean verifyGetMethod(JNIEnvironment env, JNIObjectHandle clazz, String name, Supplier<String> signature, JNIObjectHandle result, JNIObjectHandle declaring, JNIObjectHandle callerClass) {
+        if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
             return true;
         }
         JNIMethodId method = jniFunctions().getFromReflectedMethod().invoke(env, result);
-        return verifyGetMethod0(env, clazz, name, () -> asInternalSignature(paramTypesArray), method, declaring);
+        return verifyGetMethod0(env, clazz, name, signature, method, declaring);
     }
 
-    public boolean verifyGetConstructor(JNIEnvironment env, JNIObjectHandle clazz, Object paramTypesArray, JNIObjectHandle result, JNIObjectHandle callerClass) {
-        return verifyGetMethod(env, clazz, ConfigurationMethod.CONSTRUCTOR_NAME, paramTypesArray, result, clazz, callerClass);
+    public boolean verifyGetConstructor(JNIEnvironment env, JNIObjectHandle clazz, Supplier<String> signature, JNIObjectHandle result, JNIObjectHandle callerClass) {
+        return verifyGetMethod(env, clazz, ConfigurationMethod.CONSTRUCTOR_NAME, signature, result, clazz, callerClass);
     }
 
     public boolean verifyNewInstance(JNIEnvironment env, JNIObjectHandle clazz, String name, String signature, JNIMethodId result, JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+        if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
             return true;
         }
         return verifyGetMethod0(env, clazz, name, () -> signature, result, clazz);
     }
 
+    public boolean verifyNewArray(JNIEnvironment env, JNIObjectHandle arrayClass, JNIObjectHandle callerClass) {
+        if (shouldApproveWithoutChecks(env, arrayClass, callerClass)) {
+            return true;
+        }
+        return typeAccessChecker.getType(arrayClass) != null;
+    }
+
     public boolean verifyGetEnclosingMethod(JNIEnvironment env, JNIObjectHandle clazz, String name, String signature, JNIObjectHandle result, JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+        if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
             return true;
         }
         JNIMethodId method = jniFunctions().getFromReflectedMethod().invoke(env, result);
-        return method.isNonNull() && isMethodAccessible(env, clazz, name, () -> signature, method, clazz);
+        return method.isNull() || typeAccessChecker.isMethodAccessible(env, clazz, name, () -> signature, method, clazz);
     }
 
     private boolean verifyGetMethod0(JNIEnvironment env, JNIObjectHandle clazz, String name, Supplier<String> signature, JNIMethodId method, JNIObjectHandle declaring) {
-        if (method.isNonNull() && isMethodAccessible(env, clazz, name, signature, method, declaring)) {
-            return true;
-        }
-        try (CCharPointerHolder message = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit access to method: " +
-                        getClassNameOr(env, clazz, "(null)", "(?)") + "." + name + signature.get())) {
-
-            beforeThrow(message);
-            jniFunctions().getThrowNew().invoke(env, handles().javaLangNoSuchMethodException, message.get());
-        }
-        return false;
+        return method.isNull() || typeAccessChecker.isMethodAccessible(env, clazz, name, signature, method, declaring);
     }
 
-    private static String asInternalSignature(Object paramTypesArray) {
-        if (paramTypesArray instanceof Object[]) {
-            StringBuilder sb = new StringBuilder("(");
-            for (Object paramType : (Object[]) paramTypesArray) {
-                sb.append(MetaUtil.toInternalName(paramType.toString()));
-            }
-            return sb.append(')').toString();
+    public JNIObjectHandle filterGetClasses(JNIEnvironment env, JNIObjectHandle queriedClass, JNIObjectHandle array, WordSupplier<JNIObjectHandle> elementClass, JNIObjectHandle callerClass,
+                    WordFunction<JNIObjectHandle, JNIObjectHandle> getDeclaringClass, boolean declaredOnly) {
+        if (shouldApproveWithoutChecks(env, queriedClass, callerClass)) {
+            return array;
         }
-        return null;
-    }
 
-    private static void beforeThrow(@SuppressWarnings("unused") CCharPointerHolder message) {
-        // System.err.println(fromCString(message.get()));
-    }
-
-    private static void beforeFilter(@SuppressWarnings("unused") Supplier<String> message) {
-        // System.err.println("Filtering: " + message.get());
+        WordPredicate<JNIObjectHandle> predicate = innerClass -> {
+            JNIObjectHandle declaringClass = declaredOnly ? queriedClass : getDeclaringClass.apply(innerClass);
+            return typeAccessChecker.isInnerClassAccessible(env, queriedClass, innerClass, declaringClass);
+        };
+        return filterArray(env, array, elementClass, predicate);
     }
 
     public JNIObjectHandle filterGetFields(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle array, boolean declaredOnly, JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+        if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
             return array;
         }
-        WordPredicate<JNIObjectHandle> predicate = f -> shouldFilterField(env, clazz, f, declaredOnly);
-        return filterArray(env, array, () -> handles().getJavaLangReflectField(env), predicate);
+        WordPredicate<JNIObjectHandle> predicate = f -> shouldRetainField(env, clazz, f, declaredOnly);
+        return filterArray(env, array, () -> agent.handles().getJavaLangReflectField(env), predicate);
     }
 
     public JNIObjectHandle filterGetMethods(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle array,
                     WordSupplier<JNIObjectHandle> elementClass, boolean declaredOnly, JNIObjectHandle callerClass) {
 
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+        if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
             return array;
         }
-        WordPredicate<JNIObjectHandle> predicate = m -> shouldFilterMethod(env, clazz, m, declaredOnly);
+        WordPredicate<JNIObjectHandle> predicate = m -> shouldRetainMethod(env, clazz, m, declaredOnly);
         return filterArray(env, array, elementClass, predicate);
     }
 
-    private boolean shouldFilterMethod(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle methodObj, boolean declaredOnly) {
+    private boolean shouldRetainMethod(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle methodObj, boolean declaredOnly) {
         JNIMethodId method = jniFunctions().getFromReflectedMethod().invoke(env, methodObj);
         if (method.isNonNull() && !clearException(env)) {
             JNIObjectHandle declaring = nullHandle();
@@ -188,10 +187,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
                 CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
                 CCharPointerPointer signaturePtr = StackValue.get(CCharPointerPointer.class);
                 if (jvmtiFunctions().GetMethodName().invoke(jvmtiEnv(), method, namePtr, signaturePtr, nullPointer()) == JvmtiError.JVMTI_ERROR_NONE) {
-                    boolean accessible = isMethodAccessible(env, clazz, fromCString(namePtr.read()), () -> fromCString(signaturePtr.read()), method, declaring);
-                    if (!accessible) {
-                        beforeFilter(() -> "Method " + getClassNameOrNull(env, clazz) + "." + fromCString(namePtr.read()) + fromCString(signaturePtr.read()));
-                    }
+                    boolean accessible = typeAccessChecker.isMethodAccessible(env, clazz, fromCString(namePtr.read()), () -> fromCString(signaturePtr.read()), method, declaring);
                     jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), namePtr.read());
                     jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), signaturePtr.read());
                     if (accessible) {
@@ -234,7 +230,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         return result;
     }
 
-    private boolean shouldFilterField(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle fieldObj, boolean declaredOnly) {
+    private boolean shouldRetainField(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle fieldObj, boolean declaredOnly) {
         JNIFieldId field = jniFunctions().getFromReflectedField().invoke(env, fieldObj);
         if (field.isNonNull() && !clearException(env)) {
             JNIObjectHandle declaring = nullHandle();
@@ -247,19 +243,10 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
                 }
             }
             if (declaring.notEqual(nullHandle())) {
-                Supplier<String> nameSupplier = () -> {
-                    String result = null;
-                    CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
-                    if (jvmtiFunctions().GetFieldName().invoke(jvmtiEnv(), clazz, field, namePtr, nullPointer(), nullPointer()) == JvmtiError.JVMTI_ERROR_NONE) {
-                        result = fromCString(namePtr.read());
-                        jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), namePtr.read());
-                    }
-                    return result;
-                };
-                if (isFieldAccessible(env, clazz, nameSupplier, field, declaring)) {
+                Supplier<String> nameSupplier = () -> Support.getFieldName(clazz, field);
+                if (typeAccessChecker.isFieldAccessible(env, clazz, nameSupplier, field, declaring)) {
                     return true;
                 }
-                beforeFilter(() -> "Method " + getClassNameOrNull(env, clazz) + "." + nameSupplier.get());
             }
         }
         return false;
