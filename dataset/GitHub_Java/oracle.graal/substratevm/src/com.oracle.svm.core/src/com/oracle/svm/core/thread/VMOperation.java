@@ -55,11 +55,6 @@ public abstract class VMOperation {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    protected boolean isGC() {
-        return false;
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public final boolean getCausesSafepoint() {
         return systemEffect == SystemEffect.SAFEPOINT;
     }
@@ -120,12 +115,6 @@ public abstract class VMOperation {
         return inProgress.getExecutingThread() == CurrentIsolate.getCurrentThread();
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static boolean isGCInProgress() {
-        VMOperation op = VMOperationControl.get().getInProgress().getOperation();
-        return op != null && op.isGC();
-    }
-
     /** Check that there is a VMOperation in progress. */
     public static void guaranteeInProgress(String message) {
         if (!isInProgress()) {
@@ -146,12 +135,6 @@ public abstract class VMOperation {
         }
     }
 
-    public static void guaranteeGCInProgress(String message) {
-        if (!isGCInProgress()) {
-            throw VMError.shouldNotReachHere(message);
-        }
-    }
-
     /**
      * Used to determine if a VM operation must be executed or if it can be skipped. Regardless of
      * the {@linkplain SystemEffect} that was specified for the VM operation, this method might be
@@ -163,12 +146,10 @@ public abstract class VMOperation {
 
     protected abstract IsolateThread getQueuingThread(NativeVMOperationData data);
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     protected abstract void setQueuingThread(NativeVMOperationData data, IsolateThread value);
 
     protected abstract boolean isFinished(NativeVMOperationData data);
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     protected abstract void setFinished(NativeVMOperationData data, boolean value);
 
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.UNRESTRICTED, overridesCallers = true, reason = "Whitelisted because some operations may allocate.")

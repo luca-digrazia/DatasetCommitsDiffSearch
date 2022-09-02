@@ -91,7 +91,11 @@ class VMThreadLocalCollector implements Function<Object, Object> {
         return result;
     }
 
-    public List<VMThreadLocalInfo> sortThreadLocals(Feature.CompilationAccess a) {
+    public List<VMThreadLocalInfo> sortThreadLocals(Feature.CompilationAccess config) {
+        return sortThreadLocals(config, null);
+    }
+
+    public List<VMThreadLocalInfo> sortThreadLocals(Feature.CompilationAccess a, FastThreadLocal first) {
         CompilationAccessImpl config = (CompilationAccessImpl) a;
 
         sealed = true;
@@ -134,6 +138,12 @@ class VMThreadLocalCollector implements Function<Object, Object> {
 
         List<VMThreadLocalInfo> sortedThreadLocals = new ArrayList<>(threadLocals.values());
         sortedThreadLocals.sort(VMThreadLocalCollector::compareThreadLocal);
+        if (first != null) {
+            VMThreadLocalInfo info = threadLocals.get(first);
+            assert info != null && sortedThreadLocals.contains(info);
+            sortedThreadLocals.remove(info);
+            sortedThreadLocals.add(0, info);
+        }
         return sortedThreadLocals;
     }
 
@@ -142,21 +152,17 @@ class VMThreadLocalCollector implements Function<Object, Object> {
             return 0;
         }
 
-        /* Order by priority: lower maximum offsets first. */
-        int result = Integer.compare(info1.maxOffset, info2.maxOffset);
+        /* Order by size to avoid padding. */
+        int result = -Integer.compare(info1.sizeInBytes, info2.sizeInBytes);
         if (result == 0) {
-            /* Order by size to avoid padding. */
-            result = -Integer.compare(info1.sizeInBytes, info2.sizeInBytes);
+            /* Ensure that all objects are contiguous. */
+            result = -Boolean.compare(info1.isObject, info2.isObject);
             if (result == 0) {
-                /* Ensure that all objects are contiguous. */
-                result = -Boolean.compare(info1.isObject, info2.isObject);
-                if (result == 0) {
-                    /*
-                     * Make the order deterministic by sorting by name. This is arbitrary, we can
-                     * come up with any better ordering.
-                     */
-                    result = info1.name.compareTo(info2.name);
-                }
+                /*
+                 * Make the order deterministic by sorting by name. This is arbitrary, we can come
+                 * up with any better ordering.
+                 */
+                result = info1.name.compareTo(info2.name);
             }
         }
         assert result != 0 : "not distinguishable: " + info1 + ", " + info2;

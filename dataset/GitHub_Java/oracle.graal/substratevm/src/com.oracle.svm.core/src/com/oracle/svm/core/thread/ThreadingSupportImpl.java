@@ -43,6 +43,7 @@ import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
+import com.oracle.svm.core.thread.Safepoint.Master;
 import com.oracle.svm.core.thread.Safepoint.SafepointException;
 import com.oracle.svm.core.thread.Safepoint.SafepointRequestValues;
 import com.oracle.svm.core.threadlocal.FastThreadLocalFactory;
@@ -82,6 +83,7 @@ public class ThreadingSupportImpl implements ThreadingSupport {
          */
         private static final double EWMA_LAMBDA = 0.3;
         private static final double TARGET_INTERVAL_FLEXIBILITY = 0.95;
+        private static final long UNSIGNED_INT_MAX = 0xFFFFFFFFL;
         private static final int INITIAL_CHECKS = 100;
         private static final long MINIMUM_INTERVAL_NANOS = 1_000;
 
@@ -89,7 +91,7 @@ public class ThreadingSupportImpl implements ThreadingSupport {
         private final long flexibleTargetIntervalNanos;
         private final RecurringCallback callback;
 
-        private int requestedChecks;
+        private int unsignedRequestedChecks;
         private double ewmaChecksPerNano;
         private long lastCapture;
         private long lastCallbackExecution;
@@ -104,7 +106,7 @@ public class ThreadingSupportImpl implements ThreadingSupport {
             long now = System.nanoTime();
             this.lastCapture = now;
             this.lastCallbackExecution = now;
-            this.requestedChecks = INITIAL_CHECKS;
+            this.unsignedRequestedChecks = INITIAL_CHECKS;
         }
 
         @Uninterruptible(reason = "Must not contain safepoint checks.")
@@ -121,10 +123,14 @@ public class ThreadingSupportImpl implements ThreadingSupport {
         public void updateStatistics() {
             long now = System.nanoTime();
             long elapsedNanos = now - lastCapture;
+            int unsignedSkippedChecks = getSafepointRequestedValue(CurrentIsolate.getCurrentThread());
 
-            int skippedChecks = getSkippedChecks(CurrentIsolate.getCurrentThread());
-            int executedChecks = requestedChecks - skippedChecks;
-            assert executedChecks >= 0;
+            /*
+             * Normally, unsignedIntToLong(unsignedRequestedChecks) should always be greater equal
+             * than unsignedIntToLong(unsignedSkippedChecks). However, our implementation is
+             * currently not thread-safe enough to guarantee that all the time.
+             */
+            long executedChecks = unsignedIntToLong(unsignedRequestedChecks) - unsignedIntToLong(unsignedSkippedChecks);
             if (elapsedNanos > 0 && executedChecks > 0) {
                 double checksPerNano = executedChecks / (double) elapsedNanos;
                 if (ewmaChecksPerNano == 0) { // initialization
@@ -137,9 +143,24 @@ public class ThreadingSupportImpl implements ThreadingSupport {
         }
 
         @Uninterruptible(reason = "Must be uninterruptible to avoid races with the safepoint code.")
-        private static int getSkippedChecks(IsolateThread thread) {
+        private static int getSafepointRequestedValue(IsolateThread thread) {
+            /*
+             * A concurrent safepoint request could destroy the safepointRequested value. However,
+             * the safepoint logic saves the original value in
+             * safepointRequestedValueBeforeSafepoint. So, we access that value if necessary to
+             * avoid race conditions.
+             *
+             * This is still not a 100% thread safe (see updateStatistics).
+             */
             int rawValue = Safepoint.getSafepointRequested(thread);
-            return rawValue >= 0 ? rawValue : -rawValue;
+            if (rawValue == Safepoint.SafepointRequestValues.ENTER) {
+                int valueSavedBeforeSafepoint = Safepoint.getSafepointRequestedValueBeforeSafepoint(thread);
+                if (valueSavedBeforeSafepoint != 0) {
+                    assert Master.singleton().getRequestingThread().isNonNull();
+                    return valueSavedBeforeSafepoint;
+                }
+            }
+            return rawValue;
         }
 
         @Uninterruptible(reason = "Called by uninterruptible code.")
@@ -192,13 +213,13 @@ public class ThreadingSupportImpl implements ThreadingSupport {
             } else {
                 remainingNanos = (remainingNanos < MINIMUM_INTERVAL_NANOS) ? MINIMUM_INTERVAL_NANOS : remainingNanos;
                 double checks = ewmaChecksPerNano * remainingNanos;
-                setSafepointRequested(checks > SafepointRequestValues.RESET ? SafepointRequestValues.RESET : ((checks < 1) ? 1 : (int) checks));
+                setSafepointRequested((checks > UNSIGNED_INT_MAX) ? (int) UNSIGNED_INT_MAX : ((checks < 1) ? 1 : (int) checks));
             }
         }
 
         @Uninterruptible(reason = "Called by uninterruptible code.")
         public void setSafepointRequested(int value) {
-            requestedChecks = value;
+            unsignedRequestedChecks = value;
             Safepoint.setSafepointRequested(value);
         }
 
@@ -222,6 +243,11 @@ public class ThreadingSupportImpl implements ThreadingSupport {
                 Log.log().string("Exception caught in recurring callback (ignored): ").object(t).newline();
             }
         }
+
+        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        private static long unsignedIntToLong(int unsignedValue) {
+            return unsignedValue & UNSIGNED_INT_MAX;
+        }
     }
 
     private static final FastThreadLocalObject<RecurringCallbackTimer> activeTimer = FastThreadLocalFactory.createObject(RecurringCallbackTimer.class);
@@ -238,7 +264,7 @@ public class ThreadingSupportImpl implements ThreadingSupport {
             }
             RecurringCallbackTimer timer = new RecurringCallbackTimer(intervalNanos, callback);
             activeTimer.set(timer);
-            Safepoint.setSafepointRequested(timer.requestedChecks);
+            Safepoint.setSafepointRequested(timer.unsignedRequestedChecks);
         } else {
             activeTimer.set(null);
         }
