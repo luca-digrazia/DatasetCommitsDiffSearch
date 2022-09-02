@@ -113,7 +113,6 @@ import org.graalvm.compiler.nodes.gc.BarrierSet;
 import org.graalvm.compiler.nodes.java.AbstractNewObjectNode;
 import org.graalvm.compiler.nodes.java.AccessIndexedNode;
 import org.graalvm.compiler.nodes.java.ArrayLengthNode;
-import org.graalvm.compiler.nodes.java.AtomicReadAndAddNode;
 import org.graalvm.compiler.nodes.java.AtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.java.FinalFieldBarrierNode;
 import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
@@ -121,7 +120,6 @@ import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.LogicCompareAndSwapNode;
-import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndAddNode;
 import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
@@ -260,8 +258,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 lowerCompareAndExchangeNode((UnsafeCompareAndExchangeNode) n);
             } else if (n instanceof AtomicReadAndWriteNode) {
                 lowerAtomicReadAndWriteNode((AtomicReadAndWriteNode) n);
-            } else if (n instanceof AtomicReadAndAddNode) {
-                lowerAtomicReadAndAddNode((AtomicReadAndAddNode) n);
             } else if (n instanceof RawLoadNode) {
                 lowerUnsafeLoadNode((RawLoadNode) n, tool);
             } else if (n instanceof UnsafeMemoryLoadNode) {
@@ -561,7 +557,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         GuardingNode boundsCheck = getBoundsCheck(loadIndexed, array, tool);
         ValueNode index = loadIndexed.index();
         if (SpectrePHTIndexMasking.getValue(graph.getOptions())) {
-            index = graph.addOrUniqueWithInputs(proxyIndex(loadIndexed, index, array, tool));
+            index = proxyIndex(loadIndexed, index, array, tool);
         }
         AddressNode address = createArrayIndexAddress(graph, array, elementKind, index, boundsCheck);
 
@@ -727,24 +723,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         BarrierType barrierType = barrierSet.guessStoreBarrierType(n.object(), newValue);
         LIRKind lirAccessKind = LIRKind.fromJavaKind(target.arch, valueKind);
         LoweredAtomicReadAndWriteNode memoryRead = graph.add(new LoweredAtomicReadAndWriteNode(address, n.getKilledLocationIdentity(), newValue, lirAccessKind, barrierType));
-        memoryRead.setStateAfter(n.stateAfter());
-
-        ValueNode readValue = implicitLoadConvert(graph, valueKind, memoryRead);
-        n.stateAfter().replaceFirstInput(n, memoryRead);
-        n.replaceAtUsages(readValue);
-        graph.replaceFixedWithFixed(n, memoryRead);
-    }
-
-    protected void lowerAtomicReadAndAddNode(AtomicReadAndAddNode n) {
-        StructuredGraph graph = n.graph();
-        JavaKind valueKind = n.getValueKind();
-
-        ValueNode delta = implicitStoreConvert(graph, valueKind, n.delta());
-
-        AddressNode address = graph.unique(new OffsetAddressNode(n.object(), n.offset()));
-        BarrierType barrierType = barrierSet.guessStoreBarrierType(n.object(), delta);
-        LIRKind lirAccessKind = LIRKind.fromJavaKind(target.arch, valueKind);
-        LoweredAtomicReadAndAddNode memoryRead = graph.add(new LoweredAtomicReadAndAddNode(address, n.getKilledLocationIdentity(), delta, lirAccessKind, barrierType));
         memoryRead.setStateAfter(n.stateAfter());
 
         ValueNode readValue = implicitLoadConvert(graph, valueKind, memoryRead);
