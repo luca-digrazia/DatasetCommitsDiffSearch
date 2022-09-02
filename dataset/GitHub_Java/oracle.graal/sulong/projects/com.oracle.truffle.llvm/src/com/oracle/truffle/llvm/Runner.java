@@ -43,7 +43,6 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
@@ -144,9 +143,9 @@ final class Runner {
     private final LLVMContext context;
     private final DefaultLoader loader;
     private final LLVMLanguage language;
-    private final AtomicInteger id;
+    private final int id;
 
-    Runner(LLVMContext context, DefaultLoader loader, AtomicInteger id) {
+    Runner(LLVMContext context, DefaultLoader loader, int id) {
         this.context = context;
         this.loader = loader;
         this.language = context.getLanguage();
@@ -213,7 +212,7 @@ final class Runner {
                         InitializeModuleNode[] initModules) {
             for (int i = 0; i < parserResults.size(); i++) {
                 LLVMParserResult res = parserResults.get(i);
-                initSymbols[offset + i] = new InitializeSymbolsNode(res, res.getRuntime().getNodeFactory());
+                initSymbols[offset + i] = new InitializeSymbolsNode(res, res.getRuntime().getNodeFactory(), runner.id);
                 initModules[offset + i] = new InitializeModuleNode(runner, rootFrame, res);
             }
         }
@@ -385,16 +384,17 @@ final class Runner {
 
         @Children final AllocGlobalNode[] allocGlobals;
 
+        private LLVMPointer[] globals;
         private final LLVMScope fileScope;
         private NodeFactory nodeFactory;
         private final int id;
 
-        InitializeSymbolsNode(LLVMParserResult res, NodeFactory nodeFactory) {
+        InitializeSymbolsNode(LLVMParserResult res, NodeFactory nodeFactory, int id) {
             DataLayout dataLayout = res.getDataLayout();
             this.nodeFactory = nodeFactory;
             this.fileScope = res.getRuntime().getFileScope();
             this.checkGlobals = LLVMCheckGlobalVariableStorageNodeGen.create();
-            this.id = res.getRuntime().getID();
+            this.id = id;
 
             // allocate all non-pointer types as two structs
             // one for read-only and one for read-write
@@ -427,7 +427,8 @@ final class Runner {
         public LLVMPointer execute(LLVMContext ctx) {
             LLVMPointer roBase = allocOrNull(allocRoSection);
             LLVMPointer rwBase = allocOrNull(allocRwSection);
-            ctx.registerGlobalMap(id, new LLVMPointer[this.allocGlobals.length + this.fileScope.values().size()]);
+            globals = new LLVMPointer[this.allocGlobals.length + this.fileScope.values().size()];
+            ctx.registerGlobalMap(id, globals);
 
             allocGlobals(ctx, roBase, rwBase);
             if (allocRoSection != null) {
@@ -726,7 +727,7 @@ final class Runner {
         NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(context, targetDataLayout);
         // This needs to be removed once the nodefactory is taken out of the language.
         LLVMScope fileScope = new LLVMScope();
-        LLVMParserRuntime runtime = new LLVMParserRuntime(context, library, fileScope, nodeFactory, id.getAndIncrement());
+        LLVMParserRuntime runtime = new LLVMParserRuntime(context, library, fileScope, nodeFactory, id);
         LLVMParser parser = new LLVMParser(source, runtime);
         LLVMParserResult parserResult = parser.parse(module, targetDataLayout);
         parserResults.add(parserResult);
@@ -783,7 +784,7 @@ final class Runner {
                 LLVMSymbol globalSymbol = globalScope.get(global.getName());
                 if (globalSymbol == null) {
                     globalSymbol = LLVMGlobal.create(global.getName(), global.getType(), global.getSourceSymbol(), global.isReadOnly());
-                    ((LLVMGlobal) globalSymbol).setID(id.get());
+                    ((LLVMGlobal) globalSymbol).setID(id);
                     globalScope.register(globalSymbol);
                 } else if (!globalSymbol.isGlobalVariable()) {
                     assert globalSymbol.isFunction();
