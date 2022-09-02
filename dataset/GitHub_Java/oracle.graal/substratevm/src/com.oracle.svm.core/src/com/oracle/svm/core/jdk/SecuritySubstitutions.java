@@ -326,11 +326,9 @@ final class Target_javax_crypto_JceSecurity {
      * Lazily recompute the RANDOM field at runtime. We cannot push the entire static initialization
      * of JceSecurity to run time because we want the JceSecurity.verificationResults initialized at
      * image build time.
-     *
-     * This is only used in {@link KeyAgreement}, it's safe to remove.
      */
-    @Alias @TargetElement(onlyWith = JDK15OrEarlier.class) //
-    @InjectAccessors(JceSecurityAccessor.class) //
+    @Alias @InjectAccessors(JceSecurityAccessor.class) //
+    @TargetElement(onlyWith = JDK15OrEarlier.class)//
     static SecureRandom RANDOM;
 
     /*
@@ -584,27 +582,6 @@ final class Target_sun_security_provider_PolicySpiFile {
 @Delete("Substrate VM does not use SecurityManager, so loading a security policy file would be misleading")
 @TargetClass(className = "sun.security.provider.PolicyFile")
 final class Target_sun_security_provider_PolicyFile {
-}
-
-@TargetClass(className = "sun.security.jca.ProviderConfig")
-@SuppressWarnings({"unused", "static-method"})
-final class Target_sun_security_jca_ProviderConfig {
-
-    /**
-     * All security providers used in a native-image must be registered during image build time. At
-     * runtime, we shouldn't have a call to doLoadProvider. However, this method is still reachable
-     * at runtime, and transitively includes other types in the image, among which is
-     * sun.security.jca.ProviderConfig.ProviderLoader. This class contains a static field with a
-     * cache of providers loaded during the image build. The contents of this cache can vary even
-     * when building the same image due to the way services are loaded on Java 11. This cache can
-     * increase the final image size substantially (if it contains, for example,
-     * {@link org.jcp.xml.dsig.internal.dom.XMLDSigRI}.
-     */
-    @Substitute
-    private Provider doLoadProvider() {
-        throw VMError.unsupportedFeature("Cannot load new security provider at runtime.");
-    }
-
 }
 
 /** Dummy class to have a class with the file's name. */
