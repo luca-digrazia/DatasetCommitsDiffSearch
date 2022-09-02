@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,22 +24,20 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.test.SubprocessUtil.formatExecutedCommand;
 import static org.graalvm.compiler.test.SubprocessUtil.getVMCommandLine;
 import static org.graalvm.compiler.test.SubprocessUtil.withoutDebuggerArguments;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.graalvm.compiler.core.CompilerThreadFactory;
+import org.graalvm.compiler.core.GraalCompilerOptions;
 import org.graalvm.compiler.core.common.util.Util;
 import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.nodes.Cancellable;
@@ -45,9 +45,12 @@ import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.options.OptionValuesAccess;
 import org.graalvm.compiler.options.OptionsParser;
-import org.graalvm.compiler.serviceprovider.JDK9Method;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.compiler.test.SubprocessUtil;
+import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
+import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
@@ -66,8 +69,6 @@ public class LazyInitializationTest {
     private final Class<?> hotSpotGraalJVMCIServiceLocatorShared;
     private final Class<?> jvmciVersionCheck;
 
-    private static boolean Java8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
-
     public LazyInitializationTest() {
         hotSpotVMEventListener = forNameOrNull("jdk.vm.ci.hotspot.services.HotSpotVMEventListener");
         hotSpotGraalCompilerFactoryOptions = forNameOrNull("org.graalvm.compiler.hotspot.HotSpotGraalCompilerFactory$Options");
@@ -85,7 +86,48 @@ public class LazyInitializationTest {
 
     @Test
     public void testSLTck() throws IOException, InterruptedException {
-        spawnUnitTests("com.oracle.truffle.sl.test.SLFactorialTest");
+        Assume.assumeFalse(TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompileImmediately));
+        List<String> vmCommandLine = getVMCommandLine();
+        Assume.assumeFalse("Explicitly enables JVMCI compiler", vmCommandLine.contains("-XX:+UseJVMCINativeLibrary") || vmCommandLine.contains("-XX:+UseJVMCICompiler"));
+        List<String> vmArgs = withoutDebuggerArguments(vmCommandLine);
+        vmArgs.add(JavaVersionUtil.JAVA_SPEC <= 8 ? "-XX:+TraceClassLoading" : "-Xlog:class+init=info");
+        vmArgs.add("-dsa");
+        vmArgs.add("-da");
+        vmArgs.add("-XX:-UseJVMCICompiler");
+
+        // Remove -Dgraal.CompilationFailureAction as it drags in CompilationWrapper
+        vmArgs = vmArgs.stream().filter(e -> !e.contains(GraalCompilerOptions.CompilationFailureAction.getName())).collect(Collectors.toList());
+
+        Subprocess proc = SubprocessUtil.java(vmArgs, "com.oracle.mxtool.junit.MxJUnitWrapper", "com.oracle.truffle.sl.test.SLFactorialTest");
+        int exitCode = proc.exitCode;
+        if (exitCode != 0) {
+            Assert.fail(String.format("non-zero exit code %d for command:%n%s", exitCode, proc));
+        }
+
+        ArrayList<String> loadedGraalClassNames = new ArrayList<>();
+        int testCount = 0;
+        for (String line : proc.output) {
+            String loadedClass = extractClass(line);
+            if (loadedClass != null) {
+                if (isGraalClass(loadedClass)) {
+                    loadedGraalClassNames.add(loadedClass);
+                }
+            } else if (line.startsWith("OK (")) {
+                Assert.assertTrue(testCount == 0);
+                int start = "OK (".length();
+                int end = line.indexOf(' ', start);
+                testCount = Integer.parseInt(line.substring(start, end));
+            }
+        }
+        if (testCount == 0) {
+            Assert.fail(String.format("no tests found in output of command:%n%s", testCount, proc));
+        }
+
+        try {
+            checkAllowedGraalClasses(loadedGraalClassNames);
+        } catch (AssertionError e) {
+            throw new AssertionError(String.format("Failure for command:%n%s", proc), e);
+        }
     }
 
     private static final Pattern CLASS_INIT_LOG_PATTERN = Pattern.compile("\\[info\\]\\[class,init\\] \\d+ Initializing '([^']+)'");
@@ -94,7 +136,7 @@ public class LazyInitializationTest {
      * Extracts the class name from a line of log output.
      */
     private static String extractClass(String line) {
-        if (Java8OrEarlier) {
+        if (JavaVersionUtil.JAVA_SPEC <= 8) {
             String traceClassLoadingPrefix = "[Loaded ";
             int index = line.indexOf(traceClassLoadingPrefix);
             if (index != -1) {
@@ -109,63 +151,6 @@ public class LazyInitializationTest {
             }
         }
         return null;
-    }
-
-    /**
-     * Spawn a new VM, execute unit tests, and check which classes are loaded.
-     */
-    private void spawnUnitTests(String... tests) throws IOException, InterruptedException {
-        List<String> args = withoutDebuggerArguments(getVMCommandLine());
-
-        boolean usesJvmciCompiler = args.contains("-jvmci") || args.contains("-XX:+UseJVMCICompiler");
-        Assume.assumeFalse("This test can only run if JVMCI is not one of the default compilers", usesJvmciCompiler);
-
-        args.add(Java8OrEarlier ? "-XX:+TraceClassLoading" : "-Xlog:class+init=info");
-        args.add("-dsa");
-        args.add("-da");
-        args.add("com.oracle.mxtool.junit.MxJUnitWrapper");
-        args.addAll(Arrays.asList(tests));
-
-        ArrayList<String> loadedGraalClassNames = new ArrayList<>();
-
-        ProcessBuilder processBuilder = new ProcessBuilder(args);
-        processBuilder.redirectErrorStream(true);
-
-        Process process = processBuilder.start();
-        int testCount = 0;
-        BufferedReader stdout = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        List<String> outputLines = new ArrayList<>();
-        String line;
-        while ((line = stdout.readLine()) != null) {
-            outputLines.add(line);
-            String loadedClass = extractClass(line);
-            if (loadedClass != null) {
-                if (isGraalClass(loadedClass)) {
-                    loadedGraalClassNames.add(loadedClass);
-                }
-            } else if (line.startsWith("OK (")) {
-                Assert.assertTrue(testCount == 0);
-                int start = "OK (".length();
-                int end = line.indexOf(' ', start);
-                testCount = Integer.parseInt(line.substring(start, end));
-            }
-        }
-
-        String dashes = "-------------------------------------------------------";
-
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            Assert.fail(String.format("non-zero exit code %d for command:%n%s", exitCode, formatExecutedCommand(args, outputLines, dashes, dashes)));
-        }
-        if (testCount == 0) {
-            Assert.fail(String.format("no tests found in output of command:%n%s", testCount, formatExecutedCommand(args, outputLines, dashes, dashes)));
-        }
-
-        try {
-            checkAllowedGraalClasses(loadedGraalClassNames);
-        } catch (AssertionError e) {
-            throw new AssertionError(String.format("Failure for command:%n%s", formatExecutedCommand(args, outputLines, dashes, dashes)), e);
-        }
     }
 
     private static boolean isGraalClass(String className) {
@@ -197,10 +182,11 @@ public class LazyInitializationTest {
         for (Class<?> cls : loadedGraalClasses) {
             if (OptionDescriptors.class.isAssignableFrom(cls)) {
                 try {
-                    OptionDescriptors optionDescriptors = cls.asSubclass(OptionDescriptors.class).newInstance();
+                    OptionDescriptors optionDescriptors = cls.asSubclass(OptionDescriptors.class).getDeclaredConstructor().newInstance();
                     for (OptionDescriptor option : optionDescriptors) {
                         whitelist.add(option.getDeclaringClass());
-                        whitelist.add(option.getType());
+                        whitelist.add(option.getOptionValueType());
+                        whitelist.add(option.getOptionType().getDeclaringClass());
                     }
                 } catch (ReflectiveOperationException e) {
                 }
@@ -225,7 +211,7 @@ public class LazyInitializationTest {
     }
 
     private boolean isGraalClassAllowed(Class<?> cls) {
-        if (CompilerThreadFactory.class.equals(cls) || CompilerThreadFactory.DebugConfigAccess.class.equals(cls)) {
+        if (CompilerThreadFactory.class.equals(cls)) {
             // The HotSpotTruffleRuntime creates a CompilerThreadFactory for Truffle.
             return true;
         }
@@ -240,17 +226,12 @@ public class LazyInitializationTest {
             return true;
         }
 
-        if (JDK9Method.JAVA_SPECIFICATION_VERSION >= 9 && cls.equals(JDK9Method.class)) {
-            // Graal initialization needs access to Module API on JDK 9.
-            return true;
-        }
-
-        if (cls.equals(jvmciVersionCheck)) {
+        if (cls.equals(jvmciVersionCheck) || Objects.equals(cls.getEnclosingClass(), jvmciVersionCheck)) {
             // The Graal initialization needs to check the JVMCI version.
             return true;
         }
 
-        if (JVMCICompilerFactory.class.isAssignableFrom(cls)) {
+        if (JVMCICompilerFactory.class.isAssignableFrom(cls) || cls.getName().startsWith("org.graalvm.compiler.hotspot.IsGraalPredicate")) {
             // The compiler factories have to be loaded and instantiated by the JVMCI.
             return true;
         }
@@ -264,13 +245,18 @@ public class LazyInitializationTest {
             return true;
         }
 
-        if (cls == Assertions.class || cls == OptionsParser.class || cls == OptionValues.class || OptionValuesAccess.class.isAssignableFrom(cls)) {
+        if (cls == Assertions.class || cls == OptionsParser.class || cls == OptionValues.class || cls.getName().equals("org.graalvm.compiler.hotspot.HotSpotGraalOptionValues")) {
             // Classes implementing Graal option loading
             return true;
         }
 
         if (OptionKey.class.isAssignableFrom(cls)) {
             // If options are specified, that may implicitly load a custom OptionKey subclass.
+            return true;
+        }
+
+        if (cls.getName().equals("org.graalvm.compiler.hotspot.HotSpotGraalMBean")) {
+            // MBean is OK and fast
             return true;
         }
 
