@@ -245,12 +245,6 @@ public final class MethodSpecParser {
             if (resolvedParameter == null) {
                 return null;
             }
-            for (ParameterSpec annotationSpec : spec.getAnnotations()) {
-                if (annotationSpec.matches(actualType)) {
-                    return null;
-                }
-            }
-
             parsedParams.add(resolvedParameter);
             typeIndex++;
             specificationIndex++;
