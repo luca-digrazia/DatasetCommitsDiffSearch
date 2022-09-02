@@ -143,7 +143,6 @@ import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMIntrinsicProvider;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 /**
  * If an intrinsic is defined for a function, then the intrinsic is used instead of doing a call to
@@ -170,9 +169,9 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
     }
 
     @Override
-    public final RootCallTarget generateIntrinsicTarget(String name, Type[] argTypes) {
+    public final RootCallTarget generateIntrinsicTarget(String name, int argCount) {
         CompilerAsserts.neverPartOfCompilation();
-        LLVMTypedIntrinsicFactory factory = getFactory(name);
+        LLVMIntrinsicFactory factory = getFactory(name);
         if (factory == null) {
             return null;
         }
@@ -184,23 +183,33 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
 
             @Override
             public int size() {
-                return argTypes.length;
+                return argCount;
             }
-        }, language, argTypes));
+        }, language));
     }
 
     @Override
-    public final LLVMExpressionNode generateIntrinsicNode(String name, LLVMExpressionNode[] arguments, Type[] argTypes) {
+    public final LLVMExpressionNode generateIntrinsicNode(String name, LLVMExpressionNode[] arguments) {
         CompilerAsserts.neverPartOfCompilation();
-        LLVMTypedIntrinsicFactory factory = getFactory(name);
+        LLVMIntrinsicFactory factory = getFactory(name);
         if (factory == null) {
             return null;
         }
-        return factory.generate(Arrays.asList(arguments), language, argTypes);
+        return factory.generate(new AbstractList<LLVMExpressionNode>() {
+            @Override
+            public LLVMExpressionNode get(int index) {
+                return arguments[index];
+            }
+
+            @Override
+            public int size() {
+                return arguments.length;
+            }
+        }, language);
     }
 
-    private LLVMTypedIntrinsicFactory getFactory(String name) {
-        LLVMTypedIntrinsicFactory factory = getFactories().get(name);
+    private LLVMIntrinsicFactory getFactory(String name) {
+        LLVMIntrinsicFactory factory = getFactories().get(name);
         if (factory != null) {
             return factory;
         }
@@ -223,7 +232,7 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
         this.language = language;
     }
 
-    protected Map<String, LLVMTypedIntrinsicFactory> getFactories() {
+    protected Map<String, LLVMIntrinsicFactory> getFactories() {
         return FACTORIES;
     }
 
@@ -233,17 +242,8 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
         public abstract LLVMExpressionNode get(int index);
     }
 
-    public interface LLVMTypedIntrinsicFactory {
-        LLVMExpressionNode generate(List<LLVMExpressionNode> args, LLVMLanguage language, Type[] argTypes);
-    }
-
-    public interface LLVMIntrinsicFactory extends LLVMTypedIntrinsicFactory {
+    public interface LLVMIntrinsicFactory {
         LLVMExpressionNode generate(List<LLVMExpressionNode> args, LLVMLanguage language);
-
-        @Override
-        default LLVMExpressionNode generate(List<LLVMExpressionNode> args, LLVMLanguage language, Type[] argTypes) {
-            return generate(args, language);
-        }
     }
 
     protected static final Demangler DEMANGLER = new Demangler();
@@ -338,7 +338,7 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
         }
     }
 
-    protected static final ConcurrentHashMap<String, LLVMTypedIntrinsicFactory> FACTORIES = new ConcurrentHashMap<>();
+    protected static final ConcurrentHashMap<String, LLVMIntrinsicFactory> FACTORIES = new ConcurrentHashMap<>();
 
     static {
         // Initialize the list of intrinsics:
@@ -533,13 +533,9 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
         add("__mulxc3", (args, language) -> LLVMComplex80BitFloatMulNodeGen.create(args.get(1), args.get(2), args.get(3), args.get(4), args.get(5)));
     }
 
-    private static void add(String name, LLVMTypedIntrinsicFactory factory) {
-        LLVMTypedIntrinsicFactory existing = FACTORIES.put(name, factory);
-        assert existing == null : "same intrinsic was added more than once";
-    }
-
     private static void add(String name, LLVMIntrinsicFactory factory) {
-        add(name, (LLVMTypedIntrinsicFactory) factory);
+        LLVMIntrinsicFactory existing = FACTORIES.put(name, factory);
+        assert existing == null : "same intrinsic was added more than once";
     }
 
     private static void add(String name1, String name2, LLVMIntrinsicFactory factory) {
