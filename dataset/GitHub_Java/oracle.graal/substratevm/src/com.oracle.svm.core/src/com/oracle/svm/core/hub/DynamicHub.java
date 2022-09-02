@@ -72,8 +72,8 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownObjectField;
-import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
+import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.jdk.Package_jdk_internal_reflect;
 import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.jdk.Target_java_lang_ClassLoader;
@@ -81,8 +81,6 @@ import com.oracle.svm.core.jdk.Target_java_lang_Module;
 import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.util.LazyFinalReference;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.util.ReflectionUtil;
-import com.oracle.svm.util.ReflectionUtil.ReflectionUtilError;
 
 import jdk.vm.ci.meta.JavaKind;
 import sun.security.util.SecurityConstants;
@@ -95,7 +93,7 @@ import sun.security.util.SecurityConstants;
 public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, java.lang.reflect.Type, GenericDeclaration, Serializable {
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class) //
+    @TargetElement(onlyWith = JDK9OrLater.class) //
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
 
     /* Value copied from java.lang.Class. */
@@ -387,16 +385,19 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public void initEnumConstantsAtRuntime(Class<?> enumClass) {
-        /* Adapted from `Class.getEnumConstantsShared`. */
         try {
-            Method values = ReflectionUtil.lookupMethod(enumClass, "values");
-            enumConstantsReference = new LazyFinalReference<>(() -> initEnumConstantsAtRuntime(values));
-        } catch (ReflectionUtilError e) {
-            /*
-             * This can happen when users concoct enum-like classes that don't comply with the enum
-             * spec.
-             */
-            enumConstantsReference = null;
+            /* Adapted from `Class.getEnumConstantsShared`. */
+            try {
+                Method values = enumClass.getMethod("values");
+                values.setAccessible(true);
+                enumConstantsReference = new LazyFinalReference<>(() -> initEnumConstantsAtRuntime(values));
+            } catch (NoSuchMethodException e) {
+                /*
+                 * This can happen when users concoct enum-like classes that don't comply with the
+                 * enum spec.
+                 */
+                enumConstantsReference = null;
+            }
         } catch (NoClassDefFoundError e) {
             /*
              * This can happen when an enum references a missing class. So, in order to match the
@@ -653,13 +654,13 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private native String getSimpleNameJDK8OrEarlier();
 
     @Substitute
-    @TargetElement(name = "getSimpleName", onlyWith = JDK11OrLater.class)
-    private String getSimpleNameJDK11OrLater() {
+    @TargetElement(name = "getSimpleName", onlyWith = JDK9OrLater.class)
+    private String getSimpleNameJDK9OrLater() {
         return getSimpleName0();
     }
 
     @KeepOriginal //
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private native String getSimpleName0();
 
     @KeepOriginal
@@ -667,13 +668,13 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private native String getCanonicalNameJDK8OrEarlier();
 
     @Substitute
-    @TargetElement(name = "getCanonicalName", onlyWith = JDK11OrLater.class)
-    private String getCanonicalNameJDK11OrLater() {
+    @TargetElement(name = "getCanonicalName", onlyWith = JDK9OrLater.class)
+    private String getCanonicalNameJDK9OrLater() {
         return getCanonicalName0();
     }
 
     @KeepOriginal
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private native String getCanonicalName0();
 
     @KeepOriginal
@@ -730,7 +731,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private DynamicHub[] getInterfaces(boolean cloneArray) {
         return getInterfaces(this, cloneArray);
     }
@@ -754,7 +755,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
                 throw new InstantiationException("Type `" + this.getCanonicalNameJDK8OrEarlier() +
                                 "` can not be instantiated reflectively as it does not have a no-parameter constructor or the no-parameter constructor has not been added explicitly to the native image.");
             } else {
-                throw new InstantiationException("Type `" + this.getCanonicalNameJDK11OrLater() +
+                throw new InstantiationException("Type `" + this.getCanonicalNameJDK9OrLater() +
                                 "` can not be instantiated reflectively as it does not have a no-parameter constructor or the no-parameter constructor has not been added explicitly to the native image.");
             }
         }
@@ -1042,8 +1043,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute
-    @TargetElement(name = "privateGetPublicFields", onlyWith = JDK11OrLater.class)
-    private Field[] privateGetPublicFieldsJDK11OrLater() {
+    @TargetElement(name = "privateGetPublicFields", onlyWith = JDK9OrLater.class)
+    private Field[] privateGetPublicFieldsJDK9Orlater() {
         return rd.publicFields;
     }
 
@@ -1060,9 +1061,9 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute
-    @TargetElement(name = "checkMemberAccess", onlyWith = JDK11OrLater.class)
+    @TargetElement(name = "checkMemberAccess", onlyWith = JDK9OrLater.class)
     @SuppressWarnings("unused")
-    private void checkMemberAccessJDK11OrLater(SecurityManager sm, int which, Class<?> caller, boolean checkProxyInterfaces) {
+    private void checkMemberAccessJDK9OrLater(SecurityManager sm, int which, Class<?> caller, boolean checkProxyInterfaces) {
         /* No runtime access checks. */
     }
 
@@ -1142,19 +1143,19 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private static Class<?> forName(String className) throws ClassNotFoundException {
-        return ClassForNameSupport.forName(className, true);
+        return ClassForNameSupport.forName(className);
     }
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class) //
+    @TargetElement(onlyWith = JDK9OrLater.class) //
     @SuppressWarnings({"unused"})
     public static Class<?> forName(Target_java_lang_Module module, String name) {
-        throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.forName(Target_java_lang_Module module, String name)");
+        throw VMError.unsupportedFeature("JDK9OrLater: DynamicHub.forName(Target_java_lang_Module module, String name)");
     }
 
     @Substitute
     private static Class<?> forName(String name, @SuppressWarnings("unused") boolean initialize, @SuppressWarnings("unused") ClassLoader loader) throws ClassNotFoundException {
-        return ClassForNameSupport.forName(name, initialize);
+        return ClassForNameSupport.forName(name);
     }
 
     @KeepOriginal
@@ -1162,11 +1163,11 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     public native Package getPackageJDK8OrEarlier();
 
     @KeepOriginal
-    @TargetElement(name = "getPackage", onlyWith = JDK11OrLater.class)
-    public native Package getPackageJDK11OrLater();
+    @TargetElement(name = "getPackage", onlyWith = JDK9OrLater.class)
+    public native Package getPackageJDK9OrLater();
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     public String getPackageName() {
         return packageNameReference.get();
     }
@@ -1215,13 +1216,13 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     public Target_java_lang_Module getModule() {
         return singleModuleReference.get();
     }
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private String methodToString(String nameArg, Class<?>[] argTypes) {
         return describeMethod(name + "." + nameArg + "(", argTypes, ")");
     }
@@ -1238,21 +1239,21 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute //
     private <T> Target_java_lang_Class_ReflectionData<T> reflectionData() {
-        throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.reflectionData()");
+        throw VMError.unsupportedFeature("JDK9OrLater: DynamicHub.reflectionData()");
     }
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private boolean isTopLevelClass() {
         return !isLocalOrAnonymousClass() && getDeclaringClass() == null;
     }
 
     @KeepOriginal
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private native Object[] getEnclosingMethod0();
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private String getSimpleBinaryName0() {
         if (enclosingClass == null) {
             return null;
@@ -1266,10 +1267,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class) //
+    @TargetElement(onlyWith = JDK9OrLater.class) //
     @SuppressWarnings({"unused"})
     List<Method> getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes) {
-        throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes)");
+        throw VMError.unsupportedFeature("JDK9OrLater: DynamicHub.getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes)");
     }
 
     @Substitute //
