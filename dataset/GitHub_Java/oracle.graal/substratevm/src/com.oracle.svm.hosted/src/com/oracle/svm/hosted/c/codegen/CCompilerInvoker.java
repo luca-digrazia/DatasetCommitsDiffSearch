@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.Scanner;
 import java.util.function.Consumer;
 
+import com.oracle.svm.core.c.libc.LibCBase;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -47,7 +48,6 @@ import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateTargetDescription;
 import com.oracle.svm.core.SubstrateUtil;
-import com.oracle.svm.core.c.libc.LibCBase;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
@@ -57,6 +57,7 @@ import com.oracle.svm.hosted.c.util.FileUtils;
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
+import org.graalvm.nativeimage.Platform;
 
 public abstract class CCompilerInvoker {
 
@@ -193,10 +194,6 @@ public abstract class CCompilerInvoker {
             }
         }
 
-        @Override
-        protected List<String> compileStrictOptions() {
-            return Arrays.asList("/Wall", "/WX");
-        }
     }
 
     private static class LinuxCCompilerInvoker extends CCompilerInvoker {
@@ -207,7 +204,10 @@ public abstract class CCompilerInvoker {
 
         @Override
         protected String getDefaultCompiler() {
-            return LibCBase.singleton().getTargetCompiler();
+            if (Platform.includedIn(Platform.LINUX.class)) {
+                return LibCBase.singleton().getTargetCompiler();
+            }
+            return "gcc";
         }
 
         @Override
@@ -397,8 +397,7 @@ public abstract class CCompilerInvoker {
     }
 
     @SuppressWarnings("try")
-    public void compileAndParseError(boolean strict, List<String> compileOptions, Path source, Path target, CompilerErrorHandler handler, DebugContext debug) {
-        List<String> options = strict ? createStrictOptions(compileOptions) : compileOptions;
+    public void compileAndParseError(List<String> options, Path source, Path target, CompilerErrorHandler handler, DebugContext debug) {
         ProcessBuilder pb = new ProcessBuilder()
                         .command(createCompilerCommand(options, target.normalize(), source.normalize()))
                         .directory(tempDirectory.toFile());
@@ -440,16 +439,6 @@ public abstract class CCompilerInvoker {
         }
     }
 
-    private List<String> createStrictOptions(List<String> compileOptions) {
-        ArrayList<String> strictCompileOptions = new ArrayList<>(compileStrictOptions());
-        strictCompileOptions.addAll(compileOptions);
-        return strictCompileOptions;
-    }
-
-    protected List<String> compileStrictOptions() {
-        return Arrays.asList("-Wall", "-Werror");
-    }
-
     protected boolean detectError(String line) {
         return line.contains(": error:") || line.contains(": fatal error:");
     }
@@ -457,7 +446,7 @@ public abstract class CCompilerInvoker {
     public static Optional<Path> lookupSearchPath(String name) {
         return Arrays.stream(System.getenv("PATH").split(File.pathSeparator))
                         .map(entry -> Paths.get(entry, name))
-                        .filter(p -> Files.isExecutable(p) && !Files.isDirectory(p))
+                        .filter(Files::isExecutable)
                         .findFirst();
     }
 
