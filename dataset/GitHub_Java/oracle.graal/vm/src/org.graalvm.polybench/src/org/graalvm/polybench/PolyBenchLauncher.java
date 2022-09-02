@@ -26,7 +26,6 @@ package org.graalvm.polybench;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -35,15 +34,12 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.function.BiConsumer;
-import java.util.logging.Handler;
 
 import org.graalvm.launcher.AbstractLanguageLauncher;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.proxy.ProxyArray;
-import org.graalvm.polyglot.proxy.ProxyObject;
 
 public final class PolyBenchLauncher extends AbstractLanguageLauncher {
     static class ArgumentConsumer {
@@ -107,11 +103,6 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
                         break;
                     case "partial-evaluation-time":
                         config.metric = new CompilationTimeMetric(CompilationTimeMetric.MetricType.PARTIAL_EVALUATION);
-                        break;
-                    case "one-shot":
-                        config.metric = new OneShotMetric();
-                        config.warmupIterations = 0;
-                        config.iterations = 1;
                         break;
                     default:
                         throw new IllegalArgumentException("Unknown metric: " + value);
@@ -199,55 +190,6 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
         System.out.println("Run a benchmark in an arbitrary language on the PolyBench harness.");
     }
 
-    private static String getExtension(String path) {
-        int lastDot = path.lastIndexOf('.');
-        if (lastDot < 0) {
-            return null;
-        }
-        return path.substring(lastDot + 1);
-    }
-
-    private EvalResult evalSource(Context context, String path) {
-        final File file = new File(path);
-        if ("jar".equals(getExtension(path))) {
-            // Espresso cannot eval .jar files, instead we load the JAR's main class.
-            Value helper = context.getBindings("java").getMember("sun.launcher.LauncherHelper");
-            Value mainClass = helper.invokeMember("checkAndLoadMain", true, 2 /* LM_JAR */, path);
-            Value result = mainClass.getMember("static"); // Class -> Klass
-            return new EvalResult("java", file.getName(), true, file.length(), result);
-        } else {
-            Source source;
-            String language;
-            try {
-                language = Source.findLanguage(file);
-                if (language == null) {
-                    throw abort("Could not determine the language for file " + file);
-                }
-                source = Source.newBuilder(language, file).build();
-            } catch (IOException e) {
-                throw abort("Error while examining source file '" + file + "': " + e.getMessage());
-            }
-            Value result = context.eval(source);
-            return new EvalResult(language, source.getName(), source.hasBytes(), source.getLength(), result);
-        }
-    }
-
-    static class EvalResult {
-        final String languageId;
-        final String sourceName;
-        final boolean isBinarySource;
-        final long sourceLength;
-        final Value value;
-
-        EvalResult(String languageId, String sourceName, boolean isBinarySource, long sourceLength, Value value) {
-            this.languageId = languageId;
-            this.sourceName = sourceName;
-            this.isBinarySource = isBinarySource;
-            this.sourceLength = sourceLength;
-            this.value = value;
-        }
-    }
-
     private void runHarness(Context.Builder contextBuilder) {
         log("::: Starting " + config.path + " :::");
         log(config.toString());
@@ -264,34 +206,38 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
                 throw new AssertionError("Unknown execution-mode: " + config.mode);
         }
         contextBuilder.options(config.metric.getEngineOptions(config));
-        Handler handler = config.metric.getLogHandler();
-        if (handler != null) {
-            contextBuilder.logHandler(handler);
-        }
-
-        // Set Java class path before spawning context.
-        if ("jar".equals(getExtension(config.path))) {
-            contextBuilder.option("java.Classpath", config.path);
-        }
 
         try (Context context = contextBuilder.build()) {
             log("::: Initializing :::");
 
-            EvalResult evalResult = evalSource(context, config.path);
-            log("language: " + evalResult.languageId);
-            log("type:     " + (evalResult.isBinarySource ? "binary" : "source code"));
-            log("length:   " + evalResult.sourceLength + (evalResult.isBinarySource ? " bytes" : " characters"));
+            final File file = new File(config.path);
+            Source source;
+            String language;
+            try {
+                language = Source.findLanguage(file);
+                if (language == null) {
+                    throw abort("Could not determine the language for file " + file);
+                }
+                source = Source.newBuilder(language, file).build();
+            } catch (IOException e) {
+                throw abort("Error while examining source file '" + file + "': " + e.getMessage());
+            }
 
+            context.eval(source);
+
+            log("language: " + source.getLanguage());
+            log("type:     " + (source.hasBytes() ? "binary" : "source code"));
+            log("length:   " + source.getLength() + (source.hasBytes() ? " bytes" : " characters"));
             log("Initialization completed.");
             log("");
 
             log("::: Running warmup :::");
-            repeatIterations(context, evalResult.languageId, evalResult.sourceName, evalResult.value, true, config.warmupIterations);
+            repeatIterations(context, language, source.getName(), true, config.warmupIterations);
             log("");
 
             log("::: Running :::");
             config.metric.reset();
-            repeatIterations(context, evalResult.languageId, evalResult.sourceName, evalResult.value, false, config.iterations);
+            repeatIterations(context, language, source.getName(), false, config.iterations);
             log("");
         } catch (Throwable t) {
             throw abort(t);
@@ -306,25 +252,16 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
         return String.format("%.2f", v);
     }
 
-    private void repeatIterations(Context context, String languageId, String name, Value evalSource, boolean warmup, int iterations) {
-        Value run = null;
-        if (!"java".equals(languageId)) {
-            run = lookup(context, languageId, evalSource, "run");
-        }
+    private void repeatIterations(Context context, String languageId, String name, boolean warmup, int iterations) {
+        Value run = lookup(context, languageId, "run");
         // Enter explicitly to avoid context switches for each iteration.
         context.enter();
         try {
             for (int i = 0; i < iterations; i++) {
                 config.metric.beforeIteration(warmup, i, config);
 
-                if ("java".equals(languageId)) {
-                    // Espresso doesn't provide methods as executable values.
-                    // It can only invoke methods from the declaring class or receiver.
-                    evalSource.invokeMember("main", ProxyArray.fromArray(/* empty */));
-                } else {
-                    // The executeVoid method is the fastest way to do the transition to guest.
-                    run.executeVoid();
-                }
+                // The executeVoid method is the fastest way to do the transition to guest.
+                run.executeVoid();
 
                 config.metric.afterIteration(warmup, i, config);
 
@@ -344,19 +281,12 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
         }
     }
 
-    private Value lookup(Context context, String languageId, Value evalSource, String memberName) {
+    private Value lookup(Context context, String languageId, String memberName) {
         Value result;
         switch (languageId) {
-            case "llvm":
-                if (!evalSource.canExecute()) {
-                    throw abort("No main function found: " + evalSource);
-                }
-                return evalSource;
             case "wasm":
                 result = context.getBindings(languageId).getMember("main").getMember(memberName);
                 break;
-            case "java":
-                throw abort("Espresso doesn't provide methods as executable values. It can only invoke methods from the declaring class or receiver.");
             default:
                 result = context.getBindings(languageId).getMember(memberName);
                 break;
