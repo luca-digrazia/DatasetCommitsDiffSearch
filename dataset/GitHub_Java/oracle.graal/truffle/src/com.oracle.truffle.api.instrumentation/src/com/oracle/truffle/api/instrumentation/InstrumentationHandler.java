@@ -1406,11 +1406,7 @@ final class InstrumentationHandler {
         protected void postVisit() {
             if (notifyBindings) {
                 try {
-                    /*
-                     * The notifications can add new sources, that is why we don't use enhanced for.
-                     */
-                    for (int i = 0; i < newSources.size(); i++) {
-                        Source src = newSources.get(i);
+                    for (Source src : newSources) {
                         if (performOnlyOnExecutedAST) {
                             notifySourceExecutedBindings(bindings, src);
                         } else {
