@@ -48,28 +48,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.ProcessHandler;
 import org.graalvm.polyglot.io.ProcessHandler.Redirect;
 
 public class TruffleProcessBuilder {
 
     private final Object polylgotLanguageContext;
-    private final FileSystem fileSystem;
     private List<String> cmd;
     private TruffleFile cwd;
-    private boolean inheritIO;
-    private boolean clearEnvironment;
     private Map<String, String> env;
     private boolean redirectErrorStream;
     private Redirect[] redirects;
 
-    TruffleProcessBuilder(Object polylgotLanguageContext, FileSystem fileSystem, List<String> command) {
+    TruffleProcessBuilder(Object polylgotLanguageContext, List<String> command) {
         Objects.requireNonNull(polylgotLanguageContext, "PolylgotLanguageContext must be non null.");
-        Objects.requireNonNull(fileSystem, "FileSystem must be non null.");
         Objects.requireNonNull(command, "Command must be non null.");
         this.polylgotLanguageContext = polylgotLanguageContext;
-        this.fileSystem = fileSystem;
         this.cmd = command;
         this.redirects = new Redirect[]{Redirect.PIPE, Redirect.PIPE, Redirect.PIPE};
     }
@@ -87,15 +81,27 @@ public class TruffleProcessBuilder {
         return this;
     }
 
+    public List<String> command() {
+        return cmd;
+    }
+
     public TruffleProcessBuilder directory(TruffleFile currentWorkingDirectory) {
         Objects.requireNonNull(currentWorkingDirectory, "CurrentWorkingDirectory must be non null.");
         this.cwd = currentWorkingDirectory;
         return this;
     }
 
+    public TruffleFile directory() {
+        return this.cwd;
+    }
+
     public TruffleProcessBuilder redirectErrorStream(boolean enabled) {
         this.redirectErrorStream = enabled;
         return this;
+    }
+
+    public boolean redirectErrorStream() {
+        return redirectErrorStream;
     }
 
     public TruffleProcessBuilder redirectInput(Redirect destination) {
@@ -104,10 +110,18 @@ public class TruffleProcessBuilder {
         return this;
     }
 
+    public Redirect redirectInput() {
+        return redirects[0];
+    }
+
     public TruffleProcessBuilder redirectOutput(Redirect destination) {
         Objects.requireNonNull(destination, "Destination must be non null.");
         redirects[1] = destination;
         return this;
+    }
+
+    public Redirect redirectOutput() {
+        return redirects[1];
     }
 
     public TruffleProcessBuilder redirectError(Redirect destination) {
@@ -116,41 +130,34 @@ public class TruffleProcessBuilder {
         return this;
     }
 
+    public Redirect redirectError() {
+        return redirects[2];
+    }
 
-    public TruffleProcessBuilder inheritIO(boolean enabled) {
-        this.inheritIO = enabled;
+    public TruffleProcessBuilder inheritIO() {
+        Arrays.fill(redirects, Redirect.INHERIT);
         return this;
     }
 
-    public TruffleProcessBuilder clearEnvironment(boolean enabled) {
-        this.clearEnvironment = enabled;
+    public TruffleProcessBuilder addToEnvironment(Map<String, String> environment) {
+        environment().putAll(environment);
         return this;
     }
 
-    public TruffleProcessBuilder environment(Map<String, String> environment) {
-        this.env = environment;
-        return this;
+    public Map<String, String> environment() {
+        if (env == null) {
+            env = new HashMap<>(TruffleLanguage.AccessAPI.engineAccess().getProcessEnvironment(polylgotLanguageContext));
+        }
+        assert env != null;
+        return env;
     }
 
     public Process start() throws IOException {
-        if (inheritIO) {
-            Arrays.fill(redirects, Redirect.INHERIT);
-        }
-        Map<String,String> useEnv = clearEnvironment ?
-                new HashMap<>() :
-                new HashMap<>(TruffleLanguage.AccessAPI.engineAccess().getProcessEnvironment(polylgotLanguageContext));
-        useEnv.putAll(env);
-        String useCwd;
-        if (cwd != null) {
-            useCwd = cwd.getSPIPath().toString();
-        } else {
-            useCwd = fileSystem.toAbsolutePath(fileSystem.parsePath("")).toString();
-        }
         ProcessHandler.ProcessCommand processCommand = TruffleLanguage.AccessAPI.engineAccess().newProcessCommand(
                         polylgotLanguageContext,
                         cmd,
-                        useCwd,
-                        useEnv,
+                        cwd == null ? null : cwd.getSPIPath().toString(),
+                        environment(),
                         redirectErrorStream,
                         redirects);
         return TruffleLanguage.AccessAPI.engineAccess().startProcess(polylgotLanguageContext, processCommand);

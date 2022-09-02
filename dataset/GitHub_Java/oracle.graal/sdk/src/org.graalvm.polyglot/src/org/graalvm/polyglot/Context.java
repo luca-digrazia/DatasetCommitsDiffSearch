@@ -50,7 +50,6 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.logging.Handler;
 import java.util.logging.Level;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 import org.graalvm.polyglot.io.FileSystem;
@@ -764,9 +763,6 @@ public final class Context implements AutoCloseable {
         private Object customLogHandler;
         private Boolean allowCreateProcess;
         private ProcessHandler processHandler;
-        private EnvironmentAccess environmentAcceess;
-        private Map<String,String> environment;
-        private boolean allowInheritEnvironment;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -1245,27 +1241,6 @@ public final class Context implements AutoCloseable {
             return this;
         }
 
-        public Builder allowEnvironmentAccess(EnvironmentAccess accessPolicy) {
-            Objects.requireNonNull(accessPolicy, "AccessPolicy must be non null.");
-            this.environmentAcceess = accessPolicy;
-            return this;
-        }
-
-        public Builder environment(String key, String value) {
-            Objects.requireNonNull(key, "Key must be non null.");
-            Objects.requireNonNull(value, "Value must be non null.");
-            if (this.environment == null) {
-                this.environment = new HashMap<>();
-            }
-            this.environment.put(key, value);
-            return this;
-        }
-
-        public Builder inheritEnvironment(boolean enabled) {
-            this.allowInheritEnvironment = enabled;
-            return this;
-        }
-
         /**
          * Creates a new context instance from the configuration provided in the builder. The same
          * context builder can be used to create multiple context instances.
@@ -1316,11 +1291,6 @@ public final class Context implements AutoCloseable {
             }
 
             boolean createProcess = orAllAccess(allowCreateProcess);
-            boolean inheritEnvironment = orAllAccess(allowInheritEnvironment);
-            if (environmentAcceess == null) {
-                environmentAcceess = this.allowAllAccess ? EnvironmentAccess.READ_WRITE : EnvironmentAccess.NONE;
-            }
-            AbstractPolyglotImpl.EnvironmentConfig envConfig = new AbstractPolyglotImpl.EnvironmentConfig(environmentAcceess, inheritEnvironment, environment);
             if (!io && customFileSystem != null) {
                 throw new IllegalStateException("Cannot install custom FileSystem when IO is disabled.");
             }
@@ -1350,7 +1320,7 @@ public final class Context implements AutoCloseable {
                 return engine.impl.createContext(null, null, null, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, Collections.emptyMap(), arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, envConfig);
+                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler);
             } else {
                 if (messageTransport != null) {
                     throw new IllegalStateException("Cannot use MessageTransport in a context that shares an Engine.");
@@ -1358,7 +1328,7 @@ public final class Context implements AutoCloseable {
                 return engine.impl.createContext(out, err, in, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, options == null ? Collections.emptyMap() : options, arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, envConfig);
+                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler);
             }
         }
 

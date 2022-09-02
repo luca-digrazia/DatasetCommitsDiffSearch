@@ -54,6 +54,8 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 
 public interface ProcessHandler {
 
+    Map<String, String> getEnvironment();
+
     Process start(ProcessCommand command) throws IOException;
 
     final class ProcessCommand {
