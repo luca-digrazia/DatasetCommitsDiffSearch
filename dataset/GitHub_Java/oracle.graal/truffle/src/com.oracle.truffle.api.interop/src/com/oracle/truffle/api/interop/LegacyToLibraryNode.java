@@ -41,6 +41,7 @@
 package com.oracle.truffle.api.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -50,16 +51,21 @@ final class LegacyToLibraryNode extends Node {
 
     private static final int LIMIT = 5;
 
-    private final Message message;
+    final Message message;
 
-    @Child private InteropLibrary interop = InteropLibrary.resolve().createCachedDispatch(LIMIT);
+    @Child private InteropLibrary interop;
     @Child private InteropAccessNode legacyUnbox;
     @Child private InteropAccessNode legacyIsBoxed;
+    @Child private InteropAccessNode legacyToNative;
+    @Child private InteropAccessNode legacyRemove;
 
     private LegacyToLibraryNode(Message message) {
         this.message = message;
-        legacyUnbox = InteropAccessNode.create(Message.UNBOX);
-        legacyIsBoxed = InteropAccessNode.create(Message.IS_BOXED);
+        this.interop = insert(InteropLibrary.getFactory().createDispatched(LIMIT));
+        this.legacyUnbox = insert(InteropAccessNode.create(Message.UNBOX));
+        this.legacyIsBoxed = insert(InteropAccessNode.create(Message.IS_BOXED));
+        this.legacyToNative = insert(InteropAccessNode.create(Message.TO_NATIVE));
+        this.legacyRemove = insert(InteropAccessNode.create(Message.REMOVE));
     }
 
     static final class AdoptRootNode extends RootNode {
@@ -70,7 +76,8 @@ final class LegacyToLibraryNode extends Node {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            throw new AssertionError();
+            assert false;
+            return null;
         }
 
         LegacyToLibraryNode insertAccess(LegacyToLibraryNode node) {
@@ -95,7 +102,8 @@ final class LegacyToLibraryNode extends Node {
             return interop.readMember(receiver, (String) identifier);
         } else if (identifier instanceof Number) {
             try {
-                return interop.readElement(receiver, ((Number) identifier).longValue());
+                final long index = asLongIndex(identifier);
+                return interop.readArrayElement(receiver, index);
             } catch (InvalidArrayIndexException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw UnknownIdentifierException.raise(String.valueOf(e.getInvalidIndex()));
@@ -119,13 +127,24 @@ final class LegacyToLibraryNode extends Node {
         }
     }
 
+    private static long asLongIndex(Object identifier) {
+        if (identifier instanceof Integer) {
+            return (int) identifier;
+        } else if (identifier instanceof Long) {
+            return (long) identifier;
+        } else {
+            return boundaryToLong(identifier);
+        }
+    }
+
     void sendWrite(TruffleObject receiver, Object identifier, Object value)
                     throws UnknownIdentifierException, UnsupportedTypeException, UnsupportedMessageException {
         if (identifier instanceof String) {
             interop.writeMember(receiver, (String) identifier, value);
         } else if (identifier instanceof Number) {
             try {
-                interop.writeElement(receiver, ((Number) identifier).longValue(), value);
+                final long index = asLongIndex(identifier);
+                interop.writeArrayElement(receiver, index, value);
             } catch (InvalidArrayIndexException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw UnknownIdentifierException.raise(String.valueOf(e.getInvalidIndex()));
@@ -153,11 +172,19 @@ final class LegacyToLibraryNode extends Node {
     boolean sendRemove(TruffleObject receiver, Object identifier)
                     throws UnknownIdentifierException, UnsupportedMessageException {
         if (identifier instanceof String) {
+            if (receiver.getForeignAccess() != null) {
+                return LibraryToLegacy.sendRemove(legacyRemove, receiver, identifier);
+            }
+
             interop.removeMember(receiver, (String) identifier);
             return true;
         } else if (identifier instanceof Number) {
             try {
-                interop.removeElement(receiver, ((Number) identifier).longValue());
+                if (receiver.getForeignAccess() != null) {
+                    return LibraryToLegacy.sendRemove(legacyRemove, receiver, identifier);
+                }
+                final long index = asLongIndex(identifier);
+                interop.removeArrayElement(receiver, index);
                 return true;
             } catch (InvalidArrayIndexException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -221,7 +248,11 @@ final class LegacyToLibraryNode extends Node {
     }
 
     Object sendToNative(TruffleObject receiver) throws UnsupportedMessageException {
-        return interop.toNative(receiver);
+        if (receiver.getForeignAccess() != null) {
+            return LibraryToLegacy.sendToNative(legacyToNative, receiver);
+        }
+        interop.toNative(receiver);
+        return receiver;
     }
 
     Object sendExecute(TruffleObject receiver, Object... arguments) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
@@ -250,7 +281,7 @@ final class LegacyToLibraryNode extends Node {
     }
 
     boolean sendHasSize(TruffleObject receiver) {
-        return interop.isArray(receiver);
+        return interop.hasArrayElements(receiver);
     }
 
     Object sendGetSize(TruffleObject receiver) throws UnsupportedMessageException {
@@ -290,7 +321,7 @@ final class LegacyToLibraryNode extends Node {
             if (interop.isMemberRemovable(receiver, identifier)) {
                 keyInfo |= KeyInfo.REMOVABLE;
             }
-            if (interop.isMemberInvokable(receiver, identifier)) {
+            if (interop.isMemberInvocable(receiver, identifier)) {
                 keyInfo |= KeyInfo.INVOCABLE;
             }
             if (interop.isMemberInternal(receiver, identifier)) {
@@ -303,22 +334,23 @@ final class LegacyToLibraryNode extends Node {
                 keyInfo |= KeyInfo.WRITE_SIDE_EFFECTS;
             }
         } else if (key instanceof Number) {
-            long index = ((Number) key).longValue();
+            final long index = asLongIndex(key);
             if (key instanceof Float || key instanceof Double) {
                 if (index != ((Number) key).doubleValue()) {
                     return KeyInfo.NONE;
                 }
             }
-            if (interop.isElementReadable(receiver, index)) {
+
+            if (interop.isArrayElementReadable(receiver, index)) {
                 keyInfo |= KeyInfo.READABLE;
             }
-            if (interop.isElementModifiable(receiver, index)) {
+            if (interop.isArrayElementModifiable(receiver, index)) {
                 keyInfo |= KeyInfo.MODIFIABLE;
             }
-            if (interop.isElementInsertable(receiver, index)) {
+            if (interop.isArrayElementInsertable(receiver, index)) {
                 keyInfo |= KeyInfo.INSERTABLE;
             }
-            if (interop.isElementRemovable(receiver, index)) {
+            if (interop.isArrayElementRemovable(receiver, index)) {
                 keyInfo |= KeyInfo.REMOVABLE;
             }
         } else if (key instanceof TruffleObject) {
@@ -340,8 +372,13 @@ final class LegacyToLibraryNode extends Node {
         return keyInfo;
     }
 
+    @TruffleBoundary
+    private static long boundaryToLong(Object key) {
+        return ((Number) key).longValue();
+    }
+
     boolean sendHasKeys(TruffleObject receiver) {
-        return interop.isObject(receiver);
+        return interop.hasMembers(receiver);
     }
 
     TruffleObject sendKeys(TruffleObject receiver) throws UnsupportedMessageException {
@@ -354,61 +391,59 @@ final class LegacyToLibraryNode extends Node {
 
     Object send(TruffleObject receiver, Object[] a) throws InteropException {
         if (message instanceof KnownMessage) {
-            if (message instanceof KnownMessage) {
-                switch (message.hashCode()) {
-                    case Read.HASH:
-                        Object id = a.length >= 1 ? a[0] : null;
-                        return sendRead(receiver, id);
-                    case Write.HASH:
-                        id = a.length >= 1 ? a[0] : null;
-                        Object value = a.length >= 2 ? a[1] : null;
-                        sendWrite(receiver, id, value);
-                        return a[1];
-                    case Remove.HASH:
-                        id = a.length >= 1 ? a[0] : null;
-                        return sendRemove(receiver, id);
-                    case KeyInfoMsg.HASH:
-                        id = a.length >= 1 ? a[0] : null;
-                        return sendKeyInfo(receiver, id);
-                    case Invoke.HASH:
-                        id = a.length >= 1 ? a[0] : null;
-                        Object[] args;
-                        if (a.length >= 2) {
-                            args = new Object[a.length - 1];
-                            System.arraycopy(a, 1, args, 0, args.length);
-                        } else {
-                            args = new Object[0];
-                        }
-                        return sendInvoke(receiver, (String) id, args);
-                    case HasKeys.HASH:
-                        return sendHasKeys(receiver);
-                    case Keys.HASH:
-                        return sendKeys(receiver);
-                    case Unbox.HASH:
-                        return sendUnbox(receiver);
-                    case IsBoxed.HASH:
-                        return sendIsBoxed(receiver);
-                    case HasSize.HASH:
-                        return sendHasSize(receiver);
-                    case GetSize.HASH:
-                        return sendGetSize(receiver);
-                    case Execute.HASH:
-                        return sendExecute(receiver, a);
-                    case IsExecutable.HASH:
-                        return sendIsExecutable(receiver);
-                    case New.HASH:
-                        return sendNew(receiver, a);
-                    case IsInstantiable.HASH:
-                        return sendIsInstantiable(receiver);
-                    case IsPointer.HASH:
-                        return sendIsPointer(receiver);
-                    case AsPointer.HASH:
-                        return sendAsPointer(receiver);
-                    case ToNative.HASH:
-                        return sendToNative(receiver);
-                    case IsNull.HASH:
-                        return sendIsNull(receiver);
-                }
+            switch (message.hashCode()) {
+                case Read.HASH:
+                    Object id = a.length >= 1 ? a[0] : null;
+                    return sendRead(receiver, id);
+                case Write.HASH:
+                    id = a.length >= 1 ? a[0] : null;
+                    Object value = a.length >= 2 ? a[1] : null;
+                    sendWrite(receiver, id, value);
+                    return a[1];
+                case Remove.HASH:
+                    id = a.length >= 1 ? a[0] : null;
+                    return sendRemove(receiver, id);
+                case KeyInfoMsg.HASH:
+                    id = a.length >= 1 ? a[0] : null;
+                    return sendKeyInfo(receiver, id);
+                case Invoke.HASH:
+                    id = a.length >= 1 ? a[0] : null;
+                    Object[] args;
+                    if (a.length >= 2) {
+                        args = new Object[a.length - 1];
+                        System.arraycopy(a, 1, args, 0, args.length);
+                    } else {
+                        args = new Object[0];
+                    }
+                    return sendInvoke(receiver, (String) id, args);
+                case HasKeys.HASH:
+                    return sendHasKeys(receiver);
+                case Keys.HASH:
+                    return sendKeys(receiver);
+                case Unbox.HASH:
+                    return sendUnbox(receiver);
+                case IsBoxed.HASH:
+                    return sendIsBoxed(receiver);
+                case HasSize.HASH:
+                    return sendHasSize(receiver);
+                case GetSize.HASH:
+                    return sendGetSize(receiver);
+                case Execute.HASH:
+                    return sendExecute(receiver, a);
+                case IsExecutable.HASH:
+                    return sendIsExecutable(receiver);
+                case New.HASH:
+                    return sendNew(receiver, a);
+                case IsInstantiable.HASH:
+                    return sendIsInstantiable(receiver);
+                case IsPointer.HASH:
+                    return sendIsPointer(receiver);
+                case AsPointer.HASH:
+                    return sendAsPointer(receiver);
+                case ToNative.HASH:
+                    return sendToNative(receiver);
+                case IsNull.HASH:
+                    return sendIsNull(receiver);
             }
         }
         // TODO allow sending custom messages
