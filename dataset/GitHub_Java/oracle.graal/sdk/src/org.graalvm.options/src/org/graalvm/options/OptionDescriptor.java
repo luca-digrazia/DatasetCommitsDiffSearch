@@ -263,8 +263,8 @@ public final class OptionDescriptor {
         }
 
         /**
-         * Defines if this option is an {@link OptionMap option map}. The default value is
-         * <code>false</code>. See {@link OptionKey#mapOf(Class)}.
+         * Defines if option is an {@link OptionMap option map}. The default value is
+         * <code>false</code>.
          *
          * @since 20.0
          */
