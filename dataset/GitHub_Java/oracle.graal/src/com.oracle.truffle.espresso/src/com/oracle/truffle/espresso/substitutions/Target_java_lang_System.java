@@ -26,6 +26,7 @@ package com.oracle.truffle.espresso.substitutions;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.MetaUtil;
+import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.object.DebugCounter;
 
@@ -110,5 +111,10 @@ public final class Target_java_lang_System {
             // Other checks are caught during execution without side effects.
             throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class);
         }
+    }
+
+    @Substitution
+    public static void exit(int code) {
+        throw new EspressoExitException(code);
     }
 }

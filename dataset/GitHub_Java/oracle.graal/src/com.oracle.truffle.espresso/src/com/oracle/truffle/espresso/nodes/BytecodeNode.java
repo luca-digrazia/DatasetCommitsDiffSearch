@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -277,7 +277,6 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.ReturnAddress;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
 import com.oracle.truffle.object.DebugCounter;
@@ -335,7 +334,7 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
         this.bs = new BytecodeStream(method.getCode());
         FrameSlot[] slots = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
         this.locals = Arrays.copyOfRange(slots, 0, method.getMaxLocals());
-        this.stackSlots = Arrays.copyOfRange(slots, method.getMaxLocals(), method.getMaxLocals() + method.getMaxStackSize() + method.usesMonitors());
+        this.stackSlots = Arrays.copyOfRange(slots, method.getMaxLocals(), method.getMaxLocals() + method.getMaxStackSize());
         this.SOEinfo = getMethod().getSOEHandlerInfo();
     }
 
@@ -387,9 +386,6 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
             // @formatter:on
             // Checkstyle: resume
             n += expectedkind.getSlotCount();
-        }
-        if (getMethod().usesMonitors() > 0) {
-            frame.setObject(stackSlots[monitorSlot()], new MonitorStack());
         }
     }
 
@@ -911,8 +907,8 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
                         case CHECKCAST: top += quickenCheckCast(frame, top, curBCI, curOpcode); break;
                         case INSTANCEOF: top += quickenInstanceOf(frame, top, curBCI, curOpcode); break;
 
-                        case MONITORENTER: monitorEnter(frame, nullCheck(peekAndReleaseObject(frame, top - 1))); break;
-                        case MONITOREXIT: monitorExit(frame, nullCheck(peekAndReleaseObject(frame, top - 1))); break;
+                        case MONITORENTER: InterpreterToVM.monitorEnter(nullCheck(peekAndReleaseObject(frame, top - 1))); break;
+                        case MONITOREXIT: InterpreterToVM.monitorExit(nullCheck(peekAndReleaseObject(frame, top - 1))); break;
 
                         case WIDE:
                             CompilerAsserts.neverPartOfCompilation();
@@ -1034,9 +1030,7 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
                     }
                     putObject(frame, 0, e.getException());
                     top++;
-                    int targetBCI = handler.getHandlerBCI();
-                    checkBackEdge(curBCI, targetBCI, top, NOP);
-                    curBCI = targetBCI;
+                    curBCI = handler.getHandlerBCI();
                     if (DEBUG_CATCH) {
                         reportCatch(e, curBCI, this);
                     }
@@ -1079,87 +1073,11 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
                     reportVMError(e, curBCI, this);
                     throw new EspressoException(ex);
                 }
-            } catch (EspressoExitException e) {
-                if (getMethod().usesMonitors() > 0) {
-                    getMonitorStack(frame).abort();
-                }
-                throw e;
             }
             top += Bytecodes.stackEffectOf(curOpcode);
             curBCI = bs.nextBCI(curBCI);
         }
-    }
 
-    private void monitorExit(VirtualFrame frame, Object monitor) {
-        unregisterMonitor(frame, monitor);
-        InterpreterToVM.monitorExit(monitor);
-    }
-
-    private void unregisterMonitor(VirtualFrame frame, Object monitor) {
-        getMonitorStack(frame).exit(monitor);
-    }
-
-    private void monitorEnter(VirtualFrame frame, Object monitor) {
-        registerMonitor(frame, monitor);
-        InterpreterToVM.monitorEnter(monitor);
-    }
-
-    private void registerMonitor(VirtualFrame frame, Object monitor) {
-        getMonitorStack(frame).enter(monitor);
-    }
-
-    private int monitorSlot() {
-        return getMethod().getMaxStackSize();
-    }
-
-    private MonitorStack getMonitorStack(VirtualFrame frame) {
-        Object frameResult = FrameUtil.getObjectSafe(frame, stackSlots[monitorSlot()]);
-        assert frameResult instanceof MonitorStack;
-        return (MonitorStack) frameResult;
-    }
-
-    private static class MonitorStack {
-        private static int DEFAULT_CAPACITY = 4;
-
-        private Object[] monitors = new Object[DEFAULT_CAPACITY];
-        private int top = 0;
-        private int capacity = DEFAULT_CAPACITY;
-
-        private void enter(Object monitor) {
-            if (top >= capacity) {
-                monitors = Arrays.copyOf(monitors, capacity <<= 1);
-            }
-            monitors[top++] = monitor;
-        }
-
-        private void exit(Object monitor) {
-            Object topMonitor = monitors[top - 1];
-            if (monitor == topMonitor) {
-                // Balanced locking: simply pop.
-                monitors[top--] = null;
-            } else {
-                // Unbalanced locking: do the linear search.
-                for (int i = 0; i < top; i++) {
-                    if (monitors[i] == monitor) {
-                        System.arraycopy(monitors, i + 1, monitors, i, top - i);
-                        --top;
-                        return;
-                    }
-                }
-                // monitor not found. Not against the specs.
-            }
-        }
-
-        private void abort() {
-            for (int i = 0; i < top; i++) {
-                Object monitor = monitors[i];
-                try {
-                    InterpreterToVM.monitorExit(monitor);
-                } catch (Throwable e) {
-                    /* ignore */
-                }
-            }
-        }
     }
 
     private boolean takeBranch(VirtualFrame frame, int top, int opCode) {
@@ -1195,37 +1113,11 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
     private int checkBackEdge(int curBCI, int targetBCI, int top, int opCode) {
         int newTop = top + Bytecodes.stackEffectOf(opCode);
         if (targetBCI < curBCI) {
-            checkStopping();
             if (CompilerDirectives.inInterpreter()) {
                 LoopNode.reportLoopCount(this, 1);
             }
         }
         return newTop;
-    }
-
-    private void checkStopping() {
-        if (!getContext().noThreadStop()) {
-            StaticObject thread = getContext().getHost2Guest(Thread.currentThread());
-            Target_java_lang_Thread.KillStatus status = Target_java_lang_Thread.getKillStatus(thread);
-            switch (status) {
-                case NORMAL:
-                case EXITING:
-                case KILLED:
-                    break;
-                case KILL:
-                    if (getContext().isClosing()) {
-                        // Give some leeway during closing.
-                        Target_java_lang_Thread.setThreadStop(thread, Target_java_lang_Thread.KillStatus.KILLED);
-                    } else {
-                        Target_java_lang_Thread.setThreadStop(thread, Target_java_lang_Thread.KillStatus.NORMAL);
-                    }
-                    throw getMeta().throwEx(ThreadDeath.class);
-                case DISSIDENT:
-                    // This thread refuses to stop. Send a host exception.
-                    // throw getMeta().throwEx(ThreadDeath.class);
-                    throw new EspressoExitException(0);
-            }
-        }
     }
 
     @TruffleBoundary
@@ -1720,7 +1612,7 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
         StaticObject methodType = signatureToMethodType(parsedInvokeSignature, declaringKlass, getMeta());
         StaticObject appendix = StaticObject.createArray(meta.Object_array, new StaticObject[1]);
 
-        StaticObject memberName = (StaticObject) meta.MethodHandleNatives_linkCallSite.invokeDirect(
+        StaticObject memberName = (StaticObject) meta.linkCallSite.invokeDirect(
                         null,
                         declaringKlass.mirror(),
                         bootstrapmethodMethodHandle,
@@ -1762,7 +1654,7 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
         } catch (Throwable e) {
             throw meta.throwEx(BootstrapMethodError.class);
         }
-        return (StaticObject) meta.MethodHandleNatives_findMethodHandleType.invokeDirect(
+        return (StaticObject) meta.findMethodHandleType.invokeDirect(
                         null,
                         rtype, StaticObject.createArray(meta.Class_Array, ptypes));
     }
@@ -2144,10 +2036,10 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
             // @formatter:off
             // Checkstyle: stop
             switch (kind) {
-                case Boolean : // Fall through
-                case Byte    : // Fall through
-                case Short   : // Fall through
-                case Char    : // Fall through
+                case Boolean : args[i + start] = peekInt(frame, argAt);    break;
+                case Byte    : args[i + start] = peekInt(frame, argAt);    break;
+                case Short   : args[i + start] = peekInt(frame, argAt);    break;
+                case Char    : args[i + start] = peekInt(frame, argAt);    break;
                 case Int     : args[i + start] = peekInt(frame, argAt);    break;
                 case Float   : args[i + start] = peekFloat(frame, argAt);  break;
                 case Long    : args[i + start] = peekLong(frame, argAt);   break;

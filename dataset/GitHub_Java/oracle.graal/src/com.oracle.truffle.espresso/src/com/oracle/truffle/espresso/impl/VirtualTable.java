@@ -28,9 +28,9 @@ import java.util.Arrays;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 
 /**
- * Helper for creating virtual tables in ObjectKlass.
+ * Helper for creating virtual tables in ObjectKlass
  */
-public final class VirtualTable {
+public class VirtualTable {
 
     private VirtualTable() {
 

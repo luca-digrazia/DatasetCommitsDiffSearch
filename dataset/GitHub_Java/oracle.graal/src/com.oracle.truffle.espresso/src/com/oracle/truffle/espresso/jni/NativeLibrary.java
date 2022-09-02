@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,12 +23,8 @@
 package com.oracle.truffle.espresso.jni;
 
 import java.nio.file.Path;
-import java.util.logging.Level;
-
-import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -40,26 +36,21 @@ import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
-public final class NativeLibrary {
+public class NativeLibrary {
 
-    @TruffleBoundary
     public static TruffleObject loadLibrary(Path lib) {
+        // On SVM no need to use dlmopen backend.
+        // Prepend "with dlmopen " in HotSpot.
         StringBuilder sb = new StringBuilder();
         sb.append("load(RTLD_LAZY");
-        OptionValues options = EspressoLanguage.getCurrentContext().getEnv().getOptions();
-        if (options.get(EspressoOptions.UseTruffleNFIIsolatedNamespace)) {
+        if (!EspressoOptions.RUNNING_ON_SVM) {
             sb.append("|ISOLATED_NAMESPACE");
         }
         sb.append(")");
         sb.append(" '").append(lib).append("'");
         Source source = Source.newBuilder("nfi", sb.toString(), "loadLibrary").build();
         CallTarget target = EspressoLanguage.getCurrentContext().getEnv().parseInternal(source);
-        try {
-            return (TruffleObject) target.call();
-        } catch (IllegalArgumentException e) {
-            EspressoLanguage.EspressoLogger.log(Level.SEVERE, "TruffleNFI native library isolation is not supported.", e);
-            throw EspressoError.shouldNotReachHere(e);
-        }
+        return (TruffleObject) target.call();
     }
 
     public static TruffleObject lookup(TruffleObject library, String method) throws UnknownIdentifierException {

@@ -67,5 +67,10 @@ public interface BootstrapMethodConstant extends PoolConstant {
         public final Symbol<Signature> getSignature(ConstantPool pool) {
             return Signatures.check(pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool));
         }
+
+        @Override
+        public void validate(ConstantPool pool) {
+            pool.nameAndTypeAt(nameAndTypeIndex).validateMethod(pool);
+        }
     }
 }

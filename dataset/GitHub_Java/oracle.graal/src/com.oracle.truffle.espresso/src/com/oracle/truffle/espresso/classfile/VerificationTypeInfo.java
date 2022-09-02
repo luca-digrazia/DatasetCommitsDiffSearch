@@ -5,7 +5,6 @@
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
  * published by the Free Software Foundation.
- *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
@@ -79,13 +78,13 @@ public abstract class VerificationTypeInfo {
 }
 
 class PrimitiveTypeInfo extends VerificationTypeInfo {
-    PrimitiveTypeInfo(int tag) {
+    public PrimitiveTypeInfo(int tag) {
         super(tag);
     }
 }
 
 class UninitializedThis extends VerificationTypeInfo {
-    UninitializedThis(int tag) {
+    public UninitializedThis(int tag) {
         super(tag);
     }
 
@@ -98,7 +97,7 @@ class UninitializedThis extends VerificationTypeInfo {
 class UninitializedVariable extends VerificationTypeInfo {
     private final int newOffset;
 
-    UninitializedVariable(int tag, int newOffset) {
+    public UninitializedVariable(int tag, int newOffset) {
         super(tag);
         this.newOffset = newOffset;
     }
@@ -117,7 +116,7 @@ class UninitializedVariable extends VerificationTypeInfo {
 class ReferenceVariable extends VerificationTypeInfo {
     private final int constantPoolOffset;
 
-    ReferenceVariable(int tag, int constantPoolOffset) {
+    public ReferenceVariable(int tag, int constantPoolOffset) {
         super(tag);
         this.constantPoolOffset = constantPoolOffset;
     }

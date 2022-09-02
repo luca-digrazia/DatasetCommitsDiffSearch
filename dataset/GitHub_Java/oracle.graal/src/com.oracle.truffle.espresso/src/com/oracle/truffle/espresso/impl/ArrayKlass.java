@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -61,15 +61,20 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public final int getModifiers() {
-        // Arrays (of static inner class) may have protected access.
-        return (getElementalType().getModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED)) | ACC_FINAL | ACC_ABSTRACT;
+    public final int getFlags() {
+        return (getElementalType().getModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED /*
+                                                                                               * array
+                                                                                               * of
+                                                                                               * static
+                                                                                               * inner
+                                                                                               * class
+                                                                                               */)) | ACC_FINAL | ACC_ABSTRACT;
     }
 
     @Override
-    public final int getClassModifiers() {
-        // Arrays (of static inner class) may have protected access.
-        return (getElementalType().getClassModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED)) | ACC_FINAL | ACC_ABSTRACT;
+    public final int getModifiers() {
+        // ACC_SUPER is kept for backward compatibility, should be ignored.
+        return getFlags();
     }
 
     @Override
