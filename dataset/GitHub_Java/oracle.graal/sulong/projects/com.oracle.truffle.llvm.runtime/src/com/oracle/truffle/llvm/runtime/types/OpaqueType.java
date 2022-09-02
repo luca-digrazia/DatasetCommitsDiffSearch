@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -73,7 +73,7 @@ public final class OpaqueType extends Type {
 
     @Override
     public String toString() {
-        if (name.equals(LLVMIdentifier.UNKNOWN)) {
+        if (LLVMIdentifier.isUnknown(name)) {
             return "opaque";
         } else {
             return name;

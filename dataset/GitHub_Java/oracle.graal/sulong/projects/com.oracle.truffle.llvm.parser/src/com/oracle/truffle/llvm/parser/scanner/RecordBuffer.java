@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.parser.scanner;
 import java.util.Arrays;
 
 import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class RecordBuffer {
 
@@ -104,15 +103,7 @@ public final class RecordBuffer {
     }
 
     public int readInt() {
-        long read = read();
-        return toUnsignedIntExact(read);
-    }
-
-    private int toUnsignedIntExact(long read) {
-        if (Type.fitsIntoUnsignedInt(read)) {
-            return Type.toUnsignedInt(read);
-        }
-        throw new ArithmeticException("unsigned integer overflow");
+        return (int) read();
     }
 
     public boolean readBoolean() {
