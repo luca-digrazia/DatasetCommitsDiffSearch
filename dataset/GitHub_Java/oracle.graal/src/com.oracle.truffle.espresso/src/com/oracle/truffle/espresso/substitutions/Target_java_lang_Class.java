@@ -247,13 +247,6 @@ public final class Target_java_lang_Class {
                     }
                 });
 
-                SignatureAttribute signatureAttribute = (SignatureAttribute) m.getAttribute(Name.Signature);
-                StaticObject genericSignature = StaticObject.NULL;
-                if (signatureAttribute != null) {
-                    String sig = m.getConstantPool().utf8At(signatureAttribute.getSignatureIndex(), "signature").toString();
-                    genericSignature = meta.toGuestString(sig);
-                }
-
                 StaticObject instance = meta.Constructor.allocateInstance();
                 constructorInit.invokeDirect(
                                 /* this */ instance,
@@ -262,14 +255,14 @@ public final class Target_java_lang_Class {
                                 /* checkedExceptions */ checkedExceptions,
                                 /* modifiers */ m.getModifiers(),
                                 /* slot */ i, // TODO(peterssen): Fill method slot.
-                                /* signature */ genericSignature,
+                                /* signature */ meta.toGuestString(m.getRawSignature().toString()),
 
                                 // FIXME(peterssen): Fill annotations bytes.
                                 /* annotations */ runtimeVisibleAnnotations,
                                 /* parameterAnnotations */ runtimeVisibleParameterAnnotations);
 
-                instance.setHiddenField(meta.HIDDEN_METHOD_KEY, m);
-                instance.setHiddenField(meta.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, runtimeVisibleTypeAnnotations);
+                instance.setHiddenField(meta.HIDDEN_CONSTRUCTOR_KEY, m);
+                instance.setHiddenField(meta.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, runtimeVisibleTypeAnnotations);
 
                 return instance;
             }
@@ -350,15 +343,7 @@ public final class Target_java_lang_Class {
                     }
                 });
 
-                SignatureAttribute signatureAttribute = (SignatureAttribute) m.getAttribute(Name.Signature);
-                StaticObject genericSignature = StaticObject.NULL;
-                if (signatureAttribute != null) {
-                    String sig = m.getConstantPool().utf8At(signatureAttribute.getSignatureIndex(), "signature").toString();
-                    genericSignature = meta.toGuestString(sig);
-                }
-
                 StaticObject instance = meta.Method.allocateInstance();
-
                 methodInit.invokeDirect(
                                 /* this */ instance,
                                 /* declaringClass */ m.getDeclaringKlass().mirror(),
@@ -368,7 +353,7 @@ public final class Target_java_lang_Class {
                                 /* checkedExceptions */ checkedExceptions,
                                 /* modifiers */ m.getModifiers(),
                                 /* slot */ i, // TODO(peterssen): Fill method slot.
-                                /* signature */ genericSignature,
+                                /* signature */ meta.toGuestString(m.getRawSignature().toString()),
 
                                 // FIXME(peterssen): Fill annotations bytes.
                                 /* annotations */ runtimeVisibleAnnotations,
