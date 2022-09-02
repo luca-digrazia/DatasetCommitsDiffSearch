@@ -43,6 +43,7 @@ package com.oracle.truffle.polyglot;
 import java.lang.management.ManagementFactory;
 import java.lang.ref.WeakReference;
 import java.time.Duration;
+import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
@@ -223,7 +224,7 @@ final class PolyglotLimits {
 
     }
 
-    static final class TimeLimitChecker implements Runnable {
+    static final class TimeLimitChecker extends TimerTask {
 
         private final WeakReference<PolyglotContextImpl> context;
         private final long timeLimitNS;
@@ -236,20 +237,16 @@ final class PolyglotLimits {
             this.limits = limits;
         }
 
-        private static void cancel() {
-            throw new RuntimeException("Time Limit Checker Task Cancelled!");
-        }
-
         @Override
         public void run() {
             PolyglotContextImpl c = this.context.get();
             if (cancelResult != null) {
                 if (cancelResult.isDone()) {
+                    cancel();
                     try {
                         cancelResult.get();
                     } catch (Exception e) {
                     }
-                    cancel();
                 }
                 return;
             } else if (c == null || c.closed) {
