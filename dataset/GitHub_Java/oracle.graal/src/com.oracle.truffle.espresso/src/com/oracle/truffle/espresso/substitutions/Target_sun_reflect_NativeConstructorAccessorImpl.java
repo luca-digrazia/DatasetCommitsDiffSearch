@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.espresso.substitutions;
 
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
 import java.lang.reflect.Constructor;
 
 import com.oracle.truffle.espresso.impl.Klass;
@@ -31,15 +33,17 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 
 @EspressoSubstitutions
 public class Target_sun_reflect_NativeConstructorAccessorImpl {
+    @TruffleBoundary
     @Substitution
-    public static @Host(Object.class) StaticObject newInstance0(@Host(Constructor.class) StaticObject constructor, @Host(Object[].class) StaticObject args0,
-                    @InjectMeta Meta meta) {
+    public static @Host(Object.class) StaticObject newInstance0(@Host(Constructor.class) StaticObject constructor, @Host(Object[].class) StaticObject args0) {
+        // TODO(tg): inject meta
+        Meta meta = constructor.getKlass().getMeta();
         Klass klass = ((StaticObject) meta.java_lang_reflect_Constructor_clazz.get(constructor)).getMirrorKlass();
         klass.safeInitialize();
         if (klass.isArray() || klass.isPrimitive() || klass.isInterface() || klass.isAbstract()) {
             throw Meta.throwException(meta.java_lang_InstantiationException);
         }
-        Method reflectedMethod = Method.getHostReflectiveConstructorRoot(constructor, meta);
+        Method reflectedMethod = Method.getHostReflectiveConstructorRoot(constructor);
         StaticObject instance = klass.allocateInstance();
         StaticObject parameterTypes = (StaticObject) meta.java_lang_reflect_Constructor_parameterTypes.get(constructor);
         Target_sun_reflect_NativeMethodAccessorImpl.callMethodReflectively(meta, instance, args0, reflectedMethod, klass, parameterTypes);

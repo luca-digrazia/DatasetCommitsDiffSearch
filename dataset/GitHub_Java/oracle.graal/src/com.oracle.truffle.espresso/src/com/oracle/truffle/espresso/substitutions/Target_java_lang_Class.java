@@ -236,12 +236,12 @@ public final class Target_java_lang_Class {
 
                 Attribute rawRuntimeVisibleAnnotations = f.getAttribute(Name.RuntimeVisibleAnnotations);
                 StaticObject runtimeVisibleAnnotations = rawRuntimeVisibleAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleAnnotations.getData())
                                 : StaticObject.NULL;
 
                 Attribute rawRuntimeVisibleTypeAnnotations = f.getAttribute(Name.RuntimeVisibleTypeAnnotations);
                 StaticObject runtimeVisibleTypeAnnotations = rawRuntimeVisibleTypeAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleTypeAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleTypeAnnotations.getData())
                                 : StaticObject.NULL;
 
                 fieldInit.invokeDirect(
@@ -304,17 +304,17 @@ public final class Target_java_lang_Class {
 
                 Attribute rawRuntimeVisibleAnnotations = m.getAttribute(Name.RuntimeVisibleAnnotations);
                 StaticObject runtimeVisibleAnnotations = rawRuntimeVisibleAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleAnnotations.getData())
                                 : StaticObject.NULL;
 
                 Attribute rawRuntimeVisibleParameterAnnotations = m.getAttribute(Name.RuntimeVisibleParameterAnnotations);
                 StaticObject runtimeVisibleParameterAnnotations = rawRuntimeVisibleParameterAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleParameterAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleParameterAnnotations.getData())
                                 : StaticObject.NULL;
 
                 Attribute rawRuntimeVisibleTypeAnnotations = m.getAttribute(Name.RuntimeVisibleTypeAnnotations);
                 StaticObject runtimeVisibleTypeAnnotations = rawRuntimeVisibleTypeAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleTypeAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleTypeAnnotations.getData())
                                 : StaticObject.NULL;
 
                 final Klass[] rawParameterKlasses = m.resolveParameterKlasses();
@@ -411,22 +411,22 @@ public final class Target_java_lang_Class {
                 Method m = methods[i];
                 Attribute rawRuntimeVisibleAnnotations = m.getAttribute(Name.RuntimeVisibleAnnotations);
                 StaticObject runtimeVisibleAnnotations = rawRuntimeVisibleAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleAnnotations.getData())
                                 : StaticObject.NULL;
 
                 Attribute rawRuntimeVisibleParameterAnnotations = m.getAttribute(Name.RuntimeVisibleParameterAnnotations);
                 StaticObject runtimeVisibleParameterAnnotations = rawRuntimeVisibleParameterAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleParameterAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleParameterAnnotations.getData())
                                 : StaticObject.NULL;
 
                 Attribute rawRuntimeVisibleTypeAnnotations = m.getAttribute(Name.RuntimeVisibleTypeAnnotations);
                 StaticObject runtimeVisibleTypeAnnotations = rawRuntimeVisibleTypeAnnotations != null
-                                ? StaticObject.wrap(rawRuntimeVisibleTypeAnnotations.getData(), meta)
+                                ? StaticObject.wrap(rawRuntimeVisibleTypeAnnotations.getData())
                                 : StaticObject.NULL;
 
                 Attribute rawAnnotationDefault = m.getAttribute(Name.AnnotationDefault);
                 StaticObject annotationDefault = rawAnnotationDefault != null
-                                ? StaticObject.wrap(rawAnnotationDefault.getData(), meta)
+                                ? StaticObject.wrap(rawAnnotationDefault.getData())
                                 : StaticObject.NULL;
                 final Klass[] rawParameterKlasses = m.resolveParameterKlasses();
                 StaticObject parameterTypes = meta.java_lang_Class.allocateArray(
@@ -674,8 +674,7 @@ public final class Target_java_lang_Class {
         if (klass instanceof ObjectKlass) {
             Attribute annotations = ((ObjectKlass) klass).getAttribute(Name.RuntimeVisibleAnnotations);
             if (annotations != null) {
-                Meta meta = klass.getMeta();
-                return StaticObject.wrap(annotations.getData(), meta);
+                return StaticObject.wrap(annotations.getData());
             }
         }
         return StaticObject.NULL;
@@ -687,8 +686,7 @@ public final class Target_java_lang_Class {
         if (klass instanceof ObjectKlass) {
             Attribute annotations = ((ObjectKlass) klass).getAttribute(Name.RuntimeVisibleTypeAnnotations);
             if (annotations != null) {
-                Meta meta = klass.getMeta();
-                return StaticObject.wrap(annotations.getData(), meta);
+                return StaticObject.wrap(annotations.getData());
             }
         }
         return StaticObject.NULL;
@@ -704,7 +702,7 @@ public final class Target_java_lang_Class {
         }
         // TODO(tg): inject meta
         Meta meta = self.getKlass().getMeta();
-        StaticObject cp = StaticObject.createNew(meta.sun_reflect_ConstantPool);
+        StaticObject cp = new StaticObject(meta.sun_reflect_ConstantPool);
         cp.setField(meta.sun_reflect_ConstantPool_constantPoolOop, self);
         return cp;
     }

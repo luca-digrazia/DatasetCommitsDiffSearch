@@ -84,7 +84,7 @@ public final class Target_java_lang_reflect_Array {
         // if (length < 0) {
         // throw meta.throwEx(meta.NegativeArraySizeException);
         // }
-        return InterpreterToVM.newReferenceArray(component, length);
+        return InterpreterToVM.newArray(component, length);
     }
 
     /**

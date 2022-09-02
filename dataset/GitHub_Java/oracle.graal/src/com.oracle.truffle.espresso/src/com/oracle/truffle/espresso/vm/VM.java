@@ -428,9 +428,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                 currentThread.setHiddenField(getMeta().HIDDEN_THREAD_BLOCKED_OBJECT, self);
                 Target_java_lang_Thread.incrementThreadCounter(currentThread, getMeta().HIDDEN_THREAD_WAITED_COUNT);
             }
-            context.getJDWPListener().monitorWait(self, timeout);
-            boolean timedOut = !self.getLock().await(timeout);
-            context.getJDWPListener().monitorWaited(self, timedOut);
+            self.getLock().await(timeout);
         } catch (InterruptedException e) {
             Target_java_lang_Thread.setInterrupt(currentThread, false);
             throw Meta.throwExceptionWithMessage(getMeta().java_lang_InterruptedException, e.getMessage());
@@ -1113,7 +1111,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         Klass pdKlass = getMeta().java_security_ProtectionDomain;
         StaticObject pd = pdKlass.allocateInstance();
         getMeta().java_security_ProtectionDomain_init_CodeSource_PermissionCollection.invokeDirect(pd, StaticObject.NULL, StaticObject.NULL);
-        StaticObject context = StaticObject.wrap(new StaticObject[]{pd}, getMeta());
+        StaticObject context = StaticObject.wrap(new StaticObject[]{pd});
         return createACC(context, false, StaticObject.NULL);
     }
 
@@ -2006,7 +2004,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                     if (stackTrace.length() > maxDepth && maxDepth != -1) {
                         StaticObject[] unwrapped = stackTrace.unwrap();
                         unwrapped = Arrays.copyOf(unwrapped, maxDepth);
-                        stackTrace = StaticObject.wrap(unwrapped, meta);
+                        stackTrace = StaticObject.wrap(unwrapped);
                     }
                 } else {
                     stackTrace = meta.java_lang_StackTraceElement.allocateArray(0);
