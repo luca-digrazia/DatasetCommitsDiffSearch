@@ -24,14 +24,13 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertFalse;
 
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.polyglot.Context;
 import org.junit.Test;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 
 @SuppressWarnings("try")
@@ -39,62 +38,30 @@ public class FlushEngineQueueTest {
 
     @Test
     public void testTargetsDequeuedOnClose() {
-
-        Context context = Context.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "true").option("engine.CompilationThreshold", "3").build();
+        Context context = Context.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "true").build();
         context.enter();
 
-        OptimizedCallTarget[] targets = new OptimizedCallTarget[300];
+        OptimizedCallTarget[] targets = new OptimizedCallTarget[1000];
         for (int i = 0; i < targets.length; i++) {
             // if the call targets are created while entered they will get associated with the
             // engine
-            targets[i] = createConstantCallTarget(i);
+            targets[i] = createConstantCallTarget();
         }
 
         for (int i = 0; i < targets.length; i++) {
-            for (int j = 0; j < 3; j++) {
-                targets[i].call();
-            }
+            targets[i].compile(true);
         }
 
         context.leave();
         context.close();
 
-        int validCount = 0;
         for (OptimizedCallTarget target : targets) {
-            /*
-             * We need to wait until the compilation queue gets to process the cancelled targets to
-             * clear their state.
-             */
-            target.waitForCompilation();
-            if (target.isValid()) {
-                validCount++;
-            }
+            assertFalse(target.isSubmittedForCompilation());
         }
-        /*
-         * All we can assume is that after waiting we did not compile all targets. The problem is
-         * that the compilation queue does not unqueue currently active compilations.
-         */
-        assertNotEquals(targets.length, validCount);
     }
 
-    private static OptimizedCallTarget createConstantCallTarget(int i) {
-        return (OptimizedCallTarget) GraalTruffleRuntime.getRuntime().createCallTarget(new RootNode(null) {
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                return i;
-            }
-
-            @Override
-            public String getName() {
-                return String.valueOf(i);
-            }
-
-            @Override
-            public String toString() {
-                return getName();
-            }
-        });
+    private static OptimizedCallTarget createConstantCallTarget() {
+        return (OptimizedCallTarget) GraalTruffleRuntime.getRuntime().createCallTarget(RootNode.createConstantNode(42));
     }
 
 }

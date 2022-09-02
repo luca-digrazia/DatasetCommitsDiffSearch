@@ -162,14 +162,9 @@ final class GraalRuntimeSupport extends RuntimeSupport {
     @Override
     public void flushCompileQueue(Object runtimeData) {
         EngineData engine = (EngineData) runtimeData;
-        BackgroundCompileQueue queue = GraalTruffleRuntime.getRuntime().getCompileQueue();
-        // compile queue might be null if no call target was yet created
-        if (queue != null) {
-            for (OptimizedCallTarget target : queue.getQueuedTargets(engine)) {
-                target.cancelCompilation("Polyglot engine was closed.");
-            }
+        for (OptimizedCallTarget target : GraalTruffleRuntime.getRuntime().getCompileQueue().getQueuedTargets(engine)) {
+            target.cancelCompilation("Polyglot engine was closed.");
         }
-
     }
 
 }
