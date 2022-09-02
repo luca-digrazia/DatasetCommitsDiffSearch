@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,187 +22,155 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.EOFException;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.descriptors.ByteSequence;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 
 /**
  * Operations for sequentially scanning data items in a class file. Any IO exceptions that occur
  * during scanning are converted to {@link ClassFormatError}s.
  */
-public class ClassfileStream {
-
-    private final int length;
-    private final ByteArrayInputStream bstream;
-    private final DataInputStream stream;
+public final class ClassfileStream {
     private final ClasspathFile classfile;
+    private final ByteBuffer data;
+    private final byte[] bytes;
 
     public ClassfileStream(byte[] bytes, ClasspathFile classfile) {
-        this(bytes, 0, bytes.length, classfile);
-    }
-
-    public ClassfileStream(ClasspathFile classfile) {
-        this(classfile.contents, classfile);
-    }
-
-    public ClassfileStream(byte[] bytes, int offset, int length, ClasspathFile classfile) {
-        this.length = length;
-        this.bstream = new ByteArrayInputStream(bytes, offset, length);
-        this.stream = new DataInputStream(bstream);
+        this.bytes = bytes;
+        this.data = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
         this.classfile = classfile;
     }
 
     public char readChar() {
         try {
-            return stream.readChar();
-        } catch (EOFException eofException) {
+            return data.getChar();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public float readFloat() {
         try {
-            return stream.readFloat();
-        } catch (EOFException eofException) {
+            return data.getFloat();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public long readS8() {
         try {
-            return stream.readLong();
-        } catch (EOFException eofException) {
+            return data.getLong();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public double readDouble() {
         try {
-            return stream.readDouble();
-        } catch (EOFException eofException) {
+            return data.getDouble();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public int readU1() {
         try {
-            return stream.readUnsignedByte();
-        } catch (EOFException eofException) {
+            return data.get() & 0xff;
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public int readU2() {
         try {
-            return stream.readUnsignedShort();
-        } catch (EOFException eofException) {
+            return data.getChar();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public int readS4() {
         try {
-            return stream.readInt();
-        } catch (EOFException eofException) {
+            return data.getInt();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public int readS1() {
         try {
-            return stream.readByte();
-        } catch (EOFException eofException) {
+            return data.get();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public int readS2() {
         try {
-            return stream.readShort();
-        } catch (EOFException eofException) {
+            return data.getShort();
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
     public byte[] readByteArray(int len) {
         try {
-            final byte[] bytes = new byte[len];
-            stream.readFully(bytes);
-            return bytes;
-        } catch (EOFException eofException) {
+            final byte[] buf = new byte[len];
+            data.get(buf);
+            return buf;
+        } catch (BufferUnderflowException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
         }
     }
 
-    public String readString() {
-        try {
-            return stream.readUTF();
-        } catch (EOFException eofException) {
-            throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
-        }
+    public ByteSequence readByteSequenceUTF() {
+        int utflen = readU2();
+        int start = getPosition();
+        skip(utflen);
+        return ByteSequence.wrap(bytes, start, utflen);
     }
 
     public void skip(int nBytes) {
         try {
-            stream.skipBytes(nBytes);
-        } catch (EOFException eofException) {
+            data.position(data.position() + nBytes);
+        } catch (IllegalArgumentException e) {
             throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
+        }
+    }
+
+    byte[] getByteRange(int startPosition, int numBytes) {
+        try {
+            byte[] result = new byte[numBytes];
+            System.arraycopy(bytes, startPosition, result, 0, numBytes);
+            return result;
+        } catch (IndexOutOfBoundsException e) {
+            throw eofError();
         }
     }
 
     public boolean isAtEndOfFile() {
-        return bstream.available() == 0;
+        return data.remaining() == 0;
     }
 
     public void checkEndOfFile() {
         if (!isAtEndOfFile()) {
-            throw new ClassFormatError("Extra bytes in class file");
+            throw classFormatError("Extra bytes", classfile);
         }
     }
 
     public int getPosition() {
-        return length - bstream.available();
-    }
-
-    public void close() {
-        try {
-            stream.close();
-        } catch (EOFException eofException) {
-            throw eofError();
-        } catch (IOException ioException) {
-            throw ioError(ioException);
-        }
+        return data.position();
     }
 
     public ClassFormatError classFormatError(String format, Object... args) {
-        throw classfile.classFormatError(format, args);
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        throw Meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, String.format(format, args) + " in classfile " + classfile);
     }
 
     public ClassFormatError ioError(IOException ioException) {
