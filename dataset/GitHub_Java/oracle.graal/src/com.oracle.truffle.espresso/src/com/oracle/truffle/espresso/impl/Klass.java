@@ -29,7 +29,6 @@ import java.util.Comparator;
 import java.util.function.IntFunction;
 
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.GenerateLibrary;
 import org.graalvm.collections.EconomicSet;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -87,6 +86,9 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     private static final String COMPONENT = "component";
     private static final String SUPER = "super";
 
+    // Threshold for using binary search instead of linear search for interface lookup.
+    private static final int LINEAR_SEARCH_THRESHOLD = 4;
+
     @ExportMessage
     final boolean isMemberReadable(String member) {
         if (STATIC_TO_CLASS.equals(member)) {
@@ -104,14 +106,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         if (getSuperKlass() != null && SUPER.equals(member)) {
             return true;
         }
-
-        // Look for public static fields.
-        for (Field f : getDeclaredFields()) {
-            if (f.isStatic() && f.isPublic() && member.equals(f.getNameAsString())) {
-                return true;
-            }
-        }
-
         return false;
     }
 
@@ -134,50 +128,13 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         if (getSuperKlass() != null && SUPER.equals(member)) {
             return getSuperKlass();
         }
-
-        // Look for public static fields.
-        for (Field f : getDeclaredFields()) {
-            if (f.isPublic() && f.isStatic() && member.equals(f.getNameAsString())) {
-                return f.get(tryInitializeAndGetStatics());
-            }
-        }
-
-        throw UnknownIdentifierException.create(member);
-    }
-
-    @ExportMessage
-    boolean isMemberModifiable(String member) {
-        for (Field f : getDeclaredFields()) {
-            if (f.isPublic() && f.isStatic() && !f.isFinalFlagSet() && member.equals(f.getNameAsString())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @SuppressWarnings("static-method")
-    @ExportMessage
-    boolean isMemberInsertable(String member) {
-        return false;
-    }
-
-    @ExportMessage
-    final void writeMember(String member, Object value, @Cached ToEspressoNode toEspressoNode) throws UnknownIdentifierException, UnsupportedTypeException {
-        // Write to public static non-final fields.
-        for (Field f : getDeclaredFields()) {
-            if (f.isPublic() && f.isStatic() && !f.isFinalFlagSet() && member.equals(f.getNameAsString())) {
-                Object espressoValue = toEspressoNode.execute(value, f.resolveTypeKlass());
-                f.set(tryInitializeAndGetStatics(), espressoValue);
-                return ;
-            }
-        }
         throw UnknownIdentifierException.create(member);
     }
 
     @ExportMessage
     final boolean isMemberInvocable(String member) {
         for (Method m : getDeclaredMethods()) {
-            if (m.isPublic() && m.isStatic() && member.equals(m.getName().toString())) {
+            if (m.isStatic() && m.isPublic() && member.equals(m.getName().toString())) {
                 return true;
             }
         }
@@ -224,13 +181,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         if (getSuperKlass() != null) {
             members.add(SUPER);
         }
-
-        for (Field f : getDeclaredFields()) {
-            if (f.isPublic() && f.isStatic()) {
-                members.add(f.getNameAsString());
-            }
-        }
-
         return new KeysArray(members.toArray(new String[members.size()]));
     }
 
@@ -364,10 +314,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
     // endregion Interop
 
-    // Threshold for using binary search instead of linear search for interface lookup.
-    private static final int LINEAR_SEARCH_THRESHOLD = 4;
-
-
     static final Comparator<Klass> KLASS_ID_COMPARATOR = new Comparator<Klass>() {
         @Override
         public int compare(Klass k1, Klass k2) {
@@ -422,7 +368,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      * <li>C is not public, and C and D are members of the same run-time package.
      * </ul>
      */
-    public static boolean checkAccess(Klass klass, Klass accessingKlass) {
+    public static boolean checkAccess(StaticObject classLoader, Klass klass, Klass accessingKlass) {
         if (accessingKlass == null) {
             return true;
         }
@@ -434,7 +380,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         }
         EspressoContext context = accessingKlass.getContext();
         if (context.getJavaVersion().modulesEnabled()) {
-            if (klass.sameRuntimePackage(accessingKlass)) {
+            if (klass.sameRuntimePackage(classLoader, accessingKlass)) {
                 return true;
             }
             if (klass.isPublic()) {
@@ -443,7 +389,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
                 }
             }
         } else {
-            if (klass.isPublic() || klass.sameRuntimePackage(accessingKlass)) {
+            if (klass.isPublic() || klass.sameRuntimePackage(classLoader, accessingKlass)) {
                 return true;
             }
         }
@@ -1162,8 +1108,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return name;
     }
 
-    public boolean sameRuntimePackage(Klass other) {
-        if (this.getDefiningClassLoader() != other.getDefiningClassLoader()) {
+    public boolean sameRuntimePackage(StaticObject classLoader, Klass other) {
+        if (classLoader != other.getDefiningClassLoader()) {
             return false;
         }
         if (getJavaVersion().modulesEnabled()) {

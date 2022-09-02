@@ -133,7 +133,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     // the parts of the method that can change when it's redefined
     // are encapsulated within the methodVersion
     @CompilationFinal volatile MethodVersion methodVersion;
-    private boolean removedByRedefinition;
 
     public Method identity() {
         return proxy == null ? this : proxy;
@@ -993,14 +992,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return version;
     }
 
-    public void removedByRedefinition() {
-        removedByRedefinition = true;
-    }
-
-    public boolean isRemovedByRedefition() {
-        return removedByRedefinition;
-    }
-
     public final class MethodVersion implements MethodRef {
         private final Assumption assumption;
         private final RuntimeConstantPool pool;
@@ -1034,9 +1025,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         public CallTarget getCallTarget() {
             if (callTarget == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                if (removedByRedefinition) {
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoSuchMethodError, getMethod().getDeclaringKlass().getNameAsString() + "." + getMethod().getName() + getMethod().getSignatureAsString());
-                }
                 Meta meta = getMeta();
                 if (poisonPill) {
                     // Conflicting Maximally-specific non-abstract interface methods.

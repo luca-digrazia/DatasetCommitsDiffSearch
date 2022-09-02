@@ -211,15 +211,14 @@ public final class ObjectKlass extends Klass {
     }
 
     private boolean verifyTables() {
-        Method[] vtable = getRedefineCache().vtable;
-        if (vtable != null) {
-            for (int i = 0; i < vtable.length; i++) {
+        if (getVTable() != null) {
+            for (int i = 0; i < getVTable().length; i++) {
                 if (isInterface()) {
-                    if (vtable[i].getITableIndex() != i) {
+                    if (getVTable()[i].getITableIndex() != i) {
                         return false;
                     }
                 } else {
-                    if (vtable[i].getVTableIndex() != i) {
+                    if (getVTable()[i].getVTableIndex() != i) {
                         return false;
                     }
                 }
