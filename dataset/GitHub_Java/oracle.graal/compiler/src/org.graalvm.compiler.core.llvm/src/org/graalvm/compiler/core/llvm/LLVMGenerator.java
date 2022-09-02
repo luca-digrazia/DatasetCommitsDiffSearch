@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.core.llvm;
 
+import static org.graalvm.compiler.core.llvm.LLVMIRBuilder.isObject;
 import static org.graalvm.compiler.core.llvm.LLVMIRBuilder.isVoidType;
 import static org.graalvm.compiler.core.llvm.LLVMIRBuilder.typeOf;
 import static org.graalvm.compiler.core.llvm.LLVMUtils.dumpTypes;
@@ -40,6 +41,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import org.bytedeco.javacpp.LLVM.LLVMBasicBlockRef;
+import org.bytedeco.javacpp.LLVM.LLVMTypeRef;
+import org.bytedeco.javacpp.LLVM.LLVMValueRef;
 import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -75,10 +79,6 @@ import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.phases.util.Providers;
 
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMBasicBlockRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMTypeRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMValueRef;
-
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
@@ -105,7 +105,6 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
     private final Providers providers;
     private final LLVMGenerationResult generationResult;
     private final boolean returnsEnum;
-    private final boolean explicitSelects;
     private final int debugLevel;
     private LLVMValueRef indentCounter;
     private LLVMValueRef spacesVector;
@@ -114,12 +113,10 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
     private Map<AbstractBeginNode, LLVMBasicBlockRef> basicBlockMap = new HashMap<>();
     Map<Block, LLVMBasicBlockRef> splitBlockEndMap = new HashMap<>();
 
-    public LLVMGenerator(Providers providers, LLVMGenerationResult generationResult, ResolvedJavaMethod method, LLVMIRBuilder builder, LIRKindTool lirKindTool, int debugLevel,
-                    boolean explicitSelects) {
+    public LLVMGenerator(Providers providers, LLVMGenerationResult generationResult, ResolvedJavaMethod method, LLVMIRBuilder builder, LIRKindTool lirKindTool, int debugLevel) {
         this.providers = providers;
         this.generationResult = generationResult;
         this.returnsEnum = method.getSignature().getReturnType(null).resolve(null).isEnum();
-        this.explicitSelects = explicitSelects;
 
         /* this.explodeSelects = selectBlacklist.contains(builder.getFunctionName()); */
 
@@ -661,7 +658,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
         LLVMValueRef select;
         LLVMValueRef trueValue = getVal(trueVal);
         LLVMValueRef falseValue = getVal(falseVal);
-        if (explicitSelects && LLVMIRBuilder.isObject(typeOf(trueValue))) {
+        if (isObject(typeOf(trueValue))) {
             select = buildSelect(condition, trueValue, falseValue);
         } else {
             select = builder.buildSelect(condition, trueValue, falseValue);
