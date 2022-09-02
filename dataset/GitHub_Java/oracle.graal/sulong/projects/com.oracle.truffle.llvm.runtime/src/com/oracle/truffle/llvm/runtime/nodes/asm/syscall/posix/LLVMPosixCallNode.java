@@ -33,10 +33,11 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.NativeContextExtension;
-import com.oracle.truffle.llvm.runtime.NativeContextExtension.WellKnownNativeFunctionNode;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
 public abstract class LLVMPosixCallNode extends LLVMNode {
@@ -48,10 +49,10 @@ public abstract class LLVMPosixCallNode extends LLVMNode {
         this.signature = signature;
     }
 
-    protected WellKnownNativeFunctionNode createFunctionNode() {
+    protected Object createFunction() {
         LLVMContext context = lookupContextReference(LLVMLanguage.class).get();
-        NativeContextExtension nativeContextExtension = context.getContextExtension(NativeContextExtension.class);
-        return nativeContextExtension.getWellKnownNativeFunction("__sulong_posix_" + name, signature);
+        NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+        return nfiContextExtension.getNativeFunction("__sulong_posix_" + name, signature);
     }
 
     // Workaround for nice syntax + Truffle DSL
@@ -63,9 +64,10 @@ public abstract class LLVMPosixCallNode extends LLVMNode {
 
     @Specialization
     protected Object doCall(Object[] args,
-                    @Cached("createFunctionNode()") WellKnownNativeFunctionNode function) {
+                    @Cached("createFunction()") Object function,
+                    @CachedLibrary("function") InteropLibrary nativeExecute) {
         try {
-            return function.execute(args);
+            return nativeExecute.execute(function, args);
         } catch (InteropException e) {
             CompilerDirectives.transferToInterpreter();
             throw new AssertionError(e);

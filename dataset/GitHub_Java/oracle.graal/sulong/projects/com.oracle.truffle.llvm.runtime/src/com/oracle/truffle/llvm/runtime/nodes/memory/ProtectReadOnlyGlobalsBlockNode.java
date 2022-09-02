@@ -29,31 +29,30 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory;
 
-import com.oracle.truffle.api.dsl.Bind;
-import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemoryOpNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public abstract class ProtectReadOnlyGlobalsBlockNode extends LLVMNode implements LLVMMemoryOpNode {
+public final class ProtectReadOnlyGlobalsBlockNode extends LLVMNode implements LLVMMemoryOpNode {
 
-    public ProtectReadOnlyGlobalsBlockNode(){
+    @Child InteropLibrary interop;
+
+    private final Object protectReadonlyGlobalsBlock;
+
+    public ProtectReadOnlyGlobalsBlockNode(LLVMContext context) {
+        NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
+        this.protectReadonlyGlobalsBlock = nfiContextExtension.getNativeFunction("__sulong_protect_readonly_globals_block", "(POINTER):VOID");
+        this.interop = InteropLibrary.getFactory().create(protectReadonlyGlobalsBlock);
     }
 
-    @Specialization(limit = "1")
-    public void execute(LLVMPointer ptr,
-                        @SuppressWarnings("unused")
-                        @CachedContext(LLVMLanguage.class) LLVMContext ctx,
-                        @Bind("ctx.getProtectReadOnlyGlobalsBlockFunction()") Object protextGlobalsBlock,
-                        @CachedLibrary("protextGlobalsBlock") InteropLibrary interop) {
+    @Override
+    public void execute(LLVMPointer ptr) {
         try {
-            interop.execute(protextGlobalsBlock, ptr);
+            interop.execute(protectReadonlyGlobalsBlock, ptr);
         } catch (InteropException ex) {
             assert false; // should never happen, but probably also safe to ignore
         }
