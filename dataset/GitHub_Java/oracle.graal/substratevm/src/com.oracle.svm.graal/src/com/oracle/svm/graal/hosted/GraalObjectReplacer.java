@@ -32,13 +32,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
-import org.graalvm.compiler.hotspot.HotSpotBackendFactory;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
+import org.graalvm.nativeimage.Feature.CompilationAccess;
 import org.graalvm.nativeimage.c.function.RelocatedPointer;
-import org.graalvm.nativeimage.hosted.Feature.CompilationAccess;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.meta.AnalysisField;
@@ -52,8 +50,13 @@ import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.core.util.HostedStringDeduplication;
 import com.oracle.svm.core.util.Replaced;
+import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.graal.GraalSupport;
 import com.oracle.svm.graal.SubstrateGraalRuntime;
+import com.oracle.svm.graal.meta.SubstrateConstantFieldProvider;
+import com.oracle.svm.graal.meta.SubstrateConstantReflectionProvider;
 import com.oracle.svm.graal.meta.SubstrateField;
+import com.oracle.svm.graal.meta.SubstrateMetaAccess;
 import com.oracle.svm.graal.meta.SubstrateMethod;
 import com.oracle.svm.graal.meta.SubstrateSignature;
 import com.oracle.svm.graal.meta.SubstrateType;
@@ -63,10 +66,10 @@ import com.oracle.svm.hosted.ameta.AnalysisConstantReflectionProvider;
 import com.oracle.svm.hosted.analysis.Inflation;
 import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedMethod;
+import com.oracle.svm.hosted.meta.HostedSnippetReflectionProvider;
 import com.oracle.svm.hosted.meta.HostedType;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 
-import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
@@ -93,16 +96,20 @@ public class GraalObjectReplacer implements Function<Object, Object> {
     private final HashMap<FieldLocationIdentity, FieldLocationIdentity> fieldLocationIdentities = new HashMap<>();
     private final HashMap<AnalysisType, SubstrateType> types = new HashMap<>();
     private final HashMap<Signature, SubstrateSignature> signatures = new HashMap<>();
-    private final GraalProviderObjectReplacements providerReplacements;
+    private final SubstrateMetaAccess sMetaAccess;
+    private final SubstrateConstantReflectionProvider sConstantReflectionProvider;
+    private final SubstrateConstantFieldProvider sConstantFieldProvider;
     private SubstrateGraalRuntime sGraalRuntime;
 
     private final HostedStringDeduplication stringTable;
 
-    public GraalObjectReplacer(AnalysisUniverse aUniverse, AnalysisMetaAccess aMetaAccess, GraalProviderObjectReplacements providerReplacements) {
+    public GraalObjectReplacer(AnalysisUniverse aUniverse, AnalysisMetaAccess aMetaAccess) {
         this.aUniverse = aUniverse;
         this.aMetaAccess = aMetaAccess;
-        this.providerReplacements = providerReplacements;
+        this.sMetaAccess = new SubstrateMetaAccess();
         this.stringTable = HostedStringDeduplication.singleton();
+        this.sConstantReflectionProvider = new SubstrateConstantReflectionProvider(sMetaAccess);
+        this.sConstantFieldProvider = new SubstrateConstantFieldProvider(aMetaAccess);
     }
 
     public void setGraalRuntime(SubstrateGraalRuntime sGraalRuntime) {
@@ -124,25 +131,19 @@ public class GraalObjectReplacer implements Function<Object, Object> {
         }
 
         if (source instanceof MetaAccessProvider) {
-            dest = providerReplacements.getMetaAccessProvider();
+            dest = sMetaAccess;
         } else if (source instanceof HotSpotJVMCIRuntime) {
-            throw new UnsupportedFeatureException("HotSpotJVMCIRuntime should not appear in the image: " + source);
-        } else if (source instanceof HotSpotBackendFactory) {
-            HotSpotBackendFactory factory = (HotSpotBackendFactory) source;
-            Architecture hostArch = HotSpotJVMCIRuntime.runtime().getHostJVMCIBackend().getTarget().arch;
-            if (!factory.getArchitecture().equals(hostArch.getClass())) {
-                throw new UnsupportedFeatureException("non host archtecture HotSpotBackendFactory should not appear in the image: " + source);
-            }
+            throw VMError.shouldNotReachHere("HotSpotJVMCIRuntime should not appear in the image: " + source);
         } else if (source instanceof GraalRuntime) {
             dest = sGraalRuntime;
         } else if (source instanceof AnalysisConstantReflectionProvider) {
-            dest = providerReplacements.getConstantReflectionProvider();
+            dest = sConstantReflectionProvider;
         } else if (source instanceof AnalysisConstantFieldProvider) {
-            dest = providerReplacements.getConstantFieldProvider();
+            dest = sConstantFieldProvider;
         } else if (source instanceof ForeignCallsProvider) {
-            dest = providerReplacements.getForeignCallsProvider();
-        } else if (source instanceof SnippetReflectionProvider) {
-            dest = providerReplacements.getSnippetReflectionProvider();
+            dest = GraalSupport.getRuntimeConfig().getProviders().getForeignCalls();
+        } else if (source instanceof HostedSnippetReflectionProvider) {
+            dest = GraalSupport.getRuntimeConfig().getSnippetReflection();
 
         } else if (shouldBeReplaced(source)) {
             /*
