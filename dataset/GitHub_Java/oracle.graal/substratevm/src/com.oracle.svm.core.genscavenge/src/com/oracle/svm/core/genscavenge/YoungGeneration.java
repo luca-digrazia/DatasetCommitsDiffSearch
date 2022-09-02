@@ -156,7 +156,7 @@ public class YoungGeneration extends Generation {
             /* Promote by Object copying to the next age space. */
             AlignedHeapChunk.AlignedHeader originalChunk = AlignedHeapChunk.getEnclosingAlignedHeapChunk(original);
             final Space originalSpace = originalChunk.getSpace();
-            if (originalSpace.getAge() < maxSurvivorSpaces) {
+            if (originalChunk.getAge() < maxSurvivorSpaces) {
                 result = promoteAlignedObject(original, originalSpace);
             } else {
                 result = HeapImpl.getHeapImpl().getOldGeneration().promoteAlignedObject(original);
@@ -165,7 +165,7 @@ public class YoungGeneration extends Generation {
             trace.string("  unaligned header: ").hex(ObjectHeaderImpl.readHeaderFromObject(original)).newline();
             UnalignedHeapChunk.UnalignedHeader originalUnalignedChunk = UnalignedHeapChunk.getEnclosingUnalignedHeapChunk(original);
             final Space originalSpace = originalUnalignedChunk.getSpace();
-            if (originalSpace.getAge() < maxSurvivorSpaces) {
+            if (originalUnalignedChunk.getAge() < maxSurvivorSpaces) {
                 result = promoteUnalignedObject(original, originalSpace);
             } else {
                 result = HeapImpl.getHeapImpl().getOldGeneration().promoteUnalignedObjectChunk(original);
