@@ -95,9 +95,9 @@ final class GraphManager {
         return new Entry(rootRequest.graph, plugin);
     }
 
-    UnmodifiableEconomicMap<Node, Node> doInline(Invoke invoke, StructuredGraph ir, CompilableTruffleAST truffleAST, InliningUtil.InlineeReturnAction returnAction) {
+    UnmodifiableEconomicMap<Node, Node> doInline(Invoke invoke, StructuredGraph ir, CompilableTruffleAST truffleAST) {
         return InliningUtil.inline(invoke, ir, true, partialEvaluator.inlineRootForCallTarget(truffleAST),
-                        "cost-benefit analysis", AgnosticInliningPhase.class.getName(), returnAction);
+                        "cost-benefit analysis", AgnosticInliningPhase.class.getName());
     }
 
     void finalizeGraph(Invoke invoke, CompilableTruffleAST truffleAST) {

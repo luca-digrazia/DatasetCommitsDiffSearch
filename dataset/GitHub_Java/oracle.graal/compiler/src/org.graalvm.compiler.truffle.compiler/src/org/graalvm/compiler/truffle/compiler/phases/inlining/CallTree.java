@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,28 +26,33 @@ package org.graalvm.compiler.truffle.compiler.phases.inlining;
 
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Graph;
-import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.truffle.common.CallNodeProvider;
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
+import org.graalvm.compiler.truffle.common.TruffleInliningData;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
-import org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 
 public final class CallTree extends Graph {
 
     private final InliningPolicy policy;
     private final GraphManager graphManager;
     private final CallNode root;
+    private final PartialEvaluator.Request request;
     int expanded = 1;
     int inlined = 1;
+    int frontierSize;
+    private int nextId = 0;
 
-    CallTree(PartialEvaluator partialEvaluator, CallNodeProvider callNodeProvider, CompilableTruffleAST truffleAST, StructuredGraph ir, InliningPolicy policy) {
-        super(ir.getOptions(), ir.getDebug());
+    CallTree(PartialEvaluator partialEvaluator, PartialEvaluator.Request request, InliningPolicy policy) {
+        super(request.graph.getOptions(), request.debug);
         this.policy = policy;
-        this.graphManager = new GraphManager(ir, partialEvaluator, callNodeProvider);
+        this.request = request;
+        this.graphManager = new GraphManager(partialEvaluator, request);
         // Should be kept as the last call in the constructor, as this is an argument.
-        this.root = CallNode.makeRoot(this, truffleAST, ir);
+        this.root = CallNode.makeRoot(this, request);
+    }
+
+    int nextId() {
+        return nextId++;
     }
 
     InliningPolicy getPolicy() {
@@ -70,38 +75,23 @@ public final class CallTree extends Graph {
         return graphManager;
     }
 
-    public void trace() {
-        final Boolean details = TruffleCompilerOptions.getValue(TruffleCompilerOptions.TraceTruffleInliningDetails);
-        if (TruffleCompilerOptions.getValue(SharedTruffleCompilerOptions.TraceTruffleInlining) || details) {
+    void trace() {
+        Boolean details = request.options.get(PolyglotCompilerOptions.TraceInliningDetails);
+        if (request.options.get(PolyglotCompilerOptions.TraceInlining) || details) {
             TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
-            runtime.logEvent(0, "inline start", root.getName(), root.getStringProperties());
+            runtime.logEvent(root.getTruffleAST(), 0, "Inline start", root.getName(), root.getStringProperties(), null);
             traceRecursive(runtime, root, details, 0);
-            runtime.logEvent(0, "inline done", root.getName(), root.getStringProperties());
+            runtime.logEvent(root.getTruffleAST(), 0, "Inline done", root.getName(), root.getStringProperties(), null);
         }
     }
 
     private void traceRecursive(TruffleCompilerRuntime runtime, CallNode node, boolean details, int depth) {
         if (depth != 0) {
-            runtime.logEvent(depth, node.getState().toString(), node.getName(), node.getStringProperties());
+            runtime.logEvent(root.getTruffleAST(), depth, node.getState().toString(), node.getName(), node.getStringProperties(), null);
         }
         if (node.getState() == CallNode.State.Inlined || details) {
             for (CallNode child : node.getChildren()) {
                 traceRecursive(runtime, child, details, depth + 1);
-            }
-        }
-    }
-
-    public void dequeueInlined() {
-        dequeueInlined(root);
-    }
-
-    private void dequeueInlined(CallNode node) {
-        if (node.getState() == CallNode.State.Inlined) {
-            for (CallNode child : node.getChildren()) {
-                dequeueInlined(child);
-            }
-            if (!node.isRoot()) {
-                node.cancelCompilationIfSingleCallsite();
             }
         }
     }
@@ -111,15 +101,42 @@ public final class CallTree extends Graph {
         return "Call Tree";
     }
 
-    public void dumpBasic(String format, Object arg) {
-        getDebug().dump(DebugContext.BASIC_LEVEL, this, format, arg);
+    void dumpBasic(String format) {
+        getDebug().dump(DebugContext.BASIC_LEVEL, this, format, "");
     }
 
     public void dumpInfo(String format, Object arg) {
         getDebug().dump(DebugContext.INFO_LEVEL, this, format, arg);
     }
 
-    void handleInlinedNodes() {
-        graphManager.handleRemainingInlinedNodes(root.getIR());
+    public void finalizeGraph() {
+        root.finalizeGraph();
+    }
+
+    void collectTargetsToDequeue(TruffleInliningData provider) {
+        root.collectTargetsToDequeue(provider);
+    }
+
+    public void updateTracingInfo(TruffleInliningData inliningPlan) {
+        final int inlinedWithoutRoot = inlined - 1;
+        if (tracingCallCounts()) {
+            inliningPlan.setCallCount(inlinedWithoutRoot + frontierSize);
+            inliningPlan.setInlinedCallCount(inlinedWithoutRoot);
+        }
+        if (loggingInlinedTargets()) {
+            root.collectInlinedTargets(inliningPlan);
+        }
+    }
+
+    private boolean loggingInlinedTargets() {
+        return request.debug.isDumpEnabled(DebugContext.BASIC_LEVEL) || request.options.get(PolyglotCompilerOptions.CompilationStatistics) ||
+                        request.options.get(PolyglotCompilerOptions.CompilationStatisticDetails);
+    }
+
+    private boolean tracingCallCounts() {
+        return request.options.get(PolyglotCompilerOptions.TraceCompilation) ||
+                        request.options.get(PolyglotCompilerOptions.TraceCompilationDetails) ||
+                        request.options.get(PolyglotCompilerOptions.CompilationStatistics) ||
+                        request.options.get(PolyglotCompilerOptions.CompilationStatisticDetails);
     }
 }
