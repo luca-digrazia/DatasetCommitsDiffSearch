@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -39,8 +39,6 @@ import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMReplaceSymbolNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMReplaceSymbolNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMReadNode.AttachInteropTypeNode;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMReadNodeFactory.AttachInteropTypeNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -56,7 +54,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 public abstract class LLVMTruffleWriteManagedToGlobal extends LLVMIntrinsic {
 
     @Child AttachInteropTypeNode attachType = AttachInteropTypeNodeGen.create();
-    @Child LLVMReplaceSymbolNode globalReplace = LLVMReplaceSymbolNodeGen.create();
 
     @TruffleBoundary
     @Specialization
@@ -67,7 +64,7 @@ public abstract class LLVMTruffleWriteManagedToGlobal extends LLVMIntrinsic {
             throw new LLVMPolyglotException(this, "First argument to truffle_assign_managed must be a pointer to a global.");
         }
         Object newValue = attachType.execute(value, global.getInteropType(ctx));
-        globalReplace.execute(LLVMPointer.cast(newValue), global);
+        ctx.getGlobalStorage().set(global, LLVMPointer.cast(newValue));
         return newValue;
     }
 }
