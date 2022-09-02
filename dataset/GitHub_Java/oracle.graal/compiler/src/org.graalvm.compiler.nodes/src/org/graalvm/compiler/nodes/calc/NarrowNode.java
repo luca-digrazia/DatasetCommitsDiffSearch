@@ -87,24 +87,16 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, IntegerConvertO
 
     @Override
     public boolean isLossless() {
-        return checkLossless(this.getResultBits(), this.getValue());
+        return checkLossless(this.getResultBits());
     }
 
-    public static boolean checkLossless(int bits, ValueNode value) {
-        Stamp valueStamp = value.stamp(NodeView.DEFAULT);
+    private boolean checkLossless(int bits) {
+        Stamp valueStamp = this.getValue().stamp(NodeView.DEFAULT);
         if (bits > 0 && valueStamp instanceof IntegerStamp) {
             IntegerStamp integerStamp = (IntegerStamp) valueStamp;
-            long bitsRangeMin = CodeUtil.minValue(bits);
-            long bitsRangeMax = CodeUtil.maxValue(bits);
-            if (bitsRangeMin <= integerStamp.lowerBound() && integerStamp.upperBound() <= bitsRangeMax) {
-                // all signed values fit
+            long valueUpMask = integerStamp.upMask();
+            if ((valueUpMask & CodeUtil.mask(bits)) == valueUpMask) {
                 return true;
-            } else if (integerStamp.isPositive()) {
-                long valueUpMask = integerStamp.upMask();
-                if ((valueUpMask & CodeUtil.mask(bits)) == valueUpMask) {
-                    // value is unsigned and fits
-                    return true;
-                }
             }
         }
         return false;
@@ -115,9 +107,9 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, IntegerConvertO
         switch (cond) {
             case LT:
                 // Must guarantee that also sign bit does not flip.
-                return checkLossless(this.getResultBits() - 1, this.getValue());
+                return checkLossless(this.getResultBits() - 1);
             default:
-                return checkLossless(this.getResultBits(), this.getValue());
+                return checkLossless(this.getResultBits());
         }
     }
 
