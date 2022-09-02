@@ -69,7 +69,6 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Objects;
 
 import static org.graalvm.wasm.Assert.assertByteEqual;
 import static org.graalvm.wasm.Assert.assertIntEqual;
@@ -89,7 +88,7 @@ import static org.graalvm.wasm.constants.Sizes.MAX_TABLE_DECLARATION_SIZE;
  * Simple recursive-descend parser for the binary WebAssembly format.
  */
 public class BinaryParser extends BinaryStreamParser {
-    private static class ParsingExceptionHandler implements Thread.UncaughtExceptionHandler {
+    private class ParsingExceptionHandler implements Thread.UncaughtExceptionHandler {
         private Throwable parsingException = null;
 
         @Override
@@ -219,7 +218,7 @@ public class BinaryParser extends BinaryStreamParser {
                     readStartSection();
                     break;
                 case Section.ELEMENT:
-                    readElementSection(null, null);
+                    readElementSection();
                     break;
                 case Section.CODE:
                     skipCodeSection();
@@ -670,63 +669,43 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.F32_LOAD:
-                    load(state, F32_TYPE, 32);
+                    load(state, F32_TYPE);
                     break;
                 case Instructions.F64_LOAD:
-                    load(state, F64_TYPE, 64);
+                    load(state, F64_TYPE);
                     break;
                 case Instructions.I32_LOAD:
-                    load(state, I32_TYPE, 32);
-                    break;
                 case Instructions.I32_LOAD8_S:
                 case Instructions.I32_LOAD8_U:
-                    load(state, I32_TYPE, 8);
-                    break;
                 case Instructions.I32_LOAD16_S:
                 case Instructions.I32_LOAD16_U:
-                    load(state, I32_TYPE, 16);
+                    load(state, I32_TYPE);
                     break;
                 case Instructions.I64_LOAD:
-                    load(state, I64_TYPE, 64);
-                    break;
                 case Instructions.I64_LOAD8_S:
                 case Instructions.I64_LOAD8_U:
-                    load(state, I64_TYPE, 8);
-                    break;
                 case Instructions.I64_LOAD16_S:
                 case Instructions.I64_LOAD16_U:
-                    load(state, I64_TYPE, 16);
-                    break;
                 case Instructions.I64_LOAD32_S:
                 case Instructions.I64_LOAD32_U:
-                    load(state, I64_TYPE, 32);
+                    load(state, I64_TYPE);
                     break;
                 case Instructions.F32_STORE:
-                    store(state, F32_TYPE, 32);
+                    store(state, F32_TYPE);
                     break;
                 case Instructions.F64_STORE:
-                    store(state, F64_TYPE, 64);
+                    store(state, F64_TYPE);
                     break;
                 case Instructions.I32_STORE:
-                    store(state, I32_TYPE, 32);
-                    break;
                 case Instructions.I32_STORE_8:
-                    store(state, I32_TYPE, 8);
-                    break;
                 case Instructions.I32_STORE_16:
-                    store(state, I32_TYPE, 16);
+                    store(state, I32_TYPE);
                     break;
                 case Instructions.I64_STORE:
-                    store(state, I64_TYPE, 64);
-                    break;
                 case Instructions.I64_STORE_8:
-                    store(state, I64_TYPE, 8);
-                    break;
                 case Instructions.I64_STORE_16:
-                    store(state, I64_TYPE, 16);
-                    break;
                 case Instructions.I64_STORE_32:
-                    store(state, I64_TYPE, 32);
+                    store(state, I64_TYPE);
                     break;
                 case Instructions.MEMORY_SIZE: {
                     final int flag = read1();
@@ -995,25 +974,25 @@ public class BinaryParser extends BinaryStreamParser {
         return currentBlock;
     }
 
-    private void store(ExecutionState state, byte type, int n) {
+    private void store(ExecutionState state, byte type) {
         assertTrue(module.symbolTable().memoryExists(), Failure.UNKNOWN_MEMORY);
 
         // We don't store the `align` literal, as our implementation does not make use
         // of it, but we need to store its byte length, so that we can skip it
         // during the execution.
-        readAlignHint(n); // align hint
+        readUnsignedInt32(); // align hint
         readUnsignedInt32(); // store offset
         state.popChecked(type); // value to store
         state.popChecked(I32_TYPE); // base address
     }
 
-    private void load(ExecutionState state, byte type, int n) {
+    private void load(ExecutionState state, byte type) {
         assertTrue(module.symbolTable().memoryExists(), Failure.UNKNOWN_MEMORY);
 
         // We don't store the `align` literal, as our implementation does not make use
         // of it, but we need to store its byte length, so that we can skip it
         // during execution.
-        readAlignHint(n); // align hint
+        readUnsignedInt32(); // align hint
         readUnsignedInt32(); // load offset
         state.popChecked(I32_TYPE); // base address
         state.push(type); // loaded value
@@ -1069,7 +1048,7 @@ public class BinaryParser extends BinaryStreamParser {
         return new WasmIfNode(instance, codeEntry, trueBranchBlock, falseBranchBlock, offset() - startOffset, blockTypeId, stackSizeBeforeCondition);
     }
 
-    private void readElementSection(WasmContext linkedContext, WasmInstance linkedInstance) {
+    private void readElementSection() {
         int numElements = readLength();
         module.limits().checkElementSegmentCount(numElements);
 
@@ -1103,25 +1082,25 @@ public class BinaryParser extends BinaryStreamParser {
             readEnd();
 
             // Copy the contents, or schedule a linker task for this.
-            final int segmentLength = readLength();
+            int segmentLength = readLength();
+            final SymbolTable symbolTable = module.symbolTable();
             final int currentElemSegmentId = elemSegmentId;
             final int currentOffsetAddress = offsetAddress;
             final int currentOffsetGlobalIndex = offsetGlobalIndex;
             final int[] functionIndices = new int[segmentLength];
             for (int index = 0; index != segmentLength; ++index) {
-                functionIndices[index] = readDeclaredFunctionIndex();
+                final int functionIndex = readDeclaredFunctionIndex();
+                functionIndices[index] = functionIndex;
             }
-
-            if (linkedContext == null || linkedInstance == null) {
-                // Reading of the elements segment occurs during parsing, so add a linker action.
-                module.addLinkAction(
-                                (context, instance) -> context.linker().resolveElemSegment(context, instance, currentElemSegmentId, currentOffsetAddress, currentOffsetGlobalIndex, functionIndices));
-            } else {
-                // Reading of the elements segment is called after linking (this happens when this
-                // method is called from #resetTableState()), so initialize the table directly.
-                final Linker linker = Objects.requireNonNull(linkedContext.linker());
-                linker.immediatelyResolveElemSegment(linkedContext, linkedInstance, currentElemSegmentId, currentOffsetAddress, currentOffsetGlobalIndex, functionIndices);
-            }
+            module.addLinkAction((context, instance) -> {
+                WasmFunction[] elements = new WasmFunction[segmentLength];
+                for (int index = 0; index != segmentLength; ++index) {
+                    final int functionIndex = functionIndices[index];
+                    final WasmFunction function = symbolTable.function(functionIndex);
+                    elements[index] = function;
+                }
+                context.linker().resolveElemSegment(context, instance, currentElemSegmentId, currentOffsetAddress, currentOffsetGlobalIndex, segmentLength, elements);
+            });
         }
     }
 
@@ -1466,12 +1445,6 @@ public class BinaryParser extends BinaryStreamParser {
         return value;
     }
 
-    protected int readAlignHint(int n) {
-        final int value = readUnsignedInt32();
-        assertUnsignedIntLessOrEqual(1 << value, n / 8, Failure.ALIGNMENT_LARGER_THAN_NATURAL);
-        return value;
-    }
-
     protected int readUnsignedInt32() {
         final long valueLength = peekUnsignedInt32AndLength(data, offset);
         offset += length(valueLength);
@@ -1595,12 +1568,6 @@ public class BinaryParser extends BinaryStreamParser {
     public void resetMemoryState(WasmContext context, WasmInstance instance) {
         if (tryJumpToSection(Section.DATA)) {
             readDataSection(context, instance);
-        }
-    }
-
-    public void resetTableState(WasmContext context, WasmInstance instance) {
-        if (tryJumpToSection(Section.ELEMENT)) {
-            readElementSection(context, instance);
         }
     }
 }
