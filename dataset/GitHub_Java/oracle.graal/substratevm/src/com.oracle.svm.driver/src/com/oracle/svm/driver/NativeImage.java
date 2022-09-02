@@ -70,7 +70,6 @@ import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.svm.core.FallbackExecutor;
-import com.oracle.svm.core.FallbackExecutor.Options;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
@@ -157,7 +156,6 @@ public class NativeImage {
     final String oHOptimize = oH(SubstrateOptions.Optimize);
     final String oHFallbackThreshold = oH(SubstrateOptions.FallbackThreshold);
     final String oHFallbackExecutorJavaArg = oH(FallbackExecutor.Options.FallbackExecutorJavaArg);
-    final String oHRuntimeJavaArg = oH(Options.FallbackExecutorRuntimeJavaArg);
 
     /* List arguments */
     final String oHSubstitutionFiles = oH(ConfigurationFiles.Options.SubstitutionFiles);
@@ -353,13 +351,6 @@ public class NativeImage {
         default List<String> getBuildArgs() {
             throw VMError.unimplemented();
         }
-
-        /**
-         * @return true for fallback image building
-         */
-        default boolean buildFallbackImage() {
-            return false;
-        }
     }
 
     private static class DefaultBuildConfiguration implements BuildConfiguration {
@@ -510,13 +501,6 @@ public class NativeImage {
             buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorSystemProperty) + property);
         }
 
-        List<String> runtimeJavaArgs = imageBuilderArgs.stream()
-                        .filter(s -> s.startsWith(oHRuntimeJavaArg))
-                        .collect(Collectors.toList());
-        for (String runtimeJavaArg : runtimeJavaArgs) {
-            buildArgs.add(runtimeJavaArg);
-        }
-
         List<String> fallbackExecutorJavaArgs = imageBuilderArgs.stream()
                         .filter(s -> s.startsWith(oHFallbackExecutorJavaArg))
                         .collect(Collectors.toList());
@@ -565,8 +549,6 @@ public class NativeImage {
                     return Collections.emptyList();
                 case "getBuildArgs":
                     return buildArgs;
-                case "buildFallbackImage":
-                    return true;
                 default:
                     return method.invoke(original.config, args);
             }
@@ -866,7 +848,7 @@ public class NativeImage {
         }
 
         /* If no customImageClasspath was specified put "." on classpath */
-        if (!config.buildFallbackImage() && customImageClasspath.isEmpty() && queryOption == null) {
+        if (customImageClasspath.isEmpty() && queryOption == null) {
             addImageProvidedClasspath(Paths.get("."));
         } else {
             imageClasspath.addAll(customImageClasspath);
@@ -970,11 +952,6 @@ public class NativeImage {
         finalImageClasspath.addAll(imageBuilderClasspath);
         finalImageClasspath.addAll(imageProvidedClasspath);
         finalImageClasspath.addAll(imageClasspath);
-
-        if (!config.buildFallbackImage() && imageBuilderArgs.contains(oHFallbackThreshold + SubstrateOptions.ForceFallback)) {
-            /* Bypass regular build and proceed with fallback image building */
-            return 2;
-        }
         return buildImage(imageBuilderJavaArgs, imageBuilderBootClasspath, imageBuilderClasspath, imageBuilderArgs, finalImageClasspath);
     }
 
