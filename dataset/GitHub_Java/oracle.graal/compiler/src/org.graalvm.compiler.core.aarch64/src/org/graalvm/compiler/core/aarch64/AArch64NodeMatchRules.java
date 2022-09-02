@@ -116,30 +116,6 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
         super(gen);
     }
 
-    /**
-     * Checks whether all arguments are numeric integers.
-     */
-    protected boolean isNumericInteger(ValueNode... values) {
-        for (ValueNode value : values) {
-            if (!value.getStackKind().isNumericInteger()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Checks whether all arguments are numeric floats.
-     */
-    protected boolean isNumericFloat(ValueNode... values) {
-        for (ValueNode value : values) {
-            if (!value.getStackKind().isNumericFloat()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     protected LIRFrameState getState(MemoryAccess access) {
         if (access instanceof DeoptimizingNode) {
             return state((DeoptimizingNode) access);
@@ -190,7 +166,8 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     protected ComplexMatchResult emitBinaryShift(AArch64ArithmeticOp op, ValueNode value, BinaryNode shift) {
         AArch64MacroAssembler.ShiftType shiftType = shiftTypeMap.get(shift.getClass());
         assert shiftType != null;
-        assert isNumericInteger(value, shift.getX());
+        assert value.getStackKind().isNumericInteger();
+        assert shift.getX().getStackKind().isNumericInteger();
         assert shift.getY() instanceof ConstantNode;
 
         return builder -> {
@@ -219,7 +196,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
 
     private ComplexMatchResult emitBitField(JavaKind kind, AArch64BitFieldOp.BitFieldOpCode op, ValueNode value, int lsb, int width) {
         assert op != null;
-        assert isNumericInteger(value);
+        assert value.getStackKind().isNumericInteger();
 
         return builder -> {
             Value a = operand(value);
@@ -283,7 +260,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Add=op x (LeftShift (ZeroExtend=ext y) Constant=lshift))")
     @MatchRule("(Sub=op x (LeftShift (ZeroExtend=ext y) Constant=lshift))")
     public ComplexMatchResult mergeSignExtendByShiftIntoAddSub(BinaryNode op, UnaryNode ext, ValueNode x, ValueNode y, ConstantNode lshift) {
-        assert isNumericInteger(lshift);
+        assert lshift.getStackKind().isNumericInteger();
         int shiftAmt = lshift.asJavaConstant().asInt();
         if (shiftAmt > 4 || shiftAmt < 0) {
             return null;
@@ -300,7 +277,8 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Add=op x (LeftShift (And y Constant=constant) Constant=lshift))")
     @MatchRule("(Sub=op x (LeftShift (And y Constant=constant) Constant=lshift))")
     public ComplexMatchResult mergeShiftDowncastIntoAddSub(BinaryNode op, ValueNode x, ValueNode y, ConstantNode constant, ConstantNode lshift) {
-        assert isNumericInteger(lshift, constant);
+        assert lshift.getStackKind().isNumericInteger();
+        assert constant.getStackKind().isNumericInteger();
         int shiftAmt = lshift.asJavaConstant().asInt();
         long mask = constant.asJavaConstant().asLong();
         if (shiftAmt > 4 || shiftAmt < 0) {
@@ -316,7 +294,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Add=op x (RightShift (LeftShift y Constant=shiftConst) Constant=shiftConst))")
     @MatchRule("(Sub=op x (RightShift (LeftShift y Constant=shiftConst) Constant=shiftConst))")
     public ComplexMatchResult mergePairShiftIntoAddSub(BinaryNode op, ValueNode x, ValueNode y, ConstantNode shiftConst) {
-        assert isNumericInteger(shiftConst);
+        assert shiftConst.getStackKind().isNumericInteger();
         int shift = shiftConst.asJavaConstant().asInt();
         if (shift != 16 && shift != 24 && shift != 32 && shift != 48 && shift != 56) {
             return null;
@@ -328,7 +306,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Add=op x (LeftShift (RightShift (LeftShift y Constant=shiftConst) Constant=shiftConst) Constant=lshift))")
     @MatchRule("(Sub=op x (LeftShift (RightShift (LeftShift y Constant=shiftConst) Constant=shiftConst) Constant=lshift))")
     public ComplexMatchResult mergeShiftedPairShiftIntoAddSub(BinaryNode op, ValueNode x, ValueNode y, ConstantNode shiftConst, ConstantNode lshift) {
-        assert isNumericInteger(shiftConst);
+        assert shiftConst.getStackKind().isNumericInteger();
         int shift = shiftConst.asJavaConstant().asInt();
         int shiftAmt = lshift.asJavaConstant().asInt();
         if (shiftAmt > 4 || shiftAmt < 0) {
@@ -398,12 +376,12 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
 
     @MatchRule("(LeftShift=shift (SignExtend value) Constant)")
     public ComplexMatchResult signedBitField(LeftShiftNode shift) {
-        assert isNumericInteger(shift);
+        JavaKind kind = shift.getStackKind();
+        assert kind.isNumericInteger();
 
         SignExtendNode extend = (SignExtendNode) shift.getX();
         int srcBits = extend.getInputBits();
         int resultBits = extend.getResultBits();
-        JavaKind kind = shift.getStackKind();
         assert kind.getBitCount() == resultBits;
 
         int lsb = shift.getY().asJavaConstant().asInt() & (resultBits - 1);
@@ -418,8 +396,8 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(RightShift=rshift (LeftShift=lshift value Constant) Constant)")
     @MatchRule("(UnsignedRightShift=rshift (LeftShift=lshift value Constant) Constant)")
     public ComplexMatchResult bitFieldMove(BinaryNode rshift, LeftShiftNode lshift) {
-        assert isNumericInteger(rshift);
         JavaKind srcKind = rshift.getStackKind();
+        assert srcKind.isNumericInteger();
         int srcBits = srcKind.getBitCount();
         int lshiftNum = lshift.getY().asJavaConstant().asInt() & (srcBits - 1);
         int rshiftNum = rshift.getY().asJavaConstant().asInt() & (srcBits - 1);
@@ -450,7 +428,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Add=op (LeftShift=x src Constant=shiftAmt1) (UnsignedRightShift src Constant=shiftAmt2))")
     @MatchRule("(Add=op (UnsignedRightShift=x src Constant=shiftAmt1) (LeftShift src Constant=shiftAmt2))")
     public ComplexMatchResult rotationConstant(ValueNode op, ValueNode x, ValueNode src, ConstantNode shiftAmt1, ConstantNode shiftAmt2) {
-        assert isNumericInteger(src);
+        assert src.getStackKind().isNumericInteger();
         assert shiftAmt1.getStackKind().getBitCount() == 32;
         assert shiftAmt2.getStackKind().getBitCount() == 32;
 
@@ -478,7 +456,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Or (LeftShift=x src shiftAmount) (UnsignedRightShift src (Negate=y shiftAmount)))")
     @MatchRule("(Or (UnsignedRightShift=x src shiftAmount) (LeftShift src (Negate=y shiftAmount)))")
     public ComplexMatchResult rotationExpander(ValueNode src, ValueNode shiftAmount, ValueNode x, ValueNode y) {
-        assert isNumericInteger(src);
+        assert src.getStackKind().isNumericInteger();
         assert shiftAmount.getStackKind().getBitCount() == 32;
 
         if (y instanceof SubNode || y instanceof AddNode) {
@@ -497,7 +475,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
             } else {
                 b = x instanceof LeftShiftNode ? getArithmeticLIRGenerator().emitNegate(operand(shiftAmount)) : operand(shiftAmount);
             }
-            return getArithmeticLIRGenerator().emitBinary(LIRKind.combine(a, b), AArch64ArithmeticOp.ROR, false, a, b);
+            return getArithmeticLIRGenerator().emitBinary(LIRKind.combine(a, b), AArch64ArithmeticOp.RORV, false, a, b);
         };
     }
 
@@ -546,8 +524,8 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(And=logic value1 (Not=not value2))")
     @MatchRule("(Or=logic value1 (Not=not value2))")
     @MatchRule("(Xor=logic value1 (Not=not value2))")
-    public final ComplexMatchResult bitwiseLogicNot(BinaryNode logic, NotNode not) {
-        assert isNumericInteger(logic);
+    public ComplexMatchResult bitwiseLogicNot(BinaryNode logic, NotNode not) {
+        assert logic.getStackKind().isNumericInteger();
         AArch64ArithmeticOp op = logicalNotOpMap.get(logic.getClass());
         assert op != null;
         ValueNode src1 = logic.getX() == not ? logic.getY() : logic.getX();
@@ -562,7 +540,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
 
     @MatchRule("(Not=not (Xor value1 value2))")
     public ComplexMatchResult bitwiseNotXor(NotNode not) {
-        assert isNumericInteger(not);
+        assert not.getStackKind().isNumericInteger();
         return builder -> {
             XorNode xor = (XorNode) not.getValue();
             Value a = operand(xor.getX());
@@ -622,7 +600,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(RightShift=binary (Narrow=narrow a) b)")
     @MatchRule("(UnsignedRightShift=binary (Narrow=narrow a) b)")
     public ComplexMatchResult elideL2IForBinary(BinaryNode binary, NarrowNode narrow) {
-        assert isNumericInteger(binary);
+        assert binary.getStackKind().isNumericInteger();
 
         ValueNode a = narrow;
         ValueNode b = binary.getX() == narrow ? binary.getY() : binary.getX();
@@ -652,7 +630,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Add=op x (And y Constant=constant))")
     @MatchRule("(Sub=op x (And y Constant=constant))")
     public ComplexMatchResult mergeDowncastIntoAddSub(BinaryNode op, ValueNode x, ValueNode y, ConstantNode constant) {
-        assert isNumericInteger(constant);
+        assert constant.getStackKind().isNumericInteger();
         long mask = constant.asJavaConstant().asLong();
         if (mask != 0xff && mask != 0xffff && mask != 0xffffffffL) {
             return null;
@@ -678,7 +656,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Negate=unary (Narrow=narrow value))")
     @MatchRule("(Not=unary (Narrow=narrow value))")
     public ComplexMatchResult elideL2IForUnary(UnaryNode unary, NarrowNode narrow) {
-        assert isNumericInteger(unary);
+        assert unary.getStackKind().isNumericInteger();
         if (!isNarrowingLongToInt(narrow)) {
             return null;
         }
@@ -696,8 +674,8 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
 
     @MatchRule("(Mul (Negate a) b)")
     @MatchRule("(Negate (Mul a b))")
-    public final ComplexMatchResult multiplyNegate(ValueNode a, ValueNode b) {
-        if (isNumericInteger(a, b)) {
+    public ComplexMatchResult multiplyNegate(ValueNode a, ValueNode b) {
+        if (a.getStackKind().isNumericInteger() && b.getStackKind().isNumericInteger()) {
             return builder -> getArithmeticLIRGenerator().emitMNeg(operand(a), operand(b));
         }
         return null;
@@ -705,8 +683,11 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
 
     @MatchRule("(Add=binary (Mul a b) c)")
     @MatchRule("(Sub=binary c (Mul a b))")
-    public final ComplexMatchResult multiplyAddSub(BinaryNode binary, ValueNode a, ValueNode b, ValueNode c) {
-        if (!(isNumericInteger(a, b, c))) {
+    public ComplexMatchResult multiplyAddSub(BinaryNode binary, ValueNode a, ValueNode b, ValueNode c) {
+        JavaKind kindA = a.getStackKind();
+        JavaKind kindB = b.getStackKind();
+        JavaKind kindC = c.getStackKind();
+        if (!(kindA.isNumericInteger() && kindB.isNumericInteger() && kindC.isNumericInteger())) {
             return null;
         }
 
@@ -721,7 +702,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
      */
     @MatchRule("(If (IntegerTest value Constant=a))")
     public ComplexMatchResult testBitAndBranch(IfNode root, ValueNode value, ConstantNode a) {
-        if (isNumericInteger(value)) {
+        if (value.getStackKind().isNumericInteger()) {
             long constant = a.asJavaConstant().asLong();
             if (Long.bitCount(constant) == 1) {
                 return emitBitTestAndBranch(root.trueSuccessor(), root.falseSuccessor(), value,
@@ -736,17 +717,18 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
      */
     @MatchRule("(If (IntegerLessThan=lessNode x Constant=y))")
     public ComplexMatchResult checkNegativeAndBranch(IfNode root, IntegerLessThanNode lessNode, ValueNode x, ConstantNode y) {
-        assert isNumericInteger(x);
+        JavaKind xKind = x.getStackKind();
+        assert xKind.isNumericInteger();
         if (y.isJavaConstant() && (0 == y.asJavaConstant().asLong()) && lessNode.condition().equals(CanonicalCondition.LT)) {
             return emitBitTestAndBranch(root.falseSuccessor(), root.trueSuccessor(), x,
-                            1.0 - root.getTrueSuccessorProbability(), x.getStackKind().getBitCount() - 1);
+                            1.0 - root.getTrueSuccessorProbability(), xKind.getBitCount() - 1);
         }
         return null;
     }
 
     @MatchRule("(FloatConvert=a (Sqrt (FloatConvert=b c)))")
-    public final ComplexMatchResult floatSqrt(FloatConvertNode a, FloatConvertNode b, ValueNode c) {
-        if (isNumericFloat(a, c)) {
+    public ComplexMatchResult floatSqrt(FloatConvertNode a, FloatConvertNode b, ValueNode c) {
+        if (c.getStackKind().isNumericFloat() && a.getStackKind().isNumericFloat()) {
             if (a.getFloatConvert() == FloatConvert.D2F && b.getFloatConvert() == FloatConvert.F2D) {
                 return builder -> getArithmeticLIRGenerator().emitMathSqrt(operand(c));
             }
