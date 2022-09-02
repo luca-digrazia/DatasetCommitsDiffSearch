@@ -63,7 +63,6 @@ import org.graalvm.compiler.hotspot.nodes.BeginLockScopeNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotCompressionNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotDirectCallTargetNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotIndirectCallTargetNode;
-import org.graalvm.compiler.hotspot.nodes.KlassBeingInitializedCheckNode;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveDynamicConstantNode;
@@ -183,7 +182,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 /**
  * HotSpot implementation of {@link LoweringProvider}.
  */
-public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider implements HotSpotLoweringProvider {
+public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider implements HotSpotLoweringProvider {
 
     protected final HotSpotGraalRuntimeProvider runtime;
     protected final HotSpotRegistersProvider registers;
@@ -406,8 +405,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 }
             } else if (n instanceof ProfileNode) {
                 profileSnippets.lower((ProfileNode) n, tool);
-            } else if (n instanceof KlassBeingInitializedCheckNode) {
-                newObjectSnippets.lower((KlassBeingInitializedCheckNode) n, registers, tool);
             } else {
                 super.lower(n, tool);
             }
