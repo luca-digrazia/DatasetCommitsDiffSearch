@@ -133,7 +133,7 @@ public final class ProbeNode extends Node {
     static class RetiredNodeReference {
         private final WeakReference<Node> node;
         private final Set<Class<? extends Tag>> materializeTags;
-        final RetiredNodeReference next;
+        private final RetiredNodeReference next;
 
         RetiredNodeReference(Node node, Set<Class<? extends Tag>> materializeTags, RetiredNodeReference next) {
             this.node = new WeakReference<>(node);
@@ -141,13 +141,18 @@ public final class ProbeNode extends Node {
             this.next = next;
         }
 
-        Node getNode() {
+        public Node getNode() {
             return node.get();
+        }
+
+        public RetiredNodeReference getNext() {
+            return next;
         }
     }
 
     private final InstrumentationHandler handler;
     private volatile RetiredNodeReference retiredNodeReference;
+    private Set<Class<? extends Tag>> allSeenMaterializeTags;
     @CompilationFinal private volatile EventContext context;
 
     @Child private volatile ProbeNode.EventChainNode chain;
@@ -173,31 +178,24 @@ public final class ProbeNode extends Node {
         retiredNodeReference = null;
     }
 
-    private boolean hasNewTags(Node retiredNode, Set<Class<? extends Tag>> materializeTags) {
-        Set<Class<? extends Tag>> allSeenMaterializeTags = retiredNodeReference.next == null ? retiredNodeReference.materializeTags : new HashSet<>(retiredNodeReference.materializeTags);
-
-        RetiredNodeReference nodeRef = retiredNodeReference;
-        while (nodeRef != null) {
-            if (allSeenMaterializeTags != nodeRef.materializeTags) {
-                allSeenMaterializeTags.addAll(nodeRef.materializeTags);
-            }
-            Node nodeRefNode = nodeRef.getNode();
-            assert nodeRefNode == null || nodeRefNode != retiredNode : "The same retired node must not be set more than once!";
-            assert !nodeRef.materializeTags.equals(materializeTags) : "Retired node must be set at most once for the same set of tags!";
-            nodeRef = nodeRef.next;
-        }
-        return !allSeenMaterializeTags.containsAll(materializeTags);
-    }
-
+    @SuppressWarnings("AssertWithSideEffects")
     void setRetiredNode(Node retiredNode, Set<Class<? extends Tag>> materializeTags) {
         if (retiredNodeReference == null) {
             retiredNodeReference = new RetiredNodeReference(retiredNode, materializeTags, null);
+            assert !(allSeenMaterializeTags = new HashSet<>(materializeTags)).isEmpty() : "Materialize tags must not be empty!";
         } else {
+            RetiredNodeReference nodeRef = retiredNodeReference;
             /*
              * The following check does not check all illegal materializations, because seen
              * materialize tags are not recorded before the AST is first executed.
              */
-            assert hasNewTags(retiredNode, materializeTags) : "There should always be some new materialize tag!";
+            assert !allSeenMaterializeTags.containsAll(materializeTags) : "There should always be some new materialize tag!";
+            while (nodeRef != null) {
+                Node nodeRefNode = nodeRef.getNode();
+                assert nodeRefNode == null || nodeRefNode != retiredNode : "The same retired node must not be set more than once!";
+                assert !nodeRef.materializeTags.equals(materializeTags) : "Retired node must be set at most once for the same set of tags!";
+                nodeRef = nodeRef.next;
+            }
             RetiredNodeReference previousRetiredNodeReference = retiredNodeReference;
             RetiredNodeReference newRetiredNodeReference = new RetiredNodeReference(retiredNode, materializeTags, previousRetiredNodeReference);
             retiredNodeReference = newRetiredNodeReference;
