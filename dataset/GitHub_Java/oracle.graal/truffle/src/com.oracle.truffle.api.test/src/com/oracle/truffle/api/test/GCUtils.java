@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,14 +40,14 @@
  */
 package com.oracle.truffle.api.test;
 
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import org.junit.Assert;
@@ -77,8 +77,9 @@ public final class GCUtils {
         List<WeakReference<Object>> collectibleObjects = new ArrayList<>();
         for (int i = 0; i < GC_TEST_ITERATIONS; i++) {
             collectibleObjects.add(new WeakReference<>(objectFactory.apply(i), queue));
-            gc();
+            System.gc();
         }
+        gc(IsFreed.anyOf(collectibleObjects), true);
         int refsCleared = 0;
         while (queue.poll() != null) {
             refsCleared++;
@@ -94,12 +95,29 @@ public final class GCUtils {
      * @param ref the reference
      */
     public static void assertGc(final String message, final Reference<?> ref) {
-        cleanRuntimeNativeReferences();
+        if (!gc(IsFreed.allOf(Collections.singleton(ref)), true)) {
+            Assert.fail(message);
+        }
+    }
+
+    /**
+     * Asserts that given reference is not cleaned, the referent is freed by garbage collector.
+     *
+     * @param message the message for an {@link AssertionError} when referent is not freed by GC
+     * @param ref the reference
+     */
+    public static void assertNotGc(final String message, final Reference<?> ref) {
+        if (gc(IsFreed.allOf(Collections.singleton(ref)), false)) {
+            Assert.fail(message);
+        }
+    }
+
+    private static boolean gc(BooleanSupplier isFreed, boolean performAllocations) {
         int blockSize = 100_000;
         final List<byte[]> blocks = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
-            if (ref.get() == null) {
-                return;
+            if (isFreed.getAsBoolean()) {
+                return true;
             }
             try {
                 System.gc();
@@ -109,14 +127,15 @@ public final class GCUtils {
                 System.runFinalization();
             } catch (OutOfMemoryError oom) {
             }
-            try {
-                blocks.add(new byte[blockSize]);
-                blockSize = (int) (blockSize * 1.3);
-            } catch (OutOfMemoryError oom) {
-                blockSize >>>= 1;
+            if (performAllocations) {
+                try {
+                    blocks.add(new byte[blockSize]);
+                    blockSize = (int) (blockSize * 1.3);
+                } catch (OutOfMemoryError oom) {
+                    blockSize >>>= 1;
+                }
             }
             if (i % 10 == 0) {
-                cleanRuntimeNativeReferences();
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException ie) {
@@ -124,32 +143,47 @@ public final class GCUtils {
                 }
             }
         }
-        try {
-            System.out.println("Not freed...");
-            Thread.sleep(1_000_000);
-        } catch (InterruptedException e) {
+        return false;
+    }
+
+    private static final class IsFreed implements BooleanSupplier {
+
+        private enum Operator {
+            AND,
+            OR
         }
-        Assert.fail(message);
-    }
 
-    /**
-     * Performs GC and possibly frees non HotSpot heap.
-     */
-    public static void gc() {
-        cleanRuntimeNativeReferences();
-        System.gc();
-    }
+        private final Collection<? extends Reference<?>> refs;
+        private final Operator operator;
 
-    private static boolean cleanRuntimeNativeReferences() {
-        try {
-            TruffleRuntime runtime = Truffle.getRuntime();
-            Method clearNativeReferences = runtime.getClass().getDeclaredMethod("cleanNativeReferences");
-            clearNativeReferences.setAccessible(true);
-            clearNativeReferences.invoke(null);
-            return true;
-        } catch (ReflectiveOperationException e) {
-            return false;
+        private IsFreed(Collection<? extends Reference<?>> refs, Operator operator) {
+            this.refs = refs;
+            this.operator = operator;
+        }
+
+        @Override
+        public boolean getAsBoolean() {
+            for (Reference<?> ref : refs) {
+                boolean freed = ref.get() == null;
+                if (freed) {
+                    if (operator == Operator.OR) {
+                        return true;
+                    }
+                } else {
+                    if (operator == Operator.AND) {
+                        return false;
+                    }
+                }
+            }
+            return operator == Operator.AND;
+        }
+
+        static IsFreed anyOf(Collection<? extends Reference<?>> refs) {
+            return new IsFreed(refs, Operator.OR);
+        }
+
+        static IsFreed allOf(Collection<? extends Reference<?>> refs) {
+            return new IsFreed(refs, Operator.AND);
         }
     }
-
 }
