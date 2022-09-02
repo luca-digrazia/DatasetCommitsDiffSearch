@@ -112,10 +112,8 @@ public final class NFIContextExtension implements ContextExtension {
     }
 
     public void addNativeLibrary(ExternalLibrary library) {
-        synchronized (nativeLibraries) {
-            if (!nativeLibraries.contains(library)) {
-                nativeLibraries.add(library);
-            }
+        if (!nativeLibraries.contains(library)) {
+            nativeLibraries.add(library);
         }
     }
 
