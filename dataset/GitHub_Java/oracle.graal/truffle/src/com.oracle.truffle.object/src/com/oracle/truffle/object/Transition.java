@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,6 +42,7 @@ package com.oracle.truffle.object;
 
 import java.util.Objects;
 
+import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Property;
 
 /** @since 0.17 or earlier */
@@ -158,15 +159,15 @@ public abstract class Transition {
 
     /** @since 0.17 or earlier */
     public static final class ObjectTypeTransition extends Transition {
-        private final Object objectType;
+        private final ObjectType objectType;
 
         /** @since 0.17 or earlier */
-        public ObjectTypeTransition(Object objectType) {
+        public ObjectTypeTransition(ObjectType objectType) {
             this.objectType = objectType;
         }
 
         /** @since 0.17 or earlier */
-        public Object getObjectType() {
+        public ObjectType getObjectType() {
             return objectType;
         }
 
