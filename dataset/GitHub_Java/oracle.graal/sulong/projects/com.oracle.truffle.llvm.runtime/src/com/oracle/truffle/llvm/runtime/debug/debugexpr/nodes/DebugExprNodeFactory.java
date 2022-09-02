@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -39,8 +39,6 @@ import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
-import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 public final class DebugExprNodeFactory {
 
@@ -148,18 +146,13 @@ public final class DebugExprNodeFactory {
 
     @SuppressWarnings("static-method")
     public DebugExpressionPair createVarNode(String name) {
-        DebugExprVarNode node = DebugExprVarNodeGen.create(name, scopes);
+        DebugExprVarNode node = new DebugExprVarNode(name, scopes);
         return DebugExpressionPair.create(node, node.getType());
     }
 
     @SuppressWarnings("static-method")
     public DebugExpressionPair createSizeofNode(DebugExprType type) {
-        LLVMExpressionNode node;
-        try {
-            node = DebugExprSizeofNode.create(type);
-        } catch (TypeOverflowException e) {
-            node = Type.handleOverflowExpression(e);
-        }
+        LLVMExpressionNode node = new DebugExprSizeofNode(type);
         return DebugExpressionPair.create(node, DebugExprType.getIntType(32, true));
     }
 
@@ -167,7 +160,7 @@ public final class DebugExprNodeFactory {
     public DebugExpressionPair createLogicalAndNode(DebugExpressionPair left, DebugExpressionPair right) {
         checkError(left, "&&");
         checkError(right, "&&");
-        LLVMExpressionNode node = DebugExprShortCircuitEvaluationNodeGen.create(left.getNode(), right.getNode(), new DebugExprLogicalAndNode());
+        LLVMExpressionNode node = new DebugExprLogicalAndNode(left.getNode(), right.getNode());
         return DebugExpressionPair.create(node, DebugExprType.getBoolType());
     }
 
@@ -175,7 +168,7 @@ public final class DebugExprNodeFactory {
     public DebugExpressionPair createLogicalOrNode(DebugExpressionPair left, DebugExpressionPair right) {
         checkError(left, "||");
         checkError(right, "||");
-        LLVMExpressionNode node = DebugExprShortCircuitEvaluationNodeGen.create(left.getNode(), right.getNode(), new DebugExprLogicalOrNode());
+        LLVMExpressionNode node = new DebugExprLogicalOrNode(left.getNode(), right.getNode());
         return DebugExpressionPair.create(node, DebugExprType.getBoolType());
     }
 
@@ -267,7 +260,7 @@ public final class DebugExprNodeFactory {
     @SuppressWarnings("static-method")
     public DebugExpressionPair createObjectMember(DebugExpressionPair receiver, String fieldName) {
         LLVMExpressionNode baseNode = receiver.getNode();
-        DebugExprObjectMemberNode node = DebugExprObjectMemberNodeGen.create(baseNode, fieldName);
+        DebugExprObjectMemberNode node = new DebugExprObjectMemberNode(baseNode, fieldName);
         DebugExprType type = node.getType();
         return DebugExpressionPair.create(node, type);
     }
@@ -275,7 +268,7 @@ public final class DebugExprNodeFactory {
     @SuppressWarnings("static-method")
     public DebugExpressionPair createDereferenceNode(DebugExpressionPair pointerPair) {
         checkError(pointerPair, "*");
-        DebugExprDereferenceNode node = DebugExprDereferenceNodeGen.create(pointerPair.getNode());
+        DebugExprDereferenceNode node = new DebugExprDereferenceNode(pointerPair.getNode());
         DebugExprType type = pointerPair.getType().getInnerType();
         return DebugExpressionPair.create(node, type);
     }
@@ -299,7 +292,7 @@ public final class DebugExprNodeFactory {
 
     @SuppressWarnings("static-method")
     public DebugExpressionPair createArrayElement(DebugExpressionPair array, DebugExpressionPair index) {
-        DebugExprArrayElementNode node = DebugExprArrayElementNode.create(array, index.getNode());
+        DebugExprArrayElementNode node = new DebugExprArrayElementNode(array, index.getNode());
         if (array.getType() == null) {
             throw DebugExprException.typeError(node, node);
         }
@@ -307,13 +300,13 @@ public final class DebugExprNodeFactory {
     }
 
     public DebugExprTypeofNode createTypeofNode(String ident) {
-        return DebugExprTypeofNodeGen.create(ident, scopes);
+        return new DebugExprTypeofNode(ident, scopes);
     }
 
     @SuppressWarnings("static-method")
     public DebugExpressionPair createPointerCastNode(DebugExpressionPair pair, DebugExprTypeofNode typeNode) {
         checkError(pair, "pointer cast");
-        DebugExprPointerCastNode node = DebugExprPointerCastNodeGen.create(pair.getNode(), typeNode);
+        DebugExprPointerCastNode node = new DebugExprPointerCastNode(pair.getNode(), typeNode);
         return DebugExpressionPair.create(node, node.getType());
     }
 

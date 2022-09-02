@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -55,7 +55,7 @@ public class DebugExprParser {
         @Override
         public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
             String location = "-- line " + line + " col " + (charPositionInLine + 1) + ": ";
-            throw DebugExprException.create(null, "Debug Expression error in %s:\n%s%s", snippet, location, msg);
+            throw DebugExprException.create(null, String.format("Debug Expression error in %s:\n%s%s", snippet, location, msg));
         }
     }
 
@@ -74,20 +74,36 @@ public class DebugExprParser {
     }
 
     public LLVMExpressionNode parse() throws DebugExprException {
+        // final ByteArrayOutputStream errorStream = new ByteArrayOutputStream();
+        // parser.errors.errorStream = new PrintStream(errorStream);
+        // parser.Parse();
+        // LLVMExpressionNode root = parser.GetASTRoot();
+        // if (parser.errors.count == 0) { // parsed correctly
+        // return root;
+        // } else {
+        // throw DebugExprException.create(root, errorStream.toString().replace("\n",
+        // "").replace("\r", ""));
+        // }
+
         lexer.removeErrorListeners();
         parser.removeErrorListeners();
-
         BailoutErrorListener listener = new BailoutErrorListener(asmSnippet);
         lexer.addErrorListener(listener);
         parser.addErrorListener(listener);
-
         parser.debugExpr();
-        LLVMExpressionNode root = parser.GetASTRoot();
-
-        if (parser.getNumberOfSyntaxErrors() == 0) {
-            return root;
-        } else {
-            throw DebugExprException.create(root, listener.toString().replace("\n", "").replace("\r", ""));
-        }
+        // parser.snippet = asmSnippet;
+        // parser.factory = new AsmFactory(language, argTypes, asmFlags, retType, retTypes,
+        // retOffsets);
+        // parser.inline_assembly();
+        // if (parser.root == null) {
+        // throw new IllegalStateException("no roots produced by inline assembly snippet");
+        // }
+        return parser.GetASTRoot();
+        /*
+         * return new LLVMExpressionNode() {
+         * 
+         * @Override public Object executeGeneric(VirtualFrame frame) { throw
+         * DebugExprException.create(this, "Not Yet Implemented: " + asmSnippet); } };
+         */
     }
 }
