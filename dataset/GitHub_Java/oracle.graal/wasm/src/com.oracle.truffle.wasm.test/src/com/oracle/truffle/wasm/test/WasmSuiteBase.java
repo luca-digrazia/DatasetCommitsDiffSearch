@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.WasmOptions;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
@@ -73,8 +72,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                     function.execute();
                 }
             }
-            final Value result = function.execute();
-            validateResult(testCase.data.resultValidator, result);
+            validateResult(testCase.data.resultValidator, function.execute());
         } catch (InterruptedException | IOException e) {
             Assert.fail(String.format("Test %s failed: %s", testCase.name, e.getMessage()));
         } catch (PolyglotException e) {
@@ -121,24 +119,14 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("Using runtime: " + Truffle.getRuntime().toString());
         for (WasmTestCase testCase : qualifyingTestCases) {
-            String statusIcon = "\u003F";
             try {
-                System.out.print(" ");
-                System.out.print(testCase.name);
-                System.out.flush();
                 runTestCase(testCase);
-                statusIcon = "\uD83D\uDE0D";
-            } catch (Throwable e) {
-                statusIcon = "\uD83D\uDE21";
-                errors.put(testCase, e);
-            } finally {
-                for (int i = 0; i < testCase.name.length() + 1; i++) {
-                    System.out.print("\u001b[1D");
-                    System.out.print(" ");
-                    System.out.print("\u001b[1D");
-                }
-                System.out.print(statusIcon);
+                System.out.print("\uD83D\uDE0D");
                 System.out.flush();
+            } catch (Throwable e) {
+                System.out.print("\uD83D\uDE21");
+                System.out.flush();
+                errors.put(testCase, e);
             }
         }
         System.out.println();
