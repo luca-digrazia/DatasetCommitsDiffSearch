@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,10 +43,10 @@ public abstract class QuickNode extends Node {
         this.callerBCI = callerBCI;
     }
 
-    public abstract int invoke(VirtualFrame frame);
+    public abstract int execute(VirtualFrame frame);
 
     // TODO(peterssen): Make this a node?
-    protected static StaticObject nullCheck(StaticObject value) {
+    protected static final StaticObject nullCheck(StaticObject value) {
         if (StaticObject.isNull(value)) {
             CompilerDirectives.transferToInterpreter();
             // TODO(peterssen): Profile whether null was hit or not.
@@ -56,8 +56,8 @@ public abstract class QuickNode extends Node {
         return value;
     }
 
-    public final BytecodeNode getBytecodesNode() {
-        return (BytecodeNode) getParent();
+    public final BytecodesNode getBytecodesNode() {
+        return (BytecodesNode) getParent();
     }
 
     public int getBCI() {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -64,16 +64,16 @@ public final class EspressoStatementNode extends EspressoInstrumentableNode {
         return tag == StandardTags.StatementTag.class;
     }
 
-    public BytecodeNode getBytecodesNode() {
+    public BytecodesNode getBytecodesNode() {
         // parent is normally the BytecodesNode.InstrumentationSupport
         // parents parent is normally the BytecodesNode
         Node parent = getParent();
 
-        while (parent instanceof WrapperNode || parent instanceof BytecodeNode.InstrumentationSupport) {
+        while (parent instanceof WrapperNode || parent instanceof BytecodesNode.InstrumentationSupport) {
             parent = parent.getParent();
         }
         assert !(parent instanceof WrapperNode);
-        return (BytecodeNode) parent;
+        return (BytecodesNode) parent;
     }
 
     public int getBci() {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,23 +24,24 @@ package com.oracle.truffle.espresso.meta;
 
 import java.util.Objects;
 
-import com.oracle.truffle.espresso.classfile.Utf8Constant;
-import com.oracle.truffle.espresso.jdwp.api.LocalRef;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 
 /**
  * Describes the type and bytecode index range in which a local variable is live.
  */
-public final class Local implements LocalRef {
+public final class Local {
 
     public static final Local[] EMPTY_ARRAY = new Local[0];
 
-    private final Utf8Constant name;
-    private final Utf8Constant type;
+    private final Symbol<Name> name;
+    private final Symbol<Name> type;
     private final int startBci;
     private final int endBci;
     private final int slot;
 
-    public Local(Utf8Constant name, Utf8Constant type, int startBci, int endBci, int slot) {
+    public Local(Symbol<Name> name, Symbol<Name> type, int startBci, int endBci, int slot) {
         this.name = name;
         this.startBci = startBci;
         this.endBci = endBci;
@@ -56,11 +57,11 @@ public final class Local implements LocalRef {
         return endBci;
     }
 
-    public Utf8Constant getName() {
+    public Symbol<Name> getName() {
         return name;
     }
 
-    public Utf8Constant getType() {
+    public Symbol<Name> getType() {
         return type;
     }
 
@@ -85,15 +86,5 @@ public final class Local implements LocalRef {
     @Override
     public String toString() {
         return "LocalImpl<name=" + name + ", type=" + type + ", startBci=" + startBci + ", endBci=" + endBci + ", slot=" + slot + ">";
-    }
-
-    @Override
-    public String getNameAsString() {
-        return name.toString();
-    }
-
-    @Override
-    public String getTypeAsString() {
-        return type.toString();
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -109,15 +109,15 @@ public final class CodeAttribute extends Attribute {
         return LocalVariableTable.EMPTY;
     }
 
-    public int bciToLineNumber(int bci) {
+    public final int BCItoLineNumber(int BCI) {
         LineNumberTable lnt = getLineNumberTableAttribute();
         if (lnt == LineNumberTable.EMPTY) {
             return -1;
         }
-        return lnt.getLineNumber(bci);
+        return lnt.getLineNumber(BCI);
     }
 
-    public boolean useStackMaps() {
+    public final boolean useStackMaps() {
         return majorVersion >= JAVA_6_VERSION;
     }
 

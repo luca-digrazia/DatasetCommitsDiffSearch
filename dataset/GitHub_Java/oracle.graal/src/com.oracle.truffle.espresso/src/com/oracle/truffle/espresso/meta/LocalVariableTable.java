@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ import java.util.List;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.jdwp.api.LocalVariableTableRef;
 import com.oracle.truffle.espresso.runtime.Attribute;
 
 /**
@@ -36,9 +35,10 @@ import com.oracle.truffle.espresso.runtime.Attribute;
  *
  * @see "https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.7.13"
  */
-public final class LocalVariableTable extends Attribute implements LocalVariableTableRef {
+public final class LocalVariableTable extends Attribute {
 
-    public static final LocalVariableTable EMPTY = new LocalVariableTable(Name.LocalVariableTable, Local.EMPTY_ARRAY);
+    public static final Symbol<Symbol.Name> NAME = Name.LocalVariableTable;
+    public static final LocalVariableTable EMPTY = new LocalVariableTable(Local.EMPTY_ARRAY);
 
     @CompilationFinal(dimensions = 1) //
     private final Local[] locals;
@@ -51,8 +51,8 @@ public final class LocalVariableTable extends Attribute implements LocalVariable
      */
     // @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "caller transfers ownership of
     // `locals`")
-    public LocalVariableTable(Symbol<Name> name, Local[] locals) {
-        super(name, null);
+    public LocalVariableTable(Local[] locals) {
+        super(NAME, null);
         this.locals = locals;
     }
 

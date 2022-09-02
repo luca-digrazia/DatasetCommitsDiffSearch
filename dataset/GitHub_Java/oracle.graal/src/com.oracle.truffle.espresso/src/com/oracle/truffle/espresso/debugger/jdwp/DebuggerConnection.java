@@ -182,9 +182,6 @@ public class DebuggerConnection implements JDWPCommands {
                             case JDWP.ReferenceType.CLASSLOADER.ID:
                                 reply = JDWP.ReferenceType.CLASSLOADER.createReply(packet);
                                 break;
-                            case JDWP.ReferenceType.GET_VALUES.ID:
-                                reply = JDWP.ReferenceType.GET_VALUES.createReply(packet);
-                                break;
                             case JDWP.ReferenceType.SOURCE_FILE.ID:
                                 reply = JDWP.ReferenceType.SOURCE_FILE.createReply(packet);
                                 break;
@@ -204,7 +201,7 @@ public class DebuggerConnection implements JDWPCommands {
                                 reply = JDWP.ReferenceType.METHODS_WITH_GENERIC.createReply(packet);
                                 break;
                         }
-                        break;
+                     break;
                     }
                     case JDWP.ClassType.ID: {
                         switch (packet.cmd) {
@@ -238,14 +235,6 @@ public class DebuggerConnection implements JDWPCommands {
                                 break;
                             case JDWP.ObjectReference.IS_COLLECTED.ID:
                                 reply = JDWP.ObjectReference.IS_COLLECTED.createReply(packet);
-                                break;
-                        }
-                        break;
-                    }
-                    case JDWP.STRING_REFERENCE.ID: {
-                        switch (packet.cmd) {
-                            case JDWP.STRING_REFERENCE.VALUE.ID:
-                                reply = JDWP.STRING_REFERENCE.VALUE.createReply(packet, controller.getContext());
                                 break;
                         }
                         break;

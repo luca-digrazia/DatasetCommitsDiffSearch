@@ -48,18 +48,18 @@ public class EspressoScope {
         List<? extends FrameSlot> slots;
 
         slots = frame.getFrameDescriptor().getSlots();
-        int size = slots.size();
+        slots.size();
 
         Map<String, FrameSlot> slotsMap;
         if (slots.isEmpty()) {
             slotsMap = Collections.emptyMap();
-        } else if (size == 1) {
+        } else if (slots.size() == 1) {
             FrameSlot slot = slots.get(0);
             String identifier = getIdentifier(liveLocals, slot);
             getIdentifier(liveLocals, slot);
             slotsMap = Collections.singletonMap(Objects.toString(identifier), slot);
         } else {
-            slotsMap = new LinkedHashMap<>(size);
+            slotsMap = new LinkedHashMap<>(slots.size());
             for (FrameSlot slot : slots) {
                 String identifier = getIdentifier(liveLocals, slot);
                 if (identifier != null) {
@@ -74,8 +74,7 @@ public class EspressoScope {
         String identifier = slot.getIdentifier().toString();
         for (Local local : liveLocals) {
             try {
-                // Note: shifting by 1, because monitor uses slot 0
-                if (local.getSlot() == Integer.parseInt(identifier) -1) {
+                if (local.getSlot() == Integer.parseInt(identifier)) {
                     return local.getName().toString();
                 }
             } catch (NumberFormatException nf) {
@@ -94,6 +93,10 @@ public class EspressoScope {
         private VariablesMapObject(Map<String, ? extends FrameSlot> slots, Frame frame) {
             this.slots = slots;
             this.frame = frame;
+        }
+
+        public static boolean isInstance(TruffleObject obj) {
+            return obj instanceof EspressoScope.VariablesMapObject;
         }
 
         @SuppressWarnings("static-method")
