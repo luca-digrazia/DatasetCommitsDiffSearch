@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,7 +44,7 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.regex.charset.CharMatchers;
+import com.oracle.truffle.regex.charset.CharSet;
 import com.oracle.truffle.regex.tregex.util.MathUtil;
 
 /**
@@ -55,7 +55,8 @@ import com.oracle.truffle.regex.tregex.util.MathUtil;
  * something similar to this:
  *
  * <pre>
- * match(char c) {
+ * {@code
+ * match (char c) {
  *     if (c < 4) {
  *         return 1 <= c && c <= 2;
  *     } else if (c > 5) {
@@ -69,6 +70,7 @@ import com.oracle.truffle.regex.tregex.util.MathUtil;
  *     } else {
  *         return true;
  *     }
+ * }
  * }
  * </pre>
  */
@@ -84,24 +86,25 @@ public abstract class RangeTreeMatcher extends InvertibleCharMatcher {
      *            method.
      * @return a new {@link RangeTreeMatcher}.
      */
-    public static RangeTreeMatcher fromRanges(boolean invert, int[] ranges) {
+    public static RangeTreeMatcher fromRanges(boolean invert, char[] ranges) {
         return RangeTreeMatcherNodeGen.create(invert, ranges);
     }
 
-    @CompilationFinal(dimensions = 1) private final int[] sortedRanges;
+    @CompilationFinal(dimensions = 1) private final char[] sortedRanges;
 
-    RangeTreeMatcher(boolean invert, int[] sortedRanges) {
+    RangeTreeMatcher(boolean invert, char[] sortedRanges) {
         super(invert);
         this.sortedRanges = sortedRanges;
     }
 
     @Specialization
-    public boolean match(int c) {
+    public boolean match(char c, boolean compactString) {
+        assert !compactString : "this matcher should be avoided via ProfilingCharMatcher on compact strings";
         CompilerAsserts.partialEvaluationConstant(this);
         return matchTree(0, (sortedRanges.length >>> 1) - 1, c);
     }
 
-    private boolean matchTree(int fromIndex, int toIndex, int c) {
+    private boolean matchTree(int fromIndex, int toIndex, char c) {
         CompilerAsserts.partialEvaluationConstant(fromIndex);
         CompilerAsserts.partialEvaluationConstant(toIndex);
         if (fromIndex > toIndex) {
@@ -130,6 +133,6 @@ public abstract class RangeTreeMatcher extends InvertibleCharMatcher {
     @Override
     @TruffleBoundary
     public String toString() {
-        return "tree " + modifiersToString() + "[" + CharMatchers.rangesToString(sortedRanges) + "]";
+        return "tree " + modifiersToString() + "[" + CharSet.rangesToString(sortedRanges) + "]";
     }
 }
