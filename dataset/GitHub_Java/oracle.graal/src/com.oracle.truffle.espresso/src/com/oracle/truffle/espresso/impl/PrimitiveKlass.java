@@ -40,22 +40,14 @@ import com.oracle.truffle.espresso.substitutions.Host;
  * representation, so the associated LinkedKlass is null.
  */
 public final class PrimitiveKlass extends Klass {
-    private final JavaKind primitiveKind;
-
     /**
      * Creates Espresso type for a primitive {@link JavaKind}.
      *
-     * @param primitiveKind the kind to create the type for
+     * @param kind the kind to create the type for
      */
-    public PrimitiveKlass(EspressoContext context, JavaKind primitiveKind) {
-        super(context, primitiveKind.getPrimitiveBinaryName(), primitiveKind.getType(), null, ObjectKlass.EMPTY_ARRAY,
-                        Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC);
-        assert primitiveKind.isPrimitive() : primitiveKind + " not a primitive kind";
-        this.primitiveKind = primitiveKind;
-    }
-
-    public JavaKind getPrimitiveJavaKind() {
-        return primitiveKind;
+    public PrimitiveKlass(EspressoContext context, JavaKind kind) {
+        super(context, kind.getPrimitiveBinaryName(), kind.getType(), null, ObjectKlass.EMPTY_ARRAY);
+        assert kind.isPrimitive() : kind + " not a primitive kind";
     }
 
     @Override
@@ -169,6 +161,11 @@ public final class PrimitiveKlass extends Klass {
     @Override
     public String toString() {
         return "PrimitiveKlass<" + getJavaKind() + ">";
+    }
+
+    @Override
+    public int getModifiers() {
+        return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
     }
 
     @Override

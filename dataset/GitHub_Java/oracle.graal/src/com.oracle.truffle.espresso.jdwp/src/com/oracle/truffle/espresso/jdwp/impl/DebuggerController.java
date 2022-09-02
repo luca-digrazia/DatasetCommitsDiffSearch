@@ -40,7 +40,12 @@ import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.jdwp.api.*;
+import com.oracle.truffle.espresso.jdwp.api.CallFrame;
+import com.oracle.truffle.espresso.jdwp.api.Ids;
+import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
+import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
+import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -190,7 +195,7 @@ public final class DebuggerController implements ContextsListener {
             CallFrame currentFrame = susp.getStackFrames()[0];
             MethodRef method = (MethodRef) ids.fromId((int) currentFrame.getMethodId());
             if (method.isLastLine(currentFrame.getCodeIndex())) {
-                susp.getEvent().prepareStepOut(STEP_CONFIG);// .prepareStepOver(STEP_CONFIG);
+                susp.getEvent().prepareStepOut(STEP_CONFIG); // .prepareStepOver(STEP_CONFIG);
             } else {
                 susp.getEvent().prepareStepOver(STEP_CONFIG);
             }
@@ -521,8 +526,9 @@ public final class DebuggerController implements ContextsListener {
 
             for (Pattern pattern : patterns) {
                 JDWPLogger.log("Matching klass: %s against pattern: %s", JDWPLogger.LogLevel.STEPPING, klass.getNameAsString(), pattern.pattern());
-                if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.')))
+                if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.'))) {
                     return true;
+                }
             }
             return false;
         }
@@ -681,11 +687,6 @@ public final class DebuggerController implements ContextsListener {
         private void suspend(CallFrame currentFrame, Object thread, byte suspendPolicy, List<Callable<Void>> jobs) {
             JDWPLogger.log("suspending from callback in thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
 
-            // before sending any events to debugger, make sure to mark
-            // the thread lock as locked, in case a resume command happens
-            // shortly thereafter, with the risk of a race (lost notify)
-            getSuspendLock(thread).acquire();
-
             switch (suspendPolicy) {
                 case SuspendStrategy.NONE:
                     runJobs(jobs);
@@ -762,6 +763,7 @@ public final class DebuggerController implements ContextsListener {
 
         synchronized (lock) {
             try {
+                lock.acquire();
                 // in case a thread job is already posted on this thread
                 checkThreadJobsAndRun(thread);
                 while (lock.isLocked()) {

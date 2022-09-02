@@ -47,7 +47,6 @@ import org.graalvm.wasm.Linker.ResolutionDag.Sym;
 import org.graalvm.wasm.Linker.ResolutionDag.ExportMemorySym;
 import org.graalvm.wasm.Linker.ResolutionDag.ImportMemorySym;
 import org.graalvm.wasm.Linker.ResolutionDag.Resolver;
-import org.graalvm.wasm.SymbolTable.FunctionType;
 import org.graalvm.wasm.constants.GlobalModifier;
 import org.graalvm.wasm.constants.GlobalResolution;
 import org.graalvm.wasm.exception.WasmLinkerException;
@@ -107,7 +106,6 @@ public class Linker {
             // TODO: Once topological linking starts handling all the import kinds,
             // remove the previous loop.
             linkTopologically();
-            assignTypeEquivalenceClasses();
             for (WasmModule module : modules.values()) {
                 module.setLinked();
             }
@@ -126,29 +124,6 @@ public class Linker {
         final Resolver[] sortedResolutions = resolutionDag.toposort();
         for (Resolver resolver : sortedResolutions) {
             resolver.action.run();
-        }
-    }
-
-    private static void assignTypeEquivalenceClasses() {
-        final Map<String, WasmModule> modules = WasmContext.getCurrent().modules();
-        final Map<FunctionType, Integer> equivalenceClasses = new HashMap<>();
-        int nextEquivalenceClass = SymbolTable.FIRST_EQUIVALENCE_CLASS;
-        for (WasmModule module : modules.values()) {
-            final SymbolTable symtab = module.symbolTable();
-            for (int index = 0; index < symtab.typeCount(); index++) {
-                FunctionType type = symtab.typeAt(index);
-                Integer equivalenceClass = equivalenceClasses.get(type);
-                if (equivalenceClass == null) {
-                    equivalenceClass = nextEquivalenceClass;
-                    equivalenceClasses.put(type, equivalenceClass);
-                    nextEquivalenceClass++;
-                }
-                symtab.setEquivalenceClass(index, equivalenceClass);
-            }
-            for (int index = 0; index < symtab.numFunctions(); index++) {
-                final WasmFunction function = symtab.function(index);
-                function.setTypeEquivalenceClass(symtab.equivalenceClass(function.typeIndex()));
-            }
         }
     }
 
@@ -371,64 +346,6 @@ public class Linker {
         abstract static class Sym {
         }
 
-        static class ImportGlobalSym extends Sym {
-            final String moduleName;
-            final ImportDescriptor importDescriptor;
-
-            ImportGlobalSym(String moduleName, ImportDescriptor importDescriptor) {
-                this.moduleName = moduleName;
-                this.importDescriptor = importDescriptor;
-            }
-
-            @Override
-            public String toString() {
-                return String.format("(import global %s from %s into %s)", importDescriptor.memberName, importDescriptor.moduleName, moduleName);
-            }
-
-            @Override
-            public int hashCode() {
-                return moduleName.hashCode() ^ importDescriptor.hashCode();
-            }
-
-            @Override
-            public boolean equals(Object object) {
-                if (!(object instanceof ImportGlobalSym)) {
-                    return false;
-                }
-                final ImportGlobalSym that = (ImportGlobalSym) object;
-                return this.moduleName.equals(that.moduleName) && this.importDescriptor.equals(that.importDescriptor);
-            }
-        }
-
-        static class ExportGlobalSym extends Sym {
-            final String moduleName;
-            final String globalName;
-
-            ExportGlobalSym(String moduleName, String globalName) {
-                this.moduleName = moduleName;
-                this.globalName = globalName;
-            }
-
-            @Override
-            public String toString() {
-                return String.format("(export global %s from %s)", globalName, moduleName);
-            }
-
-            @Override
-            public int hashCode() {
-                return moduleName.hashCode() ^ globalName.hashCode();
-            }
-
-            @Override
-            public boolean equals(Object object) {
-                if (!(object instanceof ExportFunctionSym)) {
-                    return false;
-                }
-                final ExportFunctionSym that = (ExportFunctionSym) object;
-                return this.moduleName.equals(that.moduleName) && this.globalName.equals(that.functionName);
-            }
-        }
-
         static class ImportFunctionSym extends Sym {
             final String moduleName;
             final ImportDescriptor importDescriptor;
@@ -460,21 +377,21 @@ public class Linker {
 
         static class ExportFunctionSym extends Sym {
             final String moduleName;
-            final String functionName;
+            final String memoryName;
 
-            ExportFunctionSym(String moduleName, String functionName) {
+            ExportFunctionSym(String moduleName, String memoryName) {
                 this.moduleName = moduleName;
-                this.functionName = functionName;
+                this.memoryName = memoryName;
             }
 
             @Override
             public String toString() {
-                return String.format("(export func %s from %s)", functionName, moduleName);
+                return String.format("(export func %s from %s)", memoryName, moduleName);
             }
 
             @Override
             public int hashCode() {
-                return moduleName.hashCode() ^ functionName.hashCode();
+                return moduleName.hashCode() ^ memoryName.hashCode();
             }
 
             @Override
@@ -483,7 +400,7 @@ public class Linker {
                     return false;
                 }
                 final ExportFunctionSym that = (ExportFunctionSym) object;
-                return this.moduleName.equals(that.moduleName) && this.functionName.equals(that.functionName);
+                return this.moduleName.equals(that.moduleName) && this.memoryName.equals(that.memoryName);
             }
         }
 

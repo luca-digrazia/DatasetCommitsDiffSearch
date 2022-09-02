@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,21 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import com.oracle.truffle.espresso.EspressoLanguage;
+import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveFieldCount;
+
+import java.util.Objects;
+
+import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
-import com.oracle.truffle.espresso.runtime.FieldInfo;
-import com.oracle.truffle.espresso.types.TypeDescriptor;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.descriptors.Types;
+import com.oracle.truffle.espresso.impl.Field;
+import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
 
 public interface FieldRefConstant extends MemberRefConstant {
 
@@ -34,84 +45,130 @@ public interface FieldRefConstant extends MemberRefConstant {
         return Tag.FIELD_REF;
     }
 
-    TypeDescriptor getType(ConstantPool pool, int thisIndex);
-
-    FieldInfo resolve(ConstantPool pool, int thisIndex);
-
-    @Override
-    default String toString(ConstantPool pool, int thisIndex) {
-        return getDeclaringClass(pool, thisIndex) + "." + getName(pool, thisIndex) + getType(pool, thisIndex);
+    @SuppressWarnings("uncheked")
+    default Symbol<Type> getType(ConstantPool pool) {
+        // TODO(peterssen): Validate type descriptor.
+        return Types.fromDescriptor(getDescriptor(pool));
     }
 
-    public static final class Resolved implements FieldRefConstant {
-
-        private final FieldInfo field;
-
-        public FieldInfo field() {
-            return field;
-        }
-
-        public Resolved(FieldInfo field) {
-            this.field = field;
-        }
-
-        public FieldInfo resolve(ConstantPool pool, int index) {
-            return field;
-        }
-
-        public TypeDescriptor getDeclaringClass(ConstantPool pool, int thisIndex) {
-            return field.getDeclaringClass().getName();
-        }
-
-        public Utf8Constant getName(ConstantPool pool, int thisIndex) {
-            return field.getName();
-        }
-
-        public TypeDescriptor getType(ConstantPool pool, int thisIndex) {
-            return field.getType();
-        }
-    }
-
-    static final class Unresolved extends MemberRefConstant.Unresolved implements FieldRefConstant {
-
-        private final TypeDescriptor type;
-
-        public Unresolved(TypeDescriptor declaringClass, Utf8Constant name, TypeDescriptor type) {
-            super(declaringClass, name);
-            this.type = type;
-        }
-
-        public TypeDescriptor getType(ConstantPool pool, int thisIndex) {
-            return type;
-        }
-
-        public FieldInfo resolve(ConstantPool pool, int thisIndex) {
-            throw EspressoLanguage.unimplemented();
-        }
-    }
-
-    static final class Indexes extends MemberRefConstant.Indexes implements FieldRefConstant {
-
+    final class Indexes extends MemberRefConstant.Indexes implements FieldRefConstant, Resolvable {
         Indexes(int classIndex, int nameAndTypeIndex) {
             super(classIndex, nameAndTypeIndex);
         }
 
-        @Override
-        protected MemberRefConstant createUnresolved(ConstantPool pool, TypeDescriptor declaringClass, Utf8Constant name, Utf8Constant type) {
-            return new FieldRefConstant.Unresolved(declaringClass, name, pool.getContext().getLanguage().getTypeDescriptors().make(type.toString()));
+        /**
+         * <h3>5.4.3.2. Field Resolution</h3>
+         *
+         * To resolve an unresolved symbolic reference from D to a field in a class or interface C,
+         * the symbolic reference to C given by the field reference must first be resolved
+         * (&sect;5.4.3.1). Therefore, any exception that can be thrown as a result of failure of
+         * resolution of a class or interface reference can be thrown as a result of failure of
+         * field resolution. If the reference to C can be successfully resolved, an exception
+         * relating to the failure of resolution of the field reference itself can be thrown.
+         *
+         * When resolving a field reference, field resolution first attempts to look up the
+         * referenced field in C and its superclasses:
+         * <ol>
+         * <li>If C declares a field with the name and descriptor specified by the field reference,
+         * field lookup succeeds. The declared field is the result of the field lookup.
+         * <li>Otherwise, field lookup is applied recursively to the direct superinterfaces of the
+         * specified class or interface C.
+         * <li>Otherwise, if C has a superclass S, field lookup is applied recursively to S.
+         * <li>Otherwise, field lookup fails.
+         * </ol>
+         *
+         * Then:
+         * <ul>
+         * <li>If field lookup fails, field resolution throws a NoSuchFieldError.
+         * <li>Otherwise, if field lookup succeeds but the referenced field is not accessible
+         * (&sect;5.4.4) to D, field resolution throws an IllegalAccessError.
+         * <li>Otherwise, let < E, L1 > be the class or interface in which the referenced field is
+         * actually declared and let L2 be the defining loader of D.
+         * <li>Given that the type of the referenced field is Tf, let T be Tf if Tf is not an array
+         * type, and let T be the element type (&sect;2.4) of Tf otherwise.
+         * <li>The Java Virtual Machine must impose the loading constraint that TL1 = TL2
+         * (&sect;5.3.4).
+         * </ul>
+         */
+        private static Field lookupField(Klass seed, Symbol<Name> name, Symbol<Type> type) {
+            Field f = seed.lookupDeclaredField(name, type);
+            if (f != null) {
+                return f;
+            }
+            for (Klass i : seed.getSuperInterfaces()) {
+                f = lookupField(i, name, type);
+                if (f != null) {
+                    return f;
+                }
+            }
+            if (seed.getSuperKlass() != null) {
+                return lookupField(seed.getSuperKlass(), name, type);
+            }
+            return null;
         }
 
         @Override
-        protected FieldRefConstant replace(ConstantPool pool, int thisIndex) {
-            return (FieldRefConstant) super.replace(pool, thisIndex);
+        public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
+            resolveFieldCount.inc();
+            Klass holderKlass = getResolvedHolderKlass(accessingKlass, pool);
+            Symbol<Name> name = getName(pool);
+            Symbol<Type> type = getType(pool);
+
+            Field field = lookupField(holderKlass, name, type);
+            if (field == null) {
+                Meta meta = pool.getContext().getMeta();
+                throw meta.throwExWithMessage(meta.NoSuchFieldError, meta.toGuestString(name));
+            }
+
+            if (!MemberRefConstant.checkAccess(accessingKlass, holderKlass, field)) {
+                Meta meta = pool.getContext().getMeta();
+                System.err.println(EspressoOptions.INCEPTION_NAME + " Field access check of: " + field.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
+                                " throws IllegalAccessError");
+                throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
+            }
+
+            field.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), field.getDeclaringKlass().getDefiningClassLoader());
+
+            return new Resolved(field);
         }
 
-        public FieldInfo resolve(ConstantPool pool, int thisIndex) {
-            return replace(pool, thisIndex).resolve(pool, thisIndex);
+        @Override
+        public void validate(ConstantPool pool) {
+            super.validate(pool);
+            pool.nameAndTypeAt(nameAndTypeIndex).validateField(pool);
+        }
+    }
+
+    final class Resolved implements FieldRefConstant, Resolvable.ResolvedConstant {
+        private final Field resolved;
+
+        Resolved(Field resolved) {
+            this.resolved = Objects.requireNonNull(resolved);
         }
 
-        public TypeDescriptor getType(ConstantPool pool, int thisIndex) {
-            return replace(pool, thisIndex).getType(pool, thisIndex);
+        @Override
+        public Symbol<Type> getType(ConstantPool pool) {
+            return resolved.getType();
+        }
+
+        @Override
+        public Field value() {
+            return resolved;
+        }
+
+        @Override
+        public Symbol<Name> getHolderKlassName(ConstantPool pool) {
+            throw EspressoError.shouldNotReachHere("Field already resolved");
+        }
+
+        @Override
+        public Symbol<Name> getName(ConstantPool pool) {
+            return resolved.getName();
+        }
+
+        @Override
+        public Symbol<? extends Descriptor> getDescriptor(ConstantPool pool) {
+            return resolved.getType();
         }
     }
 }

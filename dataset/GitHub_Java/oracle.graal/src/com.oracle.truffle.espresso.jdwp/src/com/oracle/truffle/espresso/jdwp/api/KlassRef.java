@@ -138,13 +138,4 @@ public interface KlassRef {
      * @return klass modifier bitmask.
      */
     int getModifiers();
-
-    /**
-     * Returns the array klass for this klass with the given dimensions.
-     *
-     * @param dimensions array dimension
-     * @return array klass
-     */
-    KlassRef getArrayClass(int dimensions);
-
 }

@@ -26,12 +26,9 @@ package com.oracle.truffle.espresso.classfile;
 import static com.oracle.truffle.espresso.classfile.Constants.ITEM_Bogus;
 import static com.oracle.truffle.espresso.classfile.Constants.ITEM_Double;
 import static com.oracle.truffle.espresso.classfile.Constants.ITEM_Float;
-import static com.oracle.truffle.espresso.classfile.Constants.ITEM_InitObject;
 import static com.oracle.truffle.espresso.classfile.Constants.ITEM_Integer;
 import static com.oracle.truffle.espresso.classfile.Constants.ITEM_Long;
-import static com.oracle.truffle.espresso.classfile.Constants.ITEM_NewObject;
 import static com.oracle.truffle.espresso.classfile.Constants.ITEM_Null;
-import static com.oracle.truffle.espresso.classfile.Constants.ITEM_Object;
 
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -82,46 +79,14 @@ public abstract class VerificationTypeInfo {
 }
 
 class PrimitiveTypeInfo extends VerificationTypeInfo {
-    private static final PrimitiveTypeInfo Bogus = new PrimitiveTypeInfo(ITEM_Bogus);
-    private static final PrimitiveTypeInfo Integer = new PrimitiveTypeInfo(ITEM_Integer);
-    private static final PrimitiveTypeInfo Float = new PrimitiveTypeInfo(ITEM_Float);
-    private static final PrimitiveTypeInfo Double = new PrimitiveTypeInfo(ITEM_Double);
-    private static final PrimitiveTypeInfo Long = new PrimitiveTypeInfo(ITEM_Long);
-    private static final PrimitiveTypeInfo Null = new PrimitiveTypeInfo(ITEM_Null);
-
-    private PrimitiveTypeInfo(int tag) {
+    PrimitiveTypeInfo(int tag) {
         super(tag);
-    }
-
-    static VerificationTypeInfo get(int tag) {
-        switch (tag) {
-            case ITEM_Bogus:
-                return Bogus;
-            case ITEM_Integer:
-                return Integer;
-            case ITEM_Float:
-                return Float;
-            case ITEM_Double:
-                return Double;
-            case ITEM_Long:
-                return Long;
-            case ITEM_Null:
-                return Null;
-            default:
-                throw EspressoError.shouldNotReachHere();
-        }
     }
 }
 
 class UninitializedThis extends VerificationTypeInfo {
-    private static UninitializedThis UNINITIALIZED_THIS = new UninitializedThis();
-
-    private UninitializedThis() {
-        super(ITEM_InitObject);
-    }
-
-    static VerificationTypeInfo get() {
-        return UNINITIALIZED_THIS;
+    UninitializedThis(int tag) {
+        super(tag);
     }
 
     @Override
@@ -133,8 +98,8 @@ class UninitializedThis extends VerificationTypeInfo {
 class UninitializedVariable extends VerificationTypeInfo {
     private final int newOffset;
 
-    UninitializedVariable(int newOffset) {
-        super(ITEM_NewObject);
+    UninitializedVariable(int tag, int newOffset) {
+        super(tag);
         this.newOffset = newOffset;
     }
 
@@ -152,8 +117,8 @@ class UninitializedVariable extends VerificationTypeInfo {
 class ReferenceVariable extends VerificationTypeInfo {
     private final int constantPoolOffset;
 
-    ReferenceVariable(int constantPoolOffset) {
-        super(ITEM_Object);
+    ReferenceVariable(int tag, int constantPoolOffset) {
+        super(tag);
         this.constantPoolOffset = constantPoolOffset;
     }
 

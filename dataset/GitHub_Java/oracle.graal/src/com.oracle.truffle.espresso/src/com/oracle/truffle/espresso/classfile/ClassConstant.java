@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,19 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
+import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
+
+import java.util.Objects;
+
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
-import com.oracle.truffle.espresso.runtime.Klass;
-import com.oracle.truffle.espresso.types.TypeDescriptor;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.EspressoException;
 
 /**
  * Interface denoting a class entry in a constant pool.
@@ -40,61 +50,72 @@ public interface ClassConstant extends PoolConstant {
      * Gets the type descriptor of the class represented by this constant.
      *
      * @param pool container of this constant
-     * @param thisIndex index of this constant in {@code pool}
      */
-    TypeDescriptor getTypeDescriptor(ConstantPool pool, int thisIndex);
+    Symbol<Name> getName(ConstantPool pool);
 
     @Override
-    default String toString(ConstantPool pool, int thisIndex) {
-        return getTypeDescriptor(pool, thisIndex).toString();
+    default String toString(ConstantPool pool) {
+        return getName(pool).toString();
     }
 
-    /**
-     * Resolves this entry to a {@link Klass}.
-     *
-     * @param pool container of this constant
-     * @param index index of this constant in {@code pool}
-     */
-    Klass resolve(ConstantPool pool, int index);
+    final class Index implements ClassConstant, Resolvable {
+        private final char classNameIndex;
 
-    public static final class Resolved implements ClassConstant {
-
-        final Klass klass;
-
-        public Resolved(Klass klass) {
-            this.klass = klass;
+        Index(int classNameIndex) {
+            this.classNameIndex = PoolConstant.u2(classNameIndex);
         }
 
-        public TypeDescriptor getTypeDescriptor(ConstantPool pool, int index) {
-            return klass.getName();
+        @Override
+        public Symbol<Name> getName(ConstantPool pool) {
+            return pool.symbolAt(classNameIndex);
         }
 
-        public Klass resolve(ConstantPool pool, int index) {
-            return klass;
-        }
-    }
-
-    public static class Unresolved implements ClassConstant {
-
-        private final TypeDescriptor typeDescriptor;
-
-        Unresolved(TypeDescriptor typeDescriptor) {
-            this.typeDescriptor = typeDescriptor;
-        }
-
-        public TypeDescriptor getTypeDescriptor(ConstantPool pool, int index) {
-            return typeDescriptor;
-        }
-
-        public Klass resolve(ConstantPool pool, int index) {
+        /**
+         * <h3>5.4.3.1. Class and Interface Resolution</h3>
+         *
+         * To resolve an unresolved symbolic reference from D to a class or interface C denoted by
+         * N, the following steps are performed:
+         * <ol>
+         * <li>The defining class loader of D is used to create a class or interface denoted by N.
+         * This class or interface is C. The details of the process are given in &sect;5.3. <b>Any
+         * exception that can be thrown as a result of failure of class or interface creation can
+         * thus be thrown as a result of failure of class and interface resolution.</b>
+         * <li>If C is an array class and its element type is a reference type, then a symbolic
+         * reference to the class or interface representing the element type is resolved by invoking
+         * the algorithm in &sect;5.4.3.1 recursively.
+         * <li>Finally, access permissions to C are checked.
+         * <ul>
+         * <li><b>If C is not accessible (&sect;5.4.4) to D, class or interface resolution throws an
+         * IllegalAccessError.</b> This condition can occur, for example, if C is a class that was
+         * originally declared to be public but was changed to be non-public after D was compiled.
+         * </ul>
+         * </ol>
+         * If steps 1 and 2 succeed but step 3 fails, C is still valid and usable. Nevertheless,
+         * resolution fails, and D is prohibited from accessing C.
+         */
+        @Override
+        public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
+            resolveKlassCount.inc();
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            Symbol<Name> klassName = getName(pool);
             try {
-                try {
-                    Klass klass = typeDescriptor.resolveType(pool.classLoader());
-                    pool.updateAt(index, new Resolved(klass));
-                    return klass;
-                } catch (RuntimeException e) {
-                    throw (NoClassDefFoundError) new NoClassDefFoundError(typeDescriptor.toString()).initCause(e);
+                EspressoContext context = pool.getContext();
+                Symbol<Symbol.Type> type = context.getTypes().fromName(klassName);
+                Klass klass = context.getMeta().resolveSymbol(type, accessingKlass.getDefiningClassLoader());
+                if (!Klass.checkAccess(klass.getElementalType(), accessingKlass)) {
+                    Meta meta = context.getMeta();
+                    System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
+                    throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(klassName));
                 }
+
+                return new Resolved(klass);
+
+            } catch (EspressoException e) {
+                CompilerDirectives.transferToInterpreter();
+                if (pool.getContext().getMeta().ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                    throw pool.getContext().getMeta().throwExWithMessage(NoClassDefFoundError.class, klassName.toString());
+                }
+                throw e;
             } catch (VirtualMachineError e) {
                 // Comment from Hotspot:
                 // Just throw the exception and don't prevent these classes from
@@ -105,32 +126,91 @@ public interface ClassConstant extends PoolConstant {
             }
         }
 
+        @Override
+        public void validate(ConstantPool pool) {
+            pool.utf8At(classNameIndex).validateClassName();
+        }
     }
 
-    public static class Index implements ClassConstant {
+    final class Resolved implements ClassConstant, Resolvable.ResolvedConstant {
+        private final Klass resolved;
 
-        private final char classNameIndex;
-
-        Index(int classNameIndex) {
-            this.classNameIndex = PoolConstant.u2(classNameIndex);
+        Resolved(Klass resolved) {
+            this.resolved = Objects.requireNonNull(resolved);
         }
 
-        private ClassConstant replace(ConstantPool pool, int index) {
-            Utf8Constant className = pool.utf8At(classNameIndex);
-            Unresolved replacement = new Unresolved(pool.getContext().getLanguage().getTypeDescriptors().make('L' + className.toString() + ';'));
-            return (ClassConstant) pool.updateAt(index, replacement);
+        @Override
+        public Symbol<Name> getName(ConstantPool pool) {
+            return resolved.getName();
         }
 
-        public boolean isResolved() {
-            return false;
+        @Override
+        public Klass value() {
+            return resolved;
+        }
+    }
+
+    final class WithString implements ClassConstant, Resolvable {
+        private final Symbol<Name> name;
+
+        WithString(Symbol<Name> name) {
+            this.name = name;
         }
 
-        public TypeDescriptor getTypeDescriptor(ConstantPool pool, int index) {
-            return replace(pool, index).getTypeDescriptor(pool, index);
+        @Override
+        public Symbol<Name> getName(ConstantPool pool) {
+            return name;
         }
 
-        public Klass resolve(ConstantPool pool, int index) {
-            return replace(pool, index).resolve(pool, index);
+        @Override
+        public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
+            resolveKlassCount.inc();
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            Symbol<Name> klassName = getName(pool);
+            try {
+                EspressoContext context = pool.getContext();
+                Klass klass = context.getMeta().resolveSymbol(context.getTypes().fromName(klassName), accessingKlass.getDefiningClassLoader());
+                if (!Klass.checkAccess(klass.getElementalType(), accessingKlass)) {
+                    Meta meta = context.getMeta();
+                    System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
+                    throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(klassName));
+                }
+
+                return new Resolved(klass);
+
+            } catch (VirtualMachineError e) {
+                // Comment from Hotspot:
+                // Just throw the exception and don't prevent these classes from
+                // being loaded for virtual machine errors like StackOverflow
+                // and OutOfMemoryError, etc.
+                // Needs clarification to section 5.4.3 of the JVM spec (see 6308271)
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Constant Pool patching inserts already resolved constants in the constant pool. However, at
+     * the time of patching, we do not have a Runtime CP. Therefore, we help the CP by inserting a
+     * Pre-Resolved constant.
+     *
+     * This is also used to Pre-resolve anonymous classes.
+     */
+    final class PreResolved implements ClassConstant, Resolvable {
+        private final Klass resolved;
+
+        PreResolved(Klass resolved) {
+            this.resolved = Objects.requireNonNull(resolved);
+        }
+
+        @Override
+        public Symbol<Name> getName(ConstantPool pool) {
+            return resolved.getName();
+        }
+
+        @Override
+        public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
+            return new Resolved(resolved);
         }
     }
 }

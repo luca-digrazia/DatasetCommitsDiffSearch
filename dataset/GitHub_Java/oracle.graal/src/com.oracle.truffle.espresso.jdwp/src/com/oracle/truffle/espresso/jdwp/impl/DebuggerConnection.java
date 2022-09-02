@@ -185,7 +185,7 @@ public final class DebuggerConnection implements Commands {
         // waking up the main Espresso startup thread
         private static final int GRACE_PERIOD = 100;
 
-        public JDWPTransportThread(boolean suspend) {
+        JDWPTransportThread(boolean suspend) {
             this.started = !suspend;
         }
 
@@ -227,6 +227,7 @@ public final class DebuggerConnection implements Commands {
                     // we closed the session, so let the thread run dry
                 }
             }
+            controller.leaveTruffleContext();
         }
 
         private void processPacket(Packet packet) {
@@ -545,7 +546,6 @@ public final class DebuggerConnection implements Commands {
             } else {
                 JDWPLogger.log("no result for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
             }
-            controller.leaveTruffleContext();
         }
     }
 }

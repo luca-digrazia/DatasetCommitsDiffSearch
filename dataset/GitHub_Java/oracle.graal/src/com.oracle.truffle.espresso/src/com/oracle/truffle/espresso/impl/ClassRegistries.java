@@ -99,13 +99,14 @@ public final class ClassRegistries {
 
     @TruffleBoundary
     public Klass[] getAllLoadedClasses() {
+        ArrayList<Klass> list = new ArrayList<>();
         // add classes from boot registry
-        ArrayList<Klass> list = new ArrayList<>(bootClassRegistry.classes.values());
+        list.addAll(bootClassRegistry.classes.values());
         // add classes from all other registries
         for (ClassRegistry registry : registries.values()) {
             list.addAll(registry.classes.values());
         }
-        return list.toArray(Klass.EMPTY_ARRAY);
+        return list.toArray(new Klass[list.size()]);
     }
 
     @TruffleBoundary

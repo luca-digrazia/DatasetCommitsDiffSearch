@@ -23,8 +23,6 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 
 public final class PacketStream {
 
@@ -135,9 +133,13 @@ public final class PacketStream {
     }
 
     public void writeString(String string) {
-        byte[] stringBytes = string.getBytes(StandardCharsets.UTF_8);
-        writeInt(stringBytes.length);
-        writeByteArray(stringBytes);
+        try {
+            byte[] stringBytes = string.getBytes("UTF8");
+            writeInt(stringBytes.length);
+            writeByteArray(stringBytes);
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new RuntimeException("Cannot convert string to UTF8 bytes");
+        }
     }
 
     public byte readByte() {
@@ -197,12 +199,6 @@ public final class PacketStream {
 
     public double readDouble() {
         return Double.longBitsToDouble(readLong());
-    }
-
-    public byte[] readByteArray(int length) {
-        byte[] result = Arrays.copyOfRange(packet.data, readPosition, readPosition + length);
-        readPosition += length;
-        return result;
     }
 
     public String readString() {

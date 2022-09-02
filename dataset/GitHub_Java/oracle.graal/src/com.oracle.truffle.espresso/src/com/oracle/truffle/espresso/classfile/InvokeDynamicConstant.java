@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,16 +23,62 @@
 package com.oracle.truffle.espresso.classfile;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
+import com.oracle.truffle.espresso.descriptors.Signatures;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 
-public interface InvokeDynamicConstant extends BootstrapMethodConstant {
+public interface InvokeDynamicConstant extends PoolConstant {
+
+    int getBootstrapMethodAttrIndex();
+
+    int getNameAndTypeIndex();
+
+    Symbol<Signature> getSignature(ConstantPool pool);
+
+    Symbol<Name> getName(ConstantPool pool);
 
     default Tag tag() {
         return Tag.INVOKEDYNAMIC;
     }
 
-    final class Indexes extends BootstrapMethodConstant.Indexes implements InvokeDynamicConstant {
+    final class Indexes implements InvokeDynamicConstant {
+        public int bootstrapMethodAttrIndex;
+        public int nameAndTypeIndex;
+
         Indexes(int bootstrapMethodAttrIndex, int nameAndTypeIndex) {
-            super(bootstrapMethodAttrIndex, nameAndTypeIndex);
+            this.bootstrapMethodAttrIndex = bootstrapMethodAttrIndex;
+            this.nameAndTypeIndex = nameAndTypeIndex;
         }
+
+        @Override
+        public int getBootstrapMethodAttrIndex() {
+            return bootstrapMethodAttrIndex;
+        }
+
+        @Override
+        public int getNameAndTypeIndex() {
+            return nameAndTypeIndex;
+        }
+
+        @Override
+        public Symbol<Signature> getSignature(ConstantPool pool) {
+            return Signatures.check(pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool));
+        }
+
+        @Override
+        public Symbol<Name> getName(ConstantPool pool) {
+            return pool.nameAndTypeAt(nameAndTypeIndex).getName(pool);
+        }
+
+        @Override
+        public void validate(ConstantPool pool) {
+            pool.nameAndTypeAt(nameAndTypeIndex).validateMethod(pool);
+        }
+    }
+
+    @Override
+    default String toString(ConstantPool pool) {
+        return "bsmIndex:" + getBootstrapMethodAttrIndex() + " " + getSignature(pool);
     }
 }

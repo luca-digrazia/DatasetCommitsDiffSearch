@@ -142,12 +142,4 @@ public final class LinkedKlass {
     public LinkedKlass[] getInterfaces() {
         return interfaces;
     }
-
-    public int getMajorVersion() {
-        return parserKlass.getMajorVersion();
-    }
-
-    public int getMinorVersion() {
-        return parserKlass.getMinorVersion();
-    }
 }

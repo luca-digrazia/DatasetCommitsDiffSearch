@@ -41,7 +41,6 @@
 package org.graalvm.wasm;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,70 +48,33 @@ import java.util.Map;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import org.graalvm.wasm.constants.GlobalModifier;
+import org.graalvm.wasm.constants.GlobalResolution;
 import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.memory.UnsafeWasmMemory;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.memory.WasmMemoryException;
 import org.graalvm.wasm.collection.ByteArrayList;
+import org.graalvm.wasm.collection.LongArrayList;
 
-import static org.graalvm.wasm.TableRegistry.Table;
+import static org.graalvm.wasm.TableRegistry.*;
 
 /**
  * Contains the symbol information of a module.
  */
 public class SymbolTable {
     private static final int INITIAL_DATA_SIZE = 512;
-    private static final int INITIAL_TYPE_SIZE = 128;
+    private static final int INITIAL_OFFSET_SIZE = 128;
     private static final int INITIAL_FUNCTION_TYPES_SIZE = 128;
     private static final int INITIAL_GLOBALS_SIZE = 128;
-    private static final int UNINITIALIZED_GLOBAL_ADDRESS = -1;
-    private static final int GLOBAL_MUTABLE_BIT = 0x0100;
-    private static final int GLOBAL_EXPORT_BIT = 0x0200;
-    private static final int GLOBAL_INITIALIZED_BIT = 0x0400;
-    private static final int NO_EQUIVALENCE_CLASS = 0;
-    static final int FIRST_EQUIVALENCE_CLASS = NO_EQUIVALENCE_CLASS + 1;
-
-    public static class FunctionType {
-        private final byte[] argumentTypes;
-        private final byte returnType;
-        private final int hashCode;
-
-        FunctionType(byte[] argumentTypes, byte returnType) {
-            this.argumentTypes = argumentTypes;
-            this.returnType = returnType;
-            this.hashCode = Arrays.hashCode(argumentTypes) ^ Byte.hashCode(returnType);
-        }
-
-        @Override
-        public int hashCode() {
-            return hashCode;
-        }
-
-        @Override
-        public boolean equals(Object object) {
-            if (!(object instanceof FunctionType)) {
-                return false;
-            }
-            FunctionType that = (FunctionType) object;
-            if (this.returnType != that.returnType) {
-                return false;
-            }
-            for (int i = 0; i < argumentTypes.length; i++) {
-                if (this.argumentTypes[i] != that.argumentTypes[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
+    private static final int GLOBAL_EXPORT_BIT = 1 << 24;
 
     @CompilationFinal private WasmModule module;
 
     /**
      * Encodes the arguments and return types of each function type.
      *
-     * Given a function type index, the {@link #typeOffsets} array indicates where the encoding for
-     * that function type begins in this array.
+     * Given a function type index, the {@link #offsets} array indicates where the encoding for that
+     * function type begins in this array.
      *
      * For a function type starting at index i, the encoding is the following
      *
@@ -123,7 +85,7 @@ public class SymbolTable {
      * +-----+-----+-------+-----+--------+----------+-----+-----------+
      * </code>
      *
-     * where `na` is the number of arguments, and `nr` is the number of return values.
+     * where na: the number of arguments nr: the number of return values
      *
      * This array is monotonically populated from left to right during parsing. Any code that uses
      * this array should only access the locations in the array that have already been populated.
@@ -136,20 +98,10 @@ public class SymbolTable {
      * This array is monotonically populated from left to right during parsing. Any code that uses
      * this array should only access the locations in the array that have already been populated.
      */
-    @CompilationFinal(dimensions = 1) private int[] typeOffsets;
-
-    /**
-     * Stores the type equivalence class.
-     *
-     * Since multiple types have the same shape, each type is mapped to an equivalence class, so
-     * that two types can be quickly compared.
-     *
-     * The equivalence classes are computed globally for all the modules, during linking.
-     */
-    @CompilationFinal(dimensions = 1) private int[] typeEquivalenceClasses;
+    @CompilationFinal(dimensions = 1) private int[] offsets;
 
     @CompilationFinal private int typeDataSize;
-    @CompilationFinal private int typeCount;
+    @CompilationFinal private int offsetsSize;
 
     /**
      * Stores the function objects for a WebAssembly module.
@@ -183,7 +135,7 @@ public class SymbolTable {
     /**
      * This array is monotonically populated from the left. An index i denotes the i-th global in
      * this module. The value at the index i denotes the address of the global in the memory space
-     * for all the globals from all the modules (see {@link GlobalRegistry}).
+     * for all the globals from all the modules (see {@link Globals}).
      *
      * This separation of global indices is done because the index spaces of the globals are
      * module-specific, and the globals can be imported across modules. Thus, the address-space of
@@ -193,13 +145,19 @@ public class SymbolTable {
 
     /**
      * A global type is the value type of the global, followed by its mutability. This is encoded as
-     * two bytes -- the lowest (0th) byte is the value type. The 1st byte is organized like this:
-     *
-     * <code>
-     * | . | . | . | . | . | initialized flag | exported flag | mutable flag |
-     * </code>
+     * two bytes -- the lowest (0th) byte is the value type, the 1st byte is the mutability of the
+     * global variable, and the 2nd byte is the global's resolution status (see
+     * {@link GlobalModifier}, {@link GlobalResolution} and {@link ValueTypes}).
      */
-    @CompilationFinal(dimensions = 1) short[] globalTypes;
+    @CompilationFinal(dimensions = 1) int[] globalTypes;
+
+    /**
+     * Tracks all the globals that have not yet been resolved, and will be resolved once the modules
+     * are fully linked. The lower 4 bytes are the index of the unresolved global, whereas the
+     * higher 4 bytes are the index of the global whose value this global should be initialized with
+     * (assuming that this global was declared with a {@code GLOBAL_GET} expression).
+     */
+    @CompilationFinal private final LongArrayList unresolvedGlobals;
 
     /**
      * A mapping between the indices of the imported globals and their import specifiers.
@@ -255,10 +213,9 @@ public class SymbolTable {
     SymbolTable(WasmModule module) {
         this.module = module;
         this.typeData = new int[INITIAL_DATA_SIZE];
-        this.typeOffsets = new int[INITIAL_TYPE_SIZE];
-        this.typeEquivalenceClasses = new int[INITIAL_TYPE_SIZE];
+        this.offsets = new int[INITIAL_OFFSET_SIZE];
         this.typeDataSize = 0;
-        this.typeCount = 0;
+        this.offsetsSize = 0;
         this.functions = new WasmFunction[INITIAL_FUNCTION_TYPES_SIZE];
         this.numFunctions = 0;
         this.importedFunctions = new ArrayList<>();
@@ -266,7 +223,8 @@ public class SymbolTable {
         this.exportedFunctionsByIndex = new HashMap<>();
         this.startFunctionIndex = -1;
         this.globalAddresses = new int[INITIAL_GLOBALS_SIZE];
-        this.globalTypes = new short[INITIAL_GLOBALS_SIZE];
+        this.globalTypes = new int[INITIAL_GLOBALS_SIZE];
+        this.unresolvedGlobals = new LongArrayList();
         this.importedGlobals = new LinkedHashMap<>();
         this.exportedGlobals = new LinkedHashMap<>();
         this.maxGlobalIndex = -1;
@@ -312,26 +270,24 @@ public class SymbolTable {
     }
 
     /**
-     * Ensure that the {@link #typeOffsets} and {@link #typeEquivalenceClasses} arrays have enough
-     * space to store the data for the type at {@code index}. If there is not enough space, then a
-     * reallocation of the array takes place, doubling its capacity.
+     * Ensure that the {@link #offsets} array has enough space to store {@code index}. If there is
+     * no enough space, then a reallocation of the array takes place, doubling its capacity.
      *
      * No synchronisation is required for this method, as it is only called during parsing, which is
      * carried out by a single thread.
      */
-    private void ensureTypeCapacity(int index) {
-        if (typeOffsets.length <= index) {
-            int newLength = Math.max(Integer.highestOneBit(index) << 1, 2 * typeOffsets.length);
-            typeOffsets = reallocate(typeOffsets, typeCount, newLength);
-            typeEquivalenceClasses = reallocate(typeEquivalenceClasses, typeCount, newLength);
+    private void ensureOffsetsCapacity(int index) {
+        if (offsets.length <= index) {
+            int newLength = Math.max(Integer.highestOneBit(index) << 1, 2 * offsets.length);
+            offsets = reallocate(offsets, offsetsSize, newLength);
         }
     }
 
     int allocateFunctionType(int numParameterTypes, int numReturnTypes) {
         checkNotLinked();
-        ensureTypeCapacity(typeCount);
-        int typeIdx = typeCount++;
-        typeOffsets[typeIdx] = typeDataSize;
+        ensureOffsetsCapacity(offsetsSize);
+        int typeIdx = offsetsSize++;
+        offsets[typeIdx] = typeDataSize;
 
         assert 0 <= numReturnTypes && numReturnTypes <= 1;
         int size = 2 + numParameterTypes + numReturnTypes;
@@ -356,26 +312,14 @@ public class SymbolTable {
 
     void registerFunctionTypeParameterType(int funcTypeIdx, int paramIdx, byte type) {
         checkNotLinked();
-        int idx = 2 + typeOffsets[funcTypeIdx] + paramIdx;
+        int idx = 2 + offsets[funcTypeIdx] + paramIdx;
         typeData[idx] = type;
     }
 
     void registerFunctionTypeReturnType(int funcTypeIdx, int returnIdx, byte type) {
         checkNotLinked();
-        int idx = 2 + typeOffsets[funcTypeIdx] + typeData[typeOffsets[funcTypeIdx]] + returnIdx;
+        int idx = 2 + offsets[funcTypeIdx] + typeData[offsets[funcTypeIdx]] + returnIdx;
         typeData[idx] = type;
-    }
-
-    public int equivalenceClass(int typeIndex) {
-        return typeEquivalenceClasses[typeIndex];
-    }
-
-    void setEquivalenceClass(int index, int eqClass) {
-        checkNotLinked();
-        if (typeEquivalenceClasses[index] != NO_EQUIVALENCE_CLASS) {
-            throw new WasmException("Type at index " + index + " already has an equivalence class.");
-        }
-        typeEquivalenceClasses[index] = eqClass;
     }
 
     private void ensureFunctionsCapacity(int index) {
@@ -406,7 +350,7 @@ public class SymbolTable {
         return function;
     }
 
-    String exportedFunctionName(int index) {
+    public String exportedFunctionName(int index) {
         return exportedFunctionsByIndex.get(index);
     }
 
@@ -430,20 +374,20 @@ public class SymbolTable {
     }
 
     public int functionTypeArgumentCount(int typeIndex) {
-        int typeOffset = typeOffsets[typeIndex];
+        int typeOffset = offsets[typeIndex];
         int numArgs = typeData[typeOffset + 0];
         return numArgs;
     }
 
     public byte functionTypeReturnType(int typeIndex) {
-        int typeOffset = typeOffsets[typeIndex];
+        int typeOffset = offsets[typeIndex];
         int numArgTypes = typeData[typeOffset + 0];
         int numReturnTypes = typeData[typeOffset + 1];
         return numReturnTypes == 0 ? (byte) 0x40 : (byte) typeData[typeOffset + 2 + numArgTypes];
     }
 
     int functionTypeReturnTypeLength(int typeIndex) {
-        int typeOffset = typeOffsets[typeIndex];
+        int typeOffset = offsets[typeIndex];
         int numReturnTypes = typeData[typeOffset + 1];
         return numReturnTypes;
     }
@@ -460,12 +404,12 @@ public class SymbolTable {
     }
 
     public byte functionTypeArgumentTypeAt(int typeIndex, int i) {
-        int typeOffset = typeOffsets[typeIndex];
+        int typeOffset = offsets[typeIndex];
         return (byte) typeData[typeOffset + 2 + i];
     }
 
     public byte functionTypeReturnTypeAt(int typeIndex, int i) {
-        int typeOffset = typeOffsets[typeIndex];
+        int typeOffset = offsets[typeIndex];
         int numArgs = typeData[typeOffset];
         return (byte) typeData[typeOffset + 2 + numArgs + i];
     }
@@ -476,14 +420,6 @@ public class SymbolTable {
             types.add(functionTypeArgumentTypeAt(typeIndex, i));
         }
         return types;
-    }
-
-    int typeCount() {
-        return typeCount;
-    }
-
-    FunctionType typeAt(int index) {
-        return new FunctionType(functionTypeArgumentTypes(index).toArray(), functionTypeReturnType(index));
     }
 
     void exportFunction(WasmContext context, int functionIndex, String exportName) {
@@ -515,7 +451,7 @@ public class SymbolTable {
             final int[] nGlobalIndices = new int[globalAddresses.length * 2];
             System.arraycopy(globalAddresses, 0, nGlobalIndices, 0, globalAddresses.length);
             globalAddresses = nGlobalIndices;
-            final short[] nGlobalTypes = new short[globalTypes.length * 2];
+            final int[] nGlobalTypes = new int[globalTypes.length * 2];
             System.arraycopy(globalTypes, 0, nGlobalTypes, 0, globalTypes.length);
             globalTypes = nGlobalTypes;
         }
@@ -525,40 +461,29 @@ public class SymbolTable {
      * Allocates a global index in the symbol table, for a global variable that was already
      * allocated.
      */
-    void allocateGlobal(int index, byte valueType, byte mutability, int address) {
+    private void allocateGlobal(int index, int valueType, int mutability, GlobalResolution resolution, int address) {
         assert (valueType & 0xff) == valueType;
+        assert (mutability & 0xff) == mutability;
         checkNotLinked();
         ensureGlobalsCapacity(index);
         maxGlobalIndex = Math.max(maxGlobalIndex, index);
         globalAddresses[index] = address;
-        final int mutabilityBit;
-        if (mutability == GlobalModifier.CONSTANT) {
-            mutabilityBit = 0;
-        } else if (mutability == GlobalModifier.MUTABLE) {
-            mutabilityBit = GLOBAL_MUTABLE_BIT;
-        } else {
-            throw new WasmException("Invalid mutability: " + mutability);
-        }
-        short globalType = (short) (mutabilityBit | valueType);
+        int globalType = (resolution.ordinal() << 16) | ((mutability << 8) | valueType);
         globalTypes[index] = globalType;
     }
 
-    int declareGlobal(WasmContext context, int index, byte valueType, byte mutability) {
-        final GlobalRegistry globals = context.globals();
+    int declareGlobal(WasmContext context, int index, int valueType, int mutability, GlobalResolution resolution) {
+        assert !resolution.isImported();
+        final Globals globals = context.globals();
         final int address = globals.allocateGlobal();
-        allocateGlobal(index, valueType, mutability, address);
+        allocateGlobal(index, valueType, mutability, resolution, address);
         return address;
     }
 
-    void importGlobal(WasmContext context, String moduleName, String globalName, int index, byte valueType, byte mutability) {
+    void importGlobal(String moduleName, String globalName, int index, int valueType, int mutability, GlobalResolution resolution, int address) {
+        assert resolution.isImported();
         importedGlobals.put(index, new ImportDescriptor(moduleName, globalName));
-        allocateGlobal(index, valueType, mutability, UNINITIALIZED_GLOBAL_ADDRESS);
-        context.linker().resolveGlobalImport(context, module, new ImportDescriptor(moduleName, globalName), index, valueType, mutability);
-    }
-
-    void setGlobalAddress(int globalIndex, int address) {
-        checkNotLinked();
-        globalAddresses[globalIndex] = address;
+        allocateGlobal(index, valueType, mutability, resolution, address);
     }
 
     LinkedHashMap<Integer, ImportDescriptor> importedGlobals() {
@@ -573,31 +498,53 @@ public class SymbolTable {
         return globalAddresses[index];
     }
 
-    private boolean globalExported(int index) {
+    boolean globalExported(int index) {
         final int exportStatus = globalTypes[index] & GLOBAL_EXPORT_BIT;
         return exportStatus != 0;
     }
 
+    public GlobalResolution globalResolution(int index) {
+        final int resolutionValue = (globalTypes[index] >>> 16) & 0xff;
+        return GlobalResolution.VALUES[resolutionValue];
+    }
+
     byte globalMutability(int index) {
-        final short globalType = globalTypes[index];
-        if ((globalType & GLOBAL_MUTABLE_BIT) != 0) {
-            return GlobalModifier.MUTABLE;
-        } else {
-            return GlobalModifier.CONSTANT;
-        }
+        return (byte) ((globalTypes[index] >>> 8) & 0xff);
     }
 
     public byte globalValueType(int index) {
         return (byte) (globalTypes[index] & 0xff);
     }
 
-    void initializeGlobal(int index) {
+    private void addUnresolvedGlobal(long unresolvedEntry) {
         checkNotLinked();
-        globalTypes[index] |= GLOBAL_INITIALIZED_BIT;
+        unresolvedGlobals.add(unresolvedEntry);
     }
 
-    boolean isGlobalInitialized(int index) {
-        return (globalTypes[index] & GLOBAL_INITIALIZED_BIT) != 0;
+    /**
+     * Tracks an unresolved imported global. The global must have been previously allocated.
+     */
+    public void trackUnresolvedGlobal(int globalIndex) {
+        checkNotLinked();
+        assertGlobalAllocated(globalIndex);
+        addUnresolvedGlobal(globalIndex);
+    }
+
+    /**
+     * Tracks an unresolved declared global, which depends on an unresolved imported global. The
+     * global must have been previously allocated.
+     */
+    void trackUnresolvedGlobal(int globalIndex, int dependentGlobal) {
+        checkNotLinked();
+        assertGlobalAllocated(globalIndex);
+        long encoding = ((long) dependentGlobal << 32) | globalIndex;
+        addUnresolvedGlobal(encoding);
+    }
+
+    private void assertGlobalAllocated(int globalIndex) {
+        if (globalIndex >= maxGlobalIndex || globalTypes[globalIndex] == 0) {
+            throw new RuntimeException("Cannot track non-allocated global: " + globalIndex);
+        }
     }
 
     Map<String, Integer> exportedGlobals() {
@@ -613,20 +560,20 @@ public class SymbolTable {
         return null;
     }
 
-    void exportGlobal(WasmContext context, String name, int index) {
+    void exportGlobal(String name, int index) {
         checkNotLinked();
         if (globalExported(index)) {
-            throw new WasmMemoryException("Global " + index + " already exported with the name: " + nameOfExportedGlobal(index));
+            throw new WasmMemoryException("Global " + index + " already exported under the name: " + nameOfExportedGlobal(index));
         }
         globalTypes[index] |= GLOBAL_EXPORT_BIT;
+        // TODO: Invoke Linker to link together any modules with pending unresolved globals.
         exportedGlobals.put(name, index);
-        context.linker().resolveGlobalExport(module, name, index);
     }
 
-    public int declareExportedGlobal(WasmContext context, String name, int index, byte valueType, byte mutability) {
+    public int declareExportedGlobal(WasmContext context, String name, int index, int valueType, int mutability, GlobalResolution resolution) {
         checkNotLinked();
-        int address = declareGlobal(context, index, valueType, mutability);
-        exportGlobal(context, name, index);
+        int address = declareGlobal(context, index, valueType, mutability, resolution);
+        exportGlobal(name, index);
         return address;
     }
 
