@@ -40,6 +40,7 @@
  */
 package org.graalvm.wasm;
 
+import static org.graalvm.wasm.TableRegistry.Table;
 import static org.graalvm.wasm.WasmUtil.unsignedInt32ToLong;
 
 import java.nio.charset.StandardCharsets;
@@ -977,7 +978,7 @@ public class BinaryParser extends BinaryStreamParser {
             // Copy the contents, or schedule a linker task for this.
             int segmentLength = readVectorLength();
             final SymbolTable symbolTable = module.symbolTable();
-            final WasmTable table = symbolTable.table();
+            final Table table = symbolTable.table();
             if (table == null || offsetGlobalIndex == -1) {
                 // Note: we do not check if the earlier element segments were executed,
                 // and we do not try to execute the element segments in order,
@@ -998,7 +999,7 @@ public class BinaryParser extends BinaryStreamParser {
                 for (int index = 0; index != segmentLength; ++index) {
                     final int functionIndex = readDeclaredFunctionIndex();
                     final WasmFunction function = symbolTable.function(functionIndex);
-                    table.initialize(offsetAddress + index, function);
+                    table.set(offsetAddress + index, function);
                 }
             }
         }

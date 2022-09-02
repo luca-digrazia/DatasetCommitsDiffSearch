@@ -96,13 +96,13 @@ public final class WasmCodeEntry {
 
     private static FrameSlotKind frameSlotKind(byte valueType) {
         switch (valueType) {
-            case WasmType.I32_TYPE:
+            case ValueTypes.I32_TYPE:
                 return FrameSlotKind.Int;
-            case WasmType.I64_TYPE:
+            case ValueTypes.I64_TYPE:
                 return FrameSlotKind.Long;
-            case WasmType.F32_TYPE:
+            case ValueTypes.F32_TYPE:
                 return FrameSlotKind.Float;
-            case WasmType.F64_TYPE:
+            case ValueTypes.F64_TYPE:
                 return FrameSlotKind.Double;
             default:
                 Assert.fail(String.format("Unknown value type: 0x%02X", valueType));

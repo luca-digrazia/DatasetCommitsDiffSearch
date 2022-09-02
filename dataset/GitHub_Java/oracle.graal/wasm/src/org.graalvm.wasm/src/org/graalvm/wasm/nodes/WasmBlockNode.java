@@ -234,8 +234,8 @@ import org.graalvm.wasm.ValueTypes;
 import org.graalvm.wasm.WasmCodeEntry;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmFunction;
-import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmLanguage;
+import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.exception.WasmTrap;
 import org.graalvm.wasm.memory.WasmMemory;
@@ -278,10 +278,10 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
     @Children private Node[] children;
 
-    public WasmBlockNode(WasmInstance wasmInstance, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, byte continuationTypeId, int initialStackPointer,
-                         int initialByteConstantOffset, int initialIntConstantOffset, int initialLongConstantOffset, int initialBranchTableOffset,
-                         int initialProfileOffset) {
-        super(wasmInstance, codeEntry, -1);
+    public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, byte continuationTypeId, int initialStackPointer,
+                    int initialByteConstantOffset, int initialIntConstantOffset, int initialLongConstantOffset, int initialBranchTableOffset,
+                    int initialProfileOffset) {
+        super(wasmModule, codeEntry, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
         this.continuationTypeId = continuationTypeId;
@@ -514,21 +514,15 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     // but since we are returning, it does not really matter.
 
                     int returnTypeLength = table[0];
+                    int unwindCounter = table[1 + 2 * index];
+                    int continuationStackPointer = table[1 + 2 * index + 1];
+                    trace("br_table, target = %d", unwindCounter);
 
-                    for (int i = 0; i < (table.length - 1) / 2; ++i) {
-                        if (i == index) {
-                            int unwindCounter = table[1 + 2 * i];
-                            int continuationStackPointer = table[1 + 2 * i + 1];
-                            trace("br_table, target = %d", unwindCounter);
+                    // Populate the stack with the return values of the current block (the one we
+                    // are escaping from).
+                    unwindStack(frame, stackPointer, continuationStackPointer, returnTypeLength);
 
-                            // Populate the stack with the return values of the current block (the
-                            // one we are escaping from).
-                            unwindStack(frame, stackPointer, continuationStackPointer, returnTypeLength);
-
-                            return unwindCounter;
-                        }
-                    }
-                    throw new WasmExecutionException(this, "Should not reach here");
+                    return unwindCounter;
                 }
                 case RETURN: {
                     // A return statement causes the termination of the current function, i.e.
@@ -2450,8 +2444,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             long value = pop(frame, stackPointer + i - 1);
             push(frame, continuationStackPointer + i, value);
         }
-        for (int i = continuationStackPointer + returnLength; i < stackPointer; ++i) {
-            pop(frame, i);
+        // This check will be removed in the next PR which makes continuationStackPointer always
+        // constants by improving the BR_TABLE implementation.
+        if (CompilerDirectives.isPartialEvaluationConstant(continuationStackPointer)) {
+            for (int i = continuationStackPointer + returnLength; i < stackPointer; ++i) {
+                pop(frame, i);
+            }
         }
     }
 
@@ -2480,7 +2478,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     private int unsignedIntConstant(int offset, int intConstantOffset) {
-        switch (module().storeConstantsPolicy()) {
+        switch (module().storeConstantsPolicy) {
             case ALL:
                 return codeEntry().intConstant(intConstantOffset);
             case LARGE_ONLY:
@@ -2493,7 +2491,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     private int signedIntConstant(int offset, int intConstantOffset) {
-        switch (module().storeConstantsPolicy()) {
+        switch (module().storeConstantsPolicy) {
             case ALL:
                 return codeEntry().intConstant(intConstantOffset);
             case LARGE_ONLY:
@@ -2511,7 +2509,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     public long signedLongConstant(int offset, int longConstantOffset) {
-        switch (module().storeConstantsPolicy()) {
+        switch (module().storeConstantsPolicy) {
             case ALL:
                 return codeEntry().longConstant(longConstantOffset);
             case LARGE_ONLY:
@@ -2529,7 +2527,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     private int offsetDelta(int offset, int byteConstantOffset) {
-        switch (module().storeConstantsPolicy()) {
+        switch (module().storeConstantsPolicy) {
             case ALL:
                 return codeEntry().byteConstant(byteConstantOffset);
             case LARGE_ONLY:
@@ -2554,7 +2552,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     private int constantDelta(int offset) {
-        switch (module().storeConstantsPolicy()) {
+        switch (module().storeConstantsPolicy) {
             case ALL:
                 return 1;
             case LARGE_ONLY:
