@@ -599,7 +599,7 @@ public class AnalysisUniverse implements Universe {
         }
     }
 
-    public static Set<AnalysisMethod> getMethodImplementations(BigBang bb, AnalysisMethod method) {
+    public Set<AnalysisMethod> getMethodImplementations(BigBang bb, AnalysisMethod method) {
         Set<AnalysisMethod> implementations = new LinkedHashSet<>();
         if (method.wrapped.canBeStaticallyBound() || method.isConstructor()) {
             if (method.isImplementationInvoked()) {
@@ -616,8 +616,7 @@ public class AnalysisUniverse implements Universe {
         return implementations;
     }
 
-    private static boolean collectMethodImplementations(AnalysisMethod method, AnalysisType holder, Set<AnalysisMethod> implementations) {
-        assert holder.subTypes != null : holder;
+    private boolean collectMethodImplementations(AnalysisMethod method, AnalysisType holder, Set<AnalysisMethod> implementations) {
         boolean holderOrSubtypeInstantiated = holder.isInstantiated();
         for (AnalysisType subClass : holder.subTypes) {
             holderOrSubtypeInstantiated |= collectMethodImplementations(method, subClass, implementations);
@@ -642,15 +641,14 @@ public class AnalysisUniverse implements Universe {
         return holderOrSubtypeInstantiated;
     }
 
-    public static Set<AnalysisType> getSubtypes(AnalysisType baseType) {
+    public Set<AnalysisType> getSubtypes(AnalysisType baseType) {
         LinkedHashSet<AnalysisType> result = new LinkedHashSet<>();
         result.add(baseType);
         collectSubtypes(baseType, result);
         return result;
     }
 
-    private static void collectSubtypes(AnalysisType baseType, Set<AnalysisType> result) {
-        assert baseType.subTypes != null : baseType;
+    private void collectSubtypes(AnalysisType baseType, Set<AnalysisType> result) {
         for (AnalysisType subType : baseType.subTypes) {
             if (result.contains(subType)) {
                 continue;

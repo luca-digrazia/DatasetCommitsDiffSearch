@@ -90,9 +90,12 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
     private final AnalysisType declaringClass;
     private final AnalysisType fieldType;
 
+    private final AnalysisUniverse universe;
+
     public AnalysisField(AnalysisUniverse universe, ResolvedJavaField wrappedField) {
         assert !wrappedField.isInternal();
 
+        this.universe = universe;
         this.position = -1;
         this.isUnsafeAccessed = new AtomicBoolean();
         this.unsafeFrozenTypeState = new AtomicBoolean();
@@ -255,11 +258,11 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
         }
     }
 
-    public void registerAsUnsafeAccessed(AnalysisUniverse universe) {
-        registerAsUnsafeAccessed(universe, DefaultUnsafePartition.get());
+    public void registerAsUnsafeAccessed() {
+        registerAsUnsafeAccessed(DefaultUnsafePartition.get());
     }
 
-    public void registerAsUnsafeAccessed(AnalysisUniverse universe, UnsafePartitionKind partitionKind) {
+    public void registerAsUnsafeAccessed(UnsafePartitionKind partitionKind) {
 
         /*
          * A field can potentially be registered as unsafe accessed multiple times. This is
