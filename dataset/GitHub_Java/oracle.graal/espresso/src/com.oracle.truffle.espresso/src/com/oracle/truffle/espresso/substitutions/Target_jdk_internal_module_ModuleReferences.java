@@ -51,13 +51,9 @@ public class Target_jdk_internal_module_ModuleReferences {
         // check if one of our injected boot modules and patch location if so
         String hostName = getModuleName(attrs, meta);
         if (Target_jdk_internal_module_ModuleLoaderMap.HOTSWAP_MODULE_NAME.equals(hostName)) {
-            if (meta.getContext().JDWPOptions != null) { // only patch when feature is enabled
-                return (StaticObject) original.call(attrs, patcher, getPatchedPath(meta, "hotswap.jar"));
-            }
+            return (StaticObject) original.call(attrs, patcher, getPatchedPath(meta, "hotswap.jar"));
         } else if (Target_jdk_internal_module_ModuleLoaderMap.POLYGLOT_MODULE_NAME.equals(hostName)) {
-            if (meta.getContext().Polyglot) { // only patch when feature is enabled
-                return (StaticObject) original.call(attrs, patcher, getPatchedPath(meta, "polyglot.jar"));
-            }
+            return (StaticObject) original.call(attrs, patcher, getPatchedPath(meta, "polyglot.jar"));
         }
         return (StaticObject) original.call(attrs, patcher, path);
     }
