@@ -22,23 +22,24 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.hotspot.meta;
+package org.graalvm.compiler.nodes.spi;
 
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
-import org.graalvm.compiler.hotspot.nodes.type.KlassPointerStamp;
-import org.graalvm.compiler.hotspot.nodes.type.MethodPointerStamp;
-import org.graalvm.compiler.nodes.spi.StampProvider;
+import org.graalvm.compiler.nodes.extended.LoadHubNode;
 
-public class HotSpotStampProvider implements StampProvider {
+/**
+ * Provides a capability for creating platform dependent stamps.
+ */
+public interface StampProvider {
 
-    @Override
-    public AbstractPointerStamp createHubStamp(ObjectStamp object) {
-        return KlassPointerStamp.klassNonNull();
-    }
+    /**
+     * Create the stamp of the {@link LoadHubNode hub} of an object.
+     */
+    AbstractPointerStamp createHubStamp(ObjectStamp object);
 
-    @Override
-    public AbstractPointerStamp createMethodStamp() {
-        return MethodPointerStamp.methodNonNull();
-    }
+    /**
+     * Create the stamp of a pointer to a method.
+     */
+    AbstractPointerStamp createMethodStamp();
 }

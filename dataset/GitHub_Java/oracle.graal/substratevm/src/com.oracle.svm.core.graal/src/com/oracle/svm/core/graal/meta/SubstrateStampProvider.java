@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,23 +22,35 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.hotspot.meta;
+package com.oracle.svm.core.graal.meta;
+
+import static com.oracle.svm.core.util.VMError.unimplemented;
 
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
-import org.graalvm.compiler.hotspot.nodes.type.KlassPointerStamp;
-import org.graalvm.compiler.hotspot.nodes.type.MethodPointerStamp;
+import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 
-public class HotSpotStampProvider implements StampProvider {
+import com.oracle.svm.core.hub.DynamicHub;
+
+import jdk.vm.ci.meta.MetaAccessProvider;
+
+public class SubstrateStampProvider implements StampProvider {
+
+    private final AbstractPointerStamp hubStamp;
+
+    public SubstrateStampProvider(MetaAccessProvider metaAccess) {
+        this.hubStamp = StampFactory.objectNonNull(TypeReference.createExactTrusted(metaAccess.lookupJavaType(DynamicHub.class)));
+    }
 
     @Override
     public AbstractPointerStamp createHubStamp(ObjectStamp object) {
-        return KlassPointerStamp.klassNonNull();
+        return hubStamp;
     }
 
     @Override
     public AbstractPointerStamp createMethodStamp() {
-        return MethodPointerStamp.methodNonNull();
+        throw unimplemented();
     }
 }

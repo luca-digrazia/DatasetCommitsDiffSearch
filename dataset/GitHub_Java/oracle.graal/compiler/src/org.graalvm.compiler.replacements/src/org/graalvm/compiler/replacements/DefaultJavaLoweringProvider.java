@@ -579,22 +579,20 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
         final FixedWithNextNode predecessor = tool.lastFixedNode();
         final ValueNode value = loadHubOrNullNode.getValue();
-        AbstractPointerStamp stamp = (AbstractPointerStamp) value.stamp(NodeView.DEFAULT);
+        final MergeNode merge = graph.add(new MergeNode());
+        final AbstractPointerStamp hubStamp = (AbstractPointerStamp) loadHubOrNullNode.stamp(NodeView.DEFAULT);
+        ValueNode nullHub = ConstantNode.forConstant(hubStamp.asAlwaysNull(), JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph);
+        ValueNode hub = createReadHub(graph, value, tool);
+        ValueNode[] values = new ValueNode[] {nullHub, hub};
+        final PhiNode hubPhi = graph.unique(new ValuePhiNode(hubStamp, merge, values));
         final LogicNode isNull = graph.addOrUniqueWithInputs(IsNullNode.create(value));
         final EndNode trueEnd = graph.add(new EndNode());
         final EndNode falseEnd = graph.add(new EndNode());
         final IfNode ifNode = graph.add(new IfNode(isNull, trueEnd, falseEnd, 0.5));
-        final MergeNode merge = graph.add(new MergeNode());
-        merge.addForwardEnd(trueEnd);
-        merge.addForwardEnd(falseEnd);
-        final AbstractPointerStamp hubStamp = (AbstractPointerStamp) loadHubOrNullNode.stamp(NodeView.DEFAULT);
-        ValueNode nullHub = ConstantNode.forConstant(hubStamp.asAlwaysNull(), JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph);
-        final ValueNode nonNullValue = graph.addOrUniqueWithInputs(PiNode.create(value, stamp.asNonNull(), ifNode.falseSuccessor()));
-        ValueNode hub = createReadHub(graph, nonNullValue, tool);
-        ValueNode[] values = new ValueNode[] {nullHub, hub};
-        final PhiNode hubPhi = graph.unique(new ValuePhiNode(hubStamp, merge, values));
         final FixedNode oldNext = predecessor.next();
         predecessor.setNext(ifNode);
+        merge.addForwardEnd(trueEnd);
+        merge.addForwardEnd(falseEnd);
         merge.setNext(oldNext);
         loadHubOrNullNode.replaceAtUsagesAndDelete(hubPhi);
     }
@@ -807,8 +805,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                     } else {
                         newObject = graph.add(createNewArrayFromVirtual(virtual, ConstantNode.forInt(entryCount, graph)));
                     }
-                    // The final STORE_STORE barrier will be emitted by finishAllocatedObjects
-                    newObject.clearEmitMemoryBarrier();
 
                     recursiveLowerings.add(newObject);
                     graph.addBeforeFixed(commit, newObject);
