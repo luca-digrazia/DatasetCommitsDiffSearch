@@ -121,7 +121,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
     }
 
     private static boolean inCI() {
-        final String prid = System.getenv("CONTINUOUS_INTEGRATION");
+        final String prid = System.getenv("PULL_REQUEST_ID");
         return prid != null;
     }
 
@@ -169,10 +169,8 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                     capturedStdout = new ByteArrayOutputStream();
                     System.setOut(new PrintStream(capturedStdout));
 
-                    final String argString = testCase.options().getProperty("argument");
-
                     // Execute benchmark.
-                    final Value result = argString == null ? mainFunction.execute() : mainFunction.execute(Integer.parseInt(argString));
+                    final Value result = mainFunction.execute();
 
                     // Save context state, and check that it's consistent with the previous one.
                     if (iterationNeedsStateCheck(i)) {
@@ -399,7 +397,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
             final int width = Integer.parseInt(output.split(" ")[1]);
             return width;
         } catch (IOException e) {
-            System.err.println("Could not retrieve terminal width: " + e.getMessage());
+            System.out.println("Could not retrieve terminal width: " + e.getMessage());
             return -1;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
