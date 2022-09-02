@@ -999,10 +999,6 @@ public abstract class InteropLibrary extends Library {
             this.delegate = delegate;
         }
 
-        private static boolean isMultiThreaded(Object receiver) {
-            return InteropAccessor.ACCESSOR.engineSupport().isMultiThreaded(receiver);
-        }
-
         @Override
         public boolean accepts(Object receiver) {
             assert preCondition(receiver);
@@ -1375,7 +1371,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 Object result = delegate.readMember(receiver, identifier);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
-                assert wasReadable || isMultiThreaded(receiver) : violationInvariant(receiver, identifier);
+                assert wasReadable : violationInvariant(receiver, identifier);
                 assert validReturn(receiver, result);
                 return result;
             } catch (InteropException e) {
@@ -1393,7 +1389,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 delegate.writeMember(receiver, identifier, value);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
-                assert wasWritable || isMultiThreaded(receiver) : violationInvariant(receiver, identifier);
+                assert wasWritable : violationInvariant(receiver, identifier);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof UnknownIdentifierException || e instanceof UnsupportedTypeException : violationPost(receiver, e);
                 throw e;
@@ -1408,7 +1404,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 delegate.removeMember(receiver, identifier);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
-                assert wasRemovable || isMultiThreaded(receiver) : violationInvariant(receiver, identifier);
+                assert wasRemovable : violationInvariant(receiver, identifier);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof UnknownIdentifierException : violationPost(receiver, e);
                 throw e;
@@ -1424,7 +1420,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 Object result = delegate.invokeMember(receiver, identifier, arguments);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
-                assert wasInvocable || isMultiThreaded(receiver) : violationInvariant(receiver, identifier);
+                assert wasInvocable : violationInvariant(receiver, identifier);
                 assert validReturn(receiver, result);
                 return result;
             } catch (InteropException e) {
@@ -1440,7 +1436,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 Object result = delegate.getMembers(receiver, internal);
                 assert validReturn(receiver, result);
-                assert isMultiThreaded(receiver) || assertMemberKeys(receiver, result, internal);
+                assert assertMemberKeys(receiver, result, internal);
                 return result;
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException : violationPost(receiver, e);
@@ -1484,7 +1480,7 @@ public abstract class InteropLibrary extends Library {
             assert validArgument(receiver, identifier);
             boolean result = delegate.hasMemberReadSideEffects(receiver, identifier);
             assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
-            assert !result || (delegate.isMemberReadable(receiver, identifier) || isMultiThreaded(receiver)) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isMemberReadable(receiver, identifier) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -1494,7 +1490,7 @@ public abstract class InteropLibrary extends Library {
             assert validArgument(receiver, identifier);
             boolean result = delegate.hasMemberWriteSideEffects(receiver, identifier);
             assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
-            assert !result || (delegate.isMemberWritable(receiver, identifier) || isMultiThreaded(receiver)) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isMemberWritable(receiver, identifier) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -1565,7 +1561,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 Object result = delegate.readArrayElement(receiver, index);
                 assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
-                assert wasReadable || isMultiThreaded(receiver) : violationInvariant(receiver, index);
+                assert wasReadable : violationInvariant(receiver, index);
                 assert validReturn(receiver, result);
                 return result;
             } catch (InteropException e) {
@@ -1582,7 +1578,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 delegate.writeArrayElement(receiver, index, value);
                 assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
-                assert wasWritable || isMultiThreaded(receiver) : violationInvariant(receiver, index);
+                assert wasWritable : violationInvariant(receiver, index);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof UnsupportedTypeException || e instanceof InvalidArrayIndexException : violationPost(receiver, e);
                 throw e;
@@ -1596,7 +1592,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 delegate.removeArrayElement(receiver, index);
                 assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
-                assert wasRemovable || isMultiThreaded(receiver) : violationInvariant(receiver, index);
+                assert wasRemovable : violationInvariant(receiver, index);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof InvalidArrayIndexException : violationPost(receiver, e);
                 throw e;
