@@ -204,7 +204,6 @@ public final class Function implements ParserListener {
         scope.exitLocalScope();
     }
 
-    @SuppressWarnings("fallthrough")
     @Override
     public void record(RecordBuffer buffer) {
         int opCode = buffer.getId();
