@@ -71,6 +71,7 @@ import com.oracle.svm.core.util.UnsignedUtils;
  * </ul>
  */
 public final class CardTable {
+
     private static final int BYTES_COVERED_BY_ENTRY = 512;
 
     private static final int ENTRY_SIZE_BYTES = 1;
@@ -157,7 +158,7 @@ public final class CardTable {
      * {@link #getBytesCoveredByEntry} 8 so there's at most one object per card to weed out
      * ambiguous marked cards.
      */
-    static boolean verify(Pointer ctStart, Pointer fotStart, Pointer objectsStart, Pointer objectsLimit) {
+    protected static boolean verify(Pointer ctStart, Pointer fotStart, Pointer objectsStart, Pointer objectsLimit) {
         final Log trace = Log.noopLog().string("[CardTable.verify: ");
         trace.string("  ctStart: ").hex(ctStart).string("  fotStart: ").hex(fotStart).string("  objectsStart: ").hex(objectsStart).string("  objectsLimit: ").hex(objectsLimit).newline();
         if (!verifyCleanCards(ctStart, fotStart, objectsStart, objectsLimit)) {
@@ -286,7 +287,7 @@ public final class CardTable {
                         witness.string("  array length: ").signed(KnownIntrinsics.readArrayLength(obj));
                     }
                     witness.newline();
-                    HeapChunk.Header<?> objChunk = AlignedHeapChunk.getEnclosingChunk(obj);
+                    HeapChunk.Header<?> objChunk = AlignedHeapChunk.getEnclosingAlignedHeapChunk(obj);
                     witness.string("  objChunk: ").hex(objChunk).string("  objChunk space: ").string(objChunk.getSpace().getName()).string("  contains young: ").bool(containsYoung).newline();
                     /* Repeat the search for old-to-young references, this time as a witness. */
                     getReferenceToYoungObjectVisitor().witnessReferenceToYoungObject(obj);
@@ -329,10 +330,11 @@ public final class CardTable {
         return true;
     }
 
-    static class ReferenceToYoungObjectVisitor implements ObjectVisitor {
+    protected static class ReferenceToYoungObjectVisitor implements ObjectVisitor {
+
         private final ReferenceToYoungObjectReferenceVisitor visitor;
 
-        ReferenceToYoungObjectVisitor(ReferenceToYoungObjectReferenceVisitor visitor) {
+        protected ReferenceToYoungObjectVisitor(ReferenceToYoungObjectReferenceVisitor visitor) {
             this.visitor = visitor;
         }
 
@@ -367,7 +369,7 @@ public final class CardTable {
     }
 
     /** Visit an object reference and return false if it is a reference to the young space. */
-    static class ReferenceToYoungObjectReferenceVisitor implements ObjectReferenceVisitor {
+    protected static class ReferenceToYoungObjectReferenceVisitor implements ObjectReferenceVisitor {
 
         /** Have I found a reference to a young object yet? */
         private boolean found;

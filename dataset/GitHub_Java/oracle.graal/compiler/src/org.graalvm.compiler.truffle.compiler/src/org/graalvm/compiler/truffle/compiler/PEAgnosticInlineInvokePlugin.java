@@ -61,7 +61,6 @@ public final class PEAgnosticInlineInvokePlugin implements InlineInvokePlugin {
                 GraalError.shouldNotReachHere("The direct call node does not resolve to a constant!");
             }
             lastDirectCallNode = (JavaConstant) arg0.asConstant();
-            return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
         }
         if (original.equals(partialEvaluator.callIndirectMethod)) {
             indirectCall = true;
@@ -71,7 +70,7 @@ public final class PEAgnosticInlineInvokePlugin implements InlineInvokePlugin {
 
     @Override
     public void notifyNotInlined(GraphBuilderContext b, ResolvedJavaMethod original, Invoke invoke) {
-        if (original.equals(partialEvaluator.callDirectMethod)) {
+        if (original.equals(partialEvaluator.callBoundary)) {
             if (lastDirectCallNode == null) {
                 if (indirectCall) {
                     indirectCall = false;

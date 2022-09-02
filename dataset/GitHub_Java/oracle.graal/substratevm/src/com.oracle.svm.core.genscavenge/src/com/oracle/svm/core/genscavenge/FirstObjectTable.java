@@ -115,6 +115,7 @@ import com.oracle.svm.core.util.UnsignedUtils;
  * Implementation note: Table entries are bytes but converted to and from ints with bounds checks.
  */
 public final class FirstObjectTable {
+
     /**
      * The number of bytes of memory covered by an entry.
      *
@@ -171,17 +172,17 @@ public final class FirstObjectTable {
     private FirstObjectTable() {
     }
 
-    static Pointer initializeTableToLimit(Pointer table, Pointer tableLimit) {
+    protected static Pointer initializeTableToLimit(Pointer table, Pointer tableLimit) {
         final UnsignedWord indexLimit = FirstObjectTable.tableOffsetToIndex(tableLimit.subtract(table));
         return FirstObjectTable.initializeTableToIndex(table, indexLimit);
     }
 
-    static boolean isUninitializedIndex(Pointer table, UnsignedWord index) {
+    protected static boolean isUninitializedIndex(Pointer table, UnsignedWord index) {
         final int entry = getEntryAtIndex(table, index);
         return isUninitializedEntry(entry);
     }
 
-    static void setTableForObject(Pointer table, Pointer memory, Pointer start, Pointer end) {
+    protected static void setTableForObject(Pointer table, Pointer memory, Pointer start, Pointer end) {
         assert VMOperation.isGCInProgress() : "Should only be called from the collector.";
         setTableForObjectUnchecked(table, memory, start, end);
     }
@@ -254,7 +255,7 @@ public final class FirstObjectTable {
      * @param index The index into the first object table.
      * @return A Pointer to first object that could be precisely marked at this index.
      */
-    static Pointer getPreciseFirstObjectPointer(Pointer tableStart, Pointer memoryStart, Pointer memoryLimit, UnsignedWord index) {
+    protected static Pointer getPreciseFirstObjectPointer(Pointer tableStart, Pointer memoryStart, Pointer memoryLimit, UnsignedWord index) {
         final Log trace = Log.noopLog().string("[FirstObjectTable.getPreciseFirstObjectPointer:").string("  index: ").unsigned(index);
         UnsignedWord currentIndex = index;
         int currentEntry = getEntryAtIndex(tableStart, currentIndex);
@@ -302,7 +303,7 @@ public final class FirstObjectTable {
      *         object that crosses onto this card either also crosses off of this card, or runs up
      *         to the memory limit.
      */
-    static Pointer getImpreciseFirstObjectPointer(Pointer tableStart, Pointer memoryStart, Pointer memoryLimit, UnsignedWord index) {
+    protected static Pointer getImpreciseFirstObjectPointer(Pointer tableStart, Pointer memoryStart, Pointer memoryLimit, UnsignedWord index) {
         final Log trace = Log.noopLog().string("[FirstObjectTable.getImpreciseFirstObjectPointer:");
         trace.string("  tableStart: ").hex(tableStart).string("  memoryStart: ").hex(memoryStart).string("  memoryLimit: ").hex(memoryLimit).string("  index: ").unsigned(index).newline();
         final Pointer preciseFirstPointer = getPreciseFirstObjectPointer(tableStart, memoryStart, memoryLimit, index);
@@ -324,7 +325,7 @@ public final class FirstObjectTable {
     }
 
     /** Walk the table checking I can find the start of each object that crosses onto an entry. */
-    static boolean verify(Pointer tableStart, Pointer memoryStart, Pointer memoryLimit) {
+    protected static boolean verify(Pointer tableStart, Pointer memoryStart, Pointer memoryLimit) {
         final Log trace = HeapImpl.getHeapImpl().getHeapVerifier().getTraceLog().string("[FirstObjectTable.verify:");
         trace.string("  tableStart: ").hex(tableStart).string("  memoryStart: ").hex(memoryStart).string("  memoryLimit: ").hex(memoryLimit);
         final UnsignedWord indexLimit = getTableSizeForMemoryRange(memoryStart, memoryLimit);
@@ -371,7 +372,7 @@ public final class FirstObjectTable {
         return true;
     }
 
-    static UnsignedWord getTableSizeForMemoryRange(Pointer memoryStart, Pointer memoryLimit) {
+    protected static UnsignedWord getTableSizeForMemoryRange(Pointer memoryStart, Pointer memoryLimit) {
         assert memoryStart.belowOrEqual(memoryLimit) : "Pointers out of order";
         final UnsignedWord memorySize = memoryLimit.subtract(memoryStart);
         return getTableSizeForMemorySize(memorySize);

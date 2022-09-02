@@ -51,12 +51,13 @@ import com.oracle.svm.core.util.VMError;
  *
  * This visitor is used during GC and so it must be constructed during native image generation.
  */
-final class GreyToBlackObjectVisitor implements ObjectVisitor {
+public final class GreyToBlackObjectVisitor implements ObjectVisitor {
+
     private final DiagnosticReporter diagnosticReporter;
     private final GreyToBlackObjRefVisitor objRefVisitor;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    GreyToBlackObjectVisitor(final GreyToBlackObjRefVisitor greyToBlackObjRefVisitor) {
+    public GreyToBlackObjectVisitor(final GreyToBlackObjRefVisitor greyToBlackObjRefVisitor) {
         this.objRefVisitor = greyToBlackObjRefVisitor;
         if (DiagnosticReporter.getHistoryLength() > 0) {
             this.diagnosticReporter = new DiagnosticReporter();

@@ -32,9 +32,6 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.EncodedGraph;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
-import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
@@ -60,7 +57,7 @@ final class GraphManager {
         Entry entry = irCache.get(truffleAST);
         if (entry == null) {
             final PEAgnosticInlineInvokePlugin plugin = newPlugin();
-            final PartialEvaluator.Request request = newRequest(truffleAST, false);
+            final PartialEvaluator.Request request = newRequest(truffleAST);
             request.graph.getAssumptions().record(new TruffleAssumption(truffleAST.getNodeRewritingAssumptionConstant()));
             partialEvaluator.doGraphPE(request, plugin, graphCacheForInlining);
             entry = new Entry(request.graph, plugin.getInvokeToTruffleCallNode(), plugin.getIndirectInvokes());
@@ -69,12 +66,12 @@ final class GraphManager {
         return entry;
     }
 
-    private PartialEvaluator.Request newRequest(CompilableTruffleAST truffleAST, boolean finalize) {
+    private PartialEvaluator.Request newRequest(CompilableTruffleAST truffleAST) {
         return partialEvaluator.new Request(
                         rootRequest.options,
                         rootRequest.debug,
                         truffleAST,
-                        finalize ? partialEvaluator.getCallDirect() : partialEvaluator.inlineRootForCallTarget(truffleAST),
+                        partialEvaluator.inlineRootForCallTarget(truffleAST),
                         rootRequest.inliningPlan,
                         rootRequest.compilationId,
                         rootRequest.log,
@@ -93,18 +90,7 @@ final class GraphManager {
 
     UnmodifiableEconomicMap<Node, Node> doInline(Invoke invoke, StructuredGraph ir, CompilableTruffleAST truffleAST) {
         return InliningUtil.inline(invoke, ir, true, partialEvaluator.inlineRootForCallTarget(truffleAST),
-                        "cost-benefit analysis", AgnosticInliningPhase.class.toString());
-    }
-
-    void finalizeGraph(Invoke invoke, CompilableTruffleAST truffleAST) {
-        final PartialEvaluator.Request request = newRequest(truffleAST, true);
-        partialEvaluator.doGraphPE(request, new InlineInvokePlugin() {
-            @Override
-            public InlineInfo shouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
-                return PartialEvaluator.asInlineInfo(method);
-            }
-        }, EconomicMap.create());
-        InliningUtil.inline(invoke, request.graph, true, partialEvaluator.getCallInlined(), "finalization", AgnosticInliningPhase.class.toString());
+                        "cost-benefit analysis", "AgnosticInliningPhase");
     }
 
     static class Entry {

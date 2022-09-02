@@ -62,7 +62,7 @@ public abstract class CollectionPolicy {
 
     public abstract void nameToLog(Log log);
 
-    static Accounting getAccounting() {
+    static GCImpl.Accounting getAccounting() {
         return HeapImpl.getHeapImpl().getGCImpl().getAccounting();
     }
 
@@ -212,7 +212,7 @@ public abstract class CollectionPolicy {
         private static boolean voteOnMaximumSpace(Log trace) {
             final UnsignedWord youngSize = HeapPolicy.getMaximumYoungGenerationSize();
             final UnsignedWord oldInUse = getAccounting().getOldGenerationAfterChunkBytes();
-            final UnsignedWord lastPromotion = getAccounting().getLastCollectionPromotedChunkBytes();
+            final UnsignedWord lastPromotion = getAccounting().lastCollectionPromotedChunkBytes();
             final UnsignedWord expectedSize = youngSize.add(oldInUse).add(lastPromotion);
             final UnsignedWord maxHeapSize = HeapPolicy.getMaximumHeapSize();
             final boolean vote = maxHeapSize.belowThan(expectedSize);

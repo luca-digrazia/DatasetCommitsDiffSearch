@@ -25,8 +25,6 @@
 package com.oracle.svm.core.genscavenge;
 
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
@@ -54,12 +52,13 @@ import com.oracle.svm.core.thread.VMThreads;
  * {@link HeapPolicy#getMinimumHeapSize()} chunks are saved in an unused chunk list. Memory for
  * unaligned chunks is released immediately.
  */
-final class HeapChunkProvider {
+class HeapChunkProvider {
+
     /**
      * The head of the linked list of unused aligned chunks. Chunks are chained using
      * {@link Header#getNext()}.
      */
-    private final UninterruptibleUtils.AtomicPointer<AlignedHeader> unusedAlignedChunks = new UninterruptibleUtils.AtomicPointer<>();
+    private final UninterruptibleUtils.AtomicPointer<AlignedHeader> unusedAlignedChunks;
 
     /**
      * The number of chunks in the {@link #unusedAlignedChunks} list.
@@ -68,7 +67,7 @@ final class HeapChunkProvider {
      * head}, but this is OK because we only need the number of chunks for policy code (to avoid
      * running down the list and counting the number of chunks).
      */
-    private final AtomicUnsigned bytesInUnusedAlignedChunks = new AtomicUnsigned();
+    private final AtomicUnsigned bytesInUnusedAlignedChunks;
 
     /**
      * The time of the first allocation, as the basis for computing deltas.
@@ -78,12 +77,13 @@ final class HeapChunkProvider {
      */
     private long firstAllocationTime;
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    HeapChunkProvider() {
+    protected HeapChunkProvider() {
+        unusedAlignedChunks = new UninterruptibleUtils.AtomicPointer<>();
+        bytesInUnusedAlignedChunks = new AtomicUnsigned();
     }
 
     @Fold
-    static HeapChunkProvider get() {
+    protected static HeapChunkProvider get() {
         return HeapImpl.getHeapImpl().chunkProvider;
     }
 
@@ -116,7 +116,7 @@ final class HeapChunkProvider {
             initializeChunk(result, chunkSize);
             resetAlignedHeapChunk(result);
         }
-        assert result.getTop().equal(AlignedHeapChunk.getObjectsStart(result));
+        assert result.getTop().equal(AlignedHeapChunk.getAlignedHeapChunkStart(result));
         assert result.getEnd().equal(HeapChunk.asPointer(result).add(chunkSize));
 
         if (HeapPolicy.getZapProducedHeapChunks()) {
@@ -283,14 +283,14 @@ final class HeapChunkProvider {
     }
 
     private static void resetAlignedHeapChunk(AlignedHeader chunk) {
-        resetChunkHeader(chunk, AlignedHeapChunk.getObjectsStart(chunk));
+        resetChunkHeader(chunk, AlignedHeapChunk.getAlignedHeapChunkStart(chunk));
 
         CardTable.cleanTableToPointer(AlignedHeapChunk.getCardTableStart(chunk), AlignedHeapChunk.getCardTableLimit(chunk));
         FirstObjectTable.initializeTableToLimit(AlignedHeapChunk.getFirstObjectTableStart(chunk), AlignedHeapChunk.getFirstObjectTableLimit(chunk));
     }
 
     private static void resetUnalignedChunk(UnalignedHeader result) {
-        resetChunkHeader(result, UnalignedHeapChunk.getObjectStart(result));
+        resetChunkHeader(result, UnalignedHeapChunk.getUnalignedStart(result));
 
         CardTable.cleanTableToPointer(UnalignedHeapChunk.getCardTableStart(result), UnalignedHeapChunk.getCardTableLimit(result));
     }
@@ -304,7 +304,7 @@ final class HeapChunkProvider {
         }
     }
 
-    Log report(Log log, boolean traceHeapChunks) {
+    protected Log report(Log log, boolean traceHeapChunks) {
         log.string("[Unused:").indent(true);
         log.string("aligned: ").signed(bytesInUnusedAlignedChunks.get())
                         .string("/")
@@ -313,7 +313,8 @@ final class HeapChunkProvider {
             if (unusedAlignedChunks.get().isNonNull()) {
                 log.newline().string("aligned chunks:").redent(true);
                 for (AlignedHeapChunk.AlignedHeader aChunk = unusedAlignedChunks.get(); aChunk.isNonNull(); aChunk = aChunk.getNext()) {
-                    log.newline().hex(aChunk).string(" (").hex(AlignedHeapChunk.getObjectsStart(aChunk)).string("-").hex(aChunk.getTop()).string(")");
+                    log.newline().hex(aChunk)
+                                    .string(" (").hex(AlignedHeapChunk.getAlignedHeapChunkStart(aChunk)).string("-").hex(aChunk.getTop()).string(")");
                 }
                 log.redent(false);
             }
@@ -352,7 +353,7 @@ final class HeapChunkProvider {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    void tearDown() {
+    public final void tearDown() {
         freeAlignedChunkList(unusedAlignedChunks.get());
     }
 

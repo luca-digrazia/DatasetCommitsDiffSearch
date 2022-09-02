@@ -75,13 +75,12 @@ import com.oracle.svm.core.util.UnsignedUtils;
  * +===============+-------+--------+----------------------+
  * </pre>
  *
- * The CardTable and the FirstObjectTable and the start of the Objects are just computed addresses.
- * The two tables each need the same fraction of the size of the space for Objects. I conservatively
- * compute them as a fraction of the size of the entire chunk.
+ * The HeapChunk fields can be accessed via methods from HeapChunk, or more type-specifically via
+ * methods defined here. But the CardTable and the FirstObjectTable and the start of the Objects are
+ * just computed addresses. The two tables each need a fraction of the size of the space for
+ * Objects, but I conservatively compute them as a fraction of the size of the entire chunk.
  */
-public final class AlignedHeapChunk {
-    private AlignedHeapChunk() { // all static
-    }
+public class AlignedHeapChunk extends HeapChunk {
 
     /**
      * Additional fields beyond what is in {@link HeapChunk.Header}.
@@ -94,63 +93,77 @@ public final class AlignedHeapChunk {
     }
 
     static Pointer getCardTableStart(AlignedHeader that) {
-        return HeapChunk.asPointer(that).add(getCardTableStartOffset());
+        return asPointer(that).add(getCardTableStartOffset());
     }
 
     static Pointer getCardTableLimit(AlignedHeader that) {
-        return HeapChunk.asPointer(that).add(getCardTableLimitOffset());
+        return asPointer(that).add(getCardTableLimitOffset());
     }
 
     static Pointer getFirstObjectTableStart(AlignedHeader that) {
-        return HeapChunk.asPointer(that).add(getFirstObjectTableStartOffset());
+        return asPointer(that).add(getFirstObjectTableStartOffset());
     }
 
     static Pointer getFirstObjectTableLimit(AlignedHeader that) {
-        return HeapChunk.asPointer(that).add(getFirstObjectTableLimitOffset());
+        return asPointer(that).add(getFirstObjectTableLimitOffset());
     }
 
     static Pointer getObjectsStart(AlignedHeader that) {
-        return HeapChunk.asPointer(that).add(getObjectsStartOffset());
+        return asPointer(that).add(getObjectsStartOffset());
     }
 
-    /** Allocate uninitialized memory within this AlignedHeapChunk. */
+    static Pointer getAlignedHeapChunkStart(AlignedHeader that) {
+        return getObjectsStart(that);
+    }
+
+    /**
+     * Allocate memory within this AlignedHeapChunk. No initialization of the memory happens here.
+     */
     static Pointer allocateMemory(AlignedHeader that, UnsignedWord size) {
         Pointer result = WordFactory.nullPointer();
-        final UnsignedWord available = HeapChunk.availableObjectMemory(that);
+        final UnsignedWord available = availableObjectMemory(that);
         if (size.belowOrEqual(available)) {
             result = that.getTop();
             final Pointer newTop = result.add(size);
-            HeapChunk.setTopCarefully(that, newTop);
+            setTopCarefully(that, newTop);
         }
         return result;
     }
 
-    static UnsignedWord getCommittedObjectMemory(AlignedHeader that) {
-        return that.getEnd().subtract(getObjectsStart(that));
+    static UnsignedWord committedObjectMemoryOfAlignedHeapChunk(AlignedHeader that) {
+        return that.getEnd().subtract(getAlignedHeapChunkStart(that));
     }
 
-    static AlignedHeader getEnclosingChunk(Object obj) {
+    static AlignedHeader getEnclosingAlignedHeapChunk(Object obj) {
         final Pointer ptr = Word.objectToUntrackedPointer(obj);
-        return getEnclosingChunkFromPointer(ptr);
+        return getEnclosingAlignedHeapChunkFromPointer(ptr);
     }
 
-    static AlignedHeader getEnclosingChunkFromPointer(Pointer ptr) {
-        return (AlignedHeader) PointerUtils.roundDown(ptr, HeapPolicy.getAlignedHeapChunkAlignment());
+    static AlignedHeader getEnclosingAlignedHeapChunkFromPointer(Pointer ptr) {
+        final Pointer result = PointerUtils.roundDown(ptr, HeapPolicy.getAlignedHeapChunkAlignment());
+        return (AlignedHeader) result;
     }
 
-    static void cleanRememberedSet(AlignedHeader that) {
+    static void cleanRememberedSetOfAlignedHeapChunk(AlignedHeader that) {
+        final Log trace = Log.noopLog().string("[AlignedHeapChunk.cleanRememberedSet:");
+        trace.string("  that: ").hex(that);
         final Pointer cardTableStart = getCardTableStart(that);
-        final UnsignedWord indexLimit = getCardTableIndexLimitForCurrentTop(that);
+        final UnsignedWord indexLimit = getCardTableIndexLimitForCurrentTop(that, trace);
         CardTable.cleanTableToIndex(cardTableStart, indexLimit);
+        trace.string("]").newline();
     }
 
-    private static UnsignedWord getCardTableIndexLimitForCurrentTop(AlignedHeader that) {
-        UnsignedWord memorySize = that.getTop().subtract(getObjectsStart(that));
-        return CardTable.indexLimitForMemorySize(memorySize);
+    private static UnsignedWord getCardTableIndexLimitForCurrentTop(AlignedHeader that, Log trace) {
+        final Pointer objectsStart = getAlignedHeapChunkStart(that);
+        final Pointer objectsLimit = that.getTop();
+        final UnsignedWord memorySize = objectsLimit.subtract(objectsStart);
+        final UnsignedWord indexLimit = CardTable.indexLimitForMemorySize(memorySize);
+        trace.string("  objectsStart: ").hex(objectsStart).string("  objectsLimit: ").hex(objectsLimit).string("  indexLimit: ").unsigned(indexLimit);
+        return indexLimit;
     }
 
     @AlwaysInline("GC performance")
-    static void setUpRememberedSetForObject(AlignedHeader that, Object obj) {
+    static void setUpRememberedSetForObjectOfAlignedHeapChunk(AlignedHeader that, Object obj) {
         assert VMOperation.isGCInProgress() : "Should only be called from the collector.";
         assert !that.getSpace().isYoungSpace();
         /*
@@ -158,7 +171,7 @@ public final class AlignedHeapChunk {
          * to be set up.
          */
         final Pointer fotStart = getFirstObjectTableStart(that);
-        final Pointer memoryStart = getObjectsStart(that);
+        final Pointer memoryStart = getAlignedHeapChunkStart(that);
         final Pointer objStart = Word.objectToUntrackedPointer(obj);
         final Pointer objEnd = LayoutEncoding.getObjectEnd(obj);
         FirstObjectTable.setTableForObject(fotStart, memoryStart, objStart, objEnd);
@@ -173,20 +186,21 @@ public final class AlignedHeapChunk {
      * method.
      */
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.UNRESTRICTED, overridesCallers = true, reason = "Whitelisted because other ObjectVisitors are allowed to allocate.")
-    static void constructRememberedSet(AlignedHeader that) {
+    static void constructRememberedSetOfAlignedHeapChunk(AlignedHeader that) {
         final GCImpl.RememberedSetConstructor constructor = GCImpl.getGCImpl().getRememberedSetConstructor();
         constructor.initialize(that);
-        HeapChunk.walkObjectsFromInline(that, getObjectsStart(that), constructor);
+        walkObjectsFromInline(that, getAlignedHeapChunkStart(that), constructor);
         constructor.reset();
     }
 
     /**
-     * Dirty the card corresponding to the given Object. This has to be fast, because it is used by
-     * the post-write barrier.
+     * Dirty the card corresponding to the given Object.
+     *
+     * This has to be fast, because it is used by the post-write barrier.
      */
-    public static void dirtyCardForObject(Object object, boolean verifyOnly) {
+    public static void dirtyCardForObjectOfAlignedHeapChunk(Object object, boolean verifyOnly) {
         final Pointer objectPointer = Word.objectToUntrackedPointer(object);
-        final AlignedHeader chunk = getEnclosingChunkFromPointer(objectPointer);
+        final AlignedHeader chunk = getEnclosingAlignedHeapChunkFromPointer(objectPointer);
         final Pointer cardTableStart = getCardTableStart(chunk);
         final UnsignedWord index = getObjectIndex(chunk, objectPointer);
         if (verifyOnly) {
@@ -208,13 +222,9 @@ public final class AlignedHeapChunk {
         return CardTable.memoryOffsetToIndex(offset);
     }
 
-    static boolean walkObjects(AlignedHeader that, ObjectVisitor visitor) {
-        return HeapChunk.walkObjectsFrom(that, getObjectsStart(that), visitor);
-    }
-
-    @AlwaysInline("GC performance")
-    static boolean walkObjectsInline(AlignedHeader that, ObjectVisitor visitor) {
-        return HeapChunk.walkObjectsFromInline(that, getObjectsStart(that), visitor);
+    /** Walk the objects in the given chunk, starting from the first object. */
+    static boolean walkObjectsOfAlignedHeapChunk(AlignedHeader that, ObjectVisitor visitor) {
+        return walkObjectsFrom(that, getAlignedHeapChunkStart(that), visitor);
     }
 
     @Fold
@@ -275,16 +285,16 @@ public final class AlignedHeapChunk {
         return UnsignedUtils.roundUp(fotLimit, alignment);
     }
 
-    static boolean verify(AlignedHeader that) {
+    static boolean verifyAlignedHeapChunk(AlignedHeader that) {
         final Log trace = Log.noopLog().string("[AlignedHeapChunk.verify:");
         trace.string("  that: ").hex(that);
         boolean result = true;
-        if (result && !HeapChunk.verifyObjects(that, getObjectsStart(that))) {
+        if (result && !verifyObjects(that, getAlignedHeapChunkStart(that))) {
             result = false;
             final Log verifyLog = HeapImpl.getHeapImpl().getHeapVerifier().getWitnessLog().string("[AlignedHeapChunk.verify:");
             verifyLog.string("  identifier: ").hex(that).string("  superclass fails to verify]").newline();
         }
-        if (result && !verifyObjectHeaders(that)) {
+        if (result && !verifyHeaders(that)) {
             result = false;
             final Log verifyLog = HeapImpl.getHeapImpl().getHeapVerifier().getWitnessLog().string("[AlignedHeapChunk.verify:");
             verifyLog.string("  identifier: ").hex(that).string("  object headers fail to verify.]").newline();
@@ -300,9 +310,9 @@ public final class AlignedHeapChunk {
     }
 
     /** Verify that all the objects have headers that say they are aligned. */
-    private static boolean verifyObjectHeaders(AlignedHeader that) {
-        final Log trace = Log.noopLog().string("[AlignedHeapChunk.verifyObjectHeaders: ").string("  that: ").hex(that);
-        Pointer current = getObjectsStart(that);
+    private static boolean verifyHeaders(AlignedHeader that) {
+        final Log trace = Log.noopLog().string("[AlignedHeapChunk.verifyHeaders: ").string("  that: ").hex(that);
+        Pointer current = getAlignedHeapChunkStart(that);
         while (current.belowThan(that.getTop())) {
             trace.newline().string("  current: ").hex(current);
             final UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointer(current);
@@ -326,12 +336,12 @@ public final class AlignedHeapChunk {
         final HeapImpl heap = HeapImpl.getHeapImpl();
         final OldGeneration oldGen = heap.getOldGeneration();
         if (that.getSpace() == oldGen.getFromSpace()) {
-            if (!CardTable.verify(getCardTableStart(that), getFirstObjectTableStart(that), getObjectsStart(that), that.getTop())) {
+            if (!CardTable.verify(getCardTableStart(that), getFirstObjectTableStart(that), getAlignedHeapChunkStart(that), that.getTop())) {
                 final Log verifyLog = heap.getHeapVerifier().getWitnessLog().string("[AlignedHeapChunk.verifyRememberedSet:");
                 verifyLog.string("  card table fails to verify").string("]").newline();
                 return false;
             }
-            if (!FirstObjectTable.verify(getFirstObjectTableStart(that), getObjectsStart(that), that.getTop())) {
+            if (!FirstObjectTable.verify(getFirstObjectTableStart(that), getAlignedHeapChunkStart(that), that.getTop())) {
                 final Log verifyLog = heap.getHeapVerifier().getWitnessLog().string("[AlignedHeapChunk.verifyRememberedSet:");
                 verifyLog.string("  first object table fails to verify").string("]").newline();
                 return false;
@@ -341,13 +351,13 @@ public final class AlignedHeapChunk {
         return true;
     }
 
-    static boolean walkDirtyObjects(AlignedHeader that, ObjectVisitor visitor, boolean clean) {
-        final Log trace = Log.noopLog().string("[AlignedHeapChunk.walkDirtyObjects:");
+    static boolean walkDirtyObjectsOfAlignedHeapChunk(AlignedHeader that, ObjectVisitor visitor, boolean clean) {
+        final Log trace = Log.noopLog().string("[AlignedHeapChunk.walkDirtyObjectsOfAlignedHeapChunk:");
         trace.string("  that: ").hex(that).string("  clean: ").bool(clean);
         /* Iterate through the cards looking for dirty cards. */
         final Pointer cardTableStart = getCardTableStart(that);
         final Pointer fotStart = getFirstObjectTableStart(that);
-        final Pointer objectsStart = getObjectsStart(that);
+        final Pointer objectsStart = getAlignedHeapChunkStart(that);
         final Pointer objectsLimit = that.getTop();
         final UnsignedWord memorySize = objectsLimit.subtract(objectsStart);
         final UnsignedWord indexLimit = CardTable.indexLimitForMemorySize(memorySize);
@@ -412,7 +422,7 @@ public final class AlignedHeapChunk {
         trace.string("  that: ").hex(that);
         boolean result = true;
         final Pointer cardTableStart = getCardTableStart(that);
-        final UnsignedWord indexLimit = getCardTableIndexLimitForCurrentTop(that);
+        final UnsignedWord indexLimit = getCardTableIndexLimitForCurrentTop(that, trace);
         for (UnsignedWord index = WordFactory.zero(); index.belowThan(indexLimit); index = index.add(1)) {
             if (CardTable.isDirtyEntryAtIndex(cardTableStart, index)) {
                 result = false;
@@ -425,12 +435,12 @@ public final class AlignedHeapChunk {
     }
 
     @Fold
-    static MemoryWalker.HeapChunkAccess<AlignedHeapChunk.AlignedHeader> getMemoryWalkerAccess() {
+    public static MemoryWalker.HeapChunkAccess<AlignedHeapChunk.AlignedHeader> getMemoryWalkerAccess() {
         return ImageSingletons.lookup(AlignedHeapChunk.MemoryWalkerAccessImpl.class);
     }
 
     /** Methods for a {@link MemoryWalker} to access an aligned heap chunk. */
-    static final class MemoryWalkerAccessImpl extends HeapChunk.MemoryWalkerAccessImpl<AlignedHeapChunk.AlignedHeader> {
+    protected static final class MemoryWalkerAccessImpl extends HeapChunk.MemoryWalkerAccessImpl<AlignedHeapChunk.AlignedHeader> {
 
         @Platforms(Platform.HOSTED_ONLY.class)
         MemoryWalkerAccessImpl() {
@@ -443,7 +453,7 @@ public final class AlignedHeapChunk {
 
         @Override
         public UnsignedWord getAllocationStart(AlignedHeapChunk.AlignedHeader heapChunk) {
-            return getObjectsStart(heapChunk);
+            return AlignedHeapChunk.getAlignedHeapChunkStart(heapChunk);
         }
     }
 

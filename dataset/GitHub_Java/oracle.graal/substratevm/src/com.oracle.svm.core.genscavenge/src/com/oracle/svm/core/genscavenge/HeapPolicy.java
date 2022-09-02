@@ -45,9 +45,10 @@ import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 
 /** HeapPolicy contains policies for the parameters and behaviors of the heap and collector. */
-public final class HeapPolicy {
+public class HeapPolicy {
+
     static final long LARGE_ARRAY_THRESHOLD_SENTINEL_VALUE = 0;
-    static final int ALIGNED_HEAP_CHUNK_FRACTION_FOR_LARGE_ARRAY_THRESHOLD = 8;
+    private static final int ALIGNED_HEAP_CHUNK_FRACTION_FOR_LARGE_ARRAY_THRESHOLD = 8;
 
     /* Policy constants initialized from command line options during image build. */
     private final CollectOnAllocationPolicy collectOnAllocationPolicy;
@@ -311,11 +312,12 @@ public final class HeapPolicy {
         return WordFactory.unsigned(HeapPolicyOptions.AllocationBeforePhysicalMemorySize.getValue());
     }
 
-    HeapPolicy.HintGCPolicy getUserRequestedGCPolicy() {
+    public HeapPolicy.HintGCPolicy getUserRequestedGCPolicy() {
         return userRequestedGCPolicy;
     }
 
     public static final class TestingBackDoor {
+
         private TestingBackDoor() {
         }
 
@@ -331,13 +333,13 @@ public final class HeapPolicy {
         void maybeCauseCollection();
     }
 
-    static final class NeverCollectOnAllocation implements CollectOnAllocationPolicy {
+    static class NeverCollectOnAllocation implements CollectOnAllocationPolicy {
         @Override
         public void maybeCauseCollection() {
         }
     }
 
-    static final class AlwaysCollectOnAllocation implements CollectOnAllocationPolicy {
+    static class AlwaysCollectOnAllocation implements CollectOnAllocationPolicy {
         @Override
         public void maybeCauseCollection() {
             HeapImpl.getHeapImpl().getGCImpl().collectWithoutAllocating(GenScavengeGCCause.OnAllocationAlways);
@@ -345,7 +347,7 @@ public final class HeapPolicy {
     }
 
     /** A policy that causes collections if enough young generation allocation has happened. */
-    static final class SometimesCollectOnAllocation implements CollectOnAllocationPolicy {
+    static class SometimesCollectOnAllocation implements CollectOnAllocationPolicy {
         @Override
         public void maybeCauseCollection() {
             if (youngUsedBytes.get().aboveOrEqual(getMaximumYoungGenerationSize())) {
@@ -358,7 +360,7 @@ public final class HeapPolicy {
         void maybeCauseCollection(GCCause cause);
     }
 
-    public static final class AlwaysCollectCompletely implements HeapPolicy.HintGCPolicy {
+    public static class AlwaysCollectCompletely implements HeapPolicy.HintGCPolicy {
         @Override
         public void maybeCauseCollection(GCCause cause) {
             HeapImpl.getHeapImpl().getGC().collectCompletely(cause);
@@ -366,7 +368,7 @@ public final class HeapPolicy {
     }
 
     /** Collect if bytes allocated since last collection exceed a threshold. */
-    public static final class ScepticallyCollect implements HeapPolicy.HintGCPolicy {
+    public static class ScepticallyCollect implements HeapPolicy.HintGCPolicy {
         @Override
         public void maybeCauseCollection(GCCause cause) {
             if (youngUsedBytes.get().aboveOrEqual(collectScepticallyThreshold())) {

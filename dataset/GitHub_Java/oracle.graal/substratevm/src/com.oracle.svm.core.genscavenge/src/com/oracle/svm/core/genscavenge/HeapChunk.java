@@ -48,11 +48,8 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 
 /**
- * The common structure of the chunks of memory which make up the heap. HeapChunks are aggregated
- * into {@linkplain Space spaces}. A specific "subtype" of chunk should be accessed via its own
- * accessor class, such as {@link AlignedHeapChunk}, which provides methods that are specific to the
- * type of chunk and its layout. (Such classes intentionally do not subclass {@link HeapChunk} so to
- * not directly expose its methods.)
+ * HeapChunk is a "superclass" for the memory that makes up the Heap. HeapChunks are aggregated into
+ * {@linkplain Space spaces}.
  * <p>
  * A HeapChunk is raw memory with a {@linkplain Header} on the beginning that stores bookkeeping
  * information about the HeapChunk. HeapChunks do not have any instance methods: instead they have
@@ -76,9 +73,7 @@ import com.oracle.svm.core.option.HostedOptionKey;
  * HeapChunks are *not* examined for interior Object references by the collector, though the Objects
  * allocated within the HeapChunk are examined by the collector.
  */
-final class HeapChunk {
-    private HeapChunk() { // all static
-    }
+class HeapChunk {
 
     static class Options {
         @Option(help = "Number of bytes at the beginning of each heap chunk that are not used for payload data, i.e., can be freely used as metadata by the heap chunk provider.") //
@@ -180,14 +175,14 @@ final class HeapChunk {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static void setTopCarefully(Header<?> that, Pointer newTop) {
+    protected static void setTopCarefully(Header<?> that, Pointer newTop) {
         assert that.getTop().belowOrEqual(newTop) : "newTop too low.";
         assert newTop.belowOrEqual(that.getEnd()) : "newTop too high.";
         that.setTop(newTop);
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static Pointer asPointer(Header<?> that) {
+    protected static Pointer asPointer(Header<?> that) {
         return (Pointer) that;
     }
 
@@ -195,24 +190,25 @@ final class HeapChunk {
         assert !HeapImpl.getHeapImpl().isInImageHeap(obj) : "Must be checked before calling this method";
         assert !ObjectHeaderImpl.isPointerToForwardedObject(Word.objectToUntrackedPointer(obj)) : "Forwarded objects must be a pointer and not an object";
         if (ObjectHeaderImpl.isAlignedObject(obj)) {
-            return AlignedHeapChunk.getEnclosingChunk(obj);
+            return AlignedHeapChunk.getEnclosingAlignedHeapChunk(obj);
         } else {
             assert ObjectHeaderImpl.isUnalignedObject(obj);
-            return UnalignedHeapChunk.getEnclosingChunk(obj);
+            return UnalignedHeapChunk.getEnclosingUnalignedHeapChunk(obj);
         }
     }
 
     public static HeapChunk.Header<?> getEnclosingHeapChunk(Pointer ptrToObj, UnsignedWord header) {
         if (ObjectHeaderImpl.isAlignedHeader(ptrToObj, header)) {
-            return AlignedHeapChunk.getEnclosingChunkFromPointer(ptrToObj);
+            return AlignedHeapChunk.getEnclosingAlignedHeapChunkFromPointer(ptrToObj);
         } else {
-            return UnalignedHeapChunk.getEnclosingChunkFromObjectPointer(ptrToObj);
+            return UnalignedHeapChunk.getEnclosingUnalignedHeapChunkFromPointer(ptrToObj);
         }
     }
 
-    abstract static class MemoryWalkerAccessImpl<T extends HeapChunk.Header<?>> implements MemoryWalker.HeapChunkAccess<T> {
+    public abstract static class MemoryWalkerAccessImpl<T extends HeapChunk.Header<?>> implements MemoryWalker.HeapChunkAccess<T> {
+
         @Platforms(Platform.HOSTED_ONLY.class)
-        MemoryWalkerAccessImpl() {
+        protected MemoryWalkerAccessImpl() {
         }
 
         @Override
