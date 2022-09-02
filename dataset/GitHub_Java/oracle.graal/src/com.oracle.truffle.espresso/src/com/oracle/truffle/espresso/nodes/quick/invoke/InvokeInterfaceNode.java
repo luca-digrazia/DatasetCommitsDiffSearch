@@ -28,7 +28,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
-import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -66,7 +65,7 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     }
 
     InvokeInterfaceNode(Method resolutionSeed, int top, int curBCI) {
-        super(top, curBCI, Bytecodes.INVOKEINTERFACE);
+        super(top, curBCI);
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
         this.itableIndex = resolutionSeed.getITableIndex();
@@ -97,15 +96,7 @@ public abstract class InvokeInterfaceNode extends QuickNode {
         final Object[] args = root.peekAndReleaseArguments(frame, top, true, resolutionSeed.getParsedSignature());
         assert receiver == args[0] : "receiver must be the first argument";
         Object result = executeInterface(receiver, args);
-        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, Signatures.returnKind(resolutionSeed.getParsedSignature()));
-    }
-
-    @Override
-    public boolean producedForeignObject(VirtualFrame frame) {
-        return resolutionSeed.getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
-    }
-
-    private int getResultAt() {
-        return top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
+        int resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
+        return (resultAt - top) + root.putKind(frame, resultAt, result, Signatures.returnKind(resolutionSeed.getParsedSignature()));
     }
 }

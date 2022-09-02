@@ -399,9 +399,6 @@ public final class VM extends NativeEnv implements ContextAccess {
                     @GuestCall(target = "java_lang_ref_Finalizer_register") DirectCallNode finalizerRegister,
                     @InjectMeta Meta meta, @InjectProfile SubstitutionProfiler profiler) {
         assert StaticObject.notNull(self);
-        if (self.isForeignObject()) {
-            throw Meta.throwExceptionWithMessage(meta.java_lang_CloneNotSupportedException, "Clone not supported for interop objects");
-        }
         if (self.isArray()) {
             // Arrays are always cloneable.
             return self.copy();
@@ -867,7 +864,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @TruffleBoundary
     public void JVM_UnloadLibrary(@SuppressWarnings("unused") @Pointer TruffleObject handle) {
         // TODO(peterssen): Do unload the library.
-        getLogger().severe(String.format("JVM_UnloadLibrary: %x was not unloaded!", interopAsPointer(handle)));
+        getLogger().severe(String.format("JVM_UnloadLibrary: %x was not unloaded!", handle));
     }
 
     @VmImpl
