@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,35 +40,23 @@
  */
 package com.oracle.truffle.object.basic.test;
 
-import java.util.Arrays;
-import java.util.List;
-
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.DynamicObjectLibrary;
 import com.oracle.truffle.api.object.FinalLocationException;
 import com.oracle.truffle.api.object.IncompatibleLocationException;
+import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
-import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
 
-@SuppressWarnings("deprecation")
-@RunWith(Parameterized.class)
-public class DeclaredLocationTest extends AbstractParametrizedLibraryTest {
+public class DeclaredLocationTest {
+    private static final DynamicObjectLibrary LIBRARY = DynamicObjectLibrary.getUncached();
 
-    @Parameters(name = "{0}")
-    public static List<TestRun> data() {
-        return Arrays.asList(TestRun.values());
-    }
-
-    final com.oracle.truffle.api.object.Layout layout = com.oracle.truffle.api.object.Layout.newLayout().build();
+    final Layout layout = Layout.newLayout().build();
     final Shape rootShape = layout.createShape(new ObjectType());
     final Object value = new Object();
     final Location declaredLocation = rootShape.allocator().declaredLocation(value);
@@ -77,12 +65,9 @@ public class DeclaredLocationTest extends AbstractParametrizedLibraryTest {
     @Test
     public void testDeclaredLocation() {
         DynamicObject object = shapeWithDeclared.newInstance();
+        Assert.assertSame(value, LIBRARY.getOrDefault(object, "declared", null));
 
-        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, object);
-
-        Assert.assertSame(value, library.getOrDefault(object, "declared", null));
-
-        library.putIfPresent(object, "declared", value);
+        LIBRARY.putIfPresent(object, "declared", value);
         Assert.assertSame(shapeWithDeclared, object.getShape());
 
         Property property = object.getShape().getProperty("declared");
@@ -104,22 +89,19 @@ public class DeclaredLocationTest extends AbstractParametrizedLibraryTest {
             Assert.assertTrue(e instanceof FinalLocationException);
         }
 
-        Assert.assertSame(value, library.getOrDefault(object, "declared", null));
+        Assert.assertSame(value, LIBRARY.getOrDefault(object, "declared", null));
     }
 
     @Test
     public void testMigrateDeclaredLocation() {
         DynamicObject object = shapeWithDeclared.newInstance();
-
-        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, object);
-
         Assert.assertSame(shapeWithDeclared, object.getShape());
-        Assert.assertSame(value, library.getOrDefault(object, "declared", null));
+        Assert.assertSame(value, LIBRARY.getOrDefault(object, "declared", null));
 
         Object newValue = new Object();
-        library.putIfPresent(object, "declared", newValue);
+        LIBRARY.putIfPresent(object, "declared", newValue);
         Assert.assertNotSame(shapeWithDeclared, object.getShape());
-        Assert.assertSame(newValue, library.getOrDefault(object, "declared", null));
+        Assert.assertSame(newValue, LIBRARY.getOrDefault(object, "declared", null));
     }
 
     @SuppressWarnings("deprecation")
@@ -128,12 +110,9 @@ public class DeclaredLocationTest extends AbstractParametrizedLibraryTest {
         Property property = shapeWithDeclared.getProperty("declared");
 
         DynamicObject object = rootShape.newInstance();
-
-        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, object);
-
         property.setSafe(object, value, rootShape, shapeWithDeclared);
         Assert.assertSame(shapeWithDeclared, object.getShape());
-        Assert.assertSame(value, library.getOrDefault(object, "declared", null));
+        Assert.assertSame(value, LIBRARY.getOrDefault(object, "declared", null));
 
         DynamicObject object2 = rootShape.newInstance();
         Object newValue = new Object();
@@ -146,7 +125,7 @@ public class DeclaredLocationTest extends AbstractParametrizedLibraryTest {
             // Expected
         }
         Assert.assertSame(rootShape, object2.getShape());
-        Assert.assertEquals(false, library.containsKey(object2, "declared"));
+        Assert.assertEquals(false, LIBRARY.containsKey(object2, "declared"));
     }
 
 }

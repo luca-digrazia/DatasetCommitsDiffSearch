@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,16 +42,17 @@ package com.oracle.truffle.object.basic.test;
 
 import org.junit.Test;
 
+import com.oracle.truffle.api.object.Layout;
+import com.oracle.truffle.api.object.Layout.ImplicitCast;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
 
-@SuppressWarnings("deprecation")
 public class ShapeTest {
 
     @Test
     public void testToString() {
-        com.oracle.truffle.api.object.Layout layout = com.oracle.truffle.api.object.Layout.newLayout().addAllowedImplicitCast(com.oracle.truffle.api.object.Layout.ImplicitCast.IntToLong).build();
+        Layout layout = Layout.newLayout().addAllowedImplicitCast(ImplicitCast.IntToLong).build();
 
         Shape rootShape = layout.createShape(new ObjectType());
         DOTestAsserts.assertShape(new String[]{}, rootShape);
