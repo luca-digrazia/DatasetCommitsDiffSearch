@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,13 +30,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import org.graalvm.tools.api.lsp.LSPLibrary;
 import org.graalvm.tools.lsp.server.types.CompletionContext;
 import org.graalvm.tools.lsp.server.types.CompletionItem;
 import org.graalvm.tools.lsp.server.types.CompletionItemKind;
@@ -50,6 +48,7 @@ import org.graalvm.tools.lsp.server.types.MarkupKind;
 import org.graalvm.tools.lsp.server.ContextAwareExecutor;
 import org.graalvm.tools.lsp.exceptions.DiagnosticsNotification;
 import org.graalvm.tools.lsp.instrument.LSPInstrument;
+import org.graalvm.tools.lsp.interop.LSPLibrary;
 import org.graalvm.tools.lsp.server.utils.CoverageData;
 import org.graalvm.tools.lsp.server.utils.EvaluationResult;
 import org.graalvm.tools.lsp.server.utils.InteropUtils;
@@ -95,13 +94,11 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
     private static final int SORTING_PRIORITY_GLOBALS = 2;
 
     private final SourceCodeEvaluator sourceCodeEvaluator;
-    private final Map<String, List<String>> langId2CompletionTriggerCharacters;
 
     public CompletionRequestHandler(TruffleInstrument.Env env, TextDocumentSurrogateMap surrogateMap, ContextAwareExecutor executor,
-                    SourceCodeEvaluator sourceCodeEvaluator, Map<String, List<String>> langId2CompletionTriggerCharacters) {
+                    SourceCodeEvaluator sourceCodeEvaluator) {
         super(env, surrogateMap, executor);
         this.sourceCodeEvaluator = sourceCodeEvaluator;
-        this.langId2CompletionTriggerCharacters = langId2CompletionTriggerCharacters;
     }
 
     public List<String> getCompletionTriggerCharactersWithEnteredContext() {
@@ -127,8 +124,7 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
             return emptyList;
         }
 
-        List<String> completionTriggerCharacters = langId2CompletionTriggerCharacters.getOrDefault(surrogate.getLanguageId(), Collections.emptyList());
-        CompletionKind completionKind = getCompletionKind(source, SourceUtils.zeroBasedLineToOneBasedLine(line, source), column, completionTriggerCharacters,
+        CompletionKind completionKind = getCompletionKind(source, SourceUtils.zeroBasedLineToOneBasedLine(line, source), column, surrogate.getCompletionTriggerCharacters(),
                         completionContext);
         if (surrogate.isSourceCodeReadyForCodeCompletion()) {
             return createCompletions(surrogate, line, column, completionKind);
@@ -160,7 +156,7 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
             // custom file system callback
             surrogateMap.put(uri, fixedSurrogate);
             try {
-                return createCompletions(fixedSurrogate, line, sourceFix.characterIdx, getCompletionKind(sourceFix.removedCharacters, completionTriggerCharacters));
+                return createCompletions(fixedSurrogate, line, sourceFix.characterIdx, getCompletionKind(sourceFix.removedCharacters, surrogate.getCompletionTriggerCharacters()));
             } finally {
                 surrogateMap.put(uri, surrogate);
             }
@@ -468,7 +464,7 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
             langInfo = getObjectLanguageInfo(langInfo, obj);
         }
 
-        if (truffleObj != null && INTEROP.isExecutable(truffleObj)) {
+        if (truffleObj != null) {
             String formattedSignature = getFormattedSignature(truffleObj, langInfo);
             detailText = formattedSignature != null ? formattedSignature : "";
         }
