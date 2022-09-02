@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -69,6 +69,8 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
 
     private String uniqueName;
 
+    private final boolean ignoreUnexpected;
+
     public ExecutableTypeData(NodeData node, TypeMirror returnType, String uniqueName, TypeMirror frameParameter, List<TypeMirror> evaluatedParameters) {
         this.node = node;
         this.returnType = returnType;
@@ -76,12 +78,14 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
         this.evaluatedParameters = evaluatedParameters;
         this.uniqueName = uniqueName;
         this.method = null;
+        this.ignoreUnexpected = false;
     }
 
-    public ExecutableTypeData(NodeData node, ExecutableElement method, int signatureSize, List<TypeMirror> frameTypes) {
+    public ExecutableTypeData(NodeData node, ExecutableElement method, int signatureSize, List<TypeMirror> frameTypes, boolean ignoreUnexpected) {
         this.node = node;
         this.method = method;
         this.returnType = method.getReturnType();
+        this.ignoreUnexpected = ignoreUnexpected;
         TypeMirror foundFrameParameter = null;
         List<? extends VariableElement> parameters = method.getParameters();
 
@@ -167,6 +171,13 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
         return signaturetypes;
     }
 
+    public TypeMirror getParameterTypeOrDie(NodeExecutionData execution) {
+        if (execution.getIndex() >= getEvaluatedCount()) {
+            throw new AssertionError("Parameter type not evaluated.");
+        }
+        return getEvaluatedParameters().get(execution.getIndex());
+    }
+
     public int getVarArgsIndex(int parameterIndex) {
         if (method.isVarArgs()) {
             int index = parameterIndex - (method.getParameters().size() - 1);
@@ -188,7 +199,10 @@ public class ExecutableTypeData extends MessageContainer implements Comparable<E
     }
 
     public boolean hasUnexpectedValue() {
-        return method == null ? false : ElementUtils.canThrowTypeExact(method.getThrownTypes(), types.UnexpectedResultException);
+        if (ignoreUnexpected || method == null) {
+            return false;
+        }
+        return ElementUtils.canThrowTypeExact(method.getThrownTypes(), types.UnexpectedResultException);
     }
 
     public boolean isFinal() {

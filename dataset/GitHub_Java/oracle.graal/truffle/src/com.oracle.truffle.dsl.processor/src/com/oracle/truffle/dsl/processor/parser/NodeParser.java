@@ -430,18 +430,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
 
             for (CacheExpression cache : specialization.getCaches()) {
 
-                if (cache.isMergedLibrary()) {
-                    cache.addError("Merged librares are not supported in combination with AOT preparation. " + //
-                                    "Resolve this problem by either: %n" + //
-                                    " - Setting @%s(..., useForAOT=false) to disable AOT preparation for this export. %n" + //
-                                    " - Using a dispatched library without receiver expression. %n" + //
-                                    " - Adding the @%s.%s annotation to the specialization or exported method.",
-                                    getSimpleName(types.ExportLibrary),
-                                    getSimpleName(types.GenerateAOT),
-                                    getSimpleName(types.GenerateAOT_Exclude));
-                    continue;
-                }
-
                 TypeMirror type = cache.getParameter().getType();
                 if (NodeCodeGenerator.isSpecializedNode(type)) {
                     List<TypeElement> lookupTypes = collectSuperClasses(new ArrayList<TypeElement>(), ElementUtils.castTypeElement(type));
@@ -462,27 +450,18 @@ public final class NodeParser extends AbstractParser<NodeData> {
                     }
                 }
 
-                boolean cachedLibraryAOT = false;
-                if (cache.isCachedLibrary()) {
-                    cachedLibraryAOT = ElementUtils.findAnnotationMirror(ElementUtils.fromTypeMirror(cache.getParameter().getType()), types.GenerateAOT) != null;
-                }
-
                 if (cache.isCachedLibrary() && cache.getCachedLibraryLimit() != null && !cache.getCachedLibraryLimit().equals("")) {
-                    if (!cachedLibraryAOT) {
-                        cache.addError("Failed to generate code for @%s: " + //
-                                        "@%s with automatic dispatch cannot be prepared for AOT." + //
-                                        "Resolve this problem by either: %n" + //
-                                        " - Exclude this specialization from AOT with @%s.%s if it is acceptable to deoptimize for this specialization in AOT compiled code. %n" + //
-                                        " - Configure the specialization to be replaced with a more generic specialization. %n" + //
-                                        " - Remove the cached parameter value. %n" + //
-                                        " - Define a cached library initializer expression for manual dispatch. %n" + //
-                                        " - Add the @%s annotation to the %s library class to enable AOT for the library.",
-                                        getSimpleName(types.GenerateAOT),
-                                        getSimpleName(types.CachedLibrary),
-                                        getSimpleName(types.GenerateAOT), getSimpleName(types.GenerateAOT_Exclude),
-                                        getSimpleName(types.GenerateAOT), getSimpleName(type));
-                        continue;
-                    }
+                    cache.addError("Failed to generate code for @%s: " + //
+                                    "@%s with automatic dispatch cannot be prepared for AOT." + //
+                                    "Resolve this problem by either: %n" + //
+                                    " - Exclude this specialization from AOT with @%s.%s if it is acceptable to deoptimize for this specialization in AOT compiled code. %n" + //
+                                    " - Configure the specialization to be replaced with a more generic specialization. %n" + //
+                                    " - Remove the cached parameter value. %n" + //
+                                    " - Define a cached library initializer expression for manual dispatch.",
+                                    getSimpleName(types.GenerateAOT),
+                                    getSimpleName(types.CachedLibrary),
+                                    getSimpleName(types.GenerateAOT), getSimpleName(types.GenerateAOT_Exclude));
+                    continue;
                 }
 
                 if (specialization.isDynamicParameterBound(cache.getDefaultExpression(), true)) {
@@ -495,22 +474,17 @@ public final class NodeParser extends AbstractParser<NodeData> {
                         continue;
                     }
 
-                    if (!cachedLibraryAOT) {
-                        cache.addError("Failed to generate code for @%s: " + //
-                                        "Cached values in specializations included for AOT must not bind dynamic values. " + //
-                                        "Such caches are only allowed to bind static values, values read from the node or values from the current language instance using a language reference. " + //
-                                        "Resolve this problem by either: %n" + //
-                                        " - Exclude this specialization from AOT with @%s.%s if it is acceptable to deoptimize for this specialization in AOT compiled code. %n" + //
-                                        " - Configure the specialization to be replaced with a more generic specialization. %n" + //
-                                        " - Remove the cached parameter value. %n" + //
-                                        " - Avoid binding dynamic parameters in the cache initializer expression. %n" + //
-                                        " - If a cached library is used add the @%s annotation to the library class to enable AOT for the library.",
-                                        getSimpleName(types.GenerateAOT),
-                                        getSimpleName(types.GenerateAOT), getSimpleName(types.GenerateAOT_Exclude),
-                                        getSimpleName(types.GenerateAOT));
-                        continue outer;
-                    }
-
+                    cache.addError("Failed to generate code for @%s: " + //
+                                    "Cached values in specializations included for AOT must not bind dynamic values. " + //
+                                    "Such caches are only allowed to bind static values, values read from the node or values from the current language instance using a language reference. " + //
+                                    "Resolve this problem by either: %n" + //
+                                    " - Exclude this specialization from AOT with @%s.%s if it is acceptable to deoptimize for this specialization in AOT compiled code. %n" + //
+                                    " - Configure the specialization to be replaced with a more generic specialization. %n" + //
+                                    " - Remove the cached parameter value. %n" + //
+                                    " - Avoid binding dynamic parameters in the cache initializer expression.",
+                                    getSimpleName(types.GenerateAOT),
+                                    getSimpleName(types.GenerateAOT), getSimpleName(types.GenerateAOT_Exclude));
+                    continue outer;
                 }
             }
         }
@@ -2556,11 +2530,9 @@ public final class NodeParser extends AbstractParser<NodeData> {
             }
             specialization.setUncachedSpecialization(uncachedSpecialization);
         }
-
         if (uncachedLibraries != null && uncachedLibraries.size() != libraries.size()) {
             throw new AssertionError("Unexpected number of uncached libraries.");
         }
-
         boolean seenDynamicParameterBound = false;
 
         for (int i = 0; i < libraries.size(); i++) {
@@ -2632,7 +2604,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 }
                 if (substituteCachedExpression == null && supportsLibraryMerge(receiverExpression, receiverParameter.getVariableElement())) {
                     substituteCachedExpression = receiverExpression;
-
                     cachedLibrary.setMergedLibrary(true);
                 }
             }
@@ -2684,16 +2655,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 }
             }
 
-        }
-        if (specialization.isFallback()) {
-            for (int i = 0; i < libraries.size(); i++) {
-                CacheExpression cachedLibrary = libraries.get(i);
-                if (cachedLibrary.getCachedLibraryExpression() != null) {
-                    cachedLibrary.addError("@%s annotations with specialized receivers are not supported in combination with @%s annotations. " +
-                                    "Specify the @%s(limit=\"...\") attribute and remove the receiver expression to use an dispatched library instead.",
-                                    getSimpleName(types.CachedLibrary), getSimpleName(types.Fallback), getSimpleName(types.CachedLibrary));
-                }
-            }
         }
 
         if (!libraries.isEmpty() && !specialization.hasErrors() && ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "limit", false) == null &&
