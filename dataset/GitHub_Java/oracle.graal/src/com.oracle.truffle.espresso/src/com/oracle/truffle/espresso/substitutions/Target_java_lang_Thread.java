@@ -23,6 +23,9 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
+import static com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
+
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
@@ -30,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Field;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -214,7 +218,6 @@ public final class Target_java_lang_Thread {
                 @Override
                 public void run() {
                     try {
-                        context.getVM().attachThread(Thread.currentThread());
                         try {
                             if (meta.getContext().IsolatedNamespace) {
                                 // Initialize TLS related to __ctype_b_loc to avoid crashes on
@@ -225,8 +228,9 @@ public final class Target_java_lang_Thread {
                             self.getKlass().vtableLookup(meta.java_lang_Thread_run.getVTableIndex()).invokeDirect(self);
                             checkDeprecatedState(meta, self);
                         } catch (EspressoException uncaught) {
-                            // TODO why was this using a dedicated lookup?
-                            meta.java_lang_Thread_dispatchUncaughtException.invokeDirect(self, uncaught.getExceptionObject());
+                            Method dispatchUncaughtException = self.getKlass().lookupMethod(Name.dispatchUncaughtException, Signature._void_Throwable);
+                            assert !dispatchUncaughtException.isStatic();
+                            dispatchUncaughtException.invokeDirect(self, uncaught.getExceptionObject());
                         }
                     } catch (EspressoExitException exit) {
                         /* Suppress */
@@ -255,20 +259,16 @@ public final class Target_java_lang_Thread {
         }
     }
 
-    public static void terminate(StaticObject thread, Meta meta) {
-        terminate(thread, null, meta);
+    public static void terminate(@Host(Thread.class) StaticObject self, Meta meta) {
+        meta.getContext().unregisterThread(self);
     }
 
     private static void terminate(@Host(Thread.class) StaticObject self, DirectCallNode threadExit, Meta meta) {
         setThreadStop(self, KillStatus.EXITING);
-        try {
-            if (threadExit != null) {
-                threadExit.call(self);
-            } else {
-                meta.java_lang_Thread_exit.invokeDirect(self);
-            }
-        } catch (EspressoException e) {
-            // just drop it
+        if (threadExit != null) {
+            threadExit.call(self);
+        } else {
+            meta.java_lang_Thread_exit.invokeDirect(self);
         }
         self.getLock().lock();
         try {

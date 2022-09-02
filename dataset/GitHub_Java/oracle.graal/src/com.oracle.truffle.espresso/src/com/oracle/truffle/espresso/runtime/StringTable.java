@@ -26,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.Host;
 
 /**
@@ -52,16 +51,15 @@ public final class StringTable {
         this.context = context;
     }
 
-    public final StaticObject intern(Symbol<?> value) {
+    public StaticObject intern(Symbol<?> value) {
         // Weak values? Too expensive?
-        return interned.computeIfAbsent(
-                        cache.computeIfAbsent(value, new Function<Symbol<?>, String>() {
+        return interned.computeIfAbsent(cache.computeIfAbsent(value,
+                        new Function<Symbol<?>, String>() {
                             @Override
                             public String apply(Symbol<?> value1) {
                                 return createStringFromSymbol(value1);
                             }
-                        }),
-                        new Function<String, StaticObject>() {
+                        }), new Function<String, StaticObject>() {
                             @Override
                             public StaticObject apply(String value1) {
                                 return StringTable.this.createStringObjectFromString(value1);
@@ -77,9 +75,9 @@ public final class StringTable {
         return value.toString();
     }
 
-    public final @Host(String.class) StaticObject intern(@Host(String.class) StaticObject guestString) {
+    public @Host(String.class) StaticObject intern(@Host(String.class) StaticObject guestString) {
         assert StaticObject.notNull(guestString);
-        String hostString = Meta.toHostString(guestString);
+        String hostString = context.getMeta().toHostString(guestString);
         return interned.computeIfAbsent(hostString, new Function<String, StaticObject>() {
             @Override
             public StaticObject apply(String k) {
