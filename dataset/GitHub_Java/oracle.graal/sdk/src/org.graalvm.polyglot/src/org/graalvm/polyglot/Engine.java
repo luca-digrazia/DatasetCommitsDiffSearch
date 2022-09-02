@@ -53,7 +53,6 @@ import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -294,14 +293,14 @@ public final class Engine implements AutoCloseable {
         private Map<String, String> options = new HashMap<>();
         private boolean allowExperimentalOptions = false;
         private boolean useSystemProperties = true;
-        private boolean boundEngine;
+        private Runnable[] boundEngine;
         private MessageTransport messageTransport;
         private Object customLogHandler;
 
         Builder() {
         }
 
-        Builder setBoundEngine(boolean boundEngine) {
+        Builder setBoundEngine(Runnable[] boundEngine) {
             this.boundEngine = boundEngine;
             return this;
         }
@@ -524,11 +523,6 @@ public final class Engine implements AutoCloseable {
         }
 
         @Override
-        public AbstractContextImpl getImpl(Context context) {
-            return context.impl;
-        }
-
-        @Override
         public Engine newEngine(AbstractEngineImpl impl) {
             return new Engine(impl);
         }
@@ -589,17 +583,7 @@ public final class Engine implements AutoCloseable {
         }
 
         @Override
-        public ResourceLimitEvent newResourceLimitsEvent(Object impl) {
-            return new ResourceLimitEvent(impl);
-        }
-
-        @Override
         public AbstractLanguageImpl getImpl(Language value) {
-            return value.impl;
-        }
-
-        @Override
-        public Object getImpl(ResourceLimits value) {
             return value.impl;
         }
 
@@ -757,63 +741,53 @@ public final class Engine implements AutoCloseable {
 
         @Override
         public Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
-                        long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean allowExperimentalOptions, boolean boundEngine, MessageTransport messageInterceptor,
+                        long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean allowExperimentalOptions, Runnable[] boundEngine, MessageTransport messageInterceptor,
                         Object logHandlerOrStream,
                         HostAccess conf) {
             throw noPolyglotImplementationFound();
         }
 
         @Override
-        public Object buildLimits(long statementLimit, Predicate<Source> statementLimitSourceFilter, Duration timeLimit, Duration timeLimitAccuracy, Consumer<ResourceLimitEvent> onLimit) {
-            throw noPolyglotImplementationFound();
-        }
-
-        @Override
-        public Context getLimitEventContext(Object impl) {
-            throw noPolyglotImplementationFound();
-        }
-
-        @Override
-        public AbstractManagementImpl getManagementImpl() {
-            return new AbstractManagementImpl(this) {
+        public AbstractExecutionListenerImpl getExecutionListenerImpl() {
+            return new AbstractExecutionListenerImpl(this) {
 
                 @Override
-                public boolean isExecutionEventStatement(Object impl) {
+                public boolean isStatement(Object impl) {
                     return false;
                 }
 
                 @Override
-                public boolean isExecutionEventRoot(Object impl) {
+                public boolean isRoot(Object impl) {
                     return false;
                 }
 
                 @Override
-                public boolean isExecutionEventExpression(Object impl) {
+                public boolean isExpression(Object impl) {
                     return false;
                 }
 
                 @Override
-                public String getExecutionEventRootName(Object impl) {
+                public String getRootName(Object impl) {
                     throw noPolyglotImplementationFound();
                 }
 
                 @Override
-                public PolyglotException getExecutionEventException(Object impl) {
+                public PolyglotException getException(Object impl) {
                     throw noPolyglotImplementationFound();
                 }
 
                 @Override
-                public Value getExecutionEventReturnValue(Object impl) {
+                public Value getReturnValue(Object impl) {
                     throw noPolyglotImplementationFound();
                 }
 
                 @Override
-                public SourceSection getExecutionEventLocation(Object impl) {
+                public SourceSection getLocation(Object impl) {
                     throw noPolyglotImplementationFound();
                 }
 
                 @Override
-                public List<Value> getExecutionEventInputValues(Object impl) {
+                public List<Value> getInputValues(Object impl) {
                     throw noPolyglotImplementationFound();
                 }
 
@@ -828,7 +802,6 @@ public final class Engine implements AutoCloseable {
                                 Predicate<Source> sourceFilter, Predicate<String> rootFilter, boolean collectInputValues, boolean collectReturnValues, boolean collectErrors) {
                     throw noPolyglotImplementationFound();
                 }
-
             };
         }
 
