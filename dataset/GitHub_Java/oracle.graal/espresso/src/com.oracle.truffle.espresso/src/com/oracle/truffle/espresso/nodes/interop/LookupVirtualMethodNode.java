@@ -40,7 +40,7 @@ public abstract class LookupVirtualMethodNode extends AbstractLookupNode {
     public abstract Method execute(Klass klass, String methodName, int arity);
 
     public boolean isInvocable(Klass klass, String member) {
-        return isInvocable(klass, member, true, false);
+        return doLookup(klass, member, true, false, -1) != null;
     }
 
     @SuppressWarnings("unused")
@@ -95,7 +95,7 @@ public abstract class LookupVirtualMethodNode extends AbstractLookupNode {
         return meta.java_lang_Object;
     }
 
-    public static boolean isCandidate(Method m) {
+    public static boolean isCanditate(Method m) {
         return m.isPublic() && !m.isStatic() && !m.isSignaturePolymorphicDeclared();
     }
 

@@ -37,7 +37,7 @@ import com.oracle.svm.core.c.function.CEntryPointOptions.DefaultNameTransformati
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.c.function.CEntryPointSetup;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.hosted.image.NativeBootImage;
+import com.oracle.svm.hosted.image.NativeImage;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -52,24 +52,36 @@ public final class CEntryPointData {
 
     public static CEntryPointData create(ResolvedJavaMethod method) {
         return create(method.getAnnotation(CEntryPoint.class), method.getAnnotation(CEntryPointOptions.class),
-                        () -> NativeBootImage.globalSymbolNameForMethod(method));
+                        () -> NativeImage.globalSymbolNameForMethod(method));
     }
 
     public static CEntryPointData create(ResolvedJavaMethod method, String name, Class<? extends Function<String, String>> nameTransformation,
                     String documentation, Class<?> prologue, Class<?> epilogue, Class<?> exceptionHandler, Publish publishAs) {
 
-        return create(name, () -> NativeBootImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NO_BUILTIN, prologue, epilogue, exceptionHandler, publishAs);
+        return create(name, () -> NativeImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NO_BUILTIN, prologue, epilogue, exceptionHandler, publishAs);
     }
 
     public static CEntryPointData create(Method method) {
+        return create(method, DEFAULT_NAME);
+    }
+
+    public static CEntryPointData create(Method method, String name) {
+        assert method.getAnnotation(CEntryPoint.class).name().isEmpty() || name.isEmpty();
         return create(method.getAnnotation(CEntryPoint.class), method.getAnnotation(CEntryPointOptions.class),
-                        () -> NativeBootImage.globalSymbolNameForMethod(method));
+                        () -> !name.isEmpty() ? name : NativeImage.globalSymbolNameForMethod(method));
     }
 
     public static CEntryPointData create(Method method, String name, Class<? extends Function<String, String>> nameTransformation,
                     String documentation, Class<?> prologue, Class<?> epilogue, Class<?> exceptionHandler, Publish publishAs) {
 
-        return create(name, () -> NativeBootImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NO_BUILTIN, prologue, epilogue, exceptionHandler, publishAs);
+        return create(name, () -> NativeImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NO_BUILTIN, prologue, epilogue, exceptionHandler, publishAs);
+    }
+
+    public static CEntryPointData createCustomUnpublished() {
+        CEntryPointData unpublished = new CEntryPointData(null, DEFAULT_NAME, "", Builtin.NO_BUILTIN, CEntryPointOptions.NoPrologue.class, CEntryPointOptions.NoEpilogue.class,
+                        DEFAULT_EXCEPTION_HANDLER, Publish.NotPublished);
+        unpublished.symbolName = DEFAULT_NAME;
+        return unpublished;
     }
 
     @SuppressWarnings("deprecation")
@@ -86,14 +98,6 @@ public final class CEntryPointData {
             nameTransformation = options.nameTransformation();
             prologue = options.prologue();
             epilogue = options.epilogue();
-
-            /*
-             * Look at the deprecated specification for exceptionHandler too, until that code gets
-             * removed.
-             */
-            if (options.exceptionHandler() != CEntryPointData.DEFAULT_EXCEPTION_HANDLER) {
-                exceptionHandler = options.exceptionHandler();
-            }
             publishAs = options.publishAs();
         }
         return create(annotatedName, alternativeNameSupplier, nameTransformation, documentation, builtin, prologue, epilogue, exceptionHandler, publishAs);
@@ -140,6 +144,10 @@ public final class CEntryPointData {
         this.epilogue = epilogue;
         this.exceptionHandler = exceptionHandler;
         this.publishAs = publishAs;
+    }
+
+    public CEntryPointData copyWithPublishAs(Publish customPublishAs) {
+        return new CEntryPointData(symbolNameSupplier, providedName, documentation, builtin, prologue, epilogue, exceptionHandler, customPublishAs);
     }
 
     public String getSymbolName() {
