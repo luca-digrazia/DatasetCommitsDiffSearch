@@ -255,15 +255,9 @@ public class MultiThreadedMonitorSupport extends MonitorSupport {
     }
 
     @Override
-    public boolean isLockedByCurrentThread(Object obj) {
+    public boolean holdsLock(Object obj) {
         ReentrantLock lockObject = getOrCreateMonitor(obj, false);
         return lockObject != null && lockObject.isHeldByCurrentThread();
-    }
-
-    @Override
-    public boolean isLockedByAnyThread(Object obj) {
-        ReentrantLock lockObject = getOrCreateMonitor(obj, false);
-        return lockObject != null && lockObject.isLocked();
     }
 
     @SuppressFBWarnings(value = {"WA_AWAIT_NOT_IN_LOOP"}, justification = "This method is a wait implementation.")
