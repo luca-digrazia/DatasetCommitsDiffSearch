@@ -62,8 +62,8 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMGlobalRootNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMStatementRootNode;
+import com.oracle.truffle.llvm.nodes.func.LLVMGlobalRootNode;
+import com.oracle.truffle.llvm.nodes.others.LLVMStatementRootNode;
 import com.oracle.truffle.llvm.parser.LLVMParser;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
@@ -356,7 +356,7 @@ final class Runner {
         final LLVMScope fileScope;
 
         InitializeSymbolsNode(LLVMContext context, LLVMParserResult res) {
-            DataLayout dataLayout = res.getDataLayout();
+            DataLayout dataLayout = context.getDataSpecConverter();
 
             // allocate all non-pointer types as two structs
             // one for read-only and one for read-write
@@ -881,10 +881,10 @@ final class Runner {
 
     private StaticInitsNode createGlobalVariableInitializer(FrameDescriptor rootFrame, LLVMParserResult parserResult) {
         LLVMParserRuntime runtime = parserResult.getRuntime();
-        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, rootFrame, GetStackSpaceFactory.createAllocaFactory(), parserResult.getDataLayout());
+        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, rootFrame, GetStackSpaceFactory.createAllocaFactory());
         final List<LLVMStatementNode> globalNodes = new ArrayList<>();
         for (GlobalVariable global : parserResult.getDefinedGlobals()) {
-            final LLVMStatementNode store = createGlobalInitialization(runtime, symbolResolver, global, parserResult.getDataLayout());
+            final LLVMStatementNode store = createGlobalInitialization(runtime, symbolResolver, global);
             if (store != null) {
                 globalNodes.add(store);
             }
@@ -893,7 +893,7 @@ final class Runner {
         return new StaticInitsNode(initNodes);
     }
 
-    private LLVMStatementNode createGlobalInitialization(LLVMParserRuntime runtime, LLVMSymbolReadResolver symbolResolver, GlobalVariable global, DataLayout dataLayout) {
+    private LLVMStatementNode createGlobalInitialization(LLVMParserRuntime runtime, LLVMSymbolReadResolver symbolResolver, GlobalVariable global) {
         if (global == null || global.getValue() == null) {
             return null;
         }
@@ -901,7 +901,7 @@ final class Runner {
         LLVMExpressionNode constant = symbolResolver.resolve(global.getValue());
         if (constant != null) {
             final Type type = global.getType().getPointeeType();
-            final int size = type.getSize(dataLayout);
+            final int size = context.getByteSize(type);
 
             // for fetching the address of the global that we want to initialize, we must use the
             // file scope because we are initializing the globals of the current file
@@ -909,10 +909,10 @@ final class Runner {
             final LLVMExpressionNode globalVarAddress = language.getNodeFactory().createLiteral(globalDescriptor, new PointerType(global.getType()));
             if (size != 0) {
                 if (type instanceof ArrayType || type instanceof StructureType) {
-                    return language.getNodeFactory().createStore(globalVarAddress, constant, type);
+                    return language.getNodeFactory().createStore(globalVarAddress, constant, type, null);
                 } else {
                     Type t = global.getValue().getType();
-                    return language.getNodeFactory().createStore(globalVarAddress, constant, t);
+                    return language.getNodeFactory().createStore(globalVarAddress, constant, t, null);
                 }
             }
         }
@@ -937,13 +937,13 @@ final class Runner {
     private LLVMStatementNode[] createStructor(String name, LLVMParserResult parserResult, Comparator<Pair<Integer, ?>> priorityComparator) {
         for (GlobalVariable globalVariable : parserResult.getDefinedGlobals()) {
             if (globalVariable.getName().equals(name)) {
-                return resolveStructor(parserResult.getRuntime().getFileScope(), globalVariable, priorityComparator, parserResult.getDataLayout());
+                return resolveStructor(parserResult.getRuntime().getFileScope(), globalVariable, priorityComparator);
             }
         }
         return LLVMStatementNode.NO_STATEMENTS;
     }
 
-    private LLVMStatementNode[] resolveStructor(LLVMScope fileScope, GlobalVariable globalSymbol, Comparator<Pair<Integer, ?>> priorityComparator, DataLayout dataLayout) {
+    private LLVMStatementNode[] resolveStructor(LLVMScope fileScope, GlobalVariable globalSymbol, Comparator<Pair<Integer, ?>> priorityComparator) {
         if (!(globalSymbol.getValue() instanceof ArrayConstant)) {
             // array globals of length 0 may be initialized with scalar null
             return LLVMStatementNode.NO_STATEMENTS;
@@ -954,10 +954,10 @@ final class Runner {
         final int elemCount = arrayConstant.getElementCount();
 
         final StructureType elementType = (StructureType) arrayConstant.getType().getElementType();
-        final int elementSize = elementType.getSize(dataLayout);
+        final int elementSize = context.getByteSize(elementType);
 
         final FunctionType functionType = (FunctionType) ((PointerType) elementType.getElementType(1)).getPointeeType();
-        final int indexedTypeLength = functionType.getAlignment(dataLayout);
+        final int indexedTypeLength = context.getByteAlignment(functionType);
 
         final ArrayList<Pair<Integer, LLVMStatementNode>> structors = new ArrayList<>(elemCount);
         FrameDescriptor rootFrame = StackManager.createRootFrame();
@@ -972,7 +972,7 @@ final class Runner {
             final LLVMExpressionNode loadedFunction = language.getNodeFactory().createLoad(functionType, functionLoadTarget);
             final LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{
                             language.getNodeFactory().createFrameRead(PointerType.VOID, rootFrame.findFrameSlot(LLVMStack.FRAME_ID))};
-            final LLVMStatementNode functionCall = LLVMVoidStatementNodeGen.create(language.getNodeFactory().createFunctionCall(loadedFunction, argNodes, functionType));
+            final LLVMStatementNode functionCall = LLVMVoidStatementNodeGen.create(language.getNodeFactory().createFunctionCall(loadedFunction, argNodes, functionType, null));
 
             final StructureConstant structorDefinition = (StructureConstant) arrayConstant.getElement(i);
             final SymbolImpl prioritySymbol = structorDefinition.getElement(0);

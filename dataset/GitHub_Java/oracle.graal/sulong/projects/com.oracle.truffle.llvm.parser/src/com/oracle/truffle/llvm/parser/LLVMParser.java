@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.parser.factories.BasicNodeFactory;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
@@ -52,7 +51,6 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Function;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LazyLLVMIRFunction;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
@@ -77,9 +75,7 @@ public final class LLVMParser {
     public LLVMParserResult parse(ModelModule module) {
         TargetDataLayout layout = module.getTargetDataLayout();
         DataLayout targetDataLayout = new DataLayout(layout.getDataLayout());
-        NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(context);
-        ((BasicNodeFactory) nodeFactory).addDataLayout(targetDataLayout);
-        context.getLanguage().setNodeFactory(nodeFactory);
+        runtime.getContext().addDataLayout(targetDataLayout);
 
         List<GlobalVariable> externalGlobals = new ArrayList<>();
         List<GlobalVariable> definedGlobals = new ArrayList<>();
