@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -89,10 +89,9 @@ public final class SpecializationData extends TemplateMethod {
     private DSLExpression limitExpression;
     private SpecializationData uncachedSpecialization;
     private final boolean reportPolymorphism;
-    private final boolean reportMegamorphism;
 
     public SpecializationData(NodeData node, TemplateMethod template, SpecializationKind kind, List<SpecializationThrowsData> exceptions, boolean hasUnexpectedResultRewrite,
-                              boolean reportPolymorphism, boolean reportMegamorphism) {
+                    boolean reportPolymorphism) {
         super(template);
         this.node = node;
         this.kind = kind;
@@ -100,11 +99,10 @@ public final class SpecializationData extends TemplateMethod {
         this.hasUnexpectedResultRewrite = hasUnexpectedResultRewrite;
         this.index = template.getNaturalOrder();
         this.reportPolymorphism = reportPolymorphism;
-        this.reportMegamorphism = reportMegamorphism;
     }
 
     public SpecializationData copy() {
-        SpecializationData copy = new SpecializationData(node, this, kind, new ArrayList<>(exceptions), hasUnexpectedResultRewrite, reportPolymorphism, reportMegamorphism);
+        SpecializationData copy = new SpecializationData(node, this, kind, new ArrayList<>(exceptions), hasUnexpectedResultRewrite, reportPolymorphism);
         copy.guards.addAll(guards);
         copy.caches = new ArrayList<>(caches);
         copy.assumptionExpressions = new ArrayList<>(assumptionExpressions);
@@ -161,11 +159,6 @@ public final class SpecializationData extends TemplateMethod {
 
     public boolean isReportPolymorphism() {
         return reportPolymorphism;
-    }
-
-    public boolean isReportMegamorphism() {
-//        return false;
-        return reportMegamorphism;
     }
 
     public boolean isReachesFallback() {
@@ -310,7 +303,7 @@ public final class SpecializationData extends TemplateMethod {
     }
 
     public SpecializationData(NodeData node, TemplateMethod template, SpecializationKind kind) {
-        this(node, template, kind, new ArrayList<SpecializationThrowsData>(), false, true, false);
+        this(node, template, kind, new ArrayList<SpecializationThrowsData>(), false, true);
     }
 
     public Set<SpecializationData> getReplaces() {
@@ -444,13 +437,6 @@ public final class SpecializationData extends TemplateMethod {
 
     public int getIndex() {
         return index;
-    }
-
-    public int getIntrospectionIndex() {
-        if (getMethod() == null) {
-            return -1;
-        }
-        return index - 1;
     }
 
     public NodeData getNode() {

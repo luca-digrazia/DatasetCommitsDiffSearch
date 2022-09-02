@@ -179,7 +179,7 @@ public class FlatNodeGenFactory {
     private final Map<ExecutableElement, Function<Call, DSLExpression>> substitutions = new LinkedHashMap<>();
     private final Map<String, CodeVariableElement> libraryConstants;
 
-    private final boolean needsSpecializeLocking;
+    private final boolean needsLocking;
     private final GeneratorMode generatorMode;
 
     public enum GeneratorMode {
@@ -210,7 +210,6 @@ public class FlatNodeGenFactory {
 
         List<Object> stateObjects = new ArrayList<>();
         List<SpecializationData> excludeObjects = new ArrayList<>();
-        boolean volatileState = false;
         for (NodeData stateNode : stateSharingNodes) {
             boolean needsRewrites = stateNode.needsRewrites(context);
             if (!needsRewrites) {
@@ -229,9 +228,6 @@ public class FlatNodeGenFactory {
                     }
                     index++;
                 }
-                if (!specialization.getCaches().isEmpty()) {
-                    volatileState = true;
-                }
 
                 for (GuardExpression guard : specialization.getGuards()) {
                     if (guardNeedsStateBit(specialization, guard)) {
@@ -242,11 +238,10 @@ public class FlatNodeGenFactory {
             stateObjects.addAll(implicitCasts);
             excludeObjects.addAll(specializations);
         }
-        this.state = new StateBitSet(stateObjects.toArray(new Object[0]), volatileState);
-        this.exclude = new ExcludeBitSet(excludeObjects.toArray(new SpecializationData[0]), volatileState);
+        this.state = new StateBitSet(stateObjects.toArray(new Object[0]));
+        this.exclude = new ExcludeBitSet(excludeObjects.toArray(new SpecializationData[0]));
         this.executeAndSpecializeType = createExecuteAndSpecializeType();
-        this.needsSpecializeLocking = exclude.computeStateLength() != 0 || reachableSpecializations.stream().anyMatch((s) -> !s.getCaches().isEmpty());
-
+        this.needsLocking = exclude.computeStateLength() != 0 || reachableSpecializations.stream().anyMatch((s) -> !s.getCaches().isEmpty());
         this.libraryConstants = libraryConstants;
         this.substitutions.put(ElementUtils.findExecutableElement(types.LibraryFactory, "resolve"),
                         (binary) -> substituteLibraryCall(binary));
@@ -1535,7 +1530,7 @@ public class FlatNodeGenFactory {
 
         final CodeTreeBuilder builder = method.createBuilder();
         boolean reportPolymorphism = shouldReportPolymorphism(node, reachableSpecializations);
-        if (needsSpecializeLocking) {
+        if (needsLocking) {
             builder.declaration(context.getType(Lock.class), "lock", "getLock()");
             builder.declaration(context.getType(boolean.class), "hasLock", "true");
             builder.statement("lock.lock()");
@@ -1548,7 +1543,7 @@ public class FlatNodeGenFactory {
         if (reportPolymorphism) {
             generateSaveOldPolymorphismState(builder, frameState);
         }
-        if (needsSpecializeLocking || reportPolymorphism) {
+        if (needsLocking || reportPolymorphism) {
             builder.startTryBlock();
         }
 
@@ -1562,12 +1557,12 @@ public class FlatNodeGenFactory {
             builder.tree(createThrowUnsupported(builder, originalFrameState));
         }
 
-        if (needsSpecializeLocking || reportPolymorphism) {
+        if (needsLocking || reportPolymorphism) {
             builder.end().startFinallyBlock();
             if (reportPolymorphism) {
                 generateCheckNewPolymorphismState(builder);
             }
-            if (needsSpecializeLocking) {
+            if (needsLocking) {
                 builder.startIf().string("hasLock").end().startBlock();
                 builder.statement("lock.unlock()");
                 builder.end();
@@ -2604,7 +2599,7 @@ public class FlatNodeGenFactory {
             frameState.addCaughtException(throwsData.getJavaClass());
         }
 
-        if (needsSpecializeLocking && frameState.getMode().isSlowPath()) {
+        if (needsLocking && frameState.getMode().isSlowPath()) {
             builder.statement("lock.unlock()");
             builder.statement("hasLock = false");
         }
@@ -2981,7 +2976,8 @@ public class FlatNodeGenFactory {
             }
 
             if (pushEnclosingNode || extractInBoundary) {
-                GeneratorUtils.pushEncapsulatingNode(innerBuilder, "this");
+                innerBuilder.startStatement().type(types.Node).string(" prev_ = ").//
+                                startStaticCall(types.NodeUtil, "pushEncapsulatingNode").string("this").end().end();
                 innerBuilder.startTryBlock();
             }
 
@@ -2997,7 +2993,7 @@ public class FlatNodeGenFactory {
 
             if (pushEnclosingNode || extractInBoundary) {
                 innerBuilder.end().startFinallyBlock();
-                GeneratorUtils.popEncapsulatingNode(innerBuilder);
+                innerBuilder.startStatement().startStaticCall(types.NodeUtil, "popEncapsulatingNode").string("prev_").end().end();
                 innerBuilder.end();
             }
             builder.end(nonBoundaryIfCount.blockCount);
@@ -3044,7 +3040,9 @@ public class FlatNodeGenFactory {
                 boolean pushBoundary = cachesRequireFastPathBoundary(specialization.getCaches());
                 if (pushBoundary) {
                     builder.startBlock();
-                    GeneratorUtils.pushEncapsulatingNode(builder, "this");
+                    builder.startStatement();
+                    builder.type(types.Node);
+                    builder.string(" prev_ = ").startStaticCall(types.NodeUtil, "pushEncapsulatingNode").string("this").end().end();
                     builder.startTryBlock();
                 }
                 BlockState innerIfCount = BlockState.NONE;
@@ -3146,7 +3144,7 @@ public class FlatNodeGenFactory {
 
                 if (pushBoundary) {
                     builder.end().startFinallyBlock();
-                    GeneratorUtils.popEncapsulatingNode(builder);
+                    builder.startStatement().startStaticCall(types.NodeUtil, "popEncapsulatingNode").string("prev_").end().end();
                     builder.end();
                     builder.end();
                 }
@@ -3716,7 +3714,7 @@ public class FlatNodeGenFactory {
             builder.declaration(context.getType(Lock.class), "lock", "getLock()");
         }
 
-        if (needsSpecializeLocking) {
+        if (needsLocking) {
             builder.statement("lock.lock()");
             builder.startTryBlock();
         }
@@ -3738,7 +3736,7 @@ public class FlatNodeGenFactory {
             }
         }
 
-        if (needsSpecializeLocking) {
+        if (needsLocking) {
             builder.end().startFinallyBlock();
             builder.statement("lock.unlock()");
             builder.end();
@@ -3775,7 +3773,7 @@ public class FlatNodeGenFactory {
                 method.addParameter(new CodeVariableElement(context.getType(Object.class), specializationLocalName));
             }
             CodeTreeBuilder builder = method.createBuilder();
-            if (needsSpecializeLocking) {
+            if (needsLocking) {
                 builder.declaration(context.getType(Lock.class), "lock", "getLock()");
                 builder.statement("lock.lock()");
                 builder.startTryBlock();
@@ -3818,7 +3816,7 @@ public class FlatNodeGenFactory {
                 builder.tree((state.createSet(null, Arrays.asList(specialization).toArray(new SpecializationData[0]), false, true)));
                 builder.end();
             }
-            if (needsSpecializeLocking) {
+            if (needsLocking) {
                 builder.end().startFinallyBlock();
                 builder.statement("lock.unlock()");
                 builder.end();
@@ -4648,12 +4646,9 @@ public class FlatNodeGenFactory {
         private final long allMask;
         private final TypeMirror bitSetType;
 
-        private final boolean needsVolatile;
-
-        BitSet(String name, Object[] objects, boolean needsVolatile) {
+        BitSet(String name, Object[] objects) {
             this.name = name;
             this.objects = objects;
-            this.needsVolatile = needsVolatile;
             this.capacity = computeStateLength();
 
             if (capacity <= 32) {
@@ -4681,11 +4676,7 @@ public class FlatNodeGenFactory {
         }
 
         public CodeVariableElement declareFields(CodeTypeElement clazz) {
-            CodeVariableElement var = clazz.add(createNodeField(PRIVATE, bitSetType, name + "_", context.getTypes().CompilerDirectives_CompilationFinal));
-            if (needsVolatile) {
-                var.getModifiers().add(Modifier.VOLATILE);
-            }
-            return var;
+            return clazz.add(createNodeField(PRIVATE, bitSetType, name + "_", context.getTypes().CompilerDirectives_CompilationFinal));
         }
 
         public CodeTree createLoad(FrameState frameState) {
@@ -4944,8 +4935,8 @@ public class FlatNodeGenFactory {
 
     private class StateBitSet extends BitSet {
 
-        StateBitSet(Object[] objects, boolean needsVolatile) {
-            super(STATE_VALUE, objects, needsVolatile);
+        StateBitSet(Object[] objects) {
+            super(STATE_VALUE, objects);
         }
 
         @Override
@@ -4977,8 +4968,8 @@ public class FlatNodeGenFactory {
 
     private static class ExcludeBitSet extends BitSet {
 
-        ExcludeBitSet(SpecializationData[] specializations, boolean needsVolatile) {
-            super("exclude", specializations, needsVolatile);
+        ExcludeBitSet(SpecializationData[] specializations) {
+            super("exclude", specializations);
         }
 
         @Override
