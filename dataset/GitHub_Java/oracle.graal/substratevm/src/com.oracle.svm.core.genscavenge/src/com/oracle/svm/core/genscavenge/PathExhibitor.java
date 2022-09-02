@@ -64,30 +64,26 @@ public class PathExhibitor {
         return new PathExhibitor();
     }
 
-    @NeverInline("Starting a stack walk in the caller frame")
     public void findPathToRange(Pointer rangeBegin, Pointer rangeEnd) {
         assert VMOperation.isInProgressAtSafepoint();
         if (rangeBegin.isNull() || rangeBegin.aboveThan(rangeEnd)) {
             return;
         }
         PathEdge edge = new PathEdge();
-        findPathToTarget(new RangeTargetMatcher(rangeBegin, rangeEnd), edge, KnownIntrinsics.readCallerStackPointer());
+        findPathToTarget(new RangeTargetMatcher(rangeBegin, rangeEnd), edge);
         if (edge.isFilled()) {
             path.add(edge.getTo());
             path.add(edge.getFrom());
             Object fromObj = KnownIntrinsics.convertUnknownValue(edge.getFrom().getObject(), Object.class);
-
-            // Add the rest of the path
-            findPathToRoot(fromObj, edge, KnownIntrinsics.readCallerStackPointer());
+            findPathToRoot(fromObj, edge); // adds the rest of the path
         }
     }
 
-    @NeverInline("Starting a stack walk in the caller frame")
     public void findPathToRoot(Object leaf) {
-        findPathToRoot(leaf, new PathEdge(), KnownIntrinsics.readCallerStackPointer());
+        findPathToRoot(leaf, new PathEdge());
     }
 
-    void findPathToRoot(Object leaf, PathEdge currentEdge, Pointer currentThreadWalkStackPointer) {
+    void findPathToRoot(Object leaf, PathEdge currentEdge) {
         assert VMOperation.isInProgressAtSafepoint();
         if (leaf == null) {
             return;
@@ -96,7 +92,7 @@ public class PathExhibitor {
         for (; /* break */;) {
             // Walk backwards one step.
             currentEdge.reset();
-            findPathToTarget(new ObjectTargetMatcher(currentTargetObj), currentEdge, currentThreadWalkStackPointer);
+            findPathToTarget(new ObjectTargetMatcher(currentTargetObj), currentEdge);
 
             PathElement currentElement = null;
             if (currentEdge.isFilled()) {
@@ -140,21 +136,23 @@ public class PathExhibitor {
         }
     }
 
-    protected void findPathToTarget(TargetMatcher target, PathEdge edge, Pointer currentThreadWalkStackPointer) {
+    protected void findPathToTarget(TargetMatcher target, PathEdge edge) {
         assert target != null && !edge.isFilled();
         // Look in all the roots.
         findPathInHeap(target, edge);
         findPathInBootImageHeap(target, edge);
-        findPathInStack(target, edge, currentThreadWalkStackPointer);
+        findPathInStack(target, edge);
     }
 
-    protected void findPathInStack(TargetMatcher target, PathEdge edge, Pointer currentThreadWalkStackPointer) {
+    @NeverInline("Starting a stack walk in the caller frame")
+    protected void findPathInStack(TargetMatcher target, PathEdge edge) {
         if (edge.isFilled()) {
             return;
         }
 
         stackFrameVisitor.initialize(target, edge);
-        JavaStackWalker.walkCurrentThread(currentThreadWalkStackPointer, stackFrameVisitor);
+        Pointer sp = KnownIntrinsics.readCallerStackPointer();
+        JavaStackWalker.walkCurrentThread(sp, stackFrameVisitor);
         stackFrameVisitor.reset();
 
         if (SubstrateOptions.MultiThreaded.getValue()) {
@@ -390,7 +388,6 @@ public class PathExhibitor {
             return true;
         }
 
-        @NeverInline("Starting a stack walk in the caller frame")
         static boolean isInterfering(Object currentObject) {
             return currentObject instanceof PathElement || currentObject instanceof FindPathToObjectOperation || currentObject instanceof TargetMatcher;
         }
@@ -588,9 +585,8 @@ public class PathExhibitor {
         }
 
         @Override
-        @NeverInline("Starting a stack walk.")
         protected void operate() {
-            exhibitor.findPathToRoot(object, result, KnownIntrinsics.readCallerStackPointer());
+            exhibitor.findPathToRoot(object, result);
         }
     }
 
