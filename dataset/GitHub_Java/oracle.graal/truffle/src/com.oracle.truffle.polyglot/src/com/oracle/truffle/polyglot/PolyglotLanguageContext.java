@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.polyglot;
 
-import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
 import static com.oracle.truffle.polyglot.EngineAccessor.LANGUAGE;
 
 import java.io.PrintStream;
@@ -102,30 +101,22 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         final Map<Class<?>, PolyglotValue> valueCache;
         final Thread.UncaughtExceptionHandler uncaughtExceptionHandler;
         final PolyglotLanguageInstance languageInstance;
-        @CompilationFinal Map<String, LanguageInfo> accessibleInternalLanguages;
-        @CompilationFinal Map<String, LanguageInfo> accessiblePublicLanguages;
+        final Map<String, LanguageInfo> accessibleInternalLanguages;
+        final Map<String, LanguageInfo> accessiblePublicLanguages;
         final Object internalFileSystemContext;
         final Object publicFileSystemContext;
 
         Lazy(PolyglotLanguageInstance languageInstance, PolyglotContextConfig config) {
-            /*
-             * Important anything that is initialized here must be properly patched in #patch.
-             */
             this.languageInstance = languageInstance;
             this.sourceCache = languageInstance.getSourceCache();
             this.activePolyglotThreads = new HashSet<>();
             this.polyglotGuestBindings = new PolyglotBindings(PolyglotLanguageContext.this);
             this.uncaughtExceptionHandler = new PolyglotUncaughtExceptionHandler();
             this.valueCache = new ConcurrentHashMap<>();
-            this.computeAccessPermissions(config);
-            // file systems are patched after preinitialization internally using a delegate field
-            this.publicFileSystemContext = EngineAccessor.LANGUAGE.createFileSystemContext(PolyglotLanguageContext.this, config.fileSystem);
-            this.internalFileSystemContext = EngineAccessor.LANGUAGE.createFileSystemContext(PolyglotLanguageContext.this, config.internalFileSystem);
-        }
-
-        void computeAccessPermissions(PolyglotContextConfig config) {
             this.accessibleInternalLanguages = computeAccessibleLanguages(config, true);
             this.accessiblePublicLanguages = computeAccessibleLanguages(config, false);
+            this.publicFileSystemContext = EngineAccessor.LANGUAGE.createFileSystemContext(PolyglotLanguageContext.this, config.fileSystem);
+            this.internalFileSystemContext = EngineAccessor.LANGUAGE.createFileSystemContext(PolyglotLanguageContext.this, config.internalFileSystem);
         }
 
         private Map<String, LanguageInfo> computeAccessibleLanguages(PolyglotContextConfig config, boolean internal) {
@@ -298,27 +289,19 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         if (env != null) {
             return LANGUAGE.getContext(env);
         } else {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerDirectives.transferToInterpreter();
             return null;
         }
     }
 
     Object getPublicFileSystemContext() {
-        Lazy l = lazy;
-        if (l != null) {
-            return l.publicFileSystemContext;
-        } else {
-            return null;
-        }
+        assert lazy != null;
+        return lazy.publicFileSystemContext;
     }
 
     Object getInternalFileSystemContext() {
-        Lazy l = lazy;
-        if (l != null) {
-            return l.internalFileSystemContext;
-        } else {
-            return null;
-        }
+        assert lazy != null;
+        return lazy.internalFileSystemContext;
     }
 
     Value getHostBindings() {
@@ -358,7 +341,9 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     Env requireEnv() {
         Env localEnv = this.env;
         if (localEnv == null) {
-            throw shouldNotReachHere("No language context is active on this thread.");
+            CompilerDirectives.transferToInterpreter();
+            throw new AssertionError(
+                            "No language context is active on this thread.");
         }
         return localEnv;
     }
@@ -628,9 +613,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     boolean patch(PolyglotContextConfig newConfig) {
         if (isCreated()) {
             try {
-                OptionValuesImpl newOptionValues = newConfig.getOptionValues(language);
-                lazy.computeAccessPermissions(newConfig);
-                Env newEnv = LANGUAGE.patchEnvContext(env, newConfig.out, newConfig.err, newConfig.in,
+                final OptionValuesImpl newOptionValues = newConfig.getOptionValues(language);
+                final Env newEnv = LANGUAGE.patchEnvContext(env, newConfig.out, newConfig.err, newConfig.in,
                                 Collections.emptyMap(), newOptionValues, newConfig.getApplicationArguments(language));
                 if (newEnv != null) {
                     env = newEnv;
@@ -645,9 +629,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                     throw t;
                 }
                 LOG.log(Level.FINE, "Exception during patching context of language: {0}", this.language.getId());
-                // The conversion to the host exception happens in the
-                // PolyglotEngineImpl.createContext
-                throw GuestToHostRootNode.silenceException(RuntimeException.class, t);
+                throw PolyglotImpl.guestToHostException(this, t);
             }
         } else {
             return true;
@@ -760,7 +742,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
     static final class Generic {
         private Generic() {
-            throw shouldNotReachHere("no instances");
+            throw new AssertionError("no instances");
         }
     }
 
@@ -932,7 +914,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             assert value instanceof TruffleObject;
             return value;
         } else {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerDirectives.transferToInterpreter();
             throw PolyglotEngineException.illegalArgument(String.format("The value '%s' cannot be passed from one context to another. " +
                             "The current context is 0x%x and the argument value originates from context 0x%x.",
                             PolyglotValue.getValueInfo(null, value), context.hashCode(), valueContext.hashCode()));
@@ -1003,7 +985,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                     return receiver;
                 }
             } catch (UnsupportedMessageException e) {
-                throw shouldNotReachHere(e);
+                CompilerDirectives.transferToInterpreter();
+                throw new AssertionError(e);
             }
         }
         return getLanguageViewNoCheck(receiver);
@@ -1017,7 +1000,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                             lib.getLanguage(result) == languageClass : String.format("The returned language view of language '%s' must return the class '%s' for InteropLibrary.getLanguage." +
                                             "Fix the implementation of %s.getLanguageView to resolve this.", languageClass.getTypeName(), languageClass.getTypeName(), languageClass.getTypeName());
         } catch (UnsupportedMessageException e) {
-            throw shouldNotReachHere(e);
+            CompilerDirectives.transferToInterpreter();
+            throw new AssertionError(e);
         }
         return true;
     }
@@ -1030,7 +1014,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                             lib.getLanguage(result) == languageClass : String.format("The returned scoped view of language '%s' must return the class '%s' for InteropLibrary.getLanguage." +
                                             "Fix the implementation of %s.getScopedView to resolve this.", languageClass.getTypeName(), languageClass.getTypeName(), languageClass.getTypeName());
         } catch (UnsupportedMessageException e) {
-            throw shouldNotReachHere(e);
+            CompilerDirectives.transferToInterpreter();
+            throw new AssertionError(e);
         }
         return true;
     }
