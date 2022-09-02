@@ -532,17 +532,18 @@ public final class SubstitutionProcessor extends EspressoProcessor {
     }
 
     @Override
-    List<String> expectedImports(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
-        List<String> expectedImports = new ArrayList<>();
+    String generateImports(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
+        StringBuilder str = new StringBuilder();
         SubstitutorHelper h = (SubstitutorHelper) helper;
-        expectedImports.add(substitutorPackage + "." + SUBSTITUTOR);
+        str.append("import ").append(substitutorPackage + "." + SUBSTITUTOR).append(";\n");
         if (parameterTypeName.contains("StaticObject") || h.returnType.equals("V")) {
-            expectedImports.add(IMPORT_STATIC_OBJECT);
+            str.append(IMPORT_STATIC_OBJECT);
         }
         if (helper.isNodeTarget()) {
-            expectedImports.add(helper.getNodeTarget().getQualifiedName().toString());
+            str.append("import ").append(helper.getNodeTarget().getQualifiedName()).append(";\n");
         }
-        return expectedImports;
+        str.append("\n");
+        return str.toString();
     }
 
     @Override
