@@ -35,7 +35,6 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibG
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal.Id.GetDataPatchesCount;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal.Id.GetDumpChannel;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal.Id.GetExceptionHandlersCount;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal.Id.GetExecutionID;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal.Id.GetGraphDumpDirectory;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal.Id.GetInfopoints;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal.Id.GetInfopointsCount;
@@ -130,7 +129,6 @@ import org.graalvm.util.OptionsEncoder;
 import org.graalvm.word.WordFactory;
 
 import jdk.vm.ci.meta.ResolvedJavaType;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 
 /**
  * Entry points in libgraal for {@link TruffleToLibGraal calls} from HotSpot.
@@ -748,20 +746,6 @@ final class TruffleToLibGraalEntryPoints {
         } catch (Throwable t) {
             JNIExceptionWrapper.throwInHotSpot(env, t);
         }
-    }
-
-    @TruffleToLibGraal(GetExecutionID)
-    @CEntryPoint(name = "Java_org_graalvm_compiler_truffle_runtime_hotspot_libgraal_TruffleToLibGraalCalls_getExecutionID")
-    @SuppressWarnings({"unused", "try"})
-    public JString getExecutionID(JNIEnv env, JClass hsClass, @CEntryPoint.IsolateThreadContext long isolateThreadId) {
-        JNILibGraalScope<TruffleToLibGraal.Id> scope = new JNILibGraalScope<>(GetExecutionID, env);
-        try (JNILibGraalScope<TruffleToLibGraal.Id> s = scope) {
-            scope.setObjectResult(createHSString(env, GraalServices.getExecutionID()));
-        } catch (Throwable t) {
-            JNIExceptionWrapper.throwInHotSpot(env, t);
-            scope.setObjectResult(WordFactory.nullPointer());
-        }
-        return scope.getObjectResult();
     }
 
     static {
