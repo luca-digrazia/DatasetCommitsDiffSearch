@@ -46,6 +46,7 @@ public abstract class LLVMCheckSymbolNode extends LLVMNode {
 
     public abstract boolean execute(LLVMSymbol descriptor);
 
+    @SuppressWarnings("unused")
     @Specialization(guards = "alias.isAlias()")
     boolean doCheckAlias(LLVMAlias alias,
                     @CachedContext(LLVMLanguage.class) LLVMContext context) {
@@ -56,6 +57,7 @@ public abstract class LLVMCheckSymbolNode extends LLVMNode {
         return doCheck(target, context);
     }
 
+    @SuppressWarnings("unused")
     @Specialization
     boolean doCheck(LLVMSymbol symbol,
                     @CachedContext(LLVMLanguage.class) LLVMContext context) {
