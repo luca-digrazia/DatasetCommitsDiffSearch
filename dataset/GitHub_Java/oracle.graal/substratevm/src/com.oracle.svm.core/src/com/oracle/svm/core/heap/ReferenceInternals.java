@@ -40,7 +40,6 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
-import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.util.TimeUtils;
 import com.oracle.svm.core.util.VMError;
 
@@ -74,7 +73,6 @@ public final class ReferenceInternals {
 
     /** Barrier-less read of {@link Target_java_lang_ref_Reference#referent} as pointer. */
     public static <T> Pointer getReferentPointer(Reference<T> instance) {
-        assert VMOperation.isGCInProgress();
         return Word.objectToUntrackedPointer(ObjectAccess.readObject(instance, WordFactory.signed(Target_java_lang_ref_Reference.referentFieldOffset)));
     }
 
@@ -85,7 +83,6 @@ public final class ReferenceInternals {
 
     /** Barrier-less write of {@link Target_java_lang_ref_Reference#referent} as pointer. */
     public static <T> void setReferentPointer(Reference<T> instance, Pointer value) {
-        assert VMOperation.isGCInProgress();
         ObjectAccess.writeObject(instance, WordFactory.signed(Target_java_lang_ref_Reference.referentFieldOffset), value.toObject());
     }
 
@@ -99,7 +96,6 @@ public final class ReferenceInternals {
 
     /** Barrier-less read of {@link Target_java_lang_ref_Reference#discovered}. */
     public static <T> Reference<?> getNextDiscovered(Reference<T> instance) {
-        assert VMOperation.isGCInProgress();
         return KnownIntrinsics.convertUnknownValue(ObjectAccess.readObject(instance, WordFactory.signed(Target_java_lang_ref_Reference.discoveredFieldOffset)), Reference.class);
     }
 
@@ -109,7 +105,6 @@ public final class ReferenceInternals {
 
     /** Barrier-less write of {@link Target_java_lang_ref_Reference#discovered}. */
     public static <T> void setNextDiscovered(Reference<T> instance, Reference<?> newNext) {
-        assert VMOperation.isGCInProgress();
         ObjectAccess.writeObject(instance, WordFactory.signed(Target_java_lang_ref_Reference.discoveredFieldOffset), newNext);
     }
 
