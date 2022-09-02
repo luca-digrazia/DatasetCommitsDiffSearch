@@ -32,6 +32,7 @@ import java.util.function.Function;
 
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGenerator;
 
+import jdk.vm.ci.amd64.AMD64Kind;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
 
@@ -142,7 +143,15 @@ public abstract class HashFunction {
 
             @Override
             public Value gen(Value val, Value min, ArithmeticLIRGenerator t) {
-                return gen.apply(t).apply(t.emitNarrow(val, 32), t.emitNarrow(min, 32));
+                return gen.apply(t).apply(toDWORD(val, t), toDWORD(min, t));
+            }
+
+            private Value toDWORD(Value v, ArithmeticLIRGenerator t) {
+                if (v.getPlatformKind() != AMD64Kind.DWORD) {
+                    return t.emitNarrow(v, 32);
+                } else {
+                    return v;
+                }
             }
         });
     }

@@ -30,7 +30,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
-import jdk.vm.ci.meta.JavaKind;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGenerator;
 
 import jdk.vm.ci.meta.JavaConstant;
@@ -52,12 +51,11 @@ public final class Hasher {
      * @return an optional hasher
      */
     public static Optional<Hasher> forKeys(JavaConstant[] keys, double minDensity) {
-        assert checkKeyKind(keys);
         if (keys.length <= 2) {
             return Optional.empty();
         } else {
             int maxCardinality = (int) Math.round(keys.length / minDensity);
-            assert checkIfSorted(keys);
+            assertSorted(keys);
             TreeSet<Hasher> candidates = new TreeSet<>(new Comparator<Hasher>() {
                 @Override
                 public int compare(Hasher o1, Hasher o2) {
@@ -69,7 +67,7 @@ public final class Hasher {
                     }
                 }
             });
-            int min = keys[0].asInt();
+            long min = keys[0].asLong();
             for (HashFunction f : HashFunction.instances()) {
                 for (int cardinality = keys.length; cardinality < maxCardinality; cardinality++) {
                     if (isValid(keys, min, f, cardinality)) {
@@ -86,28 +84,16 @@ public final class Hasher {
         }
     }
 
-    private static boolean checkKeyKind(JavaConstant[] keys) {
-        for (int i = 0; i < keys.length; i++) {
-            if (keys[i].getJavaKind() != JavaKind.Int) {
-                throw new AssertionError(String.format("Key at index %d is not an int: %s", i, keys[i]));
-            }
-        }
-        return true;
-    }
-
-    private static boolean checkIfSorted(JavaConstant[] keys) {
+    private static void assertSorted(JavaConstant[] keys) {
         for (int i = 1; i < keys.length; i++) {
-            if (keys[i - 1].asInt() >= keys[i].asInt()) {
-                throw new AssertionError("Keys array is not sorted");
-            }
+            assert keys[i - 1].asLong() < keys[i].asLong();
         }
-        return true;
     }
 
-    private static boolean isValid(JavaConstant[] keys, int min, HashFunction function, int cardinality) {
+    private static boolean isValid(JavaConstant[] keys, long min, HashFunction function, int cardinality) {
         Set<Integer> seen = new HashSet<>(keys.length);
         for (JavaConstant key : keys) {
-            int hash = function.apply(key.asInt(), min) & (cardinality - 1);
+            int hash = function.apply(key.asLong(), min) & (cardinality - 1);
             if (!seen.add(hash)) {
                 return false;
             }
@@ -117,9 +103,9 @@ public final class Hasher {
 
     private final HashFunction function;
     private final int cardinality;
-    private final int min;
+    private final long min;
 
-    private Hasher(HashFunction function, int cardinality, int min) {
+    private Hasher(HashFunction function, int cardinality, long min) {
         this.function = function;
         this.cardinality = cardinality;
         this.min = min;
@@ -131,7 +117,7 @@ public final class Hasher {
      * @param value the value to be hashed
      * @return the hash value
      */
-    public int hash(int value) {
+    public int hash(long value) {
         return function.apply(value, min) & (cardinality - 1);
     }
 
@@ -143,7 +129,7 @@ public final class Hasher {
      * @return the hashed lir value
      */
     public Value hash(Value value, ArithmeticLIRGenerator gen) {
-        Value h = function.gen(value, gen.getLIRGen().emitJavaConstant(JavaConstant.forInt(min)), gen);
+        Value h = function.gen(value, gen.getLIRGen().emitJavaConstant(JavaConstant.forLong(min)), gen);
         return gen.emitAnd(h, gen.getLIRGen().emitJavaConstant(JavaConstant.forInt(cardinality - 1)));
     }
 

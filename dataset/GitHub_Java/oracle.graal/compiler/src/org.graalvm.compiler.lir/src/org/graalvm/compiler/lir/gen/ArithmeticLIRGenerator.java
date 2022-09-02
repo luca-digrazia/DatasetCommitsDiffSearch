@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -41,6 +43,10 @@ public abstract class ArithmeticLIRGenerator implements ArithmeticLIRGeneratorTo
         return lirGen;
     }
 
+    protected final AllocatableValue asAllocatable(Value value) {
+        return lirGen.asAllocatable(value);
+    }
+
     public OptionValues getOptions() {
         return getLIRGen().getResult().getLIR().getOptions();
     }
@@ -50,8 +56,19 @@ public abstract class ArithmeticLIRGenerator implements ArithmeticLIRGeneratorTo
 
     protected abstract Variable emitAdd(LIRKind resultKind, Value a, Value b, boolean setFlags);
 
+    protected abstract Variable emitSub(LIRKind resultKind, Value a, Value b, boolean setFlags);
+
     @Override
     public final Variable emitAdd(Value aVal, Value bVal, boolean setFlags) {
+        return emitAddOrSub(aVal, bVal, setFlags, true);
+    }
+
+    @Override
+    public final Variable emitSub(Value aVal, Value bVal, boolean setFlags) {
+        return emitAddOrSub(aVal, bVal, setFlags, false);
+    }
+
+    private Variable emitAddOrSub(Value aVal, Value bVal, boolean setFlags, boolean isAdd) {
         LIRKind resultKind;
         Value a = aVal;
         Value b = bVal;
@@ -71,7 +88,7 @@ public abstract class ArithmeticLIRGenerator implements ArithmeticLIRGeneratorTo
                 if (bKind.isDerivedReference()) {
                     resultKind = bKind;
                 } else {
-                    AllocatableValue allocatable = getLIRGen().asAllocatable(b);
+                    AllocatableValue allocatable = asAllocatable(b);
                     resultKind = bKind.makeDerivedReference(allocatable);
                     b = allocatable;
                 }
@@ -79,7 +96,7 @@ public abstract class ArithmeticLIRGenerator implements ArithmeticLIRGeneratorTo
                 if (aKind.isDerivedReference()) {
                     resultKind = aKind;
                 } else {
-                    AllocatableValue allocatable = getLIRGen().asAllocatable(a);
+                    AllocatableValue allocatable = asAllocatable(a);
                     resultKind = aKind.makeDerivedReference(allocatable);
                     a = allocatable;
                 }
@@ -90,47 +107,12 @@ public abstract class ArithmeticLIRGenerator implements ArithmeticLIRGeneratorTo
             resultKind = LIRKind.combine(a, b);
         }
 
-        return emitAdd(resultKind, a, b, setFlags);
+        return isAdd ? emitAdd(resultKind, a, b, setFlags) : emitSub(resultKind, a, b, setFlags);
     }
 
-    protected abstract Variable emitSub(LIRKind resultKind, Value a, Value b, boolean setFlags);
-
-    @Override
-    public final Variable emitSub(Value aVal, Value bVal, boolean setFlags) {
-        LIRKind resultKind;
-        Value a = aVal;
-        Value b = bVal;
-
-        if (isNumericInteger(a.getPlatformKind())) {
-            LIRKind aKind = a.getValueKind(LIRKind.class);
-            LIRKind bKind = b.getValueKind(LIRKind.class);
-            assert a.getPlatformKind() == b.getPlatformKind();
-
-            if (aKind.isUnknownReference()) {
-                resultKind = aKind;
-            } else if (bKind.isUnknownReference()) {
-                resultKind = bKind;
-            }
-
-            if (aKind.isValue() && bKind.isValue()) {
-                resultKind = aKind;
-            } else if (bKind.isValue()) {
-                if (aKind.isDerivedReference()) {
-                    resultKind = aKind;
-                } else {
-                    AllocatableValue allocatable = getLIRGen().asAllocatable(a);
-                    resultKind = aKind.makeDerivedReference(allocatable);
-                    a = allocatable;
-                }
-            } else if (aKind.isDerivedReference() && bKind.isDerivedReference() && aKind.getDerivedReferenceBase().equals(bKind.getDerivedReferenceBase())) {
-                resultKind = LIRKind.value(a.getPlatformKind());
-            } else {
-                resultKind = aKind.makeUnknownReference();
-            }
-        } else {
-            resultKind = LIRKind.combine(a, b);
-        }
-
-        return emitSub(resultKind, a, b, setFlags);
+    public Value emitRor(Value value, Value distance) {
+        // (value >>> distance) | (value << -distance)
+        return emitOr(emitUShr(value, distance), emitShl(value, emitNegate(distance)));
     }
+
 }
