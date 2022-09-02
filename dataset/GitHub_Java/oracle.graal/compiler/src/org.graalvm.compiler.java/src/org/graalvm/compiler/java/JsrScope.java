@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -85,13 +85,13 @@ public final class JsrScope {
      *         {@code int[]} with {@code value.chars().toArray()}.
      */
     public String getAncestry() {
-        String result = "";
+        StringBuilder sb = new StringBuilder();
         for (JsrScope s = this; s != null; s = s.parent) {
             if (!s.isEmpty()) {
-                result = s.returnAddress + result;
+                sb.append(s.returnAddress);
             }
         }
-        return result;
+        return sb.reverse().toString();
     }
 
     /**
