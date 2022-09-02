@@ -535,9 +535,8 @@ public class InliningUtil extends ValueMergeUtil {
                 assert obj.usages().filter(x -> x instanceof GuardedNode && ((GuardedNode) x).getGuard() == obj).count() == 0 : "Must not have guards attached to an exception object node";
                 AbstractBeginNode replacementAnchor = AbstractBeginNode.prevBegin(unwindNode);
                 assert replacementAnchor != null;
-                // guard case should never happen, see above
-                obj.replaceAtUsages(replacementAnchor, InputType.Anchor, InputType.Guard);
-                obj.replaceAtUsages(unwindNode.exception(), InputType.Value);
+                obj.replaceAtUsages(InputType.Anchor, replacementAnchor);
+                obj.replaceAtUsages(InputType.Value, unwindNode.exception());
 
                 Node n = obj.next();
                 obj.setNext(null);
