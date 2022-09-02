@@ -24,17 +24,17 @@
  */
 package com.oracle.svm.core.genscavenge;
 
+import com.oracle.svm.core.hub.LayoutEncoding;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
-import org.graalvm.word.UnsignedWord;
-import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryWalker;
-import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.log.Log;
+import org.graalvm.word.UnsignedWord;
+import org.graalvm.word.WordFactory;
 
 /**
  * A Young Generation has one space, for ordinary objects.
@@ -141,24 +141,38 @@ public class YoungGeneration extends Generation {
         return survivorGreyObjectsWalkers[index];
     }
 
-    @AlwaysInline("GC performance")
+    /** Check if that space is the young space. */
+    boolean isYoungSpace(Space thatSpace) {
+        return thatSpace.isYoungSpace();
+    }
+
     @Override
-    protected Object promoteObject(Object original, UnsignedWord header) {
-        if (ObjectHeaderImpl.isAlignedHeader(original, header)) {
+    protected Object promoteObject(Object original) {
+        final Log trace = Log.noopLog().string("[YoungGeneration.promoteObject:").string("  original: ").object(original).newline();
+        /* Choose between object copying and chunk motion. */
+        Object result = null;
+        if (ObjectHeaderImpl.getObjectHeaderImpl().isAlignedObject(original)) {
+            trace.string("  aligned header: ").hex(ObjectHeaderImpl.readHeaderFromObject(original)).newline();
+            /* Promote by Object copying to the next age space. */
             AlignedHeapChunk.AlignedHeader originalChunk = AlignedHeapChunk.getEnclosingAlignedHeapChunk(original);
-            Space originalSpace = originalChunk.getSpace();
-            if (originalSpace.isFrom()) {
-                return promoteAlignedObject(original, originalSpace);
+            final Space originalSpace = originalChunk.getSpace();
+            if (originalSpace.getAge() < maxSurvivorSpaces) {
+                result = promoteAlignedObject(original, originalSpace);
+            } else {
+                result = HeapImpl.getHeapImpl().getOldGeneration().promoteAlignedObject(original);
             }
         } else {
-            assert ObjectHeaderImpl.isUnalignedHeader(original, header);
-            UnalignedHeapChunk.UnalignedHeader chunk = UnalignedHeapChunk.getEnclosingUnalignedHeapChunk(original);
-            Space originalSpace = chunk.getSpace();
-            if (originalSpace.isFrom()) {
-                promoteUnalignedObject(chunk, originalSpace);
+            trace.string("  unaligned header: ").hex(ObjectHeaderImpl.readHeaderFromObject(original)).newline();
+            UnalignedHeapChunk.UnalignedHeader originalUnalignedChunk = UnalignedHeapChunk.getEnclosingUnalignedHeapChunk(original);
+            final Space originalSpace = originalUnalignedChunk.getSpace();
+            if (originalSpace.getAge() < maxSurvivorSpaces) {
+                result = promoteUnalignedObject(original, originalSpace);
+            } else {
+                result = HeapImpl.getHeapImpl().getOldGeneration().promoteUnalignedObjectChunk(original);
             }
         }
-        return original;
+        trace.string("  OldGeneration.promoteObject returns: ").object(result).string("]").newline();
+        return result;
     }
 
     private void releaseSurvivorSpaces(boolean isFromSpace) {
@@ -185,6 +199,11 @@ public class YoungGeneration extends Generation {
             assert getSurvivorFromSpaceAt(i).isEmpty() : "Survivor fromSpace should be empty.";
             getSurvivorFromSpaceAt(i).absorb(getSurvivorToSpaceAt(i));
         }
+    }
+
+    @Override
+    protected boolean isValidSpace(Space thatSpace) {
+        return isYoungSpace(thatSpace);
     }
 
     @Override
@@ -274,6 +293,7 @@ public class YoungGeneration extends Generation {
 
     boolean scanGreyObjects() {
         final Log trace = Log.noopLog().string("[YoungGeneration.scanGreyObjects:");
+        final GCImpl gc = HeapImpl.getHeapImpl().getGCImpl();
         boolean needScan = false;
 
         for (int i = 0; i < maxSurvivorSpaces; i++) {
@@ -289,7 +309,7 @@ public class YoungGeneration extends Generation {
 
         for (int i = 0; i < maxSurvivorSpaces; i++) {
             trace.string("[Scanning survivor-").signed(i).string("]").newline();
-            getSurvivorGreyObjectsWalker(i).walkGreyObjects();
+            getSurvivorGreyObjectsWalker(i).walkGreyObjects(gc.getGreyToBlackObjectVisitor());
         }
         trace.string("]").newline();
 
@@ -331,34 +351,50 @@ public class YoungGeneration extends Generation {
     }
 
     boolean contains(Object object) {
-        return HeapChunk.getEnclosingHeapChunk(object).getSpace().isYoungSpace();
+        final ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
+        if (ohi.isAlignedObject(object)) {
+            return isYoungSpace(AlignedHeapChunk.getEnclosingAlignedHeapChunk(object).getSpace());
+        } else if (ohi.isUnalignedObject(object)) {
+            return isYoungSpace(UnalignedHeapChunk.getEnclosingUnalignedHeapChunk(object).getSpace());
+        }
+        return false;
     }
 
-    @AlwaysInline("GC performance")
+    private static boolean shouldPromoteFrom(Space originalSpace) {
+        return originalSpace.isFrom();
+    }
+
     private Object promoteAlignedObject(Object original, Space originalSpace) {
-        assert ObjectHeaderImpl.isAlignedObject(original);
         assert originalSpace.isEdenSpace() || originalSpace.isSurvivorSpace() : "Should be Eden or survivor.";
-        assert originalSpace.isFrom() : "must not be called for other objects";
-
-        if (originalSpace.getAge() < maxSurvivorSpaces) {
-            int age = originalSpace.getNextAgeForPromotion();
-            Space toSpace = getSurvivorToSpaceAt(age - 1);
-            return toSpace.promoteAlignedObject(original, originalSpace);
-        } else {
-            return HeapImpl.getHeapImpl().getOldGeneration().promoteAlignedObject(original, originalSpace);
+        if (!shouldPromoteFrom(originalSpace)) {
+            return original;
         }
+        int age = originalSpace.getNextAgeForPromotion();
+        Space toSpace = getSurvivorToSpaceAt(age - 1);
+        return toSpace.promoteAlignedObject(original);
     }
 
-    @AlwaysInline("GC performance")
-    private void promoteUnalignedObject(UnalignedHeapChunk.UnalignedHeader originalChunk, Space originalSpace) {
-        assert originalSpace.isFrom() : "must not be called for other objects";
-
-        if (originalSpace.getAge() < maxSurvivorSpaces) {
+    private Object promoteUnalignedObject(Object original, Space originalSpace) {
+        final Log trace = Log.noopLog().string("[YoungGeneration.promoteUnalignedObjectChunk:").string("  original: ").object(original);
+        assert ObjectHeaderImpl.getObjectHeaderImpl().isUnalignedObject(original);
+        trace.string("  originalSpace: ").string(originalSpace.getName());
+        if (shouldPromoteFrom(originalSpace)) {
+            trace.string("  promoting");
+            final UnalignedHeapChunk.UnalignedHeader uChunk = UnalignedHeapChunk.getEnclosingUnalignedHeapChunk(original);
             int age = originalSpace.getNextAgeForPromotion();
             Space toSpace = getSurvivorToSpaceAt(age - 1);
-            toSpace.promoteUnalignedHeapChunk(originalChunk, originalSpace);
+            if (HeapOptions.TraceObjectPromotion.getValue()) {
+                final Log promotionTrace = Log.log().string("[YoungGeneration.promoteUnalignedObjectChunk:").string("  original: ").object(original);
+                final UnsignedWord size = LayoutEncoding.getSizeFromObject(original);
+                promotionTrace.string("  size: ").unsigned(size).string("]").newline();
+            }
+            toSpace.promoteUnalignedHeapChunk(uChunk);
         } else {
-            HeapImpl.getHeapImpl().getOldGeneration().promoteUnalignedChunk(originalChunk, originalSpace);
+            trace.string("  not promoting");
         }
+        trace.string("  returns: ").object(original);
+        trace.string("]").newline();
+        return original;
     }
+
 }
