@@ -50,6 +50,7 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Split
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingDumpDecisions;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingGrowthLimit;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingMaxCalleeSize;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingMaxNumberOfSplitNodes;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingMaxPropagationDepth;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingTraceEvents;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceCompilation;
@@ -113,6 +114,7 @@ public final class EngineData {
     @CompilationFinal public int splittingMaxCalleeSize;
     @CompilationFinal public int splittingMaxPropagationDepth;
     @CompilationFinal public double splittingGrowthLimit;
+    @CompilationFinal public int splittingMaxNumberOfSplitNodes;
 
     // inlining options
     @CompilationFinal public boolean inlining;
@@ -169,6 +171,7 @@ public final class EngineData {
         this.traceSplittingSummary = getPolyglotOptionValue(options, TraceSplittingSummary);
         this.traceSplits = getPolyglotOptionValue(options, TraceSplitting);
         this.splittingGrowthLimit = getPolyglotOptionValue(options, SplittingGrowthLimit);
+        this.splittingMaxNumberOfSplitNodes = getPolyglotOptionValue(options, SplittingMaxNumberOfSplitNodes);
 
         // inlining options
         this.inlining = getPolyglotOptionValue(options, Inlining) &&

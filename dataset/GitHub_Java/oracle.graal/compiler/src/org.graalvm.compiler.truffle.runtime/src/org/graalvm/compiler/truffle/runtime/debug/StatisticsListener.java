@@ -32,6 +32,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IntSummaryStatistics;
+import java.util.List;
 import java.util.LongSummaryStatistics;
 import java.util.Map;
 import java.util.Objects;
@@ -42,12 +43,15 @@ import java.util.logging.Level;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.EngineData;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
+import org.graalvm.compiler.truffle.runtime.TruffleInlining;
+import org.graalvm.compiler.truffle.runtime.TruffleInlining.CallTreeNodeVisitor;
+import org.graalvm.compiler.truffle.runtime.TruffleInliningDecision;
 
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -178,12 +182,12 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
     }
 
     @Override
-    public synchronized void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleMetaAccessProvider inliningDecision, GraphInfo graph) {
+    public synchronized void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph) {
         final Times times = compilationTimes.get();
         times.truffleTierFinished = System.nanoTime();
-        nodeStatistics.accept(nodeClasses(target), target);
+        nodeStatistics.accept(nodeClasses(target, inliningDecision), target);
 
-        CallTargetNodeStatistics callTargetStat = new CallTargetNodeStatistics(target);
+        CallTargetNodeStatistics callTargetStat = new CallTargetNodeStatistics(target, inliningDecision);
         nodeCount.accept(callTargetStat.getNodeCount(), target);
         nodeCountTrivial.accept(callTargetStat.getNodeCountTrivial(), target);
         nodeCountNonTrivial.accept(callTargetStat.getNodeCountNonTrivial(), target);
@@ -206,9 +210,9 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         }
     }
 
-    private static Collection<Class<?>> nodeClasses(OptimizedCallTarget target) {
+    private static Collection<Class<?>> nodeClasses(OptimizedCallTarget target, TruffleInlining inliningDecision) {
         Collection<Class<?>> nodeClasses = new ArrayList<>();
-        for (Node node : target.nodeIterable()) {
+        for (Node node : target.nodeIterable(inliningDecision)) {
             if (node != null) {
                 nodeClasses.add(node.getClass());
             }
@@ -227,7 +231,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
     }
 
     @Override
-    public synchronized void onCompilationSuccess(OptimizedCallTarget target, TruffleMetaAccessProvider inliningDecision, GraphInfo graph, CompilationResultInfo result) {
+    public synchronized void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
         success++;
         long compilationDone = System.nanoTime();
 
@@ -302,6 +306,25 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
             printStatisticTime(out, "  Graal Tier", compilationTimeGraalTier);
             printStatisticTime(out, "  Code Installation", compilationTimeCodeInstallation);
 
+            // GR-25014 Truffle node count statistics are broken with language agnostic inlining
+            if (!runtimeData.getEngineOptions().get(PolyglotCompilerOptions.LanguageAgnosticInlining)) {
+                printStatistic(out, "Truffle node count", nodeCount);
+                printStatistic(out, "  Trivial", nodeCountTrivial);
+                printStatistic(out, "  Non Trivial", nodeCountNonTrivial);
+                printStatistic(out, "    Monomorphic", nodeCountMonomorphic);
+                printStatistic(out, "    Polymorphic", nodeCountPolymorphic);
+                printStatistic(out, "    Megamorphic", nodeCountMegamorphic);
+                printStatistic(out, "Truffle call count", callCount);
+                printStatistic(out, "  Indirect", callCountIndirect);
+                printStatistic(out, "  Direct", callCountDirect);
+                printStatistic(out, "    Dispatched", callCountDirectDispatched);
+                printStatistic(out, "    Inlined", callCountDirectInlined);
+                printStatistic(out, "    ----------");
+                printStatistic(out, "    Cloned", callCountDirectCloned);
+                printStatistic(out, "    Not Cloned", callCountDirectNotCloned);
+                printStatistic(out, "Truffle loops", loopCount);
+            }
+
             printStatistic(out, "Graal node count");
             printStatistic(out, "  After Truffle Tier", truffleTierNodeCount);
             printStatistic(out, "  After Graal Tier", graalTierNodeCount);
@@ -316,6 +339,11 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
             printStatistic(out, "  Data references", compilationResultDataPatches);
 
             if (runtimeData.callTargetStatisticDetails) {
+                // GR-25014 Truffle node count statistics are broken with language agnostic inlining
+                if (!runtimeData.getEngineOptions().get(PolyglotCompilerOptions.LanguageAgnosticInlining)) {
+                    printStatistic(out, "Truffle nodes");
+                    nodeStatistics.printStatistics(out, Class::getSimpleName, false, true);
+                }
                 printStatistic(out, "Graal nodes after Truffle tier");
                 truffleTierNodeStatistics.printStatistics(out, Function.identity(), false, true);
                 printStatistic(out, "Graal nodes after Graal tier");
@@ -475,12 +503,12 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         private int callCountDirectNotCloned;
         private int loopCount;
 
-        CallTargetNodeStatistics(OptimizedCallTarget target) {
-            target.accept(this::visitNode);
+        CallTargetNodeStatistics(OptimizedCallTarget target, TruffleInlining inliningDecision) {
+            target.accept((CallTreeNodeVisitor) this::visitNode, inliningDecision);
 
         }
 
-        private boolean visitNode(Node node) {
+        private boolean visitNode(List<TruffleInlining> stack, Node node) {
             if (node == null) {
                 return true;
             }
@@ -500,8 +528,13 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
             }
 
             if (node instanceof DirectCallNode) {
-                OptimizedDirectCallNode optimizedDirectCallNode = node instanceof OptimizedDirectCallNode ? ((OptimizedDirectCallNode) node) : null;
-                if (optimizedDirectCallNode != null && optimizedDirectCallNode.getCallTarget().isSplit()) {
+                TruffleInliningDecision decision = CallTreeNodeVisitor.getCurrentInliningDecision(stack);
+                if (decision != null && decision.getProfile().getCallNode() == node && decision.shouldInline()) {
+                    callCountDirectInlined++;
+                } else {
+                    callCountDirectDispatched++;
+                }
+                if (decision != null && decision.getProfile().getCallNode().isCallTargetCloned()) {
                     callCountDirectCloned++;
                 } else {
                     callCountDirectNotCloned++;
@@ -633,7 +666,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         }
 
         @Override
-        public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleMetaAccessProvider inliningDecision, GraphInfo graph) {
+        public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph) {
             StatisticsListener listener = target.engine.statisticsListener;
             if (listener != null) {
                 listener.onCompilationTruffleTierFinished(target, inliningDecision, graph);
@@ -649,7 +682,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         }
 
         @Override
-        public void onCompilationSuccess(OptimizedCallTarget target, TruffleMetaAccessProvider inliningDecision, GraphInfo graph, CompilationResultInfo result) {
+        public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
             StatisticsListener listener = target.engine.statisticsListener;
             if (listener != null) {
                 listener.onCompilationSuccess(target, inliningDecision, graph, result);

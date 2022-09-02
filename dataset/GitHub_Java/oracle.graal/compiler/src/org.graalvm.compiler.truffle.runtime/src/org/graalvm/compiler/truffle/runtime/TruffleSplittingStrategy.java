@@ -197,7 +197,8 @@ final class TruffleSplittingStrategy {
         final OptimizedCallTarget callTarget = (OptimizedCallTarget) target;
         final EngineData engineData = callTarget.engine;
         if (engineData.splitting) {
-            engineData.splitLimit = (int) (engineData.splitLimit + engineData.splittingGrowthLimit * callTarget.getUninitializedNodeCount());
+            final int newLimit = (int) (engineData.splitLimit + engineData.splittingGrowthLimit * callTarget.getUninitializedNodeCount());
+            engineData.splitLimit = Math.min(newLimit, engineData.splittingMaxNumberOfSplitNodes);
         }
         if (engineData.traceSplittingSummary) {
             synchronized (engineData.splittingStatistics) {

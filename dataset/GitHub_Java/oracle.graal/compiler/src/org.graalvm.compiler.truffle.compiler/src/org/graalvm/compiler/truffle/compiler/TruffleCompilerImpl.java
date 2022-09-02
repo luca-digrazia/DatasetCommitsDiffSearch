@@ -39,7 +39,6 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.First
 import java.io.PrintStream;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
-import java.nio.ReadOnlyBufferException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -151,13 +150,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(runtime);
 
         GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins));
-        this.config = baseConfig //
-                        .withSkippedExceptionTypes(skippedExceptionTypes) //
-                        .withOmitAssertions(ExcludeAssertions.getDefaultValue()) //
-                        .withBytecodeExceptionMode(BytecodeExceptionMode.ExplicitOnly) //
-                        // Avoid deopt loops caused by unresolved constant pool entries when parsed
-                        // graphs are cached across compilations.
-                        .withEagerResolving(true);
+        this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(ExcludeAssertions.getDefaultValue()).withBytecodeExceptionMode(BytecodeExceptionMode.ExplicitOnly);
 
         this.partialEvaluator = createPartialEvaluator();
         this.firstTierProviders = firstTierProviders;
@@ -175,7 +168,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
                         ClassCastException.class,
                         BufferUnderflowException.class,
                         BufferOverflowException.class,
-                        ReadOnlyBufferException.class,
         });
         ResolvedJavaType[] tail = {
                         runtime.resolveType(metaAccess, "com.oracle.truffle.api.nodes.UnexpectedResultException"),
