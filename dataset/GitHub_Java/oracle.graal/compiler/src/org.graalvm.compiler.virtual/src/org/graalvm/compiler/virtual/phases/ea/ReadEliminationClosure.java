@@ -49,7 +49,6 @@ import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.ValueProxyNode;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
 import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 import org.graalvm.compiler.nodes.cfg.Block;
@@ -174,7 +173,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     RawLoadNode load = (RawLoadNode) node;
                     if (load.getLocationIdentity().isSingle()) {
                         ValueNode object = GraphUtil.unproxify(load.object());
-                        UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, load.offset(), load.getLocationIdentity(), load.accessKind());
+                        UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, load.offset(), load.getLocationIdentity());
                         ValueNode cachedValue = state.getCacheEntry(identifier);
                         if (cachedValue != null && areValuesReplaceable(load, cachedValue, considerGuards)) {
                             if (load.accessKind() == JavaKind.Boolean) {
@@ -196,7 +195,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     RawStoreNode write = (RawStoreNode) node;
                     if (write.getKilledLocationIdentity().isSingle()) {
                         ValueNode object = GraphUtil.unproxify(write.object());
-                        UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, write.offset(), write.getKilledLocationIdentity(), write.accessKind());
+                        UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, write.offset(), write.getKilledLocationIdentity());
                         ValueNode cachedValue = state.getCacheEntry(identifier);
                         ValueNode value = getScalarAlias(write.value());
                         if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
@@ -243,7 +242,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
 
     @Override
     protected void processLoopExit(LoopExitNode exitNode, ReadEliminationBlockState initialState, ReadEliminationBlockState exitState, GraphEffectList effects) {
-        if (exitNode.graph().isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL)) {
+        if (exitNode.graph().hasValueProxies()) {
             MapCursor<CacheEntry<?>, ValueNode> entry = exitState.getReadCache().getEntries();
             while (entry.advance()) {
                 if (initialState.getReadCache().get(entry.getKey()) != entry.getValue()) {

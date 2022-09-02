@@ -37,7 +37,7 @@ import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
-import org.graalvm.compiler.virtual.phases.ea.ReadEliminationPhase;
+import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 import org.junit.Assert;
 import org.junit.Test;
@@ -123,12 +123,12 @@ public class UnsafeReadEliminationTest extends GraalCompilerTest {
         CoreProviders context = getDefaultHighTierContext();
         CanonicalizerPhase canonicalizer = createCanonicalizerPhase();
         canonicalizer.apply(graph, context);
-        new ReadEliminationPhase(canonicalizer).apply(graph, context);
+        new EarlyReadEliminationPhase(canonicalizer).apply(graph, context);
         Assert.assertEquals(3, graph.getNodes().filter(UnsafeAccessNode.class).count());
         // after lowering the same applies for reads and writes
         new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         canonicalizer.apply(graph, context);
-        new ReadEliminationPhase(canonicalizer).apply(graph, context);
+        new EarlyReadEliminationPhase(canonicalizer).apply(graph, context);
         Assert.assertEquals(reads, graph.getNodes().filter(ReadNode.class).count());
         Assert.assertEquals(writes, graph.getNodes().filter(WriteNode.class).count());
     }
@@ -377,23 +377,6 @@ public class UnsafeReadEliminationTest extends GraalCompilerTest {
     @Test
     public void testAliasingSafeUnsafe3() {
         test("aliasingSafeUnsafe3");
-    }
-
-    public static boolean aliasingUnsafe() {
-        UNSAFE.putByte(FINAL_BYTE_ARRAY, byteArrayBaseOffset + 1, (byte) 0x44);
-        UNSAFE.putByte(FINAL_BYTE_ARRAY, byteArrayBaseOffset, (byte) 0x55);
-        int after = UNSAFE.getInt(FINAL_BYTE_ARRAY, byteArrayBaseOffset);
-
-        FINAL_BYTE_ARRAY[0] = 0; // reset
-        FINAL_BYTE_ARRAY[1] = 0; // reset
-        FINAL_BYTE_ARRAY[2] = 0; // reset
-        FINAL_BYTE_ARRAY[3] = 0; // reset
-        return 0x55 != after;
-    }
-
-    @Test
-    public void testAliasingUnsafe() {
-        test("aliasingUnsafe");
     }
 
 }
