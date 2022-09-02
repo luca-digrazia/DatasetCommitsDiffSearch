@@ -109,15 +109,20 @@ public abstract class LLVMNode extends Node {
 
     protected final DataLayout getDataLayout() {
         Node datalayoutNode = this;
+
         while (!(datalayoutNode instanceof LLVMHasDatalayoutNode)) {
             if (datalayoutNode.getParent() != null) {
                 assert !(datalayoutNode instanceof RootNode) : "root node must not have a parent";
                 datalayoutNode = datalayoutNode.getParent();
             } else {
-                return LLVMLanguage.getLLVMContextReference().get().getLibsulongDataLayout();
+                return null;
             }
         }
-        return ((LLVMHasDatalayoutNode) datalayoutNode).getDatalayout();
 
+        if (datalayoutNode instanceof LLVMHasDatalayoutNode) {
+            return ((LLVMHasDatalayoutNode) datalayoutNode).getDatalayout();
+        }
+
+        return null;
     }
 }

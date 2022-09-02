@@ -32,12 +32,10 @@ package com.oracle.truffle.llvm.runtime.nodes.intrinsics.rust;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -64,9 +62,9 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
     protected Object doOp(LLVMPointer panicLocVar,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
                     @Cached("createPanicLocation()") PanicLocType panicLoc,
-                    @CachedLanguage LLVMLanguage language) {
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
         LLVMNativePointer pointer = toNative.executeWithTarget(panicLocVar);
-        throw panicLoc.read(language.getCapability(LLVMMemory.class), pointer.asNative(), this);
+        throw panicLoc.read(memory, pointer.asNative(), this);
     }
 
     static final class PanicLocType {
