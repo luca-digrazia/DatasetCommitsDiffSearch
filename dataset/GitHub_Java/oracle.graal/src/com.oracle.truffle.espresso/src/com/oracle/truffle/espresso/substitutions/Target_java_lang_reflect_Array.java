@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.substitutions;
 
 import java.lang.reflect.Array;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Types;
@@ -348,6 +347,7 @@ public final class Target_java_lang_reflect_Array {
         }
         if (array.isArray()) {
             // @formatter:off
+            // Checkstyle: stop
             Object widenValue = Target_sun_reflect_NativeMethodAccessorImpl.checkAndWiden(meta, value, array.getKlass().getComponentType());
             switch (array.getKlass().getComponentType().getJavaKind()) {
                 case Boolean : vm.setArrayByte(((boolean) widenValue) ? (byte) 1 : (byte) 0, index, array); break;
@@ -358,12 +358,11 @@ public final class Target_java_lang_reflect_Array {
                 case Float   : vm.setArrayFloat(((float) widenValue), index, array);     break;
                 case Long    : vm.setArrayLong(((long) widenValue), index, array);       break;
                 case Double  : vm.setArrayDouble(((double) widenValue), index, array);   break;
-                case Object  : vm.setArrayObject(value, index, array); break;
-                default      :
-                    CompilerDirectives.transferToInterpreter();
-                    throw EspressoError.shouldNotReachHere("invalid array type: " + array);
+                case Object  : vm.setArrayObject(value, index, array); break ;
+                default      : throw EspressoError.shouldNotReachHere("invalid array type: " + array);
             }
             // @formatter:on
+            // Checkstyle: resume
         } else {
             throw meta.throwEx(meta.IllegalArgumentException);
         }
@@ -391,6 +390,7 @@ public final class Target_java_lang_reflect_Array {
         }
         if (array.isArray()) {
             // @formatter:off
+            // Checkstyle: stop
             switch (array.getKlass().getComponentType().getJavaKind()) {
                 case Boolean : return meta.boxBoolean(vm.getArrayByte(index, array) != 0);
                 case Byte    : return meta.boxByte(vm.getArrayByte(index, array));
@@ -401,11 +401,10 @@ public final class Target_java_lang_reflect_Array {
                 case Long    : return meta.boxLong(vm.getArrayLong(index, array));
                 case Double  : return meta.boxDouble(vm.getArrayDouble(index, array));
                 case Object  : return vm.getArrayObject(index, array);
-                default      :
-                    CompilerDirectives.transferToInterpreter();
-                    throw EspressoError.shouldNotReachHere("invalid array type: " + array);
+                default      : throw EspressoError.shouldNotReachHere("invalid array type: " + array);
             }
             // @formatter:on
+            // Checkstyle: resume
         } else {
             throw meta.throwEx(meta.IllegalArgumentException);
         }
