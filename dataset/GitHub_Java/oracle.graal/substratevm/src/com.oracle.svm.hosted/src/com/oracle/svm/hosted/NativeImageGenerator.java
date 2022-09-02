@@ -56,6 +56,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import com.oracle.svm.core.aarch64.AArch64CPUFeatureAccess;
+import com.oracle.svm.core.amd64.AMD64CPUFeatureAccess;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.api.replacements.Fold;
@@ -120,7 +122,6 @@ import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.c.struct.RawPointerTo;
 import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.Feature.OnAnalysisExitAccess;
@@ -202,8 +203,7 @@ import com.oracle.svm.core.heap.RestrictHeapAccessCallees;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.image.ImageHeapLayouter;
-import com.oracle.svm.core.jdk.LocalizationFeature;
-import com.oracle.svm.core.option.HostedOptionOverrideValues;
+import com.oracle.svm.core.jdk.localization.LocalizationFeature;
 import com.oracle.svm.core.option.HostedOptionValues;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.RuntimeOptionValues;
@@ -420,7 +420,7 @@ public class NativeImageGenerator {
 
                 features.addAll(parseCSVtoEnum(AMD64.CPUFeature.class, NativeImageOptions.CPUFeatures.getValue().values(), AMD64.CPUFeature.values()));
 
-                architecture = new AMD64(features, SubstrateTargetDescription.allAMD64Flags());
+                architecture = new AMD64(features, AMD64CPUFeatureAccess.allAMD64Flags());
             }
             assert architecture instanceof AMD64 : "using AMD64 platform with a different architecture";
             int deoptScratchSpace = 2 * 8; // Space for two 64-bit registers: rax and xmm0
@@ -443,7 +443,7 @@ public class NativeImageGenerator {
 
                 features.addAll(parseCSVtoEnum(AArch64.CPUFeature.class, NativeImageOptions.CPUFeatures.getValue().values(), AArch64.CPUFeature.values()));
 
-                architecture = new AArch64(features, EnumSet.noneOf(AArch64.Flag.class));
+                architecture = new AArch64(features, AArch64CPUFeatureAccess.enabledAArch64Flags());
             }
             assert architecture instanceof AArch64 : "using AArch64 platform with a different architecture";
             int deoptScratchSpace = 2 * 8; // Space for two 64-bit registers.
@@ -488,7 +488,6 @@ public class NativeImageGenerator {
                 ImageSingletons.add(BuildArtifacts.class, (type, artifact) -> buildArtifacts.computeIfAbsent(type, t -> new ArrayList<>()).add(artifact));
                 ImageSingletons.add(ClassLoaderQuery.class, new ClassLoaderQueryImpl(loader.getClassLoader()));
                 ImageSingletons.add(HostedOptionValues.class, new HostedOptionValues(optionProvider.getHostedValues()));
-                ImageSingletons.add(HostedOptionOverrideValues.class, new HostedOptionOverrideValues());
                 ImageSingletons.add(RuntimeOptionValues.class, new RuntimeOptionValues(optionProvider.getRuntimeValues(), allOptionNames));
                 watchdog = new DeadlockWatchdog();
                 try (TemporaryBuildDirectoryProviderImpl tempDirectoryProvider = new TemporaryBuildDirectoryProviderImpl()) {
@@ -503,6 +502,11 @@ public class NativeImageGenerator {
             ReportUtils.report("build artifacts", buildDir.resolve(imageName + ".build_artifacts.txt"),
                             writer -> buildArtifacts.forEach((artifactType, paths) -> {
                                 writer.println("[" + artifactType + "]");
+                                if (artifactType == ArtifactType.JDK_LIB_SHIM) {
+                                    writer.println("# Note that shim JDK libraries depend on this");
+                                    writer.println("# particular native image (including its name)");
+                                    writer.println("# and therefore cannot be used with others.");
+                                }
                                 paths.stream().map(buildDir::relativize).forEach(writer::println);
                                 writer.println();
                             }));
@@ -510,14 +514,16 @@ public class NativeImageGenerator {
             System.out.println("Interrupted!");
             throw new InterruptImageBuilding(e);
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof RuntimeException) {
-                throw (RuntimeException) e.getCause();
-            } else if (e.getCause() instanceof Error) {
-                throw (Error) e.getCause();
-            }
+            rethrow(e.getCause());
         } finally {
             shutdownBuildExecutor();
         }
+    }
+
+    /** A version of "sneaky throw" to relay exceptions. */
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void rethrow(Throwable t) throws T {
+        throw (T) t;
     }
 
     protected static void setSystemPropertiesForImageEarly() {
@@ -935,7 +941,7 @@ public class NativeImageGenerator {
                         annotationSubstitutions, additionalSubstitutions);
 
         SVMHost hostVM = new SVMHost(options, buildExecutor, loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
-        automaticSubstitutions.init(loader, originalMetaAccess, hostVM);
+        automaticSubstitutions.init(loader, originalMetaAccess);
         AnalysisPolicy analysisPolicy = PointstoOptions.AllocationSiteSensitiveHeap.getValue(options) ? new BytecodeSensitiveAnalysisPolicy(options)
                         : new DefaultAnalysisPolicy(options);
         return new AnalysisUniverse(hostVM, target.wordJavaKind, loader.platform, analysisPolicy, aSubstitutions, originalMetaAccess, originalSnippetReflection,
@@ -1227,15 +1233,14 @@ public class NativeImageGenerator {
             }
         }
 
-        final boolean explicitUnsafeNullChecks = SubstrateOptions.SpawnIsolates.getValue();
         final boolean arrayEqualsSubstitution = !SubstrateOptions.useLLVMBackend();
-        registerInvocationPlugins(providers.getMetaAccess(), providers.getSnippetReflection(), plugins.getInvocationPlugins(), replacements, reason == ParsingReason.JITCompilation,
-                        explicitUnsafeNullChecks, arrayEqualsSubstitution, providers.getLowerer());
+        registerInvocationPlugins(providers.getMetaAccess(), providers.getSnippetReflection(), plugins.getInvocationPlugins(), replacements,
+                        reason == ParsingReason.JITCompilation, true, arrayEqualsSubstitution, providers.getLowerer());
 
         Architecture architecture = ConfigurationValues.getTarget().arch;
         OptionValues options = aUniverse.hostVM().options();
         ImageSingletons.lookup(TargetGraphBuilderPlugins.class).register(plugins, replacements, architecture,
-                        explicitUnsafeNullChecks, /* registerForeignCallMath */false, JavaVersionUtil.JAVA_SPEC >= 11, options);
+                        /* registerForeignCallMath */ false, JavaVersionUtil.JAVA_SPEC >= 11, options);
 
         /*
          * When the context is hosted, i.e., ahead-of-time compilation, and after the analysis we
@@ -1253,7 +1258,7 @@ public class NativeImageGenerator {
         SubstrateGraphBuilderPlugins.registerInvocationPlugins(annotationSubstitutionProcessor, pluginsMetaAccess,
                         hostedSnippetReflection, plugins.getInvocationPlugins(), replacements, reason);
 
-        featureHandler.forEachGraalFeature(feature -> feature.registerInvocationPlugins(providers, hostedSnippetReflection, plugins.getInvocationPlugins(), reason));
+        featureHandler.forEachGraalFeature(feature -> feature.registerInvocationPlugins(providers, hostedSnippetReflection, plugins, reason));
 
         providers.setGraphBuilderPlugins(plugins);
         replacements.setGraphBuilderPlugins(plugins);
@@ -1589,12 +1594,6 @@ public class NativeImageGenerator {
         for (Class<?> clazz : loader.findAnnotatedClasses(CPointerTo.class, false)) {
             if (LibCBase.isTypeProvidedInCurrentLibc(clazz)) {
                 classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CPointerTo.class.getSimpleName() + " are always initialized");
-                nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
-            }
-        }
-        for (Class<?> clazz : loader.findAnnotatedClasses(RawPointerTo.class, false)) {
-            if (LibCBase.isTypeProvidedInCurrentLibc(clazz)) {
-                classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + RawPointerTo.class.getSimpleName() + " are always initialized");
                 nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
             }
         }

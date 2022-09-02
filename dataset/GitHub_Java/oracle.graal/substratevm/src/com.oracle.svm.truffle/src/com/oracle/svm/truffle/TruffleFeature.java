@@ -132,6 +132,7 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.ParsingReason;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -567,7 +568,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
-            if (original.hasNeverInlineDirective()) {
+            if (SubstrateUtil.NativeImageLoadingShield.isNeverInline(original)) {
                 return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
             } else if (invocationPlugins.lookupInvocation(original) != null) {
                 return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
@@ -697,7 +698,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         Uninterruptible uninterruptibleAnnotation = implementationMethod.getAnnotation(Uninterruptible.class);
         if (implementationMethod.getAnnotation(CompilerDirectives.TruffleBoundary.class) != null) {
             return false;
-        } else if (implementationMethod.hasNeverInlineDirective()) {
+        } else if (SubstrateUtil.NativeImageLoadingShield.isNeverInline(implementationMethod)) {
             /* Ensure that NeverInline methods are also never inlined during Truffle compilation. */
             return false;
         } else if (uninterruptibleAnnotation != null && !uninterruptibleAnnotation.mayBeInlined()) {
