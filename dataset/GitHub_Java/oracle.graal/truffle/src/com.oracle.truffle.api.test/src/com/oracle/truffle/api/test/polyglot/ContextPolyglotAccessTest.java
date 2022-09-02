@@ -60,10 +60,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -86,7 +83,7 @@ public class ContextPolyglotAccessTest extends AbstractPolyglotTest {
     }
 
     @Test
-    public void testAllAccess() throws UnsupportedMessageException, UnknownIdentifierException {
+    public void testAllAccess() {
         setupEnv(Context.newBuilder(ProxyLanguage.ID, LANGUAGE1, LANGUAGE2).allowPolyglotAccess(PolyglotAccess.ALL).build());
         context.initialize(LANGUAGE1);
         context.initialize(LANGUAGE2);
@@ -122,17 +119,6 @@ public class ContextPolyglotAccessTest extends AbstractPolyglotTest {
         assertEquals("value", env2.importSymbol("symbol2"));
         assertEquals("value", env1.importSymbol("symbol2"));
 
-        assertEquals("value", InteropLibrary.getFactory().getUncached().readMember(env1.getPolyglotBindings(), "symbol1"));
-        assertEquals("value", InteropLibrary.getFactory().getUncached().readMember(env2.getPolyglotBindings(), "symbol2"));
-
-    }
-
-    private static void assertBindingsNotAccessible(Env env1) {
-        try {
-            env1.getPolyglotBindings();
-            fail();
-        } catch (SecurityException e) {
-        }
     }
 
     private static void assertAccessNotPermitted(Env from, String to) {
@@ -194,9 +180,6 @@ public class ContextPolyglotAccessTest extends AbstractPolyglotTest {
 
         assertExportNotAcccessible(env2);
         assertImportNotAcccessible(env2);
-
-        assertBindingsNotAccessible(env1);
-        assertBindingsNotAccessible(env2);
     }
 
     private static void assertImportNotAcccessible(Env env1) {
