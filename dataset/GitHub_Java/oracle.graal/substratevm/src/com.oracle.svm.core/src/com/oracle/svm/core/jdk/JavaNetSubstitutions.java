@@ -29,37 +29,30 @@ package com.oracle.svm.core.jdk;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
-import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
-import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Delete;
-import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.util.ReflectionUtil;
 
 @TargetClass(java.net.URL.class)
 final class Target_java_net_URL {
@@ -67,34 +60,9 @@ final class Target_java_net_URL {
     @Delete private static Hashtable<?, ?> handlers;
 
     @Substitute
-    private static URLStreamHandler getURLStreamHandler(String protocol) throws MalformedURLException {
-        /*
-         * The original version of this method does not throw MalformedURLException directly, but
-         * instead returns null if no handler is found. The callers then check the result and throw
-         * the exception when the return value is null. Implementing our substitution the same way
-         * would mean that we cannot provide a helpful exception message why a protocol is not
-         * available, and how to add a protocol at image build time.
-         */
+    private static URLStreamHandler getURLStreamHandler(String protocol) {
         return JavaNetSubstitutions.getURLStreamHandler(protocol);
     }
-}
-
-@TargetClass(className = "jdk.internal.net.http.websocket.OpeningHandshake", onlyWith = JDK11OrLater.class)
-@SuppressWarnings("unused")
-final class Target_jdk_internal_net_http_websocket_OpeningHandshake {
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    private static SecureRandom random;
-
-    @Substitute
-    private static String createNonce() {
-        byte[] bytes = new byte[16];
-        OpeningHandshakeSecureRandomHolder.random.nextBytes(bytes);
-        return Base64.getEncoder().encodeToString(bytes);
-    }
-}
-
-final class OpeningHandshakeSecureRandomHolder {
-    static SecureRandom random = new SecureRandom();
 }
 
 @AutomaticFeature
@@ -129,32 +97,12 @@ class JavaNetFeature implements Feature {
                 }
             }
         }
-
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtRunTime(OpeningHandshakeSecureRandomHolder.class, "Create SecureRandom instance at image-runtime");
-    }
-
-    @Override
-    public void beforeAnalysis(BeforeAnalysisAccess access) {
-        if (JavaVersionUtil.JAVA_SPEC >= 11) {
-            try {
-                Method initFilters = access.findClassByName("jdk.internal.net.http.HttpClientImpl").getDeclaredMethod("initFilters");
-                access.registerReachabilityHandler(JavaNetFeature::registerInitFiltersAccess, initFilters);
-            } catch (NoSuchMethodException e) {
-                VMError.shouldNotReachHere(e);
-            }
-        }
     }
 
     private static void printWarning(String warningMessage) {
         // Checkstyle: stop
         System.out.println(warningMessage);
         // Checkstyle: resume}
-    }
-
-    private static void registerInitFiltersAccess(DuringAnalysisAccess a) {
-        RuntimeReflection.registerForReflectiveInstantiation(a.findClassByName("jdk.internal.net.http.AuthenticationFilter"));
-        RuntimeReflection.registerForReflectiveInstantiation(a.findClassByName("jdk.internal.net.http.RedirectFilter"));
-        RuntimeReflection.registerForReflectiveInstantiation(a.findClassByName("jdk.internal.net.http.CookieFilter"));
     }
 }
 
@@ -176,11 +124,12 @@ class URLProtocolsSupport {
 public final class JavaNetSubstitutions {
 
     public static final String FILE_PROTOCOL = "file";
-    public static final String RESOURCE_PROTOCOL = "resource";
     public static final String HTTP_PROTOCOL = "http";
     public static final String HTTPS_PROTOCOL = "https";
 
-    static final List<String> defaultProtocols = Arrays.asList(FILE_PROTOCOL, RESOURCE_PROTOCOL);
+    public static final String RESOURCE_PROTOCOL = "resource";
+
+    static final List<String> defaultProtocols = Collections.singletonList(FILE_PROTOCOL);
     static final List<String> onDemandProtocols = Arrays.asList(HTTP_PROTOCOL, HTTPS_PROTOCOL);
 
     static final String enableProtocolsOption = SubstrateOptionsParser.commandArgument(SubstrateOptions.EnableURLProtocols, "");
@@ -193,18 +142,20 @@ public final class JavaNetSubstitutions {
             return true;
         }
         try {
-            URLStreamHandler handler = (URLStreamHandler) ReflectionUtil.lookupMethod(URL.class, "getURLStreamHandler", String.class).invoke(null, protocol);
+            Method method = URL.class.getDeclaredMethod("getURLStreamHandler", String.class);
+            method.setAccessible(true);
+            URLStreamHandler handler = (URLStreamHandler) method.invoke(null, protocol);
             if (handler != null) {
                 URLProtocolsSupport.put(protocol, handler);
                 return true;
             }
             return false;
-        } catch (ReflectiveOperationException ex) {
-            throw VMError.shouldNotReachHere(ex);
+        } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException ex) {
+            throw new Error(ex);
         }
     }
 
-    static URLStreamHandler getURLStreamHandler(String protocol) throws MalformedURLException {
+    static URLStreamHandler getURLStreamHandler(String protocol) {
         URLStreamHandler result = URLProtocolsSupport.get(protocol);
         if (result == null) {
             if (onDemandProtocols.contains(protocol)) {
@@ -246,12 +197,8 @@ public final class JavaNetSubstitutions {
         };
     }
 
-    private static void unsupported(String message) throws MalformedURLException {
-        /*
-         * We throw a MalformedURLException and not our own unsupported feature error to be
-         * consistent with the specification of URL.
-         */
-        throw new MalformedURLException(message);
+    private static void unsupported(String message) {
+        throw VMError.unsupportedFeature(message);
     }
 
     static String supportedProtocols() {

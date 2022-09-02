@@ -36,7 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -120,11 +120,6 @@ public final class Resources {
             @Override
             public InputStream getInputStream() throws IOException {
                 return new ByteArrayInputStream(resourceBytes);
-            }
-
-            @Override
-            public long getContentLengthLong() {
-                return resourceBytes.length;
             }
         }
 
