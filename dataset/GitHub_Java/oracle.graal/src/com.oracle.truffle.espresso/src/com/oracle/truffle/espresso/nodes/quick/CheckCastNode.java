@@ -77,7 +77,7 @@ public abstract class CheckCastNode extends QuickNode {
     }
 
     @TruffleBoundary
-    private String getExceptionMessage(BytecodeNode root, StaticObject receiver) {
+    private final String getExceptionMessage(BytecodeNode root, StaticObject receiver) {
         return receiver.getKlass().getType() + " cannot be cast to: " + typeToCheck.getType() + " in context " + root.getMethod().toString();
     }
 }

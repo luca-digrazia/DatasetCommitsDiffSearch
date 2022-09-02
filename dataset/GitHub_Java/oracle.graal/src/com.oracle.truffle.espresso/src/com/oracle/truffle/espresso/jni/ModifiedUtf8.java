@@ -25,8 +25,6 @@ package com.oracle.truffle.espresso.jni;
 import java.io.IOException;
 import java.io.UTFDataFormatException;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-
 /**
  * Modified UTF-8 conversions.
  */

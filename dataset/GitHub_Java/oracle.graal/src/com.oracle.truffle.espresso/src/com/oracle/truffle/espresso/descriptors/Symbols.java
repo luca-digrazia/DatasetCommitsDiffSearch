@@ -76,7 +76,9 @@ public final class Symbols {
                 // symbol map and it's byte-equals to the computed value.
                 // It doesn't keep the underlying byte array (which can be large e.g. .class file
                 // contents) from being collected.
-                key.seq = computed;
+                if (key.seq == null) {
+                    key.seq = computed;
+                }
                 return computed;
             }
         });
