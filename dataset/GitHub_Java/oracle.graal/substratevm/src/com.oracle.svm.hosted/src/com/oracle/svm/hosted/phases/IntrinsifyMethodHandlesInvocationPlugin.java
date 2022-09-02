@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import org.graalvm.collections.Pair;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
@@ -203,10 +202,7 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
         }
 
         methodHandleType = universeProviders.getMetaAccess().lookupJavaType(java.lang.invoke.MethodHandle.class);
-        methodHandleInvokeMethodNames = new HashSet<>();
-        if (!NativeImageOptions.areMethodHandlesSupported()) {
-            methodHandleInvokeMethodNames.addAll(Arrays.asList("invokeExact", "invoke", "invokeBasic", "linkToVirtual", "linkToStatic", "linkToSpecial", "linkToInterface"));
-        }
+        methodHandleInvokeMethodNames = new HashSet<>(Arrays.asList("invokeExact", "invoke", "invokeBasic", "linkToVirtual", "linkToStatic", "linkToSpecial", "linkToInterface"));
 
         if (JavaVersionUtil.JAVA_SPEC >= 11) {
             try {
@@ -232,7 +228,7 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
          * We want to process invokes that have a constant MethodHandle parameter. And we need a
          * direct call, otherwise we do not have a single target method.
          */
-        if (b.getInvokeKind().isDirect() && (hasMethodHandleArgument(args) || isVarHandleMethod(method, args)) && !ignoreMethod(method)) {
+        if (b.getInvokeKind().isDirect() && (hasMethodHandleArgument(args) || isVarHandleMethod(method, args))) {
             processInvokeWithMethodHandle(b, universeProviders.getReplacements(), method, args);
             return true;
 
@@ -303,21 +299,6 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
 
     private boolean isVarHandle(ValueNode arg) {
         return varHandleType.isAssignableFrom(universeProviders.getMetaAccess().lookupJavaType(arg.asJavaConstant()));
-    }
-
-    private static final List<Pair<String, String>> IGNORE_FILTER = Arrays.asList(
-                    Pair.create("java.lang.invoke.MethodHandles", "insertArguments"),
-                    Pair.create("java.lang.invoke.Invokers", "spreadInvoker"));
-
-    private static boolean ignoreMethod(ResolvedJavaMethod method) {
-        String className = method.getDeclaringClass().toJavaName(true);
-        String methodName = method.getName();
-        for (Pair<String, String> ignored : IGNORE_FILTER) {
-            if (ignored.getLeft().equals(className) && ignored.getRight().equals(methodName)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     class MethodHandlesParameterPlugin implements ParameterPlugin {
@@ -523,12 +504,12 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
     /**
      * Transplants the graph parsed in the HotSpot universe into the currently parsed method. This
      * requires conversion of all types, methods, fields, and constants.
-     *
+     * 
      * Currently, only linear control flow in the original graph is supported. Nodes in the original
      * graph that have implicit exception edges ({@link InvokeNode}, {@link FixedGuardNode} are
      * converted to nodes with explicit exception edges. So the transplanted graph has a limited
      * amount of control flow for exception handling, but still no control flow merges.
-     *
+     * 
      * All necessary frame states use the same bci from the caller, i.e., all transplanted method
      * calls, field stores, exceptions, ... look as if they are coming from the original invocation
      * site of the method handle. This means the static analysis is not storing any analysis results
@@ -715,7 +696,7 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
             Stamp result;
             if (((Stamp) oStamp).getClass() == ObjectStamp.class) {
                 ObjectStamp oObjectStamp = (ObjectStamp) oStamp;
-                result = new ObjectStamp(lookup(oObjectStamp.type()), oObjectStamp.isExactType(), oObjectStamp.nonNull(), oObjectStamp.alwaysNull(), oObjectStamp.isAlwaysArray());
+                result = new ObjectStamp(lookup(oObjectStamp.type()), oObjectStamp.isExactType(), oObjectStamp.nonNull(), oObjectStamp.alwaysNull());
             } else if (oStamp instanceof PrimitiveStamp) {
                 result = oStamp;
             } else {
@@ -768,9 +749,7 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
                         "The method handle must be a compile time constant, e.g., be loaded from a `static final` field. " +
                         "Method that contains the method handle invocation: " + methodHandleMethod.format("%H.%n(%p)");
 
-        if (NativeImageOptions.areMethodHandlesSupported()) {
-            /* Do nothing, the method will be compiled elsewhere */
-        } else if (NativeImageOptions.ReportUnsupportedElementsAtRuntime.getValue()) {
+        if (NativeImageOptions.ReportUnsupportedElementsAtRuntime.getValue()) {
             /*
              * Ensure that we have space on the expression stack for the (unused) return value of
              * the invoke.
@@ -783,10 +762,9 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
             return;
 
         } else {
-            throw new UnsupportedFeatureException(message + System.lineSeparator() +
-                            "To enable method handles that do not require LambdaForm interpretation (e.g. because of a call to MethodHandle.bindTo()) or to diagnose the issue, you can add the option " +
+            throw new UnsupportedFeatureException(message + System.lineSeparator() + "To diagnose the issue, you can add the option " +
                             SubstrateOptionsParser.commandArgument(NativeImageOptions.ReportUnsupportedElementsAtRuntime, "+") +
-                            ". The error is then reported at run time when the invoke is executed and the method handle has to be interpreted.");
+                            ". The error is then reported at run time when the invoke is executed.");
         }
     }
 

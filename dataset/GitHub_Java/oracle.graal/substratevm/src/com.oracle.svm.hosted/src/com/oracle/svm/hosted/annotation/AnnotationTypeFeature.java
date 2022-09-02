@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,10 +30,11 @@ import java.lang.reflect.AnnotatedElement;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.util.EconomicSet;
 
+import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.hub.AnnotationTypeSupport;
@@ -56,7 +59,23 @@ public class AnnotationTypeFeature implements Feature {
 
     @Override
     public void duringAnalysis(DuringAnalysisAccess access) {
-        AnalysisUniverse universe = ((DuringAnalysisAccessImpl) access).getUniverse();
+        DuringAnalysisAccessImpl accessImpl = (DuringAnalysisAccessImpl) access;
+        AnalysisUniverse universe = accessImpl.getUniverse();
+
+        /*
+         * JDK implementation of repeatable annotations always instantiates an array of a requested
+         * annotation. We need to mark arrays of all reachable annotations as in heap.
+         */
+        universe.getTypes().stream()
+                        .filter(AnalysisType::isAnnotation)
+                        .filter(AnalysisType::isReachable)
+                        .map(type -> universe.lookup(type.getWrapped()).getArrayClass())
+                        .filter(annotationArray -> !annotationArray.isInstantiated())
+                        .forEach(annotationArray -> {
+                            accessImpl.registerAsInHeap(annotationArray);
+                            access.requireAnalysisIteration();
+                        });
+
         Stream<AnnotatedElement> allElements = Stream.concat(Stream.concat(universe.getFields().stream(), universe.getMethods().stream()), universe.getTypes().stream());
         Stream<AnnotatedElement> newElements = allElements.filter(visitedElements::add);
         newElements.forEach(this::reportAnnotation);

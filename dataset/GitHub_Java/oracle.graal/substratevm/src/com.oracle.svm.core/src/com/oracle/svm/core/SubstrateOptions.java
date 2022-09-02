@@ -33,6 +33,8 @@ import static org.graalvm.compiler.options.OptionType.User;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.function.Predicate;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.UnmodifiableEconomicMap;
@@ -43,6 +45,8 @@ import org.graalvm.compiler.options.OptionStability;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.jdk.JavaNetSubstitutions;
 import com.oracle.svm.core.option.APIOption;
@@ -142,8 +146,64 @@ public class SubstrateOptions {
     @Option(help = "Directory of the image file to be generated", type = OptionType.User)//
     public static final HostedOptionKey<String> Path = new HostedOptionKey<>(null);
 
+    @APIOption(name = "-ea", customHelp = "enable assertions in the generated image")//
+    @APIOption(name = "-da", kind = APIOption.APIOptionKind.Negated, customHelp = "disable assertions in the generated image")//
+    @Option(help = "Enable or disable Java assert statements at run time", type = OptionType.User)//
+    public static final HostedOptionKey<Boolean> RuntimeAssertions = new HostedOptionKey<>(false);
+
+    public static boolean getRuntimeAssertionsForClass(String name) {
+        return RuntimeAssertions.getValue() && getRuntimeAssertionsFilter().test(name);
+    }
+
+    @Fold
+    static Predicate<String> getRuntimeAssertionsFilter() {
+        return makeFilter(RuntimeAssertionsFilter.getValue());
+    }
+
     @Option(help = "Use a card remembered set heap for GC")//
     public static final HostedOptionKey<Boolean> UseCardRememberedSetHeap = new HostedOptionKey<>(true);
+
+    @Option(help = "Print summary GC information after each collection", type = OptionType.Expert)//
+    public static final RuntimeOptionKey<Boolean> PrintGC = new RuntimeOptionKey<>(false);
+
+    @Option(help = "Print more information about the heap before and after each collection", type = OptionType.Expert)//
+    public static final RuntimeOptionKey<Boolean> VerboseGC = new RuntimeOptionKey<>(false);
+
+    @Option(help = "Determines if references from runtime-compiled code to Java heap objects should be treated as strong or weak.", type = OptionType.Debug)//
+    public static final HostedOptionKey<Boolean> TreatRuntimeCodeInfoReferencesAsWeak = new HostedOptionKey<>(true);
+
+    @Option(help = "Verify the heap before and after each collection.")//
+    public static final HostedOptionKey<Boolean> VerifyHeap = new HostedOptionKey<>(false);
+
+    @Option(help = "The minimum heap size at run-time, in bytes.", type = OptionType.User)//
+    public static final RuntimeOptionKey<Long> MinHeapSize = new RuntimeOptionKey<Long>(0L) {
+        @Override
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+            if (!SubstrateUtil.HOSTED) {
+                XOptions.getXms().setValue(newValue);
+            }
+        }
+    };
+
+    @Option(help = "The maximum heap size at run-time, in bytes.", type = OptionType.User)//
+    public static final RuntimeOptionKey<Long> MaxHeapSize = new RuntimeOptionKey<Long>(0L) {
+        @Override
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+            if (!SubstrateUtil.HOSTED) {
+                XOptions.getXmx().setValue(newValue);
+            }
+        }
+    };
+
+    @Option(help = "The maximum size of the young generation at run-time, in bytes", type = OptionType.User)//
+    public static final RuntimeOptionKey<Long> MaxNewSize = new RuntimeOptionKey<Long>(0L) {
+        @Override
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+            if (!SubstrateUtil.HOSTED) {
+                XOptions.getXmn().setValue(newValue);
+            }
+        }
+    };
 
     @Option(help = "The size of each thread stack at run-time, in bytes.", type = OptionType.User)//
     public static final RuntimeOptionKey<Long> StackSize = new RuntimeOptionKey<Long>(0L) {
@@ -305,6 +365,9 @@ public class SubstrateOptions {
     @Option(help = "Parse and consume standard options and system properties from the command line arguments when the VM is created.")//
     public static final HostedOptionKey<Boolean> ParseRuntimeOptions = new HostedOptionKey<>(true);
 
+    @Option(help = "Only use Java assert statements for classes that are matching the comma-separated list of package prefixes.")//
+    public static final HostedOptionKey<String[]> RuntimeAssertionsFilter = new HostedOptionKey<>(null);
+
     @Option(help = "Perform method inlining in the AOT compiled native image")//
     public static final HostedOptionKey<Boolean> AOTInline = new HostedOptionKey<>(true);
 
@@ -363,6 +426,22 @@ public class SubstrateOptions {
 
     @Option(help = "Determines if VM operations should be executed in a dedicated thread.", type = OptionType.Expert)//
     public static final HostedOptionKey<Boolean> UseDedicatedVMOperationThread = new HostedOptionKey<>(false);
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public static Predicate<String> makeFilter(String[] definedFilters) {
+        if (definedFilters != null) {
+            List<String> wildCardList = OptionUtils.flatten(",", definedFilters);
+            return javaName -> {
+                for (String wildCard : wildCardList) {
+                    if (javaName.startsWith(wildCard)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+        }
+        return javaName -> true;
+    }
 
     @Option(help = "Use linker option to prevent unreferenced symbols in image.")//
     public static final HostedOptionKey<Boolean> RemoveUnusedSymbols = new HostedOptionKey<>(false);

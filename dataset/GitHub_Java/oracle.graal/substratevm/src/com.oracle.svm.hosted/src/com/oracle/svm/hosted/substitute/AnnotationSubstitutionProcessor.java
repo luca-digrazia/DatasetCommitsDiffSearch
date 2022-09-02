@@ -695,10 +695,12 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             }
 
         } catch (NoSuchMethodException ex) {
-            throw UserError.abort("Could not find target method: %s", annotatedMethod);
+            throw UserError.abort("could not find target method: " + annotatedMethod);
         } catch (NoClassDefFoundError error) {
-            throw UserError.abort("Cannot find %s.%s, %s can not be loaded, due to %s not being available in the classpath. Are you missing a dependency in your classpath?",
+            String message = String.format("can not find %s.%s, %s can not be loaded, due to %s not being available in the classpath. " +
+                            "Are you missing a dependency in your classpath?",
                             originalClass.getName(), originalName, originalClass.getName(), error.getMessage());
+            throw UserError.abort(message);
         }
     }
 
@@ -752,7 +754,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             try {
                 onlyWithProvider = ReflectionUtil.newInstance(onlyWithClass);
             } catch (ReflectionUtilError ex) {
-                throw UserError.abort(ex.getCause(), "Class specified as onlyWith for %s cannot be loaded or instantiated: %s", annotatedElement, onlyWithClass.getTypeName());
+                throw UserError.abort(ex.getCause(), "Class specified as onlyWith for " + annotatedElement + " cannot be loaded or instantiated: " + onlyWithClass.getTypeName());
             }
 
             boolean onlyWithResult;
@@ -763,7 +765,8 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
                 Predicate<Class<?>> onlyWithPredicate = (Predicate<Class<?>>) onlyWithProvider;
                 onlyWithResult = onlyWithPredicate.test(originalClass);
             } else {
-                throw UserError.abort("Class specified as onlyWith for %s does not implement %s or %s", annotatedElement, BooleanSupplier.class.getSimpleName(), Predicate.class.getSimpleName());
+                throw UserError.abort("Class specified as onlyWith for " + annotatedElement + " does not implement " +
+                                BooleanSupplier.class.getSimpleName() + " or " + Predicate.class.getSimpleName());
             }
 
             if (!onlyWithResult) {
@@ -860,7 +863,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             try {
                 className = ReflectionUtil.newInstance(target.classNameProvider()).apply(target);
             } catch (ReflectionUtilError ex) {
-                throw UserError.abort(ex.getCause(), "Cannot instantiate classNameProvider: %s. The class must have a parameterless constructor.", target.classNameProvider().getTypeName());
+                throw UserError.abort(ex.getCause(), "Cannot instantiate classNameProvider: " + target.classNameProvider().getTypeName() + ". The class must have a parameterless constructor.");
             }
         } else {
             guarantee(!target.className().isEmpty(), "Neither class, className, nor classNameProvider specified for substitution");
@@ -872,7 +875,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             try {
                 onlyWithProvider = ReflectionUtil.newInstance(onlyWithClass);
             } catch (ReflectionUtilError ex) {
-                throw UserError.abort(ex.getCause(), "Class specified as onlyWith for %s cannot be loaded or instantiated: %s", annotatedBaseClass.getTypeName(), onlyWithClass.getTypeName());
+                throw UserError.abort(ex.getCause(), "Class specified as onlyWith for " + annotatedBaseClass.getTypeName() + " cannot be loaded or instantiated: " + onlyWithClass.getTypeName());
             }
 
             boolean onlyWithResult;
@@ -883,8 +886,8 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
                 Predicate<String> onlyWithPredicate = (Predicate<String>) onlyWithProvider;
                 onlyWithResult = onlyWithPredicate.test(className);
             } else {
-                throw UserError.abort("Class specified as onlyWith for %s does not implement %s or %s", annotatedBaseClass.getTypeName(),
-                                BooleanSupplier.class.getSimpleName(), Predicate.class.getSimpleName());
+                throw UserError.abort("Class specified as onlyWith for " + annotatedBaseClass.getTypeName() + " does not implement " +
+                                BooleanSupplier.class.getSimpleName() + " or " + Predicate.class.getSimpleName());
             }
 
             if (!onlyWithResult) {
@@ -894,16 +897,16 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
 
         Class<?> holder = imageClassLoader.findClassByName(className, false);
         if (holder == null) {
-            throw UserError.abort("Substitution target for %s is not loaded. Use field `onlyWith` in the `TargetClass` annotation to make substitution only active when needed.",
-                            annotatedBaseClass.getName());
+            throw UserError.abort("substitution target for " + annotatedBaseClass.getName() +
+                            " is not loaded. Use field `onlyWith` in the `TargetClass` annotation to make substitution only active when needed.");
         }
         if (target.innerClass().length > 0) {
             for (String innerClass : target.innerClass()) {
                 Class<?> prevHolder = holder;
                 holder = findInnerClass(prevHolder, innerClass);
                 if (holder == null) {
-                    throw UserError.abort("Substitution target for %s is invalid as inner class %s in %s can not be found. Make sure that the inner class is present.",
-                                    annotatedBaseClass.getName(), innerClass, prevHolder.getName());
+                    throw UserError.abort("substitution target for " + annotatedBaseClass.getName() + " is invalid as inner class " + innerClass + " in " + prevHolder.getName() +
+                                    " can not be found. Make sure that the inner class is present.");
                 }
             }
         }

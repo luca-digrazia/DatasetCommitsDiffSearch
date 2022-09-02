@@ -174,7 +174,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                  * intrinsified to simple array and field access nodes in
                  * IntrinsifyMethodHandlesInvocationPlugin.
                  */
-                for (Method method : loader.findClassOrFail("java.lang.invoke.VarHandles").getDeclaredMethods()) {
+                for (Method method : loader.findClassByName("java.lang.invoke.VarHandles", true).getDeclaredMethods()) {
                     neverInlineSet.add(originalMetaAccess.lookupJavaMethod(method));
                 }
             }

@@ -30,7 +30,6 @@ import org.graalvm.compiler.java.GraphBuilderPhase.Instance;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
-import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
@@ -101,7 +100,7 @@ public class HostedGraphKit extends SubstrateGraphKit {
             ensureInitializedNode.setExceptionEdge(exceptionEdge);
 
             lastFixedNode = exceptionEdge;
-            append(new UnwindNode(exceptionEdge));
+            throwInvocationTargetException(exceptionEdge);
 
             assert lastFixedNode == null;
             lastFixedNode = noExceptionEdge;

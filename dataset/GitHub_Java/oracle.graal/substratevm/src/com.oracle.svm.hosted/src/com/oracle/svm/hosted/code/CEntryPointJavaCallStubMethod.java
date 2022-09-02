@@ -46,7 +46,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * {@linkplain CEntryPointCallStubMethod native-to-Java stub}.
  */
 public class CEntryPointJavaCallStubMethod extends CCallStubMethod {
-
     private final String name;
     private final ResolvedJavaType declaringClass;
     private final CFunctionPointer target;
@@ -80,7 +79,7 @@ public class CEntryPointJavaCallStubMethod extends CCallStubMethod {
          * We currently cannot handle {@link MethodPointer} as a constant in the code, so we use an
          * indirection with a non-final field load from an object of BoxedRelocatedPointer.
          */
-        BoxedRelocatedPointer box = CEntryPointCallStubSupport.singleton().getBoxedRelocatedPointer(target);
+        BoxedRelocatedPointer box = new BoxedRelocatedPointer(target);
         ConstantNode boxNode = kit.createObject(box);
         LoadFieldNode node = kit.createLoadFieldNode(boxNode, BoxedRelocatedPointer.class, "pointer");
         return kit.append(node);
