@@ -46,12 +46,10 @@ import static org.graalvm.wasm.api.ImportExportKind.memory;
 import static org.graalvm.wasm.api.ImportExportKind.table;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 import org.graalvm.wasm.ImportDescriptor;
 import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.WasmCustomSection;
 import org.graalvm.wasm.WasmFunction;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.WasmType;
@@ -131,14 +129,10 @@ public class Module extends Dictionary {
         return typeInfo.toString();
     }
 
+    @SuppressWarnings("unused")
     public Sequence<ByteArrayBuffer> customSections(Object sectionName) {
-        List<ByteArrayBuffer> sections = new ArrayList<>();
-        for (WasmCustomSection section : module.customSections()) {
-            if (section.getName().equals(sectionName)) {
-                sections.add(new ByteArrayBuffer(module.data(), section.getOffset(), section.getLength()));
-            }
-        }
-        return new Sequence<>(sections);
+        // TODO: Implement once we support custom sections.
+        return null;
     }
 
     public WasmModule wasmModule() {
