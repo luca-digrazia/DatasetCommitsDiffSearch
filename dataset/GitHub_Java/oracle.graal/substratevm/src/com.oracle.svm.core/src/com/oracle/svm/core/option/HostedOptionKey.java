@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,7 @@
  */
 package com.oracle.svm.core.option;
 
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
@@ -50,10 +53,36 @@ public class HostedOptionKey<T> extends OptionKey<T> {
     }
 
     /**
+     * Returns {@code true} if this option has been set in the {@link HostedOptionValues}.
+     * <p>
+     * The result of this method is guaranteed to be constant folded in the native image due to the
+     * {@link Fold} annotation.
+     */
+    @Fold
+    public boolean hasBeenSet() {
+        return hasBeenSet(HostedOptionValues.singleton());
+    }
+
+    /**
      * Descriptors are not loaded for {@link HostedOptionKey}.
      */
     @Override
     protected boolean checkDescriptorExists() {
         return true;
+    }
+
+    @Override
+    public void update(EconomicMap<OptionKey<?>, Object> values, Object boxedValue) {
+        Object defaultValue = getDefaultValue();
+        if (defaultValue instanceof MultiOptionValue) {
+            MultiOptionValue<?> value = (MultiOptionValue<?>) values.get(this);
+            if (value == null) {
+                value = ((MultiOptionValue<?>) defaultValue).createCopy();
+            }
+            value.valueUpdate(boxedValue);
+            super.update(values, value);
+        } else {
+            super.update(values, LocatableOption.rawValue(boxedValue));
+        }
     }
 }
