@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -110,9 +110,9 @@ abstract class PolyglotExecuteNode extends Node {
         } catch (ArityException e) {
             arityError.enter();
             if (executable) {
-                throw HostInteropErrors.invalidExecuteArity(languageContext, function, functionArgs, e.getExpectedMinArity(), e.getExpectedMaxArity(), e.getActualArity());
+                throw HostInteropErrors.invalidExecuteArity(languageContext, function, functionArgs, e.getExpectedArity(), e.getActualArity());
             } else {
-                throw HostInteropErrors.invalidInstantiateArity(languageContext, function, functionArgs, e.getExpectedMinArity(), e.getExpectedMaxArity(), e.getActualArity());
+                throw HostInteropErrors.invalidInstantiateArity(languageContext, function, functionArgs, e.getExpectedArity(), e.getActualArity());
             }
         } catch (UnsupportedMessageException e) {
             unsupportedError.enter();

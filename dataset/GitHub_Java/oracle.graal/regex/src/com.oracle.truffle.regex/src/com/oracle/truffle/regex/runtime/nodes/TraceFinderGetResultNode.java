@@ -38,73 +38,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex.result;
+package com.oracle.truffle.regex.runtime.nodes;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import com.oracle.truffle.regex.runtime.nodes.LazyCaptureGroupGetResultNode;
-import com.oracle.truffle.regex.runtime.nodes.TraceFinderGetResultNode;
+import com.oracle.truffle.regex.result.TraceFinderResult;
 
-@ReportPolymorphism
 @GenerateUncached
-abstract class RegexResultGetEndNode extends Node {
+public abstract class TraceFinderGetResultNode extends Node {
 
-    private static final int INVALID_RESULT = -1;
-
-    abstract int execute(Object receiver, int groupNumber);
+    public abstract int[] execute(TraceFinderResult receiver);
 
     @Specialization
-    static int doNoMatch(@SuppressWarnings("unused") NoMatchResult receiver, @SuppressWarnings("unused") int groupNumber) {
-        return INVALID_RESULT;
-    }
-
-    @Specialization
-    static int doSingleResult(SingleResult receiver, int groupNumber,
-                    @Cached ConditionProfile boundsProfile) {
-        if (boundsProfile.profile(groupNumber == 0)) {
-            return receiver.getEnd();
-        } else {
-            return INVALID_RESULT;
+    static int[] doTraceFinderCalc(TraceFinderResult receiver,
+                    @Cached ConditionProfile conditionProfile,
+                    @Cached DispatchNode calcResult) {
+        if (conditionProfile.profile(!receiver.isResultCalculated())) {
+            receiver.applyTraceFinderResult((int) calcResult.execute(receiver.getTraceFinderCallTarget(), receiver.createArgsTraceFinder()));
         }
+        return receiver.getIndices();
     }
-
-    @Specialization
-    static int doSingleResultLazyStart(SingleResultLazyStart receiver, int groupNumber,
-                    @Cached ConditionProfile boundsProfile) {
-        if (boundsProfile.profile(groupNumber == 0)) {
-            return receiver.getEnd();
-        } else {
-            return INVALID_RESULT;
-        }
-    }
-
-    @Specialization
-    static int doSingleIndexArray(SingleIndexArrayResult receiver, int groupNumber) {
-        return fromSingleArray(receiver.getIndices(), groupNumber);
-    }
-
-    @Specialization
-    static int doTraceFinder(TraceFinderResult receiver, int groupNumber,
-                    @Cached TraceFinderGetResultNode getResultNode) {
-        return fromSingleArray(getResultNode.execute(receiver), groupNumber);
-    }
-
-    @Specialization
-    static int doLazyCaptureGroups(LazyCaptureGroupsResult receiver, int groupNumber,
-                    @Cached LazyCaptureGroupGetResultNode getResultNode) {
-        return fromSingleArray(getResultNode.execute(receiver), groupNumber) - 1;
-    }
-
-    private static int fromSingleArray(int[] array, int groupNumber) {
-        try {
-            return array[groupNumber * 2 + 1];
-        } catch (ArrayIndexOutOfBoundsException e) {
-            return INVALID_RESULT;
-        }
-    }
-
 }

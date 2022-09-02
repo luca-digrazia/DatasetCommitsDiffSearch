@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -75,6 +75,34 @@ public abstract class LLVMCMathsIntrinsics {
         protected LLVM80BitFloat doIntrinsic(LLVM80BitFloat value) {
             double result = doIntrinsic(value.getDoubleValue());
             return LLVM80BitFloat.fromDouble(result);
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeField(name = "vectorLength", type = int.class)
+    public abstract static class LLVMSqrtVectorNode extends LLVMBuiltin {
+        protected abstract int getVectorLength();
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVMDoubleVector doVector(LLVMDoubleVector value) {
+            assert value.getLength() == getVectorLength();
+            double[] result = new double[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = Math.sqrt(value.getValue(i));
+            }
+            return LLVMDoubleVector.create(result);
+        }
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVMFloatVector doVector(LLVMFloatVector value) {
+            assert value.getLength() == getVectorLength();
+            float[] result = new float[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                result[i] = (float) Math.sqrt(value.getValue(i));
+            }
+            return LLVMFloatVector.create(result);
         }
     }
 
@@ -240,7 +268,7 @@ public abstract class LLVMCMathsIntrinsics {
 
         @Specialization
         protected LLVMManagedPointer doManaged(LLVMManagedPointer value,
-                        @Cached("createBinaryProfile()") ConditionProfile negated) {
+                        @Cached ConditionProfile negated) {
             if (negated.profile(value.getObject() instanceof LLVMNegatedForeignObject)) {
                 LLVMNegatedForeignObject obj = (LLVMNegatedForeignObject) value.getObject();
                 assert !(obj.getForeign() instanceof LLVMNegatedForeignObject);
