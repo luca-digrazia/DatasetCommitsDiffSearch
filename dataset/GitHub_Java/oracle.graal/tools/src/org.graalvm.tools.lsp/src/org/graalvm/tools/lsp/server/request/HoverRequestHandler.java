@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,11 +27,11 @@ package org.graalvm.tools.lsp.server.request;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 
+import org.graalvm.tools.lsp.instrument.LSPInstrument;
 import org.graalvm.tools.lsp.server.ContextAwareExecutor;
 import org.graalvm.tools.lsp.server.types.Hover;
 import org.graalvm.tools.lsp.server.types.MarkupContent;
@@ -42,8 +42,9 @@ import org.graalvm.tools.lsp.server.utils.SourceUtils;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogate;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogateMap;
 
-import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
@@ -55,11 +56,7 @@ import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.WriteVariableTag;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -69,15 +66,13 @@ import com.oracle.truffle.api.source.SourceSection;
 
 @SuppressWarnings("deprecation")
 public final class HoverRequestHandler extends AbstractRequestHandler {
-
-    static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
+    private static final TruffleLogger LOG = TruffleLogger.getLogger(LSPInstrument.ID, HoverRequestHandler.class);
 
     private final CompletionRequestHandler completionHandler;
     private final boolean developerMode;
 
-    public HoverRequestHandler(Env envMain, Env env, TextDocumentSurrogateMap surrogateMap, ContextAwareExecutor contextAwareExecutor, CompletionRequestHandler completionHandler,
-                    boolean developerMode) {
-        super(envMain, env, surrogateMap, contextAwareExecutor);
+    public HoverRequestHandler(Env env, TextDocumentSurrogateMap surrogateMap, ContextAwareExecutor contextAwareExecutor, CompletionRequestHandler completionHandler, boolean developerMode) {
+        super(env, surrogateMap, contextAwareExecutor);
         this.completionHandler = completionHandler;
         this.developerMode = developerMode;
     }
@@ -87,7 +82,7 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         InstrumentableNode nodeAtCaret = findNodeAtCaret(surrogate, line, column);
         if (nodeAtCaret != null) {
             SourceSection hoverSection = ((Node) nodeAtCaret).getSourceSection();
-            logger.log(Level.FINER, "Hover: SourceSection({0})", hoverSection.getCharacters());
+            LOG.log(Level.FINER, "Hover: SourceSection({0})", hoverSection.getCharacters());
             if (surrogate.hasCoverageData()) {
                 List<CoverageData> coverages = surrogate.getCoverageData(hoverSection);
                 if (coverages != null) {
@@ -119,7 +114,7 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
     private Hover evalHoverInfos(List<CoverageData> coverages, SourceSection hoverSection, LanguageInfo langInfo) {
         String textAtHoverPosition = hoverSection.getCharacters().toString();
         for (CoverageData coverageData : coverages) {
-            Hover frameSlotHover = tryFrameScope(coverageData.getFrame(), coverageData.getCoverageEventNode(), textAtHoverPosition, langInfo, hoverSection);
+            Hover frameSlotHover = tryFrameSlot(coverageData.getFrame(), textAtHoverPosition, langInfo, hoverSection);
             if (frameSlotHover != null) {
                 return frameSlotHover;
             }
@@ -145,6 +140,9 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
             try {
                 executableNode = env.parseInline(inlineEvalSource, coverageData.getCoverageEventNode(), coverageData.getFrame());
             } catch (Exception e) {
+                if (!(e instanceof TruffleException)) {
+                    e.printStackTrace(err);
+                }
             }
             if (executableNode == null) {
                 return Hover.create(Collections.emptyList());
@@ -154,7 +152,7 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
             coverageEventNode.insertOrReplaceChild(executableNode);
             Object evalResult = null;
             try {
-                logger.fine("Trying coverage-based eval...");
+                LOG.fine("Trying coverage-based eval...");
                 evalResult = executableNode.execute(coverageData.getFrame());
             } catch (Exception e) {
                 if (!((e instanceof TruffleException) || (e instanceof ControlFlowException))) {
@@ -200,37 +198,11 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         return null;
     }
 
-    private Hover tryFrameScope(MaterializedFrame frame, Node node, String textAtHoverPosition, LanguageInfo langInfo, SourceSection hoverSection) {
-        final Iterator<Scope> scopes = env.findLocalScopes(node, frame).iterator();
-        if (scopes.hasNext()) {
-            final Scope scope = scopes.next();
-            try {
-                final Object argsObject = scope.getArguments();
-                if (argsObject instanceof TruffleObject) {
-                    Object keys = INTEROP.getMembers(argsObject);
-                    long size = INTEROP.getArraySize(keys);
-                    for (long i = 0; i < size; i++) {
-                        String key = INTEROP.asString(INTEROP.readArrayElement(keys, i));
-                        if (key.equals(textAtHoverPosition)) {
-                            Object argument = INTEROP.readMember(argsObject, key);
-                            return Hover.create(createDefaultHoverInfos(textAtHoverPosition, argument, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
-                        }
-                    }
-                }
-                final Object varsObject = scope.getVariables();
-                if (varsObject instanceof TruffleObject) {
-                    Object keys = INTEROP.getMembers(varsObject);
-                    long size = INTEROP.getArraySize(keys);
-                    for (long i = 0; i < size; i++) {
-                        String key = INTEROP.asString(INTEROP.readArrayElement(keys, i));
-                        if (key.equals(textAtHoverPosition)) {
-                            Object var = INTEROP.readMember(varsObject, key);
-                            return Hover.create(createDefaultHoverInfos(textAtHoverPosition, var, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
-                        }
-                    }
-                }
-            } catch (UnsupportedMessageException | UnknownIdentifierException | InvalidArrayIndexException e) {
-            }
+    private Hover tryFrameSlot(MaterializedFrame frame, String textAtHoverPosition, LanguageInfo langInfo, SourceSection hoverSection) {
+        FrameSlot frameSlot = frame.getFrameDescriptor().getSlots().stream().filter(slot -> slot.getIdentifier().equals(textAtHoverPosition)).findFirst().orElseGet(() -> null);
+        if (frameSlot != null) {
+            Object frameSlotValue = frame.getValue(frameSlot);
+            return Hover.create(createDefaultHoverInfos(textAtHoverPosition, frameSlotValue, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
         }
         return null;
     }

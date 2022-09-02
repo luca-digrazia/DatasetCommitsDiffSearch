@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,8 +45,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.function.Supplier;
 import java.util.logging.Level;
-
-import org.graalvm.collections.Pair;
 
 import org.graalvm.tools.lsp.server.types.CodeAction;
 import org.graalvm.tools.lsp.server.types.CodeActionParams;
@@ -456,7 +454,7 @@ public final class LanguageServerImpl extends LanguageServer {
         return resultOnError;
     }
 
-    public CompletableFuture<?> start(final ServerSocket serverSocket, final List<Pair<String, SocketAddress>> delegateAddresses) {
+    public CompletableFuture<?> start(final ServerSocket serverSocket, final List<SocketAddress> delegateAddresses) {
         clientConnectionExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
 
             @Override
@@ -512,17 +510,15 @@ public final class LanguageServerImpl extends LanguageServer {
                     delegateServersList = Collections.emptyList();
                 } else {
                     delegateServersList = new ArrayList<>(delegateAddresses.size());
-                    for (Pair<String, SocketAddress> langAddress : delegateAddresses) {
-                        String languageId = langAddress.getLeft();
-                        SocketAddress address = langAddress.getRight();
+                    for (SocketAddress address : delegateAddresses) {
                         try {
-                            delegateServersList.add(new DelegateServer(languageId, address, serverOutput, truffleAdapter, getLogger()));
+                            delegateServersList.add(new DelegateServer(address, serverOutput, getLogger()));
                         } catch (IOException ex) {
                             err.println("[Graal LSP] Error while connecting to delegate server at " + address + " : " + ex.getLocalizedMessage());
                         }
                     }
                 }
-                return new DelegateServers(truffleAdapter, delegateServersList);
+                return new DelegateServers(delegateServersList);
             }
         }, clientConnectionExecutor);
         return future;

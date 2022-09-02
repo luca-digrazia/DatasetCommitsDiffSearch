@@ -24,16 +24,12 @@
  */
 package org.graalvm.tools.lsp.test.server;
 
-import java.io.File;
-import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Context.Builder;
@@ -47,6 +43,7 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 
 public abstract class TruffleLSPTest {
 
@@ -79,9 +76,15 @@ public abstract class TruffleLSPTest {
                     "  return abc();\n" +   // 13
                     "}\n";                  // 14
 
+    private static AtomicInteger globalCounter;
     protected Engine engine;
     protected TruffleAdapter truffleAdapter;
     protected Context context;
+
+    @BeforeClass
+    public static void classSetup() {
+        globalCounter = new AtomicInteger();
+    }
 
     @Before
     public void setup() {
@@ -89,7 +92,7 @@ public abstract class TruffleLSPTest {
         Instrument instrument = engine.getInstruments().get("lsp");
         EnvironmentProvider envProvider = instrument.lookup(EnvironmentProvider.class);
 
-        truffleAdapter = new TruffleAdapter(envProvider.getEnvironment(), true);
+        truffleAdapter = new TruffleAdapter(true);
 
         Builder contextBuilder = Context.newBuilder();
         contextBuilder.allowAllAccess(true);
@@ -105,7 +108,9 @@ public abstract class TruffleLSPTest {
                 try {
                     return CompletableFuture.completedFuture(taskWithResult.call());
                 } catch (Exception e) {
-                    return CompletableFuture.failedFuture(e);
+                    CompletableFuture<T> cf = new CompletableFuture<>();
+                    cf.completeExceptionally(e);
+                    return cf;
                 }
             }
 
@@ -113,34 +118,14 @@ public abstract class TruffleLSPTest {
             public <T> Future<T> executeWithNestedContext(Callable<T> taskWithResult, boolean cached) {
                 try (Context newContext = contextBuilder.build()) {
                     newContext.enter();
-                    newContext.initialize("sl");
                     try {
                         return CompletableFuture.completedFuture(taskWithResult.call());
                     } catch (Exception e) {
-                        return CompletableFuture.failedFuture(e);
+                        CompletableFuture<T> cf = new CompletableFuture<>();
+                        cf.completeExceptionally(e);
+                        return cf;
                     } finally {
                         newContext.leave();
-                    }
-                }
-            }
-
-            @Override
-            public <T> Future<T> executeWithNestedContext(Callable<T> taskWithResult, int timeoutMillis, Callable<T> onTimeoutTask) {
-                if (timeoutMillis <= 0) {
-                    return executeWithNestedContext(taskWithResult, false);
-                } else {
-                    CompletableFuture<Future<T>> future = CompletableFuture.supplyAsync(() -> executeWithNestedContext(taskWithResult, false));
-                    try {
-                        return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
-                    } catch (TimeoutException e) {
-                        future.cancel(true);
-                        try {
-                            return CompletableFuture.completedFuture(onTimeoutTask.call());
-                        } catch (Exception timeoutTaskException) {
-                            return CompletableFuture.failedFuture(timeoutTaskException);
-                        }
-                    } catch (InterruptedException | ExecutionException e) {
-                        return CompletableFuture.failedFuture(e);
                     }
                 }
             }
@@ -155,6 +140,7 @@ public abstract class TruffleLSPTest {
         };
 
         truffleAdapter.register(envProvider.getEnvironment(), executorWrapper);
+        truffleAdapter.initialize();
     }
 
     @After
@@ -164,13 +150,7 @@ public abstract class TruffleLSPTest {
     }
 
     public URI createDummyFileUriForSL() {
-        try {
-            File dummy = File.createTempFile("truffle-lsp-test-file-", ".sl");
-            dummy.deleteOnExit();
-            return dummy.getCanonicalFile().toPath().toUri();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        return URI.create("file:///tmp/truffle-lsp-test-file-" + globalCounter.incrementAndGet() + ".sl");
     }
 
     protected DiagnosticsNotification getDiagnosticsNotification(ExecutionException e) {

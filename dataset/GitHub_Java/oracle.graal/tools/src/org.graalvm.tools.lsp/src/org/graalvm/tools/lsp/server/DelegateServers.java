@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,6 @@ import com.oracle.truffle.tools.utils.json.JSONArray;
 import com.oracle.truffle.tools.utils.json.JSONObject;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -50,11 +49,9 @@ import org.graalvm.tools.lsp.server.types.ServerCapabilities;
  */
 public final class DelegateServers {
 
-    private final TruffleAdapter truffleAdapter;
     private final DelegateServer[] delegateServers;
 
-    public DelegateServers(TruffleAdapter truffleAdapter, List<DelegateServer> delegateServers) {
-        this.truffleAdapter = truffleAdapter;
+    public DelegateServers(List<DelegateServer> delegateServers) {
         this.delegateServers = delegateServers.toArray(new DelegateServer[delegateServers.size()]);
     }
 
@@ -65,9 +62,8 @@ public final class DelegateServers {
     }
 
     public void sendMessageToDelegates(byte[] buffer, Object id, String method, JSONObject params, LoggerProxy logger) {
-        String language = findContextLanguage(params);
         for (DelegateServer ds : delegateServers) {
-            if (languageMatch(language, ds.getLanguageId()) && supportsMethod(method, params, ds.getCapabilities())) {
+            if (supportsMethod(method, params, ds.getCapabilities())) {
                 try {
                     ds.sendMessage(buffer, id, method);
                 } catch (IOException e) {
@@ -75,29 +71,6 @@ public final class DelegateServers {
                 }
             }
         }
-    }
-
-    private String findContextLanguage(JSONObject params) {
-        Object context = params.opt("context");
-        if (!(context instanceof JSONObject)) {
-            context = params;
-        }
-        Object textDocument = ((JSONObject) context).opt("textDocument");
-        if (!(textDocument instanceof JSONObject)) {
-            return null;
-        }
-        Object uri = ((JSONObject) textDocument).opt("uri");
-        if (!(uri instanceof String)) {
-            return null;
-        }
-        return truffleAdapter.getLanguageId(URI.create((String) uri));
-    }
-
-    private static boolean languageMatch(String languageId1, String languageId2) {
-        if (languageId1 == null || languageId2 == null) {
-            return true;
-        }
-        return languageId1.equals(languageId2);
     }
 
     public Object mergeResults(Object id, Object result) {
