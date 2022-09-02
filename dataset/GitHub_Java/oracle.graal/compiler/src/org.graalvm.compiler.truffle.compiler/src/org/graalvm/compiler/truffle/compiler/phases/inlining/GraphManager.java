@@ -91,10 +91,10 @@ final class GraphManager {
         return new PEAgnosticInlineInvokePlugin(rootRequest.inliningPlan, partialEvaluator);
     }
 
-    Entry peRoot(boolean truffleTierOnExpand) {
+    Entry peRoot(boolean optimizeOnExpand) {
         final PEAgnosticInlineInvokePlugin plugin = newPlugin();
         partialEvaluator.doGraphPE(rootRequest, plugin, graphCacheForInlining);
-        if (truffleTierOnExpand) {
+        if (optimizeOnExpand) {
             partialEvaluator.truffleTier(rootRequest);
         }
         return new Entry(rootRequest.graph, plugin);
