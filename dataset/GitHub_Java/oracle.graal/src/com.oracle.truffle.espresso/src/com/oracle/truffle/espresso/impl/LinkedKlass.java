@@ -144,10 +144,10 @@ public final class LinkedKlass {
     }
 
     public int getMajorVersion() {
-        return getConstantPool().getMajorVersion();
+        return parserKlass.getMajorVersion();
     }
 
     public int getMinorVersion() {
-        return getConstantPool().getMinorVersion();
+        return parserKlass.getMinorVersion();
     }
 }

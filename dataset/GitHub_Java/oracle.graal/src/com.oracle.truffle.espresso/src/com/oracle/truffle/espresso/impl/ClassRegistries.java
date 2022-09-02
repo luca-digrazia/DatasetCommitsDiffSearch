@@ -24,9 +24,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -34,54 +31,22 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
-import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 public final class ClassRegistries {
 
     private final ClassRegistry bootClassRegistry;
+    private final ConcurrentHashMap<StaticObject, ClassRegistry> registries;
     private final LoadingConstraints constraints;
     private final EspressoContext context;
 
-    private final Set<StaticObject> weakClassLoaderSet = Collections.newSetFromMap(new WeakHashMap<>());
-
     public ClassRegistries(EspressoContext context) {
         this.context = context;
+        this.registries = new ConcurrentHashMap<>();
         this.bootClassRegistry = new BootClassRegistry(context);
         this.constraints = new LoadingConstraints(context);
-    }
-
-    private ClassRegistry getClassRegistry(@Host(ClassLoader.class) StaticObject classLoader) {
-        if (StaticObject.isNull(classLoader)) {
-            return bootClassRegistry;
-        }
-
-        // Double-checked locking to attach class registry to guest instance.
-        ClassRegistry classRegistry = (ClassRegistry) classLoader.getHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY);
-        if (classRegistry == null) {
-            // Synchronizing on the classLoader instance would be the natural choice here, but:
-            // On SubstrateVM, synchronizing on a StaticObject instance will add an extra slot/field
-            // to all StaticObject instances. Locking on the weak set instead (maybe) spares one
-            // slot/field in every single guest object.
-            // Setting the class registry happens only once, for such rare operations, no contention
-            // is expected.
-            synchronized (weakClassLoaderSet) {
-                classRegistry = (ClassRegistry) classLoader.getHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY);
-                if (classRegistry == null) {
-                    classRegistry = new GuestClassRegistry(context, classLoader);
-                    classLoader.setHiddenFieldVolatile(context.getMeta().HIDDEN_CLASS_LOADER_REGISTRY, classRegistry);
-                    // Register the class loader in the weak set.
-                    assert Thread.holdsLock(weakClassLoaderSet);
-                    weakClassLoaderSet.add(classLoader);
-                }
-            }
-        }
-
-        assert classRegistry != null;
-        return classRegistry;
     }
 
     @TruffleBoundary
@@ -96,8 +61,15 @@ public final class ClassRegistries {
             return elemental.getArrayClass(Types.getArrayDimensions(type));
         }
 
-        ClassRegistry registry = getClassRegistry(classLoader);
-        assert registry != null;
+        ClassRegistry registry = StaticObject.isNull(classLoader)
+                        ? bootClassRegistry
+                        : registries.get(classLoader);
+
+        // Unknown class loader; no class has been loaded with it.
+        if (registry == null) {
+            return null;
+        }
+
         return registry.findLoadedKlass(type);
     }
 
@@ -106,7 +78,7 @@ public final class ClassRegistries {
         if (classLoader == StaticObject.NULL) {
             return bootClassRegistry.classes.values().toArray(new Klass[0]);
         }
-        return getClassRegistry(classLoader).getLoadedKlasses();
+        return registries.get(classLoader).getLoadedKlasses();
     }
 
     @TruffleBoundary
@@ -120,12 +92,9 @@ public final class ClassRegistries {
             return klasses.toArray(new Klass[0]);
         }
         // continue search in all other registries
-        synchronized (weakClassLoaderSet) {
-            for (StaticObject classLoader : weakClassLoaderSet) {
-                ClassRegistry registry = getClassRegistry(classLoader);
-                if (registry != null && registry.classes != null && registry.classes.containsKey(type)) {
-                    klasses.add(registry.classes.get(type));
-                }
+        for (ClassRegistry registry : registries.values()) {
+            if (registry != null && registry.classes != null && registry.classes.containsKey(type)) {
+                klasses.add(registry.classes.get(type));
             }
         }
         return klasses.toArray(new Klass[0]);
@@ -136,10 +105,8 @@ public final class ClassRegistries {
         // add classes from boot registry
         ArrayList<Klass> list = new ArrayList<>(bootClassRegistry.classes.values());
         // add classes from all other registries
-        synchronized (weakClassLoaderSet) {
-            for (StaticObject classLoader : weakClassLoaderSet) {
-                list.addAll(getClassRegistry(classLoader).classes.values());
-            }
+        for (ClassRegistry registry : registries.values()) {
+            list.addAll(registry.classes.values());
         }
         return list.toArray(Klass.EMPTY_ARRAY);
     }
@@ -160,14 +127,32 @@ public final class ClassRegistries {
             }
             return elemental.getArrayClass(Types.getArrayDimensions(type));
         }
-        ClassRegistry registry = getClassRegistry(classLoader);
+
+        ClassRegistry registry = StaticObject.isNull(classLoader)
+                        ? bootClassRegistry
+                        : registries.computeIfAbsent(classLoader, new Function<StaticObject, ClassRegistry>() {
+                            @Override
+                            public ClassRegistry apply(StaticObject cl) {
+                                return new GuestClassRegistry(context, cl);
+                            }
+                        });
+
         return registry.loadKlass(type);
     }
 
     @TruffleBoundary
     public Klass defineKlass(Symbol<Type> type, byte[] bytes, StaticObject classLoader) {
         assert classLoader != null;
-        ClassRegistry registry = getClassRegistry(classLoader);
+
+        ClassRegistry registry = StaticObject.isNull(classLoader)
+                        ? bootClassRegistry
+                        : registries.computeIfAbsent(classLoader, new Function<StaticObject, ClassRegistry>() {
+                            @Override
+                            public ClassRegistry apply(StaticObject cl) {
+                                return new GuestClassRegistry(context, cl);
+                            }
+                        });
+
         return registry.defineKlass(type, bytes);
     }
 
@@ -189,23 +174,7 @@ public final class ClassRegistries {
         }
     }
 
-    public long getLoadedClassesCount() {
-        long result = bootClassRegistry.classes.size();
-        synchronized (weakClassLoaderSet) {
-            for (StaticObject classLoader : weakClassLoaderSet) {
-                result += getClassRegistry(classLoader).classes.size();
-            }
-        }
-        assert result >= 0;
-        return result;
-    }
-
     public boolean isClassLoader(StaticObject object) {
-        if (InterpreterToVM.instanceOf(object, context.getMeta().java_lang_ClassLoader)) {
-            synchronized (weakClassLoaderSet) {
-                return weakClassLoaderSet.contains(object);
-            }
-        }
-        return false;
+        return registries.keySet().contains(object);
     }
 }

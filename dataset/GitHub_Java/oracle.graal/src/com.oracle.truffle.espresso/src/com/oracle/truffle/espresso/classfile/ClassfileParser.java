@@ -260,9 +260,9 @@ public final class ClassfileParser {
         verifyVersion(majorVersion, minorVersion);
 
         if (constantPoolPatches == null) {
-            this.pool = ConstantPool.parse(context.getLanguage(), stream, this, majorVersion, minorVersion);
+            this.pool = ConstantPool.parse(context.getLanguage(), stream, this);
         } else {
-            this.pool = ConstantPool.parse(context.getLanguage(), stream, this, constantPoolPatches, context, majorVersion, minorVersion);
+            this.pool = ConstantPool.parse(context.getLanguage(), stream, this, constantPoolPatches, context);
         }
 
         // JVM_ACC_MODULE is defined in JDK-9 and later.
@@ -332,7 +332,7 @@ public final class ClassfileParser {
         // Ensure there are no trailing bytes
         stream.checkEndOfFile();
 
-        return new ParserKlass(pool, classFlags, thisKlassName, thisKlassType, superKlass, superInterfaces, methods, fields, attributes, thisKlassIndex);
+        return new ParserKlass(pool, classFlags, thisKlassName, thisKlassType, superKlass, superInterfaces, methods, fields, attributes, thisKlassIndex, majorVersion, minorVersion);
     }
 
     private ParserMethod[] parseMethods(boolean isInterface) {

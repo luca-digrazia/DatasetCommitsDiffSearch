@@ -340,9 +340,6 @@ public final class DebuggerConnection implements Commands {
                                 case JDWP.ReferenceType.CLASS_FILE_VERSION.ID:
                                     result = JDWP.ReferenceType.CLASS_FILE_VERSION.createReply(packet, context);
                                     break;
-                                case JDWP.ReferenceType.CONSTANT_POOL.ID:
-                                    result = JDWP.ReferenceType.CONSTANT_POOL.createReply(packet, context);
-                                    break;
                             }
                             break;
                         }
