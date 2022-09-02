@@ -45,6 +45,9 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.espresso.FinalizationFeature;
+import com.oracle.truffle.espresso.redefinition.plugins.api.InternalRedefinitionPlugin;
+import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.options.OptionMap;
 import org.graalvm.polyglot.Engine;
 
@@ -64,7 +67,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoBindings;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.FinalizationSupport;
 import com.oracle.truffle.espresso.descriptors.Names;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -84,7 +86,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.perf.DebugCloseable;
 import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.perf.TimerCollection;
-import com.oracle.truffle.espresso.redefinition.plugins.api.InternalRedefinitionPlugin;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
@@ -190,6 +191,7 @@ public final class EspressoContext {
     @CompilationFinal private InterpreterToVM interpreterToVM;
     @CompilationFinal private JImageLibrary jimageLibrary;
     @CompilationFinal private EspressoProperties vmProperties;
+    @CompilationFinal private JavaVersion javaVersion;
     @CompilationFinal private AgentLibraries agents;
     @CompilationFinal private NativeAccess nativeAccess;
     // endregion VM
@@ -401,9 +403,10 @@ public final class EspressoContext {
                                         "Allow native access on context creation e.g. contextBuilder.allowNativeAccess(true)");
         assert !this.initialized;
         eventListener = new EmptyListener();
-        // Setup finalization support in the host VM.
-        FinalizationSupport.ensureInitialized();
-
+        if (!ImageInfo.inImageRuntimeCode()) {
+            // Setup finalization support in the host VM.
+            FinalizationFeature.ensureInitialized();
+        }
         spawnVM();
         this.initialized = true;
         this.jdwpContext = new JDWPContextImpl(this);
@@ -446,16 +449,16 @@ public final class EspressoContext {
 
             initVmProperties();
 
+            if (getJavaVersion().modulesEnabled()) {
+                registries.initJavaBaseModule();
+                registries.getBootClassRegistry().initUnnamedModule(StaticObject.NULL);
+            }
+
             // Spawn JNI first, then the VM.
             try (DebugCloseable vmInit = VM_INIT.scope(timers)) {
                 this.nativeAccess = spawnNativeAccess();
                 this.vm = VM.create(getJNI()); // Mokapot is loaded
                 vm.attachThread(Thread.currentThread());
-            }
-
-            if (getJavaVersion().modulesEnabled()) {
-                registries.initJavaBaseModule();
-                registries.getBootClassRegistry().initUnnamedModule(StaticObject.NULL);
             }
 
             // TODO: link libjimage
@@ -611,6 +614,7 @@ public final class EspressoContext {
         // libraries bundled with GraalVM.
         builder.javaHome(Engine.findHome());
         vmProperties = EspressoProperties.processOptions(builder, getEnv().getOptions()).build();
+        javaVersion = new JavaVersion(vmProperties.bootClassPathType().getJavaVersion());
     }
 
     private void initializeKnownClass(Symbol<Type> type) {
@@ -648,7 +652,7 @@ public final class EspressoContext {
     }
 
     public JavaVersion getJavaVersion() {
-        return vm.getJavaVersion();
+        return javaVersion;
     }
 
     public Types getTypes() {
