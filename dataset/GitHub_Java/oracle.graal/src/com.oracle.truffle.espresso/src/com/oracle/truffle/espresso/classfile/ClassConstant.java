@@ -24,6 +24,7 @@ package com.oracle.truffle.espresso.classfile;
 
 import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
 
+
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -112,7 +113,7 @@ public interface ClassConstant extends PoolConstant {
 
             } catch (EspressoException e) {
                 CompilerDirectives.transferToInterpreter();
-                if (pool.getContext().getMeta().ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                if (pool.getContext().getMeta().ClassNotFoundException.isAssignableFrom(e.getException().getKlass())) {
                     throw pool.getContext().getMeta().throwExWithMessage(NoClassDefFoundError.class, klassName.toString());
                 }
                 throw e;

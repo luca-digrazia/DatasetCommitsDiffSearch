@@ -157,7 +157,7 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
             currentBci = 0; // start of the method
             method = bytecodeNode.getMethod();
             scopeNode = bytecodeNode;
-        } else {
+            } else {
             return super.findLocalScopes(context, node, frame);
         }
         Klass klass = method.getDeclaringKlass();
@@ -202,9 +202,9 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         } else {
             System.out.println("Time spent in Espresso: " + (totalTime) + "ms");
         }
+        context.interruptActiveThreads();
         // Shutdown.shutdown creates a Cleaner thread. At this point, Polyglot doesn't allow new
         // threads. We must perform shutdown before then, after main has finished.
-        context.interruptActiveThreads();
     }
 
     @Override

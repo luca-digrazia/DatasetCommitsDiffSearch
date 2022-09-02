@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,11 @@ import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public interface MethodTypeConstant extends PoolConstant {
 
@@ -46,7 +51,7 @@ public interface MethodTypeConstant extends PoolConstant {
         return getSignature(pool).toString();
     }
 
-    final class Index implements MethodTypeConstant {
+    final class Index implements MethodTypeConstant, Resolvable {
         private final char descriptorIndex;
 
         Index(int descriptorIndex) {
@@ -56,7 +61,36 @@ public interface MethodTypeConstant extends PoolConstant {
         @Override
         public Symbol<Signature> getSignature(ConstantPool pool) {
             // TODO(peterssen): Assert valid signature.
-            return pool.utf8At(descriptorIndex);
+            return pool.symbolAt(descriptorIndex);
+        }
+
+        public Resolved resolve(RuntimeConstantPool pool, int index, Klass accessingKlass) {
+            Symbol<Signature> sig = getSignature(pool);
+            Meta meta = accessingKlass.getContext().getMeta();
+            return new Resolved(BytecodeNode.signatureToMethodType(meta.getSignatures().parsed(sig), accessingKlass, meta));
+        }
+
+        @Override
+        public void validate(ConstantPool pool) {
+            pool.utf8At(descriptorIndex).validateSignature();
+        }
+    }
+
+    final class Resolved implements MethodTypeConstant, Resolvable.ResolvedConstant {
+        private final StaticObject resolved;
+
+        Resolved(StaticObject resolved) {
+            this.resolved = resolved;
+        }
+
+        @Override
+        public Symbol<Signature> getSignature(ConstantPool pool) {
+            // TODO(peterssen): Assert valid signature.
+            throw EspressoError.shouldNotReachHere("Method type already resolved !");
+        }
+
+        public Object value() {
+            return resolved;
         }
     }
 }
