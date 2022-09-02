@@ -96,10 +96,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
         for (ResolvedJavaMethod method : original.getDeclaredMethods()) {
             switch (method.getName()) {
                 case "invoke":
-                    addSubstitutionMethod(method, new ReflectiveInvokeMethod(method, (Method) member, false));
-                    break;
-                case "invokeSpecial":
-                    addSubstitutionMethod(method, new ReflectiveInvokeMethod(method, (Method) member, true));
+                    addSubstitutionMethod(method, new ReflectiveInvokeMethod(method, (Method) member));
                     break;
                 case "get":
                     addSubstitutionMethod(method, new ReflectiveReadMethod(method, (Field) member, JavaKind.Object));
@@ -526,12 +523,10 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
     private static class ReflectiveInvokeMethod extends ReflectionSubstitutionMethod {
 
         private final Method method;
-        private final boolean specialInvoke;
 
-        ReflectiveInvokeMethod(ResolvedJavaMethod original, Method method, boolean specialInvoke) {
+        ReflectiveInvokeMethod(ResolvedJavaMethod original, Method method) {
             super(original);
             this.method = method;
-            this.specialInvoke = specialInvoke;
         }
 
         @Override
@@ -554,9 +549,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
             fillArgsArray(graphKit, argumentArray, receiverOffset, args, argTypes);
 
             InvokeKind invokeKind;
-            if (specialInvoke) {
-                invokeKind = InvokeKind.Special;
-            } else if (targetMethod.isStatic()) {
+            if (targetMethod.isStatic()) {
                 invokeKind = InvokeKind.Static;
             } else if (targetMethod.isInterface()) {
                 invokeKind = InvokeKind.Interface;

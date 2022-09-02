@@ -34,12 +34,11 @@ import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.java.BytecodeParser;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode;
-import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderTool;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
@@ -48,6 +47,8 @@ import com.oracle.svm.core.c.enums.EnumRuntimeData;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.c.info.EnumInfo;
 
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -111,12 +112,11 @@ public class CInterfaceEnumTool {
 
         // Create the instanceof guard to narrow the return type for the analysis
         LogicNode instanceOfNode = kit.append(InstanceOfNode.createAllowNull(TypeReference.createExactTrusted(enumType), invoke, null, null));
-        ConstantNode enumClass = kit.createConstant(kit.getConstantReflection().asJavaClass(enumType), JavaKind.Object);
-        GuardingNode guard = kit.createCheckThrowingBytecodeException(instanceOfNode, BytecodeExceptionNode.BytecodeExceptionKind.CLASS_CAST, invoke, enumClass);
+        FixedGuardNode guard = kit.append(new FixedGuardNode(instanceOfNode, DeoptimizationReason.ClassCastException, DeoptimizationAction.None));
 
         // Create the PiNode anchored at the guard to narrow the return type for compilation
         ObjectStamp resultStamp = StampFactory.object(TypeReference.create(null, enumType), false);
-        return kit.unique(new PiNode(invoke, resultStamp, guard.asNode()));
+        return kit.unique(new PiNode(invoke, resultStamp, guard));
     }
 
     private MethodCallTargetNode invokeEnumLookup(GraphBuilderTool b, CallTargetFactory callTargetFactory, int bci, EnumInfo enumInfo, JavaKind parameterKind, ValueNode arg) {
