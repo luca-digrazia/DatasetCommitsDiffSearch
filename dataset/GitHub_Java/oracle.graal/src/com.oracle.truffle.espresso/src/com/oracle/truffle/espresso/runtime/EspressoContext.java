@@ -587,7 +587,7 @@ public final class EspressoContext {
 
     private static final long MAX_KILL_PHASE_WAIT = 100;
 
-    public void teardown() {
+    public void teardown(boolean fromExit) {
         assert isClosing();
         invalidateNoThreadStop("Killing the VM");
         Thread initiatingThread = Thread.currentThread();
@@ -595,7 +595,7 @@ public final class EspressoContext {
         // Phase 0: wait.
         boolean nextPhase = !waitSpin(initiatingThread);
 
-        if (getEnv().getOptions().get(EspressoOptions.SoftExit)) {
+        if (!fromExit) {
             if (nextPhase) {
                 // Phase 1: Interrupt threads, and stops daemons.
                 teardownPhase1(initiatingThread);
@@ -934,7 +934,7 @@ public final class EspressoContext {
                 // Wake up spinning main thread.
                 sync.notifyAll();
             }
-            teardown();
+            teardown(true);
         }
     }
 
@@ -942,7 +942,7 @@ public final class EspressoContext {
     public void destroyVM() {
         waitForClose();
         getMeta().java_lang_reflect_Shutdown_shutdown.invokeDirect(null);
-        teardown();
+        teardown(false);
     }
 
     private void waitForClose() throws EspressoExitException {
