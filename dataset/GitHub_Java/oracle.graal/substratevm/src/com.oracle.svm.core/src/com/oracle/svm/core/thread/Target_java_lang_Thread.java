@@ -28,7 +28,6 @@ import java.security.AccessControlContext;
 import java.util.Map;
 import java.util.Objects;
 
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.IsolateThread;
 
 import com.oracle.svm.core.SubstrateOptions;
@@ -64,12 +63,10 @@ public final class Target_java_lang_Thread {
     /**
      * Every thread has a boolean for noting whether this thread is interrupted.
      *
-     * After JDK 11, a field with same name has been introduced and the logic to set / reset it has
-     * moved into Java code. So this injected field and the substitutions that maintain it are no
-     * longer necessary.
+     * For Loom JDK a field with same name has been introduced, this field and the
+     * {@link Target_java_lang_Thread#isInterrupted()} substitution are no longer necessary.
      */
-    @Inject //
-    @TargetElement(onlyWith = JDK11OrEarlier.class) //
+    @Inject @TargetElement(onlyWith = NotLoomJDK.class)//
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
     volatile boolean interrupted;
 
@@ -394,6 +391,12 @@ public final class Target_java_lang_Thread {
         return result;
     }
 
+    @Substitute
+    @TargetElement(onlyWith = NotLoomJDK.class)
+    public boolean isInterrupted() {
+        return interrupted;
+    }
+
     /**
      * Marks the thread as interrupted and wakes it up.
      *
@@ -402,13 +405,8 @@ public final class Target_java_lang_Thread {
      */
     @Substitute
     void interrupt0() {
-        if (JavaVersionUtil.JAVA_SPEC <= 11) {
+        if (!JavaContinuations.useLoom()) {
             interrupted = true;
-        } else {
-            /*
-             * After JDK 11, the interrupted flag is maintained by the JDK in Java code, i.e.,
-             * already set by the caller. So we do not need to set any flag.
-             */
         }
 
         if (!SubstrateOptions.MultiThreaded.getValue()) {
