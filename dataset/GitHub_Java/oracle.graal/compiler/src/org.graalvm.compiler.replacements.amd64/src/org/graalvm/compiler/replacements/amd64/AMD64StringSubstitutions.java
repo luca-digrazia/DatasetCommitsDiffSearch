@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,10 +23,6 @@
  * questions.
  */
 package org.graalvm.compiler.replacements.amd64;
-
-import static org.graalvm.compiler.api.directives.GraalDirectives.LIKELY_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.UNLIKELY_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.injectBranchProbability;
 
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.Fold;
@@ -70,39 +66,39 @@ public class AMD64StringSubstitutions {
                     @ConstantNodeParameter char[] target, int targetOffset, int targetCount,
                     int origFromIndex) {
         int fromIndex = origFromIndex;
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex >= sourceCount)) {
+        if (fromIndex >= sourceCount) {
             return (targetCount == 0 ? sourceCount : -1);
         }
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex < 0)) {
+        if (fromIndex < 0) {
             fromIndex = 0;
         }
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, targetCount == 0)) {
+        if (targetCount == 0) {
             // The empty string is in every string.
             return fromIndex;
         }
 
         int totalOffset = sourceOffset + fromIndex;
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, sourceCount - fromIndex < targetCount)) {
+        if (sourceCount - fromIndex < targetCount) {
             // The empty string contains nothing except the empty string.
             return -1;
         }
 
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, targetCount == 1)) {
+        if (targetCount == 1) {
             return AMD64ArrayIndexOf.indexOf1Char(source, sourceCount, totalOffset, target[targetOffset]);
         } else {
             int haystackLength = sourceCount - (targetCount - 2);
-            while (injectBranchProbability(LIKELY_PROBABILITY, totalOffset < haystackLength)) {
+            while (totalOffset < haystackLength) {
                 int indexOfResult = AMD64ArrayIndexOf.indexOfTwoConsecutiveChars(source, haystackLength, totalOffset, target[targetOffset], target[targetOffset + 1]);
-                if (injectBranchProbability(UNLIKELY_PROBABILITY, indexOfResult < 0)) {
+                if (indexOfResult < 0) {
                     return -1;
                 }
                 totalOffset = indexOfResult;
-                if (injectBranchProbability(UNLIKELY_PROBABILITY, targetCount == 2)) {
+                if (targetCount == 2) {
                     return totalOffset;
                 } else {
                     Pointer cmpSourcePointer = Word.objectToTrackedPointer(source).add(charArrayBaseOffset(INJECTED)).add(totalOffset * charArrayIndexScale(INJECTED));
                     Pointer targetPointer = Word.objectToTrackedPointer(target).add(charArrayBaseOffset(INJECTED)).add(targetOffset * charArrayIndexScale(INJECTED));
-                    if (injectBranchProbability(UNLIKELY_PROBABILITY, ArrayRegionEqualsNode.regionEquals(cmpSourcePointer, targetPointer, targetCount, JavaKind.Char))) {
+                    if (ArrayRegionEqualsNode.regionEquals(cmpSourcePointer, targetPointer, targetCount, JavaKind.Char)) {
                         return totalOffset;
                     }
                 }
@@ -117,15 +113,15 @@ public class AMD64StringSubstitutions {
     public static int indexOf(String source, int ch, int origFromIndex) {
         int fromIndex = origFromIndex;
         final int sourceCount = source.length();
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex >= sourceCount)) {
+        if (fromIndex >= sourceCount) {
             // Note: fromIndex might be near -1>>>1.
             return -1;
         }
-        if (injectBranchProbability(UNLIKELY_PROBABILITY, fromIndex < 0)) {
+        if (fromIndex < 0) {
             fromIndex = 0;
         }
 
-        if (injectBranchProbability(LIKELY_PROBABILITY, ch < Character.MIN_SUPPLEMENTARY_CODE_POINT)) {
+        if (ch < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
             char[] sourceArray = StringSubstitutions.getValue(source);
             return AMD64ArrayIndexOf.indexOf1Char(sourceArray, sourceCount, fromIndex, (char) ch);
         } else {
