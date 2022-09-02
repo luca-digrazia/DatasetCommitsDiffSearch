@@ -51,6 +51,7 @@ import org.graalvm.collections.Equivalence;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.object.Layout.ImplicitCast;
 import com.oracle.truffle.api.utilities.NeverValidAssumption;
 
 /**
@@ -160,7 +161,7 @@ public abstract class Shape {
      * @see Shape#newBuilder()
      * @since 20.2.0
      */
-    @SuppressWarnings({"hiding", "deprecation"})
+    @SuppressWarnings("hiding")
     public static final class Builder extends AbstractBuilder<Builder> {
 
         private Class<? extends DynamicObject> layoutClass = DynamicObject.class;
@@ -171,7 +172,7 @@ public abstract class Shape {
         private Object sharedData;
         private Assumption singleContextAssumption;
         private EconomicMap<Object, Property> properties;
-        private EnumSet<Layout.ImplicitCast> allowedImplicitCasts = EnumSet.noneOf(Layout.ImplicitCast.class);
+        private EnumSet<ImplicitCast> allowedImplicitCasts = EnumSet.noneOf(ImplicitCast.class);
 
         Builder() {
         }
@@ -819,22 +820,8 @@ public abstract class Shape {
      *
      * @see Shape.Builder#layout(Class)
      * @since 0.8 or earlier
-     * @deprecated since 21.1. You can get the shape's layout class using {@link #getLayoutClass()}.
      */
-    @Deprecated
-    @SuppressWarnings("deprecation")
     public abstract Layout getLayout();
-
-    /**
-     * Get the shape's layout class.
-     *
-     * @see Shape.Builder#layout(Class)
-     * @since 21.1
-     */
-    @SuppressWarnings("deprecation")
-    public Class<? extends DynamicObject> getLayoutClass() {
-        return getLayout().getType();
-    }
 
     /**
      * Get the shape's shared data.

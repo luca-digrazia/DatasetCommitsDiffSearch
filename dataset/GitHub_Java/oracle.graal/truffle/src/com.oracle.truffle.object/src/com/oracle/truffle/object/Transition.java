@@ -42,7 +42,6 @@ package com.oracle.truffle.object;
 
 import java.util.Objects;
 
-import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.Property;
 
 /** @since 0.17 or earlier */
@@ -81,24 +80,10 @@ public abstract class Transition {
     /** @since 0.17 or earlier */
     public abstract static class PropertyTransition extends Transition {
         private final Property property;
-        private final Object key;
-        private final int flags;
-        /** A {@link Location} or the value's erased type. */
-        private final Object locationOrType;
 
         /** @since 0.17 or earlier */
-        protected PropertyTransition(Property property) {
+        public PropertyTransition(Property property) {
             this.property = property;
-            this.key = property.getKey();
-            this.flags = property.getFlags();
-            this.locationOrType = getLocationOrType(property);
-        }
-
-        protected PropertyTransition(Object key, int flags, Object locationType) {
-            this.property = null;
-            this.key = key;
-            this.flags = flags;
-            this.locationOrType = locationType;
         }
 
         /** @since 0.17 or earlier */
@@ -106,9 +91,7 @@ public abstract class Transition {
         public int hashCode() {
             final int prime = 31;
             int result = super.hashCode();
-            result = prime * result + ((key == null) ? 0 : key.hashCode());
-            result = prime * result + flags;
-            result = prime * result + ((locationOrType == null) ? 0 : locationOrType.hashCode());
+            result = prime * result + ((property == null) ? 0 : property.hashCode());
             return result;
         }
 
@@ -119,13 +102,7 @@ public abstract class Transition {
                 return false;
             }
             PropertyTransition other = (PropertyTransition) obj;
-            if (!Objects.equals(this.key, other.key)) {
-                return false;
-            }
-            if (this.flags != other.flags) {
-                return false;
-            }
-            if (!Objects.equals(this.locationOrType, other.locationOrType)) {
+            if (!Objects.equals(property, other.property)) {
                 return false;
             }
             return true;
@@ -133,43 +110,7 @@ public abstract class Transition {
 
         /** @since 0.17 or earlier */
         public Property getProperty() {
-            return Objects.requireNonNull(property);
-        }
-
-        public Object getPropertyKey() {
-            return key;
-        }
-
-        public int getPropertyFlags() {
-            return flags;
-        }
-
-        public boolean isPropertyEquals(Property other) {
-            if (this.flags != other.getFlags()) {
-                return false;
-            }
-            if (!Objects.equals(this.key, other.getKey())) {
-                return false;
-            }
-            if (!Objects.equals(this.locationOrType, getLocationOrType(other))) {
-                return false;
-            }
-            return true;
-        }
-
-        static Object getLocationOrType(Property property) {
-            Location location = property.getLocation();
-            if (location instanceof LocationImpl) {
-                Class<?> type = ((LocationImpl) location).getType();
-                if (type != null) {
-                    return type;
-                }
-            }
-            return property.getLocation();
-        }
-
-        protected final String propertyToString() {
-            return "\"" + key + "\"" + ":" + locationOrType + (flags == 0 ? "" : "%" + flags);
+            return property;
         }
     }
 
@@ -178,10 +119,6 @@ public abstract class Transition {
         /** @since 0.17 or earlier */
         public AddPropertyTransition(Property property) {
             super(property);
-        }
-
-        public AddPropertyTransition(Object key, int flags, Object locationType) {
-            super(key, flags, locationType);
         }
 
         /** @since 0.17 or earlier */
@@ -193,7 +130,7 @@ public abstract class Transition {
         /** @since 0.17 or earlier */
         @Override
         public String toString() {
-            return String.format("add(%s)", propertyToString());
+            return String.format("add(%s)", getProperty());
         }
     }
 
@@ -215,7 +152,7 @@ public abstract class Transition {
         /** @since 0.17 or earlier */
         @Override
         public String toString() {
-            return String.format("remove(%s)", propertyToString());
+            return String.format("remove(%s)", getProperty());
         }
     }
 
@@ -299,7 +236,7 @@ public abstract class Transition {
         /** @since 0.17 or earlier */
         @Override
         public String toString() {
-            return String.format("replace(%s,%s)", propertyToString(), getPropertyAfter());
+            return String.format("replace(%s,%s)", getPropertyBefore(), getPropertyAfter());
         }
     }
 
