@@ -79,9 +79,4 @@ public final class G1PreWriteBarrier extends ObjectWriteBarrier implements Deopt
         updateUsages(stateBefore, state);
         stateBefore = state;
     }
-
-    @Override
-    public Kind getKind() {
-        return Kind.PRE_BARRIER;
-    }
 }
