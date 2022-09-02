@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import java.nio.ByteBuffer;
-
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -99,12 +97,6 @@ public interface MemberRefConstant extends PoolConstant {
         public void validate(ConstantPool pool) {
             pool.classAt(classIndex).validate(pool);
             pool.nameAndTypeAt(nameAndTypeIndex).validate(pool);
-        }
-
-        @Override
-        public void dump(ByteBuffer buf) {
-            buf.putChar(classIndex);
-            buf.putChar(nameAndTypeIndex);
         }
     }
 
