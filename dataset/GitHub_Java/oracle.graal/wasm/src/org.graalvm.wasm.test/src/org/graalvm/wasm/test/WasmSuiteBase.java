@@ -107,11 +107,6 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return contextBuilder.build();
     }
 
-    private static boolean inCI() {
-        final String prid = System.getenv("PULL_REQUEST_ID");
-        return prid != null;
-    }
-
     private static Value runInContext(WasmCase testCase, Context context, Source source, int iterations, String phaseIcon, String phaseLabel) {
         boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
 
@@ -132,7 +127,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
         Value result = null;
         resetStatus(oldOut, phaseIcon, phaseLabel);
-        ByteArrayOutputStream capturedStdout;
+        ByteArrayOutputStream capturedStdout = null;
         Object firstIterationContextState = null;
 
         for (int i = 0; i != iterations; ++i) {
@@ -191,17 +186,10 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         for (int i = formattedLabel.length(); i < STATUS_LABEL_WIDTH; i++) {
             formattedLabel += " ";
         }
-        if (inCI()) {
-            oldOut.println();
-            oldOut.print(icon);
-            oldOut.print(formattedLabel);
-            oldOut.flush();
-        } else {
-            eraseStatus(oldOut);
-            oldOut.print(icon);
-            oldOut.print(formattedLabel);
-            oldOut.flush();
-        }
+        eraseStatus(oldOut);
+        oldOut.print(icon);
+        oldOut.print(formattedLabel);
+        oldOut.flush();
     }
 
     private static void eraseStatus(PrintStream oldOut) {
@@ -321,19 +309,13 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 statusIcon = TEST_FAILED_ICON;
                 errors.put(testCase, e);
             } finally {
-                if (inCI()) {
-                    System.out.println();
-                    System.out.println(statusIcon);
-                    System.out.println();
-                } else {
-                    for (int i = 0; i < requiredWidth; i++) {
-                        System.out.print(MOVE_LEFT);
-                        System.out.print(" ");
-                        System.out.print(MOVE_LEFT);
-                    }
-                    System.out.print(statusIcon);
-                    System.out.flush();
+                for (int i = 0; i < requiredWidth; i++) {
+                    System.out.print(MOVE_LEFT);
+                    System.out.print(" ");
+                    System.out.print(MOVE_LEFT);
                 }
+                System.out.print(statusIcon);
+                System.out.flush();
             }
             position++;
         }
