@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,8 +42,11 @@ package com.oracle.truffle.api.impl;
 
 import static com.oracle.truffle.api.impl.DefaultTruffleRuntime.getRuntime;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleRuntime;
+import com.oracle.truffle.api.impl.Accessor.CallInlined;
+import com.oracle.truffle.api.impl.Accessor.CallProfiled;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -60,7 +63,7 @@ public final class DefaultCallTarget implements RootCallTarget {
     DefaultCallTarget(RootNode function) {
         this.rootNode = function;
         this.rootNode.adoptChildren();
-        DefaultRuntimeAccessor.NODES.setCallTarget(function, this);
+        getRuntime().getTvmci().setCallTarget(function, this);
     }
 
     @Override
@@ -81,7 +84,7 @@ public final class DefaultCallTarget implements RootCallTarget {
         try {
             return getRootNode().execute(frame);
         } catch (Throwable t) {
-            DefaultRuntimeAccessor.LANGUAGE.onThrowable(callNode, this, t, frame);
+            getRuntime().getTvmci().onThrowable(callNode, this, t, frame);
             throw t;
         } finally {
             getRuntime().popFrame();
@@ -98,7 +101,7 @@ public final class DefaultCallTarget implements RootCallTarget {
         try {
             return getRootNode().execute(frame);
         } catch (Throwable t) {
-            DefaultRuntimeAccessor.LANGUAGE.onThrowable(null, this, t, frame);
+            getRuntime().getTvmci().onThrowable(null, this, t, frame);
             throw t;
         } finally {
             getRuntime().popFrame();
@@ -108,9 +111,23 @@ public final class DefaultCallTarget implements RootCallTarget {
     private void initialize() {
         synchronized (this) {
             if (!this.initialized) {
-                DefaultRuntimeAccessor.INSTRUMENT.onFirstExecution(getRootNode());
+                getRuntime().getTvmci().onFirstExecution(this);
                 this.initialized = true;
             }
         }
     }
+
+    static final CallInlined CALL_INLINED = new CallInlined() {
+        @Override
+        public Object call(Node callNode, CallTarget target, Object... arguments) {
+            return ((DefaultCallTarget) target).callDirectOrIndirect(callNode, arguments);
+        }
+    };
+
+    static final CallProfiled CALL_PROFILED = new CallProfiled() {
+        @Override
+        public Object call(CallTarget target, Object... arguments) {
+            return ((DefaultCallTarget) target).call(arguments);
+        }
+    };
 }
