@@ -43,10 +43,6 @@ public interface AgentScriptAPI {
              * @return name of the loaded source
              */
             String name();
-            /** Character content of the {@link #sourceLoaded}.
-             * @return content of the loaded source
-             */
-            String characters();
         }
         void sourceLoaded(Info info);
     }
