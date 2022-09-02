@@ -271,9 +271,9 @@ public abstract class LLVMDataEscapeNode extends LLVMNode {
         @Specialization
         static Object escapingManaged(LLVMPointer address, @SuppressWarnings("unused") LLVMInteropType.Structured type,
                         @Cached("createClassProfile()") ValueProfile objectProfile,
-                        @Cached ConditionProfile isManagedPointer,
-                        @Cached ConditionProfile isTypedForeignObject,
-                        @Cached ConditionProfile typedProfile) {
+                        @Cached("createBinaryProfile()") ConditionProfile isManagedPointer,
+                        @Cached("createBinaryProfile()") ConditionProfile isTypedForeignObject,
+                        @Cached("createBinaryProfile()") ConditionProfile typedProfile) {
 
             if (isManagedPointer.profile(LLVMManagedPointer.isInstance(address))) {
                 LLVMManagedPointer managed = LLVMManagedPointer.cast(address);

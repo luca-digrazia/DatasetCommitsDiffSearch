@@ -34,6 +34,7 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.nfi.LLVMNativeConvertNodeFactory.I1FromNativeToLLVMNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.nfi.LLVMNativeConvertNodeFactory.IdNodeGen;
 import com.oracle.truffle.llvm.runtime.interop.nfi.LLVMNativeConvertNodeFactory.NativeToAddressNodeGen;
@@ -109,14 +110,16 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
         }
 
         @Specialization(guards = "!interop.isPointer(address)", limit = "3")
+        @SuppressWarnings("unused")
         protected LLVMManagedPointer doFunction(TruffleObject address,
-                        @CachedLibrary("address") @SuppressWarnings("unused") InteropLibrary interop) {
+                        @CachedLibrary("address") InteropLibrary interop) {
             /*
              * If the NFI returns an object that's not a pointer, it's probably a callback function.
              * In that case, don't eagerly force TO_NATIVE. If we just call it immediately, we
              * shouldn't throw away the NFI signature just to re-construct it immediately.
              */
-            return LLVMManagedPointer.create(address);
+            LLVMTypedForeignObject object = LLVMTypedForeignObject.createUnknown(address);
+            return LLVMManagedPointer.create(object);
         }
 
         @Specialization(limit = "3", replaces = {"doPointer", "doFunction"})
