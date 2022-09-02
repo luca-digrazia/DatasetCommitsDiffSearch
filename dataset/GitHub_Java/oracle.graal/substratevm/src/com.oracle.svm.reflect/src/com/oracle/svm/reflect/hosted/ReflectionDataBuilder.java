@@ -41,8 +41,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.graalvm.nativeimage.hosted.Feature.DuringAnalysisAccess;
 import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
@@ -270,7 +270,7 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
              * for this class.
              *
              * If the class fails verification then no reflection metadata can be registered.
-             * However, the class is still registered for run time loading with Class.forName() and
+             * Howerver, the class is still registered for run time loading with Class.forName() and
              * its class initializer is replaced with a synthesized 'throw new VerifyError()' (see
              * ClassInitializationFeature.buildRuntimeInitializationInfo()).
              */
@@ -299,29 +299,32 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
                             nullaryConstructor(accessors.getDeclaredConstructors(originalReflectionData), reflectionMethods),
                             filterFields(accessors.getDeclaredPublicFields(originalReflectionData), reflectionFields.keySet(), access.getMetaAccess()),
                             filterMethods(accessors.getDeclaredPublicMethods(originalReflectionData), reflectionMethods, access.getMetaAccess()),
-                            catchLinkingErrors(clazz, reflectionClasses, access.getMetaAccess(), Class::getDeclaredClasses),
-                            catchLinkingErrors(clazz, reflectionClasses, access.getMetaAccess(), Class::getClasses),
+                            logOnError(() -> filterClasses(clazz.getDeclaredClasses(), reflectionClasses, access.getMetaAccess()), clazz, "getDeclaredClasses", EMPTY_CLASSES),
+                            logOnError(() -> filterClasses(clazz.getClasses(), reflectionClasses, access.getMetaAccess()), clazz, "getPublicClasses", EMPTY_CLASSES),
                             enclosingMethodOrConstructor(clazz));
         }
         hub.setReflectionData(reflectionData);
     }
 
     /**
-     * Catches any linking or verification exceptions when accessing inner classes.
+     * Catches any linking or verification exception and returns a null object for given type
+     * instead.
      * 
+     * @param extractor code that extracts and filters the reflection data
      * @param clazz class, whose reflection data is being processed
-     * @param innerClassAccessor method that extracts the inner classes
-     * @return filtered inner classes or empty array in case of a linking/verification error
+     * @param operationName name of the operation, for better error message
+     * @param nullObject null value to be provided instead if operation fails
+     * @return valid result from extractor or null value if extracting fails
      */
-    private static Class<?>[] catchLinkingErrors(Class<?> clazz, Set<Class<?>> filter, AnalysisMetaAccess access, Function<Class<?>, Class<?>[]> innerClassAccessor) {
+    private static <T> T logOnError(Supplier<T> extractor, Class<?> clazz, String operationName, T nullObject) {
         try {
-            return filterClasses(innerClassAccessor.apply(clazz), filter, access);
+            return extractor.get();
         } catch (TypeNotPresentException | LinkageError e) {
             // Checkstyle: stop
             System.out.println("WARNING: Could not register reflection metadata for " + clazz.getTypeName() +
-                            ". Reason: " + e.getClass().getTypeName() + ": " + e.getMessage() + '.');
+                            ", operation " + operationName + ". Reason: " + e.getClass().getTypeName() + ": " + e.getMessage() + '.');
             // Checkstyle: resume
-            return EMPTY_CLASSES;
+            return nullObject;
         }
     }
 
