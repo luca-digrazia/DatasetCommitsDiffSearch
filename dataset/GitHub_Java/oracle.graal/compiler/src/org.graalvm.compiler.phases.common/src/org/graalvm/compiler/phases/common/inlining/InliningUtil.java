@@ -72,6 +72,7 @@ import org.graalvm.compiler.nodes.InliningLog;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
+import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.NodeView;
@@ -381,7 +382,7 @@ public class InliningUtil extends ValueMergeUtil {
             throw new IllegalStateException("Inlined graph is in invalid state: " + inlineGraph);
         }
         for (Node node : inlineGraph.getNodes()) {
-            if (node == entryPointNode || (node == entryPointNode.stateAfter() && node.hasExactlyOneUsage()) || node instanceof ParameterNode) {
+            if (node == entryPointNode || (node == entryPointNode.stateAfter() && node.usages().count() == 1) || node instanceof ParameterNode) {
                 // Do nothing.
             } else {
                 nodes.add(node);
@@ -464,7 +465,11 @@ public class InliningUtil extends ValueMergeUtil {
             // A partial intrinsic exit must be replaced with a call to
             // the intrinsified method.
             Invoke dup = (Invoke) duplicates.get(exit.asNode());
-            dup.replaceBci(invoke.bci());
+            if (dup instanceof InvokeNode) {
+                ((InvokeNode) dup).replaceWithNewBci(invoke.bci());
+            } else {
+                ((InvokeWithExceptionNode) dup).replaceWithNewBci(invoke.bci());
+            }
         }
         if (unwindNode != null) {
             unwindNode = (UnwindNode) duplicates.get(unwindNode);
@@ -538,7 +543,15 @@ public class InliningUtil extends ValueMergeUtil {
             }
 
             // get rid of memory kill
-            invokeWithException.killKillingBegin();
+            AbstractBeginNode begin = invokeWithException.next();
+            if (begin instanceof KillingBeginNode) {
+                try (DebugCloseable position = begin.withNodeSourcePosition()) {
+                    AbstractBeginNode newBegin = new BeginNode();
+                    graph.addAfterFixed(begin, graph.add(newBegin));
+                    begin.replaceAtUsages(newBegin);
+                    graph.removeFixed(begin);
+                }
+            }
         } else {
             if (unwindNode != null && unwindNode.isAlive()) {
                 try (DebugCloseable position = unwindNode.withNodeSourcePosition()) {
