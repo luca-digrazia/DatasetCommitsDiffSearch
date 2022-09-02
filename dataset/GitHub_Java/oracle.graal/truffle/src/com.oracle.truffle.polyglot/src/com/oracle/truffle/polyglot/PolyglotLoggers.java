@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -51,6 +51,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -157,15 +158,6 @@ final class PolyglotLoggers {
                 }
             }
             return handler.retain();
-        }
-    }
-
-    /**
-     * Used reflectively by {@code ContextPreInitializationTest}.
-     */
-    static boolean hasActiveFileHandlers() {
-        synchronized (fileHandlers) {
-            return !fileHandlers.isEmpty();
         }
     }
 
@@ -321,7 +313,7 @@ final class PolyglotLoggers {
      */
     private static final class ContextLogHandler extends Handler {
 
-        private final WeakReference<PolyglotContextImpl> contextRef;
+        private final Reference<PolyglotContextImpl> contextRef;
 
         ContextLogHandler(PolyglotContextImpl context) {
             this.contextRef = new WeakReference<>(context);
