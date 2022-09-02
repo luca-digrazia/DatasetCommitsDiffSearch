@@ -1277,19 +1277,6 @@ public class StandardGraphBuilderPlugins {
             }
         });
 
-        r.register0("inIntrinsic", new InvocationPlugin() {
-            @Override
-            public boolean inlineOnly() {
-                return true;
-            }
-
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(b.parsingIntrinsic()));
-                return true;
-            }
-        });
-
         r.register0("controlFlowAnchor", new InvocationPlugin() {
             @Override
             public boolean inlineOnly() {
