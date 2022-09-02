@@ -29,8 +29,8 @@
  */
 package com.oracle.truffle.llvm.runtime.except;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.LLVMAccessStackPointerNode;
 
 /**
  * Indicates an memory failure that is not a {@link LLVMAllocationFailureException}.
@@ -42,7 +42,12 @@ public class LLVMMemoryException extends LLVMException {
         super(node, cause.getMessage(), cause);
     }
 
-    public LLVMMemoryException(LLVMAccessStackPointerNode node, String message) {
+    public LLVMMemoryException(Node node, String message) {
         super(node, message);
+    }
+
+    @TruffleBoundary
+    public LLVMMemoryException(Node location, String format, Object... args) {
+        this(location, String.format(format, args));
     }
 }

@@ -36,11 +36,10 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.except.LLVMMemoryException;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHandleMemoryBase;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
@@ -55,15 +54,13 @@ public abstract class GraalVMResolveHandle extends LLVMIntrinsic {
                     @Cached LLVMToNativeNode forceAddressNode,
                     @CachedLanguage LLVMLanguage language,
                     @Cached ConditionProfile isDerefProfile,
-                    @Cached BranchProfile invalidHandle,
-                    @Cached("createClassProfile()") ValueProfile derefHandleContainerProfile,
-                    @Cached("createClassProfile()") ValueProfile handleContainerProfile) {
+                    @Cached BranchProfile invalidHandle) {
         long address = forceAddressNode.executeWithTarget(rawHandle).asNative();
         try {
-            if (!language.getNoDerefHandleAssumption().isValid() && isDerefProfile.profile(LLVMHandleMemoryBase.isDerefHandleMemory(address))) {
-                return derefHandleContainerProfile.profile(context.getDerefHandleContainer()).getValue(this, address).copy();
+            if (!language.getNoDerefHandleAssumption().isValid() && isDerefProfile.profile(LLVMNativeMemory.isDerefHandleMemory(address))) {
+                return context.getDerefHandleContainer().getValue(this, address).copy();
             } else {
-                return handleContainerProfile.profile(context.getHandleContainer()).getValue(this, address).copy();
+                return context.getHandleContainer().getValue(this, address).copy();
             }
         } catch (ArrayIndexOutOfBoundsException | NullPointerException ex) {
             invalidHandle.enter();
