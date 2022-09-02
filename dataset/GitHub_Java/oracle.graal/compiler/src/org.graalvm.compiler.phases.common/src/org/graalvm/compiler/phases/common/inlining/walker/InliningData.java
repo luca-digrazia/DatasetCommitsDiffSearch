@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import jdk.vm.ci.meta.SpeculationLog;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
@@ -75,7 +76,6 @@ import jdk.vm.ci.meta.Assumptions.AssumptionResult;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog;
 
 /**
  * <p>
@@ -277,7 +277,7 @@ public class InliningData {
         OptionValues options = invoke.asNode().getOptions();
 
         SpeculationLog speculationLog = graph.getSpeculationLog();
-        SpeculationLog.SpeculationReason speculation = InliningUtil.createSpeculation(invoke, typeProfile);
+        SpeculationLog.SpeculationReason speculation = InliningUtil.createSpeculation(invoke, ptypes.length);
 
         if (ptypes.length == 1 && notRecordedTypeProbability == 0 && (speculationLog == null || speculationLog.maySpeculate(speculation))) {
             if (!optimisticOpts.inlineMonomorphicCalls(options)) {
