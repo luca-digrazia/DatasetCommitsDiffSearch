@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,14 +56,14 @@ public abstract class UnsafeAccessNode extends FixedWithNextNode implements Cano
     @Input ValueNode offset;
     protected final JavaKind accessKind;
     protected final LocationIdentity locationIdentity;
-    protected final boolean forceLocation;
+    protected final boolean forceAnyLocation;
 
     public abstract boolean isVolatile();
 
     protected UnsafeAccessNode(NodeClass<? extends UnsafeAccessNode> c, Stamp stamp, ValueNode object, ValueNode offset, JavaKind accessKind, LocationIdentity locationIdentity,
-                    boolean forceLocation) {
+                    boolean forceAnyLocation) {
         super(c, stamp);
-        this.forceLocation = forceLocation;
+        this.forceAnyLocation = forceAnyLocation;
         assert accessKind != null;
         assert locationIdentity != null;
         this.object = object;
@@ -76,8 +76,8 @@ public abstract class UnsafeAccessNode extends FixedWithNextNode implements Cano
         return locationIdentity;
     }
 
-    public boolean isLocationForced() {
-        return forceLocation;
+    public boolean isAnyLocationForced() {
+        return forceAnyLocation;
     }
 
     public ValueNode object() {
@@ -94,7 +94,7 @@ public abstract class UnsafeAccessNode extends FixedWithNextNode implements Cano
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (!isLocationForced()) {
+        if (!isAnyLocationForced()) {
             if (offset().isConstant()) {
                 long constantOffset = offset().asJavaConstant().asLong();
 
