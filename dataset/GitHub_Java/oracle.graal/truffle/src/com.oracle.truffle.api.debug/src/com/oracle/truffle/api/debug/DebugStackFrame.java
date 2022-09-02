@@ -187,6 +187,26 @@ public final class DebugStackFrame {
     }
 
     /**
+     * Returns the root node of this frame, or <code>null</code> if the requesting language class
+     * does not match the root node guest language.
+     *
+     * @param languageClass the Truffle languageClass class object
+     * @return the root node associated with the frame
+     *
+     * @since 20.1
+     */
+    public RootNode getRootNode(Class<? extends TruffleLanguage> languageClass) {
+        Objects.requireNonNull(languageClass);
+        RootNode rootNode = findCurrentRoot();
+        if (languageClass == null || rootNode == null) {
+            return null;
+        }
+        // check if language class of the root node corresponds to the input language
+        TruffleLanguage<?> language = Debugger.ACCESSOR.nodeSupport().getLanguage(rootNode);
+        return language != null && language.getClass() == languageClass ? rootNode : null;
+    }
+
+    /**
      * Get the current inner-most scope. The scope remain valid as long as the current stack frame
      * remains valid.
      * <p>
@@ -232,54 +252,6 @@ public final class DebugStackFrame {
         } catch (Throwable ex) {
             throw new DebugException(session, ex, languageInfo, null, true, null);
         }
-    }
-
-    /**
-     * Returns the current node for this stack frame, or <code>null</code> if the requesting
-     * language class does not match the root node guest language.
-     * 
-     * This method is permitted only if the guest language class is available. This is the case if
-     * you want to utilize the Debugger API directly from within a guest language, or if you are an
-     * instrument bound/dependent on a specific language.
-     *
-     * @param languageClass the Truffle language class for a given guest language
-     * @return the node associated with the frame
-     *
-     * @since 20.1
-     */
-    public Node getRawNode(Class<? extends TruffleLanguage<?>> languageClass) {
-        Objects.requireNonNull(languageClass);
-        RootNode rootNode = findCurrentRoot();
-        if (rootNode == null) {
-            return null;
-        }
-        // check if language class of the root node corresponds to the input language
-        TruffleLanguage<?> language = Debugger.ACCESSOR.nodeSupport().getLanguage(rootNode);
-        return language != null && language.getClass() == languageClass ? getCurrentNode() : null;
-    }
-
-    /**
-     * Returns the underlying materialized frame for this debug stack frame or <code>null</code> if
-     * the requesting language class does not match the root node guest language.
-     *
-     * This method is permitted only if the guest language class is available. This is the case if
-     * you want to utilize the Debugger API directly from within a guest language, or if you are an
-     * instrument bound/dependent on a specific language.
-     *
-     * @param languageClass the Truffle language class for a given guest language
-     * @return the materialized frame
-     *
-     * @since 20.1
-     */
-    public MaterializedFrame getRawFrame(Class<? extends TruffleLanguage<?>> languageClass) {
-        Objects.requireNonNull(languageClass);
-        RootNode rootNode = findCurrentRoot();
-        if (rootNode == null) {
-            return null;
-        }
-        // check if language class of the root node corresponds to the input language
-        TruffleLanguage<?> language = Debugger.ACCESSOR.nodeSupport().getLanguage(rootNode);
-        return language != null && language.getClass() == languageClass ? findTruffleFrame() : null;
     }
 
     DebugValue wrapHeapValue(Object result) {
@@ -371,22 +343,6 @@ public final class DebugStackFrame {
             Node callNode = currentFrame.getCallNode();
             if (callNode != null) {
                 return callNode.getRootNode();
-            }
-            CallTarget target = currentFrame.getCallTarget();
-            if (target instanceof RootCallTarget) {
-                return ((RootCallTarget) target).getRootNode();
-            }
-            return null;
-        }
-    }
-
-    Node getCurrentNode() {
-        if (currentFrame == null) {
-            return getContext().getInstrumentedNode();
-        } else {
-            Node callNode = currentFrame.getCallNode();
-            if (callNode != null) {
-                return callNode;
             }
             CallTarget target = currentFrame.getCallTarget();
             if (target instanceof RootCallTarget) {
