@@ -110,7 +110,9 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                 LLVMConditionalBranchNode conditionalBranchNode = (LLVMConditionalBranchNode) controlFlowNode;
                 boolean condition = conditionalBranchNode.executeCondition(frame);
                 if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(LLVMConditionalBranchNode.TRUE_SUCCESSOR), condition)) {
-                    bb.enterSuccessor(LLVMConditionalBranchNode.TRUE_SUCCESSOR);
+                    if (CompilerDirectives.inInterpreter()) {
+                        bb.increaseBranchProbability(LLVMConditionalBranchNode.TRUE_SUCCESSOR);
+                    }
                     LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                     LLVMDispatchBasicBlockNode.executePhis(frame, conditionalBranchNode, LLVMConditionalBranchNode.TRUE_SUCCESSOR);
                     basicBlockIndex = conditionalBranchNode.getTrueSuccessor();
@@ -124,7 +126,9 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                     }
                     continue outer;
                 } else {
-                    bb.enterSuccessor(LLVMConditionalBranchNode.FALSE_SUCCESSOR);
+                    if (CompilerDirectives.inInterpreter()) {
+                        bb.increaseBranchProbability(LLVMConditionalBranchNode.FALSE_SUCCESSOR);
+                    }
                     LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                     LLVMDispatchBasicBlockNode.executePhis(frame, conditionalBranchNode, LLVMConditionalBranchNode.FALSE_SUCCESSOR);
                     basicBlockIndex = conditionalBranchNode.getFalseSuccessor();
@@ -144,7 +148,9 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                 int[] successors = switchNode.getSuccessors();
                 for (int i = 0; i < successors.length - 1; i++) {
                     if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(i), switchNode.checkCase(frame, i, condition))) {
-                        bb.enterSuccessor(i);
+                        if (CompilerDirectives.inInterpreter()) {
+                            bb.increaseBranchProbability(i);
+                        }
                         LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                         LLVMDispatchBasicBlockNode.executePhis(frame, switchNode, i);
                         basicBlockIndex = successors[i];
@@ -161,7 +167,9 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                 }
 
                 int i = successors.length - 1;
-                bb.enterSuccessor(i);
+                if (CompilerDirectives.inInterpreter()) {
+                    bb.increaseBranchProbability(i);
+                }
                 LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                 LLVMDispatchBasicBlockNode.executePhis(frame, switchNode, i);
                 basicBlockIndex = successors[i];
@@ -212,7 +220,9 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                 int successorBasicBlockIndex = indirectBranchNode.executeCondition(frame);
                 for (int i = 0; i < successors.length - 1; i++) {
                     if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(i), successors[i] == successorBasicBlockIndex)) {
-                        bb.enterSuccessor(i);
+                        if (CompilerDirectives.inInterpreter()) {
+                            bb.increaseBranchProbability(i);
+                        }
                         LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                         LLVMDispatchBasicBlockNode.executePhis(frame, indirectBranchNode, i);
                         basicBlockIndex = successors[i];
@@ -229,7 +239,9 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                 }
                 int i = successors.length - 1;
                 assert successorBasicBlockIndex == successors[i];
-                bb.enterSuccessor(i);
+                if (CompilerDirectives.inInterpreter()) {
+                    bb.increaseBranchProbability(i);
+                }
                 LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                 LLVMDispatchBasicBlockNode.executePhis(frame, indirectBranchNode, i);
                 basicBlockIndex = successors[i];
@@ -261,7 +273,6 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                 LLVMInvokeNode invokeNode = (LLVMInvokeNode) controlFlowNode;
                 try {
                     invokeNode.execute(frame);
-                    bb.enterSuccessor(LLVMInvokeNode.NORMAL_SUCCESSOR);
                     LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                     LLVMDispatchBasicBlockNode.executePhis(frame, invokeNode, LLVMInvokeNode.NORMAL_SUCCESSOR);
                     basicBlockIndex = invokeNode.getNormalSuccessor();
@@ -275,7 +286,6 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                     }
                     continue outer;
                 } catch (LLVMUserException e) {
-                    bb.enterSuccessor(LLVMInvokeNode.UNWIND_SUCCESSOR);
                     frame.setObject(exceptionValueSlot, e);
                     LLVMDispatchBasicBlockNode.nullDeadSlots(frame, bb.nullableAfter);
                     LLVMDispatchBasicBlockNode.executePhis(frame, invokeNode, LLVMInvokeNode.UNWIND_SUCCESSOR);
