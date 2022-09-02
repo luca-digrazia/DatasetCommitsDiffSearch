@@ -367,10 +367,6 @@ public class CheckGraalIntrinsics extends GraalTest {
                 add(ignore,
                                 "com/sun/crypto/provider/GHASH.processBlocks([BII[J[J)V");
             }
-            if (!(config.useSHA1Intrinsics() || config.useSHA256Intrinsics() || config.useSHA512Intrinsics())) {
-                add(ignore,
-                                "sun/security/provider/DigestBase.implCompressMultiBlock0([BII)I");
-            }
         }
 
         if (isJDK10OrHigher()) {
@@ -381,11 +377,8 @@ public class CheckGraalIntrinsics extends GraalTest {
         if (isJDK11OrHigher()) {
             // Relevant for Java flight recorder
             add(toBeInvestigated,
+                            "java/util/Base64$Encoder.encodeBlock([BII[BIZ)V",
                             "jdk/jfr/internal/JVM.getEventWriter()Ljava/lang/Object;");
-            if (!config.useBase64Intrinsics()) {
-                add(ignore,
-                                "java/util/Base64$Encoder.encodeBlock([BII[BIZ)V");
-            }
         }
 
         if (isJDK12OrHigher()) {
