@@ -59,12 +59,6 @@ final class SourceEventObject implements TruffleObject {
                 return obj.source.getCharacters().toString();
             case "name":
                 return obj.source.getName();
-            case "language":
-                return obj.source.getLanguage();
-            case "mimeType":
-                return NullObject.nullCheck(obj.source.getMimeType());
-            case "uri":
-                return obj.source.getURI().toASCIIString();
             default:
                 throw UnknownIdentifierException.create(member);
         }
