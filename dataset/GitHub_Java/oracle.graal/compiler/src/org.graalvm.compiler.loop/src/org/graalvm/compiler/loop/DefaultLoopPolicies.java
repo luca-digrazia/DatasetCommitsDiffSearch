@@ -103,58 +103,23 @@ public class DefaultLoopPolicies implements LoopPolicies {
         return true;
     }
 
-    /**
-     * This enum represents the result of analyzing a loop for full unrolling. It is used by
-     * {@link #canFullUnroll} to communicate to its caller whether a loop should be fully unrolled,
-     * and if not, why not.
-     */
-    public enum FullUnrollability {
-        /** We can and should fully unroll this loop. */
-        SHOULD_FULL_UNROLL,
-        /**
-         * We cannot fully unroll this loop because it is not a counted loop with a constant max
-         * trip count, or the counter might overflow.
-         */
-        NOT_COUNTED,
-        /** We cannot fully unroll this loop because we cannot duplicate it. */
-        MUST_NOT_DUPLICATE,
-        /**
-         * We could fully unroll this loop, but we should not because it has more iterations than
-         * allowed by the full unrolling options.
-         */
-        TOO_MANY_ITERATIONS,
-        /**
-         * We could fully unroll this loop, but we should not because this would exceed a global or
-         * per-loop size limit.
-         */
-        TOO_LARGE,
-    }
-
-    /**
-     * Determine whether the loop should be fully unrolled. Returns
-     * {@link FullUnrollability#SHOULD_FULL_UNROLL} if the loop should be fully unrolled. Otherwise,
-     * returns some other member of {@link FullUnrollability} describing why the loop cannot or
-     * should not be fully unrolled.
-     */
-    public FullUnrollability canFullUnroll(LoopEx loop) {
+    @Override
+    public boolean shouldFullUnroll(LoopEx loop) {
         if (!loop.isCounted() || !loop.counted().isConstantMaxTripCount() || !loop.counted().counterNeverOverflows()) {
-            return FullUnrollability.NOT_COUNTED;
-        }
-        if (!loop.canDuplicateLoop()) {
-            return FullUnrollability.MUST_NOT_DUPLICATE;
+            return false;
         }
         OptionValues options = loop.entryPoint().getOptions();
         CountedLoopInfo counted = loop.counted();
         UnsignedLong maxTrips = counted.constantMaxTripCount();
         if (maxTrips.equals(0)) {
-            return FullUnrollability.SHOULD_FULL_UNROLL;
+            return loop.canDuplicateLoop();
         }
         if (maxTrips.isGreaterThan(Options.FullUnrollMaxIterations.getValue(options))) {
-            return FullUnrollability.TOO_MANY_ITERATIONS;
+            return false;
         }
         int globalMax = MaximumDesiredSize.getValue(options) - loop.loopBegin().graph().getNodeCount();
         if (globalMax <= 0) {
-            return FullUnrollability.TOO_LARGE;
+            return false;
         }
         int maxNodes = counted.isExactTripCount() ? Options.ExactFullUnrollMaxNodes.getValue(options) : Options.FullUnrollMaxNodes.getValue(options);
         for (Node usage : counted.getCounter().valueNode().usages()) {
@@ -180,15 +145,10 @@ public class DefaultLoopPolicies implements LoopPolicies {
          */
         if (maxTrips.minus(1).times(size).isLessOrEqualTo(maxNodes)) {
             // check whether we're allowed to unroll this loop
-            return FullUnrollability.SHOULD_FULL_UNROLL;
+            return loop.canDuplicateLoop();
         } else {
-            return FullUnrollability.TOO_LARGE;
+            return false;
         }
-    }
-
-    @Override
-    public boolean shouldFullUnroll(LoopEx loop) {
-        return canFullUnroll(loop) == FullUnrollability.SHOULD_FULL_UNROLL;
     }
 
     @Override
