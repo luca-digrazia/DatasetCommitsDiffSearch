@@ -47,7 +47,6 @@ import com.oracle.truffle.api.source.SourceSection;
 public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeListener {
 
     private final ThreadLocal<Times> currentCompilation = new ThreadLocal<>();
-    private long startTime = System.nanoTime();
 
     private TraceCompilationListener(GraalTruffleRuntime runtime) {
         super(runtime);
@@ -64,24 +63,17 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
         return properties;
     }
 
-    private Map<String, Object> queueProperties(OptimizedCallTarget target) {
-        Map<String, Object> properties = defaultProperties(target);
-        properties.put("Queue", runtime.getCompilationQueueSize());
-        properties.put("Time", System.nanoTime() - startTime);
-        return properties;
-    }
-
     @Override
     public void onCompilationQueued(OptimizedCallTarget target) {
         if (target.engine.traceCompilationDetails) {
-            runtime.logEvent(target, 0, "opt queued", queueProperties(target));
+            runtime.logEvent(target, 0, "opt queued", defaultProperties(target));
         }
     }
 
     @Override
     public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
         if (target.engine.traceCompilationDetails) {
-            Map<String, Object> properties = queueProperties(target);
+            Map<String, Object> properties = defaultProperties(target);
             properties.put("Reason", reason);
             runtime.logEvent(target, 0, "opt unqueued", properties);
         }
@@ -162,7 +154,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
                         (compilation.timePartialEvaluationFinished - compilation.timeCompilationStarted) / 1e6, //
                         (timeCompilationFinished - compilation.timePartialEvaluationFinished) / 1e6));
         properties.put("Tier", target.isValidLastTier() ? "2" : "1");
-        properties.put("Inlined", String.format("%3dY %3dN", inlinedCalls, dispatchedCalls));
+        properties.put("Calls", String.format("%3dI/%3dD", inlinedCalls, dispatchedCalls));
         properties.put("IR", String.format("%5d/%5d", compilation.nodeCountPartialEval, nodeCountLowered));
         properties.put("CodeSize", result.getTargetCodeSize());
         if (target.getCodeAddress() != 0) {
