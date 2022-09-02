@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.nodes.graphbuilderconf;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 
 import org.graalvm.compiler.debug.GraalError;
@@ -31,6 +32,7 @@ import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.type.StampTool;
 
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
@@ -43,7 +45,7 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
      * {@link InvocationPlugins#put(InvocationPlugin, boolean, boolean, Class, String, Class...)} to
      * denote the receiver argument for such a non-static method.
      */
-    interface Receiver {
+    public interface Receiver {
         /**
          * Gets the receiver value, null checking it first if necessary.
          *
@@ -68,11 +70,19 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
     }
 
     /**
+     * Determines if this plugin is for a method with a polymorphic signature (e.g.
+     * {@link MethodHandle#invokeExact(Object...)}).
+     */
+    default boolean isSignaturePolymorphic() {
+        return false;
+    }
+
+    /**
      * Determines if this plugin can only be used when inlining the method is it associated with.
      * That is, this plugin cannot be used when the associated method is the compilation root.
      */
     default boolean inlineOnly() {
-        return false;
+        return isSignaturePolymorphic();
     }
 
     /**
@@ -82,6 +92,18 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
      */
     default boolean isDecorator() {
         return false;
+    }
+
+    /**
+     * Handles invocation of a signature polymorphic method.
+     *
+     * @param receiver access to the receiver, {@code null} if {@code targetMethod} is static
+     * @param argsIncludingReceiver all arguments to the invocation include the raw receiver in
+     *            position 0 if {@code targetMethod} is not static
+     * @see #execute
+     */
+    default boolean applyPolymorphic(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode... argsIncludingReceiver) {
+        return defaultHandler(b, targetMethod, receiver, argsIncludingReceiver);
     }
 
     /**
@@ -146,7 +168,8 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
      * Executes this plugin against a set of invocation arguments.
      *
      * The default implementation in {@link InvocationPlugin} dispatches to the {@code apply(...)}
-     * method that matches the number of arguments.
+     * method that matches the number of arguments or to {@link #applyPolymorphic} if {@code plugin}
+     * is {@linkplain #isSignaturePolymorphic() signature polymorphic}.
      *
      * @param targetMethod the method for which this plugin is being applied
      * @param receiver access to the receiver, {@code null} if {@code targetMethod} is static
@@ -159,7 +182,9 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
      *         {@linkplain InvocationPlugin#isDecorator() decorator}.
      */
     default boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver) {
-        if (receiver != null) {
+        if (isSignaturePolymorphic()) {
+            return applyPolymorphic(b, targetMethod, receiver, argsIncludingReceiver);
+        } else if (receiver != null) {
             assert !targetMethod.isStatic();
             assert argsIncludingReceiver.length > 0;
             if (argsIncludingReceiver.length == 1) {
@@ -215,11 +240,13 @@ public interface InvocationPlugin extends GraphBuilderPlugin {
         throw new GraalError("Invocation plugin for %s does not handle invocations with %d arguments", targetMethod.format("%H.%n(%p)"), args.length);
     }
 
-    default String getSourceLocation() {
+    default StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
         Class<?> c = getClass();
         for (Method m : c.getDeclaredMethods()) {
-            if (m.getName().equals("apply") || m.getName().equals("defaultHandler")) {
-                return String.format("%s.%s()", m.getClass().getName(), m.getName());
+            if (m.getName().equals("apply")) {
+                return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
+            } else if (m.getName().equals("defaultHandler")) {
+                return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
             }
         }
         throw new GraalError("could not find method named \"apply\" or \"defaultHandler\" in " + c.getName());
