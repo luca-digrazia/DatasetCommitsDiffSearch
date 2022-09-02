@@ -159,7 +159,6 @@ final class PolyglotEngineException extends RuntimeException {
 
     static PolyglotEngineException bufferIndexOutOfBounds(String message) {
         return new PolyglotEngineException(new IndexOutOfBoundsException(message));
-    }
 
     static PolyglotEngineException noSuchElement(String message) {
         return new PolyglotEngineException(new NoSuchElementException(message));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -56,6 +56,7 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 import org.graalvm.polyglot.Context;
 import org.junit.Test;
+import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
@@ -619,13 +620,13 @@ public class InteropDefaultsTest extends InteropLibraryBaseTest {
         Object empty = new TruffleObject() {
         };
         InteropLibrary emptyLib = createLibrary(InteropLibrary.class, empty);
-        assertFalse(emptyLib.hasIterator(empty));
-        assertFails(() -> emptyLib.getIterator(empty), UnsupportedMessageException.class);
+        assertFalse(emptyLib.hasArrayIterator(empty));
+        assertFails(() -> emptyLib.getArrayIterator(empty), UnsupportedMessageException.class);
 
         Array array = new Array(1, 2, 3);
         InteropLibrary arrayLib = createLibrary(InteropLibrary.class, array);
-        assertTrue(arrayLib.hasIterator(array));
-        arrayLib.getIterator(array);
+        assertTrue(arrayLib.hasArrayIterator(array));
+        arrayLib.getArrayIterator(array);
     }
 
     @Test
@@ -643,7 +644,7 @@ public class InteropDefaultsTest extends InteropLibraryBaseTest {
         assertFails(() -> arrayLib.hasIteratorNextElement(array), UnsupportedMessageException.class);
         assertFails(() -> arrayLib.getIteratorNextElement(array), UnsupportedMessageException.class);
 
-        Object iterator = arrayLib.getIterator(array);
+        Object iterator = arrayLib.getArrayIterator(array);
         InteropLibrary iteratorLib = createLibrary(InteropLibrary.class, iterator);
         assertTrue(iteratorLib.isIterator(iterator));
         assertTrue(iteratorLib.hasIteratorNextElement(iterator));
@@ -654,9 +655,18 @@ public class InteropDefaultsTest extends InteropLibraryBaseTest {
     static final class Array implements TruffleObject {
 
         private final Object[] elements;
+        private final BitSet readable;
 
         Array(Object... elements) {
+            this(elements, null);
+        }
+
+        Array(Object[] elements, BitSet readable) {
+            if (readable != null && elements.length != readable.size()) {
+                throw new IllegalArgumentException();
+            }
             this.elements = elements;
+            this.readable = readable;
         }
 
         @ExportMessage
@@ -672,17 +682,16 @@ public class InteropDefaultsTest extends InteropLibraryBaseTest {
 
         @ExportMessage
         boolean isArrayElementReadable(long index) {
-            return index >= 0 && index < elements.length;
+            return readable == null || readable.get((int) index);
         }
 
         @ExportMessage
         Object readArrayElement(long index) throws InvalidArrayIndexException {
-            if (!isArrayElementReadable(index)) {
+            if (index < 0 || index > elements.length || !isArrayElementReadable(index)) {
                 throw InvalidArrayIndexException.create(index);
             }
             return elements[(int) index];
         }
 
     }
-
 }

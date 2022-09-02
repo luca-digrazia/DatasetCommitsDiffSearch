@@ -798,6 +798,8 @@ public final class HostAccess {
          * @see Value#isIterator()
          * @see Value#hasIteratorNextElement()
          * @see Value#getIteratorNextElement()
+         * @see Value#removeIteratorElement()
+         * @see Value#setIteratorElement(Object)
          * @since 21.1
          */
         public Builder allowIteratorAccess(boolean iteratorAccess) {

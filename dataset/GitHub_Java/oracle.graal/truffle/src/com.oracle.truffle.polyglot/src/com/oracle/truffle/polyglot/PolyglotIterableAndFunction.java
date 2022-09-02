@@ -38,71 +38,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.api.interop;
+package com.oracle.truffle.polyglot;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import java.lang.reflect.Type;
+import java.util.function.Function;
 
-@ExportLibrary(InteropLibrary.class)
-final class ArrayIterator implements TruffleObject {
+final class PolyglotIterableAndFunction<T> extends PolyglotIterable<T> implements Function<Object, Object> {
 
-    private static final Object STOP = new Object();
-
-    final Object array;
-    private int currentItemIndex;
-    private Object next;
-
-    ArrayIterator(Object array) {
-        this.array = array;
+    PolyglotIterableAndFunction(Class<T> elementClass, Type elementType, Object iterable, PolyglotLanguageContext languageContext) {
+        super(elementClass, elementType, iterable, languageContext);
     }
 
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    boolean isIterator() {
-        return true;
-    }
-
-    @ExportMessage
-    boolean hasIteratorNextElement(@CachedLibrary("this.array") InteropLibrary arrays) {
-        init(arrays);
-        return next != STOP;
-    }
-
-    @ExportMessage
-    Object getIteratorNextElement(@CachedLibrary("this.array") InteropLibrary arrays) throws StopIterationException {
-        init(arrays);
-        Object res = next;
-        if (res == STOP) {
-            throw StopIterationException.create();
-        }
-        advance(arrays);
-        return res;
-    }
-
-    private void init(InteropLibrary arrays) {
-        if (next == null) {
-            advance(arrays);
-        }
-    }
-
-    private void advance(InteropLibrary arrays) {
-        next = STOP;
-        try {
-            while (currentItemIndex < arrays.getArraySize(array)) {
-                if (arrays.isArrayElementReadable(array, currentItemIndex)) {
-                    next = arrays.readArrayElement(array, currentItemIndex);
-                    currentItemIndex++;
-                    break;
-                } else {
-                    currentItemIndex++;
-                }
-            }
-        } catch (UnsupportedMessageException ume) {
-            CompilerDirectives.shouldNotReachHere(ume);
-        } catch (InvalidArrayIndexException iaie) {
-            // Pass with next set to STOP
-        }
+    @Override
+    public Object apply(Object t) {
+        return cache.apply.call(languageContext, guestObject, t);
     }
 }

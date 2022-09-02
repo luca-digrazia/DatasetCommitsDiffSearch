@@ -38,71 +38,39 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.api.interop;
+package org.graalvm.polyglot.proxy;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import java.util.Objects;
 
-@ExportLibrary(InteropLibrary.class)
-final class ArrayIterator implements TruffleObject {
+/**
+ * Interface to be implemented to mimic guest language iterables.
+ *
+ * @see Proxy
+ * @see ProxyIterator
+ * @since 21.1
+ */
+public interface ProxyArrayIterable extends Proxy {
 
-    private static final Object STOP = new Object();
+    /**
+     * Returns an iterator object.
+     *
+     * @see ProxyIterator
+     * @since 21.1
+     */
+    Object getArrayIterator();
 
-    final Object array;
-    private int currentItemIndex;
-    private Object next;
-
-    ArrayIterator(Object array) {
-        this.array = array;
-    }
-
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    boolean isIterator() {
-        return true;
-    }
-
-    @ExportMessage
-    boolean hasIteratorNextElement(@CachedLibrary("this.array") InteropLibrary arrays) {
-        init(arrays);
-        return next != STOP;
-    }
-
-    @ExportMessage
-    Object getIteratorNextElement(@CachedLibrary("this.array") InteropLibrary arrays) throws StopIterationException {
-        init(arrays);
-        Object res = next;
-        if (res == STOP) {
-            throw StopIterationException.create();
-        }
-        advance(arrays);
-        return res;
-    }
-
-    private void init(InteropLibrary arrays) {
-        if (next == null) {
-            advance(arrays);
-        }
-    }
-
-    private void advance(InteropLibrary arrays) {
-        next = STOP;
-        try {
-            while (currentItemIndex < arrays.getArraySize(array)) {
-                if (arrays.isArrayElementReadable(array, currentItemIndex)) {
-                    next = arrays.readArrayElement(array, currentItemIndex);
-                    currentItemIndex++;
-                    break;
-                } else {
-                    currentItemIndex++;
-                }
+    /**
+     * Creates a proxy iterable backed by a Java {@link Iterable}.
+     *
+     * @since 21.1
+     */
+    static ProxyArrayIterable from(Iterable<Object> iterable) {
+        Objects.requireNonNull(iterable, "Iterable must be non null.");
+        return new ProxyArrayIterable() {
+            @Override
+            public Object getArrayIterator() {
+                return ProxyIterator.from(iterable.iterator());
             }
-        } catch (UnsupportedMessageException ume) {
-            CompilerDirectives.shouldNotReachHere(ume);
-        } catch (InvalidArrayIndexException iaie) {
-            // Pass with next set to STOP
-        }
+        };
     }
 }

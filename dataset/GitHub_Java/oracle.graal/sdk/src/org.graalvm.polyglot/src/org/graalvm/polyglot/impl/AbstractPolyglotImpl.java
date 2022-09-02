@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -185,8 +185,6 @@ public abstract class AbstractPolyglotImpl {
         public abstract boolean isIterableAccessible(HostAccess access);
 
         public abstract boolean isIteratorAccessible(HostAccess access);
-
-        public abstract boolean isMapAccessible(HostAccess access);
 
         public abstract Object getHostAccessImpl(HostAccess conf);
 
@@ -806,11 +804,11 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract int hashCodeImpl(Object receiver);
 
-        public boolean hasIterator(Object receiver) {
+        public boolean hasArrayIterator(Object receiver) {
             return false;
         }
 
-        public abstract Value getIterator(Object receiver);
+        public abstract Value getArrayIterator(Object receiver);
 
         public boolean isIterator(Object receiver) {
             return false;
@@ -819,24 +817,6 @@ public abstract class AbstractPolyglotImpl {
         public abstract boolean hasIteratorNextElement(Object receiver);
 
         public abstract Value getIteratorNextElement(Object receiver);
-
-        public boolean hasHashEntries(Object receiver) {
-            return false;
-        }
-
-        public abstract long getHashSize(Object receiver);
-
-        public boolean hasHashEntry(Object receiver, Object key) {
-            return false;
-        }
-
-        public abstract Value getHashValue(Object receiver, Object key);
-
-        public abstract void putHashEntry(Object receiver, Object key, Object value);
-
-        public abstract boolean removeHashEntry(Object receiver, Object key);
-
-        public abstract Value getHashEntriesIterator(Object receiver);
     }
 
     public abstract Class<?> loadLanguageClass(String className);

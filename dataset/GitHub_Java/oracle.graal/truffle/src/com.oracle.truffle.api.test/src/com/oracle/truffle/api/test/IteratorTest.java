@@ -73,7 +73,6 @@ import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -89,7 +88,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyArray;
-import org.graalvm.polyglot.proxy.ProxyIterable;
+import org.graalvm.polyglot.proxy.ProxyArrayIterable;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.graalvm.polyglot.proxy.ProxyIterator;
 import org.junit.Before;
@@ -123,28 +122,6 @@ public class IteratorTest extends AbstractPolyglotTest {
             }
         });
         verifyingHandler.expect(items);
-        context.eval(ProxyLanguage.ID, "Test");
-    }
-
-    @Test
-    public void testArrayWithUnreadableElements() {
-        String[] items = new String[10];
-        String[] expected = new String[items.length / 2];
-        BitSet readable = new BitSet(items.length);
-        for (int i = 0; i < items.length; i++) {
-            items[i] = Integer.toString(i);
-            if (i % 2 == 0) {
-                readable.set(i);
-                expected[i / 2] = items[i];
-            }
-        }
-        setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                return createAST(languageInstance, new Array(items, readable));
-            }
-        });
-        verifyingHandler.expect(expected);
         context.eval(ProxyLanguage.ID, "Test");
     }
 
@@ -235,7 +212,7 @@ public class IteratorTest extends AbstractPolyglotTest {
         Collection<Object> valuesIterable = new HashSet<>();
         Collections.addAll(valuesIterable, values);
         setupEnv(Context.newBuilder().allowAllAccess(true).build());
-        Value iterable = context.asValue(ProxyIterable.from(valuesIterable));
+        Value iterable = context.asValue(ProxyArrayIterable.from(valuesIterable));
         verifyIterable(iterable, values);
     }
 
@@ -245,7 +222,7 @@ public class IteratorTest extends AbstractPolyglotTest {
         List<Object> valuesList = new ArrayList<>();
         Collections.addAll(valuesList, values);
         setupEnv(Context.newBuilder().allowAllAccess(true).build());
-        Value iterable = context.asValue(ProxyIterable.from(valuesList));
+        Value iterable = context.asValue(ProxyArrayIterable.from(valuesList));
         verifyIterable(iterable, values);
     }
 
@@ -286,15 +263,15 @@ public class IteratorTest extends AbstractPolyglotTest {
     }
 
     private static void verifyIterable(Value iterable, Object[] values) {
-        assertTrue(iterable.hasIterator());
+        assertTrue(iterable.hasArrayIterator());
         assertFalse(iterable.isIterator());
-        verifyIterator(iterable.getIterator(), values);
-        verifyIterator(iterable.getIterator().as(Iterator.class), values);
+        verifyIterator(iterable.getArrayIterator(), values);
+        verifyIterator(iterable.getArrayIterator().as(Iterator.class), values);
         verifyIterator(iterable.as(Iterable.class).iterator(), values);
     }
 
     private static void verifyIterator(Value iterator, Object[] values) {
-        assertFalse(iterator.hasIterator());
+        assertFalse(iterator.hasArrayIterator());
         assertTrue(iterator.isIterator());
         for (int i = 0; i < values.length; i++) {
             assertTrue(iterator.hasIteratorNextElement());
@@ -343,12 +320,12 @@ public class IteratorTest extends AbstractPolyglotTest {
         }
 
         @ExportMessage
-        boolean hasIterator() {
+        boolean hasArrayIterator() {
             return true;
         }
 
         @ExportMessage
-        Object getIterator() {
+        Object getArrayIterator() {
             return new SimpleIterator(items);
         }
     }
@@ -383,7 +360,7 @@ public class IteratorTest extends AbstractPolyglotTest {
         }
     }
 
-    private static final class ExecutableProxyIterableImpl implements ProxyIterable, ProxyExecutable {
+    private static final class ExecutableProxyIterableImpl implements ProxyArrayIterable, ProxyExecutable {
 
         private final List<Object> storage;
 
@@ -393,7 +370,7 @@ public class IteratorTest extends AbstractPolyglotTest {
         }
 
         @Override
-        public Object getIterator() {
+        public Object getArrayIterator() {
             return new ExecutableProxyIteratorImpl(storage.iterator());
         }
 
@@ -436,16 +413,10 @@ public class IteratorTest extends AbstractPolyglotTest {
     @ExportLibrary(InteropLibrary.class)
     static class Array implements TruffleObject {
 
-        private final Object[] items;
-        private final BitSet readable;
+        private Object[] items;
 
         Array(Object... items) {
-            this(items, null);
-        }
-
-        Array(Object[] items, BitSet readable) {
             this.items = items;
-            this.readable = readable;
         }
 
         @ExportMessage
@@ -460,12 +431,12 @@ public class IteratorTest extends AbstractPolyglotTest {
 
         @ExportMessage
         boolean isArrayElementReadable(long index) {
-            return index >= 0 && index < items.length && (readable == null || readable.get((int) index));
+            return index >= 0 && index < items.length;
         }
 
         @ExportMessage
         Object readArrayElement(long index) throws InvalidArrayIndexException {
-            if (!isArrayElementReadable(index)) {
+            if (index < 0 || index >= items.length) {
                 throw InvalidArrayIndexException.create(index);
             }
             return items[(int) index];
@@ -617,13 +588,9 @@ public class IteratorTest extends AbstractPolyglotTest {
                 throw new TypeError("iterator", this);
             }
             while (iterators.hasIteratorNextElement(iterator)) {
-                try {
-                    Object item = iterators.getIteratorNextElement(iterator);
-                    setLocal.write(frame, item);
-                    repeat.executeVoid(frame);
-                } catch (UnsupportedMessageException ume) {
-                    continue;
-                }
+                Object item = iterators.getIteratorNextElement(iterator);
+                setLocal.write(frame, item);
+                repeat.executeVoid(frame);
             }
         }
     }
@@ -643,11 +610,11 @@ public class IteratorTest extends AbstractPolyglotTest {
         @Override
         void executeVoid(VirtualFrame frame) {
             Object iterable = readIterable.execute(frame);
-            if (!iterables.hasIterator(iterable)) {
+            if (!iterables.hasArrayIterator(iterable)) {
                 throw new TypeError("iterable", this);
             }
             try {
-                iterate.execute(frame, iterables.getIterator(iterable));
+                iterate.execute(frame, iterables.getArrayIterator(iterable));
             } catch (UnsupportedMessageException | StopIterationException e) {
                 throw CompilerDirectives.shouldNotReachHere(e);
             }

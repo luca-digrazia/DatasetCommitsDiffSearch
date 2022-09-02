@@ -58,7 +58,7 @@ import org.graalvm.polyglot.proxy.ProxyDuration;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.graalvm.polyglot.proxy.ProxyInstant;
 import org.graalvm.polyglot.proxy.ProxyInstantiable;
-import org.graalvm.polyglot.proxy.ProxyIterable;
+import org.graalvm.polyglot.proxy.ProxyArrayIterable;
 import org.graalvm.polyglot.proxy.ProxyIterator;
 import org.graalvm.polyglot.proxy.ProxyNativeObject;
 import org.graalvm.polyglot.proxy.ProxyObject;
@@ -578,25 +578,19 @@ final class PolyglotProxy implements TruffleObject {
     }
 
     @ExportMessage
-    boolean hasIterator() {
-        return proxy instanceof ProxyIterable;
+    boolean hasArrayIterator() {
+        return proxy instanceof ProxyArrayIterable;
     }
 
     @ExportMessage
     @TruffleBoundary
-    Object getIterator(@CachedLibrary("this") InteropLibrary library,
+    Object getArrayIterator(@CachedLibrary("this") InteropLibrary library,
                     @CachedContext(HostLanguage.class) ContextReference<HostContext> context,
                     @CachedLanguage HostLanguage language) throws UnsupportedMessageException {
-        if (proxy instanceof ProxyIterable) {
+        if (proxy instanceof ProxyArrayIterable) {
             PolyglotLanguageContext languageContext = context.get().internalContext;
-            Object result = guestToHostCall(library, language.getHostToGuestCache().getIterator, languageContext, proxy);
-            Object guestValue = languageContext.toGuestValue(library, result);
-            InteropLibrary interop = InteropLibrary.getFactory().getUncached();
-            if (!interop.isIterator(guestValue)) {
-                throw illegalProxy(languageContext, "getIterator() returned an invalid value %s but must return an iterator.",
-                                languageContext.asValue(guestValue).toString());
-            }
-            return guestValue;
+            Object result = guestToHostCall(library, language.getHostToGuestCache().getArrayIterator, languageContext, proxy);
+            return languageContext.toGuestValue(library, result);
         } else {
             throw UnsupportedMessageException.create();
         }

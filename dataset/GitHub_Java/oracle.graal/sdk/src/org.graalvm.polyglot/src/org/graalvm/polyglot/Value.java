@@ -1304,7 +1304,7 @@ public final class Value {
      * might be an expensive operation it is recommended to use the `List` or `Collection` target
      * type if possible.
      * <li><code>{@link Iterable}.class</code> is supported if the value has an
-     * {@link #hasIterator() iterator}. The returned iterable can be safely cast to
+     * {@link #hasArrayIterator() array iterator}. The returned iterable can be safely cast to
      * <code>Iterable&lt;Object&gt;</code>. It is recommended to use {@link #as(TypeLiteral) type
      * literals} to specify the expected component type. With type literals the value type can be
      * restricted to any supported target type, for example to <code>Iterable&lt;Integer&gt;</code>.
@@ -1400,9 +1400,9 @@ public final class Value {
      * element of the value maps to one list element. The size of the returned list maps to the
      * array size of the value. The returned value may also implement {@link Function} if the value
      * can be {@link #canExecute() executed} or {@link #canInstantiate() instantiated}.
-     * <li>If the value has an {@link #hasIterator()} iterator} then the result value will implement
-     * {@link Iterable}. The returned value may also implement {@link Function} if the value can be
-     * {@link #canExecute() executed} or {@link #canInstantiate() instantiated}.
+     * <li>If the value has an {@link #hasArrayIterator()} array iterator} then the result value
+     * will implement {@link Iterable}. The returned value may also implement {@link Function} if
+     * the value can be {@link #canExecute() executed} or {@link #canInstantiate() instantiated}.
      * <li>If the value is an {@link #isIterator()} iterator} then the result value will implement
      * {@link Iterator}. The returned value may also implement {@link Function} if the value can be
      * {@link #canExecute() executed} or {@link #canInstantiate() instantiated}.
@@ -1764,32 +1764,32 @@ public final class Value {
     }
 
     /**
-     * Returns <code>true</code> if this polyglot value provides an iterator. The iterator can be
-     * obtained using {@link #getIterator()}.
+     * Returns <code>true</code> if this polyglot value provides an array iterator. The array
+     * iterator can be obtained using {@link #getArrayIterator()}.
      *
      * @throws IllegalStateException if the context is already closed.
      * @throws PolyglotException if a guest language error occurred during execution.
      *
-     * @see #getIterator()
+     * @see #getArrayIterator()
      * @since 21.1
      */
-    public boolean hasIterator() {
-        return impl.hasIterator(receiver);
+    public boolean hasArrayIterator() {
+        return impl.hasArrayIterator(receiver);
     }
 
     /**
-     * Returns the iterator.
+     * Returns the array iterator.
      *
-     * @throws UnsupportedOperationException if the value does not provide {@link #hasIterator()
-     *             iterator}.
+     * @throws UnsupportedOperationException if the value does not provide
+     *             {@link #hasArrayIterator() iterator}.
      * @throws IllegalStateException if the context is already closed.
      * @throws PolyglotException if a guest language error occurred during execution.
      *
-     * @see #hasIterator()
+     * @see #hasArrayIterator()
      * @since 21.1
      */
-    public Value getIterator() {
-        return impl.getIterator(receiver);
+    public Value getArrayIterator() {
+        return impl.getArrayIterator(receiver);
     }
 
     /**
@@ -1825,8 +1825,7 @@ public final class Value {
     /**
      * Returns the next element in the iteration.
      *
-     * @throws UnsupportedOperationException if the value is not an {@link #isIterator() iterator}
-     *             or when the underlying iterator element exists but is not readable.
+     * @throws UnsupportedOperationException if the value is not an {@link #isIterator() iterator}.
      * @throws NoSuchElementException if the iteration has no more elements, the
      *             {@link #hasIteratorNextElement()} returns <code>false</code>.
      * @throws IllegalStateException if the context is already closed.

@@ -50,7 +50,7 @@ import java.util.Objects;
  * Interface to be implemented to mimic guest language iterators.
  *
  * @see Proxy
- * @see ProxyIterable
+ * @see ProxyArrayIterable
  * @since 21.1
  */
 public interface ProxyIterator extends Proxy {
@@ -68,13 +68,11 @@ public interface ProxyIterator extends Proxy {
      *
      * @throws NoSuchElementException if the iteration has no more elements, the {@link #hasNext()}
      *             returns <code>false</code>.
-     * @throws UnsupportedOperationException when the underlying iterator element exists but is not
-     *             readable.
      *
      * @see #hasNext()
      * @since 21.1
      */
-    Object getNext() throws NoSuchElementException, UnsupportedOperationException;
+    Object getNext();
 
     /**
      * Creates a proxy iterator backed by a Java {@link Iterator}. If the set values are host values
@@ -109,41 +107,41 @@ final class DefaultProxyIterator implements ProxyIterator {
 
 final class DefaultProxyArrayIterator implements ProxyIterator {
 
+    private static final Object STOP = new Object();
+
     private final ProxyArray array;
     private int index;
-    private boolean stopped;
+    private Object next;
 
     DefaultProxyArrayIterator(ProxyArray array) {
         this.array = array;
+        advance();
     }
 
     @Override
     public boolean hasNext() {
-        if (stopped) {
-            return false;
-        }
-        boolean hasNext = index < array.getSize();
-        if (!hasNext) {
-            stopped = true;
-        }
-        return hasNext;
+        return next != STOP;
     }
 
     @Override
     public Object getNext() {
-        if (stopped) {
+        Object res = next;
+        if (res == STOP) {
             throw new NoSuchElementException();
         }
-        try {
-            Object res = array.get(index);
-            index++;
-            return res;
-        } catch (UnsupportedOperationException e) {
-            index++;
-            throw e;
-        } catch (ArrayIndexOutOfBoundsException e) {
-            stopped = true;
-            throw new NoSuchElementException();
+        advance();
+        return res;
+    }
+
+    private void advance() {
+        next = STOP;
+        if (index < array.getSize()) {
+            try {
+                next = array.get(index);
+                index++;
+            } catch (ArrayIndexOutOfBoundsException | UnsupportedOperationException e) {
+                // Pass with next set to STOP
+            }
         }
     }
 }

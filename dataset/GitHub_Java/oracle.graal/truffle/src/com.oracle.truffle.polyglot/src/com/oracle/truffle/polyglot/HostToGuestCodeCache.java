@@ -58,7 +58,7 @@ import org.graalvm.polyglot.proxy.ProxyDuration;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.graalvm.polyglot.proxy.ProxyInstant;
 import org.graalvm.polyglot.proxy.ProxyInstantiable;
-import org.graalvm.polyglot.proxy.ProxyIterable;
+import org.graalvm.polyglot.proxy.ProxyArrayIterable;
 import org.graalvm.polyglot.proxy.ProxyIterator;
 import org.graalvm.polyglot.proxy.ProxyNativeObject;
 import org.graalvm.polyglot.proxy.ProxyObject;
@@ -349,12 +349,12 @@ final class HostToGuestCodeCache {
         }
     });
 
-    final CallTarget getIterator = createGuestToHost(new GuestToHostRootNode(ProxyIterable.class, "getIterator") {
+    final CallTarget getArrayIterator = createGuestToHost(new GuestToHostRootNode(ProxyArrayIterable.class, "getArrayIterator") {
 
         @Override
         @TruffleBoundary
         protected Object executeImpl(Object proxy, Object[] arguments) {
-            return ((ProxyIterable) proxy).getIterator();
+            return ((ProxyArrayIterable) proxy).getArrayIterator();
         }
     });
 
@@ -371,13 +371,11 @@ final class HostToGuestCodeCache {
 
         @Override
         @TruffleBoundary
-        protected Object executeImpl(Object proxy, Object[] arguments) throws StopIterationException, UnsupportedMessageException {
+        protected Object executeImpl(Object proxy, Object[] arguments) throws StopIterationException {
             try {
                 return ((ProxyIterator) proxy).getNext();
             } catch (NoSuchElementException e) {
                 throw StopIterationException.create();
-            } catch (UnsupportedOperationException e) {
-                throw UnsupportedMessageException.create();
             }
         }
     });
