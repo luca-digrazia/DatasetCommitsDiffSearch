@@ -36,7 +36,6 @@ class LCOVPrinter {
 
     private static final String END_OF_RECORD = "end_of_record";
     private static final String TEST_NAME = "TN:";
-    private static final String SOURCE_NAME = "SN:";
     private static final String SOURCE_FILE = "SF:";
     private static final String FUNCTION = "FN:";
     private static final String FUNCTION_DATA = "FNDA:";
@@ -112,7 +111,6 @@ class LCOVPrinter {
 
     private void printSourceCoverage(SourceCoverage sourceCoverage) {
         printTestName();
-        printSourceName(sourceCoverage);
         printSourceFile(sourceCoverage);
         printRootData(sourceCoverage);
         printLineData(sourceCoverage);
@@ -169,10 +167,6 @@ class LCOVPrinter {
 
     private void printRoot(RootCoverage root) {
         out.println(FUNCTION + root.getSourceSection().getStartLine() + "," + root.getName());
-    }
-
-    private void printSourceName(SourceCoverage sourceCoverage) {
-        out.println(SOURCE_NAME + sourceCoverage.getSource().getName());
     }
 
     private void printSourceFile(SourceCoverage sourceCoverage) {
