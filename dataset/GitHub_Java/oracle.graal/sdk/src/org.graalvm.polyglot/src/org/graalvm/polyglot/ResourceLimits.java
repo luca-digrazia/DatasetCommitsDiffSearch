@@ -85,10 +85,10 @@ public final class ResourceLimits {
 
     private static final ResourceLimits EMPTY = new ResourceLimits(null);
 
-    final Object receiver;
+    final Object impl;
 
-    ResourceLimits(Object receiver) {
-        this.receiver = receiver;
+    ResourceLimits(Object impl) {
+        this.impl = impl;
     }
 
     /**

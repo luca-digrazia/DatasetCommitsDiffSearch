@@ -188,7 +188,7 @@ final class PolyglotLimits {
                                 limit, actualCount);
                 boolean invalidated = context.invalidate(true, message);
                 if (invalidated) {
-                    context.close(true);
+                    context.close(context.creatorApi, true);
                     RuntimeException e = limits.notifyEvent(context);
                     if (e != null) {
                         throw e;
@@ -266,9 +266,9 @@ final class PolyglotLimits {
                             @Override
                             public boolean test(com.oracle.truffle.api.source.Source s) {
                                 try {
-                                    return statementLimitSourcePredicate.test(PolyglotImpl.getOrCreatePolyglotSource(engine.getImpl(), s));
+                                    return statementLimitSourcePredicate.test(engine.getImpl().getOrCreatePolyglotSource(s));
                                 } catch (Throwable e) {
-                                    throw context.engine.host.toHostException(context.getHostContextObject(), e);
+                                    throw PolyglotImpl.hostToGuestException(context, e);
                                 }
                             }
                         });
@@ -297,11 +297,10 @@ final class PolyglotLimits {
             if (onEvent == null) {
                 return null;
             }
-            ResourceLimitEvent event = engine.getImpl().getAPIAccess().newResourceLimitsEvent(context.api);
             try {
-                onEvent.accept(event);
+                onEvent.accept(engine.getImpl().getAPIAccess().newResourceLimitsEvent(context.creatorApi));
             } catch (Throwable t) {
-                throw context.engine.host.toHostException(context.getHostContextObject(), t);
+                return PolyglotImpl.hostToGuestException(context, t);
             }
             return null;
         }
