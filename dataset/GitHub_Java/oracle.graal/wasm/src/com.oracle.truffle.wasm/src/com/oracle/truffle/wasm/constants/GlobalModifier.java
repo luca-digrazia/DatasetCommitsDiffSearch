@@ -31,7 +31,7 @@ package com.oracle.truffle.wasm.constants;
 
 import com.oracle.truffle.wasm.exception.WasmException;
 
-public class GlobalModifier {
+public final class GlobalModifier {
     public static final int CONSTANT = 0x00;
     public static final int MUTABLE = 0x01;
 
@@ -44,5 +44,8 @@ public class GlobalModifier {
             default:
                 throw new WasmException("Unknown modifier: 0x" + Integer.toHexString(modifier));
         }
+    }
+
+    private GlobalModifier() {
     }
 }

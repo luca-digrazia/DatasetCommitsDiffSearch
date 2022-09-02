@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.wasm.constants;
 
-public final class Debug {
+public class Debug {
     public static final boolean TRACING = false;
 
     private Debug() {
