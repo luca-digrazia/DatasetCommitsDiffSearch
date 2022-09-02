@@ -40,7 +40,6 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.except.LLVMAllocationFailureException;
-import com.oracle.truffle.llvm.runtime.except.LLVMStackOverflowError;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory.CMPXCHGI16;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory.CMPXCHGI32;
@@ -70,7 +69,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
-import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 @NodeChild(type = LLVMExpressionNode.class, value = "address")
 @NodeChild(type = LLVMExpressionNode.class, value = "comparisonValue")
@@ -79,14 +77,9 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
 
     @Child private LLVMCMPXCHInternalNode cmpxch;
 
-    public static LLVMCompareExchangeNode create(AggregateType returnType, DataLayout dataLayout, LLVMExpressionNode address, LLVMExpressionNode comparisonValue, LLVMExpressionNode newValue)
-                    throws TypeOverflowException {
-        long resultSize = returnType.getSize(dataLayout);
+    public LLVMCompareExchangeNode(AggregateType returnType, DataLayout dataLayout) {
+        int resultSize = returnType.getSize(dataLayout);
         long secondValueOffset = returnType.getOffsetOf(1, dataLayout);
-        return LLVMCompareExchangeNodeGen.create(resultSize, secondValueOffset, address, comparisonValue, newValue);
-    }
-
-    public LLVMCompareExchangeNode(long resultSize, long secondValueOffset) {
         this.cmpxch = LLVMCMPXCHInternalNodeGen.create(resultSize, secondValueOffset);
     }
 
@@ -97,10 +90,10 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
 
     abstract static class LLVMCMPXCHInternalNode extends LLVMNode {
 
-        private final long resultSize;
+        private final int resultSize;
         private final long secondValueOffset;
 
-        LLVMCMPXCHInternalNode(long resultSize, long secondValueOffset) {
+        LLVMCMPXCHInternalNode(int resultSize, long secondValueOffset) {
             this.resultSize = resultSize;
             this.secondValueOffset = secondValueOffset;
         }
@@ -254,7 +247,7 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
         private LLVMNativePointer allocateResult(VirtualFrame frame, LLVMMemory memory) {
             try {
                 return LLVMNativePointer.create(LLVMStack.allocateStackMemory(frame, memory, getStackPointerSlot(), resultSize, 8));
-            } catch (LLVMStackOverflowError soe) {
+            } catch (StackOverflowError soe) {
                 CompilerDirectives.transferToInterpreter();
                 throw new LLVMAllocationFailureException(this, soe);
             }
