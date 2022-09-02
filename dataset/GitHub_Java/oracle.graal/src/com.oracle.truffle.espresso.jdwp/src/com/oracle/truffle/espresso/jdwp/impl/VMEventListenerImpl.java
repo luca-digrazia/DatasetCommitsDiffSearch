@@ -532,7 +532,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         if (info.isPopFrames()) {
             // send reply packet when "step" is completed
             PacketStream reply = new PacketStream().replyPacket().id(info.getRequestId());
-            JDWPLogger.log("Sending pop frames reply packet", JDWPLogger.LogLevel.STEPPING);
+            System.out.println("SENDING pop frames reply packet");
             if (holdEvents) {
                 heldEvents.add(reply);
             } else {
