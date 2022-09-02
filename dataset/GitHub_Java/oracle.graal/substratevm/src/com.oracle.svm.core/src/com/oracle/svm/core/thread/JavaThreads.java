@@ -36,7 +36,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.annotate.ForceFixedRegisterReads;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
@@ -619,8 +618,7 @@ public abstract class JavaThreads {
 
         // Change the Java thread state while parking.
         final int oldStatus = JavaThreads.getThreadStatus(thread);
-        int newStatus = MonitorSupport.maybeAdjustNewParkStatus(ThreadStatus.PARKED);
-        JavaThreads.setThreadStatus(thread, newStatus);
+        JavaThreads.setThreadStatus(thread, ThreadStatus.PARKED);
         try {
             return parkEvent.condWait();
         } finally {
@@ -639,8 +637,7 @@ public abstract class JavaThreads {
         final long endNanos = TimeUtils.addOrMaxValue(startNanos, delayNanos);
 
         final int oldStatus = JavaThreads.getThreadStatus(thread);
-        int newStatus = MonitorSupport.maybeAdjustNewParkStatus(ThreadStatus.PARKED_TIMED);
-        JavaThreads.setThreadStatus(thread, newStatus);
+        JavaThreads.setThreadStatus(thread, ThreadStatus.PARKED_TIMED);
         try {
             // How much longer should I sleep?
             long remainingNanos = delayNanos;
