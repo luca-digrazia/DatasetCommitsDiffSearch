@@ -1321,10 +1321,10 @@ public class BytecodeParser implements GraphBuilderContext {
         AbstractBeginNode dispatchBegin;
         if (exceptionObject == null) {
             ExceptionObjectNode newExceptionObject = graph.add(new ExceptionObjectNode(getMetaAccess()));
-            dispatchState.push(JavaKind.Object, newExceptionObject);
+            dispatchBegin = newExceptionObject;
+            dispatchState.push(JavaKind.Object, dispatchBegin);
             dispatchState.setRethrowException(true);
             newExceptionObject.setStateAfter(dispatchState.create(bci, newExceptionObject));
-            dispatchBegin = newExceptionObject;
         } else {
             dispatchBegin = graph.add(new BeginNode());
             dispatchState.push(JavaKind.Object, exceptionObject);
@@ -1346,7 +1346,7 @@ public class BytecodeParser implements GraphBuilderContext {
     protected void createHandleExceptionTarget(FixedWithNextNode afterExceptionLoaded, int bci, FrameStateBuilder dispatchState) {
         FixedWithNextNode afterInstrumentation = afterExceptionLoaded;
         for (NodePlugin plugin : graphBuilderConfig.getPlugins().getNodePlugins()) {
-            afterInstrumentation = plugin.instrumentExceptionDispatch(graph, afterInstrumentation, () -> dispatchState.create(bci, getNonIntrinsicAncestor(), false, null, null));
+            afterInstrumentation = plugin.instrumentExceptionDispatch(graph, afterInstrumentation);
             assert afterInstrumentation.next() == null : "exception dispatch instrumentation will be linked to dispatch block";
         }
 
