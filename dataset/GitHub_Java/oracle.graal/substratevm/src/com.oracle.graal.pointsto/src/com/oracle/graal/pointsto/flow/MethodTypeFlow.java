@@ -61,7 +61,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
 
     private final AnalysisMethod method;
 
-    private volatile boolean typeFlowCreated;
+    private volatile boolean methodParsed;
     private InvokeTypeFlow parsingReason;
 
     private ParameterNode returnedParameter;
@@ -100,7 +100,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
 
         // make sure that the method is parsed before attempting to clone it;
         // the parsing should always happen on the same thread
-        this.ensureTypeFlowCreated(bb, reason);
+        this.ensureParsed(bb, reason);
 
         AnalysisContext newContext = bb.contextPolicy().peel(calleeContext, localCallingContextDepth);
 
@@ -297,15 +297,15 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         return returnedParameter;
     }
 
-    public void ensureTypeFlowCreated(BigBang bb, InvokeTypeFlow reason) {
-        if (!typeFlowCreated) {
-            createTypeFlow(bb, reason);
+    public void ensureParsed(BigBang bb, InvokeTypeFlow reason) {
+        if (!methodParsed) {
+            doParse(bb, reason);
         }
     }
 
     /* All threads that try to parse the current method synchronize and only the first parses. */
-    private synchronized void createTypeFlow(BigBang bb, InvokeTypeFlow reason) {
-        if (!typeFlowCreated) {
+    private synchronized void doParse(BigBang bb, InvokeTypeFlow reason) {
+        if (!methodParsed) {
             parsingReason = reason;
             StructuredGraph graph = null;
             try {
@@ -337,7 +337,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
 
             returnedParameter = computeReturnedParameter(graph);
 
-            typeFlowCreated = true;
+            methodParsed = true;
         }
     }
 
