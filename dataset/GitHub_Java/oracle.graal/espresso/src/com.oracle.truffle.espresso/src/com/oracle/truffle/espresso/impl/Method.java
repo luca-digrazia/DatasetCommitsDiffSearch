@@ -881,7 +881,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         if (attribute != null) {
             return attribute.getLocalvariableTable();
         }
-        return LocalVariableTable.EMPTY_LVT;
+        return LocalVariableTable.EMPTY;
     }
 
     public LocalVariableTable getLocalVariableTypeTable() {
@@ -889,7 +889,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         if (attribute != null) {
             return attribute.getLocalvariableTypeTable();
         }
-        return LocalVariableTable.EMPTY_LVTT;
+        return LocalVariableTable.EMPTY;
     }
 
     /**
@@ -1399,7 +1399,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
         @Override
         public boolean hasVariableTable() {
-            return getLocalVariableTable() != LocalVariableTable.EMPTY_LVT;
+            return getLocalVariableTable() != LocalVariableTable.EMPTY;
         }
 
         @Override
