@@ -303,15 +303,7 @@ public final class JDWPContextImpl implements JDWPContext {
     @Override
     public Object toGuest(Object object) {
         // be sure that current thread has set context
-        Object previous = null;
-        try {
-            previous = context.getEnv().getContext().enter();
-            return context.getMeta().toGuestBoxed(object);
-        } finally {
-            if (previous != null) {
-                context.getEnv().getContext().leave(previous);
-            }
-        }
+        return context.getMeta().toGuestBoxed(object);
     }
 
     @Override
