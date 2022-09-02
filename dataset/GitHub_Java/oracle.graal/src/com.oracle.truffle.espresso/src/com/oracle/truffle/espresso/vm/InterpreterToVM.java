@@ -68,41 +68,6 @@ public final class InterpreterToVM implements ContextAccess {
         this.context = context;
     }
 
-    @TruffleBoundary(allowInlining = true)
-    public static void monitorUnsafeEnter(EspressoLock self) {
-        self.lock();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    public static void monitorUnsafeExit(EspressoLock self) {
-        self.unlock();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    public static void monitorNotifyAll(EspressoLock self) {
-        self.signalAll();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    public static void monitorNotify(EspressoLock self) {
-        self.signal();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    public static boolean monitorWait(EspressoLock self, long timeout) throws InterruptedException {
-        return self.await(timeout);
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    public static boolean monitorTryLock(EspressoLock lock) {
-        return lock.tryLock();
-    }
-
-    @TruffleBoundary(allowInlining = true)
-    public static boolean holdsLock(EspressoLock lock) {
-        return lock.isHeldByCurrentThread();
-    }
-
     @Override
     public EspressoContext getContext() {
         return context;
@@ -247,10 +212,12 @@ public final class InterpreterToVM implements ContextAccess {
 
     // region Monitor enter/exit
 
-    public static void monitorEnter(@Host(Object.class) StaticObject obj, Meta meta) {
+    @TruffleBoundary
+    public static void monitorEnter(@Host(Object.class) StaticObject obj) {
         final EspressoLock lock = obj.getLock();
-        EspressoContext context = meta.getContext();
-        if (!monitorTryLock(lock)) {
+        EspressoContext context = obj.getKlass().getContext();
+        if (!lock.tryLock()) {
+            Meta meta = context.getMeta();
             StaticObject thread = context.getCurrentThread();
             Target_java_lang_Thread.fromRunnable(thread, meta, Target_java_lang_Thread.State.BLOCKED);
             if (context.EnableManagement) {
@@ -260,7 +227,7 @@ public final class InterpreterToVM implements ContextAccess {
                 Target_java_lang_Thread.incrementThreadCounter(thread, blockedCount);
             }
             context.getJDWPListener().onContendedMonitorEnter(obj);
-            monitorUnsafeEnter(lock);
+            lock.lock();
             context.getJDWPListener().onContendedMonitorEntered(obj);
             if (context.EnableManagement) {
                 thread.setHiddenField(meta.HIDDEN_THREAD_BLOCKED_OBJECT, null);
@@ -270,15 +237,17 @@ public final class InterpreterToVM implements ContextAccess {
         context.getJDWPListener().onMonitorEnter(obj);
     }
 
-    public static void monitorExit(@Host(Object.class) StaticObject obj, Meta meta) {
+    @TruffleBoundary
+    public static void monitorExit(@Host(Object.class) StaticObject obj) {
         final EspressoLock lock = obj.getLock();
-        if (!holdsLock(lock)) {
+        if (!lock.isHeldByCurrentThread()) {
             // No owner checks in SVM. This is a safeguard against unbalanced monitor accesses until
             // Espresso has its own monitor handling.
+            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
             throw Meta.throwException(meta.java_lang_IllegalMonitorStateException);
         }
-        monitorUnsafeExit(lock);
-        meta.getContext().getJDWPListener().onMonitorExit(obj);
+        lock.unlock();
+        obj.getKlass().getContext().getJDWPListener().onMonitorExit(obj);
     }
 
     // endregion
