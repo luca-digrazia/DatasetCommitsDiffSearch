@@ -96,7 +96,7 @@ public abstract class WasmBenchmark {
             mainFunction = wasmBindings.getMember("_main");
             resetContext = wasmBindings.getMember(TestutilModule.Names.RESET_CONTEXT);
             customInitializer = wasmBindings.getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION);
-            initialization = benchCase.initialization();
+            initialization = benchCase.initialization;
         }
 
         @Setup(Level.Iteration)
@@ -173,16 +173,8 @@ public abstract class WasmBenchmark {
 
         public abstract byte[] createBinary() throws IOException, InterruptedException;
 
-        public String name() {
-            return name;
-        }
-
         public WasmInitialization initialization() {
             return initialization;
-        }
-
-        public Properties options() {
-            return options;
         }
     }
 
@@ -210,7 +202,7 @@ public abstract class WasmBenchmark {
 
 
         @Override
-        public byte[] createBinary() {
+        public byte[] createBinary() throws IOException, InterruptedException {
             return binary;
         }
     }
