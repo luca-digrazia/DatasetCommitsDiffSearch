@@ -41,7 +41,6 @@ import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.lir.ConstantValue;
-import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
@@ -146,13 +145,11 @@ public final class ConstantNode extends FloatingNode implements LIRLowerable, Ar
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        LIRGeneratorTool lirTool = gen.getLIRGeneratorTool();
-        LIRKind kind = lirTool.getLIRKind(stamp(NodeView.DEFAULT));
-        if (onlyUsedInVirtualState() || lirTool.getMoveFactory().canInlineConstant(value)
-                || (lirTool.getMoveFactory().mayEmbedConstantLoad(value) && hasExactlyOneUsage() && onlyUsedInCurrentBlock())) {
+        LIRKind kind = gen.getLIRGeneratorTool().getLIRKind(stamp(NodeView.DEFAULT));
+        if (onlyUsedInVirtualState()) {
             gen.setResult(this, new ConstantValue(kind, value));
         } else {
-            gen.setResult(this, gen.getLIRGeneratorTool().emitConstant(kind, value));
+            gen.setResult(this, gen.getLIRGeneratorTool().emitConstant(kind, value, hasExactlyOneUsage() && onlyUsedInCurrentBlock()));
         }
     }
 

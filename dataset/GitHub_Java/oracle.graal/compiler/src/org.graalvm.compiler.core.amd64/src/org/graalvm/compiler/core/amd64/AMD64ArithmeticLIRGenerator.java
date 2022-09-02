@@ -124,6 +124,7 @@ import org.graalvm.compiler.lir.amd64.AMD64ShiftOp;
 import org.graalvm.compiler.lir.amd64.AMD64SignExtendOp;
 import org.graalvm.compiler.lir.amd64.AMD64Ternary;
 import org.graalvm.compiler.lir.amd64.AMD64Unary;
+import org.graalvm.compiler.lir.amd64.AMD64ZeroMemoryOp;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorBinary;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorBinary.AVXBinaryConstFloatOp;
 import org.graalvm.compiler.lir.amd64.vector.AMD64VectorBinary.AVXBinaryOp;
@@ -1127,6 +1128,12 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
     @Override
     public Value emitMathPow(Value x, Value y) {
         return new AMD64MathPowOp().emitLIRWrapper(getLIRGen(), x, y);
+    }
+
+    @Override
+    public void emitZeroMemory(Value address, Value length) {
+        RegisterValue lengthReg = moveToReg(AMD64.rcx, length);
+        getLIRGen().append(new AMD64ZeroMemoryOp(getAMD64LIRGen().asAddressValue(address), lengthReg));
     }
 
     protected AMD64LIRGenerator getAMD64LIRGen() {
