@@ -1,25 +1,3 @@
-/*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.truffle.espresso.verifier;
 
 import static com.oracle.truffle.espresso.verifier.MethodVerifier.Invalid;
@@ -34,7 +12,7 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 
 abstract class Operand {
-    public static final Operand[] EMPTY_ARRAY = new Operand[0];
+    static public Operand[] EMPTY_ARRAY = new Operand[0];
 
     protected JavaKind kind;
 
@@ -130,7 +108,7 @@ class PrimitiveOperand extends Operand {
     }
 }
 
-final class ReturnAddressOperand extends PrimitiveOperand {
+class ReturnAddressOperand extends PrimitiveOperand {
     ArrayList<Integer> targetBCIs = new ArrayList<>();
     int subroutineBCI;
 
@@ -231,7 +209,7 @@ class ReferenceOperand extends Operand {
                 }
             } catch (EspressoException e) {
                 // TODO(garcia) fine grain this catch
-                if (thisKlass.getMeta().java_lang_ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                if (thisKlass.getMeta().ClassNotFoundException.isAssignableFrom(e.getException().getKlass())) {
                     throw new NoClassDefFoundError(type.toString());
                 }
                 throw e;
@@ -246,7 +224,7 @@ class ReferenceOperand extends Operand {
     @Override
     boolean compliesWith(Operand other) {
         if (other.isReference()) {
-            if (type == null || other.getType() == Type.java_lang_Object) {
+            if (type == null || other.getType() == Type.Object) {
                 return true;
             }
             if (other.getType() == null) {
@@ -314,7 +292,7 @@ class ReferenceOperand extends Operand {
     }
 }
 
-final class ArrayOperand extends Operand {
+class ArrayOperand extends Operand {
     private int dimensions;
     private Operand elemental;
     private Operand component = null;
@@ -337,17 +315,17 @@ final class ArrayOperand extends Operand {
     boolean compliesWith(Operand other) {
         if (other.isArrayType()) {
             if (other.getDimensions() < getDimensions()) {
-                return other.getElemental().isReference() && (other.getElemental().getType() == Type.java_lang_Object ||
-                                other.getElemental().getType() == Type.java_lang_Cloneable ||
-                                other.getElemental().getType() == Type.java_io_Serializable);
+                return other.getElemental().isReference() && (other.getElemental().getType() == Type.Object ||
+                                other.getElemental().getType() == Type.Cloneable ||
+                                other.getElemental().getType() == Type.Serializable);
             } else if (other.getDimensions() == getDimensions()) {
                 return elemental.compliesWith(other.getElemental());
             }
             return false;
         }
-        return (other == Invalid) || (other.isReference() && (other.getType() == Type.java_lang_Object ||
-                        other.getType() == Type.java_lang_Cloneable ||
-                        other.getType() == Type.java_io_Serializable));
+        return (other == Invalid) || (other.isReference() && (other.getType() == Type.Object ||
+                        other.getType() == Type.Cloneable ||
+                        other.getType() == Type.Serializable));
     }
 
     @Override
@@ -380,7 +358,7 @@ final class ArrayOperand extends Operand {
         if (smallestElemental.isPrimitive()) {
             return new ArrayOperand(jlObject, Math.min(thisDim, otherDim));
         }
-        if (smallestElemental.getType() == Type.java_lang_Cloneable || smallestElemental.getType() == Type.java_io_Serializable) {
+        if (smallestElemental.getType() == Type.Cloneable || smallestElemental.getType() == Type.Serializable) {
             return new ArrayOperand(smallestElemental, Math.min(thisDim, otherDim));
         }
         return new ArrayOperand(jlObject, Math.min(thisDim, otherDim));
@@ -427,7 +405,7 @@ final class ArrayOperand extends Operand {
     }
 }
 
-final class UninitReferenceOperand extends ReferenceOperand {
+class UninitReferenceOperand extends ReferenceOperand {
     final int newBCI;
 
     UninitReferenceOperand(Symbol<Type> type, Klass thisKlass) {
