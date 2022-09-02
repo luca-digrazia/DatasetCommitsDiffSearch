@@ -51,7 +51,7 @@ public final class LLVMFunction extends LLVMSymbol {
     private final Function function;
     private final String path;
     private LLVMSourceLocation sourceLocation;
-    private String originalName;
+    @CompilationFinal private String originalName;
 
     private final Assumption fixedCodeAssumption = Truffle.getRuntime().createAssumption();
     @CompilationFinal private LLVMFunctionCode fixedCode;
