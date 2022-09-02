@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -77,7 +77,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
 
     private static final byte[] MAGIC_BYTES = {'B', 'I', 'G', 'V'};
 
-    private static final int MAJOR_VERSION = 8;
+    private static final int MAJOR_VERSION = 7;
     private static final int MINOR_VERSION = 0;
 
     private final ConstantPool constantPool;
@@ -849,15 +849,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         }
         final int size = props.size();
         // properties
-        if (size >= Character.MAX_VALUE) {
-            if (versionMajor > 7) {
-                writeShort(Character.MAX_VALUE);
-                writeInt(size);
-            } else
-                throw new IOException("Property count is too big.");
-        } else {
-            writeShort((char) size);
-        }
+        writeShort((char) size);
         int cnt = 0;
         for (Map.Entry<? extends Object, ? extends Object> entry : props.entrySet()) {
             String key = entry.getKey().toString();
