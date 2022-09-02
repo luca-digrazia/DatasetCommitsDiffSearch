@@ -142,7 +142,6 @@ import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 import com.oracle.svm.hosted.phases.DevirtualizeCallsPhase;
 import com.oracle.svm.hosted.phases.HostedGraphBuilderPhase;
-import com.oracle.svm.hosted.phases.ImplicitAssertionsPhase;
 import com.oracle.svm.hosted.phases.StrengthenStampsPhase;
 import com.oracle.svm.hosted.substitute.DeletedMethod;
 
@@ -325,6 +324,7 @@ public class CompileQueue {
         this.featureHandler = featureHandler;
         this.snippetReflection = snippetReflection;
 
+        // let aotjs override the replacements registration
         callForReplacements(debug, runtimeConfig);
     }
 
@@ -390,7 +390,6 @@ public class CompileQueue {
 
     protected PhaseSuite<HighTierContext> afterParseCanonicalization() {
         PhaseSuite<HighTierContext> phaseSuite = new PhaseSuite<>();
-        phaseSuite.appendPhase(new ImplicitAssertionsPhase());
         phaseSuite.appendPhase(new DeadStoreRemovalPhase());
         phaseSuite.appendPhase(new DevirtualizeCallsPhase());
         phaseSuite.appendPhase(CanonicalizerPhase.create());
@@ -470,7 +469,7 @@ public class CompileQueue {
         System.out.println("Number of deopt during calls entries       ; " + totalNumDuringCallEntryPoints);
     }
 
-    protected void parseAll() throws InterruptedException {
+    private void parseAll() throws InterruptedException {
         executor.init();
 
         parseDeoptimizationTargetMethods();
@@ -524,7 +523,7 @@ public class CompileQueue {
         ensureParsed(universe.createDeoptTarget(method), new EntryPointReason());
     }
 
-    protected void checkTrivial(HostedMethod method) {
+    private void checkTrivial(HostedMethod method) {
         if (!method.compilationInfo.isTrivialMethod() && method.canBeInlined() && InliningUtilities.isTrivialMethod(method.compilationInfo.getGraph())) {
             method.compilationInfo.setTrivialMethod(true);
             inliningProgress = true;
@@ -532,7 +531,7 @@ public class CompileQueue {
     }
 
     @SuppressWarnings("try")
-    protected void inlineTrivialMethods(DebugContext debug) throws InterruptedException {
+    private void inlineTrivialMethods(DebugContext debug) throws InterruptedException {
         for (HostedMethod method : universe.getMethods()) {
             try (DebugContext.Scope s = debug.scope("InlineTrivial", method.compilationInfo.getGraph(), method, this)) {
                 if (method.compilationInfo.getGraph() != null) {
