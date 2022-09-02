@@ -845,7 +845,7 @@ public final class TruffleFile {
     /**
      * Reads a file content as bytes.
      *
-     * @return the created <code>byte[]</code>
+     * @return the created {@link BufferedReader}
      * @throws IOException in case of IO error
      * @throws OutOfMemoryError if an array of a file size cannot be allocated
      * @throws SecurityException if the {@link FileSystem} denied the operation
