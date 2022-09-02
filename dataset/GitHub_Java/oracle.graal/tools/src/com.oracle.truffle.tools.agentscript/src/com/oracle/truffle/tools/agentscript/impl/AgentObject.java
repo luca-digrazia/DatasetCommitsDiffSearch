@@ -45,8 +45,6 @@ import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @ExportLibrary(InteropLibrary.class)
@@ -63,7 +61,6 @@ final class AgentObject implements TruffleObject {
 
     private static final class ExcludeAgentScriptsFilter implements SourceSectionFilter.SourcePredicate {
         private final AtomicBoolean initializationFinished;
-        private final Map<Source, Boolean> ignore = new WeakHashMap<>();
 
         ExcludeAgentScriptsFilter(AtomicBoolean initializationFinished) {
             this.initializationFinished = initializationFinished;
@@ -71,15 +68,7 @@ final class AgentObject implements TruffleObject {
 
         @Override
         public boolean test(Source source) {
-            if (initializationFinished.get()) {
-                if (Boolean.TRUE.equals(ignore.get(source))) {
-                    return false;
-                }
-                return true;
-            } else {
-                ignore.put(source, Boolean.TRUE);
-                return false;
-            }
+            return initializationFinished.get();
         }
     }
 
