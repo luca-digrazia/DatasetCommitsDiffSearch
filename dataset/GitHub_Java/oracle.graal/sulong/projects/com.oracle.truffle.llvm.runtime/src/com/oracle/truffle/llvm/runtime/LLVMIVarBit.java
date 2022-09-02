@@ -30,8 +30,7 @@
 package com.oracle.truffle.llvm.runtime;
 
 import java.math.BigInteger;
-
-import com.oracle.truffle.api.memory.ByteArraySupport;
+import java.nio.ByteBuffer;
 
 /**
  * Abstract type for variable width integers. Depending on the concrete bit width, either the
@@ -156,19 +155,19 @@ public abstract class LLVMIVarBit {
 
     private static byte[] shortToArray(short from) {
         byte[] array = new byte[Short.BYTES];
-        ByteArraySupport.bigEndian().putShort(array, 0, from);
+        ByteBuffer.wrap(array).putShort(from);
         return array;
     }
 
     private static byte[] intToArray(int from) {
         byte[] array = new byte[Integer.BYTES];
-        ByteArraySupport.bigEndian().putInt(array, 0, from);
+        ByteBuffer.wrap(array).putInt(from);
         return array;
     }
 
     private static byte[] longToArray(long from) {
         byte[] array = new byte[Long.BYTES];
-        ByteArraySupport.bigEndian().putLong(array, 0, from);
+        ByteBuffer.wrap(array).putLong(from);
         return array;
     }
 }
