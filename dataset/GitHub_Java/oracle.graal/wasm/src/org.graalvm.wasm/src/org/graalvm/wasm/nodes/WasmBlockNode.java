@@ -650,8 +650,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     stackPointer -= args.length;
 
                     trace("indirect call to function %s (%d args)", function, args.length);
-                    CallTarget target = instance().target(function.index());
-                    Object result = callNode.execute(target, args);
+                    Object result = callNode.execute(function, args);
                     trace("return from indirect_call to function %s : %s", function, result);
                     // At the moment, WebAssembly functions may return up to one value.
                     // As per the WebAssembly specification, this restriction may be lifted in the
@@ -2410,8 +2409,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @TruffleBoundary
     public void resolveCallNode(int childOffset) {
-        final WasmFunction function = ((WasmCallStubNode) children[childOffset]).function();
-        final CallTarget target = instance().target(function.index());
+        final CallTarget target = ((WasmCallStubNode) children[childOffset]).function().resolveCallTarget();
         children[childOffset] = Truffle.getRuntime().createDirectCallNode(target);
     }
 

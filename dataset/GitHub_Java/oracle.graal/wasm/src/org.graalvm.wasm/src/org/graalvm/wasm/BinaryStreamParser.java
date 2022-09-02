@@ -176,9 +176,6 @@ public abstract class BinaryStreamParser {
     }
 
     public static byte peek1(byte[] data, int offset) {
-        if (offset < 0 || offset >= data.length) {
-            throw new BinaryParserException("The binary is truncated at: " + offset);
-        }
         return data[offset];
     }
 
@@ -221,16 +218,10 @@ public abstract class BinaryStreamParser {
     }
 
     protected byte peek1() {
-        if (offset < 0 || offset >= data.length) {
-            throw new BinaryParserException("The binary is truncated at: " + offset);
-        }
         return data[offset];
     }
 
     protected byte peek1(int ahead) {
-        if (offset + ahead < 0 || offset + ahead >= data.length) {
-            throw new BinaryParserException("The binary is truncated at: " + (offset + ahead));
-        }
         return data[offset + ahead];
     }
 
