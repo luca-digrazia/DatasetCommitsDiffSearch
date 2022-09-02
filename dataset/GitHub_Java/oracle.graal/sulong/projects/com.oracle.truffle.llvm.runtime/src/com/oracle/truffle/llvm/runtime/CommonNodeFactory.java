@@ -378,16 +378,16 @@ public class CommonNodeFactory {
         return LLVMDebugObject.create(sourceType, 0L, debugValue, null);
     }
 
-    public static LLVMDebugObjectBuilder createDebugStaticValue(LLVMExpressionNode valueNode, boolean isGlobal) {
+    public static LLVMDebugObjectBuilder createDebugStaticValue(LLVMContext context, LLVMExpressionNode valueNode, boolean isGlobal) {
         LLVMDebugValue.Builder toDebugNode = createDebugValueBuilder();
 
         Object value = null;
         if (isGlobal) {
             assert valueNode instanceof LLVMAccessSymbolNode;
             LLVMAccessSymbolNode node = (LLVMAccessSymbolNode) valueNode;
-            LLVMSymbol symbol = node.getSymbol();
+            LLVMSymbol symbol = node.getDescriptor();
             if (symbol.isGlobalVariable()) {
-                value = new LLVMDebugGlobalVariable(symbol.asGlobalVariable());
+                value = new LLVMDebugGlobalVariable(symbol.asGlobalVariable(), context);
             } else {
                 throw new IllegalStateException(symbol.getKind() + " symbol: " + symbol.getName());
             }

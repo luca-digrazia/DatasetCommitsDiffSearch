@@ -33,7 +33,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -81,7 +80,6 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
         abstract void execute(Object identifier, AccessLocation location, Object value, ForeignToLLVMType writeType);
 
         @Specialization(limit = "3")
-        @GenerateAOT.Exclude
         void writeMember(String identifier, AccessLocation location, Object value, @SuppressWarnings("unused") ForeignToLLVMType writeType,
                         @CachedLibrary("location.base") InteropLibrary interop,
                         @Cached ConvertOutgoingNode convertOutgoing,
@@ -102,7 +100,6 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
         }
 
         @Specialization(guards = "isLocationTypeNullOrSameSize(location, writeType)", limit = "3")
-        @GenerateAOT.Exclude
         void writeArrayElementTypeMatch(long identifier, AccessLocation location, Object value, ForeignToLLVMType writeType,
                         @CachedLibrary("location.base") InteropLibrary interop,
                         @Cached ConvertOutgoingNode convertOutgoing,
@@ -116,7 +113,7 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
                 throw new LLVMPolyglotException(this, "Invalid array index %d.", idx);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Cannot write array element %d.", idx);
+                throw new LLVMPolyglotException(this, "Can not write array element %d.", idx);
             } catch (UnsupportedTypeException ex) {
                 exception.enter();
                 throw new LLVMPolyglotException(this, "Wrong type writing to array element %d.", idx);
@@ -124,7 +121,6 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
         }
 
         @Specialization(guards = {"!isLocationTypeNullOrSameSize(location, writeType)", "locationType.isI8()", "writeTypeSizeInBytes > 1"}, limit = "3")
-        @GenerateAOT.Exclude
         void writeArrayElementToI8(long identifier, AccessLocation location, Object value, ForeignToLLVMType writeType,
                         @CachedLibrary("location.base") InteropLibrary interop,
                         @Cached ReinterpretLLVMAsLong toLong,
@@ -201,7 +197,6 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
         abstract Object execute(Object value, LLVMInteropType.Value outgoingType, ForeignToLLVMType writeType);
 
         @Specialization(limit = "3", guards = {"outgoingType != null", "cachedOutgoingType == outgoingType.kind.foreignToLLVMType", "type.getSizeInBytes() == cachedOutgoingType.getSizeInBytes()"})
-        @GenerateAOT.Exclude
         Object doKnownType(Object value, LLVMInteropType.Value outgoingType, @SuppressWarnings("unused") ForeignToLLVMType type,
                         @Cached("outgoingType.kind.foreignToLLVMType") @SuppressWarnings("unused") ForeignToLLVMType cachedOutgoingType,
                         @Cached(parameters = "cachedOutgoingType") LLVMDataEscapeNode dataEscape) {
@@ -223,7 +218,6 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
          * @see #execute(Object, LLVMInteropType.Value, ForeignToLLVMType)
          */
         @Specialization(limit = "3", guards = {"typeMismatch(outgoingType, cachedType)", "cachedType == type"})
-        @GenerateAOT.Exclude
         Object doUnknownType(Object value, LLVMInteropType.Value outgoingType, ForeignToLLVMType type,
                         @Cached("type") @SuppressWarnings("unused") ForeignToLLVMType cachedType,
                         @Cached(parameters = "type") LLVMDataEscapeNode dataEscape) {
