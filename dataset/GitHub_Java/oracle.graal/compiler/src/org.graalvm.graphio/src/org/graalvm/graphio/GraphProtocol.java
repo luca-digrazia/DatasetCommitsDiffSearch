@@ -941,12 +941,10 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
                 // and then directly insert the string with the pool id.
                 String string = key.toString();
                 map.put(key, string);
-                map.put(string, id);
-                keys[id] = string;
-            } else {
-                map.put(key, id);
-                keys[id] = key;
+                key = string;
             }
+            map.put(key, id);
+            keys[id] = key;
             return id;
         }
 
