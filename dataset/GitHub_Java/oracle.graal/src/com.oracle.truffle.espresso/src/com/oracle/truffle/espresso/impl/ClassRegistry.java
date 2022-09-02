@@ -23,8 +23,6 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -209,12 +207,13 @@ public abstract class ClassRegistry implements ContextAccess {
 
     public abstract @Host(ClassLoader.class) StaticObject getClassLoader();
 
-    public List<Klass> getLoadedKlasses() {
-        ArrayList<Klass> klasses = new ArrayList<>(classes.size());
-        for (ClassRegistries.RegistryEntry entry : classes.values()) {
-            klasses.add(entry.klass());
+    public Klass[] getLoadedKlasses() {
+        ClassRegistries.RegistryEntry[] values = classes.values().toArray(new ClassRegistries.RegistryEntry[0]);
+        Klass[] result = new Klass[values.length];
+        for (int i = 0; i < values.length; i++) {
+            result[i] = values[i].klass();
         }
-        return klasses;
+        return result;
     }
 
     public Klass findLoadedKlass(Symbol<Type> type) {
