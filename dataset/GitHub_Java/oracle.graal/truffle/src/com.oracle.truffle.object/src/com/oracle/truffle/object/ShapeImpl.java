@@ -1135,7 +1135,7 @@ public abstract class ShapeImpl extends Shape {
 
         /** @since 0.17 or earlier */
         @Override
-        public Location constantLocation(Object value) {
+        public final Location constantLocation(Object value) {
             return new ConstantLocation(value);
         }
 
