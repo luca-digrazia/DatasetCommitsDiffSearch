@@ -31,60 +31,38 @@ package com.oracle.truffle.wasm.binary;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import static com.oracle.truffle.wasm.binary.Assert.format;
-
-import static com.oracle.truffle.wasm.binary.Instructions.BLOCK;
-import static com.oracle.truffle.wasm.binary.Instructions.DROP;
-import static com.oracle.truffle.wasm.binary.Instructions.END;
-import static com.oracle.truffle.wasm.binary.Instructions.F32_ADD;
-import static com.oracle.truffle.wasm.binary.Instructions.F32_CONST;
-import static com.oracle.truffle.wasm.binary.Instructions.F64_CONST;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_ADD;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_AND;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_CONST;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_MUL;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_OR;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
-import static com.oracle.truffle.wasm.binary.Instructions.I64_CONST;
-import static com.oracle.truffle.wasm.binary.Instructions.NOP;
+import static com.oracle.truffle.wasm.binary.Instructions.*;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 
 public class WasmBlockNode extends WasmNode {
     @CompilationFinal private final int startOffset;
-    @CompilationFinal private final byte returnTypeId;
+    @CompilationFinal private int size;
+    @CompilationFinal private final byte typeId;
     @CompilationFinal private final int initialStackPointer;
-    @CompilationFinal(dimensions = 1) byte[] constantLengthTable;
-    @CompilationFinal(dimensions = 1) WasmNode[] nestedControlTable;
+    @CompilationFinal byte[] constantLengthTable;
 
-    public WasmBlockNode(WasmCodeEntry codeEntry, int startOffset, int size, byte returnTypeId, int initialStackPointer) {
-        super(codeEntry, size);
+    public WasmBlockNode(WasmCodeEntry codeEntry, int startOffset, int size, byte typeId, int initialStackPointer) {
+        super(codeEntry);
         this.startOffset = startOffset;
-        this.returnTypeId = returnTypeId;
+        this.size = size;
+        this.typeId = typeId;
         this.initialStackPointer = initialStackPointer;
         this.constantLengthTable = null;
-        this.nestedControlTable = null;
     }
 
     @ExplodeLoop
     public void execute(VirtualFrame frame) {
         int constantOffset = 0;
-        int nestedControlOffset = 0;
         int stackPointer = initialStackPointer;
         int offset = startOffset;
-        while (offset < startOffset + size()) {
+        while (offset < startOffset + size) {
             byte byteOpcode = BinaryStreamReader.peek1(codeEntry().data(), offset);
             int opcode = byteOpcode & 0xFF;
             offset++;
             switch (opcode) {
                 case NOP:
-                    break;
-                case BLOCK:
-                    WasmNode block = nestedControlTable[nestedControlOffset];
-                    block.execute(frame);
-                    nestedControlOffset++;
-                    offset += block.size();
-                    stackPointer += block.returnTypeLength();
                     break;
                 case END:
                     break;
@@ -151,6 +129,15 @@ public class WasmBlockNode extends WasmNode {
                     stackPointer++;
                     break;
                 }
+                case I32_XOR: {
+                    stackPointer--;
+                    int x = popInt(frame, stackPointer);
+                    stackPointer--;
+                    int y = popInt(frame, stackPointer);
+                    pushInt(frame, stackPointer, y ^ x);
+                    stackPointer++;
+                    break;
+                }
                 case F32_CONST: {
                     int value = BinaryStreamReader.peekFloatAsInt32(codeEntry().data(), offset);
                     offset += 4;
@@ -180,18 +167,11 @@ public class WasmBlockNode extends WasmNode {
         }
     }
 
-    public byte returnTypeId() {
-        return returnTypeId;
+    public byte typeId() {
+        return typeId;
     }
 
-    @Override
-    public int returnTypeLength() {
-        switch (returnTypeId()) {
-            case 0x00:
-            case 0x40:
-                return 0;
-            default:
-                return 1;
-        }
+    public void setSize(int size) {
+        this.size = size;
     }
 }
