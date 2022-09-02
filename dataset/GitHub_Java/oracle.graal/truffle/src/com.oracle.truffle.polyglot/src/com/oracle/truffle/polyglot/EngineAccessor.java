@@ -61,7 +61,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
@@ -470,7 +469,7 @@ final class EngineAccessor extends Accessor {
                 // be conservative
                 return true;
             }
-            return !context.singleThreaded.isValid();
+            return context.singleThreaded.isValid();
         }
 
         @Override
@@ -1285,12 +1284,6 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public boolean isContextCancelling(Object polyglotContext) {
-            PolyglotContextImpl context = ((PolyglotContextImpl) polyglotContext);
-            return context.cancelling;
-        }
-
-        @Override
         public boolean isContextActive(Object polyglotContext) {
             PolyglotContextImpl context = (PolyglotContextImpl) polyglotContext;
             return context.isActive(Thread.currentThread());
@@ -1313,19 +1306,12 @@ final class EngineAccessor extends Accessor {
                     throw context.createCancelException(closeLocation);
                 }
             } else {
-                synchronized (context) {
+                if (context.isActiveNotCancelled(false)) {
                     /*
-                     * Closing the context on another thread done as a part of cancelling enters the
-                     * context which could lead to the following IllegalStateException if the
-                     * cancelling flag was not checked.
+                     * Polyglot threads are still allowed to run at this point. They are required to
+                     * be finished after finalizeContext.
                      */
-                    if (context.isActiveNotCancelled(false) && !context.cancelling) {
-                        /*
-                         * Polyglot threads are still allowed to run at this point. They are
-                         * required to be finished after finalizeContext.
-                         */
-                        throw new IllegalStateException("The context is currently active and cannot be closed. Make sure no thread is running or call closeCancelled on the context to resolve this.");
-                    }
+                    throw new IllegalStateException("The context is currently active and cannot be closed. Make sure no thread is running or call closeCancelled on the context to resolve this.");
                 }
                 context.closeImpl(false, false, true);
             }
@@ -1374,10 +1360,6 @@ final class EngineAccessor extends Accessor {
             return LegacyScopesBridge.legacyScopes2ScopeObject(node, legacyScopes, language);
         }
 
-        @Override
-        public long calculateContextHeapSize(Object polyglotContext, long stopAtBytes, AtomicBoolean cancelled) {
-            return ((PolyglotContextImpl) polyglotContext).calculateHeapSize(stopAtBytes, cancelled);
-        }
     }
 
     abstract static class AbstractClassLoaderSupplier implements Supplier<ClassLoader> {

@@ -199,10 +199,6 @@ abstract class ToHostNode extends Node {
                 return convertedValue;
             }
         }
-        if (HostObject.isJavaInstance(targetType, value)) {
-            return HostObject.valueOf(value);
-        }
-
         if (useCustomTargetTypes) {
             convertedValue = targetMapping.execute(value, targetType, languageContext, interop, false, STRICT + 1, LOOSE);
             if (convertedValue != TargetMappingNode.NO_RESULT) {
@@ -285,6 +281,8 @@ abstract class ToHostNode extends Node {
                 return false;
             }
             return true;
+        } else if (targetType == Object.class) {
+            return true;
         } else if (targetType == Value.class && languageContext != null) {
             return true;
         } else if (isPrimitiveTarget(targetType)) {
@@ -295,29 +293,6 @@ abstract class ToHostNode extends Node {
         }
         if (HostObject.isJavaInstance(targetType, value)) {
             return true;
-        }
-
-        if (priority <= STRICT) {
-            return false;
-        }
-
-        if (targetType == Object.class) {
-            return true;
-        }
-
-        if (isPrimitiveTarget(targetType)) {
-            Object convertedValue = convertLossy(value, targetType, interop);
-            if (convertedValue != null) {
-                return true;
-            }
-        } else if (targetType == List.class) {
-            return interop.hasArrayElements(value);
-        } else if (targetType == Map.class) {
-            return interop.hasMembers(value);
-        } else if (targetType.isArray()) {
-            return interop.hasArrayElements(value);
-        } else if (targetType == Function.class) {
-            return interop.isExecutable(value) || interop.isInstantiable(value);
         } else if (targetType == LocalDate.class) {
             return interop.isDate(value);
         } else if (targetType == LocalTime.class) {
@@ -332,6 +307,23 @@ abstract class ToHostNode extends Node {
             return interop.isDuration(value);
         } else if (targetType == PolyglotException.class) {
             return interop.isException(value);
+        }
+
+        if (priority <= STRICT) {
+            return false;
+        }
+
+        if (isPrimitiveTarget(targetType)) {
+            Object convertedValue = convertLossy(value, targetType, interop);
+            if (convertedValue != null) {
+                return true;
+            }
+        } else if (targetType == List.class) {
+            return interop.hasArrayElements(value);
+        } else if (targetType == Map.class) {
+            return interop.hasMembers(value);
+        } else if (targetType.isArray()) {
+            return interop.hasArrayElements(value);
         }
 
         if (value instanceof TruffleObject) {

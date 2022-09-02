@@ -40,6 +40,29 @@
  */
 package com.oracle.truffle.polyglot;
 
+import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
+import static com.oracle.truffle.polyglot.EngineAccessor.RUNTIME;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.AbstractSet;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.SourceSection;
+import org.graalvm.polyglot.TypeLiteral;
+import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
@@ -48,7 +71,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.InvalidBufferOffsetException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -69,24 +91,16 @@ import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.CanInvokeNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetArrayElementNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetArraySizeNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetBufferSizeNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetArrayIteratorNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetIteratorNextElementNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetMemberKeysNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetMemberNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetMetaQualifiedNameNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.GetMetaSimpleNameNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.HasArrayElementsNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.HasBufferElementsNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.HasArrayIteratorNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.HasMemberNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.HasMembersNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsBufferWritableNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.HasIteratorNextElementNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsDateNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsDurationNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsExceptionNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsIteratorNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsMetaInstanceNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsMetaObjectNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsNativePointerNodeGen;
@@ -95,41 +109,10 @@ import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.IsTimeZoneNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.NewInstanceNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.PutMemberNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.ReadBufferFloatNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.ReadBufferIntNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.RemoveArrayElementNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.RemoveMemberNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.SetArrayElementNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.ThrowExceptionNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.WriteBufferByteNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.WriteBufferDoubleNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.WriteBufferFloatNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.WriteBufferIntNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.WriteBufferLongNodeGen;
-import com.oracle.truffle.polyglot.PolyglotValueFactory.InteropCodeCacheFactory.WriteBufferShortNodeGen;
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.SourceSection;
-import org.graalvm.polyglot.TypeLiteral;
-import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractValueImpl;
-
-import java.nio.ByteOrder;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.util.AbstractSet;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-
-import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
-import static com.oracle.truffle.polyglot.EngineAccessor.RUNTIME;
 
 abstract class PolyglotValue extends AbstractValueImpl {
 
@@ -172,7 +155,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
     }
 
     @TruffleBoundary
-    static Value getArrayElementUnsupported(PolyglotLanguageContext context, Object receiver) {
+    static final Value getArrayElementUnsupported(PolyglotLanguageContext context, Object receiver) {
         throw unsupported(context, receiver, "getArrayElement(long)", "hasArrayElements()");
     }
 
@@ -226,254 +209,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
     static long getArraySizeUnsupported(PolyglotLanguageContext context, Object receiver) {
         throw unsupported(context, receiver, "getArraySize()", "hasArrayElements()");
     }
-
-    // region Buffer Methods
-
-    @Override
-    public boolean isBufferWritable(Object receiver) throws UnsupportedOperationException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw isBufferWritableUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException isBufferWritableUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "isBufferWritable()", "hasBufferElements()");
-    }
-
-    @Override
-    public long getBufferSize(Object receiver) throws UnsupportedOperationException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw getBufferSizeUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException getBufferSizeUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "getBufferSize()", "hasBufferElements()");
-    }
-
-    @Override
-    public byte readBufferByte(Object receiver, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw readBufferByteUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException readBufferByteUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "readBufferByte()", "hasBufferElements()");
-    }
-
-    @Override
-    public void writeBufferByte(Object receiver, long byteOffset, byte value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw writeBufferByteUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException writeBufferByteUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "writeBufferByte()", "hasBufferElements()");
-    }
-
-    @Override
-    public short readBufferShort(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw readBufferShortUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException readBufferShortUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "readBufferShort()", "hasBufferElements()");
-    }
-
-    @Override
-    public void writeBufferShort(Object receiver, ByteOrder order, long byteOffset, short value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw writeBufferShortUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException writeBufferShortUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "writeBufferShort()", "hasBufferElements()");
-    }
-
-    @Override
-    public int readBufferInt(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw readBufferIntUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException readBufferIntUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "readBufferInt()", "hasBufferElements()");
-    }
-
-    @Override
-    public void writeBufferInt(Object receiver, ByteOrder order, long byteOffset, int value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw writeBufferIntUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException writeBufferIntUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "writeBufferInt()", "hasBufferElements()");
-    }
-
-    @Override
-    public long readBufferLong(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw readBufferLongUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException readBufferLongUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "readBufferLong()", "hasBufferElements()");
-    }
-
-    @Override
-    public void writeBufferLong(Object receiver, ByteOrder order, long byteOffset, long value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw writeBufferLongUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException writeBufferLongUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "writeBufferLong()", "hasBufferElements()");
-    }
-
-    @Override
-    public float readBufferFloat(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw readBufferFloatUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException readBufferFloatUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "readBufferFloat()", "hasBufferElements()");
-    }
-
-    @Override
-    public void writeBufferFloat(Object receiver, ByteOrder order, long byteOffset, float value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw writeBufferFloatUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException writeBufferFloatUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "writeBufferFloat()", "hasBufferElements()");
-    }
-
-    @Override
-    public double readBufferDouble(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw readBufferDoubleUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException readBufferDoubleUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "readBufferDouble()", "hasBufferElements()");
-    }
-
-    @Override
-    public void writeBufferDouble(Object receiver, ByteOrder order, long byteOffset, double value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-        final Object prev = hostEnter(languageContext);
-        try {
-            throw writeBufferDoubleUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static RuntimeException writeBufferDoubleUnsupported(PolyglotLanguageContext context, Object receiver) {
-        return unsupported(context, receiver, "writeBufferDouble()", "hasBufferElements()");
-    }
-
-    @TruffleBoundary
-    protected static RuntimeException invalidBufferIndex(PolyglotLanguageContext context, Object receiver, long byteOffset, long size) {
-        final String message = String.format("Invalid buffer access of length %d at byte offset %d for buffer %s.", size, byteOffset, getValueInfo(context, receiver));
-        throw PolyglotEngineException.bufferIndexOutOfBounds(message);
-    }
-
-    // endregion
 
     @Override
     public Value getMember(Object receiver, String key) {
@@ -917,61 +652,10 @@ abstract class PolyglotValue extends AbstractValueImpl {
         try {
             return getMetaObjectImpl(receiver);
         } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
+            throw PolyglotImpl.guestToHostException((languageContext), e, true);
         } finally {
             hostLeave(languageContext, prev);
         }
-    }
-
-    @Override
-    public Value getArrayIterator(Object receiver) {
-        Object prev = hostEnter(languageContext);
-        try {
-            return getArrayIteratorUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static final Value getArrayIteratorUnsupported(PolyglotLanguageContext context, Object receiver) {
-        throw unsupported(context, receiver, "getArrayIterator()", "hasArrayIterator()");
-    }
-
-    @Override
-    public boolean hasIteratorNextElement(Object receiver) {
-        Object prev = hostEnter(languageContext);
-        try {
-            return hasIteratorNextElementUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static final boolean hasIteratorNextElementUnsupported(PolyglotLanguageContext context, Object receiver) {
-        throw unsupported(context, receiver, "hasIteratorNextElement()", "isIterator()");
-    }
-
-    @Override
-    public Value getIteratorNextElement(Object receiver) {
-        Object prev = hostEnter(languageContext);
-        try {
-            return getIteratorNextElementUnsupported(languageContext, receiver);
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
-    }
-
-    @TruffleBoundary
-    static final Value getIteratorNextElementUnsupported(PolyglotLanguageContext context, Object receiver) {
-        throw unsupported(context, receiver, "getIteratorNextElement()", "isIterator()");
     }
 
     protected Value getMetaObjectImpl(Object receiver) {
@@ -1027,7 +711,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             polyglotMessage = String.format("Unsupported operation %s.%s for %s.",
                             Value.class.getSimpleName(), message, getValueInfo(languageContext, receiver));
         }
-        return PolyglotEngineException.unsupported(polyglotMessage);
+        throw PolyglotEngineException.unsupported(polyglotMessage);
     }
 
     private static final int CHARACTER_LIMIT = 140;
@@ -1042,6 +726,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             assert false : "receiver should never be null";
             return "null";
         }
+        assert languageContext == null || !languageContext.context.engine.needsEnter(languageContext.context);
         PolyglotContextImpl context = languageContext.context;
         PolyglotLanguage displayLanguage = EngineAccessor.EngineImpl.findObjectLanguage(context.engine, receiver);
         Object view;
@@ -1139,25 +824,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
     }
 
     @TruffleBoundary
-    protected static RuntimeException stopIteration(PolyglotLanguageContext context, Object receiver) {
-        String message = String.format("Iteration was stopped for iterator %s.", getValueInfo(context, receiver));
-        throw PolyglotEngineException.noSuchElement(message);
-    }
-
-    @TruffleBoundary
-    protected static RuntimeException invalidIterator(PolyglotLanguageContext context, Object receiver) {
-        String message = String.format("GetNext method has not yet been called on the iterator %s.", getValueInfo(context, receiver));
-        throw PolyglotEngineException.illegalState(message);
-    }
-
-    @TruffleBoundary
-    protected static RuntimeException invalidIteratorValue(PolyglotLanguageContext context, Object receiver, Object value) {
-        throw PolyglotEngineException.classCast(
-                        String.format("Invalid value %s for iterator %s.",
-                                        getValueInfo(context, value), getValueInfo(context, receiver)));
-    }
-
-    @TruffleBoundary
     protected static RuntimeException invalidExecuteArgumentType(PolyglotLanguageContext context, Object receiver, UnsupportedTypeException e) {
         String originalMessage = e.getMessage() == null ? "" : e.getMessage() + " ";
         String[] formattedArgs = formatArgs(context, e.getSuppliedValues());
@@ -1225,7 +891,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
         try {
             return toStringImpl(receiver);
         } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
+            throw PolyglotImpl.guestToHostException((languageContext), e, true);
         } finally {
             hostLeave(languageContext, prev);
         }
@@ -1371,21 +1037,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
         final CallTarget setArrayElement;
         final CallTarget removeArrayElement;
         final CallTarget getArraySize;
-        final CallTarget hasBufferElements;
-        final CallTarget isBufferWritable;
-        final CallTarget getBufferSize;
-        final CallTarget readBufferByte;
-        final CallTarget writeBufferByte;
-        final CallTarget readBufferShort;
-        final CallTarget writeBufferShort;
-        final CallTarget readBufferInt;
-        final CallTarget writeBufferInt;
-        final CallTarget readBufferLong;
-        final CallTarget writeBufferLong;
-        final CallTarget readBufferFloat;
-        final CallTarget writeBufferFloat;
-        final CallTarget readBufferDouble;
-        final CallTarget writeBufferDouble;
         final CallTarget hasMembers;
         final CallTarget hasMember;
         final CallTarget getMember;
@@ -1418,11 +1069,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
         final CallTarget isMetaInstance;
         final CallTarget getMetaQualifiedName;
         final CallTarget getMetaSimpleName;
-        final CallTarget hasArrayIterator;
-        final CallTarget getArrayIterator;
-        final CallTarget isIterator;
-        final CallTarget hasIteratorNextElement;
-        final CallTarget getIteratorNextElement;
 
         final boolean isProxy;
         final boolean isHost;
@@ -1445,21 +1091,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             this.setArrayElement = createTarget(SetArrayElementNodeGen.create(this));
             this.removeArrayElement = createTarget(RemoveArrayElementNodeGen.create(this));
             this.getArraySize = createTarget(GetArraySizeNodeGen.create(this));
-            this.hasBufferElements = createTarget(HasBufferElementsNodeGen.create(this));
-            this.isBufferWritable = createTarget(IsBufferWritableNodeGen.create(this));
-            this.getBufferSize = createTarget(GetBufferSizeNodeGen.create(this));
-            this.readBufferByte = createTarget(PolyglotValueFactory.InteropCodeCacheFactory.ReadBufferByteNodeGen.create(this));
-            this.writeBufferByte = createTarget(WriteBufferByteNodeGen.create(this));
-            this.readBufferShort = createTarget(PolyglotValueFactory.InteropCodeCacheFactory.ReadBufferShortNodeGen.create(this));
-            this.writeBufferShort = createTarget(WriteBufferShortNodeGen.create(this));
-            this.readBufferInt = createTarget(ReadBufferIntNodeGen.create(this));
-            this.writeBufferInt = createTarget(WriteBufferIntNodeGen.create(this));
-            this.readBufferLong = createTarget(PolyglotValueFactory.InteropCodeCacheFactory.ReadBufferLongNodeGen.create(this));
-            this.writeBufferLong = createTarget(WriteBufferLongNodeGen.create(this));
-            this.readBufferFloat = createTarget(ReadBufferFloatNodeGen.create(this));
-            this.writeBufferFloat = createTarget(WriteBufferFloatNodeGen.create(this));
-            this.readBufferDouble = createTarget(PolyglotValueFactory.InteropCodeCacheFactory.ReadBufferDoubleNodeGen.create(this));
-            this.writeBufferDouble = createTarget(WriteBufferDoubleNodeGen.create(this));
             this.hasMember = createTarget(HasMemberNodeGen.create(this));
             this.getMember = createTarget(GetMemberNodeGen.create(this));
             this.putMember = createTarget(PutMemberNodeGen.create(this));
@@ -1494,11 +1125,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             this.isMetaInstance = createTarget(IsMetaInstanceNodeGen.create(this));
             this.getMetaQualifiedName = createTarget(GetMetaQualifiedNameNodeGen.create(this));
             this.getMetaSimpleName = createTarget(GetMetaSimpleNameNodeGen.create(this));
-            this.hasArrayIterator = createTarget(HasArrayIteratorNodeGen.create(this));
-            this.getArrayIterator = createTarget(GetArrayIteratorNodeGen.create(this));
-            this.isIterator = createTarget(IsIteratorNodeGen.create(this));
-            this.hasIteratorNextElement = createTarget(HasIteratorNextElementNodeGen.create(this));
-            this.getIteratorNextElement = createTarget(GetIteratorNextElementNodeGen.create(this));
         }
 
         abstract static class IsDateNode extends InteropNode {
@@ -2058,560 +1684,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             }
 
         }
-
-        // region Buffer nodes
-
-        abstract static class HasBufferElementsNode extends InteropNode {
-
-            protected HasBufferElementsNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "hasBufferElements";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers) {
-                return buffers.hasBufferElements(receiver);
-            }
-
-        }
-
-        abstract static class IsBufferWritableNode extends InteropNode {
-
-            protected IsBufferWritableNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "isBufferWritable";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported) {
-                try {
-                    return buffers.isBufferWritable(receiver);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw getBufferSizeUnsupported(context, receiver);
-                }
-            }
-
-        }
-
-        abstract static class GetBufferSizeNode extends InteropNode {
-
-            protected GetBufferSizeNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "getBufferSize";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported) {
-                try {
-                    return buffers.getBufferSize(receiver);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw getBufferSizeUnsupported(context, receiver);
-                }
-            }
-
-        }
-
-        abstract static class ReadBufferByteNode extends InteropNode {
-
-            protected ReadBufferByteNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "readBufferByte";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile unknown) {
-                final long byteOffset = (long) args[ARGUMENT_OFFSET];
-                try {
-                    return buffers.readBufferByte(receiver, byteOffset);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw readBufferByteUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    unknown.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-            }
-
-        }
-
-        abstract static class WriteBufferByteNode extends InteropNode {
-            protected WriteBufferByteNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, Long.class, Byte.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "writeBufferByte";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile invalidIndex,
-                            @Cached BranchProfile invalidValue) {
-                final long byteOffset = (long) args[ARGUMENT_OFFSET];
-                final byte value = (byte) args[ARGUMENT_OFFSET + 1];
-                try {
-                    buffers.writeBufferByte(receiver, byteOffset, value);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    if (buffers.hasBufferElements(receiver)) {
-                        throw unsupported(context, receiver, "writeBufferByte()", "isBufferWritable()");
-                    }
-                    throw writeBufferByteUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    invalidIndex.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-                return null;
-            }
-
-        }
-
-        abstract static class ReadBufferShortNode extends InteropNode {
-
-            protected ReadBufferShortNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "readBufferShort";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile unknown) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                try {
-                    return buffers.readBufferShort(receiver, order, byteOffset);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw readBufferShortUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    unknown.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-            }
-
-        }
-
-        abstract static class WriteBufferShortNode extends InteropNode {
-            protected WriteBufferShortNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class, Short.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "writeBufferShort";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile invalidIndex,
-                            @Cached BranchProfile invalidValue) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                final short value = (short) args[ARGUMENT_OFFSET + 2];
-                try {
-                    buffers.writeBufferShort(receiver, order, byteOffset, value);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    if (buffers.hasBufferElements(receiver)) {
-                        throw unsupported(context, receiver, "writeBufferShort()", "isBufferWritable()");
-                    }
-                    throw writeBufferShortUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    invalidIndex.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-                return null;
-            }
-
-        }
-
-        abstract static class ReadBufferIntNode extends InteropNode {
-
-            protected ReadBufferIntNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "readBufferInt";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile unknown) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                try {
-                    return buffers.readBufferInt(receiver, order, byteOffset);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw readBufferIntUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    unknown.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-            }
-
-        }
-
-        abstract static class WriteBufferIntNode extends InteropNode {
-            protected WriteBufferIntNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class, Integer.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "writeBufferInt";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile invalidIndex,
-                            @Cached BranchProfile invalidValue) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                final int value = (int) args[ARGUMENT_OFFSET + 2];
-                try {
-                    buffers.writeBufferInt(receiver, order, byteOffset, value);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    if (buffers.hasBufferElements(receiver)) {
-                        throw unsupported(context, receiver, "writeBufferInt()", "isBufferWritable()");
-                    }
-                    throw writeBufferIntUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    invalidIndex.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-                return null;
-            }
-
-        }
-
-        abstract static class ReadBufferLongNode extends InteropNode {
-
-            protected ReadBufferLongNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "readBufferLong";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile unknown) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                try {
-                    return buffers.readBufferLong(receiver, order, byteOffset);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw readBufferLongUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    unknown.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-            }
-
-        }
-
-        abstract static class WriteBufferLongNode extends InteropNode {
-            protected WriteBufferLongNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "writeBufferLong";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile invalidIndex,
-                            @Cached BranchProfile invalidValue) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                final long value = (long) args[ARGUMENT_OFFSET + 2];
-                try {
-                    buffers.writeBufferLong(receiver, order, byteOffset, value);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    if (buffers.hasBufferElements(receiver)) {
-                        throw unsupported(context, receiver, "writeBufferLong()", "isBufferWritable()");
-                    }
-                    throw writeBufferLongUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    invalidIndex.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-                return null;
-            }
-
-        }
-
-        abstract static class ReadBufferFloatNode extends InteropNode {
-
-            protected ReadBufferFloatNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "readBufferFloat";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile unknown) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                try {
-                    return buffers.readBufferFloat(receiver, order, byteOffset);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw readBufferFloatUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    unknown.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-            }
-
-        }
-
-        abstract static class WriteBufferFloatNode extends InteropNode {
-            protected WriteBufferFloatNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class, Float.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "writeBufferFloat";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile invalidIndex,
-                            @Cached BranchProfile invalidValue) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                final float value = (float) args[ARGUMENT_OFFSET + 2];
-                try {
-                    buffers.writeBufferFloat(receiver, order, byteOffset, value);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    if (buffers.hasBufferElements(receiver)) {
-                        throw unsupported(context, receiver, "writeBufferFloat()", "isBufferWritable()");
-                    }
-                    throw writeBufferFloatUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    invalidIndex.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-                return null;
-            }
-
-        }
-
-        abstract static class ReadBufferDoubleNode extends InteropNode {
-
-            protected ReadBufferDoubleNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "readBufferDouble";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile unknown) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                try {
-                    return buffers.readBufferDouble(receiver, order, byteOffset);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    throw readBufferDoubleUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    unknown.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-            }
-
-        }
-
-        abstract static class WriteBufferDoubleNode extends InteropNode {
-            protected WriteBufferDoubleNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType, ByteOrder.class, Long.class, Double.class};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "writeBufferDouble";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary buffers,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile invalidIndex,
-                            @Cached BranchProfile invalidValue) {
-                final ByteOrder order = (ByteOrder) args[ARGUMENT_OFFSET];
-                final long byteOffset = (long) args[ARGUMENT_OFFSET + 1];
-                final double value = (double) args[ARGUMENT_OFFSET + 2];
-                try {
-                    buffers.writeBufferDouble(receiver, order, byteOffset, value);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    if (buffers.hasBufferElements(receiver)) {
-                        throw unsupported(context, receiver, "writeBufferDouble()", "isBufferWritable()");
-                    }
-                    throw writeBufferDoubleUnsupported(context, receiver);
-                } catch (InvalidBufferOffsetException e) {
-                    invalidIndex.enter();
-                    throw invalidBufferIndex(context, receiver, e.getByteOffset(), e.getLength());
-                }
-                return null;
-            }
-
-        }
-
-        // endregion
 
         abstract static class GetMemberNode extends InteropNode {
 
@@ -3317,144 +2389,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             }
         }
 
-        abstract static class HasArrayIteratorNode extends InteropNode {
-
-            protected HasArrayIteratorNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "hasArrayIterator";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary iterators) {
-                return iterators.hasArrayIterator(receiver);
-            }
-        }
-
-        abstract static class GetArrayIteratorNode extends InteropNode {
-
-            protected GetArrayIteratorNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "getArrayIterator";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary iterators,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported) {
-                try {
-                    return toHost.execute(context, iterators.getArrayIterator(receiver));
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    return getArrayIteratorUnsupported(context, receiver);
-                }
-            }
-        }
-
-        abstract static class IsIteratorNode extends InteropNode {
-
-            protected IsIteratorNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "isIterator";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary iterators) {
-                return iterators.isIterator(receiver);
-            }
-        }
-
-        abstract static class HasIteratorNextElementNode extends InteropNode {
-
-            protected HasIteratorNextElementNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "hasIteratorNextElement";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary iterators,
-                            @Cached BranchProfile unsupported) {
-                try {
-                    return iterators.hasIteratorNextElement(receiver);
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    return hasIteratorNextElementUnsupported(context, receiver);
-                }
-            }
-        }
-
-        abstract static class GetIteratorNextElementNode extends InteropNode {
-
-            protected GetIteratorNextElementNode(InteropCodeCache interop) {
-                super(interop);
-            }
-
-            @Override
-            protected Class<?>[] getArgumentTypes() {
-                return new Class<?>[]{PolyglotLanguageContext.class, polyglot.receiverType};
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "getIteratorNextElement";
-            }
-
-            @Specialization(limit = "CACHE_LIMIT")
-            static Object doCached(PolyglotLanguageContext context, Object receiver, Object[] args, //
-                            @CachedLibrary("receiver") InteropLibrary iterators,
-                            @Cached("createToHost()") ToHostValueNode toHost,
-                            @Cached BranchProfile unsupported,
-                            @Cached BranchProfile stop) {
-                try {
-                    return toHost.execute(context, iterators.getIteratorNextElement(receiver));
-                } catch (UnsupportedMessageException e) {
-                    unsupported.enter();
-                    return getIteratorNextElementUnsupported(context, receiver);
-                } catch (StopIterationException e) {
-                    stop.enter();
-                    throw stopIteration(context, receiver);
-                }
-            }
-        }
     }
 
     static final class PrimitiveValue extends PolyglotValue {
@@ -3801,85 +2735,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
             return (long) RUNTIME.callProfiled(cache.getArraySize, languageContext, receiver);
         }
 
-        // region Buffer Methods
-
-        @Override
-        public boolean hasBufferElements(Object receiver) {
-            return (boolean) RUNTIME.callProfiled(cache.hasBufferElements, languageContext, receiver);
-        }
-
-        @Override
-        public boolean isBufferWritable(Object receiver) {
-            return (boolean) RUNTIME.callProfiled(cache.isBufferWritable, languageContext, receiver);
-        }
-
-        @Override
-        public long getBufferSize(Object receiver) throws UnsupportedOperationException {
-            return (long) RUNTIME.callProfiled(cache.getBufferSize, languageContext, receiver);
-        }
-
-        @Override
-        public byte readBufferByte(Object receiver, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            return (byte) RUNTIME.callProfiled(cache.readBufferByte, languageContext, receiver, byteOffset);
-        }
-
-        @Override
-        public void writeBufferByte(Object receiver, long byteOffset, byte value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            RUNTIME.callProfiled(cache.writeBufferByte, languageContext, receiver, byteOffset, value);
-        }
-
-        @Override
-        public short readBufferShort(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            return (short) RUNTIME.callProfiled(cache.readBufferShort, languageContext, receiver, order, byteOffset);
-        }
-
-        @Override
-        public void writeBufferShort(Object receiver, ByteOrder order, long byteOffset, short value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            RUNTIME.callProfiled(cache.writeBufferShort, languageContext, receiver, order, byteOffset, value);
-        }
-
-        @Override
-        public int readBufferInt(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            return (int) RUNTIME.callProfiled(cache.readBufferInt, languageContext, receiver, order, byteOffset);
-        }
-
-        @Override
-        public void writeBufferInt(Object receiver, ByteOrder order, long byteOffset, int value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            RUNTIME.callProfiled(cache.writeBufferInt, languageContext, receiver, order, byteOffset, value);
-        }
-
-        @Override
-        public long readBufferLong(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            return (long) RUNTIME.callProfiled(cache.readBufferLong, languageContext, receiver, order, byteOffset);
-        }
-
-        @Override
-        public void writeBufferLong(Object receiver, ByteOrder order, long byteOffset, long value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            RUNTIME.callProfiled(cache.writeBufferLong, languageContext, receiver, order, byteOffset, value);
-        }
-
-        @Override
-        public float readBufferFloat(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            return (float) RUNTIME.callProfiled(cache.readBufferFloat, languageContext, receiver, order, byteOffset);
-        }
-
-        @Override
-        public void writeBufferFloat(Object receiver, ByteOrder order, long byteOffset, float value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            RUNTIME.callProfiled(cache.writeBufferFloat, languageContext, receiver, order, byteOffset, value);
-        }
-
-        @Override
-        public double readBufferDouble(Object receiver, ByteOrder order, long byteOffset) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            return (double) RUNTIME.callProfiled(cache.readBufferDouble, languageContext, receiver, order, byteOffset);
-        }
-
-        @Override
-        public void writeBufferDouble(Object receiver, ByteOrder order, long byteOffset, double value) throws UnsupportedOperationException, IndexOutOfBoundsException {
-            RUNTIME.callProfiled(cache.writeBufferDouble, languageContext, receiver, order, byteOffset, value);
-        }
-
-        // endregion
-
         @Override
         public boolean hasMembers(Object receiver) {
             return (boolean) RUNTIME.callProfiled(cache.hasMembers, languageContext, receiver);
@@ -4065,7 +2920,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return UNCACHED_INTEROP.isNumber(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4077,7 +2932,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return UNCACHED_INTEROP.fitsInByte(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4093,7 +2948,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asByteUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4105,7 +2960,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return UNCACHED_INTEROP.isString(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4124,7 +2979,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asStringUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4136,7 +2991,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return UNCACHED_INTEROP.fitsInInt(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4152,7 +3007,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asIntUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4164,7 +3019,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return InteropLibrary.getFactory().getUncached().isBoolean(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4180,7 +3035,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asBooleanUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4192,7 +3047,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return InteropLibrary.getFactory().getUncached().fitsInFloat(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4208,7 +3063,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asFloatUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4220,7 +3075,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return UNCACHED_INTEROP.fitsInDouble(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4236,7 +3091,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asDoubleUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4248,7 +3103,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return UNCACHED_INTEROP.fitsInLong(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4264,7 +3119,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asLongUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4276,7 +3131,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
             try {
                 return UNCACHED_INTEROP.fitsInShort(receiver);
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4292,7 +3147,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                     return asShortUnsupported(receiver);
                 }
             } catch (Throwable e) {
-                throw PolyglotImpl.guestToHostException(languageContext, e, true);
+                throw PolyglotImpl.guestToHostException((languageContext), e, true);
             } finally {
                 hostLeave(languageContext, c);
             }
@@ -4316,31 +3171,6 @@ abstract class PolyglotValue extends AbstractValueImpl {
         @Override
         public String getMetaSimpleName(Object receiver) {
             return (String) RUNTIME.callProfiled(cache.getMetaSimpleName, languageContext, receiver);
-        }
-
-        @Override
-        public boolean hasArrayIterator(Object receiver) {
-            return (boolean) RUNTIME.callProfiled(cache.hasArrayIterator, languageContext, receiver);
-        }
-
-        @Override
-        public Value getArrayIterator(Object receiver) {
-            return (Value) RUNTIME.callProfiled(cache.getArrayIterator, languageContext, receiver);
-        }
-
-        @Override
-        public boolean isIterator(Object receiver) {
-            return (boolean) RUNTIME.callProfiled(cache.isIterator, languageContext, receiver);
-        }
-
-        @Override
-        public boolean hasIteratorNextElement(Object receiver) {
-            return (boolean) RUNTIME.callProfiled(cache.hasIteratorNextElement, languageContext, receiver);
-        }
-
-        @Override
-        public Value getIteratorNextElement(Object receiver) {
-            return (Value) RUNTIME.callProfiled(cache.getIteratorNextElement, languageContext, receiver);
         }
 
         private final class MemberSet extends AbstractSet<String> {

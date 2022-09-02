@@ -1646,15 +1646,8 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         boolean hasContextBindings;
         try {
             if (!replayEvents) { // is new context
-                try {
-                    synchronized (context) {
-                        context.initializeContextLocals();
-                    }
-                } catch (Throwable t) {
-                    synchronized (this.lock) {
-                        removeContext(context);
-                    }
-                    throw t;
+                synchronized (context) {
+                    context.initializeContextLocals();
                 }
             }
             hasContextBindings = EngineAccessor.INSTRUMENT.hasContextBindings(this);

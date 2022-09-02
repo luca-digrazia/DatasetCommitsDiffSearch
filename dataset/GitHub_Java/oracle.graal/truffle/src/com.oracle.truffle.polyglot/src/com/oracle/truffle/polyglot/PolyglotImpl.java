@@ -242,7 +242,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             }
 
             if (impl != null) {
-                impl.patch(dispatchOut,
+                if (!impl.patch(dispatchOut,
                                 dispatchErr,
                                 resolvedIn,
                                 engineOptions,
@@ -252,7 +252,10 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
                                 useAllowExperimentalOptions,
                                 contextClassLoader,
                                 boundEngine,
-                                logHandler);
+                                logHandler)) {
+                    impl.ensureClosed(false, false);
+                    impl = null;
+                }
             }
             if (impl == null) {
                 impl = new PolyglotEngineImpl(this,

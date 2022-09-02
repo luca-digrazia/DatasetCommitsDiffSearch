@@ -44,7 +44,6 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -65,27 +64,13 @@ abstract class HostToGuestRootNode extends RootNode {
     private final PolyglotEngineImpl engine;
     private final BranchProfile error = BranchProfile.create();
 
-    HostToGuestRootNode(PolyglotEngineImpl engine) {
-        this(engine, null);
-    }
-
     HostToGuestRootNode() {
-        this(null, null);
+        this(null);
     }
 
     HostToGuestRootNode(PolyglotLanguageContext languageContext) {
-        this(null, languageContext != null ? languageContext.getLanguageInstance().spi : null);
-    }
-
-    private HostToGuestRootNode(PolyglotEngineImpl engine, TruffleLanguage<?> language) {
-        super(language);
-        if (engine == null) {
-            this.engine = (PolyglotEngineImpl) EngineAccessor.NODES.getPolyglotEngine(this);
-        } else {
-            assert language == null : "unsupported state";
-            this.engine = engine;
-            EngineAccessor.NODES.setPolyglotEngine(this, engine);
-        }
+        super(languageContext != null ? languageContext.getLanguageInstance().spi : null);
+        this.engine = (PolyglotEngineImpl) EngineAccessor.NODES.getPolyglotEngine(this);
         assert this.engine != null : "all host to guest root nodes need to be initialized when entered";
         assert needsEnter() || !needsExceptionWrapping() : "HostToGuestRootNode which does not require enter cannot have exception wrapping.";
     }
@@ -116,7 +101,7 @@ abstract class HostToGuestRootNode extends RootNode {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     seenEnter = true;
                 }
-                prev = engine.enter(context, this, true);
+                prev = engine.enter(context);
             } else {
                 if (!seenNonEnter) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
