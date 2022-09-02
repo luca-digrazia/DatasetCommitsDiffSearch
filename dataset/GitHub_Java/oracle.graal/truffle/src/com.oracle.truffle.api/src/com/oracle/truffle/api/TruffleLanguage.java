@@ -77,7 +77,6 @@ import org.graalvm.polyglot.io.FileSystem;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleFile.FileTypeDetector;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -454,14 +453,6 @@ public abstract class TruffleLanguage<C> {
         Class<? extends TruffleFile.FileTypeDetector>[] fileTypeDetectors() default {};
     }
 
-    public interface Provider {
-        String getLanguageClassName();
-
-        TruffleLanguage<?> get();
-
-        List<FileTypeDetector> getFileTypeDetectors();
-    }
-
     /**
      * Returns <code>true</code> if the combination of two sets of options allow to
      * {@link ContextPolicy#SHARED share} or {@link ContextPolicy#REUSE reuse} the same language
@@ -503,7 +494,7 @@ public abstract class TruffleLanguage<C> {
      * here-in provided <code>env</code> and adjust itself according to parameters provided by the
      * <code>env</code> object.
      * <p>
-     * The context created by this method is accessible using {@link #getContextReference()}. An
+     * The context created by this method is accessible using {@link #getCurrentContext(Class)}. An
      * {@link IllegalStateException} is thrown if the context is tried to be accessed while the
      * createContext method is executed.
      * <p>
@@ -1184,20 +1175,20 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * Creates a reference to the current context to be stored in an AST. The current context can be
-     * accessed using the {@link ContextReference#get()} method of the returned reference. If a
-     * context reference is created in the language class constructor an
-     * {@link IllegalStateException} is thrown. The exception is also thrown if the reference is
-     * tried to be created or accessed outside of the execution of an engine.
-     * <p>
-     * The returned reference identity is undefined. It might either return always the same instance
-     * or a new reference for each invocation of the method. Please note that the current context
-     * might vary between {@link RootNode#execute(VirtualFrame) executions} if resources or code is
-     * shared between multiple contexts.
+     * @deprecated in 19.3 as this method is inefficient in many situations. The most efficient
+     *             context lookup can be achieved knowing the current AST in which it is used. As
+     *             this method does not know the current {@link Node node} it must be unnecessarily
+     *             conservative about the lookup and therefore inefficient. More efficient context
+     *             reference versions are available for fast-paths by calling
+     *             {@link Node#lookupContextReference(Class)} or for slow-paths
+     *             {@link TruffleLanguage#getCurrentContext(Class)}. Truffle DSL has support for
+     *             context lookup with {@link com.oracle.truffle.api.dsl.CachedContext
+     *             CachedContext} that uses the most efficient lookup automatically.
      *
      * @since 0.25
      */
     @SuppressWarnings("unchecked")
+    @Deprecated
     public final ContextReference<C> getContextReference() {
         if (reference == null) {
             throw new IllegalStateException("TruffleLanguage instance is not initialized. Cannot get the current context reference.");
