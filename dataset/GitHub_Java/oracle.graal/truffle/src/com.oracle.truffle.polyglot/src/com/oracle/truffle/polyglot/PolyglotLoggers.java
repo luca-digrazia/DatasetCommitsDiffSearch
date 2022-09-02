@@ -58,7 +58,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.ResourceBundle;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -74,19 +74,11 @@ final class PolyglotLoggers {
 
     private static final Map<Path, SharedFileHandler> fileHandlers = new HashMap<>();
 
-    private static final String GRAAL_COMPILER_LOG_ID = "graal";
-    private static final Set<String> INTERNAL_IDS;
-    static {
-        Set<String> s = new HashSet<>();
-        Collections.addAll(s, PolyglotEngineImpl.OPTION_GROUP_ENGINE, GRAAL_COMPILER_LOG_ID);
-        INTERNAL_IDS = Collections.unmodifiableSet(s);
-    }
-
     private PolyglotLoggers() {
     }
 
     static Set<String> getInternalIds() {
-        return INTERNAL_IDS;
+        return Collections.singleton(PolyglotEngineImpl.OPTION_GROUP_ENGINE);
     }
 
     static LoggerCache defaultSPI() {
@@ -94,7 +86,7 @@ final class PolyglotLoggers {
     }
 
     static LoggerCache createEngineSPI(PolyglotEngineImpl engine) {
-        return LoggerCacheImpl.newEngineLoggerCache(new PolyglotLogHandler(engine), engine, true, Collections.emptySet());
+        return LoggerCacheImpl.newEngineLoggerCache(new PolyglotLogHandler(engine), engine, true);
     }
 
     static PolyglotContextImpl getCurrentOuterContext() {
@@ -117,11 +109,11 @@ final class PolyglotLoggers {
         return false;
     }
 
-    static Function<String, TruffleLogger> createEngineLoggerProvider(PolyglotEngineImpl engine) {
+    static Supplier<TruffleLogger> createEngineLoggerProvider(PolyglotEngineImpl engine) {
         return new EngineLoggerProvider(engine);
     }
 
-    static Function<String, TruffleLogger> createEngineLoggerProvider(String defaultLogFile) {
+    static Supplier<TruffleLogger> createEngineLoggerProvider(String defaultLogFile) {
         return new EngineLoggerProvider(defaultLogFile);
     }
 
@@ -211,23 +203,20 @@ final class PolyglotLoggers {
 
     private static final class LoggerCacheImpl implements LoggerCache {
 
-        static final LoggerCache DEFAULT = new LoggerCacheImpl(PolyglotLogHandler.INSTANCE, null, true, null, Collections.emptySet());
+        static final LoggerCache DEFAULT = new LoggerCacheImpl(PolyglotLogHandler.INSTANCE, null, true, null);
 
         private final Handler handler;
         private final boolean useCurrentContext;
         private final Reference<PolyglotEngineImpl> engineRef;
         private final Map<String, Level> defaultValue;
-        private final Set<String> rawLoggerIds;
         private final Set<Level> implicitLevels;
 
-        private LoggerCacheImpl(Handler handler, PolyglotEngineImpl engine, boolean useCurrentContext, Map<String, Level> defaultValue,
-                        Set<String> rawLoggerIds, Level... implicitLevels) {
+        private LoggerCacheImpl(Handler handler, PolyglotEngineImpl engine, boolean useCurrentContext, Map<String, Level> defaultValue, Level... implicitLevels) {
             Objects.requireNonNull(handler);
             this.handler = handler;
             this.useCurrentContext = useCurrentContext;
             this.engineRef = engine == null ? null : new WeakReference<>(engine);
             this.defaultValue = defaultValue;
-            this.rawLoggerIds = rawLoggerIds;
             if (implicitLevels.length == 0) {
                 this.implicitLevels = Collections.emptySet();
             } else {
@@ -236,13 +225,12 @@ final class PolyglotLoggers {
             }
         }
 
-        static LoggerCacheImpl newEngineLoggerCache(Handler handler, PolyglotEngineImpl engine, boolean useCurrentContext,
-                        Set<String> rawLoggerIds, Level... implicitLevels) {
-            return new LoggerCacheImpl(handler, Objects.requireNonNull(engine), useCurrentContext, null, rawLoggerIds, implicitLevels);
+        static LoggerCacheImpl newEngineLoggerCache(Handler handler, PolyglotEngineImpl engine, boolean useCurrentContext, Level... implicitLevels) {
+            return new LoggerCacheImpl(handler, Objects.requireNonNull(engine), useCurrentContext, null, implicitLevels);
         }
 
         static LoggerCacheImpl newFallBackLoggerCache(Handler handler) {
-            return new LoggerCacheImpl(handler, null, false, Collections.emptyMap(), Collections.singleton(GRAAL_COMPILER_LOG_ID), Level.INFO);
+            return new LoggerCacheImpl(handler, null, false, Collections.emptyMap(), Level.INFO);
         }
 
         @Override
@@ -272,15 +260,7 @@ final class PolyglotLoggers {
 
         @Override
         public LogRecord createLogRecord(Level level, String loggerName, String message, String className, String methodName, Object[] parameters, Throwable thrown) {
-            ImmutableLogRecord.FormatKind formaterKind;
-            if (rawLoggerIds.contains(loggerName)) {
-                formaterKind = ImmutableLogRecord.FormatKind.RAW;
-            } else if (implicitLevels.contains(level)) {
-                formaterKind = ImmutableLogRecord.FormatKind.NO_LEVEL;
-            } else {
-                formaterKind = ImmutableLogRecord.FormatKind.DEFAULT;
-            }
-            return new ImmutableLogRecord(level, loggerName, message, className, methodName, parameters, thrown, formaterKind);
+            return new ImmutableLogRecord(level, loggerName, message, className, methodName, parameters, thrown, implicitLevels.contains(level));
         }
     }
 
@@ -334,16 +314,10 @@ final class PolyglotLoggers {
     private static final class ImmutableLogRecord extends LogRecord {
 
         private static final long serialVersionUID = 1L;
-        private final FormatKind formatKind;
-
-        enum FormatKind {
-            RAW,
-            NO_LEVEL,
-            DEFAULT
-        }
+        private final boolean implicit;
 
         ImmutableLogRecord(final Level level, final String loggerName, final String message, final String className, final String methodName, final Object[] parameters,
-                        final Throwable thrown, FormatKind formatKind) {
+                        final Throwable thrown, boolean implicit) {
             super(level, message);
             super.setLoggerName(loggerName);
             if (className != null) {
@@ -361,7 +335,7 @@ final class PolyglotLoggers {
             }
             super.setParameters(copy);
             super.setThrown(thrown);
-            this.formatKind = formatKind;
+            this.implicit = implicit;
         }
 
         @Override
@@ -425,8 +399,8 @@ final class PolyglotLoggers {
             throw new UnsupportedOperationException("Setting Throwable is not supported.");
         }
 
-        FormatKind getFormatKind() {
-            return formatKind;
+        boolean isImplicit() {
+            return implicit;
         }
 
         private static Object safeValue(final Object param) {
@@ -497,22 +471,8 @@ final class PolyglotLoggers {
                     }
                     stackTrace = str.toString();
                 }
-                String logEntry;
-                ImmutableLogRecord.FormatKind formatKind = ((ImmutableLogRecord) record).getFormatKind();
-                switch (formatKind) {
-                    case DEFAULT:
-                        logEntry = String.format(FORMAT_FULL, loggerName, record.getLevel().getName(), message, stackTrace);
-                        break;
-                    case NO_LEVEL:
-                        logEntry = String.format(FORMAT_NO_LEVEL, loggerName, message, stackTrace);
-                        break;
-                    case RAW:
-                        logEntry = message;
-                        break;
-                    default:
-                        throw new IllegalArgumentException("Unsupported FormatKind " + formatKind);
-                }
-                return logEntry;
+                boolean implicit = record.getClass() == ImmutableLogRecord.class && ((ImmutableLogRecord) record).isImplicit();
+                return implicit ? String.format(FORMAT_NO_LEVEL, loggerName, message, stackTrace) : String.format(FORMAT_FULL, loggerName, record.getLevel().getName(), message, stackTrace);
             }
 
             private static String formatLoggerName(final String loggerName) {
@@ -548,7 +508,7 @@ final class PolyglotLoggers {
         }
     }
 
-    private static final class EngineLoggerProvider implements Function<String, TruffleLogger> {
+    private static final class EngineLoggerProvider implements Supplier<TruffleLogger> {
 
         private final PolyglotEngineImpl engine;
         private final String logFile;
@@ -565,7 +525,7 @@ final class PolyglotLoggers {
         }
 
         @Override
-        public TruffleLogger apply(String loggerId) {
+        public TruffleLogger get() {
             Object loggersCache = loggers;
             if (loggersCache == null) {
                 synchronized (this) {
@@ -575,7 +535,7 @@ final class PolyglotLoggers {
                         Map<String, Level> levels;
                         if (engine != null) {
                             Handler useHandler = resolveHandler(engine.logHandler);
-                            spi = LoggerCacheImpl.newEngineLoggerCache(useHandler, engine, false, Collections.singleton(GRAAL_COMPILER_LOG_ID), Level.INFO);
+                            spi = LoggerCacheImpl.newEngineLoggerCache(useHandler, engine, false, Level.INFO);
                             levels = engine.logLevels;
                         } else {
                             Handler useHandler;
@@ -592,7 +552,7 @@ final class PolyglotLoggers {
                     }
                 }
             }
-            return EngineAccessor.LANGUAGE.getLogger(loggerId, null, loggersCache);
+            return EngineAccessor.LANGUAGE.getLogger(PolyglotEngineImpl.OPTION_GROUP_ENGINE, null, loggersCache);
         }
 
         private static Handler resolveHandler(Handler handler) {
