@@ -108,7 +108,7 @@ import com.oracle.truffle.api.source.SourceSection;
  * }
  * </pre>
  *
- * The following snippet shows a typical implementation of an soft exit exception.
+ * The following snippet shows a typical implementation of an exit exception.
  *
  * <pre>
  * &#64;ExportLibrary(InteropLibrary.class)
@@ -122,6 +122,11 @@ import com.oracle.truffle.api.source.SourceSection;
  *     }
  *
  *     &#64;ExportMessage
+ *     boolean isExceptionUnwind() {
+ *         return true;
+ *     }
+ *
+ *     &#64;ExportMessage
  *     ExceptionType getExceptionType() {
  *         return ExceptionType.EXIT;
  *     }
@@ -129,6 +134,29 @@ import com.oracle.truffle.api.source.SourceSection;
  *     &#64;ExportMessage
  *     int getExceptionExitStatus() {
  *         return exitStatus;
+ *     }
+ * }
+ * </pre>
+ *
+ * The following snippet shows a typical implementation of a cancel exception.
+ *
+ * <pre>
+ * &#64;ExportLibrary(InteropLibrary.class)
+ * final class MyLanguageCancelException extends AbstractTruffleException {
+ *
+ *     MyLanguageCancelException(String message, Node location) {
+ *         super(message, location);
+ *         this.unwind = unwind;
+ *     }
+ *
+ *     &#64;ExportMessage
+ *     boolean isExceptionUnwind() {
+ *         return true;
+ *     }
+ *
+ *     &#64;ExportMessage
+ *     ExceptionType getExceptionType() {
+ *         return ExceptionType.CANCEL;
  *     }
  * }
  * </pre>
@@ -317,7 +345,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
     @Deprecated
     @Override
     public final boolean isCancelled() {
-        return false;
+        return getExceptionType() == ExceptionType.CANCEL;
     }
 
     /**
