@@ -203,8 +203,8 @@ final class PolyglotReferences {
             if (ref == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 PolyglotLanguageContext langContext = language.getCurrentLanguageContext();
-                assert setLanguageContext(langContext);
                 this.languageContextImpl = ref = new WeakReference<>(langContext.getContextImpl());
+                assert setLanguageContext(langContext);
             }
             Object context = ref.get();
             assert checkContextCollected(context);
@@ -213,13 +213,6 @@ final class PolyglotReferences {
         }
 
         private static boolean assertDirectContextAccess(Object seenContext, WeakReference<PolyglotLanguageContext> contextRef) {
-            if (contextRef == null) {
-                /*
-                 * This case may happen if the assertions were disabled during boot image generation
-                 * but were later enabled at runtime. See GR-14463.
-                 */
-                return true;
-            }
             PolyglotLanguageContext context = contextRef.get();
             if (context == null) {
                 throw invalidSharingError(null);
@@ -307,7 +300,7 @@ final class PolyglotReferences {
         @Override
         public TruffleLanguage<Object> get() {
             assert language.assertCorrectEngine();
-            return PolyglotContextImpl.requireContextEntered(language.engine).getContext(language).getLanguageInstance().spi;
+            return PolyglotContextImpl.requireContext().getContext(language).getLanguageInstance().spi;
         }
     }
 
@@ -322,7 +315,7 @@ final class PolyglotReferences {
         @Override
         public Object get() {
             assert language.assertCorrectEngine();
-            return PolyglotContextImpl.requireContextEntered(language.engine).getContextImpl(language);
+            return PolyglotContextImpl.requireContext().getContext(language).getContextImpl();
         }
     }
 
