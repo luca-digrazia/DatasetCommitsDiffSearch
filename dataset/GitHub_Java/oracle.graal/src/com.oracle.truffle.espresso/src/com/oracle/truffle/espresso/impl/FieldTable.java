@@ -53,18 +53,16 @@ class FieldTable {
             fields[i] = f;
             if (f.isStatic()) {
                 f.setSlot(tmpStatics.size());
-                if (f.getKind().isPrimitive()) {
-                    f.setFieldIndex(staticWordFields);
-                    staticWordFields += f.getKind().getByteCount();
+                if (f.getKind().isSubWord()) {
+                    f.setFieldIndex(staticWordFields++);
                 } else {
                     f.setFieldIndex(staticObjectFields++);
                 }
                 tmpStatics.add(f);
             } else {
                 f.setSlot(tmpFields.size());
-                if (f.getKind().isPrimitive()) {
-                    f.setFieldIndex(wordFields);
-                    wordFields += f.getKind().getByteCount();
+                if (f.getKind().isSubWord()) {
+                    f.setFieldIndex(wordFields++);
                 } else {
                     f.setFieldIndex(objectFields++);
                 }

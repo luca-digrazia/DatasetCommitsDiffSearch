@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,10 +24,13 @@
  */
 package com.oracle.truffle.tools.chromeinspector.test;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.JarURLConnection;
 import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -38,8 +41,6 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
@@ -95,7 +96,7 @@ public class RelativeSourceInspectDebugTest {
             out.write(data, 0, data.length);
             out.closeEntry();
         }
-        try (FileSystem fs = FileSystems.newFileSystem(zip2.toPath(), (ClassLoader) null)) {
+        try (FileSystem fs = FileSystems.newFileSystem(zip2.toPath(), null)) {
             Path spInZip = fs.getPath("/");
             sourcePathURI[1] = spInZip.toUri();
             resolvedURI[1] = fs.getPath(relativePath[1]).toUri();
@@ -113,7 +114,7 @@ public class RelativeSourceInspectDebugTest {
             out.write(data, 0, data.length);
             out.closeEntry();
         }
-        try (FileSystem fs = FileSystems.newFileSystem(zip3.toPath(), (ClassLoader) null)) {
+        try (FileSystem fs = FileSystems.newFileSystem(zip3.toPath(), null)) {
             Path spInZip = fs.getPath(folderInZip3);
             sourcePathURI[2] = spInZip.toUri();
             resolvedURI[2] = fs.getPath(folderInZip3, relativePath[2]).toUri();
@@ -169,8 +170,6 @@ public class RelativeSourceInspectDebugTest {
         // @formatter:on
         // CheckStyle: resume line length check
 
-        // Reset the delegate so that we can GC the tested Engine
-        ProxyLanguage.setDelegate(new ProxyLanguage());
         tester.finish();
     }
 
@@ -208,9 +207,6 @@ public class RelativeSourceInspectDebugTest {
                         "{\"method\":\"Debugger.resumed\"}\n"));
         // @formatter:on
         // CheckStyle: resume line length check
-        language = null;
-        // Reset the delegate so that we can GC the tested Engine
-        ProxyLanguage.setDelegate(new ProxyLanguage());
         tester.finish();
     }
 
@@ -242,25 +238,18 @@ public class RelativeSourceInspectDebugTest {
             checkSourcePathToURI(zip.getAbsolutePath(), "[" + zipURI + "]");
             checkSourcePathToURI(zip.getAbsolutePath() + "/src/my#project/File", "[" + zipURI + "src/my%23project/File]", (uri) -> {
                 // Verify that the URI entry is readable
-                String[] entryName = new String[1];
-                List<String> lines = new LinkedList<>();
-                try (FileSystem jarFS = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
-                    Files.walk(jarFS.getPath("/")).forEach(path -> {
-                        try {
-                            if (Files.readAttributes(path, BasicFileAttributes.class).isRegularFile()) {
-                                entryName[0] = path.toString();
-                                lines.addAll(Files.readAllLines(path));
-                            }
-                        } catch (IOException ex) {
-                            throw new AssertionError(ex);
-                        }
-                    });
+                try {
+                    JarURLConnection jarConnection = (JarURLConnection) uri.toURL().openConnection();
+                    assertEquals("src/my#project/File", jarConnection.getEntryName());
                 } catch (IOException io) {
                     throw new AssertionError(uri.toString(), io);
                 }
-                assertEquals("/src/my#project/File", entryName[0]);
-                assertEquals(lines.toString(), 1, lines.size());
-                assertEquals("A", lines.get(0));
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(uri.toURL().openStream()))) {
+                    String line = r.readLine();
+                    assertEquals("A", line);
+                } catch (IOException io) {
+                    throw new AssertionError(uri.toString(), io);
+                }
             });
             checkSourcePathToURI(zip.getAbsolutePath() + "!/src/my#project", "[" + zipURI + "src/my%23project]");
             checkSourcePathToURI(dirX + File.pathSeparator + zip, "[" + dirX.toUri() + ", " + zipURI + "]");
