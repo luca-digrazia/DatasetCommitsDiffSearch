@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.parser.factories.BasicNodeFactory;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
@@ -76,7 +77,8 @@ public final class LLVMParser {
     public LLVMParserResult parse(ModelModule module) {
         TargetDataLayout layout = module.getTargetDataLayout();
         DataLayout targetDataLayout = new DataLayout(layout.getDataLayout());
-        NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(context, targetDataLayout);
+        NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(context);
+        ((BasicNodeFactory) nodeFactory).addDataLayout(targetDataLayout);
         context.getLanguage().setNodeFactory(nodeFactory);
 
         List<GlobalVariable> externalGlobals = new ArrayList<>();
@@ -85,13 +87,13 @@ public final class LLVMParser {
         List<String> importedSymbols = new ArrayList<>();
 
         defineGlobals(module.getGlobalVariables(), definedGlobals, externalGlobals, importedSymbols);
-        defineFunctions(module, externalFunctions, importedSymbols, targetDataLayout);
+        defineFunctions(module, externalFunctions, importedSymbols);
         defineAliases(module.getAliases(), importedSymbols);
 
-        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, StackManager.createRootFrame(), GetStackSpaceFactory.createAllocaFactory(), targetDataLayout);
+        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, StackManager.createRootFrame(), GetStackSpaceFactory.createAllocaFactory());
         createDebugInfo(module, symbolResolver);
 
-        return new LLVMParserResult(runtime, externalFunctions, definedGlobals, externalGlobals, importedSymbols, targetDataLayout);
+        return new LLVMParserResult(runtime, externalFunctions, definedGlobals, externalGlobals, importedSymbols);
     }
 
     private void defineGlobals(List<GlobalVariable> globals, List<GlobalVariable> definedGlobals, List<GlobalVariable> externalGlobals, List<String> importedSymbols) {
@@ -106,13 +108,13 @@ public final class LLVMParser {
         }
     }
 
-    private void defineFunctions(ModelModule model, List<FunctionSymbol> externalFunctions, List<String> importedSymbols, DataLayout dataLayout) {
+    private void defineFunctions(ModelModule model, List<FunctionSymbol> externalFunctions, List<String> importedSymbols) {
         for (FunctionDefinition function : model.getDefinedFunctions()) {
             if (function.isExternal()) {
                 externalFunctions.add(function);
                 importedSymbols.add(function.getName());
             } else {
-                defineFunction(function, model, importedSymbols, dataLayout);
+                defineFunction(function, model, importedSymbols);
             }
         }
 
@@ -150,12 +152,12 @@ public final class LLVMParser {
         }
     }
 
-    private void defineFunction(FunctionSymbol functionSymbol, ModelModule model, List<String> importedSymbols, DataLayout dataLayout) {
+    private void defineFunction(FunctionSymbol functionSymbol, ModelModule model, List<String> importedSymbols) {
         assert !functionSymbol.isExternal();
         // handle the file scope
         FunctionDefinition functionDefinition = (FunctionDefinition) functionSymbol;
         LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(runtime, functionDefinition, source, model.getFunctionParser(functionDefinition),
-                        model.getFunctionProcessor(), dataLayout);
+                        model.getFunctionProcessor());
         Function function = new LazyLLVMIRFunction(lazyConverter);
         LLVMFunctionDescriptor descriptor = context.createFunctionDescriptor(functionSymbol.getName(), functionSymbol.getType(), function, library);
         runtime.getFileScope().register(descriptor);

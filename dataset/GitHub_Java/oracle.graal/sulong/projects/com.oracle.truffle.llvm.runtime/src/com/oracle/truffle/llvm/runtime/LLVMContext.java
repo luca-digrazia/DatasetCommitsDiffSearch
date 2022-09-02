@@ -67,7 +67,6 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.instruments.trace.LLVMTracerInstrument;
 import com.oracle.truffle.llvm.runtime.LLVMArgumentBuffer.LLVMArgumentArray;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
@@ -130,7 +129,7 @@ public final class LLVMContext {
 
     private final LLVMSourceContext sourceContext;
 
-    private DataLayout libsulongDatalayout;
+    private final LLVMLanguage language;
     private final Env env;
     private final LLVMScope globalScope;
     private final DynamicLinkChain dynamicLinkChain;
@@ -148,7 +147,6 @@ public final class LLVMContext {
 
     private boolean initialized;
     private boolean cleanupNecessary;
-    private final LLVMLanguage language;
 
     private final LLVMTracerInstrument tracer;
 
@@ -172,7 +170,6 @@ public final class LLVMContext {
 
     LLVMContext(LLVMLanguage language, Env env, String languageHome) {
         this.language = language;
-        this.libsulongDatalayout = new DataLayout();
         this.env = env;
         this.initialized = false;
         this.cleanupNecessary = false;
@@ -343,14 +340,6 @@ public final class LLVMContext {
 
     private static LLVMManagedPointer toManagedPointer(Object value) {
         return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(value));
-    }
-
-    public void addLibsulongDataLayout(DataLayout layout) {
-        this.libsulongDatalayout = this.libsulongDatalayout.merge(layout);
-    }
-
-    public DataLayout getLibsulongDataLayout() {
-        return libsulongDatalayout;
     }
 
     void finalizeContext() {
