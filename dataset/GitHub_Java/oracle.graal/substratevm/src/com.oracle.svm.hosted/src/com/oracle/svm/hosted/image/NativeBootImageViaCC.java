@@ -40,7 +40,6 @@ import java.util.stream.Collectors;
 
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.impl.InternalPlatform;
 
@@ -49,7 +48,6 @@ import com.oracle.objectfile.macho.MachOSymtab;
 import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.c.libc.LibCBase;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
@@ -120,9 +118,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             if (SubstrateOptions.DeleteLocalSymbols.getValue()) {
                 additionalPreOptions.add("-Wl,-x");
             }
-
-            LibCBase currentLibc = ImageSingletons.lookup(LibCBase.class);
-            additionalPreOptions.addAll(currentLibc.getLinkerPreOptions());
         }
 
         @Override
@@ -290,6 +285,12 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         UserError.guarantee(!Files.isDirectory(outputFile), "Cannot write image to %s. Path exists as directory. (Use -H:Name=<image name>)", outputFile);
         inv.setOutputFile(outputFile);
         inv.setOutputKind(getOutputKind());
+
+        /*
+         * Libraries defined via @CLibrary annotations are added at the end of the list of libraries
+         * so that the written object file AND the static JDK libraries can depend on them.
+         */
+        nativeLibs.processAnnotated();
 
         inv.addLibPath(tempDirectory.toString());
         for (String libraryPath : nativeLibs.getLibraryPaths()) {
