@@ -51,7 +51,6 @@ import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,6 +77,7 @@ import com.oracle.truffle.api.ContextLocal;
 import com.oracle.truffle.api.ContextThreadLocal;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleFile;
@@ -98,7 +98,6 @@ import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
 import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeInterface;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
@@ -170,8 +169,6 @@ public abstract class Accessor {
         public abstract void forceAdoption(Node parent, Node child);
 
         public abstract boolean isTrivial(RootNode rootNode);
-
-        public abstract Object translateStackTraceElement(TruffleStackTraceElement stackTraceLement);
     }
 
     public abstract static class SourceSupport extends Support {
@@ -218,10 +215,6 @@ public abstract class Accessor {
         public abstract Object createLegacyMetaObjectWrapper(Object receiver, Object result);
 
         public abstract Object unwrapLegacyMetaObjectWrapper(Object receiver);
-
-        public abstract boolean isScopeObject(Object receiver);
-
-        public abstract Object createDefaultStackTraceElementObject(RootNode rootNode, SourceSection sourceSection);
     }
 
     public abstract static class EngineSupport extends Support {
@@ -336,13 +329,9 @@ public abstract class Accessor {
 
         public abstract Thread createThread(Object polyglotLanguageContext, Runnable runnable, Object innerContextImpl, ThreadGroup group, long stackSize);
 
-        public abstract Iterable<com.oracle.truffle.api.Scope> createDefaultLexicalScope(Node node, Frame frame, Class<? extends TruffleLanguage<?>> language);
+        public abstract Iterable<Scope> createDefaultLexicalScope(Node node, Frame frame);
 
-        public abstract Iterable<com.oracle.truffle.api.Scope> createDefaultTopScope(Object global);
-
-        public abstract Object getDefaultVariables(RootNode root, Frame frame, Class<? extends TruffleLanguage<?>> language);
-
-        public abstract Object getDefaultArguments(Object[] frameArguments, Class<? extends TruffleLanguage<?>> language);
+        public abstract Iterable<Scope> createDefaultTopScope(Object global);
 
         public abstract RuntimeException wrapHostException(Node callNode, Object languageContext, Throwable exception);
 
@@ -504,15 +493,6 @@ public abstract class Accessor {
         public abstract OptionValues getInstrumentContextOptions(Object polyglotInstrument, Object polyglotContext);
 
         public abstract boolean isContextClosed(Object polyglotContext);
-
-        public abstract Iterable<com.oracle.truffle.api.Scope> findLibraryLocalScopesToLegacy(Node node, Frame frame);
-
-        public abstract Iterable<com.oracle.truffle.api.Scope> topScopesToLegacy(Object scope);
-
-        public abstract boolean legacyScopesHasScope(NodeInterface node, Iterator<com.oracle.truffle.api.Scope> legacyScopes);
-
-        public abstract Object legacyScopes2ScopeObject(NodeInterface node, Iterator<com.oracle.truffle.api.Scope> legacyScopes, Class<? extends TruffleLanguage<?>> language);
-
     }
 
     public abstract static class LanguageSupport extends Support {
@@ -593,9 +573,9 @@ public abstract class Accessor {
 
         public abstract void finalizeContext(Env localEnv);
 
-        public abstract Iterable<com.oracle.truffle.api.Scope> findLegacyLocalScopes(Env env, Node node, Frame frame);
+        public abstract Iterable<Scope> findLocalScopes(Env env, Node node, Frame frame);
 
-        public abstract Iterable<com.oracle.truffle.api.Scope> findTopScopes(Env env);
+        public abstract Iterable<Scope> findTopScopes(Env env);
 
         public abstract Env patchEnvContext(Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments);
 
@@ -633,11 +613,13 @@ public abstract class Accessor {
 
         public abstract TruffleFile getTruffleFile(Object context, URI uri);
 
+        public abstract SecurityException throwSecurityException(String message);
+
         public abstract FileSystem getFileSystem(TruffleFile truffleFile);
 
         public abstract Path getPath(TruffleFile truffleFile);
 
-        public abstract Object getLegacyScopedView(TruffleLanguage.Env env, Node node, Frame frame, Object value);
+        public abstract Object getScopedView(TruffleLanguage.Env env, Node node, Frame frame, Object value);
 
         public abstract Object getLanguageView(TruffleLanguage.Env env, Object value);
 
@@ -650,8 +632,6 @@ public abstract class Accessor {
         public abstract Object invokeContextLocalFactory(Object factory, Object contextImpl);
 
         public abstract Object invokeContextThreadLocalFactory(Object factory, Object contextImpl, Thread thread);
-
-        public abstract Object getScope(Env env);
 
     }
 
@@ -680,6 +660,8 @@ public abstract class Accessor {
         public abstract void onFirstExecution(RootNode rootNode);
 
         public abstract void onLoad(RootNode rootNode);
+
+        public abstract Iterable<?> findTopScopes(TruffleLanguage.Env env);
 
         @SuppressWarnings("static-method")
         public final DispatchOutputStream createDispatchOutput(OutputStream out) {
@@ -756,51 +738,6 @@ public abstract class Accessor {
         public abstract void markMaterializeCalled(FrameDescriptor descriptor);
 
         public abstract boolean getMaterializeCalled(FrameDescriptor descriptor);
-    }
-
-    public abstract static class ExceptionSupport extends Support {
-
-        static final String IMPL_CLASS_NAME = "com.oracle.truffle.api.exception.ExceptionAccessor$ExceptionSupportImpl";
-
-        protected ExceptionSupport() {
-            super(IMPL_CLASS_NAME);
-        }
-
-        public abstract Throwable getLazyStackTrace(Throwable exception);
-
-        public abstract void setLazyStackTrace(Throwable exception, Throwable stackTrace);
-
-        public abstract boolean isException(Object receiver);
-
-        public abstract RuntimeException throwException(Object receiver);
-
-        public abstract boolean isExceptionUnwind(Object receiver);
-
-        public abstract Object getExceptionType(Object receiver);
-
-        public abstract boolean isExceptionIncompleteSource(Object receiver);
-
-        public abstract int getExceptionExitStatus(Object receiver);
-
-        public abstract boolean hasExceptionCause(Object receiver);
-
-        public abstract Object getExceptionCause(Object receiver);
-
-        public abstract boolean hasExceptionSuppressed(Object receiver);
-
-        public abstract Object getExceptionSuppressed(Object receiver);
-
-        public abstract boolean hasExceptionMessage(Object receiver);
-
-        public abstract Object getExceptionMessage(Object receiver);
-
-        public abstract boolean hasExceptionStackTrace(Object receiver);
-
-        public abstract Object getExceptionStackTrace(Object receiver);
-
-        public abstract boolean hasSourceLocation(Object receiver);
-
-        public abstract SourceSection getSourceLocation(Object receiver);
     }
 
     public abstract static class IOSupport extends Support {
@@ -915,7 +852,6 @@ public abstract class Accessor {
         private static final Accessor.InstrumentSupport INSTRUMENT;
         private static final Accessor.SourceSupport SOURCE;
         private static final Accessor.InteropSupport INTEROP;
-        private static final Accessor.ExceptionSupport EXCEPTION;
         private static final Accessor.IOSupport IO;
         private static final Accessor.FrameSupport FRAMES;
         private static final Accessor.EngineSupport ENGINE;
@@ -929,7 +865,6 @@ public abstract class Accessor {
             INSTRUMENT = loadSupport(InstrumentSupport.IMPL_CLASS_NAME);
             SOURCE = loadSupport(SourceSupport.IMPL_CLASS_NAME);
             INTEROP = loadSupport(InteropSupport.IMPL_CLASS_NAME);
-            EXCEPTION = loadSupport(ExceptionSupport.IMPL_CLASS_NAME);
             IO = loadSupport(IOSupport.IMPL_CLASS_NAME);
             FRAMES = loadSupport(FrameSupport.IMPL_CLASS_NAME);
             ENGINE = loadSupport(EngineSupport.IMPL_CLASS_NAME);
@@ -959,7 +894,6 @@ public abstract class Accessor {
             case "com.oracle.truffle.api.instrumentation.InstrumentAccessor":
             case "com.oracle.truffle.api.source.SourceAccessor":
             case "com.oracle.truffle.api.interop.InteropAccessor":
-            case "com.oracle.truffle.api.exception.ExceptionAccessor":
             case "com.oracle.truffle.api.io.IOAccessor":
             case "com.oracle.truffle.api.frame.FrameAccessor":
             case "com.oracle.truffle.polyglot.EngineAccessor":
@@ -1000,10 +934,6 @@ public abstract class Accessor {
 
     public final InteropSupport interopSupport() {
         return Constants.INTEROP;
-    }
-
-    public final ExceptionSupport exceptionSupport() {
-        return Constants.EXCEPTION;
     }
 
     public final SourceSupport sourceSupport() {
