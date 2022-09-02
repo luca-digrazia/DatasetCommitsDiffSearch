@@ -229,8 +229,6 @@ public interface NodeFactory extends InteropNodeFactory {
 
     LLVMMemoryOpNode createProtectGlobalsBlock();
 
-    LLVMMemoryOpNode createFreeGlobalsBlock(boolean readOnly);
-
     LLVMExpressionNode createStackSave();
 
     LLVMExpressionNode createStackRestore(LLVMExpressionNode stackPointer);
