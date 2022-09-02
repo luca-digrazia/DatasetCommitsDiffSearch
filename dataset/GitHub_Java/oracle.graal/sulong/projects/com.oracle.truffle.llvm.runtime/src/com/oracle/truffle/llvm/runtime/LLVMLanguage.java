@@ -496,21 +496,26 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
      */
     @Override
     protected CallTarget parse(ParsingRequest request) {
-        Source source = request.getSource();
-        String path = source.getPath();
-        if (source.isCached()) {
-            synchronized (libraryCacheLock) {
-                CallTarget cached = getCachedLibrary(path);
-                if (cached == null) {
-                    assert !libraryCache.containsKey(path) : "racy insertion despite lock?";
-
-                    cached = getCapability(Loader.class).load(getContext(), source, idGenerater.generateID());
-                    WeakReference<CallTarget> ref = new WeakReference<>(cached);
-                    libraryCache.put(path, ref);
+        synchronized (libraryCacheLock) {
+            Source source = request.getSource();
+            String path = source.getPath();
+            CallTarget callTarget;
+            WeakReference<CallTarget> ref;
+            if (source.isCached()) {
+                ref = libraryCache.get(path);
+                if (ref == null) {
+                    callTarget = getCapability(Loader.class).load(getContext(), source, idGenerater.generateID());
+                    WeakReference<CallTarget> prev = libraryCache.putIfAbsent(path, new WeakReference<>(callTarget));
+                    // To ensure the call target in the cache is always returned in case of
+                    // concurrency.
+                    if (prev != null) {
+                        callTarget = prev.get();
+                    }
+                } else {
+                    callTarget = ref.get();
                 }
-                return cached;
+                return callTarget;
             }
-        } else {
             // just get the id here and give it to the parserDriver
             return getCapability(Loader.class).load(getContext(), source, idGenerater.generateID());
         }
@@ -518,16 +523,10 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     public CallTarget getCachedLibrary(String path) {
         synchronized (libraryCacheLock) {
-            WeakReference<CallTarget> ref = libraryCache.get(path);
-            if (ref == null) {
+            if (libraryCache.get(path) == null) {
                 return null;
             }
-            CallTarget ret = ref.get();
-            if (ret == null) {
-                // clean up the map after an entry has been cleared by the GC
-                libraryCache.removeKey(path);
-            }
-            return ret;
+            return libraryCache.get(path).get();
         }
     }
 
