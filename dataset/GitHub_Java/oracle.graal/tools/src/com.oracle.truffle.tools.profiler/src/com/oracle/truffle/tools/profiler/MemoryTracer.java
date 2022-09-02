@@ -24,6 +24,23 @@
  */
 package com.oracle.truffle.tools.profiler;
 
+import java.io.Closeable;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.instrumentation.AllocationEvent;
 import com.oracle.truffle.api.instrumentation.AllocationEventFilter;
 import com.oracle.truffle.api.instrumentation.AllocationListener;
@@ -31,20 +48,13 @@ import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.LanguageInfo;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
+import com.oracle.truffle.tools.profiler.impl.CPUTracerInstrument;
 import com.oracle.truffle.tools.profiler.impl.MemoryTracerInstrument;
 import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
-
-import java.io.Closeable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-
-import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
  * Implementation of a memory tracing profiler for
@@ -58,12 +68,14 @@ import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
  * <p>
  * NOTE: This profiler is still experimental with limited capabilities.
  * <p>
- * Usage example: {@link MemoryTracerSnippets#example}
+ * Usage example: {@codesnippet MemoryTracerSnippets#example}
  * </p>
- * 
+ *
  * @since 0.30
  */
 public final class MemoryTracer implements Closeable {
+
+    private static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
 
     MemoryTracer(TruffleInstrument.Env env) {
         this.env = env;
@@ -85,7 +97,7 @@ public final class MemoryTracer implements Closeable {
 
     private EventBinding<?> stacksBinding;
 
-    private final ProfilerNode<Payload> rootNode = new ProfilerNode<>(this, null);
+    private final Map<Thread, ProfilerNode<Payload>> rootNodes = new HashMap<>();
 
     private boolean stackOverflowed = false;
 
@@ -105,11 +117,11 @@ public final class MemoryTracer implements Closeable {
         if (!collecting || closed) {
             return;
         }
-        this.shadowStack = new ShadowStack(stackLimit);
         SourceSectionFilter f = this.filter;
         if (f == null) {
             f = DEFAULT_FILTER;
         }
+        this.shadowStack = new ShadowStack(stackLimit, f, env.getInstrumenter(), TruffleLogger.getLogger(CPUTracerInstrument.ID));
         this.stacksBinding = this.shadowStack.install(env.getInstrumenter(), f, false);
 
         this.activeBinding = env.getInstrumenter().attachAllocationListener(AllocationEventFilter.ANY, new Listener());
@@ -120,9 +132,9 @@ public final class MemoryTracer implements Closeable {
      *
      * @param engine the engine to find debugger for
      * @return an instance of associated {@link MemoryTracer}
-     * @since 0.30
+     * @since 19.0
      */
-    public static MemoryTracer find(PolyglotEngine engine) {
+    public static MemoryTracer find(Engine engine) {
         return MemoryTracerInstrument.getTracer(engine);
     }
 
@@ -134,7 +146,7 @@ public final class MemoryTracer implements Closeable {
      */
     public synchronized void setCollecting(boolean collecting) {
         if (closed) {
-            throw new IllegalStateException("Memory Tracer is already closed.");
+            throw new ProfilerException("Memory Tracer is already closed.");
         }
         if (this.collecting != collecting) {
             this.collecting = collecting;
@@ -154,9 +166,56 @@ public final class MemoryTracer implements Closeable {
      * @return The roots of the trees representing the profile of the execution.
      * @since 0.30
      */
-    public Collection<ProfilerNode<Payload>> getRootNodes() {
-        return rootNode.getChildren();
+    public synchronized Collection<ProfilerNode<Payload>> getRootNodes() {
+        ProfilerNode<Payload> copy = new ProfilerNode<>();
+        for (ProfilerNode<Payload> node : rootNodes.values()) {
+            copy.deepMergeChildrenFrom(node, mergePayload, payloadFactory);
+        }
+        return copy.getChildren();
     }
+
+    /**
+     * @return The roots of the trees representing the profile of the execution per thread.
+     * @since 19.0
+     */
+    public synchronized Map<Thread, Collection<ProfilerNode<Payload>>> getThreadToNodesMap() {
+        Map<Thread, Collection<ProfilerNode<Payload>>> returnValue = new HashMap<>();
+        for (Map.Entry<Thread, ProfilerNode<Payload>> entry : rootNodes.entrySet()) {
+            ProfilerNode<Payload> copy = new ProfilerNode<>();
+            copy.deepCopyChildrenFrom(entry.getValue(), copyPayload);
+            returnValue.put(entry.getKey(), copy.getChildren());
+        }
+        return Collections.unmodifiableMap(returnValue);
+    }
+
+    Supplier<Payload> payloadFactory = new Supplier<Payload>() {
+        @Override
+        public Payload get() {
+            return new Payload();
+        }
+    };
+
+    Function<Payload, Payload> copyPayload = new Function<Payload, Payload>() {
+        @Override
+        public Payload apply(Payload payload) {
+            Payload copy = new Payload();
+            copy.totalAllocations = payload.totalAllocations;
+            for (AllocationEventInfo info : payload.events) {
+                copy.events.add(new AllocationEventInfo(info.language, info.allocated, info.reallocation, info.metaObjectString));
+            }
+            return copy;
+        }
+    };
+
+    BiConsumer<Payload, Payload> mergePayload = new BiConsumer<Payload, Payload>() {
+        @Override
+        public void accept(Payload source, Payload dest) {
+            dest.totalAllocations += source.totalAllocations;
+            for (AllocationEventInfo info : source.events) {
+                dest.events.add(new AllocationEventInfo(info.language, info.allocated, info.reallocation, info.metaObjectString));
+            }
+        }
+    };
 
     /**
      * Erases all the data gathered by the tracer.
@@ -164,9 +223,11 @@ public final class MemoryTracer implements Closeable {
      * @since 0.30
      */
     public synchronized void clearData() {
-        Map<SourceLocation, ProfilerNode<Payload>> rootChildren = rootNode.children;
-        if (rootChildren != null) {
-            rootChildren.clear();
+        for (ProfilerNode<Payload> node : rootNodes.values()) {
+            Map<StackTraceEntry, ProfilerNode<Payload>> rootChildren = node.children;
+            if (rootChildren != null) {
+                rootChildren.clear();
+            }
         }
     }
 
@@ -175,8 +236,12 @@ public final class MemoryTracer implements Closeable {
      * @since 0.30
      */
     public synchronized boolean hasData() {
-        Map<SourceLocation, ProfilerNode<Payload>> rootChildren = rootNode.children;
-        return rootChildren != null && !rootChildren.isEmpty();
+        boolean hasData = false;
+        for (ProfilerNode<Payload> node : rootNodes.values()) {
+            Map<StackTraceEntry, ProfilerNode<Payload>> rootChildren = node.children;
+            hasData |= (rootChildren != null && !rootChildren.isEmpty());
+        }
+        return hasData;
     }
 
     /**
@@ -197,7 +262,7 @@ public final class MemoryTracer implements Closeable {
     public synchronized void setStackLimit(int stackLimit) {
         verifyConfigAllowed();
         if (stackLimit < 1) {
-            throw new IllegalArgumentException(String.format("Invalid stack limit %s.", stackLimit));
+            throw new ProfilerException(String.format("Invalid stack limit %s.", stackLimit));
         }
         this.stackLimit = stackLimit;
     }
@@ -228,8 +293,9 @@ public final class MemoryTracer implements Closeable {
      * @since 0.30
      */
     @Override
-    public void close() {
+    public synchronized void close() {
         assert Thread.holdsLock(this);
+        closed = true;
         if (stacksBinding != null) {
             stacksBinding.dispose();
             stacksBinding = null;
@@ -242,13 +308,19 @@ public final class MemoryTracer implements Closeable {
     private void verifyConfigAllowed() {
         assert Thread.holdsLock(this);
         if (closed) {
-            throw new IllegalStateException("Memory Tracer is already closed.");
+            throw new ProfilerException("Memory Tracer is already closed.");
         } else if (collecting) {
-            throw new IllegalStateException("Cannot change tracer configuration while collecting. Call setCollecting(false) to disable collection first.");
+            throw new ProfilerException("Cannot change tracer configuration while collecting. Call setCollecting(false) to disable collection first.");
         }
     }
 
     private final class Listener implements AllocationListener {
+
+        /**
+         * Used to prevent infinite recursions in case a language does an allocation during meta
+         * object lookup or toString call.
+         */
+        ThreadLocal<Boolean> gettingMetaObject = ThreadLocal.withInitial(() -> false);
 
         @Override
         public void onEnter(AllocationEvent event) {
@@ -257,6 +329,9 @@ public final class MemoryTracer implements Closeable {
         @Override
         @TruffleBoundary
         public void onReturnValue(AllocationEvent event) {
+            if (gettingMetaObject.get()) {
+                return;
+            }
             ShadowStack.ThreadLocalStack stack = shadowStack.getStack(Thread.currentThread());
             if (stack == null || stack.getStackIndex() == -1) {
                 // nothing on the stack
@@ -266,34 +341,53 @@ public final class MemoryTracer implements Closeable {
                 stackOverflowed = true;
                 return;
             }
-            Node instrumentedNode = stack.getStack()[stack.getStackIndex()].getInstrumentedNode();
-            LanguageInfo languageInfo = instrumentedNode.getRootNode().getLanguageInfo();
-            Object metaObject = env.findMetaObject(languageInfo, event.getValue());
-            String metaObjectString = env.toString(languageInfo, metaObject);
-            AllocationEventInfo info = new AllocationEventInfo(event.getLanguage(), event.getNewSize() - event.getOldSize(), event.getOldSize() != 0, metaObjectString);
+            LanguageInfo languageInfo = event.getLanguage();
+            String metaObjectString;
+            gettingMetaObject.set(true);
+            Object view = env.getLanguageView(languageInfo, event.getValue());
+            InteropLibrary viewLib = InteropLibrary.getFactory().getUncached(view);
+            if (viewLib.hasMetaObject(view)) {
+                try {
+                    metaObjectString = INTEROP.asString(INTEROP.getMetaQualifiedName(viewLib.getMetaObject(view)));
+                } catch (UnsupportedMessageException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new AssertionError(e);
+                }
+            } else {
+                metaObjectString = "null";
+            }
+            gettingMetaObject.set(false);
+            AllocationEventInfo info = new AllocationEventInfo(languageInfo, event.getNewSize() - event.getOldSize(), event.getOldSize() != 0, metaObjectString);
             handleEvent(stack, info);
         }
 
         boolean handleEvent(ShadowStack.ThreadLocalStack stack, AllocationEventInfo info) {
-            final ShadowStack.ThreadLocalStack.CorrectedStackInfo correctedStackInfo = ShadowStack.ThreadLocalStack.CorrectedStackInfo.build(stack);
-            if (correctedStackInfo == null) {
+            StackTraceEntry[] locations = stack.getStack();
+            if (locations == null) {
                 return false;
             }
-            // now traverse the stack and reconstruct the call tree
-            ProfilerNode<Payload> treeNode = rootNode;
-            for (int i = 0; i < correctedStackInfo.getLength(); i++) {
-                SourceLocation location = correctedStackInfo.getStack()[i];
-                ProfilerNode<Payload> child = treeNode.findChild(location);
-                if (child == null) {
-                    child = new ProfilerNode<>(treeNode, location, new Payload());
-                    treeNode.addChild(location, child);
+            synchronized (MemoryTracer.this) {
+                // now traverse the stack and reconstruct the call tree
+                ProfilerNode<Payload> treeNode = rootNodes.computeIfAbsent(Thread.currentThread(), new Function<Thread, ProfilerNode<Payload>>() {
+                    @Override
+                    public ProfilerNode<Payload> apply(Thread thread) {
+                        return new ProfilerNode<>();
+                    }
+                });
+                for (int i = 0; i < locations.length; i++) {
+                    StackTraceEntry location = locations[i];
+                    ProfilerNode<Payload> child = treeNode.findChild(location);
+                    if (child == null) {
+                        child = new ProfilerNode<>(treeNode, location, new Payload());
+                        treeNode.addChild(location, child);
+                    }
+                    treeNode = child;
+                    treeNode.getPayload().incrementTotalAllocations();
                 }
-                treeNode = child;
-                treeNode.getPayload().incrementTotalAllocations();
+                // insert event at the top of the stack
+                treeNode.getPayload().getEvents().add(info);
+                return true;
             }
-            // insert event at the top of the stack
-            treeNode.getPayload().getEvents().add(info);
-            return true;
         }
     }
 
@@ -384,9 +478,6 @@ public final class MemoryTracer implements Closeable {
         }
 
         /**
-         * @return A String representation of the
-         *         {@linkplain com.oracle.truffle.api.instrumentation.TruffleInstrument.Env#findMetaObject(LanguageInfo, Object)
-         *         meta object}
          * @since 0.30
          */
         public String getMetaObjectString() {
@@ -410,17 +501,11 @@ class MemoryTracerSnippets {
     public void example() {
         // @formatter:off
         // BEGIN: MemoryTracerSnippets#example
-        PolyglotEngine engine = PolyglotEngine.
-                newBuilder().
-                build();
+        Context context = Context.create();
 
-        MemoryTracer tracer = MemoryTracer.find(engine);
+        MemoryTracer tracer = MemoryTracer.find(context.getEngine());
         tracer.setCollecting(true);
-        Source someCode = Source.
-                newBuilder("...").
-                mimeType("...").
-                name("example").build();
-        engine.eval(someCode);
+        context.eval("...", "...");
         tracer.setCollecting(false);
         // rootNodes is the recorded profile of the execution in tree form.
 
