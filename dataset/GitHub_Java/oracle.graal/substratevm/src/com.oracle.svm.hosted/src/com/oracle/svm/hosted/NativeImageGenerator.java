@@ -301,6 +301,7 @@ public class NativeImageGenerator {
     protected final ImageClassLoader loader;
     protected final HostedOptionProvider optionProvider;
 
+    private ForkJoinPool buildExecutor;
     private DeadlockWatchdog watchdog;
     private AnalysisUniverse aUniverse;
     private HostedUniverse hUniverse;
@@ -464,7 +465,6 @@ public class NativeImageGenerator {
                     SubstitutionProcessor harnessSubstitutions,
                     ForkJoinPool compilationExecutor, ForkJoinPool analysisExecutor,
                     EconomicSet<String> allOptionNames) {
-        ForkJoinPool executor = null;
         try {
             if (!buildStarted.compareAndSet(false, true)) {
                 throw UserError.abort("An image build has already been performed with this generator.");
@@ -484,7 +484,7 @@ public class NativeImageGenerator {
             setSystemPropertiesForImageLate(k);
 
             ImageSingletonsSupportImpl.HostedManagement.installInThread(new ImageSingletonsSupportImpl.HostedManagement());
-            ForkJoinPool buildExecutor = executor = createForkJoinPool(compilationExecutor.getParallelism());
+            this.buildExecutor = createForkJoinPool(compilationExecutor.getParallelism());
 
             buildExecutor.submit(() -> {
                 ImageSingletons.add(BuildArtifacts.class, (type, artifact) -> buildArtifacts.computeIfAbsent(type, t -> new ArrayList<>()).add(artifact));
@@ -494,7 +494,7 @@ public class NativeImageGenerator {
                 watchdog = new DeadlockWatchdog();
                 try (TemporaryBuildDirectoryProviderImpl tempDirectoryProvider = new TemporaryBuildDirectoryProviderImpl()) {
                     ImageSingletons.add(TemporaryBuildDirectoryProvider.class, tempDirectoryProvider);
-                    doRun(entryPoints, javaMainSupport, imageName, k, harnessSubstitutions, compilationExecutor, analysisExecutor, buildExecutor);
+                    doRun(entryPoints, javaMainSupport, imageName, k, harnessSubstitutions, compilationExecutor, analysisExecutor);
                 } finally {
                     watchdog.close();
                 }
@@ -505,9 +505,7 @@ public class NativeImageGenerator {
         } catch (ExecutionException e) {
             rethrow(e.getCause());
         } finally {
-            if (executor != null) {
-                executor.shutdownNow();
-            }
+            shutdownBuildExecutor();
         }
     }
 
@@ -561,14 +559,14 @@ public class NativeImageGenerator {
     private void doRun(Map<Method, CEntryPointData> entryPoints,
                     JavaMainSupport javaMainSupport, String imageName, NativeImageKind k,
                     SubstitutionProcessor harnessSubstitutions,
-                    ForkJoinPool compilationExecutor, ForkJoinPool analysisExecutor, ForkJoinPool buildExecutor) {
+                    ForkJoinPool compilationExecutor, ForkJoinPool analysisExecutor) {
         List<HostedMethod> hostedEntryPoints = new ArrayList<>();
 
         OptionValues options = HostedOptionValues.singleton();
         SnippetReflectionProvider originalSnippetReflection = GraalAccess.getOriginalSnippetReflection();
         try (DebugContext debug = new Builder(options, new GraalDebugHandlersFactory(originalSnippetReflection)).build();
                         DebugCloseable featureCleanup = () -> featureHandler.forEachFeature(Feature::cleanup)) {
-            setupNativeImage(imageName, options, entryPoints, javaMainSupport, harnessSubstitutions, analysisExecutor, buildExecutor, originalSnippetReflection, debug);
+            setupNativeImage(imageName, options, entryPoints, javaMainSupport, harnessSubstitutions, analysisExecutor, originalSnippetReflection, debug);
 
             boolean returnAfterAnalysis = runPointsToAnalysis(imageName, options, debug);
             if (returnAfterAnalysis) {
@@ -782,12 +780,6 @@ public class NativeImageGenerator {
                 }
 
                 /*
-                 * This verification has quadratic complexity, so do it only once after the static
-                 * analysis has finished.
-                 */
-                assert AnalysisType.verifyAssignableTypes(bigbang) : "Verification of all-instantiated type flows failed";
-
-                /*
                  * Libraries defined via @CLibrary annotations are added at the end of the list of
                  * libraries so that the written object file AND the static JDK libraries can depend
                  * on them.
@@ -860,7 +852,7 @@ public class NativeImageGenerator {
 
     @SuppressWarnings("try")
     private void setupNativeImage(String imageName, OptionValues options, Map<Method, CEntryPointData> entryPoints, JavaMainSupport javaMainSupport, SubstitutionProcessor harnessSubstitutions,
-                    ForkJoinPool analysisExecutor, ForkJoinPool buildExecutor, SnippetReflectionProvider originalSnippetReflection, DebugContext debug) {
+                    ForkJoinPool analysisExecutor, SnippetReflectionProvider originalSnippetReflection, DebugContext debug) {
         try (Indent ignored = debug.logAndIndent("setup native-image builder")) {
             try (StopTimer ignored1 = new Timer(imageName, "setup").start()) {
                 SubstrateTargetDescription target = createTarget(loader.platform);
@@ -1141,6 +1133,16 @@ public class NativeImageGenerator {
      */
     private static void recordRestrictHeapAccessCallees(Collection<AnalysisMethod> methods) {
         ((RestrictHeapAccessCalleesImpl) ImageSingletons.lookup(RestrictHeapAccessCallees.class)).aggregateMethods(methods);
+    }
+
+    public void interruptBuild() {
+        shutdownBuildExecutor();
+    }
+
+    private void shutdownBuildExecutor() {
+        if (buildExecutor != null) {
+            buildExecutor.shutdownNow();
+        }
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
