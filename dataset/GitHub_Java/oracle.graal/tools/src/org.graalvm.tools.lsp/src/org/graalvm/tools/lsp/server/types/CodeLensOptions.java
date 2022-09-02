@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,18 +28,19 @@ import com.oracle.truffle.tools.utils.json.JSONObject;
 import java.util.Objects;
 
 /**
- * Code Lens provider options of a [CodeLensRequest](#CodeLensRequest).
+ * Code Lens options.
  */
-public class CodeLensOptions extends WorkDoneProgressOptions {
+public class CodeLensOptions {
+
+    final JSONObject jsonData;
 
     CodeLensOptions(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
      * Code lens has a resolve provider as well.
      */
-    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
     public Boolean getResolveProvider() {
         return jsonData.has("resolveProvider") ? jsonData.getBoolean("resolveProvider") : null;
     }
@@ -64,20 +65,14 @@ public class CodeLensOptions extends WorkDoneProgressOptions {
         if (!Objects.equals(this.getResolveProvider(), other.getResolveProvider())) {
             return false;
         }
-        if (!Objects.equals(this.getWorkDoneProgress(), other.getWorkDoneProgress())) {
-            return false;
-        }
         return true;
     }
 
     @Override
     public int hashCode() {
-        int hash = 5;
+        int hash = 2;
         if (this.getResolveProvider() != null) {
-            hash = 59 * hash + Boolean.hashCode(this.getResolveProvider());
-        }
-        if (this.getWorkDoneProgress() != null) {
-            hash = 59 * hash + Boolean.hashCode(this.getWorkDoneProgress());
+            hash = 29 * hash + Boolean.hashCode(this.getResolveProvider());
         }
         return hash;
     }

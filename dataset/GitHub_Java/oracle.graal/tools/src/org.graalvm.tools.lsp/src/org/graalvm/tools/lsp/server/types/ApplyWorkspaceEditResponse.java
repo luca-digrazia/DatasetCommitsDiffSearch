@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,10 +30,12 @@ import java.util.Objects;
 /**
  * A response returned from the apply workspace edit request.
  */
-public class ApplyWorkspaceEditResponse extends JSONBase {
+public class ApplyWorkspaceEditResponse {
+
+    final JSONObject jsonData;
 
     ApplyWorkspaceEditResponse(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -45,20 +47,6 @@ public class ApplyWorkspaceEditResponse extends JSONBase {
 
     public ApplyWorkspaceEditResponse setApplied(boolean applied) {
         jsonData.put("applied", applied);
-        return this;
-    }
-
-    /**
-     * An optional textual description for why the edit was not applied. This may be used by the
-     * server for diagnostic logging or to provide a suitable error for a request that triggered the
-     * edit.
-     */
-    public String getFailureReason() {
-        return jsonData.optString("failureReason", null);
-    }
-
-    public ApplyWorkspaceEditResponse setFailureReason(String failureReason) {
-        jsonData.putOpt("failureReason", failureReason);
         return this;
     }
 
@@ -91,9 +79,6 @@ public class ApplyWorkspaceEditResponse extends JSONBase {
         if (this.isApplied() != other.isApplied()) {
             return false;
         }
-        if (!Objects.equals(this.getFailureReason(), other.getFailureReason())) {
-            return false;
-        }
         if (!Objects.equals(this.getFailedChange(), other.getFailedChange())) {
             return false;
         }
@@ -102,11 +87,8 @@ public class ApplyWorkspaceEditResponse extends JSONBase {
 
     @Override
     public int hashCode() {
-        int hash = 5;
+        int hash = 7;
         hash = 53 * hash + Boolean.hashCode(this.isApplied());
-        if (this.getFailureReason() != null) {
-            hash = 53 * hash + Objects.hashCode(this.getFailureReason());
-        }
         if (this.getFailedChange() != null) {
             hash = 53 * hash + Integer.hashCode(this.getFailedChange());
         }

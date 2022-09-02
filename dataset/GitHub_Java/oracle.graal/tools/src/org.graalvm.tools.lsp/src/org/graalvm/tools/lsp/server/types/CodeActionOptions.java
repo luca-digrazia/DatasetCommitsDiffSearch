@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,12 +32,14 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Provider options for a [CodeActionRequest](#CodeActionRequest).
+ * Code Action options.
  */
-public class CodeActionOptions extends WorkDoneProgressOptions {
+public class CodeActionOptions {
+
+    final JSONObject jsonData;
 
     CodeActionOptions(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -84,20 +86,14 @@ public class CodeActionOptions extends WorkDoneProgressOptions {
         if (!Objects.equals(this.getCodeActionKinds(), other.getCodeActionKinds())) {
             return false;
         }
-        if (!Objects.equals(this.getWorkDoneProgress(), other.getWorkDoneProgress())) {
-            return false;
-        }
         return true;
     }
 
     @Override
     public int hashCode() {
-        int hash = 7;
+        int hash = 3;
         if (this.getCodeActionKinds() != null) {
-            hash = 89 * hash + Objects.hashCode(this.getCodeActionKinds());
-        }
-        if (this.getWorkDoneProgress() != null) {
-            hash = 89 * hash + Boolean.hashCode(this.getWorkDoneProgress());
+            hash = 53 * hash + Objects.hashCode(this.getCodeActionKinds());
         }
         return hash;
     }

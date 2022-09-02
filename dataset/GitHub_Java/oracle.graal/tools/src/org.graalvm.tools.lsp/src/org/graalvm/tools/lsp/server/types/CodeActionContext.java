@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,10 +35,12 @@ import java.util.Objects;
  * Contains additional diagnostic information about the context in which a [code
  * action](#CodeActionProvider.provideCodeActions) is run.
  */
-public class CodeActionContext extends JSONBase {
+public class CodeActionContext {
+
+    final JSONObject jsonData;
 
     CodeActionContext(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -119,9 +121,9 @@ public class CodeActionContext extends JSONBase {
     @Override
     public int hashCode() {
         int hash = 7;
-        hash = 97 * hash + Objects.hashCode(this.getDiagnostics());
+        hash = 29 * hash + Objects.hashCode(this.getDiagnostics());
         if (this.getOnly() != null) {
-            hash = 97 * hash + Objects.hashCode(this.getOnly());
+            hash = 29 * hash + Objects.hashCode(this.getOnly());
         }
         return hash;
     }

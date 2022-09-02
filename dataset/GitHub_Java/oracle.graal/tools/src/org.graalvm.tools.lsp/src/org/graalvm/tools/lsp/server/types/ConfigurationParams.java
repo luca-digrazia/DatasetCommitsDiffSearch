@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,10 +34,12 @@ import java.util.Objects;
 /**
  * The parameters of a configuration request.
  */
-public class ConfigurationParams extends JSONBase {
+public class ConfigurationParams {
+
+    final JSONObject jsonData;
 
     ConfigurationParams(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     public List<ConfigurationItem> getItems() {
@@ -78,8 +80,8 @@ public class ConfigurationParams extends JSONBase {
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 71 * hash + Objects.hashCode(this.getItems());
+        int hash = 2;
+        hash = 89 * hash + Objects.hashCode(this.getItems());
         return hash;
     }
 

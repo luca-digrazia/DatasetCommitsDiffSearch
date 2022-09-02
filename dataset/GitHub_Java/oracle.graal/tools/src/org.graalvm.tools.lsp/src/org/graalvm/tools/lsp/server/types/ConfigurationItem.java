@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,10 +27,12 @@ package org.graalvm.tools.lsp.server.types;
 import com.oracle.truffle.tools.utils.json.JSONObject;
 import java.util.Objects;
 
-public class ConfigurationItem extends JSONBase {
+public class ConfigurationItem {
+
+    final JSONObject jsonData;
 
     ConfigurationItem(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -82,10 +84,10 @@ public class ConfigurationItem extends JSONBase {
     public int hashCode() {
         int hash = 7;
         if (this.getScopeUri() != null) {
-            hash = 37 * hash + Objects.hashCode(this.getScopeUri());
+            hash = 89 * hash + Objects.hashCode(this.getScopeUri());
         }
         if (this.getSection() != null) {
-            hash = 37 * hash + Objects.hashCode(this.getSection());
+            hash = 89 * hash + Objects.hashCode(this.getSection());
         }
         return hash;
     }

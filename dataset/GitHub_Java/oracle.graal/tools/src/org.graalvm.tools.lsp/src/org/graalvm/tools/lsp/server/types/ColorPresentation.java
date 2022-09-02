@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,10 +31,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-public class ColorPresentation extends JSONBase {
+public class ColorPresentation {
+
+    final JSONObject jsonData;
 
     ColorPresentation(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -117,13 +119,13 @@ public class ColorPresentation extends JSONBase {
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 83 * hash + Objects.hashCode(this.getLabel());
+        int hash = 2;
+        hash = 59 * hash + Objects.hashCode(this.getLabel());
         if (this.getTextEdit() != null) {
-            hash = 83 * hash + Objects.hashCode(this.getTextEdit());
+            hash = 59 * hash + Objects.hashCode(this.getTextEdit());
         }
         if (this.getAdditionalTextEdits() != null) {
-            hash = 83 * hash + Objects.hashCode(this.getAdditionalTextEdits());
+            hash = 59 * hash + Objects.hashCode(this.getAdditionalTextEdits());
         }
         return hash;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,10 +35,12 @@ import java.util.Objects;
  * A completion item represents a text snippet that is proposed to complete text that is being
  * typed.
  */
-public class CompletionItem extends JSONBase {
+public class CompletionItem {
+
+    final JSONObject jsonData;
 
     CompletionItem(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -63,34 +65,6 @@ public class CompletionItem extends JSONBase {
 
     public CompletionItem setKind(CompletionItemKind kind) {
         jsonData.putOpt("kind", kind != null ? kind.getIntValue() : null);
-        return this;
-    }
-
-    /**
-     * Tags for this completion item.
-     *
-     * @since 3.15.0
-     */
-    public List<CompletionItemTag> getTags() {
-        final JSONArray json = jsonData.optJSONArray("tags");
-        if (json == null) {
-            return null;
-        }
-        final List<CompletionItemTag> list = new ArrayList<>(json.length());
-        for (int i = 0; i < json.length(); i++) {
-            list.add(CompletionItemTag.get(json.getInt(i)));
-        }
-        return Collections.unmodifiableList(list);
-    }
-
-    public CompletionItem setTags(List<CompletionItemTag> tags) {
-        if (tags != null) {
-            final JSONArray json = new JSONArray();
-            for (CompletionItemTag completionItemTag : tags) {
-                json.put(completionItemTag.getIntValue());
-            }
-            jsonData.put("tags", json);
-        }
         return this;
     }
 
@@ -122,18 +96,14 @@ public class CompletionItem extends JSONBase {
         if (documentation instanceof MarkupContent) {
             jsonData.put("documentation", ((MarkupContent) documentation).jsonData);
         } else {
-            jsonData.put("documentation", documentation);
+            jsonData.putOpt("documentation", documentation);
         }
         return this;
     }
 
     /**
      * Indicates if this item is deprecated.
-     *
-     * @deprecated Use `tags` instead.
      */
-    @Deprecated
-    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
     public Boolean getDeprecated() {
         return jsonData.has("deprecated") ? jsonData.getBoolean("deprecated") : null;
     }
@@ -149,7 +119,6 @@ public class CompletionItem extends JSONBase {
      * *Note* that only one completion item can be selected and that the tool / client decides which
      * item that is. The rule is that the *first* item of those that match best is selected.
      */
-    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
     public Boolean getPreselect() {
         return jsonData.has("preselect") ? jsonData.getBoolean("preselect") : null;
     }
@@ -194,7 +163,10 @@ public class CompletionItem extends JSONBase {
      * `con<cursor position>` and a completion item with an `insertText` of `console` is provided it
      * will only insert `sole`. Therefore it is recommended to use `textEdit` instead since it
      * avoids additional client side interpretation.
+     *
+     * @deprecated Use textEdit instead.
      */
+    @Deprecated
     public String getInsertText() {
         return jsonData.optString("insertText", null);
     }
@@ -206,8 +178,7 @@ public class CompletionItem extends JSONBase {
 
     /**
      * The format of the insert text. The format applies to both the `insertText` property and the
-     * `newText` property of a provided `textEdit`. If ommitted defaults to
-     * `InsertTextFormat.PlainText`.
+     * `newText` property of a provided `textEdit`.
      */
     public InsertTextFormat getInsertTextFormat() {
         return InsertTextFormat.get(jsonData.has("insertTextFormat") ? jsonData.getInt("insertTextFormat") : null);
@@ -340,9 +311,6 @@ public class CompletionItem extends JSONBase {
         if (this.getKind() != other.getKind()) {
             return false;
         }
-        if (!Objects.equals(this.getTags(), other.getTags())) {
-            return false;
-        }
         if (!Objects.equals(this.getDetail(), other.getDetail())) {
             return false;
         }
@@ -387,52 +355,49 @@ public class CompletionItem extends JSONBase {
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 41 * hash + Objects.hashCode(this.getLabel());
+        int hash = 3;
+        hash = 97 * hash + Objects.hashCode(this.getLabel());
         if (this.getKind() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getKind());
-        }
-        if (this.getTags() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getTags());
+            hash = 97 * hash + Objects.hashCode(this.getKind());
         }
         if (this.getDetail() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getDetail());
+            hash = 97 * hash + Objects.hashCode(this.getDetail());
         }
         if (this.getDocumentation() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getDocumentation());
+            hash = 97 * hash + Objects.hashCode(this.getDocumentation());
         }
         if (this.getDeprecated() != null) {
-            hash = 41 * hash + Boolean.hashCode(this.getDeprecated());
+            hash = 97 * hash + Boolean.hashCode(this.getDeprecated());
         }
         if (this.getPreselect() != null) {
-            hash = 41 * hash + Boolean.hashCode(this.getPreselect());
+            hash = 97 * hash + Boolean.hashCode(this.getPreselect());
         }
         if (this.getSortText() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getSortText());
+            hash = 97 * hash + Objects.hashCode(this.getSortText());
         }
         if (this.getFilterText() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getFilterText());
+            hash = 97 * hash + Objects.hashCode(this.getFilterText());
         }
         if (this.getInsertText() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getInsertText());
+            hash = 97 * hash + Objects.hashCode(this.getInsertText());
         }
         if (this.getInsertTextFormat() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getInsertTextFormat());
+            hash = 97 * hash + Objects.hashCode(this.getInsertTextFormat());
         }
         if (this.getTextEdit() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getTextEdit());
+            hash = 97 * hash + Objects.hashCode(this.getTextEdit());
         }
         if (this.getAdditionalTextEdits() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getAdditionalTextEdits());
+            hash = 97 * hash + Objects.hashCode(this.getAdditionalTextEdits());
         }
         if (this.getCommitCharacters() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getCommitCharacters());
+            hash = 97 * hash + Objects.hashCode(this.getCommitCharacters());
         }
         if (this.getCommand() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getCommand());
+            hash = 97 * hash + Objects.hashCode(this.getCommand());
         }
         if (this.getData() != null) {
-            hash = 41 * hash + Objects.hashCode(this.getData());
+            hash = 97 * hash + Objects.hashCode(this.getData());
         }
         return hash;
     }

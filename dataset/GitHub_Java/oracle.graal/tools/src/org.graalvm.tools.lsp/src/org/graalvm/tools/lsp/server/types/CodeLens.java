@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,10 +34,12 @@ import java.util.Objects;
  * A code lens is _unresolved_ when no command is associated to it. For performance reasons the
  * creation of a code lens and resolving should be done to two stages.
  */
-public class CodeLens extends JSONBase {
+public class CodeLens {
+
+    final JSONObject jsonData;
 
     CodeLens(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -103,7 +105,7 @@ public class CodeLens extends JSONBase {
 
     @Override
     public int hashCode() {
-        int hash = 7;
+        int hash = 5;
         hash = 73 * hash + Objects.hashCode(this.getRange());
         if (this.getCommand() != null) {
             hash = 73 * hash + Objects.hashCode(this.getCommand());

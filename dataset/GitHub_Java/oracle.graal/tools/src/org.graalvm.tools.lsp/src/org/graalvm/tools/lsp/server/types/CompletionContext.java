@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,10 +30,12 @@ import java.util.Objects;
 /**
  * Contains additional information about the context in which a completion request is triggered.
  */
-public class CompletionContext extends JSONBase {
+public class CompletionContext {
+
+    final JSONObject jsonData;
 
     CompletionContext(JSONObject jsonData) {
-        super(jsonData);
+        this.jsonData = jsonData;
     }
 
     /**
@@ -84,10 +86,10 @@ public class CompletionContext extends JSONBase {
 
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 59 * hash + Objects.hashCode(this.getTriggerKind());
+        int hash = 7;
+        hash = 71 * hash + Objects.hashCode(this.getTriggerKind());
         if (this.getTriggerCharacter() != null) {
-            hash = 59 * hash + Objects.hashCode(this.getTriggerCharacter());
+            hash = 71 * hash + Objects.hashCode(this.getTriggerCharacter());
         }
         return hash;
     }
