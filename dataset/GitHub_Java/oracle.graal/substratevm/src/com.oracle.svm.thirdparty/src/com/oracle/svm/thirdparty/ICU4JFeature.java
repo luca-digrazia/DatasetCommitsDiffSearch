@@ -109,8 +109,7 @@ public final class ICU4JFeature implements Feature {
     private static Class<?>[] getIcu4jFeatureClasses(Collection<Class<?>> allClasses) {
         return allClasses.stream().filter(clazz -> {
             String className = clazz.getName();
-            return className.startsWith("com.oracle.svm.thirdparty") &&
-                            (className.contains("com_ibm_icu") || className.contains("ICU4JFeature"));
+            return className.startsWith("com.oracle.svm.thirdparty") && className.toLowerCase().contains("icu");
         }).toArray(Class<?>[]::new);
     }
 }
