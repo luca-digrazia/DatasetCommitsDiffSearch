@@ -95,14 +95,6 @@ public final class GraalDirectives {
     }
 
     /**
-     * Inject information into the compiler to assume that the input is an object created via a
-     * primitive boxing operation.
-     */
-    public static <P> P trustedBox(P o) {
-        return o;
-    }
-
-    /**
      * A call to this method will force the compiler to assume this instruction has a visible memory
      * effect killing all memory locations.
      */
@@ -412,11 +404,5 @@ public final class GraalDirectives {
      * Ensures that the given object will be virtual at the current position.
      */
     public static void ensureVirtualizedHere(@SuppressWarnings("unused") Object object) {
-    }
-
-    /**
-     * Raise a SIGTRAP that can be used as a breakpoint for a native debugger such as gdb.
-     */
-    public static void breakpoint() {
     }
 }
