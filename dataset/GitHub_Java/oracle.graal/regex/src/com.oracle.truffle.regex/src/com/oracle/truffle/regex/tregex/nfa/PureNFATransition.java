@@ -44,7 +44,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.automaton.AbstractTransition;
 import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
-import com.oracle.truffle.regex.tregex.parser.ast.PositionAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
@@ -94,16 +93,10 @@ public class PureNFATransition implements AbstractTransition<PureNFAState, PureN
         return groupBoundaries;
     }
 
-    /**
-     * Transition is guarded by the "^" - {@link PositionAssertion}.
-     */
     public boolean hasCaretGuard() {
         return caretGuard;
     }
 
-    /**
-     * Transition is guarded by the "$" - {@link PositionAssertion}.
-     */
     public boolean hasDollarGuard() {
         return dollarGuard;
     }
