@@ -25,6 +25,9 @@
 package com.oracle.svm.core.util;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.regex.Pattern;
@@ -59,4 +62,18 @@ public final class ClasspathUtils {
         return String.join(File.separator, components);
     }
 
+    public static boolean isJar(Path p) {
+        Path fn = p.getFileName();
+        assert fn != null;
+        if (Files.exists(p) && Files.isRegularFile(p) && Files.isReadable(p)) {
+            try (RandomAccessFile file = new RandomAccessFile(p.toFile(), "r")) {
+                final int magic = file.readInt();
+                return magic == 0x504B0304 || magic == 0x504B0506 || magic == 0x504B0708;
+            } catch (IOException e) {
+                return false;
+            }
+        }
+
+        return false;
+    }
 }
