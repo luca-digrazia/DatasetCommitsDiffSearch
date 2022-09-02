@@ -176,47 +176,53 @@ public abstract class WasmMemory implements TruffleObject {
 
     @ExportMessage
     long getArraySize() {
-        return byteSize();
+        return byteSize() / LONG_SIZE;
     }
 
     @ExportMessage
-    boolean isArrayElementReadable(long address) {
-        return address >= 0 && address < getArraySize();
+    boolean isArrayElementReadable(long index) {
+        return index >= 0 && index < getArraySize();
     }
 
     @ExportMessage
-    final boolean isArrayElementModifiable(long address) {
-        return isArrayElementReadable(address);
+    final boolean isArrayElementModifiable(long index) {
+        return isArrayElementReadable(index);
     }
 
     @SuppressWarnings({"unused", "static-method"})
     @ExportMessage
-    final boolean isArrayElementInsertable(long address) {
+    final boolean isArrayElementInsertable(long index) {
         return false;
     }
 
     @ExportMessage
-    public Object readArrayElement(long address) throws InvalidArrayIndexException {
-        if (!isArrayElementReadable(address)) {
+    public Object readArrayElement(long index) throws InvalidArrayIndexException {
+        if (!isArrayElementReadable(index)) {
             transferToInterpreter();
-            throw InvalidArrayIndexException.create(address);
+            throw InvalidArrayIndexException.create(index);
         }
-        return load_i32_8u(address);
+        long address = index * LONG_SIZE;
+        return load_i64(address);
     }
 
     @ExportMessage(limit = "3")
-    public void writeArrayElement(long address, Object value, @CachedLibrary("value") InteropLibrary valueLib)
+    public void writeArrayElement(long index64, Object value, @CachedLibrary("value") InteropLibrary valueLib)
                     throws InvalidArrayIndexException, UnsupportedMessageException, UnsupportedTypeException {
-        if (!isArrayElementReadable(address)) {
+        if (!isArrayElementReadable(index64)) {
             transferToInterpreter();
-            throw InvalidArrayIndexException.create(address);
+            throw InvalidArrayIndexException.create(index64);
         }
-        byte rawValue;
-        if (valueLib.fitsInByte(value)) {
-            rawValue = valueLib.asByte(value);
+        long rawValue;
+        if (valueLib.fitsInLong(value)) {
+            rawValue = valueLib.asLong(value);
+        } else if (valueLib.fitsInFloat(value)) {
+            rawValue = Float.floatToRawIntBits(valueLib.asFloat(value));
+        } else if (valueLib.fitsInDouble(value)) {
+            rawValue = Double.doubleToRawLongBits(valueLib.asDouble(value));
         } else {
-            throw UnsupportedTypeException.create(new Object[] { value }, "Only bytes can be stored into WebAssembly memory.");
+            throw UnsupportedTypeException.create(new Object[]{value});
         }
-        store_i32_8(address, rawValue);
+        long address = index64 * LONG_SIZE;
+        store_i64(address, rawValue);
     }
 }
