@@ -649,12 +649,11 @@ public final class DebuggerController implements ContextsListener {
                 long methodId = ids.getIdAsLong(method);
                 byte typeTag = TypeTag.getKind(klass);
 
-                Frame frame = frameInstance.getFrame(FrameInstance.FrameAccess.READ_WRITE);
                 // for bytecode-based languages (Espresso) we can read the precise bci from the
-                // frame
+                // frame instance
                 long codeIndex = -1;
                 try {
-                    codeIndex = context.readBCIFromFrame(root, frame);
+                    codeIndex = context.readBCIFromFrame(root, frameInstance.getFrame(FrameInstance.FrameAccess.READ_ONLY));
                 } catch (Throwable t) {
                     t.printStackTrace();
                     JDWPLogger.log("Unable to read current BCI from frame in method: %s.%s", JDWPLogger.LogLevel.ALL, klass.getNameAsString(), method.getNameAsString());
@@ -670,7 +669,7 @@ public final class DebuggerController implements ContextsListener {
                 if (codeIndex > lastLineBCI) {
                     codeIndex = lastLineBCI;
                 }
-                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, methodId, codeIndex, frame, root, instrument.getEnv()));
+                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, methodId, codeIndex, frameInstance, null, root, instrument.getEnv()));
                 return null;
             }
         });
@@ -697,10 +696,6 @@ public final class DebuggerController implements ContextsListener {
             return rootNode;
         }
         return null;
-    }
-
-    public void cancelBlockingCallFrames(Object guestThread) {
-        suspendedInfos.remove(guestThread);
     }
 
     private class SuspendedCallbackImpl implements SuspendedCallback {
@@ -915,6 +910,8 @@ public final class DebuggerController implements ContextsListener {
             int frameCount = 0;
 
             for (DebugStackFrame frame : stackFrames) {
+                // byte type tag, long classId, long methodId, long codeIndex
+
                 if (frame.getSourceSection() == null) {
                     continue;
                 }
@@ -924,46 +921,46 @@ public final class DebuggerController implements ContextsListener {
                 byte typeTag;
                 long codeIndex;
 
+                Frame rawFrame = frame.getRawFrame(context.getLanguageClass());
                 RootNode root = frame.getRawNode(context.getLanguageClass()).getRootNode();
                 if (root == null) {
                     // since we can't lookup the root node, we have to
                     // construct a jdwp-like location from the frame
                     // TODO(Gregersen) - add generic polyglot jdwp frame representation
                     continue;
-                }
+                } else {
+                    MethodRef method = getContext().getMethodFromRootNode(root);
+                    KlassRef klass = method.getDeclaringKlass();
 
-                Frame rawFrame = frame.getRawFrame(context.getLanguageClass());
-                MethodRef method = getContext().getMethodFromRootNode(root);
-                KlassRef klass = method.getDeclaringKlass();
+                    klassId = ids.getIdAsLong(klass);
+                    methodId = ids.getIdAsLong(method);
+                    typeTag = TypeTag.getKind(klass);
 
-                klassId = ids.getIdAsLong(klass);
-                methodId = ids.getIdAsLong(method);
-                typeTag = TypeTag.getKind(klass);
+                    // for bytecode-based languages (Espresso) we can read the precise bci from the
+                    // frame instance
+                    codeIndex = context.readBCIFromFrame(root, rawFrame);
 
-                // for bytecode-based languages (Espresso) we can read the precise bci from the
-                // frame instance
-                codeIndex = context.readBCIFromFrame(root, rawFrame);
-
-                if (codeIndex == -1) {
-                    // fall back to line precision through the source section
-                    SourceSection sourceSection = frame.getSourceSection();
-                    if (sourceSection.hasLines()) {
-                        if (sourceSection.getStartLine() != sourceSection.getEndLine()) {
-                            JDWPLogger.log("Not able to get a precise encapsulated source section", JDWPLogger.LogLevel.ALL);
+                    if (codeIndex == -1) {
+                        // fall back to line precision through the source section
+                        SourceSection sourceSection = frame.getSourceSection();
+                        if (sourceSection.hasLines()) {
+                            if (sourceSection.getStartLine() != sourceSection.getEndLine()) {
+                                JDWPLogger.log("Not able to get a precise encapsulated source section", JDWPLogger.LogLevel.ALL);
+                            }
+                            codeIndex = method.getBCIFromLine(sourceSection.getStartLine());
+                        } else {
+                            // no lines! Fall back to bci 0 then
+                            codeIndex = 0;
                         }
-                        codeIndex = method.getBCIFromLine(sourceSection.getStartLine());
-                    } else {
-                        // no lines! Fall back to bci 0 then
-                        codeIndex = 0;
+                    }
+                    // check if current bci is higher than the first index on the last line,
+                    // in which case we must report the last line index instead
+                    long lastLineBCI = method.getBCIFromLine(method.getLastLine());
+                    if (codeIndex > lastLineBCI) {
+                        codeIndex = lastLineBCI;
                     }
                 }
-                // check if current bci is higher than the first index on the last line,
-                // in which case we must report the last line index instead
-                long lastLineBCI = method.getBCIFromLine(method.getLastLine());
-                if (codeIndex > lastLineBCI) {
-                    codeIndex = lastLineBCI;
-                }
-                list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, rawFrame, root, instrument.getEnv()));
+                list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, null, rawFrame, root, instrument.getEnv()));
                 frameCount++;
                 if (frameLimit != -1 && frameCount >= frameLimit) {
                     return list.toArray(new CallFrame[list.size()]);

@@ -392,13 +392,13 @@ public interface JDWPContext {
     int getCatchLocation(MethodRef method, Object guestException, int bci);
 
     /**
-     * Returns the bci of the next bytecode instruction within the current frame
+     * Determines if a caller has more same-line method invocations.
      *
      * @param callerRoot the root node of the caller frame
      * @param frame the frame to read the current bci from
-     * @return the bci of the next instruction
+     * @return true if the caller method has further method invocations on the current line
      */
-    int getNextBCI(RootNode callerRoot, Frame frame);
+    boolean moreMethodCallsOnLine(RootNode callerRoot, Frame frame);
 
     /**
      * Returns the current BCI or -1 if the BCI cannot be read.
@@ -458,14 +458,4 @@ public interface JDWPContext {
      * @return the Truffle language class
      */
     Class<? extends TruffleLanguage<?>> getLanguageClass();
-
-    /**
-     * Installs new class definitions. If there are active stack frames in methods of the redefined
-     * classes in the target VM then those active frames continue to run the bytecodes of the
-     * original method.
-     *
-     * @param redefineInfos the information about the original class and the new class bytes
-     * @return 0 on success or the appropriate {@link ErrorCodes} if an error occur
-     */
-    int redefineClasses(RedefineInfo[] redefineInfos);
 }

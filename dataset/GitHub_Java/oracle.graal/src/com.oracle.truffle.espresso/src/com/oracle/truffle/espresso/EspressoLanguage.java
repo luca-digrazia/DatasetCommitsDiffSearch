@@ -295,6 +295,11 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         return (StaticObject) checkAndLoadMain.invokeDirect(null, true, mode.ordinal(), meta.toGuestString(name));
     }
 
+    @Override
+    protected boolean isObjectOfLanguage(Object object) {
+        return object instanceof StaticObject;
+    }
+
     public Utf8ConstantTable getUtf8ConstantTable() {
         return utf8Constants;
     }
