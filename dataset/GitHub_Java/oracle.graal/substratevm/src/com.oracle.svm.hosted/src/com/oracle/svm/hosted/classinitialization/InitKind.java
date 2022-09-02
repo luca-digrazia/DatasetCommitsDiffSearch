@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.hosted.classinitialization;
 
+import static com.oracle.svm.hosted.NativeImageOptions.DiagnosticsMode;
+
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -36,18 +38,22 @@ import org.graalvm.collections.Pair;
  */
 public enum InitKind {
     /** Class is initialized during image building, so it is already initialized at runtime. */
-    EAGER,
+    BUILD_TIME,
     /** Class is initialized both at runtime and during image building. */
     RERUN,
     /** Class should be initialized at runtime and not during image building. */
-    DELAY;
+    RUN_TIME;
 
     InitKind max(InitKind other) {
         return this.ordinal() > other.ordinal() ? this : other;
     }
 
-    boolean isDelayed() {
-        return this.equals(DELAY);
+    InitKind min(InitKind other) {
+        return this.ordinal() < other.ordinal() ? this : other;
+    }
+
+    boolean isRunTime() {
+        return this.equals(RUN_TIME);
     }
 
     public static final String SEPARATOR = ":";
@@ -56,24 +62,28 @@ public enum InitKind {
         return SEPARATOR + name().toLowerCase();
     }
 
-    Consumer<Class<?>> classConsumer(ClassInitializationSupport support) {
-        if (this == DELAY) {
-            return cls -> support.delay(cls, "from command line");
+    Consumer<String> stringConsumer(ClassInitializationSupport support, String origin) {
+        if (this == RUN_TIME) {
+            return name -> support.initializeAtRunTime(name, reason(origin, name));
         } else if (this == RERUN) {
-            return cls -> support.rerun(cls, "from command line");
+            return name -> support.rerunInitialization(name, reason(origin, name));
         } else {
-            return cls -> support.eager(cls, "from command line");
+            return name -> {
+                if (name.equals("") && !DiagnosticsMode.getValue()) {
+                    System.err.println(
+                                    "--initialize-at-build-time without arguments has been deprecated when not using --diagnostics-mode. With GraalVM 22.0.0." +
+                                                    " --initialize-at-build-time will only work with --diagnostics-mode for debugging purposes.\n" +
+                                                    "The reason for deprecation is that --initalize-at-build-time does not compose, i.e., a single library can make assumptions that the whole classpath can be safely initialized at build time;" +
+                                                    " that assumption is often incorrect.");
+                }
+                support.initializeAtBuildTime(name, reason(origin, name));
+            };
         }
     }
 
-    Consumer<String> stringConsumer(ClassInitializationSupport support) {
-        if (this == DELAY) {
-            return name -> support.delay(name, "from command line");
-        } else if (this == RERUN) {
-            return name -> support.rerun(name, "from command line");
-        } else {
-            return name -> support.eager(name, "from command line");
-        }
+    private static String reason(String origin, String name) {
+        String prefix = "from ";
+        return (origin == null ? prefix + "the command line" : prefix + origin) + " with '" + name + "'";
     }
 
     static Pair<String, InitKind> strip(String input) {
