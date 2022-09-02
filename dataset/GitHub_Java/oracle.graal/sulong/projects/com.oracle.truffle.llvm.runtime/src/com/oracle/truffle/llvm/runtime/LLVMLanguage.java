@@ -41,8 +41,10 @@ import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.DebuggerTags;
 import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -52,17 +54,21 @@ import com.oracle.truffle.llvm.runtime.config.Configurations;
 import com.oracle.truffle.llvm.runtime.config.LLVMCapability;
 import com.oracle.truffle.llvm.runtime.debug.LLDBSupport;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprExecutableNode;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprParser;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebuggerScopeFactory;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObject;
+import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@TruffleLanguage.Registration(id = LLVMLanguage.ID, name = LLVMLanguage.NAME, internal = false, interactive = false, defaultMimeType = LLVMLanguage.LLVM_BITCODE_MIME_TYPE, //
+@TruffleLanguage.Registration(id = LLVMLanguage.ID, name = LLVMLanguage.NAME, internal = false, interactive = true, defaultMimeType = LLVMLanguage.LLVM_BITCODE_MIME_TYPE, //
                 byteMimeTypes = {LLVMLanguage.LLVM_BITCODE_MIME_TYPE, LLVMLanguage.LLVM_ELF_SHARED_MIME_TYPE, LLVMLanguage.LLVM_ELF_EXEC_MIME_TYPE}, //
                 characterMimeTypes = {LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE}, fileTypeDetectors = LLVMFileDetector.class, services = {Toolchain.class})
 @ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class, StandardTags.RootBodyTag.class, DebuggerTags.AlwaysHalt.class})
@@ -97,6 +103,10 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     public static ContextReference<LLVMContext> getLLVMContextReference() {
         return getCurrentLanguage(LLVMLanguage.class).getContextReference();
+    }
+
+    public NodeFactory getNodeFactory() {
+        return nodeFactory;
     }
 
     public List<ContextExtension> getLanguageContextExtension() {
@@ -154,24 +164,30 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         this.contextExtensions = activeConfiguration.createContextExtensions(env);
 
         LLVMContext context = new LLVMContext(this, env, getLanguageHome());
+        this.nodeFactory = activeConfiguration.createNodeFactory(context);
         return context;
-    }
-
-    public void setNodeFactory(NodeFactory nodeFactory) {
-        this.nodeFactory = nodeFactory;
-    }
-
-    public NodeFactory getNodeFactory(){
-        return nodeFactory;
-    }
-
-    public Configuration getActiveConfiguration() {
-        return activeConfiguration;
     }
 
     @Override
     protected void initializeContext(LLVMContext context) {
         context.initialize();
+    }
+
+    @Override
+    protected ExecutableNode parse(InlineParsingRequest request) throws Exception {
+        Iterable<Scope> globalScopes = findTopScopes(getContextReference().get());
+        final DebugExprParser d = new DebugExprParser(this, request, globalScopes);
+        try {
+            return new DebugExprExecutableNode(d.parse());
+        } catch (DebugExprException | LLVMParserException e) {
+            // error found during parsing
+            return new ExecutableNode(this) {
+                @Override
+                public Object execute(VirtualFrame frame) {
+                    return e.getMessage();
+                }
+            };
+        }
     }
 
     @Override
@@ -266,7 +282,8 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     @Override
     protected Iterable<Scope> findLocalScopes(LLVMContext context, Node node, Frame frame) {
         if (context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
-            return LLVMDebuggerScopeFactory.createSourceLevelScope(node, frame, context);
+            final Iterable<Scope> scopes = LLVMDebuggerScopeFactory.createSourceLevelScope(node, frame, context);
+            return scopes;
         } else {
             return LLVMDebuggerScopeFactory.createIRLevelScope(node, frame, context);
         }
