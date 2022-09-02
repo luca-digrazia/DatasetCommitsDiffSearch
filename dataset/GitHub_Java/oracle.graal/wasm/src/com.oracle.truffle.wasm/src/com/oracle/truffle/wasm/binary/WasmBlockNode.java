@@ -1849,7 +1849,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         return args;
     }
 
-    @ExplodeLoop
     private void unwindStack(VirtualFrame frame, int stackPointer, int continuationStackPointer) {
         for (int i = 0; i != returnTypeLength(); ++i) {
             stackPointer--;

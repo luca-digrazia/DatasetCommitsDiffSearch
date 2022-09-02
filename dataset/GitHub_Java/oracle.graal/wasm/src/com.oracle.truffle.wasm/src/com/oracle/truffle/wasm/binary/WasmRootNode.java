@@ -43,7 +43,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
     @CompilationFinal private WasmCodeEntry codeEntry;
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
-    @Child private WasmNode body;
+    @Child private WasmBlockNode body;
 
     public WasmRootNode(TruffleLanguage<?> language, WasmCodeEntry codeEntry) {
         super(language);
@@ -58,7 +58,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
         return rawContextReference;
     }
 
-    public void setBody(WasmNode body) {
+    public void setBody(WasmBlockNode body) {
         this.body = insert(body);
     }
 
