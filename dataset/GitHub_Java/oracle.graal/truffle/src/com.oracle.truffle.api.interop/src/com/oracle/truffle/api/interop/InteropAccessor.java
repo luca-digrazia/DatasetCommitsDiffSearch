@@ -51,10 +51,7 @@ final class InteropAccessor extends Accessor {
     private InteropAccessor() {
     }
 
-    /*
-     * Instantiated by Accessor.
-     */
-    static class InteropImpl extends InteropSupport {
+    private static class InteropImpl extends InteropSupport {
 
         @Override
         public boolean isTruffleObject(Object value) {

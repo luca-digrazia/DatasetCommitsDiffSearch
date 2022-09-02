@@ -77,13 +77,4 @@ public class WasmContext {
     void registerModule(WasmModule module) {
         modules.put(module.name(), module);
     }
-
-    public static WasmContext getCurrent() {
-        return WasmLanguage.getCurrentContext();
-    }
-
-    public WasmMemory memory() {
-        return memory;
-    }
-
 }

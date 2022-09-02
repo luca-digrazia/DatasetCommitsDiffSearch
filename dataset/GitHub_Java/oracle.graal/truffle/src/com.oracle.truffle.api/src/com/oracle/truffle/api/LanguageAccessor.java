@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -69,7 +69,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import java.nio.file.Path;
 
 final class LanguageAccessor extends Accessor {
 
@@ -96,10 +95,6 @@ final class LanguageAccessor extends Accessor {
 
     static IOSupport ioAccess() {
         return ACCESSOR.ioSupport();
-    }
-
-    static JDKSupport jdkServicesAccessor() {
-        return ACCESSOR.jdkSupport();
     }
 
     static final class LanguageImpl extends LanguageSupport {
@@ -165,9 +160,8 @@ final class LanguageAccessor extends Accessor {
 
         @Override
         public TruffleLanguage.Env createEnv(Object vmObject, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config,
-                        OptionValues options, String[] applicationArguments, FileSystem fileSystem, FileSystem internalFileSystem,
-                        Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
-            TruffleLanguage.Env env = new TruffleLanguage.Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem, internalFileSystem, fileTypeDetectors);
+                        OptionValues options, String[] applicationArguments, FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
+            TruffleLanguage.Env env = new TruffleLanguage.Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem, fileTypeDetectors);
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
             LanguageInfo info = language.languageInfo;
             instrumentAccess().collectEnvServices(collectedServices, ACCESSOR.nodeSupport().getEngineObject(info), language);
@@ -344,8 +338,7 @@ final class LanguageAccessor extends Accessor {
 
         @Override
         public TruffleLanguage.Env patchEnvContext(TruffleLanguage.Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options,
-                        String[] applicationArguments, FileSystem fileSystem, FileSystem internalFileSystem,
-                        Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
+                        String[] applicationArguments, FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
             assert env.spi != null;
             final TruffleLanguage.Env newEnv = createEnv(
                             env.vmObject,
@@ -355,7 +348,7 @@ final class LanguageAccessor extends Accessor {
                             stdIn,
                             config,
                             options,
-                            applicationArguments, fileSystem, internalFileSystem, fileTypeDetectors);
+                            applicationArguments, fileSystem, fileTypeDetectors);
 
             newEnv.initialized = env.initialized;
             newEnv.context = env.context;
@@ -476,16 +469,6 @@ final class LanguageAccessor extends Accessor {
         @Override
         public SecurityException throwSecurityException(String message) {
             throw new TruffleSecurityException(message);
-        }
-
-        @Override
-        public FileSystem getFileSystem(TruffleFile truffleFile) {
-            return truffleFile.getSPIFileSystem();
-        }
-
-        @Override
-        public Path getPath(TruffleFile truffleFile) {
-            return truffleFile.getSPIPath();
         }
     }
 }

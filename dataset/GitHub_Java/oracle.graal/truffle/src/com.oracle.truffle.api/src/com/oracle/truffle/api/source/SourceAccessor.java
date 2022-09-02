@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,14 +42,14 @@ package com.oracle.truffle.api.source;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URL;
-import java.nio.charset.Charset;
-import java.util.Set;
-
+import java.util.Collection;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
+import java.net.URI;
+import java.nio.charset.Charset;
+import java.util.Set;
 
 final class SourceAccessor extends Accessor {
 
@@ -58,7 +58,8 @@ final class SourceAccessor extends Accessor {
     private SourceAccessor() {
     }
 
-    public static void load() {
+    static Collection<ClassLoader> allLoaders() {
+        return ACCESSOR.loaders();
     }
 
     static String getMimeType(TruffleFile file, Set<String> validMimeTypes) throws IOException {
@@ -83,11 +84,6 @@ final class SourceAccessor extends Accessor {
 
     static boolean isDefaultFileSystem(Object fileSystemContext) {
         return ACCESSOR.languageSupport().isDefaultFileSystem(fileSystemContext);
-    }
-
-    static SourceImpl.Key createSourceKey(TruffleFile truffleFile, Object content, String mimeType, String languageId, URL url, URI uri,
-            String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy) {
-        return (SourceImpl.Key) ACCESSOR.engineSupport().createSourceKey(truffleFile, content, mimeType, languageId, url, uri, name, path, internal, interactive, cached, legacy);
     }
 
     static final class SourceSupportImpl extends Accessor.SourceSupport {
@@ -130,23 +126,6 @@ final class SourceAccessor extends Accessor {
         @Override
         public void setFileSystemContext(SourceBuilder builder, Object fileSystemContext) {
             builder.embedderFileSystemContext(fileSystemContext);
-        }
-
-        @Override
-        public Runnable createReinitializableKey(TruffleFile truffleFile, String pathInLanguageHome, Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy) {
-            int hashCode = SourceImpl.Key.hashCodeImpl(content, mimeType, languageId, null, null, name, pathInLanguageHome, internal, interactive, cached, legacy);
-            return new SourceImpl.ReinitializableKey(truffleFile, content, mimeType, languageId, url, uri, name, path, internal, interactive, cached, legacy, hashCode);
-        }
-
-        @Override
-        public Object createLanguageHomeKey(String pathInLanguageHome, Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy) {
-            int hashCode = SourceImpl.Key.hashCodeImpl(content, mimeType, languageId, null, null, name, pathInLanguageHome, internal, interactive, cached, legacy);
-            return new SourceImpl.ImmutableKey(content, mimeType, languageId, url, uri, name, path, internal, interactive, cached, legacy, hashCode);
-        }
-
-        @Override
-        public Object createImmutableSourceKey(Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy) {
-            return new SourceImpl.ImmutableKey(content, mimeType, languageId, url, uri, name, path, internal, interactive, cached, legacy);
         }
     }
 }

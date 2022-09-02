@@ -40,13 +40,12 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import java.util.Set;
-import java.util.concurrent.locks.Lock;
-
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.nodes.BlockNode.NodeExecutor;
+
+import java.util.Set;
+import java.util.concurrent.locks.Lock;
 
 final class NodeAccessor extends Accessor {
 
@@ -70,11 +69,6 @@ final class NodeAccessor extends Accessor {
         IndirectCallNode callNode = super.createUncachedIndirectCall();
         assert !callNode.isAdoptable();
         return callNode;
-    }
-
-    @Override
-    protected <T extends Node> BlockNode<T> createBlockNode(T[] elements, NodeExecutor<T> executor) {
-        return super.createBlockNode(elements, executor);
     }
 
     static final class AccessNodes extends NodeSupport {
@@ -152,5 +146,4 @@ final class NodeAccessor extends Accessor {
         }
 
     }
-
 }

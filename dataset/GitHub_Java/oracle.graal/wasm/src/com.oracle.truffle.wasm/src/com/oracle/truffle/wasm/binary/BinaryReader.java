@@ -48,7 +48,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_FLOOR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_GE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_GT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_LE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_LOAD;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_LT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_MAX;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_MIN;
@@ -57,7 +56,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_NE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_NEAREST;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_NEG;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_SQRT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_STORE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_SUB;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F32_TRUNC;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_ABS;
@@ -71,7 +69,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_FLOOR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_GE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_GT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_LE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_LOAD;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_LT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_MAX;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_MIN;
@@ -80,11 +77,8 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_NE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_NEAREST;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_NEG;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_SQRT;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_STORE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_SUB;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_TRUNC;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.GLOBAL_GET;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.GLOBAL_SET;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_ADD;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_AND;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_CLZ;
@@ -100,11 +94,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_GT_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_GT_U;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LE_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LE_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LOAD;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LOAD16_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LOAD16_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LOAD8_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LOAD8_U;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LT_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_LT_U;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_MUL;
@@ -118,8 +107,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_ROTR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHL;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHR_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHR_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_STORE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_STORE_16;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SUB;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_XOR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_ADD;
@@ -137,13 +124,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_GT_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_GT_U;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LE_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LE_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LOAD;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LOAD16_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LOAD16_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LOAD32_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LOAD32_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LOAD8_S;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LOAD8_U;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LT_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_LT_U;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_MUL;
@@ -157,10 +137,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_ROTR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SHL;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SHR_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SHR_U;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_STORE;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_STORE_16;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_STORE_32;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_STORE_8;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_SUB;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I64_XOR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.IF;
@@ -168,8 +144,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_GET;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_SET;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_TEE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.LOOP;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.MEMORY_GROW;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.MEMORY_SIZE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.NOP;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
 import static com.oracle.truffle.wasm.binary.constants.Sections.CODE;
@@ -301,25 +275,6 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void readMemorySection() {
-        int numMemories = readVectorLength();
-        for (int i = 0; i != numMemories; ++i) {
-            byte limitsPrefix = read1();
-            switch (limitsPrefix) {
-                case 0x00: {
-                    /* Return value ignored, as we don't rely on the memory definition for the memory size. */
-                    readUnsignedInt32();  // initialSize (in Wasm pages)
-                    break;
-                }
-                case 0x01: {
-                    /* Return values ignored, as we don't rely on the memory definition for the memory size. */
-                    readUnsignedInt32();  // initial size (in Wasm pages)
-                    readUnsignedInt32();  // max size (in Wasm pages)
-                    break;
-                }
-                default:
-                    Assert.fail(String.format("Invalid limits prefix (expected 0x00 or 0x01, got 0x%02X", limitsPrefix));
-            }
-        }
     }
 
     private void readDataSection() {
@@ -337,12 +292,10 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void readCodeEntry(int funcIndex) {
-        /* Read code entry (function) locals. */
+        /* Read code entry (function) locals */
         WasmCodeEntry codeEntry = new WasmCodeEntry(data);
         wasmModule.symbolTable().function(funcIndex).setCodeEntry(codeEntry);
-
-        /* Initialise the code entry local variables (which contain the parameters and the locals). */
-        initCodeEntryLocals(funcIndex);
+        readCodeEntryLocals(codeEntry);
 
         /* Create the necessary objects, read and abstractly interpret the code entry */
         byte returnTypeId = wasmModule.symbolTable().function(funcIndex).returnType();
@@ -361,26 +314,20 @@ public class BinaryReader extends BinaryStreamReader {
         wasmModule.symbolTable().function(funcIndex).setCallTarget(callTarget);
     }
 
-    private ByteArrayList readCodeEntryLocals() {
+    private int readCodeEntryLocals(WasmCodeEntry codeEntry) {
         int numLocalsGroups = readVectorLength();
-        ByteArrayList localTypes = new ByteArrayList();
+        int numLocals = 0;
+        ByteArrayList locals = new ByteArrayList();
         for (int localGroup = 0; localGroup < numLocalsGroups; localGroup++) {
             int groupLength = readVectorLength();
             byte t = readValueType();
             for (int i = 0; i != groupLength; ++i) {
-                localTypes.add(t);
+                locals.add(t);
             }
+            numLocals += groupLength;
         }
-        return localTypes;
-    }
-
-    private void initCodeEntryLocals(int funcIndex) {
-        WasmCodeEntry codeEntry = wasmModule.symbolTable().function(funcIndex).codeEntry();
-        int typeIndex = wasmModule.symbolTable().function(funcIndex).typeIndex();
-        ByteArrayList argumentTypes = wasmModule.symbolTable().getFunctionTypeArgumentTypes(typeIndex);
-        ByteArrayList localTypes = readCodeEntryLocals();
-        byte[] allLocalTypes = ByteArrayList.concat(argumentTypes, localTypes);
-        codeEntry.setLocalTypes(allLocalTypes);
+        codeEntry.setLocalTypes(locals.toArray());
+        return numLocals;
     }
 
     private void checkValidStateOnBlockExit(byte returnTypeId, ExecutionState state, int initialStackSize) {
@@ -468,9 +415,7 @@ public class BinaryReader extends BinaryStreamReader {
                 case CALL: {
                     int functionIndex = readFunctionIndex(bytesConsumed);
                     state.useByteConstant(bytesConsumed[0]);
-                    int functionNumArguments = wasmModule.symbolTable().function(functionIndex).numArguments();
-                    int functionReturnTypeLength = wasmModule.symbolTable().function(functionIndex).returnTypeLength();
-                    state.pop(functionNumArguments);
+                    int functionReturnTypeLength = wasmModule.symbolTable().getFunctionReturnTypeLength(functionIndex);
                     state.push(functionReturnTypeLength);
                     break;
                 }
@@ -502,70 +447,6 @@ public class BinaryReader extends BinaryStreamReader {
                     Assert.assertLess(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
                     // Assert there is a value on the top of the stack.
                     Assert.assertLarger(state.stackSize(), 0, "local.tee requires at least one element in the stack");
-                    break;
-                }
-                case GLOBAL_GET: {
-                    int globalIndex = readLocalIndex(bytesConsumed);
-                    state.useByteConstant(bytesConsumed[0]);
-                    // Assert globalIndex exists.
-                    Assert.assertLess(globalIndex, wasmModule.symbolTable().numGlobals(), "Invalid global index for global.get");
-                    state.push();
-                    break;
-                }
-                case GLOBAL_SET: {
-                    int globalIndex = readLocalIndex(bytesConsumed);
-                    state.useByteConstant(bytesConsumed[0]);
-                    // Assert localIndex exists.
-                    Assert.assertLess(globalIndex, wasmModule.symbolTable().numGlobals(), "Invalid global index for global.set");
-                    // Assert there is a value on the top of the stack.
-                    Assert.assertLarger(state.stackSize(), 0, "global.set requires at least one element in the stack");
-                    state.pop();
-                    break;
-                }
-                case I32_LOAD:
-                case I64_LOAD:
-                case F32_LOAD:
-                case F64_LOAD:
-                case I32_LOAD8_S:
-                case I32_LOAD8_U:
-                case I32_LOAD16_S:
-                case I32_LOAD16_U:
-                case I64_LOAD8_S:
-                case I64_LOAD8_U:
-                case I64_LOAD16_S:
-                case I64_LOAD16_U:
-                case I64_LOAD32_S:
-                case I64_LOAD32_U:
-                    readUnsignedInt32(bytesConsumed);  // align
-                    state.useByteConstant(bytesConsumed[0]);
-                    readUnsignedInt32(bytesConsumed);  // offset
-                    state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertLarger(state.stackSize(), 0, String.format("load instruction 0x%02X requires at least one element in the stack", opcode));
-                    state.pop();   // base address
-                    state.push();  // loaded value
-                    break;
-                case I32_STORE:
-                case I64_STORE:
-                case F32_STORE:
-                case F64_STORE:
-                case I32_STORE_16:
-                case I64_STORE_8:
-                case I64_STORE_16:
-                case I64_STORE_32:
-                    readUnsignedInt32(bytesConsumed);  // align
-                    state.useByteConstant(bytesConsumed[0]);
-                    readUnsignedInt32(bytesConsumed);  // offset
-                    state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertLarger(state.stackSize(), 1, String.format("store instruction 0x%02X requires at least two elements in the stack", opcode));
-                    state.pop();  // value to store
-                    state.pop();  // base address
-                    break;
-                case MEMORY_SIZE: {
-                    read1();  // 0x00
-                    break;
-                }
-                case MEMORY_GROW: {
-                    read1();  // 0x00
                     break;
                 }
                 case I32_CONST:
@@ -826,16 +707,6 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void readGlobalSection() {
-        int numGlobals = readVectorLength();
-        for (int i = 0; i != numGlobals; i++) {
-            byte type = readValueType();
-            byte mut = read1();
-            // TODO: Store the global to the symbol table (or elsewhere).
-            byte b;
-            do {
-                b = read1();
-            } while (b != END);
-        }
     }
 
     private void readFunctionType() {
