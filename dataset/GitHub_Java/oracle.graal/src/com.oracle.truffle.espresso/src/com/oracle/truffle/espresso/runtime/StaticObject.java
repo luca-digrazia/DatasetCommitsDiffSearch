@@ -44,16 +44,15 @@ import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.vm.UnsafeAccess;
 
+import com.oracle.truffle.espresso.vm.UnsafeAccess;
 import sun.misc.Unsafe;
 
 /**
- * Implementation of the Espresso object model.
+ * Jumbo class that does everything for any type of object, while maintaining same performance,
+ * whether they be arrays, classes or regular objects. This allows for leaf type-checks.
  *
- * <p>
- * For performance reasons, all guest objects, including arrays, classes and <b>null</b>, are
- * instances of {@link StaticObject}.
+ * This does not come for free, however, as the implementation is pretty ugly.
  */
 @ExportLibrary(InteropLibrary.class)
 public final class StaticObject implements TruffleObject {
@@ -80,7 +79,7 @@ public final class StaticObject implements TruffleObject {
         return Meta.toHostString(this);
     }
 
-    // endregion Interop
+    // endregion
 
     private static final Unsafe UNSAFE = UnsafeAccess.get();
 
@@ -92,16 +91,7 @@ public final class StaticObject implements TruffleObject {
     private volatile EspressoLock lock;
 
     /**
-     * Returns an {@link EspressoLock} instance for use with this {@link StaticObject} instance.
-     *
-     * <p>
-     * The {@link EspressoLock} instance will be unique and cached. Calling this method on
-     * {@link StaticObject#NULL} is an invalid operation.
-     *
-     * <p>
-     * The returned {@link EspressoLock} instance supports the same usages as do the {@link Object}
-     * monitor methods ({@link Object#wait() wait}, {@link Object#notify notify}, and
-     * {@link Object#notifyAll notifyAll}) when used with the built-in monitor lock.
+     * Returns a lock for this instance.
      */
     public EspressoLock getLock() {
         EspressoLock l = lock;
