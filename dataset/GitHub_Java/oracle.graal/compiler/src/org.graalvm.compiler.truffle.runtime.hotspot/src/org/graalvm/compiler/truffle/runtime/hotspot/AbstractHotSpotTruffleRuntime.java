@@ -114,11 +114,6 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
             super(runtime);
             runtime.installDefaultListeners();
         }
-
-        Lazy(AbstractHotSpotTruffleRuntime runtime, Runnable onIdle) {
-            super(onIdle);
-            runtime.installDefaultListeners();
-        }
     }
 
     private volatile boolean traceTransferToInterpreter;
@@ -131,15 +126,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
         if (lazy == null) {
             synchronized (this) {
                 if (lazy == null) {
-                    lazy = new Lazy(this, new Runnable() {
-                        @Override
-                        public void run() {
-                            TruffleCompiler truffleCompiler = AbstractHotSpotTruffleRuntime.this.truffleCompiler;
-                            if (truffleCompiler instanceof HotSpotTruffleCompiler) {
-                                ((HotSpotTruffleCompiler) truffleCompiler).purgeCaches();
-                            }
-                        }
-                    });
+                    lazy = new Lazy(this);
                 }
             }
         }
@@ -497,9 +484,6 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
 
                 if (target instanceof OptimizedCallTarget) {
                     OptimizedCallTarget callTarget = ((OptimizedCallTarget) target);
-                    if (callTarget.isValid()) {
-                        builder.append(" <opt>");
-                    }
                     if (callTarget.getSourceCallTarget() != null) {
                         builder.append(" <split-" + Integer.toHexString(callTarget.hashCode()) + ">");
                     }
