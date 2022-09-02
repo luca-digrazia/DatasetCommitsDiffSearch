@@ -269,29 +269,25 @@ public class Option {
             .type("Boolean")
             .category("INTERNAL")
             .def("false")
-            .help("Treat compilation exceptions as fatal exceptions that will exit the application")
-            .deprecatedBy("PerformanceWarningsAreFatal"), // COMPILER
+            .help("Treat compilation exceptions as fatal exceptions that will exit the application"), // COMPILER
 
         option("TrufflePerformanceWarningsAreFatal")
             .type("Boolean")
             .category("INTERNAL")
             .def("false")
-            .help("Treat performance warnings as fatal occurrences that will exit the applications")
-            .deprecatedBy("CompilationExceptionsAreFatal"), // COMPILER
+            .help("Treat performance warnings as fatal occurrences that will exit the applications"), // COMPILER
 
         option("TruffleCompilationExceptionsArePrinted")
             .type("Boolean")
             .category("INTERNAL")
             .def("true")
-            .help("Prints the exception stack trace for compilation exceptions")
-            .deprecatedBy("CompilationExceptionsArePrinted"),
+            .help("Prints the exception stack trace for compilation exceptions"),
 
         option("TruffleCompilationExceptionsAreThrown")
             .type("Boolean")
             .category("INTERNAL")
             .def("false")
-            .help("Treat compilation exceptions as thrown runtime exceptions")
-            .deprecatedBy("CompilationExceptionsAreThrown"),
+            .help("Treat compilation exceptions as thrown runtime exceptions"),
 
         option("TraceTruffleInlining")
             .type("Boolean")

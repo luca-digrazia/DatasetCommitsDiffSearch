@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
+import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.getOptions;
 import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.overrideOptions;
 
 import java.lang.ref.WeakReference;
@@ -80,7 +81,8 @@ public class BackgroundCompileQueue {
             if (callTarget != null) {
                 try (TruffleRuntimeOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides) : null) {
                     if (!task.isCancelled()) {
-                        runtime.doCompile(callTarget, task);
+                        OptionValues options = getOptions();
+                        runtime.doCompile(options, callTarget, task);
                     }
                 } finally {
                     callTarget.resetCompilationTask();
