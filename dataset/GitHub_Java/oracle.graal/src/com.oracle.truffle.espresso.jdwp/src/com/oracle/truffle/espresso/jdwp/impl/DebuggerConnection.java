@@ -334,9 +334,6 @@ public final class DebuggerConnection implements Commands {
                                 case JDWP.ReferenceType.METHODS_WITH_GENERIC.ID:
                                     result = JDWP.ReferenceType.METHODS_WITH_GENERIC.createReply(packet, context);
                                     break;
-                                case JDWP.ReferenceType.INSTANCES.ID:
-                                    result = JDWP.ReferenceType.INSTANCES.createReply(packet);
-                                    break;
                             }
                             break;
                         }
