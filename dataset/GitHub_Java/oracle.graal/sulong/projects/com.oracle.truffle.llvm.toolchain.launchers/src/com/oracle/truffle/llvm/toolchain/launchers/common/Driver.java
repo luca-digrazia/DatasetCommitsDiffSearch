@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -52,11 +52,6 @@ public class Driver {
 
     public Driver(String exe) {
         this(exe, true);
-    }
-
-    public Driver() {
-        this.exe = null;
-        this.isBundledTool = false;
     }
 
     public enum OS {
@@ -204,7 +199,7 @@ public class Driver {
         return pb.inheritIO();
     }
 
-    public void printMissingToolMessage() {
+    private void printMissingToolMessage() {
         System.err.println("Tool execution failed. Are you sure the toolchain is available at " + getLLVMBinDir().getParent());
         System.err.println("You can install it via GraalVM updater: `gu install llvm-toolchain`");
         System.err.println();
