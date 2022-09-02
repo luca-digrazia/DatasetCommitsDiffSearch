@@ -145,7 +145,7 @@ public abstract class BinaryStreamReader {
     public static int peek4(byte[] data, int offset) {
         int result = 0;
         for (int i = 0; i != 4; ++i) {
-            int x = peek1(data, offset + i) & 0xFF;
+            int x = Byte.toUnsignedInt(peek1(data, offset));
             result |= x << 8 * i;
         }
         return result;
@@ -154,7 +154,7 @@ public abstract class BinaryStreamReader {
     public static long peek8(byte[] data, int offset) {
         long result = 0;
         for (int i = 0; i != 8; ++i) {
-            long x = peek1(data, offset + i) & 0xFF;
+            long x = Byte.toUnsignedLong(peek1(data, offset));
             result |= x << 8 * i;
         }
         return result;

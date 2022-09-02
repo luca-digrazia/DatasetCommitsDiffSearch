@@ -31,61 +31,22 @@ package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.InteropLibrary;
 
 public interface WasmNodeInterface {
     WasmCodeEntry codeEntry();
 
-    /* LOCALS operations */
-
-    default long getLong(VirtualFrame frame, int slot) {
+    default long get(VirtualFrame frame, int slot) {
         try {
-            return frame.getLong(codeEntry().localSlot(slot));
+            return frame.getLong(codeEntry().stackSlot(slot));
         } catch (FrameSlotTypeException e) {
             throw new RuntimeException(e);
         }
     }
 
-    default int getInt(VirtualFrame frame, int slot) {
-        try {
-            return frame.getInt(codeEntry().localSlot(slot));
-        } catch (FrameSlotTypeException e) {
-            throw new RuntimeException(e);
-        }
+    default void set(VirtualFrame frame, int slot, long value) {
+        frame.setLong(codeEntry().stackSlot(slot), value);
     }
-
-    default float getFloat(VirtualFrame frame, int slot) {
-        try {
-            return frame.getFloat(codeEntry().localSlot(slot));
-        } catch (FrameSlotTypeException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    default double getDouble(VirtualFrame frame, int slot) {
-        try {
-            return frame.getDouble(codeEntry().localSlot(slot));
-        } catch (FrameSlotTypeException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    default void setLong(VirtualFrame frame, int slot, long value) {
-        frame.setLong(codeEntry().localSlot(slot), value);
-    }
-
-    default void setInt(VirtualFrame frame, int slot, int value) {
-        frame.setInt(codeEntry().localSlot(slot), value);
-    }
-
-    default void setFloat(VirtualFrame frame, int slot, float value) {
-        frame.setFloat(codeEntry().localSlot(slot), value);
-    }
-
-    default void setDouble(VirtualFrame frame, int slot, double value) {
-        frame.setDouble(codeEntry().localSlot(slot), value);
-    }
-
-    /* STACK operations */
 
     default void push(VirtualFrame frame, int slot, long value) {
         frame.setLong(codeEntry().stackSlot(slot), value);
