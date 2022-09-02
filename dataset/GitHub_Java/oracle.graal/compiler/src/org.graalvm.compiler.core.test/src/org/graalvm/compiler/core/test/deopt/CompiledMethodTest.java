@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,9 +29,7 @@ import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
-import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -63,7 +61,7 @@ public class CompiledMethodTest extends GraalCompilerTest {
     public void test1() {
         final ResolvedJavaMethod javaMethod = getResolvedJavaMethod("testMethod");
         final StructuredGraph graph = parseEager(javaMethod, AllowAssumptions.NO);
-        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        createCanonicalizerPhase().apply(graph, getProviders());
         new DeadCodeEliminationPhase().apply(graph);
 
         for (ConstantNode node : ConstantNode.getConstantNodes(graph)) {
@@ -72,15 +70,20 @@ public class CompiledMethodTest extends GraalCompilerTest {
             }
         }
 
-        InstalledCode compiledMethod = getCode(javaMethod, graph);
+        InstalledCode compiledMethod = getCode(javaMethod, graph, true);
         try {
             Object result = compiledMethod.executeVarargs("1", "2", "3");
-            if (!"1-2-3".equals(result)) {
-                // Deoptimization probably occurred
-                Assert.assertEquals("interpreter", result);
-            }
+            String expected = "1-2-3";
+            checkResult(result, expected);
         } catch (InvalidInstalledCodeException t) {
             Assert.fail("method invalidated");
+        }
+    }
+
+    private static void checkResult(Object result, String expected) {
+        if (!expected.equals(result)) {
+            // Deoptimization probably occurred
+            Assert.assertEquals("interpreter", result);
         }
     }
 
@@ -90,7 +93,7 @@ public class CompiledMethodTest extends GraalCompilerTest {
         InstalledCode compiledMethod = getCode(javaMethod);
         try {
             Object result = compiledMethod.executeVarargs("1", "2", "3");
-            Assert.assertEquals("1 2 3", result);
+            checkResult(result, "1 2 3");
         } catch (InvalidInstalledCodeException t) {
             Assert.fail("method invalidated");
         }
@@ -103,7 +106,7 @@ public class CompiledMethodTest extends GraalCompilerTest {
         try {
             f1 = "0";
             Object result = compiledMethod.executeVarargs(this, "1", "2", "3");
-            Assert.assertEquals("0 1 2 3", result);
+            checkResult(result, "0 1 2 3");
         } catch (InvalidInstalledCodeException t) {
             Assert.fail("method invalidated");
         }
