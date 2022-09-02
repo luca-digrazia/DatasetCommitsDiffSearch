@@ -570,7 +570,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                 }
             }
             if (task != null) {
-                runtime().getListener().onCompilationQueued(this);
                 return maybeWaitForTask(task);
             }
         }
@@ -770,6 +769,9 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     public final String toString() {
         CompilerAsserts.neverPartOfCompilation();
         String superString = rootNode.toString();
+        if (isValid()) {
+            superString += " <opt>";
+        }
         if (sourceCallTarget != null) {
             superString += " <split-" + Integer.toHexString(hashCode()) + ">";
         }
