@@ -31,15 +31,14 @@ import org.openjdk.jmh.annotations.Warmup;
 /**
  * Base class for JMH benchmarks.
  */
-@Warmup(iterations = BenchmarkBase.Defaults.WARMUP_ITERATIONS, time = BenchmarkBase.Defaults.ITERATIONS_DURATION)
-@Measurement(iterations = BenchmarkBase.Defaults.MEASUREMENT_ITERATIONS, time = BenchmarkBase.Defaults.ITERATIONS_DURATION)
+@Warmup(iterations = BenchmarkBase.Defaults.WARMUP_ITERATIONS, time = 5)
+@Measurement(iterations = BenchmarkBase.Defaults.MEASUREMENT_ITERATIONS, time = 5)
 @Fork(BenchmarkBase.Defaults.FORKS)
 public class BenchmarkBase {
 
     public static class Defaults {
         public static final int MEASUREMENT_ITERATIONS = 5;
         public static final int WARMUP_ITERATIONS = 5;
-        public static final int ITERATIONS_DURATION = 5;
-        public static final int FORKS = 3;
+        public static final int FORKS = 1;
     }
 }
