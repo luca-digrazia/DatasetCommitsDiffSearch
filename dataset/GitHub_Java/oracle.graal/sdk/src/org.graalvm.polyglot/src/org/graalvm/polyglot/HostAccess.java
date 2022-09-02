@@ -168,7 +168,7 @@ public final class HostAccess {
         }
         if (annotations != null) {
             for (Class<? extends Annotation> ann : annotations) {
-                if (hasAnnotation(member, ann)) {
+                if (member.getAnnotation(ann) != null) {
                     return true;
                 }
             }
@@ -191,22 +191,6 @@ public final class HostAccess {
     @Override
     public String toString() {
         return name == null ? super.toString() : name;
-    }
-
-    private static boolean hasAnnotation(AnnotatedElement member, Class<? extends Annotation> annotationType) {
-        if (member instanceof Field) {
-            Field f = (Field) member;
-            return f.getAnnotation(annotationType) != null;
-        }
-        if (member instanceof Method) {
-            Method m = (Method) member;
-            return m.getAnnotation(annotationType) != null;
-        }
-        if (member instanceof Constructor) {
-            Constructor<?> c = (Constructor<?>) member;
-            return c.getAnnotation(annotationType) != null;
-        }
-        return false;
     }
 
     /**
