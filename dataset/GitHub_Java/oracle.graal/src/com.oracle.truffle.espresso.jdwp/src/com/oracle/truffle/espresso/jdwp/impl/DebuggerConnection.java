@@ -31,16 +31,16 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 
-public final class DebuggerConnection implements Commands {
+public final class DebuggerConnection implements JDWPCommands {
 
-    private final DebuggerController controller;
+    private final JDWPDebuggerController controller;
     private final JDWPContext context;
     private final SocketConnection connection;
     private final BlockingQueue<DebuggerCommand> queue = new ArrayBlockingQueue<>(512);
     private Thread commandProcessor;
     private Thread jdwpTransport;
 
-    public DebuggerConnection(SocketConnection connection, DebuggerController controller) {
+    public DebuggerConnection(SocketConnection connection, JDWPDebuggerController controller) {
         this.connection = connection;
         this.controller = controller;
         this.context = controller.getContext();
@@ -152,7 +152,7 @@ public final class DebuggerConnection implements Commands {
 
         @CompilerDirectives.CompilationFinal
         private boolean started;
-        private RequestedJDWPEvents requestedJDWPEvents = new RequestedJDWPEvents(connection, controller);
+        private RequestedJDWPEvents requestedJDWPEvents = new RequestedJDWPEvents(context, connection, controller);
         // constant used to allow for initial startup sequence debugger commands to occur before
         // waking up the main Espresso startup thread
         private static final int GRACE_PERIOD = 100;
@@ -190,6 +190,12 @@ public final class DebuggerConnection implements Commands {
                                     processPacket(Packet.fromByteArray(connection.readPacket()));
                                     time = System.currentTimeMillis();
                                     limit = time + GRACE_PERIOD;
+                                } else {
+                                    try {
+                                        Thread.sleep(10);
+                                    } catch (InterruptedException e) {
+                                        // fall through
+                                    }
                                 }
                             }
                         }
@@ -207,7 +213,7 @@ public final class DebuggerConnection implements Commands {
         }
 
         private void processPacket(Packet packet) {
-            CommandResult result = null;
+            JDWPResult result = null;
 
             if (packet.flags == Packet.Reply) {
                 // result packet from debugger!
@@ -369,10 +375,10 @@ public final class DebuggerConnection implements Commands {
                                 result = JDWP.ObjectReference.INVOKE_METHOD.createReply(packet, controller);
                                 break;
                             case JDWP.ObjectReference.DISABLE_COLLECTION.ID:
-                                result = JDWP.ObjectReference.DISABLE_COLLECTION.createReply(packet, controller);
+                                result = JDWP.ObjectReference.DISABLE_COLLECTION.createReply(packet, context);
                                 break;
                             case JDWP.ObjectReference.ENABLE_COLLECTION.ID:
-                                result = JDWP.ObjectReference.ENABLE_COLLECTION.createReply(packet, controller);
+                                result = JDWP.ObjectReference.ENABLE_COLLECTION.createReply(packet, context);
                                 break;
                             case JDWP.ObjectReference.IS_COLLECTED.ID:
                                 result = JDWP.ObjectReference.IS_COLLECTED.createReply(packet, context);
@@ -400,7 +406,7 @@ public final class DebuggerConnection implements Commands {
                                 result = JDWP.ThreadReference.RESUME.createReply(packet, controller);
                                 break;
                             case JDWP.ThreadReference.STATUS.ID:
-                                result = JDWP.ThreadReference.STATUS.createReply(packet, controller);
+                                result = JDWP.ThreadReference.STATUS.createReply(packet, context);
                                 break;
                             case JDWP.ThreadReference.THREAD_GROUP.ID:
                                 result = JDWP.ThreadReference.THREAD_GROUP.createReply(packet, context);
@@ -412,7 +418,7 @@ public final class DebuggerConnection implements Commands {
                                 result = JDWP.ThreadReference.FRAME_COUNT.createReply(packet, controller);
                                 break;
                             case JDWP.ThreadReference.SUSPEND_COUNT.ID:
-                                result = JDWP.ThreadReference.SUSPEND_COUNT.createReply(packet, controller);
+                                result = JDWP.ThreadReference.SUSPEND_COUNT.createReply(packet, context);
                                 break;
                         }
                         break;
@@ -457,7 +463,7 @@ public final class DebuggerConnection implements Commands {
                     case JDWP.EventRequest.ID: {
                         switch (packet.cmd) {
                             case JDWP.EventRequest.SET.ID: {
-                                result = requestedJDWPEvents.registerEvent(packet, DebuggerConnection.this);
+                                result = requestedJDWPEvents.registerEvent(packet, DebuggerConnection.this, context);
                                 break;
                             }
                             case JDWP.EventRequest.CLEAR.ID: {
