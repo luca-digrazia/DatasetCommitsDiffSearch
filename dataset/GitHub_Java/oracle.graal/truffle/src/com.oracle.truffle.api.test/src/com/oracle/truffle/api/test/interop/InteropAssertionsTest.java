@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -59,7 +59,6 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -1114,8 +1113,6 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
         Predicate<Object> modifiable;
         Predicate<Object> insertable;
         Predicate<Object> removeable;
-        Predicate<Object> writable;
-        Predicate<Object> existing;
         Supplier<Long> size;
         Map<Object, Object> data;
         Supplier<Object> iterator;
@@ -1262,24 +1259,6 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
         }
 
         @ExportMessage
-        public boolean isHashEntryWritable(Object key) {
-            if (writable != null) {
-                return writable.test(key);
-            } else {
-                return isHashEntryModifiable(key) || isHashEntryInsertable(key);
-            }
-        }
-
-        @ExportMessage
-        public boolean isHashEntryExisting(Object key) {
-            if (existing != null) {
-                return existing.test(key);
-            } else {
-                return isHashEntryReadable(key) || isHashEntryModifiable(key) || isHashEntryRemovable(key);
-            }
-        }
-
-        @ExportMessage
         @SuppressWarnings("static-method")
         boolean hasLanguage() {
             return true;
@@ -1398,30 +1377,6 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
         hashTest.insertable = (k) -> true;
         hashTest.readable = (k) -> true;
         assertFails(() -> hashLib.isHashEntryInsertable(hashTest, 1), AssertionError.class);
-    }
-
-    @Test
-    public void testIsHashEntryExisting() {
-        HashTest hashTest = new HashTest();
-        InteropLibrary hashLib = createLibrary(InteropLibrary.class, hashTest);
-        assertFalse(hashLib.isHashEntryExisting(hashTest, 1));
-        hashTest.modifiable = (k) -> true;
-        assertTrue(hashLib.isHashEntryExisting(hashTest, 1));
-        hashTest.modifiable = null;
-        hashTest.existing = (k) -> true;
-        assertFails(() -> hashLib.isHashEntryExisting(hashTest, 1), AssertionError.class);
-    }
-
-    @Test
-    public void testIsHashEntryWritable() {
-        HashTest hashTest = new HashTest();
-        InteropLibrary hashLib = createLibrary(InteropLibrary.class, hashTest);
-        assertTrue(hashLib.isHashEntryWritable(hashTest, 1));
-        hashTest.insertable = (k) -> false;
-        hashTest.modifiable = (k) -> false;
-        assertFalse(hashLib.isHashEntryWritable(hashTest, 1));
-        hashTest.writable = (k) -> true;
-        assertFails(() -> hashLib.isHashEntryWritable(hashTest, 1), AssertionError.class);
     }
 
     @Test
@@ -1565,45 +1520,5 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
         hashTest.iterator = () -> new TruffleObject() {
         };
         assertFails(() -> hashLib.getHashValuesIterator(hashTest), AssertionError.class);
-    }
-
-    public void testArityException() {
-        assertNotNull(ArityException.create(0, 0, -1));
-        assertNotNull(ArityException.create(0, 1, -1));
-        assertNotNull(ArityException.create(0, 1, -1));
-        assertNotNull(ArityException.create(0, -1, -1));
-
-        assertNotNull(ArityException.create(0, 0, 1));
-        assertNotNull(ArityException.create(0, 1, 2));
-        assertNotNull(ArityException.create(0, 1, 3));
-        assertNotNull(ArityException.create(1, -1, 0));
-        assertNotNull(ArityException.create(2, -1, 1));
-        assertNotNull(ArityException.create(0, Integer.MAX_VALUE - 1, Integer.MAX_VALUE));
-
-        assertFails(() -> ArityException.create(0, 0, 0), IllegalArgumentException.class);
-        assertFails(() -> ArityException.create(0, 1, 0), IllegalArgumentException.class);
-        assertFails(() -> ArityException.create(1, 0, 2), IllegalArgumentException.class);
-        assertFails(() -> ArityException.create(0, 1, 1), IllegalArgumentException.class);
-        assertFails(() -> ArityException.create(0, -1, 0), IllegalArgumentException.class);
-        assertFails(() -> ArityException.create(0, -1, Integer.MAX_VALUE), IllegalArgumentException.class);
-        assertFails(() -> ArityException.create(2, -1, 2), IllegalArgumentException.class);
-        assertFails(() -> ArityException.create(-1, -1, -1), IllegalArgumentException.class);
-
-        assertEquals(0, ArityException.create(0, 0, -1).getExpectedMinArity());
-        assertEquals(1, ArityException.create(1, 1, 2).getExpectedMinArity());
-        assertEquals(2, ArityException.create(2, 2, 3).getExpectedMinArity());
-
-        assertEquals(0, ArityException.create(0, 0, -1).getExpectedMaxArity());
-        assertEquals(1, ArityException.create(1, 1, 2).getExpectedMaxArity());
-        assertEquals(2, ArityException.create(2, 2, 3).getExpectedMaxArity());
-
-        assertEquals(-1, ArityException.create(0, 0, -1).getActualArity());
-        assertEquals(1, ArityException.create(0, 0, 1).getActualArity());
-        assertEquals(0, ArityException.create(1, 2, 0).getActualArity());
-
-        assertEquals("Arity error - expected: 0 actual: unknown", ArityException.create(0, 0, -1).getMessage());
-        assertEquals("Arity error - expected: 0 actual: 1", ArityException.create(0, 0, 1).getMessage());
-        assertEquals("Arity error - expected range: [0 - 1] actual: 2", ArityException.create(0, 1, 2).getMessage());
-        assertEquals("Arity error - expected range: [0 - infinity] actual: unknown", ArityException.create(0, -1, -1).getMessage());
     }
 }

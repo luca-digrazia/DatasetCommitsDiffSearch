@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -801,8 +801,9 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements HostWrapper {
                         if (isObjectKey(key)) {
                             String member = (String) key;
                             Object readValue = interop.readMember(receiver, member);
-                            Object guestExpectedValue = toGuest.execute(languageContext, expectedValue);
-                            if (!equalsBoundary(guestExpectedValue, readValue)) {
+                            if (!equalsBoundary(expectedValue, readValue)) {    // Todo: Should be
+                                                                                // toGuest(expectedValue)
+                                                                                // add test and fix
                                 return false;
                             }
                             interop.removeMember(receiver, ((String) key));
@@ -813,8 +814,9 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements HostWrapper {
                         if (isArrayKey(key)) {
                             int index = intValue(key);
                             Object readValue = interop.readArrayElement(receiver, index);
-                            Object guestExpectedValue = toGuest.execute(languageContext, expectedValue);
-                            if (!equalsBoundary(guestExpectedValue, readValue)) {
+                            if (!equalsBoundary(expectedValue, readValue)) {    // Todo: Should be
+                                                                                // toGuest(expectedValue)
+                                                                                // add test and fix
                                 return false;
                             }
                             interop.removeArrayElement(receiver, index);
@@ -922,7 +924,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements HostWrapper {
 
             @Override
             protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
-                return apply.execute(languageContext, receiver, args[ARGUMENT_OFFSET]);
+                return apply.execute(languageContext, receiver, args[ARGUMENT_OFFSET], Object.class, Object.class);
             }
         }
 
