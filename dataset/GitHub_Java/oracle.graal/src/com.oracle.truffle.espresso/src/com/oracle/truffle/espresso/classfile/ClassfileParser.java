@@ -592,7 +592,7 @@ public final class ClassfileParser {
         int index = stream.readU2();
         if (index == 0) {
             if (!className.equals("Ljava/lang/Object;")) {
-                throw stream.classFormatError("Invalid superclass index 0");
+                throw classfile.classFormatError("Invalid superclass index 0");
             }
             return null;
         }
