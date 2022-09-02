@@ -97,8 +97,6 @@ public class NativeImage {
     static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
 
     static final String platform = getPlatform();
-    // resources.jar packs resources files needed for some jdk services such as xml serialization
-    private static final Path RESOURCES_JAR_PATH_JAVA8 = Paths.get("jre", "lib", "resources.jar");
 
     private static String getPlatform() {
         return (OS.getCurrent().className + "-" + SubstrateUtil.getArchitectureName()).toLowerCase();
@@ -706,6 +704,7 @@ public class NativeImage {
          * non-system class and and triggers a warning.
          */
         addImageBuilderJavaArgs("-Xshare:off");
+
         config.getBuilderClasspath().forEach(this::addImageBuilderClasspath);
         config.getImageProvidedClasspath().forEach(this::addImageProvidedClasspath);
         String clibrariesBuilderArg = config.getBuilderCLibrariesPaths()
@@ -740,7 +739,6 @@ public class NativeImage {
             }
 
             config.getBuilderBootClasspath().forEach((Consumer<? super Path>) this::addImageBuilderBootClasspath);
-            addCustomImageClasspath(config.getJavaHome().resolve(RESOURCES_JAR_PATH_JAVA8));
         }
 
         config.getImageClasspath().forEach(this::addCustomImageClasspath);
@@ -1689,7 +1687,6 @@ public class NativeImage {
             if (!IS_AOT) {
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler", false);
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("com.oracle.graal.graal_enterprise", true);
-                ModuleSupport.exportAndOpenAllPackagesToUnnamed("java.xml", false);
             }
             NativeImage.main(args);
         }
