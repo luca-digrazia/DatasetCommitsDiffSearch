@@ -40,16 +40,15 @@ import com.oracle.truffle.llvm.parser.model.SymbolTable;
 import com.oracle.truffle.llvm.parser.model.ValueSymbol;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.enums.Visibility;
-import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
-public abstract class GlobalValueSymbol extends GlobalSymbol implements Constant, ValueSymbol, MetadataAttachmentHolder {
+public abstract class GlobalValueSymbol extends GlobalSymbol implements ValueSymbol, MetadataAttachmentHolder {
 
     private final PointerType type;
 
-    private Constant value = null;
+    private SymbolImpl value = null;
 
     private final Visibility visibility;
 
@@ -61,7 +60,7 @@ public abstract class GlobalValueSymbol extends GlobalSymbol implements Constant
         super(LLVMIdentifier.UNKNOWN, linkage, index);
         this.type = type;
         this.visibility = visibility;
-        this.value = value > 0 ? (Constant) symbolTable.getForwardReferenced(value - 1, this) : null;
+        this.value = value > 0 ? symbolTable.getForwardReferenced(value - 1, this) : null;
         this.sourceSymbol = null;
     }
 
@@ -78,7 +77,7 @@ public abstract class GlobalValueSymbol extends GlobalSymbol implements Constant
         return type;
     }
 
-    public Constant getValue() {
+    public SymbolImpl getValue() {
         return value;
     }
 
@@ -115,7 +114,7 @@ public abstract class GlobalValueSymbol extends GlobalSymbol implements Constant
     @Override
     public void replace(SymbolImpl oldValue, SymbolImpl newValue) {
         if (value == oldValue) {
-            value = (Constant) newValue;
+            value = newValue;
         }
     }
 
@@ -132,10 +131,5 @@ public abstract class GlobalValueSymbol extends GlobalSymbol implements Constant
     @Override
     public boolean isExternal() {
         return getInitialiser() == 0 && isExported();
-    }
-
-    @Override
-    public boolean isExternalWeak() {
-        return getLinkage() == Linkage.EXTERN_WEAK;
     }
 }
