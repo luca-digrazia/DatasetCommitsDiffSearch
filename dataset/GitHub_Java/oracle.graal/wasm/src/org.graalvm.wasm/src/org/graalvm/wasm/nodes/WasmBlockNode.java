@@ -74,8 +74,6 @@ import org.graalvm.wasm.memory.WasmMemory;
 import static org.graalvm.wasm.BinaryStreamParser.length;
 import static org.graalvm.wasm.BinaryStreamParser.value;
 import static org.graalvm.wasm.WasmMath.addExactUnsigned;
-import static org.graalvm.wasm.WasmMath.truncDouble;
-import static org.graalvm.wasm.WasmMath.truncFloat;
 import static org.graalvm.wasm.constants.Instructions.BLOCK;
 import static org.graalvm.wasm.constants.Instructions.BR;
 import static org.graalvm.wasm.constants.Instructions.BR_IF;
@@ -2490,7 +2488,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     private void f32_trunc(long[] stack, int stackPointer) {
         float x = popAsFloat(stack, stackPointer - 1);
-        float result = truncFloat(x);
+        float result = (float) (x < 0.0 ? Math.ceil(x) : Math.floor(x));
         pushFloat(stack, stackPointer - 1, result);
     }
 
@@ -2581,7 +2579,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     private void f64_trunc(long[] stack, int stackPointer) {
         double x = popAsDouble(stack, stackPointer - 1);
-        double result = truncDouble(x);
+        double result = x < 0.0 ? Math.ceil(x) : Math.floor(x);
         pushDouble(stack, stackPointer - 1, result);
     }
 
@@ -2659,7 +2657,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_FLOAT_TRUNCATABLE_TO_INT || x > MAX_FLOAT_TRUNCATABLE_TO_INT) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final int result = (int) WasmMath.truncFloatToLong(x);
+        final int result = (int) WasmMath.truncFloat(x);
         pushInt(stack, stackPointer - 1, result);
     }
 
@@ -2670,7 +2668,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_FLOAT_TRUNCATABLE_TO_U_INT || x > MAX_FLOAT_TRUNCATABLE_TO_U_INT) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final int result = (int) WasmMath.truncFloatToUnsignedLong(x);
+        final int result = (int) WasmMath.truncFloatUnsigned(x);
         pushInt(stack, stackPointer - 1, result);
     }
 
@@ -2681,7 +2679,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_INT || x > MAX_DOUBLE_TRUNCATABLE_TO_INT) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final int result = (int) WasmMath.truncDoubleToLong(x);
+        final int result = (int) WasmMath.truncDouble(x);
         pushInt(stack, stackPointer - 1, result);
     }
 
@@ -2692,7 +2690,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_U_INT || x > MAX_DOUBLE_TRUNCATABLE_TO_U_INT) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final int result = (int) WasmMath.truncDoubleToUnsignedLong(x);
+        final int result = (int) WasmMath.truncDoubleUnsigned(x);
         pushInt(stack, stackPointer - 1, result);
     }
 
@@ -2715,7 +2713,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_FLOAT_TRUNCATABLE_TO_LONG || x > MAX_FLOAT_TRUNCATABLE_TO_LONG) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final long result = WasmMath.truncFloatToLong(x);
+        final long result = WasmMath.truncFloat(x);
         push(stack, stackPointer - 1, result);
     }
 
@@ -2726,7 +2724,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_FLOAT_TRUNCATABLE_TO_U_LONG || x > MAX_FLOAT_TRUNCATABLE_TO_U_LONG) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final long result = WasmMath.truncFloatToUnsignedLong(x);
+        final long result = WasmMath.truncFloatUnsigned(x);
         push(stack, stackPointer - 1, result);
     }
 
@@ -2737,7 +2735,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_LONG || x > MAX_DOUBLE_TRUNCATABLE_TO_LONG) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final long result = WasmMath.truncDoubleToLong(x);
+        final long result = WasmMath.truncDouble(x);
         push(stack, stackPointer - 1, result);
     }
 
@@ -2748,7 +2746,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_U_LONG || x > MAX_DOUBLE_TRUNCATABLE_TO_U_LONG) {
             throw WasmException.create(Failure.INT_OVERFLOW);
         }
-        final long result = WasmMath.truncDoubleToUnsignedLong(x);
+        final long result = WasmMath.truncDoubleUnsigned(x);
         push(stack, stackPointer - 1, result);
     }
 
