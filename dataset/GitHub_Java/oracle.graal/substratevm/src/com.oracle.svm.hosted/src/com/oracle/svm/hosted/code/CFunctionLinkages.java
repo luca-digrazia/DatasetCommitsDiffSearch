@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,15 +24,15 @@
  */
 package com.oracle.svm.hosted.code;
 
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.c.CGlobalData;
@@ -41,14 +43,13 @@ import com.oracle.svm.hosted.c.CGlobalDataFeature;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public final class CFunctionLinkages {
-    private final ConcurrentMap<String, CGlobalDataInfo> nameToFunction;
-
-    CFunctionLinkages() {
-        nameToFunction = new ConcurrentHashMap<>();
+    public static CFunctionLinkages singleton() {
+        return ImageSingletons.lookup(CFunctionLinkages.class);
     }
 
-    public static CFunctionLinkages get() {
-        return ImageSingletons.lookup(CFunctionLinkages.class);
+    private final Map<String, CGlobalDataInfo> nameToFunction = new ConcurrentHashMap<>();
+
+    CFunctionLinkages() {
     }
 
     public CGlobalDataInfo addOrLookupMethod(ResolvedJavaMethod method) {
@@ -57,7 +58,7 @@ public final class CFunctionLinkages {
         }
         return nameToFunction.computeIfAbsent(linkageName(method), symbolName -> {
             CGlobalData<CFunctionPointer> linkage = CGlobalDataFactory.forSymbol(symbolName);
-            return CGlobalDataFeature.singleton().registerAsAccessed(linkage);
+            return CGlobalDataFeature.singleton().registerAsAccessedOrGet(linkage);
         });
     }
 

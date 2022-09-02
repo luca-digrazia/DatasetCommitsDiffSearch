@@ -73,14 +73,6 @@ public final class JNINativeLinkage {
         return declaringClass;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public String getDescriptor() {
-        return descriptor;
-    }
-
     public boolean isBuiltInFunction() {
         return (PlatformNativeLibrarySupport.singleton().isBuiltinPkgNative(this.getShortName()));
     }
