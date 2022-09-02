@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -515,15 +515,6 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Traversing queue gives first tier compilations priority.", category = OptionCategory.INTERNAL)
     public static final OptionKey<Boolean> TraversingQueueFirstTierPriority = new OptionKey<>(true);
-
-    @Option(help = "TODO", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> TraversingDynamicThresholds = new OptionKey<>(false);
-
-    @Option(help = "TODO", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Double> DynamicThresholdMinScale = new OptionKey<>(0.1);
-
-    @Option(help = "TODO", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Integer> DynamicThresholdNormLoad = new OptionKey<>(3);
 
     // Language agnostic inlining
 

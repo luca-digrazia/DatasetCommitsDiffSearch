@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -129,7 +129,7 @@ public class BackgroundCompileQueue {
             long compilerIdleDelay = runtime.getCompilerIdleDelay(callTarget);
             long keepAliveTime = compilerIdleDelay >= 0 ? compilerIdleDelay : 0;
 
-            this.compilationQueue = createQueue(callTarget, threads);
+            initQueue(callTarget);
             ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(threads, threads,
                             keepAliveTime, TimeUnit.MILLISECONDS,
                             compilationQueue, factory) {
@@ -151,18 +151,11 @@ public class BackgroundCompileQueue {
         }
     }
 
-    private BlockingQueue<Runnable> createQueue(OptimizedCallTarget callTarget, int threads) {
+    private void initQueue(OptimizedCallTarget callTarget) {
         if (callTarget.getOptionValue(PolyglotCompilerOptions.TraversingCompilationQueue)) {
-            if (callTarget.getOptionValue(PolyglotCompilerOptions.DynamicThresholds)) {
-                double minScale = callTarget.getOptionValue(PolyglotCompilerOptions.DynamicThresholdsMinScale);
-                int normalLoad = callTarget.getOptionValue(PolyglotCompilerOptions.DynamicThresholdsNormalLoad);
-                double plateauWidth = callTarget.getOptionValue(PolyglotCompilerOptions.DynamicThresholdPlateauWidth);
-                return new DynamicThresholdsQueue(runtime, threads, minScale, normalLoad, plateauWidth);
-            } else {
-                return new TraversingBlockingQueue();
-            }
+            this.compilationQueue = new TraversingBlockingQueue();
         } else {
-            return new IdlingPriorityBlockingQueue<>();
+            this.compilationQueue = new IdlingPriorityBlockingQueue<>();
         }
     }
 

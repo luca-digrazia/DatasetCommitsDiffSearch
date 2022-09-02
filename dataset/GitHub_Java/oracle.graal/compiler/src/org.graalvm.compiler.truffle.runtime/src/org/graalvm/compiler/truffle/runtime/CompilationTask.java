@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -196,11 +196,7 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
      * use this method, because the weight is dynamic, and relying on it in the ordering could
      * corrupt a queue data structure.
      */
-    boolean isHigherPriorityThan(CompilationTask other) {
-        if (action != compilationAction) {
-            // Any non-compilation action (e.g. compiler init) is higher priority.
-            return true;
-        }
+    public boolean isHigherPriorityThan(CompilationTask other) {
         int tier = tier();
         if (engineData.traversingFirstTierPriority && tier != other.tier()) {
             return tier < other.tier();
@@ -217,7 +213,7 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
         return false;
     }
 
-    double updateWeight(long currentTime) {
+    public double updateWeight(long currentTime) {
         OptimizedCallTarget target = targetRef.get();
         if (target == null) {
             return -1.0;
