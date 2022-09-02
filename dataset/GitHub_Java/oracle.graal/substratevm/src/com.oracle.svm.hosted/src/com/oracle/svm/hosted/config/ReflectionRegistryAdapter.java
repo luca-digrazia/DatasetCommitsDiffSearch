@@ -29,7 +29,6 @@ import java.util.List;
 
 import org.graalvm.nativeimage.impl.ReflectionRegistry;
 
-import com.oracle.svm.core.TypeResult;
 import com.oracle.svm.core.configure.ReflectionConfigurationParserDelegate;
 import com.oracle.svm.hosted.ImageClassLoader;
 
@@ -50,19 +49,13 @@ public class ReflectionRegistryAdapter implements ReflectionConfigurationParserD
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public Class<?> resolveType(String typeName) {
-        return resolveTypeResult(typeName).get();
-    }
-
-    @Override
-    public TypeResult<Class<?>> resolveTypeResult(String typeName) {
         String name = typeName;
         if (name.indexOf('[') != -1) {
             /* accept "int[][]", "java.lang.String[]" */
             name = MetaUtil.internalNameToJava(MetaUtil.toInternalName(name), true, true);
         }
-        return classLoader.findClass(name);
+        return classLoader.findClassByName(name, false);
     }
 
     @Override
