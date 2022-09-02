@@ -340,6 +340,17 @@ public final class CPUSampler implements Closeable {
     }
 
     /**
+     * Returns how may samples were missed, i.e. how many times taking a stack sample was requested
+     * but was not provided by the runtime in a timely manner.
+     * 
+     * @return The number of missed samples.
+     * @since 21.3.0
+     */
+    public int missedSamples() {
+        return safepointStackSampler.missedSamples();
+    }
+
+    /**
      * Merges all the 'per thread' profiles into one set of nodes and returns it.
      *
      * @return The roots of the trees representing the profile of the execution.
@@ -397,11 +408,32 @@ public final class CPUSampler implements Closeable {
                 threads.put(threadEntry.getKey(), copy.getChildren());
             }
             TruffleContext context = contextEntry.getKey();
-            contextToData.put(context,
-                            new CPUSamplerData(context, threads, mutableSamplerData.biasStatistic, mutableSamplerData.durationStatistic, mutableSamplerData.samplesTaken.get(), period,
-                                            mutableSamplerData.missedSamples.get()));
+            contextToData.put(context, new CPUSamplerData(context, threads, samplerTask.biasStatistic, samplerTask.durationStatistic, mutableSamplerData.samplesTaken.get(), period));
         }
         return contextToData;
+    }
+
+    /**
+     * The sample bias is a measurement of of how much time passed between requesting a stack sample
+     * and starting the stack traversal. This method provies a summary of said times during the
+     * profiling run.
+     *
+     * @return A {@link LongSummaryStatistics} of the sample bias.
+     * @since 21.3.0
+     */
+    public synchronized LongSummaryStatistics getBiasStatistics() {
+        return samplerTask.biasStatistic;
+    }
+
+    /**
+     * The sample duration is a measurement of how long it took to traverse the stack when taking a
+     * sample. This method provides a summary of said times during the profiling run.
+     *
+     * @return A {@link LongSummaryStatistics} of the sample duration.
+     * @since 21.3.0
+     */
+    public LongSummaryStatistics getSampleDuration() {
+        return samplerTask.durationStatistic;
     }
 
     /**
@@ -471,6 +503,7 @@ public final class CPUSampler implements Closeable {
      * @since 19.0
      */
     public Map<Thread, List<StackTraceEntry>> takeSample() {
+        TruffleContext context;
         synchronized (CPUSampler.this) {
             if (safepointStackSampler == null) {
                 this.safepointStackSampler = new SafepointStackSampler(stackLimit, filter, period);
@@ -478,14 +511,14 @@ public final class CPUSampler implements Closeable {
             if (activeContexts.isEmpty()) {
                 return Collections.emptyMap();
             }
-            TruffleContext context = activeContexts.keySet().iterator().next();
-            Map<Thread, List<StackTraceEntry>> stacks = new HashMap<>();
-            List<StackSample> sample = safepointStackSampler.sample(env, context, activeContexts.get(context));
-            for (StackSample stackSample : sample) {
-                stacks.put(stackSample.thread, stackSample.stack);
-            }
-            return Collections.unmodifiableMap(stacks);
+            context = activeContexts.keySet().iterator().next();
         }
+        Map<Thread, List<StackTraceEntry>> stacks = new HashMap<>();
+        List<StackSample> sample = safepointStackSampler.sample(env, context);
+        for (StackSample stackSample : sample) {
+            stacks.put(stackSample.thread, stackSample.stack);
+        }
+        return Collections.unmodifiableMap(stacks);
     }
 
     private void resetSampling() {
@@ -647,6 +680,9 @@ public final class CPUSampler implements Closeable {
 
     private class SamplingTimerTask extends TimerTask {
 
+        private final LongSummaryStatistics biasStatistic = new LongSummaryStatistics();
+        private final LongSummaryStatistics durationStatistic = new LongSummaryStatistics();
+
         @Override
         public void run() {
             long taskStartTime = System.currentTimeMillis();
@@ -654,7 +690,7 @@ public final class CPUSampler implements Closeable {
                 if (context.isClosed()) {
                     continue;
                 }
-                List<StackSample> samples = safepointStackSampler.sample(env, context, activeContexts.get(context));
+                List<StackSample> samples = safepointStackSampler.sample(env, context);
                 synchronized (CPUSampler.this) {
                     if (!collecting) {
                         return;
@@ -663,9 +699,12 @@ public final class CPUSampler implements Closeable {
                         continue;
                     }
                     final MutableSamplerData mutableSamplerData = activeContexts.get(context);
+                    if (mutableSamplerData.threadData == null) {
+                        continue;
+                    }
                     for (StackSample sample : samples) {
-                        mutableSamplerData.biasStatistic.accept(sample.biasNs);
-                        mutableSamplerData.durationStatistic.accept(sample.durationNs);
+                        biasStatistic.accept(sample.biasNs);
+                        durationStatistic.accept(sample.durationNs);
                         ProfilerNode<Payload> threadNode = mutableSamplerData.threadData.computeIfAbsent(sample.thread, new Function<Thread, ProfilerNode<Payload>>() {
                             @Override
                             public ProfilerNode<Payload> apply(Thread thread) {
@@ -720,12 +759,9 @@ public final class CPUSampler implements Closeable {
         }
     }
 
-    static class MutableSamplerData {
-        final Map<Thread, ProfilerNode<Payload>> threadData = new HashMap<>();
-        final AtomicLong samplesTaken = new AtomicLong(0);
-        final LongSummaryStatistics biasStatistic = new LongSummaryStatistics();
-        final LongSummaryStatistics durationStatistic = new LongSummaryStatistics();
-        final AtomicLong missedSamples = new AtomicLong(0);
+    private static class MutableSamplerData {
+        Map<Thread, ProfilerNode<Payload>> threadData = new HashMap<>();
+        AtomicLong samplesTaken = new AtomicLong(0);
     }
 
 }
