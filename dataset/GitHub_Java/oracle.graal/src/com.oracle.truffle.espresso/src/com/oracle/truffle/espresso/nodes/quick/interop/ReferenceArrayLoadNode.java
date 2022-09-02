@@ -43,9 +43,11 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public abstract class ReferenceArrayLoadNode extends QuickNode {
     protected static final int LIMIT = 3;
+    protected final int resultAt;
 
     protected ReferenceArrayLoadNode(int top, int callerBCI) {
         super(top, callerBCI);
+        resultAt = top - 2;
     }
 
     @Override
@@ -53,7 +55,7 @@ public abstract class ReferenceArrayLoadNode extends QuickNode {
         BytecodeNode root = getBytecodesNode();
         StaticObject array = nullCheck(root.popObject(frame, top - 2));
         int index = root.popInt(frame, top - 1);
-        root.putObject(frame, top - 2, executeLoad(array, index));
+        root.putObject(frame, resultAt, executeLoad(array, index));
         return Bytecodes.stackEffectOf(Bytecodes.AALOAD);
     }
 
@@ -83,6 +85,6 @@ public abstract class ReferenceArrayLoadNode extends QuickNode {
 
     @Override
     public boolean producedForeignObject(VirtualFrame frame) {
-        return getBytecodesNode().peekObject(frame, top - 2).isForeignObject();
+        return getBytecodesNode().peekObject(frame, resultAt).isForeignObject();
     }
 }
