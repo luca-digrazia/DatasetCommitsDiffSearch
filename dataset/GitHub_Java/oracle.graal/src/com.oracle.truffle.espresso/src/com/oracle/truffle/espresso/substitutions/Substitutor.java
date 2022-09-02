@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,45 +23,56 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-import java.util.List;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
 
-public abstract class Substitutor {
+public abstract class Substitutor extends SubstitutionProfiler {
 
-    public static final String INSTANCE_NAME = "theInstance";
-    public static final String GETTER = "getInstance";
+    public abstract static class Factory {
+        public abstract Substitutor create(Meta meta);
 
-    private static String getClassName(String className, String methodName, List<String> parameterTypes) {
-        StringBuilder str = new StringBuilder();
-        str.append(className).append("_").append(methodName).append(signatureSuffixBuilder(parameterTypes));
-        return str.toString();
-    }
+        private final String[] methodName;
+        private final String[] substitutionClassName;
+        private final String returnType;
+        private final String[] parameterTypes;
+        private final boolean hasReceiver;
 
-    /**
-     * This method MUST return the same as th one in SubstitutionProcessor.
-     */
-    public static String getQualifiedClassName(String className, String methodName, List<String> parameterTypes) {
-        return Substitutor.class.getPackage().getName() + "." + getClassName(className, methodName, parameterTypes);
-    }
-
-    private static StringBuilder signatureSuffixBuilder(List<String> parameterTypes) {
-        StringBuilder str = new StringBuilder();
-        str.append("_");
-        boolean first = true;
-        for (String parameter : parameterTypes) {
-            if (first) {
-                first = false;
-            } else {
-                str.append("_");
-            }
-            str.append(parameter);
+        public Factory(String methodName, String substitutionClassName, String returnType, String[] parameterTypes, boolean hasReceiver) {
+            this.methodName = new String[]{methodName};
+            this.substitutionClassName = new String[]{substitutionClassName};
+            this.returnType = returnType;
+            this.parameterTypes = parameterTypes;
+            this.hasReceiver = hasReceiver;
         }
-        str.append(parameterTypes.size());
-        return str;
+
+        public String[] getMethodNames() {
+            return methodName;
+        }
+
+        public String[] substitutionClassNames() {
+            return substitutionClassName;
+        }
+
+        public String returnType() {
+            return returnType;
+        }
+
+        public String[] parameterTypes() {
+            return parameterTypes;
+        }
+
+        public boolean hasReceiver() {
+            return hasReceiver;
+        }
     }
 
-// public abstract String methodDescritor();
-//
-// public abstract String type();
+    Substitutor() {
+    }
 
     public abstract Object invoke(Object[] args);
+
+    @Override
+    public Substitutor split() {
+        throw EspressoError.shouldNotReachHere();
+    }
 }

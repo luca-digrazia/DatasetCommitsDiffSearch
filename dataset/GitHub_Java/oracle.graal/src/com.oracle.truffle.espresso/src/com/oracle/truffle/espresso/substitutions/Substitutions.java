@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 import java.util.logging.Level;
 
 import org.graalvm.collections.EconomicMap;
@@ -40,7 +39,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.impl.ClassRegistry;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -48,7 +46,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.IntrinsicSubstitutorNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 
 /**
  * Substitutions/intrinsics for Espresso.
@@ -114,11 +111,7 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
  */
 public final class Substitutions implements ContextAccess {
 
-    private static final TruffleLogger logger = TruffleLogger.getLogger(EspressoLanguage.ID, Substitutions.class);
-
-    public static TruffleLogger getLogger() {
-        return logger;
-    }
+    private static final TruffleLogger SubstitutionsLogger = TruffleLogger.getLogger(EspressoLanguage.ID, Substitutions.class);
 
     public static void ensureInitialized() {
         /* nop */
@@ -135,19 +128,7 @@ public final class Substitutions implements ContextAccess {
      * We use a factory to create the substitution node once the target Method instance is known.
      */
     public interface EspressoRootNodeFactory {
-        /**
-         * Creates a node with a substitution for the given method, or returns <code>null</code> if
-         * the substitution does not apply e.g. static substitutions are only valid classes/methods
-         * on the boot and platform class loaders.
-         *
-         * @param forceValid if true, skips all checks to validate the substitution for the given
-         *            method.
-         */
-        EspressoRootNode createNodeIfValid(Method method, boolean forceValid);
-
-        default EspressoRootNode createNodeIfValid(Method method) {
-            return createNodeIfValid(method, false);
-        }
+        EspressoRootNode spawnNode(Method method);
     }
 
     private static final EconomicMap<MethodRef, EspressoRootNodeFactory> STATIC_SUBSTITUTIONS = EconomicMap.create();
@@ -218,25 +199,10 @@ public final class Substitutions implements ContextAccess {
         }
         Symbol<Type> returnType = StaticSymbols.putType(substitutorFactory.returnType());
         Symbol<Signature> signature = StaticSymbols.putSignature(returnType, parameterTypes.toArray(Symbol.EMPTY_ARRAY));
-
         EspressoRootNodeFactory factory = new EspressoRootNodeFactory() {
             @Override
-            public EspressoRootNode createNodeIfValid(Method methodToSubstitute, boolean forceValid) {
-                StaticObject classLoader = methodToSubstitute.getDeclaringKlass().getDefiningClassLoader();
-                if (forceValid || ClassRegistry.loaderIsBootOrPlatform(classLoader, methodToSubstitute.getMeta())) {
-                    return EspressoRootNode.create(null, new IntrinsicSubstitutorNode(substitutorFactory, methodToSubstitute));
-                }
-
-                getLogger().warning(new Supplier<String>() {
-                    @Override
-                    public String get() {
-                        StaticObject givenLoader = methodToSubstitute.getDeclaringKlass().getDefiningClassLoader();
-                        return "Static substitution for " + methodToSubstitute + " does not apply.\n" +
-                                "\tExpected class loader: Boot (null) or platform class loader\n" +
-                                "\tGiven class loader: " + givenLoader.toDisplayString(false) + "\n";
-                    }
-                });
-                return null;
+            public EspressoRootNode spawnNode(Method espressoMethod) {
+                return EspressoRootNode.create(null, new IntrinsicSubstitutorNode(substitutorFactory, espressoMethod));
             }
         };
         String[] classNames = substitutorFactory.substitutionClassNames();
@@ -261,7 +227,7 @@ public final class Substitutions implements ContextAccess {
         MethodRef key = new MethodRef(type, methodName, signature);
 
         if (STATIC_SUBSTITUTIONS.containsKey(key)) {
-            getLogger().log(Level.FINE, "Runtime substitution shadowed by static one: " + key);
+            SubstitutionsLogger.log(Level.FINE, "Runtime substitution shadowed by static one: " + key);
         }
 
         if (throwIfPresent && runtimeSubstitutions.containsKey(key)) {
@@ -275,10 +241,6 @@ public final class Substitutions implements ContextAccess {
         runtimeSubstitutions.remove(key);
     }
 
-    /**
-     * Returns a node with a substitution for the given method, or <code>null</code> if the
-     * substitution does not exist or does not apply.
-     */
     public EspressoRootNode get(Method method) {
         MethodRef key = getMethodKey(method);
         EspressoRootNodeFactory factory = STATIC_SUBSTITUTIONS.get(key);
@@ -288,6 +250,6 @@ public final class Substitutions implements ContextAccess {
         if (factory == null) {
             return null;
         }
-        return factory.createNodeIfValid(method);
+        return factory.spawnNode(method);
     }
 }

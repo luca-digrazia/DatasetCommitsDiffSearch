@@ -364,7 +364,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
         this.noProvider = processingEnv.getElementUtils().getTypeElement(NO_PROVIDER);
         for (Element e : espressoSubstitutions.getEnclosedElements()) {
             if (e.getKind() == ElementKind.METHOD) {
-                if (e.getSimpleName().contentEquals("nameProvider")) {
+                if (e.getSimpleName().contentEquals("classNameProvider")) {
                     this.espressoSubstitutionsClassNameProvider = (ExecutableElement) e;
                 }
             }
@@ -377,7 +377,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
                 if (e.getSimpleName().contentEquals("hasReceiver")) {
                     this.hasReceiverElement = (ExecutableElement) e;
                 }
-                if (e.getSimpleName().contentEquals("nameProvider")) {
+                if (e.getSimpleName().contentEquals("classNameProvider")) {
                     this.substitutionClassNameProvider = (ExecutableElement) e;
                 }
             }
