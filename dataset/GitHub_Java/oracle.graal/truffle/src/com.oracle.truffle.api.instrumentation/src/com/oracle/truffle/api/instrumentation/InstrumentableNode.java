@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,9 +43,9 @@ package com.oracle.truffle.api.instrumentation;
 import java.util.Set;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleRuntime;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -253,12 +253,6 @@ public interface InstrumentableNode extends NodeInterface {
      * relies on the stability of materialized nodes. Use {@link Node#notifyInserted(Node)} when you
      * need to change the structure of instrumentable nodes.
      * <p>
-     * Node must return itself from this method when it has already seen all the materializedTags
-     * specified as an argument, i.e., not only if the set of tags is exactly the same as before,
-     * but also if the current set of tags is completely contained in the union of all the sets of
-     * tags specified in all the calls of this method that led to creation of this materialized
-     * node.
-     * <p>
      * The AST lock is acquired while this method is invoked. Therefore it is not allowed to run
      * guest language code while this method is invoked. This method might be called in parallel
      * from multiple threads even if the language is single threaded. The method may be invoked
@@ -359,14 +353,14 @@ public interface InstrumentableNode extends NodeInterface {
 
     /**
      * Nodes that the instrumentation framework inserts into guest language ASTs (between
-     * {@link InstrumentableNode instrumentable} guest language nodes and their parents) for the
-     * purpose of interposing on execution events and reporting them via the instrumentation
-     * framework.
+     * {@link Instrumentable} guest language nodes and their parents) for the purpose of interposing
+     * on execution events and reporting them via the instrumentation framework.
      *
-     * @see #createWrapper(ProbeNode)
+     * @see #createWrapper(Node, ProbeNode)
      * @since 0.33
      */
-    public interface WrapperNode extends NodeInterface {
+    @SuppressWarnings("deprecation")
+    public interface WrapperNode extends NodeInterface, InstrumentableFactory.WrapperNode {
 
         /**
          * The {@link InstrumentableNode instrumentable} guest language node, adopted as a child,
@@ -413,12 +407,11 @@ class InstrumentableNodeSnippets {
 
     // BEGIN: com.oracle.truffle.api.instrumentation.InstrumentableNodeSnippets.SimpleNode
     @GenerateWrapper
-    abstract static class SimpleNode extends Node
-                    implements InstrumentableNode {
+    abstract class SimpleNode extends Node implements InstrumentableNode {
 
         public abstract Object execute(VirtualFrame frame);
 
-        public boolean isInstrumentable() {
+        public final boolean isInstrumentable() {
             return true;
         }
 
@@ -446,8 +439,7 @@ class InstrumentableNodeSnippets {
 
     // BEGIN: com.oracle.truffle.api.instrumentation.InstrumentableNodeSnippets.RecommendedNode
     @GenerateWrapper
-    abstract static class RecommendedNode extends Node
-                    implements InstrumentableNode {
+    abstract class RecommendedNode extends Node implements InstrumentableNode {
 
         private static final int NO_SOURCE = -1;
 
@@ -494,16 +486,14 @@ class InstrumentableNodeSnippets {
     abstract static class StatementNodeWrapper implements WrapperNode {
 
         @SuppressWarnings("unused")
-        static StatementNodeWrapper create(StatementNode statementNode,
-                        ProbeNode probe) {
+        static StatementNodeWrapper create(StatementNode statementNode, ProbeNode probe) {
             return null;
         }
     }
 
     // BEGIN: com.oracle.truffle.api.instrumentation.InstrumentableNodeSnippets.StatementNode
     @GenerateWrapper
-    abstract static class StatementNode extends SimpleNode
-                    implements InstrumentableNode {
+    abstract class StatementNode extends SimpleNode implements InstrumentableNode {
 
         @Override
         public final Object execute(VirtualFrame frame) {
@@ -533,18 +523,27 @@ class InstrumentableNodeSnippets {
     }
 
     @SuppressWarnings("unused")
+    class HaltNodeWrapper implements WrapperNode {
+        HaltNodeWrapper(Node node, ProbeNode probe) {
+
+        }
+
+        public Node getDelegateNode() {
+            return null;
+        }
+
+        public ProbeNode getProbeNode() {
+            return null;
+        }
+    }
+
     // BEGIN: com.oracle.truffle.api.instrumentation.InstrumentableNodeSnippets.HaltNode
     @GenerateWrapper
-    static class HaltNode extends Node implements InstrumentableNode {
+    class HaltNode extends Node implements InstrumentableNode {
         private boolean isDebuggerHalt;
 
         public void setDebuggerHalt(boolean isDebuggerHalt) {
             this.isDebuggerHalt = isDebuggerHalt;
-        }
-
-        public Object execute(VirtualFrame frame) {
-            // does nothing;
-            return null;
         }
 
         public boolean isInstrumentable() {
@@ -565,10 +564,23 @@ class InstrumentableNodeSnippets {
     }
     // END: com.oracle.truffle.api.instrumentation.InstrumentableNodeSnippets.HaltNode
 
+    @SuppressWarnings("unused")
+    class ExpressionNodeWrapper implements WrapperNode {
+        ExpressionNodeWrapper(Node node, ProbeNode probe) {
+        }
+
+        public Node getDelegateNode() {
+            return null;
+        }
+
+        public ProbeNode getProbeNode() {
+            return null;
+        }
+    }
+
     // BEGIN: com.oracle.truffle.api.instrumentation.InstrumentableNodeSnippets.ExpressionNode
     @GenerateWrapper
-    abstract static class ExpressionNode extends Node
-                    implements InstrumentableNode {
+    abstract class ExpressionNode extends Node implements InstrumentableNode {
         abstract int execute(VirtualFrame frame);
 
         public boolean isInstrumentable() {
