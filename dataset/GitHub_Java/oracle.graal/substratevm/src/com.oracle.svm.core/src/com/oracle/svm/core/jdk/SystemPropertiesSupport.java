@@ -75,13 +75,7 @@ public abstract class SystemPropertiesSupport {
     private final Map<String, Supplier<String>> lazyRuntimeValues;
 
     private Properties properties;
-
-    /**
-     * Initial value of the system properties after parsing command line options at run time.
-     * Changes by the application using {@link System#setProperties} do not affect this map.
-     */
-    final Map<String, String> savedProperties;
-
+    private final Map<String, String> savedProperties;
     private final Map<String, String> readOnlySavedProperties;
     private final String hostOS = System.getProperty("os.name");
     // needed as fallback for platforms that don't implement osNameValue
@@ -124,7 +118,7 @@ public abstract class SystemPropertiesSupport {
         lazyRuntimeValues.put("user.name", this::userName);
         lazyRuntimeValues.put("user.home", this::userHome);
         lazyRuntimeValues.put("user.dir", this::userDir);
-        lazyRuntimeValues.put("java.io.tmpdir", this::tmpDir);
+        lazyRuntimeValues.put("java.io.tmpdir", this::tmpdirValue);
         lazyRuntimeValues.put("os.version", this::osVersionValue);
         lazyRuntimeValues.put("java.vm.version", VM::getVersion);
 
@@ -227,7 +221,7 @@ public abstract class SystemPropertiesSupport {
 
     private String cachedUserName;
 
-    String userName() {
+    public String userName() {
         if (cachedUserName == null) {
             cachedUserName = userNameValue();
         }
@@ -236,7 +230,7 @@ public abstract class SystemPropertiesSupport {
 
     private String cachedUserHome;
 
-    String userHome() {
+    public String userHome() {
         if (cachedUserHome == null) {
             cachedUserHome = userHomeValue();
         }
@@ -245,20 +239,11 @@ public abstract class SystemPropertiesSupport {
 
     private String cachedUserDir;
 
-    String userDir() {
+    public String userDir() {
         if (cachedUserDir == null) {
             cachedUserDir = userDirValue();
         }
         return cachedUserDir;
-    }
-
-    private String cachedtmpDir;
-
-    String tmpDir() {
-        if (cachedtmpDir == null) {
-            cachedtmpDir = tmpdirValue();
-        }
-        return cachedtmpDir;
     }
 
     // Platform-specific subclasses compute the actual system property values lazily at run time.
