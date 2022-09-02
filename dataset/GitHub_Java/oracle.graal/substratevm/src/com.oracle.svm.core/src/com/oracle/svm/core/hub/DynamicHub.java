@@ -53,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
 
+import com.oracle.svm.core.jdk.Resources;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
@@ -80,7 +81,6 @@ import com.oracle.svm.core.jdk.JDK15OrLater;
 import com.oracle.svm.core.jdk.JDK16OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.jdk.Package_jdk_internal_reflect;
-import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.jdk.Target_java_lang_Module;
 import com.oracle.svm.core.jdk.Target_jdk_internal_reflect_Reflection;
 import com.oracle.svm.core.meta.SharedType;
@@ -100,8 +100,8 @@ import sun.security.util.SecurityConstants;
 public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, java.lang.reflect.Type, GenericDeclaration, Serializable,
                 Target_java_lang_invoke_TypeDescriptor_OfField<DynamicHub>, Target_java_lang_constant_Constable {
 
-    /** Marker value for {@link #classLoader}. */
-    static final Object NO_CLASS_LOADER = new Object();
+    /** Marker that a value must be obtained from the companion object. */
+    private static final Object FROM_COMPANION = new Object();
 
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
@@ -362,7 +362,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         this.componentType = componentHub;
         this.sourceFileName = sourceFileName;
         this.modifiers = modifiers;
-        this.classLoader = PredefinedClassesSupport.isPredefined(hostedJavaClass) ? NO_CLASS_LOADER : classLoader;
+        this.classLoader = PredefinedClassesSupport.isPredefined(hostedJavaClass) ? FROM_COMPANION : classLoader;
         setFlag(IS_HIDDED_FLAG_BIT, isHidden);
         setFlag(IS_RECORD_FLAG_BIT, isRecord);
         this.nestHost = nestHost;
@@ -741,14 +741,14 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private ClassLoader getClassLoader0() {
-        if (classLoader == NO_CLASS_LOADER) {
+        if (classLoader == FROM_COMPANION) {
             return companion.get().getClassLoader();
         }
         return (ClassLoader) classLoader;
     }
 
     public boolean isLoaded() {
-        return classLoader != NO_CLASS_LOADER || (companion.isPresent() && companion.get().hasClassLoader());
+        return classLoader != FROM_COMPANION || (companion.isPresent() && companion.get().hasClassLoader());
     }
 
     void setClassLoaderAtRuntime(ClassLoader loader) {
@@ -950,8 +950,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
                         "` was removed by reachability analysis. Use `Feature.BeforeAnalysisAccess.registerForReflectiveInstantiation` to register the type for reflective instantiation.");
     }
 
-// Checkstyle: allow direct annotation access (false positives)
-
     @Substitute
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
@@ -1019,32 +1017,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         return AnnotationsEncoding.decodeAnnotations(annotationsEncoding).getDeclaredAnnotation(annotationClass);
     }
 
-// Checkstyle: disallow direct annotation access
-
     /**
      * This class stores similar information as the non-public class java.lang.Class.ReflectionData.
      */
     public static final class ReflectionData {
-        static final ReflectionData EMPTY = new ReflectionData(new Field[0], new Field[0], new Field[0], new Method[0], new Method[0], new Constructor<?>[0], new Constructor<?>[0], null, new Field[0],
-                        new Method[0], new Class<?>[0], new Class<?>[0], null, null);
-
-        public static ReflectionData get(Field[] declaredFields, Field[] publicFields, Field[] publicUnhiddenFields, Method[] declaredMethods, Method[] publicMethods,
-                        Constructor<?>[] declaredConstructors, Constructor<?>[] publicConstructors, Constructor<?> nullaryConstructor, Field[] declaredPublicFields,
-                        Method[] declaredPublicMethods, Class<?>[] declaredClasses, Class<?>[] publicClasses, Executable enclosingMethodOrConstructor, Object[] recordComponents) {
-
-            if (z(declaredFields) && z(publicFields) && z(publicUnhiddenFields) && z(declaredMethods) && z(publicMethods) && z(declaredConstructors) &&
-                            z(publicConstructors) && nullaryConstructor == null && z(declaredPublicFields) && z(declaredPublicMethods) && z(declaredClasses) &&
-                            z(publicClasses) && enclosingMethodOrConstructor == null && (recordComponents == null || z(recordComponents))) {
-                return EMPTY; // avoid redundant objects in image heap
-            }
-            return new ReflectionData(declaredFields, publicFields, publicUnhiddenFields, declaredMethods, publicMethods, declaredConstructors, publicConstructors, nullaryConstructor,
-                            declaredPublicFields, declaredPublicMethods, declaredClasses, publicClasses, enclosingMethodOrConstructor, recordComponents);
-        }
-
-        private static boolean z(Object[] array) { // for better readability above
-            return array.length == 0;
-        }
-
         final Field[] declaredFields;
         final Field[] publicFields;
         final Field[] publicUnhiddenFields;
@@ -1065,7 +1041,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
          */
         final Executable enclosingMethodOrConstructor;
 
-        private ReflectionData(Field[] declaredFields, Field[] publicFields, Field[] publicUnhiddenFields, Method[] declaredMethods, Method[] publicMethods, Constructor<?>[] declaredConstructors,
+        public ReflectionData(Field[] declaredFields, Field[] publicFields, Field[] publicUnhiddenFields, Method[] declaredMethods, Method[] publicMethods, Constructor<?>[] declaredConstructors,
                         Constructor<?>[] publicConstructors, Constructor<?> nullaryConstructor, Field[] declaredPublicFields, Method[] declaredPublicMethods, Class<?>[] declaredClasses,
                         Class<?>[] publicClasses, Executable enclosingMethodOrConstructor,
                         Object[] recordComponents) {
@@ -1090,7 +1066,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     static final class Target_java_lang_Class_MethodArray {
     }
 
-    private ReflectionData rd = ReflectionData.EMPTY;
+    private static final ReflectionData NO_REFLECTION_DATA = new ReflectionData(new Field[0], new Field[0], new Field[0], new Method[0], new Method[0], new Constructor<?>[0], new Constructor<?>[0],
+                    null, new Field[0], new Method[0], new Class<?>[0], new Class<?>[0], null, null);
+
+    private ReflectionData rd = NO_REFLECTION_DATA;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public void setReflectionData(ReflectionData rd) {
@@ -1332,22 +1311,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
          * we use the class loader of the caller class instead of the module's loader.
          */
         Class<?> caller = Target_jdk_internal_reflect_Reflection.getCallerClass();
-        return ClassForNameSupport.forNameOrNull(className, caller.getClassLoader());
+        return ClassForNameSupport.forNameOrNull(className, false, caller.getClassLoader());
     }
 
     @Substitute
     public static Class<?> forName(String name, boolean initialize, ClassLoader loader) throws ClassNotFoundException {
-        Class<?> result = ClassForNameSupport.forNameOrNull(name, loader);
-        if (result == null && loader != null && PredefinedClassesSupport.supportsBytecodes()) {
-            result = loader.loadClass(name); // may throw
-        }
-        if (result == null) {
-            throw new ClassNotFoundException(name);
-        }
-        if (initialize) {
-            DynamicHub.fromClass(result).ensureInitialized();
-        }
-        return result;
+        return ClassForNameSupport.forName(name, initialize, loader);
     }
 
     @KeepOriginal
