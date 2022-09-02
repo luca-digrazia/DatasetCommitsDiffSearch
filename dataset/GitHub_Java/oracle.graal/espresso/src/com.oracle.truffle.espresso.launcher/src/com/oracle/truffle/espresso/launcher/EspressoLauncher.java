@@ -40,7 +40,7 @@ import org.graalvm.polyglot.Context.Builder;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 
-public final class EspressoLauncher extends AbstractLanguageLauncher {
+public class EspressoLauncher extends AbstractLanguageLauncher {
     private static final String AGENT_LIB = "java.AgentLib.";
     private static final String AGENT_PATH = "java.AgentPath.";
     private static final String JAVA_AGENT = "java.JavaAgent";
@@ -586,10 +586,5 @@ public final class EspressoLauncher extends AbstractLanguageLauncher {
         } else {
             return toPrepend;
         }
-    }
-
-    @Override
-    protected String[] getDefaultLanguages() {
-        return new String[]{"java"};
     }
 }
