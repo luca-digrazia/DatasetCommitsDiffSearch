@@ -289,7 +289,7 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
      * Returns a context reference sharable within this engine.
      */
     ContextReference<Object> getContextReference() {
-        if (singleInstance.isValid() && !engine.conservativeContextReferences) {
+        if (singleInstance.isValid()) {
             return singleOrMultiContextReference;
         } else {
             return multiContextReference;
