@@ -934,15 +934,12 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             double shortCutProbability = probability(trueSuccessor());
             LogicNode newCondition = LogicNode.or(condition(), negateCondition, conditional.condition(), negateConditionalCondition, shortCutProbability);
             return graph().unique(new ConditionalNode(newCondition, constant, otherValue));
-        }
-
-        if (!graph().isAfterExpandLogic() &&
+        } else if (!graph().isAfterExpandLogic() /*
+                                                  * Cannot spawn NormalizeCompareNodes after
+                                                  * lowering in the ExpandLogicPhase.
+                                                  */ &&
                         constant.isJavaConstant() && conditional.trueValue().isJavaConstant() && conditional.falseValue().isJavaConstant() && condition() instanceof CompareNode &&
                         conditional.condition() instanceof CompareNode) {
-            /*
-             * !isAfterExpandLogic() => Cannot spawn NormalizeCompareNodes after lowering in the
-             * ExpandLogicPhase.
-             */
             Condition cond1 = ((CompareNode) condition()).condition().asCondition();
             if (negateCondition) {
                 cond1 = cond1.negate();
