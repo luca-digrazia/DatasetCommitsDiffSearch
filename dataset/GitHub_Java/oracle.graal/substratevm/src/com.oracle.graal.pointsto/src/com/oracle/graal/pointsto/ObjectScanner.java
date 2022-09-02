@@ -30,10 +30,8 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.IdentityHashMap;
-import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
@@ -58,10 +56,6 @@ public abstract class ObjectScanner {
     protected final BigBang bb;
     private final ReusableSet scannedObjects;
     protected final Deque<WorklistEntry> worklist;
-    /**
-     * Used to track whether all work has been completed or not.
-     */
-    private final AtomicLong workInProgressCount = new AtomicLong(0);
 
     public ObjectScanner(BigBang bigbang, ReusableSet scannedObjects) {
         this.bb = bigbang;
@@ -89,15 +83,10 @@ public abstract class ObjectScanner {
         for (AnalysisField field : fields) {
             if (Modifier.isStatic(field.getModifiers()) && field.getJavaKind() == JavaKind.Object && field.isAccessed()) {
                 if (exec != null) {
-                    workInProgressCount.incrementAndGet();
                     exec.execute(new CompletionExecutor.DebugContextRunnable() {
                         @Override
                         public void run(DebugContext debug) {
-                            try {
-                                scanField(field, null, field);
-                            } finally {
-                                workInProgressCount.decrementAndGet();
-                            }
+                            scanField(field, null, field);
                         }
                     });
                 } else {
@@ -124,15 +113,10 @@ public abstract class ObjectScanner {
         for (AnalysisMethod method : methods) {
             if (method.getTypeFlow().getGraph() != null) {
                 if (exec != null) {
-                    workInProgressCount.incrementAndGet();
                     exec.execute(new CompletionExecutor.DebugContextRunnable() {
                         @Override
                         public void run(DebugContext debug) {
-                            try {
-                                scanMethod(method);
-                            } finally {
-                                workInProgressCount.decrementAndGet();
-                            }
+                            scanMethod(method);
                         }
                     });
                 } else {
@@ -147,8 +131,7 @@ public abstract class ObjectScanner {
                 throw AnalysisError.shouldNotReachHere(e);
             }
         }
-
-        finish(exec);
+        finish();
     }
 
     /*
@@ -296,10 +279,9 @@ public abstract class ObjectScanner {
         if (scannedObjects.putAndAcquire(valueObj) == null) {
             try {
                 forScannedConstant(value, reason);
+                worklist.push(new WorklistEntry(value, reason));
             } finally {
                 scannedObjects.release(valueObj);
-                workInProgressCount.incrementAndGet();
-                worklist.push(new WorklistEntry(value, reason));
             }
         }
 
@@ -390,55 +372,9 @@ public abstract class ObjectScanner {
         return result;
     }
 
-    protected void finish(CompletionExecutor exec) {
-        if (exec != null) {
-            // We add a task which checks for workitems in the worklist, we keep it adding as long
-            // there are more workitems available
-            exec.execute(new CompletionExecutor.DebugContextRunnable() {
-                @Override
-                public void run(DebugContext ignored) {
-                    if (workInProgressCount.get() > 0) {
-                        int worklistLength = worklist.size();
-                        while (!worklist.isEmpty()) {
-                            // Put workitems into buckets to avoid overhead for scheduling
-                            int bucketSize = Integer.max(1, Integer.max(worklistLength, worklist.size()) / (2 * exec.getExecutorService().getPoolSize()));
-                            final ArrayList<WorklistEntry> items = new ArrayList<>();
-                            while (!worklist.isEmpty() && items.size() < bucketSize) {
-                                items.add(worklist.remove());
-                            }
-                            exec.execute(new CompletionExecutor.DebugContextRunnable() {
-                                @Override
-                                public void run(DebugContext ignored2) {
-                                    Iterator<WorklistEntry> it = items.iterator();
-                                    try {
-                                        while (it.hasNext()) {
-                                            try {
-                                                doScan(it.next());
-                                            } finally {
-                                                workInProgressCount.decrementAndGet();
-                                            }
-                                        }
-                                    } finally {
-                                        // Push back leftover elements (In exception case)
-                                        while (it.hasNext()) {
-                                            worklist.push(it.next());
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                        // Put ourself into the queue to re-check the worklist
-                        exec.execute(this);
-                    }
-                }
-            });
-        } else {
-            while (!worklist.isEmpty()) {
-                int size = worklist.size();
-                for (int i = 0; i < size; i++) {
-                    doScan(worklist.remove());
-                }
-            }
+    protected void finish() {
+        while (!worklist.isEmpty()) {
+            doScan(worklist.pop());
         }
     }
 
