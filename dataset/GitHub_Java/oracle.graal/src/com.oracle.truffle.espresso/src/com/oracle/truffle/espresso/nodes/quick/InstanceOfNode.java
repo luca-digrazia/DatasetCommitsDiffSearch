@@ -58,6 +58,7 @@ public abstract class InstanceOfNode extends QuickNode {
 
     InstanceOfNode(char cpIndex, int top, int curBCI) {
         super(top, curBCI);
+        assert !typeToCheck.isPrimitive();
         this.cpIndex = cpIndex;
     }
 
