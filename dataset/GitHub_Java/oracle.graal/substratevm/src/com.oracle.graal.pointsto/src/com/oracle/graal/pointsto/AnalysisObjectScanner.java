@@ -130,7 +130,7 @@ public class AnalysisObjectScanner extends ObjectScanner {
     }
 
     @Override
-    protected void forScannedConstant(JavaConstant value, ScanReason reason) {
+    protected void forScannedConstant(JavaConstant value, Object reason) {
         Object valueObj = bb.getSnippetReflectionProvider().asObject(Object.class, value);
         AnalysisType type = bb.getMetaAccess().lookupJavaType(valueObj.getClass());
 

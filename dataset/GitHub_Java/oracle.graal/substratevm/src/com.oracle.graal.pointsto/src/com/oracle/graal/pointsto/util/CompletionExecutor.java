@@ -66,7 +66,6 @@ public final class CompletionExecutor {
     private volatile CopyOnWriteArrayList<Throwable> exceptions = new CopyOnWriteArrayList<>();
 
     private final ForkJoinPool executorService;
-    private final Runnable heartbeatCallback;
 
     private BigBang bb;
     private Timing timing;
@@ -84,9 +83,8 @@ public final class CompletionExecutor {
         void print();
     }
 
-    public CompletionExecutor(BigBang bb, ForkJoinPool forkJoin, Runnable heartbeatCallback) {
+    public CompletionExecutor(BigBang bb, ForkJoinPool forkJoin) {
         this.bb = bb;
-        this.heartbeatCallback = heartbeatCallback;
         executorService = forkJoin;
         state = new AtomicReference<>(State.UNUSED);
         postedOperations = new LongAdder();
@@ -154,7 +152,6 @@ public final class CompletionExecutor {
                 }
 
                 if (isSequential()) {
-                    heartbeatCallback.run();
                     try (DebugContext debug = command.getDebug(bb.getOptions(), bb.getDebugHandlerFactories());
                                     Scope s = debug.scope("Operation")) {
                         command.run(debug);
@@ -167,7 +164,6 @@ public final class CompletionExecutor {
                         if (timing != null) {
                             startTime = System.nanoTime();
                         }
-                        heartbeatCallback.run();
                         Throwable thrown = null;
                         try (DebugContext debug = command.getDebug(bb.getOptions(), bb.getDebugHandlerFactories());
                                         Scope s = debug.scope("Operation");

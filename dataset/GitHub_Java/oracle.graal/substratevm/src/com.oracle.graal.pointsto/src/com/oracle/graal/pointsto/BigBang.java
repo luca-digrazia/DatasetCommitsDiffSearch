@@ -78,6 +78,7 @@ import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.graal.pointsto.typestate.PointsToStats;
 import com.oracle.graal.pointsto.typestate.TypeState;
+import com.oracle.graal.pointsto.util.AnalysisError;
 import com.oracle.graal.pointsto.util.CompletionExecutor;
 import com.oracle.graal.pointsto.util.CompletionExecutor.DebugContextRunnable;
 import com.oracle.graal.pointsto.util.Timer;
