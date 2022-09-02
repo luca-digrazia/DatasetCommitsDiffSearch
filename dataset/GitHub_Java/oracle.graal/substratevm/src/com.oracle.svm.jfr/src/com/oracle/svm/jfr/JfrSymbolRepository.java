@@ -24,53 +24,68 @@
  */
 package com.oracle.svm.jfr;
 
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
+import com.oracle.svm.core.jdk.UninterruptibleEntry;
+import com.oracle.svm.core.jdk.UninterruptibleHashtable;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.struct.RawField;
+import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.impl.UnmanagedMemorySupport;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.MemoryUtil;
+import com.oracle.svm.core.UnmanagedMemoryUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.struct.PinnedObjectField;
 import com.oracle.svm.core.heap.Heap;
-import com.oracle.svm.core.thread.VMOperation;
+import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
 
 /**
- * In Native Image, we use java.lang.String objects that live in the image heap as symbols.
+ * In Native Image, we use {@link java.lang.String} objects that live in the image heap as symbols.
  */
-public class JfrSymbolRepository implements JfrRepository {
-    private final JfrSymbolHashtable table;
+public class JfrSymbolRepository implements JfrConstantPool {
+    private final JfrSymbolHashtable table0;
+    private final JfrSymbolHashtable table1;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public JfrSymbolRepository() {
-        table = new JfrSymbolHashtable();
+        table0 = new JfrSymbolHashtable();
+        table1 = new JfrSymbolHashtable();
     }
 
     public void teardown() {
-        table.teardown();
+        table0.teardown();
+        table1.teardown();
+    }
+
+    @Uninterruptible(reason = "Called by uninterruptible code.")
+    private JfrSymbolHashtable getTable(boolean previousEpoch) {
+        boolean epoch = previousEpoch ? JfrTraceIdEpoch.getInstance().previousEpoch() : JfrTraceIdEpoch.getInstance().currentEpoch();
+        if (epoch) {
+            return table0;
+        } else {
+            return table1;
+        }
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
-    public long getSymbolId(Class<?> clazz) {
-        return getSymbolId(clazz.getName(), true);
+    public long getSymbolId(String imageHeapString, boolean previousEpoch) {
+        return getSymbolId(imageHeapString, previousEpoch, false);
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
-    public long getSymbolId(String imageHeapString) {
-        return getSymbolId(imageHeapString, false);
-    }
+    public long getSymbolId(String imageHeapString, boolean previousEpoch, boolean replaceDotWithSlash) {
+        if (imageHeapString == null) {
+            return 0;
+        }
 
-    @Uninterruptible(reason = "Epoch must not change while in this method.")
-    private long getSymbolId(String imageHeapString, boolean replaceDotWithSlash) {
         assert Heap.getHeap().isInImageHeap(imageHeapString);
 
         JfrSymbol symbol = StackValue.get(JfrSymbol.class);
@@ -81,19 +96,55 @@ public class JfrSymbolRepository implements JfrRepository {
         int hashcode = (int) (rawPointerValue ^ (rawPointerValue >>> 32));
         symbol.setHash(hashcode);
 
-        return table.add(symbol);
+        return getTable(previousEpoch).add(symbol);
     }
 
     @Override
-    public void write(JfrChunkWriter writer) throws IOException {
-        assert VMOperation.isInProgressAtSafepoint();
+    public int write(JfrChunkWriter writer) {
+        JfrSymbolHashtable table = getTable(true);
+        if (table.getSize() == 0) {
+            return 0;
+        }
         writer.writeCompressedLong(JfrTypes.Symbol.getId());
         writer.writeCompressedLong(table.getSize());
 
-        // TODO: iterate the table and write the symbol data in the correct encoding. Also consider
-        // symbol.getReplaceDotWithSlash() when writing the data.
+        JfrSymbol[] entries = table.getTable();
+        for (int i = 0; i < entries.length; i++) {
+            JfrSymbol entry = entries[i];
+            if (entry.isNonNull()) {
+                while (entry.isNonNull()) {
+                    JfrSymbol tmp = entry;
+                    writeSymbol(writer, entry);
+                    entry = entry.getNext();
+                    table.free(tmp);
+                }
+                entries[i] = WordFactory.nullPointer();
+            }
+        }
+        table.setSize(0);
+        return 1;
     }
 
+    private void writeSymbol(JfrChunkWriter writer, JfrSymbol symbol) {
+        writer.writeCompressedLong(symbol.getId());
+        writer.writeByte(JfrChunkWriter.StringEncoding.UTF8_BYTE_ARRAY.byteValue);
+        byte[] value = symbol.getValue().getBytes(StandardCharsets.UTF_8);
+        if (symbol.getReplaceDotWithSlash()) {
+            replaceDotWithSlash(value);
+        }
+        writer.writeCompressedInt(value.length);
+        writer.writeBytes(value);
+    }
+
+    private void replaceDotWithSlash(byte[] utf8String) {
+        for (int i = 0; i < utf8String.length; i++) {
+            if (utf8String[i] == '.') {
+                utf8String[i] = '/';
+            }
+        }
+    }
+
+    @RawStructure
     private interface JfrSymbol extends UninterruptibleEntry<JfrSymbol> {
         @PinnedObjectField
         @RawField
@@ -135,7 +186,7 @@ public class JfrSymbolRepository implements JfrRepository {
             UnsignedWord size = SizeOf.unsigned(JfrSymbol.class);
             JfrSymbol symbolOnHeap = ImageSingletons.lookup(UnmanagedMemorySupport.class).malloc(size);
             if (symbolOnHeap.isNonNull()) {
-                MemoryUtil.copyConjointMemoryAtomic((Pointer) symbolOnStack, (Pointer) symbolOnHeap, size);
+                UnmanagedMemoryUtil.copy((Pointer) symbolOnStack, (Pointer) symbolOnHeap, size);
                 return symbolOnHeap;
             }
             return WordFactory.nullPointer();

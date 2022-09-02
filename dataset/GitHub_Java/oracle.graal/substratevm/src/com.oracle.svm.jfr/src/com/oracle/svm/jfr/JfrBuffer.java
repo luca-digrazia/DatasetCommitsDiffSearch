@@ -70,15 +70,14 @@ public interface JfrBuffer extends PointerBase {
     }
 
     /**
-     * Returns the position of unflushed data. Any data before this position was already flushed to
-     * some other buffer or to the disk.
+     * Gets the acquired value. Used to control concurrent access to the buffer.
+     *
+     * @see JfrBufferAccess#acquire(JfrBuffer)
+     * @see JfrBufferAccess#release(JfrBuffer)
      */
     @RawField
     Pointer getTop();
 
-    /**
-     * Sets the position of unflushed data.
-     */
     @RawField
     void setTop(Pointer value);
 
@@ -86,8 +85,10 @@ public interface JfrBuffer extends PointerBase {
     int getAcquired();
 
     /**
-     * Should only be called by {@link JfrBufferAccess#acquire(JfrBuffer)} and
-     * {@link JfrBufferAccess#release(JfrBuffer)}.
+     * Sets the acquired value.
+     *
+     * @see JfrBufferAccess#acquire(JfrBuffer)
+     * @see JfrBufferAccess#release(JfrBuffer)
      */
     @RawField
     void setAcquired(int value);

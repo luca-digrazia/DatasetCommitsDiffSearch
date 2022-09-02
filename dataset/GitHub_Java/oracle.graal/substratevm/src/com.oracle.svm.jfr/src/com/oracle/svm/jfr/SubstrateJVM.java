@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.jfr;
 
-import java.util.List;
-
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -41,16 +39,14 @@ import com.oracle.svm.core.thread.ThreadListener;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.jfr.logging.JfrLogging;
 
-import jdk.jfr.Configuration;
+import jdk.jfr.internal.LogTag;
 import jdk.jfr.internal.EventWriter;
 import jdk.jfr.internal.JVM;
-import jdk.jfr.internal.LogTag;
 
 /**
- * Manager class that handles most JFR Java API, see {@link Target_jdk_jfr_internal_JVM}.
+ * Manager class that handles most JFR Java API {@see Target_jdk_jfr_internal_JVM}.
  */
 class SubstrateJVM {
-    private final List<Configuration> knownConfigurations;
     private final JfrOptionSet options;
     private final JfrNativeEventSetting[] eventSettings;
     private final JfrSymbolRepository symbolRepo;
@@ -71,9 +67,7 @@ class SubstrateJVM {
     private byte[] metadataDescriptor;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    SubstrateJVM(List<Configuration> configurations) {
-        this.knownConfigurations = configurations;
-
+    SubstrateJVM() {
         options = new JfrOptionSet();
 
         int eventCount = JfrEvents.getEventCount();
@@ -103,11 +97,6 @@ class SubstrateJVM {
     @Fold
     public static SubstrateJVM get() {
         return ImageSingletons.lookup(SubstrateJVM.class);
-    }
-
-    @Fold
-    public static List<Configuration> getKnownConfigurations() {
-        return get().knownConfigurations;
     }
 
     @Fold
@@ -199,7 +188,7 @@ class SubstrateJVM {
     }
 
     /** See {@link JVM#getStackTraceId}. */
-    public long getStackTraceId(@SuppressWarnings("unused") int skipCount) {
+    public long getStackTraceId(int skipCount) {
         // Stack traces are not supported at the moment.
         return 0;
     }
@@ -366,7 +355,7 @@ class SubstrateJVM {
     }
 
     /** See {@link JVM#setRepositoryLocation}. */
-    public void setRepositoryLocation(@SuppressWarnings("unused") String dirText) {
+    public void setRepositoryLocation(String dirText) {
         // Would only be used in case of an emergency dump, which is not supported at the moment.
     }
 
@@ -385,13 +374,19 @@ class SubstrateJVM {
         }
     }
 
+    /** See {@link JVM#addStringConstant}. */
+    public boolean addStringConstant(boolean expectedEpoch, long id, String value) {
+        // This 'implementation' will cause the EventWriter to always write strings by value.
+        return !expectedEpoch;
+    }
+
     /** See {@link JVM#log}. */
     public void log(int tagSetId, int level, String message) {
         jfrLogging.log(tagSetId, level, message);
     }
 
     /** See {@link JVM#subscribeLogLevel}. */
-    public void subscribeLogLevel(@SuppressWarnings("unused") LogTag lt, @SuppressWarnings("unused") int tagSetId) {
+    public void subscribeLogLevel(LogTag lt, int tagSetId) {
         // Currently unused because logging support is minimal.
     }
 

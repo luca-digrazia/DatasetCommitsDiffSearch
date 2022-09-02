@@ -24,24 +24,27 @@
  */
 package com.oracle.svm.jfr;
 
-import java.io.IOException;
-
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-public class JfrFrameTypeSerializer implements JfrSerializer {
+/**
+ * Used to serialize all predefined frame types into the chunk.
+ */
+public class JfrFrameTypeSerializer implements JfrConstantPool {
     @Platforms(Platform.HOSTED_ONLY.class)
     public JfrFrameTypeSerializer() {
     }
 
     @Override
-    public void write(JfrChunkWriter writer) throws IOException {
-        writer.writeCompressedLong(JfrTypes.Frametype.getId());
+    public int write(JfrChunkWriter writer) {
+        writer.writeCompressedLong(JfrTypes.FrameType.getId());
 
         JfrFrameType[] values = JfrFrameType.values();
         writer.writeCompressedLong(values.length);
-        for (JfrFrameType value : values) {
-            // TODO: write value.getText() in the correct encoding.
+        for (int i = 0; i < values.length; i++) {
+            writer.writeCompressedInt(i);
+            writer.writeString(values[i].getText());
         }
+        return 1;
     }
 }
