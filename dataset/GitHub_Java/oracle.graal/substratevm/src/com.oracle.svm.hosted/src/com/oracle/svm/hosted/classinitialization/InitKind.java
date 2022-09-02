@@ -46,10 +46,6 @@ public enum InitKind {
         return this.ordinal() > other.ordinal() ? this : other;
     }
 
-    InitKind min(InitKind other) {
-        return this.ordinal() < other.ordinal() ? this : other;
-    }
-
     boolean isRunTime() {
         return this.equals(RUN_TIME);
     }
