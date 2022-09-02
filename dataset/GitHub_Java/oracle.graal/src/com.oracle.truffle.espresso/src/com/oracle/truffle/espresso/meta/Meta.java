@@ -54,7 +54,6 @@ import com.oracle.truffle.espresso.substitutions.Host;
  */
 public final class Meta implements ContextAccess {
 
-
     private final EspressoContext context;
 
     public Meta(EspressoContext context) {
@@ -136,7 +135,6 @@ public final class Meta implements ContextAccess {
         StackTraceElement = knownKlass(Type.StackTraceElement);
         StackTraceElement_init = StackTraceElement.lookupDeclaredMethod(Name.INIT, Signature._void_String_String_String_int);
 
-        NegativeArraySizeException = knownKlass(Type.NegativeArraySizeException);
         IllegalArgumentException = knownKlass(Type.IllegalArgumentException);
         NullPointerException = knownKlass(Type.NullPointerException);
         ClassNotFoundException = knownKlass(Type.ClassNotFoundException);
@@ -259,7 +257,6 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass Field;
     public final Field Field_root;
 
-    public final ObjectKlass NegativeArraySizeException;
     public final ObjectKlass IllegalArgumentException;
     public final ObjectKlass NullPointerException;
     public final ObjectKlass ClassNotFoundException;
