@@ -443,8 +443,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     static final DebugCounter KLASS_LOOKUP_DECLARED_METHOD_COUNT = DebugCounter.create("Klass.lookupDeclaredMethod call count");
     static final DebugCounter KLASS_LOOKUP_DECLARED_FIELD_COUNT = DebugCounter.create("Klass.lookupDeclaredField call count");
 
-    protected Symbol<Name> name;
-    protected Symbol<Type> type;
+    private final Symbol<Name> name;
+    private final Symbol<Type> type;
     private final EspressoContext context;
     private final ObjectKlass superKlass;
 
@@ -1324,6 +1324,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     @SuppressWarnings("unused")
     public boolean nestMembersCheck(Klass k) {
         return false;
+    }
+
+    public StaticObject protectionDomain() {
+        return (StaticObject) mirror().getHiddenField(getMeta().HIDDEN_PROTECTION_DOMAIN);
     }
 
     /**

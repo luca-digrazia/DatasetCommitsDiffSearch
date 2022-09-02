@@ -52,6 +52,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
@@ -557,7 +558,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         Klass[] paramsKlasses = paramCount > 0 ? new Klass[paramCount] : Klass.EMPTY_ARRAY;
         for (int i = 0; i < paramCount; ++i) {
             Symbol<Type> paramType = Signatures.parameterType(signature, i);
-            paramsKlasses[i] = getMeta().resolveSymbolOrFail(paramType, getDeclaringKlass().getDefiningClassLoader());
+            paramsKlasses[i] = getMeta().resolveSymbolOrFail(paramType,
+                            getDeclaringKlass().getDefiningClassLoader(),
+                            getDeclaringKlass().protectionDomain());
         }
         return paramsKlasses;
     }
@@ -565,7 +568,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     public Klass resolveReturnKlass() {
         // TODO(peterssen): Use resolved signature.
         Symbol<Type> returnType = Signatures.returnType(getParsedSignature());
-        return getMeta().resolveSymbolOrFail(returnType, getDeclaringKlass().getDefiningClassLoader());
+        return getMeta().resolveSymbolOrFail(returnType,
+                        getDeclaringKlass().getDefiningClassLoader(),
+                        getDeclaringKlass().protectionDomain());
     }
 
     public int getParameterCount() {
@@ -848,9 +853,13 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     public Method forceSplit() {
         Method result = new Method(this, getCodeAttribute().forceSplit());
-        FrameDescriptor frameDescriptor = new FrameDescriptor();
-        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result.getMethodVersion(), frameDescriptor));
+        FrameDescriptor frameDescriptor = initFrameDescriptor(result.getMaxLocals() + result.getMaxStackSize());
+
+        // BCI slot is always the latest.
+        FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
+        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result.getMethodVersion(), frameDescriptor, bciSlot));
         result.getMethodVersion().callTarget = Truffle.getRuntime().createCallTarget(root);
+
         return result;
     }
 
@@ -1149,8 +1158,12 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                                 throw Meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError,
                                                 "Calling abstract method: " + getMethod().getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                             }
-                            FrameDescriptor frameDescriptor = new FrameDescriptor();
-                            EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(this, frameDescriptor));
+
+                            FrameDescriptor frameDescriptor = initFrameDescriptor(getMaxLocals() + getMaxStackSize());
+
+                            // BCI slot is always the latest.
+                            FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
+                            EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(this, frameDescriptor, bciSlot));
                             callTarget = Truffle.getRuntime().createCallTarget(rootNode);
                         }
                     }

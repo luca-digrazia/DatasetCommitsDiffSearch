@@ -137,10 +137,7 @@ public final class StaticObject implements TruffleObject {
     @ExportMessage
     String asString() {
         checkNotForeign();
-        if (isNull(this)) {
-            return null;
-        }
-        return Meta.toHostString(this, 0);
+        return Meta.toHostString(this);
     }
 
     @ExportMessage
@@ -1221,7 +1218,7 @@ public final class StaticObject implements TruffleObject {
             if (instanceOf(this, meta.java_time_ZoneId)) {
                 int index = meta.java_time_ZoneId_getId.getVTableIndex();
                 StaticObject zoneIdEspresso = (StaticObject) getKlass().vtableLookup(index).invokeDirect(this);
-                String zoneId = Meta.toHostString(zoneIdEspresso, 0);
+                String zoneId = Meta.toHostString(zoneIdEspresso);
                 return ZoneId.of(zoneId, ZoneId.SHORT_IDS);
             } else if (instanceOf(this, meta.java_time_ZonedDateTime)) {
                 StaticObject zoneId = (StaticObject) meta.java_time_ZonedDateTime_getZone.invokeDirect(this);
@@ -1317,20 +1314,20 @@ public final class StaticObject implements TruffleObject {
             return "NULL";
         }
         Klass thisKlass = getKlass();
-        Meta meta = thisKlass.getMeta();
+
         if (allowSideEffects) {
             // Call guest toString.
-            int toStringIndex = meta.java_lang_Object_toString.getVTableIndex();
+            int toStringIndex = thisKlass.getMeta().java_lang_Object_toString.getVTableIndex();
             Method toString = thisKlass.vtableLookup(toStringIndex);
-            return meta.toHostString((StaticObject) toString.invokeDirect(this));
+            return Meta.toHostString((StaticObject) toString.invokeDirect(this));
         }
 
         // Handle some special instances without side effects.
-        if (thisKlass == meta.java_lang_Class) {
+        if (thisKlass == thisKlass.getMeta().java_lang_Class) {
             return "class " + thisKlass.getTypeAsString();
         }
-        if (thisKlass == meta.java_lang_String) {
-            return meta.toHostString(this);
+        if (thisKlass == thisKlass.getMeta().java_lang_String) {
+            return Meta.toHostString(this);
         }
         return thisKlass.getTypeAsString() + "@" + Integer.toHexString(System.identityHashCode(this));
     }
@@ -1979,13 +1976,7 @@ public final class StaticObject implements TruffleObject {
             return "foreign object: " + getKlass().getTypeAsString();
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
-            Meta meta = getKlass().getMeta();
-            StaticObject value = getField(meta.java_lang_String_value);
-            if (value == null || isNull(value)) {
-                // Prevents debugger crashes when trying to inspect a string in construction.
-                return "<UNINITIALIZED>";
-            }
-            return meta.toHostString(this);
+            return Meta.toHostString(this);
         }
         if (isArray()) {
             return unwrap().toString();
@@ -2005,13 +1996,7 @@ public final class StaticObject implements TruffleObject {
             return String.format("foreign object: %s\n%s", getKlass().getTypeAsString(), InteropLibrary.getUncached().toDisplayString(rawForeignObject()));
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
-            Meta meta = getKlass().getMeta();
-            StaticObject value = getField(meta.java_lang_String_value);
-            if (value == null || isNull(value)) {
-                // Prevents debugger crashes when trying to inspect a string in construction.
-                return "<UNINITIALIZED>";
-            }
-            return Meta.toHostString(this, 0);
+            return Meta.toHostString(this);
         }
         if (isArray()) {
             return unwrap().toString();
@@ -2085,7 +2070,7 @@ public final class StaticObject implements TruffleObject {
         if (index >= 0 && index < length()) {
             // TODO(peterssen): Use different profiles for index-out-of-bounds and array-store
             // exceptions.
-            putObjectUnsafe(arrayStoreExCheck(value, ((ArrayKlass) klass).getComponentType(), meta, bytecodeNode), index);
+            UNSAFE.putObject(fields, getObjectFieldIndex(index), arrayStoreExCheck(value, ((ArrayKlass) klass).getComponentType(), meta, bytecodeNode));
         } else {
             if (bytecodeNode != null) {
                 bytecodeNode.enterImplicitExceptionProfile();
@@ -2094,11 +2079,7 @@ public final class StaticObject implements TruffleObject {
         }
     }
 
-    public void putObjectUnsafe(StaticObject value, int index) {
-        UNSAFE.putObject(fields, getObjectFieldIndex(index), value);
-    }
-
-    private static StaticObject arrayStoreExCheck(StaticObject value, Klass componentType, Meta meta, BytecodeNode bytecodeNode) {
+    private static Object arrayStoreExCheck(StaticObject value, Klass componentType, Meta meta, BytecodeNode bytecodeNode) {
         if (StaticObject.isNull(value) || instanceOf(value, componentType)) {
             return value;
         } else {

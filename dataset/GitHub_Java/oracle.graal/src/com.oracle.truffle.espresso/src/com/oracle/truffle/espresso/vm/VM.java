@@ -57,7 +57,6 @@ import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 
-import com.oracle.truffle.espresso.impl.ForceAnonClassLoading;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -940,11 +939,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         final byte[] bytes = new byte[len];
         buf.get(bytes);
 
-        // check for special forced anon inner class loading
-        if (ForceAnonClassLoading.isMarked(name, loader)) {
-            throw ForceAnonClassLoading.throwing(bytes);
-        }
-
         Symbol<Type> type = null;
         if (name != null) {
             String internalName = name;
@@ -1675,7 +1669,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         if (Types.isPrimitive(type)) {
             return StaticObject.NULL;
         }
-        Klass klass = getMeta().resolveSymbolOrNull(type, StaticObject.NULL);
+        Klass klass = getMeta().resolveSymbolOrNull(type, StaticObject.NULL, StaticObject.NULL);
         if (klass == null) {
             return StaticObject.NULL;
         }
@@ -2363,7 +2357,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public @Host(Object[].class) StaticObject GetMemoryPools(@SuppressWarnings("unused") @Host(Object.class) StaticObject unused,
                     @GuestCall(target = "sun_management_ManagementFactory_createMemoryPool") DirectCallNode createMemoryPool) {
-        Klass memoryPoolMXBean = getMeta().resolveSymbolOrFail(Type.java_lang_management_MemoryPoolMXBean, StaticObject.NULL);
+        Klass memoryPoolMXBean = getMeta().resolveSymbolOrFail(Type.java_lang_management_MemoryPoolMXBean, StaticObject.NULL, StaticObject.NULL);
         return memoryPoolMXBean.allocateReferenceArray(1, new IntFunction<StaticObject>() {
             @Override
             public StaticObject apply(int value) {
@@ -2381,7 +2375,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public @Host(Object[].class) StaticObject GetMemoryManagers(@SuppressWarnings("unused") @Host(Object.class) StaticObject pool,
                     @GuestCall(target = "sun_management_ManagementFactory_createMemoryManager") DirectCallNode createMemoryManager) {
-        Klass memoryManagerMXBean = getMeta().resolveSymbolOrFail(Type.java_lang_management_MemoryManagerMXBean, StaticObject.NULL);
+        Klass memoryManagerMXBean = getMeta().resolveSymbolOrFail(Type.java_lang_management_MemoryManagerMXBean, StaticObject.NULL, StaticObject.NULL);
         return memoryManagerMXBean.allocateReferenceArray(1, new IntFunction<StaticObject>() {
             @Override
             public StaticObject apply(int value) {
