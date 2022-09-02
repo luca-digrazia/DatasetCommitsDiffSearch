@@ -347,16 +347,8 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
 
             // runVersionAction(versionAction, context.getEngine());
             if (versionAction != VersionAction.None) {
-                // The Java version is not known yet, try 8 first.
                 Value version = context.eval("java", "sun.misc.Version");
-                if (!version.isNull()) {
-                    // Java 8
-                    version.invokeMember("print");
-                } else {
-                    // > Java 8
-                    version = context.eval("java", "java.lang.VersionProps");
-                    version.invokeMember("print", /* print to stderr = */false);
-                }
+                version.invokeMember("print");
                 if (versionAction == VersionAction.PrintAndExit) {
                     throw exit(0);
                 }
