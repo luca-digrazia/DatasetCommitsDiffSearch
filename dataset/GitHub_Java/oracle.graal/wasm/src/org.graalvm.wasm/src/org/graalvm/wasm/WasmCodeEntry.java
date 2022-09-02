@@ -158,12 +158,6 @@ public final class WasmCodeEntry {
         this.branchTables = branchTables;
     }
 
-    public void setProfileCount(int size) {
-        if (size > 0) {
-            this.profileCounters = new int[size * 2];
-        }
-    }
-
     public int numLocals() {
         return localTypes.length;
     }
@@ -225,6 +219,12 @@ public final class WasmCodeEntry {
         } else {
             int sum = t + f;
             return CompilerDirectives.injectBranchProbability((double) t / (double) sum, val);
+        }
+    }
+
+    public void setConditionsCount(int size) {
+        if (size > 0) {
+            this.profileCounters = new int[size * 2];
         }
     }
 
