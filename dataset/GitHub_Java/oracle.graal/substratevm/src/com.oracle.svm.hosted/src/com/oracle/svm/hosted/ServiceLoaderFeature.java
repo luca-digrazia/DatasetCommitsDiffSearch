@@ -42,7 +42,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.svm.core.option.OptionUtils;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
@@ -79,8 +78,7 @@ import com.oracle.svm.hosted.analysis.Inflation;
  *
  * For each service interface, a single service loader file is added as a resource to the image. The
  * single file combines all the individual files that can come from different .jar files.
- *
- *
+ * 
  * Unfortunately, state of the art module support in SVM is not sophisticated enough to allow the
  * original ServiceLoader infrastructure to discover providers registered in modules. Therefore, as
  * a temporary solution, we're disabling the ModuleServicesLookupIterator in favour of the
@@ -156,8 +154,8 @@ public class ServiceLoaderFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
         // TODO write a more sophisticated include/exclude filter to handle cases like GR-27605 ?
-        servicesToSkip.addAll(OptionUtils.flatten(",", Options.ServiceLoaderFeatureExcludeServices.getValue().values()));
-        serviceProvidersToSkip.addAll(OptionUtils.flatten(",", Options.ServiceLoaderFeatureExcludeServiceProviders.getValue().values()));
+        servicesToSkip.addAll(Options.ServiceLoaderFeatureExcludeServices.getValue().values());
+        serviceProvidersToSkip.addAll(Options.ServiceLoaderFeatureExcludeServiceProviders.getValue().values());
     }
 
     @Override
