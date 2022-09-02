@@ -456,7 +456,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public ContextReference<Object> getCurrentContextSupplier(Object polyglotLanguage) {
-            return ((PolyglotLanguage) polyglotLanguage).getContextReference();
+            return ((PolyglotLanguage) polyglotLanguage).getContextImplSupplier();
         }
 
         @Override

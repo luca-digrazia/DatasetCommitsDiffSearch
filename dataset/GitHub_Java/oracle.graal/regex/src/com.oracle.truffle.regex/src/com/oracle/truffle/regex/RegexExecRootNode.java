@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.regex;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.regex.result.RegexResult;
 import com.oracle.truffle.regex.tregex.nodes.input.InputCharAtNode;
@@ -33,54 +31,30 @@ import com.oracle.truffle.regex.tregex.nodes.input.InputLengthNode;
 
 public abstract class RegexExecRootNode extends RegexBodyNode {
 
-    private static final FrameDescriptor SHARED_EMPTY_FRAMEDESCRIPTOR = new FrameDescriptor();
+    @Child private InputLengthNode inputLengthNode = InputLengthNode.create();
+    @Child private InputCharAtNode inputCharAtNode = InputCharAtNode.create();
 
-    private final boolean mustCheckUnicodeSurrogates;
-    private @Child InputLengthNode lengthNode;
-    private @Child InputCharAtNode charAtNode;
-
-    public RegexExecRootNode(RegexLanguage language, RegexSource source, boolean mustCheckUnicodeSurrogates) {
+    public RegexExecRootNode(RegexLanguage language, RegexSource source) {
         super(language, source);
-        this.mustCheckUnicodeSurrogates = mustCheckUnicodeSurrogates;
     }
 
     @Override
     public final RegexResult execute(VirtualFrame frame) {
         Object[] args = frame.getArguments();
-        assert args.length == 2;
-        Object input = args[0];
-        int fromIndex = (int) args[1];
-        return execute(frame, input, adjustFromIndex(fromIndex, input));
-    }
+        assert args.length == 3;
 
-    private int adjustFromIndex(int fromIndex, Object input) {
-        if (mustCheckUnicodeSurrogates && fromIndex > 0 && fromIndex < inputLength(input)) {
-            if (Character.isLowSurrogate(inputCharAt(input, fromIndex)) && Character.isHighSurrogate(inputCharAt(input, fromIndex - 1))) {
-                return fromIndex - 1;
+        RegexObject regex = (RegexObject) args[0];
+        Object input = args[1];
+        int fromIndex = (int) args[2];
+        if (regex.isUnicodePattern() && fromIndex > 0 && fromIndex < inputLengthNode.execute(input)) {
+            if (Character.isLowSurrogate(inputCharAtNode.execute(input, fromIndex)) &&
+                            Character.isHighSurrogate(inputCharAtNode.execute(input, fromIndex - 1))) {
+                fromIndex = fromIndex - 1;
             }
         }
-        return fromIndex;
+
+        return execute(frame, regex, input, fromIndex);
     }
 
-    protected int inputLength(Object input) {
-        if (lengthNode == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            lengthNode = insert(InputLengthNode.create());
-        }
-        return lengthNode.execute(input);
-    }
-
-    protected char inputCharAt(Object input, int i) {
-        if (charAtNode == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            charAtNode = insert(InputCharAtNode.create());
-        }
-        return charAtNode.execute(input, i);
-    }
-
-    public FrameDescriptor getFrameDescriptor() {
-        return SHARED_EMPTY_FRAMEDESCRIPTOR;
-    }
-
-    protected abstract RegexResult execute(VirtualFrame frame, Object input, int fromIndex);
+    protected abstract RegexResult execute(VirtualFrame frame, RegexObject regex, Object input, int fromIndex);
 }

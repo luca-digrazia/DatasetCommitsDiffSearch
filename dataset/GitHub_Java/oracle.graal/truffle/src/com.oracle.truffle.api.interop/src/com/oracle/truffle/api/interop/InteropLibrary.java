@@ -40,6 +40,8 @@
  */
 package com.oracle.truffle.api.interop;
 
+import static com.oracle.truffle.api.interop.AssertUtils.ASSERTIONS_ENABLED;
+import static com.oracle.truffle.api.interop.AssertUtils.notThrows;
 import static com.oracle.truffle.api.interop.AssertUtils.preCondition;
 import static com.oracle.truffle.api.interop.AssertUtils.validArgument;
 import static com.oracle.truffle.api.interop.AssertUtils.validArguments;
@@ -50,13 +52,14 @@ import static com.oracle.truffle.api.interop.AssertUtils.violationPost;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.InteropLibrary.Asserts;
 import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage.Ignore;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
-import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.library.Library;
+import com.oracle.truffle.api.library.LibraryFactory;
 
 /**
  * Represents the library that specifies the interoperability message protocol between Truffle
@@ -962,16 +965,17 @@ public abstract class InteropLibrary extends Library {
 
     private boolean assertAdoptedImpl() {
         Node node = this;
-        do {
-            if (node instanceof RootNode || node instanceof LegacyToLibraryNode || node instanceof InteropAccessNode) {
-                // we all nodes with root nodes or
-                // unadopted that use the compatibility bridge
+        while (node.getParent() != null) {
+            assert !(node instanceof RootNode) : "root node must not have a parent";
+            if (node instanceof LegacyToLibraryNode || node instanceof InteropAccessNode) {
+                // we allow nodes be unadopted that use the legacy bridge
                 return true;
             }
             node = node.getParent();
-        } while (node != null);
-
-        assert false : "Invalid libray usage. Cached library must be adopted by a RootNode before it is executed.";
+        }
+        if (!(node instanceof RootNode)) {
+            assert false : "Invalid libray usage. Cached library must be adopted by a RootNode before it is executed.";
+        }
         return true;
     }
 
@@ -1028,7 +1032,7 @@ public abstract class InteropLibrary extends Library {
         public boolean isBoolean(Object receiver) {
             assert preCondition(receiver);
             boolean result = delegate.isBoolean(receiver);
-            if (result) {
+            if (ASSERTIONS_ENABLED && result) {
                 try {
                     delegate.asBoolean(receiver);
                 } catch (InteropException e) {
@@ -1043,7 +1047,7 @@ public abstract class InteropLibrary extends Library {
         @Override
         public boolean asBoolean(Object receiver) throws UnsupportedMessageException {
             assert preCondition(receiver);
-            boolean wasBoolean = delegate.isBoolean(receiver);
+            boolean wasBoolean = ASSERTIONS_ENABLED && delegate.isBoolean(receiver);
             try {
                 boolean result = delegate.asBoolean(receiver);
                 assert wasBoolean : violationInvariant(receiver);
@@ -1068,7 +1072,7 @@ public abstract class InteropLibrary extends Library {
         public Object execute(Object receiver, Object... arguments) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
             assert preCondition(receiver);
             assert validArguments(receiver, arguments);
-            boolean wasExecutable = delegate.isExecutable(receiver);
+            boolean wasExecutable = ASSERTIONS_ENABLED && delegate.isExecutable(receiver);
             try {
                 Object result = delegate.execute(receiver, arguments);
                 assert wasExecutable : violationInvariant(receiver, arguments);
@@ -1093,7 +1097,7 @@ public abstract class InteropLibrary extends Library {
         public Object instantiate(Object receiver, Object... arguments) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
             assert preCondition(receiver);
             assert validArguments(receiver, arguments);
-            boolean wasInstantiable = delegate.isInstantiable(receiver);
+            boolean wasInstantiable = ASSERTIONS_ENABLED && delegate.isInstantiable(receiver);
             try {
                 Object result = delegate.instantiate(receiver, arguments);
                 assert wasInstantiable : violationInvariant(receiver, arguments);
@@ -1110,7 +1114,7 @@ public abstract class InteropLibrary extends Library {
         public boolean isString(Object receiver) {
             assert preCondition(receiver);
             boolean result = delegate.isString(receiver);
-            if (result) {
+            if (ASSERTIONS_ENABLED && result) {
                 try {
                     delegate.asString(receiver);
                 } catch (InteropException e) {
@@ -1125,7 +1129,7 @@ public abstract class InteropLibrary extends Library {
         @Override
         public String asString(Object receiver) throws UnsupportedMessageException {
             assert preCondition(receiver);
-            boolean wasString = delegate.isString(receiver);
+            boolean wasString = ASSERTIONS_ENABLED && delegate.isString(receiver);
             try {
                 String result = delegate.asString(receiver);
                 assert wasString : violationInvariant(receiver);
@@ -1155,7 +1159,7 @@ public abstract class InteropLibrary extends Library {
             assert !fits || delegate.fitsInLong(receiver) : violationInvariant(receiver);
             assert !fits || delegate.fitsInFloat(receiver) : violationInvariant(receiver);
             assert !fits || delegate.fitsInDouble(receiver) : violationInvariant(receiver);
-            if (fits) {
+            if (ASSERTIONS_ENABLED && fits) {
                 try {
                     delegate.asByte(receiver);
                 } catch (InteropException e) {
@@ -1177,7 +1181,7 @@ public abstract class InteropLibrary extends Library {
             assert !fits || delegate.fitsInLong(receiver) : violationInvariant(receiver);
             assert !fits || delegate.fitsInFloat(receiver) : violationInvariant(receiver);
             assert !fits || delegate.fitsInDouble(receiver) : violationInvariant(receiver);
-            if (fits) {
+            if (ASSERTIONS_ENABLED && fits) {
                 try {
                     delegate.asShort(receiver);
                 } catch (InteropException e) {
@@ -1197,7 +1201,7 @@ public abstract class InteropLibrary extends Library {
             assert !fits || delegate.isNumber(receiver) : violationInvariant(receiver);
             assert !fits || delegate.fitsInLong(receiver) : violationInvariant(receiver);
             assert !fits || delegate.fitsInDouble(receiver) : violationInvariant(receiver);
-            if (fits) {
+            if (ASSERTIONS_ENABLED && fits) {
                 try {
                     delegate.asInt(receiver);
                 } catch (InteropException e) {
@@ -1215,7 +1219,7 @@ public abstract class InteropLibrary extends Library {
 
             boolean fits = delegate.fitsInLong(receiver);
             assert !fits || delegate.isNumber(receiver) : violationInvariant(receiver);
-            if (fits) {
+            if (ASSERTIONS_ENABLED && fits) {
                 try {
                     delegate.asLong(receiver);
                 } catch (InteropException e) {
@@ -1232,7 +1236,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             boolean fits = delegate.fitsInFloat(receiver);
             assert !fits || delegate.isNumber(receiver) : violationInvariant(receiver);
-            if (fits) {
+            if (ASSERTIONS_ENABLED && fits) {
                 try {
                     delegate.asFloat(receiver);
                 } catch (InteropException e) {
@@ -1249,7 +1253,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             boolean fits = delegate.fitsInDouble(receiver);
             assert !fits || delegate.isNumber(receiver) : violationInvariant(receiver);
-            if (fits) {
+            if (ASSERTIONS_ENABLED && fits) {
                 try {
                     delegate.asDouble(receiver);
                 } catch (InteropException e) {
@@ -1367,7 +1371,7 @@ public abstract class InteropLibrary extends Library {
         public Object readMember(Object receiver, String identifier) throws UnsupportedMessageException, UnknownIdentifierException {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
-            boolean wasReadable = delegate.isMemberReadable(receiver, identifier);
+            boolean wasReadable = ASSERTIONS_ENABLED && delegate.isMemberReadable(receiver, identifier);
             try {
                 Object result = delegate.readMember(receiver, identifier);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
@@ -1385,7 +1389,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             assert validArgument(receiver, value);
-            boolean wasWritable = (delegate.isMemberModifiable(receiver, identifier) || delegate.isMemberInsertable(receiver, identifier));
+            boolean wasWritable = ASSERTIONS_ENABLED && (delegate.isMemberModifiable(receiver, identifier) || delegate.isMemberInsertable(receiver, identifier));
             try {
                 delegate.writeMember(receiver, identifier, value);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
@@ -1400,7 +1404,7 @@ public abstract class InteropLibrary extends Library {
         public void removeMember(Object receiver, String identifier) throws UnsupportedMessageException, UnknownIdentifierException {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
-            boolean wasRemovable = delegate.isMemberRemovable(receiver, identifier);
+            boolean wasRemovable = ASSERTIONS_ENABLED && delegate.isMemberRemovable(receiver, identifier);
             try {
                 delegate.removeMember(receiver, identifier);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
@@ -1416,7 +1420,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             assert validArguments(receiver, arguments);
-            boolean wasInvocable = delegate.isMemberInvocable(receiver, identifier);
+            boolean wasInvocable = ASSERTIONS_ENABLED && delegate.isMemberInvocable(receiver, identifier);
             try {
                 Object result = delegate.invokeMember(receiver, identifier, arguments);
                 assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
@@ -1557,7 +1561,7 @@ public abstract class InteropLibrary extends Library {
         @Override
         public Object readArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
             assert preCondition(receiver);
-            boolean wasReadable = delegate.isArrayElementReadable(receiver, index);
+            boolean wasReadable = ASSERTIONS_ENABLED && delegate.isArrayElementReadable(receiver, index);
             try {
                 Object result = delegate.readArrayElement(receiver, index);
                 assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
@@ -1574,7 +1578,7 @@ public abstract class InteropLibrary extends Library {
         public void writeArrayElement(Object receiver, long index, Object value) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
             assert preCondition(receiver);
             assert validArgument(receiver, value);
-            boolean wasWritable = delegate.isArrayElementModifiable(receiver, index) || delegate.isArrayElementInsertable(receiver, index);
+            boolean wasWritable = ASSERTIONS_ENABLED && delegate.isArrayElementModifiable(receiver, index) || delegate.isArrayElementInsertable(receiver, index);
             try {
                 delegate.writeArrayElement(receiver, index, value);
                 assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
@@ -1588,7 +1592,7 @@ public abstract class InteropLibrary extends Library {
         @Override
         public void removeArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
             assert preCondition(receiver);
-            boolean wasRemovable = delegate.isArrayElementRemovable(receiver, index);
+            boolean wasRemovable = ASSERTIONS_ENABLED && delegate.isArrayElementRemovable(receiver, index);
             try {
                 delegate.removeArrayElement(receiver, index);
                 assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
@@ -1662,7 +1666,7 @@ public abstract class InteropLibrary extends Library {
         @Override
         public long asPointer(Object receiver) throws UnsupportedMessageException {
             assert preCondition(receiver);
-            boolean wasPointer = delegate.isPointer(receiver);
+            boolean wasPointer = ASSERTIONS_ENABLED && delegate.isPointer(receiver);
             try {
                 long result = delegate.asPointer(receiver);
                 assert wasPointer : violationInvariant(receiver);
