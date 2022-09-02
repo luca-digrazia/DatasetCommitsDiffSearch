@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.api.source;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleFile;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -394,25 +393,22 @@ final class SourceImpl extends Source {
         }
 
         @Override
-        @CompilerDirectives.TruffleBoundary
         String getPath() {
             if (path == INVALID) {
-                path = SourceAccessor.getReinitializedPath(truffleFile);
+                path = truffleFile.getPath();
             }
             return (String) path;
         }
 
         @Override
-        @CompilerDirectives.TruffleBoundary
         URI getURI() {
             if (uri == INVALID) {
-                uri = SourceAccessor.getReinitializedURI(truffleFile);
+                uri = truffleFile.toUri();
             }
             return (URI) uri;
         }
 
         @Override
-        @CompilerDirectives.TruffleBoundary
         URL getURL() {
             if (url == INVALID) {
                 try {
