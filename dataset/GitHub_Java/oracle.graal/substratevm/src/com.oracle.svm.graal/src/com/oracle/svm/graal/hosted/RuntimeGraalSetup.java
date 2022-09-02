@@ -32,7 +32,6 @@ import org.graalvm.compiler.phases.util.Providers;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
-import com.oracle.svm.graal.meta.SubstrateRuntimeConfigurationBuilder;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
@@ -41,18 +40,14 @@ import com.oracle.svm.hosted.code.SharedRuntimeConfigurationBuilder;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
-public class SubstrateRuntimeGraalSetup implements RuntimeGraalSetup {
+/**
+ * Provides functionality during the image build for setting up Graal for compilation at runtime.
+ */
+public interface RuntimeGraalSetup {
 
-    @Override
-    public GraalProviderObjectReplacements getProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        return new GraalProviderObjectReplacements(aMetaAccess);
-    }
+    SharedRuntimeConfigurationBuilder createRuntimeConfigurationBuilder(OptionValues options, SVMHost hostVM, AnalysisUniverse aUniverse,
+                    MetaAccessProvider metaAccess, ConstantReflectionProvider originalReflectionProvider, Function<Providers, SubstrateBackend> backendProvider,
+                    NativeLibraries nativeLibraries, ClassInitializationSupport classInitializationSupport);
 
-    @Override
-    public SharedRuntimeConfigurationBuilder createRuntimeConfigurationBuilder(OptionValues options, SVMHost hostVM, AnalysisUniverse aUniverse, MetaAccessProvider metaAccess,
-                    ConstantReflectionProvider originalReflectionProvider, Function<Providers, SubstrateBackend> backendProvider,
-                    NativeLibraries nativeLibraries, ClassInitializationSupport classInitializationSupport) {
-
-        return new SubstrateRuntimeConfigurationBuilder(options, hostVM, aUniverse, metaAccess, originalReflectionProvider, backendProvider, nativeLibraries, classInitializationSupport);
-    }
+    GraalProviderObjectReplacements getProviderObjectReplacements(AnalysisMetaAccess aMetaAccess);
 }
