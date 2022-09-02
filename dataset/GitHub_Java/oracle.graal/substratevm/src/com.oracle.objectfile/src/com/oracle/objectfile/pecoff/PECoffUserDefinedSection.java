@@ -34,6 +34,7 @@ import com.oracle.objectfile.ElementImpl;
 import com.oracle.objectfile.LayoutDecisionMap;
 import com.oracle.objectfile.ObjectFile;
 import com.oracle.objectfile.ObjectFile.Element;
+import com.oracle.objectfile.ObjectFile.RelocationRecord;
 import com.oracle.objectfile.io.AssemblyBuffer;
 import com.oracle.objectfile.pecoff.PECoffObjectFile.PECoffSection;
 import com.oracle.objectfile.pecoff.PECoffObjectFile.PECoffSectionFlag;
@@ -140,7 +141,7 @@ public class PECoffUserDefinedSection extends PECoffSection implements ObjectFil
     }
 
     @Override
-    public void markRelocationSite(int offset, ByteBuffer bb, ObjectFile.RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
+    public RelocationRecord markRelocationSite(int offset, ByteBuffer bb, ObjectFile.RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
         if (useImplicitAddend != (explicitAddend == null)) {
             throw new IllegalArgumentException("must have either an explicit or implicit addend");
         }
@@ -150,7 +151,8 @@ public class PECoffUserDefinedSection extends PECoffSection implements ObjectFil
         PECoffSymtab.Entry ent = syms.getSymbol(symbolName);
         if (ent == null) {
             warn("attempting to mark relocation site for non-existent symbol " + symbolName);
-            return;
+            /* Return (but do not add to entry list) dummy relocation entry. It is never used (in GraalVM CE) */
+            return new PECoffRelocationTable.Entry(this, offset, PECoffMachine.getRelocation(getOwner().getMachine(), k), null, 0L);
         }
 
         AssemblyBuffer sbb = new AssemblyBuffer(bb);
@@ -196,7 +198,7 @@ public class PECoffUserDefinedSection extends PECoffSection implements ObjectFil
         // return ByteBuffer cursor to where it was
         sbb.pop();
 
-        rs.addEntry(this, offset, PECoffMachine.getRelocation(getOwner().getMachine(), k), ent, explicitAddend);
+        return rs.addEntry(this, offset, PECoffMachine.getRelocation(getOwner().getMachine(), k), ent, explicitAddend);
     }
 
     /**
