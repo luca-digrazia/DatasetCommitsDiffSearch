@@ -1441,23 +1441,31 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         if (!match(Character.toString(terminator))) {
             throw syntaxErrorAtRel("missing " + terminator + ", unterminated name", groupName.length());
         }
-        checkGroupName(groupName);
+        if (!checkGroupName(groupName)) {
+            throw syntaxErrorAtRel("bad character in group name " + groupName, groupName.length() + 1);
+        }
         return groupName;
     }
 
     /**
      * Determines whether the given {@link String} is a valid name for a group.
+     *
+     * @return {@code true} if the argument is a valid group name
      */
-    private void checkGroupName(String groupName) throws RegexSyntaxException {
+    private static boolean checkGroupName(String groupName) {
         if (groupName.isEmpty()) {
-            throw syntaxErrorAtRel("missing group name", 1);
+            return false;
         }
         for (int i = 0; i < groupName.length(); i = groupName.offsetByCodePoints(i, 1)) {
             int ch = groupName.codePointAt(i);
-            if ((i == 0 && !XID_START.contains(ch)) || (i > 0 && !XID_CONTINUE.contains(ch))) {
-                throw syntaxErrorAtRel("bad character in group name " + groupName, groupName.length() + 1);
+            if (i == 0 && !XID_START.contains(ch)) {
+                return false;
+            }
+            if (i > 0 && !XID_CONTINUE.contains(ch)) {
+                return false;
             }
         }
+        return true;
     }
 
     /**
@@ -1567,14 +1575,12 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             throw syntaxErrorAtRel("missing ), unterminated name", groupId.length());
         }
         int groupNumber;
-        if (groupId.startsWith("<") && groupId.endsWith(">")) {
+        if (checkGroupName(groupId)) {
             // group referenced by name
-            String groupName = groupId.substring(1, groupId.length() - 1);
-            checkGroupName(groupName);
-            if (namedCaptureGroups != null && namedCaptureGroups.containsKey(groupName)) {
-                groupNumber = namedCaptureGroups.get(groupName);
+            if (namedCaptureGroups != null && namedCaptureGroups.containsKey(groupId)) {
+                groupNumber = namedCaptureGroups.get(groupId);
             } else {
-                throw syntaxErrorAtRel("unknown group name " + groupName, groupName.length() + 1);
+                throw syntaxErrorAtRel("unknown group name " + groupId, groupId.length() + 1);
             }
         } else {
             try {
