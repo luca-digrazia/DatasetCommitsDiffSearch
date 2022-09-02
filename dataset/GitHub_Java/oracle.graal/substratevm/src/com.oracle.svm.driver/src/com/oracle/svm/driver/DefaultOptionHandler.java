@@ -163,8 +163,6 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             }
             /* Using agentlib to allow interoperability with other agents */
             nativeImage.addImageBuilderJavaArgs("-agentlib:jdwp=transport=dt_socket,server=y,address=" + debugPort + ",suspend=y");
-            /* Disable watchdog mechanism */
-            nativeImage.addPlainImageBuilderArg(nativeImage.oHDeadlockWatchdogInterval + "0");
             return true;
         }
 
