@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -418,42 +418,28 @@ abstract class DynamicObjectLibraryImpl {
         }
     }
 
-    private static void shiftPropertyValuesAfterRemove(DynamicObject object, ShapeImpl shapeBefore, ShapeImpl shapeAfter) {
-        LayoutStrategy strategy = shapeBefore.getLayout().getStrategy();
+    private static void shiftPropertyValuesAfterRemove(DynamicObject object, ShapeImpl oldShape, ShapeImpl newShape) {
         List<Move> moves = new ArrayList<>();
-        boolean canMoveInPlace = true;
-        for (ListIterator<Property> iterator = shapeAfter.getPropertyListInternal(false).listIterator(); iterator.hasNext();) {
+        for (ListIterator<Property> iterator = newShape.getPropertyListInternal(false).listIterator(); iterator.hasNext();) {
             Property to = iterator.next();
-            Property from = shapeBefore.getProperty(to.getKey());
+            Property from = oldShape.getProperty(to.getKey());
             LocationImpl fromLoc = getLocation(from);
             LocationImpl toLoc = getLocation(to);
             if (LocationImpl.isSameLocation(toLoc, fromLoc)) {
                 continue;
             }
             assert !toLoc.isValue();
-            int fromOrd = strategy.getLocationOrdinal(fromLoc);
-            int toOrd = strategy.getLocationOrdinal(toLoc);
-            Move move = new Move(fromLoc, toLoc, fromOrd, toOrd);
-            canMoveInPlace = canMoveInPlace && fromOrd > toOrd;
+            Move move = new Move(fromLoc, toLoc, oldShape.getLayout().getStrategy());
             moves.add(move);
         }
-        if (canMoveInPlace) {
-            if (!isSorted(moves)) {
-                Collections.sort(moves);
-            }
-            // perform the moves in inverse order
-            for (int i = moves.size() - 1; i >= 0; i--) {
-                moves.get(i).perform(object, i == 0);
-            }
-        } else {
-            // we cannot perform the moves in place, so stash away the values
-            Object[] tempValues = new Object[moves.size()];
-            for (int i = moves.size() - 1; i >= 0; i--) {
-                tempValues[i] = moves.get(i).performGet(object);
-            }
-            for (int i = moves.size() - 1; i >= 0; i--) {
-                moves.get(i).performSet(object, tempValues[i], true);
-            }
+        if (!isSorted(moves)) {
+            Collections.sort(moves);
+        }
+        // perform the moves in inverse order
+        for (ListIterator<Move> iterator = moves.listIterator(moves.size()); iterator.hasPrevious();) {
+            Move current = iterator.previous();
+            boolean last = !iterator.hasPrevious();
+            current.accept(object, last);
         }
     }
 
@@ -468,46 +454,27 @@ abstract class DynamicObjectLibraryImpl {
         return true;
     }
 
-    private static final class Move implements Comparable<Move> {
+    private static class Move implements Comparable<Move> {
         private final LocationImpl fromLoc;
         private final LocationImpl toLoc;
-        private final int fromOrd;
-        private final int toOrd;
+        private final LayoutStrategy strategy;
 
-        Move(LocationImpl fromLoc, LocationImpl toLoc, int fromOrd, int toOrd) {
+        Move(LocationImpl fromLoc, LocationImpl toLoc, LayoutStrategy strategy) {
             this.fromLoc = fromLoc;
             this.toLoc = toLoc;
-            this.fromOrd = fromOrd;
-            this.toOrd = toOrd;
+            this.strategy = strategy;
         }
 
-        void perform(DynamicObject obj, boolean clear) {
-            performSet(obj, performGet(obj), clear);
-        }
-
-        Object performGet(DynamicObject obj) {
-            return fromLoc.get(obj, false);
-        }
-
-        void performSet(DynamicObject obj, Object value, boolean clear) {
+        public void accept(DynamicObject obj, boolean last) {
             try {
-                toLoc.setInternal(obj, value, false);
+                Object fromValue = fromLoc.get(obj, false);
+                toLoc.setInternal(obj, fromValue, false);
+                if (last && fromLoc instanceof CoreLocations.ObjectLocation && fromValue != null) {
+                    // clear location to avoid memory leaks
+                    fromLoc.setInternal(obj, null, false);
+                }
             } catch (IncompatibleLocationException e) {
                 throw shouldNotHappen(e);
-            }
-            if (clear) {
-                clear(obj);
-            }
-        }
-
-        void clear(DynamicObject obj) {
-            if (fromLoc instanceof CoreLocations.ObjectLocation) {
-                // clear location to avoid memory leak
-                try {
-                    fromLoc.setInternal(obj, null, false);
-                } catch (IncompatibleLocationException e) {
-                    throw shouldNotHappen(e);
-                }
             }
         }
 
@@ -519,8 +486,8 @@ abstract class DynamicObjectLibraryImpl {
 
         @Override
         public int compareTo(Move other) {
-            int order = Integer.compare(fromOrd, other.fromOrd);
-            assert order == Integer.compare(toOrd, other.toOrd);
+            int order = Integer.compare(strategy.getLocationOrdinal(fromLoc), strategy.getLocationOrdinal(other.fromLoc));
+            assert order == Integer.compare(strategy.getLocationOrdinal(toLoc), strategy.getLocationOrdinal(other.toLoc));
             return -order;
         }
     }
