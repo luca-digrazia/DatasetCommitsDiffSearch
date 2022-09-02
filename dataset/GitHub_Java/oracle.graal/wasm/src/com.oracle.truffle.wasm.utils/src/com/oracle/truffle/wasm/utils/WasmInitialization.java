@@ -29,13 +29,12 @@
  */
 package com.oracle.truffle.wasm.utils;
 
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.wasm.binary.WasmContext;
-import com.oracle.truffle.wasm.binary.WasmModule;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
+import com.oracle.truffle.wasm.WasmContext;
+import com.oracle.truffle.wasm.WasmModule;
+import com.oracle.truffle.wasm.memory.WasmMemory;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -93,9 +92,11 @@ public final class WasmInitialization implements Consumer<WasmContext>, TruffleO
                 final long address = getValue(addressGlobal);
                 final String valueGlobal = entry.getValue();
                 final long value = getValue(valueGlobal);
-                memory.writeArrayElement(address, value);
+                // The memory array writes are indexed with 64-bit words.
+                // Therefore, we need to divide the byte-based address index with 8.
+                memory.store_i64(address, value);
             }
-        } catch (UnknownIdentifierException | UnsupportedMessageException | InvalidArrayIndexException e) {
+        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new RuntimeException(e);
         }
     }
