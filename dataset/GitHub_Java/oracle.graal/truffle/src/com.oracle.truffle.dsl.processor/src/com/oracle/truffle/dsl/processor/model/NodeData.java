@@ -90,7 +90,6 @@ public class NodeData extends Template implements Comparable<NodeData> {
     private boolean generateUncached;
     private Set<String> allowedCheckedExceptions;
     private Map<CacheExpression, String> sharedCaches = Collections.emptyMap();
-    private ExecutableTypeData polymorphicExecutable;
 
     public NodeData(ProcessorContext context, TypeElement type, TypeSystemData typeSystem, boolean generateFactory, boolean generateUncached) {
         super(context, type, null);
@@ -184,7 +183,7 @@ public class NodeData extends Template implements Comparable<NodeData> {
     }
 
     public boolean isFallbackReachable() {
-        SpecializationData generic = getFallbackSpecialization();
+        SpecializationData generic = getGenericSpecialization();
         if (generic != null) {
             return generic.isReachable();
         }
@@ -474,7 +473,16 @@ public class NodeData extends Template implements Comparable<NodeData> {
         return false;
     }
 
-    public SpecializationData getFallbackSpecialization() {
+    public SpecializationData getPolymorphicSpecialization() {
+        for (SpecializationData specialization : specializations) {
+            if (specialization.isPolymorphic()) {
+                return specialization;
+            }
+        }
+        return null;
+    }
+
+    public SpecializationData getGenericSpecialization() {
         for (SpecializationData specialization : specializations) {
             if (specialization.isFallback()) {
                 return specialization;
@@ -684,14 +692,6 @@ public class NodeData extends Template implements Comparable<NodeData> {
 
     public Set<TypeMirror> getLibraryTypes() {
         return libraryTypes;
-    }
-
-    public void setPolymorphicExecutable(ExecutableTypeData polymorphicType) {
-        this.polymorphicExecutable = polymorphicType;
-    }
-
-    public ExecutableTypeData getPolymorphicExecutable() {
-        return polymorphicExecutable;
     }
 
 }
