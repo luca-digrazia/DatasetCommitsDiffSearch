@@ -58,7 +58,7 @@ final class StackVerifier {
         JavaStackWalker.walkCurrentThread(KnownIntrinsics.readCallerStackPointer(), STACK_FRAME_VISITOR);
         if (SubstrateOptions.MultiThreaded.getValue()) {
             for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
-                if (vmThread == CurrentIsolate.getCurrentThread()) {
+                if (vmThread.equal(CurrentIsolate.getCurrentThread())) {
                     continue;
                 }
                 JavaStackWalker.walkThread(vmThread, STACK_FRAME_VISITOR);
@@ -104,7 +104,7 @@ final class StackVerifier {
 
         @Override
         public boolean visitObjectReference(Pointer objRef, boolean compressed) {
-            result &= HeapVerifier.verifyReference(null, objRef, compressed);
+            HeapVerifier.verifyReference(null, objRef, compressed);
             return true;
         }
     }

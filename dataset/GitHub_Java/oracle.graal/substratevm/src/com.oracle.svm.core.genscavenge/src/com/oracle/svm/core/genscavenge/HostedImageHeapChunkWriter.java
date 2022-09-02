@@ -40,7 +40,7 @@ import com.oracle.svm.core.util.HostedByteBufferPointer;
 import com.oracle.svm.core.util.VMError;
 
 @Platforms(Platform.HOSTED_ONLY.class)
-final class HostedImageHeapChunkWriter implements ImageHeapChunkWriter {
+public final class HostedImageHeapChunkWriter implements ImageHeapChunkWriter {
     private final ByteBuffer buffer;
     private final int layoutToBufferAddend;
 
@@ -51,9 +51,8 @@ final class HostedImageHeapChunkWriter implements ImageHeapChunkWriter {
     private final int spaceOffsetAt;
     private final int offsetToPreviousChunkAt;
     private final int offsetToNextChunkAt;
-    private final RememberedSet rememberedSet = RememberedSet.get();
 
-    HostedImageHeapChunkWriter(ByteBuffer heapBuffer, long layoutToBufferOffsetAddend) {
+    public HostedImageHeapChunkWriter(ByteBuffer heapBuffer, long layoutToBufferOffsetAddend) {
         buffer = heapBuffer;
         layoutToBufferAddend = NumUtil.safeToInt(layoutToBufferOffsetAddend);
 
@@ -95,13 +94,13 @@ final class HostedImageHeapChunkWriter implements ImageHeapChunkWriter {
     @Override
     public void enableRememberedSetForAlignedChunk(int chunkPosition, List<ImageHeapObject> objects) {
         int chunkOffset = getChunkOffsetInBuffer(chunkPosition);
-        rememberedSet.enableRememberedSetForAlignedChunk(new HostedByteBufferPointer(buffer, chunkOffset), chunkPosition, objects);
+        RememberedSet.get().enableRememberedSetForAlignedChunk(new HostedByteBufferPointer(buffer, chunkOffset), chunkPosition, objects);
     }
 
     @Override
     public void enableRememberedSetForUnalignedChunk(int chunkPosition) {
         int chunkOffset = getChunkOffsetInBuffer(chunkPosition);
-        rememberedSet.enableRememberedSetForUnalignedChunk(new HostedByteBufferPointer(buffer, chunkOffset));
+        RememberedSet.get().enableRememberedSetForUnalignedChunk(new HostedByteBufferPointer(buffer, chunkOffset));
     }
 
     static void putObjectReference(ByteBuffer buffer, int offset, long value) {
