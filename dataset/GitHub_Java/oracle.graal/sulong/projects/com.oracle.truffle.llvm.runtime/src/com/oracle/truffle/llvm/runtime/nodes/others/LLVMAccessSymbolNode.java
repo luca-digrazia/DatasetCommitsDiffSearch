@@ -80,6 +80,7 @@ public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
 
     public static LLVMPointer getSymbol(LLVMContext context, LLVMSymbol symbol, Node node) {
         assert !symbol.isAlias();
+        CompilerAsserts.partialEvaluationConstant(symbol);
         if (symbol.hasValidIndexAndID()) {
             int bitcodeID = symbol.getBitcodeID(false);
             if (context.symbolTableExists(bitcodeID)) {
@@ -103,6 +104,7 @@ public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
         assert !symbol.isAlias();
         AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(symbol.getBitcodeID(false));
         synchronized (symbols) {
+            CompilerAsserts.partialEvaluationConstant(symbol);
             try {
                 int index = symbol.getSymbolIndex(false);
                 symbols[index] = new AssumedValue<>(symbol.getKind() + "." + symbol.getName(), pointer);
@@ -118,6 +120,7 @@ public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
      */
     public static boolean checkSymbol(LLVMSymbol symbol, LLVMContext context, Node node) {
         assert !symbol.isAlias();
+        CompilerAsserts.partialEvaluationConstant(symbol);
         if (symbol.hasValidIndexAndID()) {
             int bitcodeID = symbol.getBitcodeID(false);
             if (context.symbolTableExists(bitcodeID)) {
