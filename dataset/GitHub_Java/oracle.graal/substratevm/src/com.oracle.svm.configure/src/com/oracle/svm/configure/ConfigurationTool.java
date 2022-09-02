@@ -201,7 +201,7 @@ public class ConfigurationTool {
         }
         if (!callerFilterFiles.isEmpty()) {
             if (callersFilter == null) {
-                callersFilter = AccessAdvisor.copyBuiltinCallerFilterTree();
+                callersFilter = AccessAdvisor.copyBuiltinFilterTree();
             }
             for (Path path : callerFilterFiles) {
                 try {
