@@ -273,14 +273,11 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> lineNumber = StaticSymbols.putName("lineNumber");
 
         // j.l.System
-        public static final Symbol<Name> err = StaticSymbols.putName("err");
         public static final Symbol<Name> getProperty = StaticSymbols.putName("getProperty");
-        public static final Symbol<Name> in = StaticSymbols.putName("in");
         public static final Symbol<Name> initializeSystemClass = StaticSymbols.putName("initializeSystemClass");
         public static final Symbol<Name> initPhase1 = StaticSymbols.putName("initPhase1");
         public static final Symbol<Name> initPhase2 = StaticSymbols.putName("initPhase2");
         public static final Symbol<Name> initPhase3 = StaticSymbols.putName("initPhase3");
-        public static final Symbol<Name> out = StaticSymbols.putName("out");
         public static final Symbol<Name> security = StaticSymbols.putName("security");
         public static final Symbol<Name> setProperty = StaticSymbols.putName("setProperty");
 
@@ -508,7 +505,6 @@ public final class Symbol<T> extends ByteSequence {
         // Class redefinition plugin helpers
         public static final Symbol<Name> flushFromCaches = StaticSymbols.putName("flushFromCaches");
         public static final Symbol<Name> generateProxyClass = StaticSymbols.putName("generateProxyClass");
-        public static final Symbol<Name> removeBeanInfo = StaticSymbols.putName("removeBeanInfo");
 
     }
 
@@ -563,7 +559,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> java_beans_ThreadGroupContext = StaticSymbols.putType("Ljava/beans/ThreadGroupContext;");
 
         public static final Symbol<Type> java_lang_reflect_Proxy = StaticSymbols.putType("Ljava/lang/reflect/Proxy;");
-        public static final Symbol<Type> java_lang_reflect_ProxyGenerator = StaticSymbols.putType("Ljava/lang/reflect/ProxyGenerator;");
         public static final Symbol<Type> sun_misc_ProxyGenerator = StaticSymbols.putType("Lsun/misc/ProxyGenerator;");
 
         // Primitive types.
