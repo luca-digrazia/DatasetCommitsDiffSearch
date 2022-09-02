@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.classfile;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Validation;
 
 public final class Utf8Constant implements PoolConstant {
 
@@ -70,19 +69,17 @@ public final class Utf8Constant implements PoolConstant {
     public void validateClassName() {
         validateUTF8();
         if ((validationCache & VALID_CLASS_NAME) == 0) {
-            if (!Validation.validClassNameEntry(value)) {
-                throw ConstantPool.classFormatError("Invalid class name entry: " + value);
-            }
+            // TODO(peterssen): Validate class name, throws guest ClassFormatError otherwise.
+
             validationCache |= VALID_CLASS_NAME;
         }
     }
 
-    public void validateType(boolean allowVoid) {
+    public void validateType() {
         validateUTF8();
         if ((validationCache & VALID_TYPE) == 0) {
-            if (!Validation.validTypeDescriptor(value, allowVoid)) {
-                throw ConstantPool.classFormatError("Invalid type descriptor: " + value);
-            }
+            // TODO(peterssen): Validate type in internal form, throws guest ClassFormatError otherwise.
+
             validationCache |= VALID_TYPE;
         }
     }
@@ -90,9 +87,8 @@ public final class Utf8Constant implements PoolConstant {
     public void validateMethodName() {
         validateUTF8();
         if ((validationCache & VALID_METHOD_NAME) == 0) {
-            if (!Validation.validMethodName(value)) {
-                throw ConstantPool.classFormatError("Invalid method name: " + value);
-            }
+            // TODO(peterssen): Validate method name, throws guest ClassFormatError otherwise.
+
             validationCache |= VALID_METHOD_NAME;
         }
     }
@@ -100,9 +96,8 @@ public final class Utf8Constant implements PoolConstant {
     public void validateFieldName() {
         validateUTF8();
         if ((validationCache & VALID_FIELD_NAME) == 0) {
-            if (!Validation.validUnqualifiedName(value)) {
-                throw ConstantPool.classFormatError("Invalid field name: " + value);
-            }
+            // TODO(peterssen): Validate field name, throws guest ClassFormatError otherwise.
+
             validationCache |= VALID_FIELD_NAME;
         }
     }
@@ -110,9 +105,8 @@ public final class Utf8Constant implements PoolConstant {
     public void validateSignature() {
         validateUTF8();
         if ((validationCache & VALID_SIGNATURE) == 0) {
-            if (!Validation.validSignatureDescriptor(value)) {
-                throw ConstantPool.classFormatError("Invalid signature descriptor: " + value);
-            }
+            // TODO(peterssen): Validate signature, throws guest ClassFormatError otherwise.
+
             validationCache |= VALID_SIGNATURE;
         }
     }
