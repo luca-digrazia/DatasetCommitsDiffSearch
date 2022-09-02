@@ -79,12 +79,11 @@ public class WasmBenchmark {
             Collection<? extends WasmBenchCase> benchCases = collectBenchCases();
 
             Context.Builder contextBuilder = Context.newBuilder("wasm");
-            contextBuilder.option("wasm.PredefinedModules", "testutil:testutil,env:emscripten");
 
             for (WasmBenchCase benchCase : benchCases) {
                 byte[] binary = benchCase.createBinary();
                 Context context = contextBuilder.build();
-                Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
+                Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "bench").build();
 
                 context.eval(source);
 
