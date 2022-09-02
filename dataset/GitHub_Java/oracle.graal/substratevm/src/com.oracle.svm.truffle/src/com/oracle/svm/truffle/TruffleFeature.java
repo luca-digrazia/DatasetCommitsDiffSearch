@@ -122,7 +122,6 @@ import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.meta.HostedType;
 import com.oracle.svm.hosted.option.RuntimeOptionFeature;
-import com.oracle.svm.hosted.snippets.SubstrateGraphBuilderPlugins;
 import com.oracle.svm.truffle.api.SubstrateOptimizedCallTarget;
 import com.oracle.svm.truffle.api.SubstratePartialEvaluator;
 import com.oracle.svm.truffle.api.SubstrateTruffleCompiler;
@@ -242,11 +241,16 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         }
 
         public BackgroundCompileQueue createBackgroundCompileQueue(@SuppressWarnings("unused") SubstrateTruffleRuntime runtime) {
-            return new BackgroundCompileQueue();
+            return new BackgroundCompileQueue(runtime);
         }
 
         public CompilableTruffleAST asCompilableTruffleAST(JavaConstant constant) {
             return (CompilableTruffleAST) KnownIntrinsics.convertUnknownValue(SubstrateObjectConstant.asObject(OptimizedCallTarget.class, constant), Object.class);
+        }
+
+        @SuppressWarnings("unused")
+        public boolean tryLog(SubstrateTruffleRuntime runtime, CompilableTruffleAST compilable, String message) {
+            return false;
         }
     }
 
@@ -374,16 +378,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
                 return true;
             }
         });
-
-        if (analysis || hosted) {
-            /*
-             * For AOT compilation and static analysis, we intrinsify CompilerDirectives.castExact
-             * with explicit exception edges. For runtime compilation, TruffleGraphBuilderPlugins
-             * registers a plugin that uses deoptimization.
-             */
-            r = new Registration(invocationPlugins, CompilerDirectives.class);
-            SubstrateGraphBuilderPlugins.registerCastExact(r);
-        }
     }
 
     private void registerNeverPartOfCompilation(InvocationPlugins plugins) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -385,6 +385,16 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
      * Gets the compiler configuration name without requiring a compiler to be created.
      */
     protected abstract String initLazyCompilerConfigurationName();
+
+    @Override
+    public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+        if (lazy == null) {
+            // if Truffle wasn't initialized yet, this is a noop
+            return false;
+        }
+
+        return super.cancelInstalledTask(optimizedCallTarget, source, reason);
+    }
 
     @SuppressWarnings("try")
     @Override
