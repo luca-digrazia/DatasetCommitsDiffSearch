@@ -37,10 +37,10 @@ import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.CErrorNumber;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.jdk.JNIPlatformNativeLibrarySupport;
 import com.oracle.svm.core.jdk.Jvm;
 import com.oracle.svm.core.jdk.NativeLibrarySupport;
@@ -51,6 +51,7 @@ import com.oracle.svm.core.posix.headers.Resource;
 import com.oracle.svm.core.posix.headers.darwin.DarwinSyslimits;
 
 @AutomaticFeature
+@Platforms({InternalPlatform.LINUX_AND_JNI.class, InternalPlatform.DARWIN_AND_JNI.class})
 class PosixNativeLibraryFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
@@ -81,17 +82,17 @@ final class PosixNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
             Resource.rlimit rlp = StackValue.get(Resource.rlimit.class);
             if (Resource.getrlimit(Resource.RLIMIT_NOFILE(), rlp) == 0) {
                 UnsignedWord newValue = rlp.rlim_max();
-                if (Platform.includedIn(InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class)) {
+                if (Platform.includedIn(InternalPlatform.DARWIN_AND_JNI.class)) {
                     // On Darwin, getrlimit may return RLIM_INFINITY for rlim_max, but then OPEN_MAX
                     // must be used for setrlimit or it will fail with errno EINVAL.
                     newValue = WordFactory.unsigned(DarwinSyslimits.OPEN_MAX());
                 }
                 rlp.set_rlim_cur(newValue);
                 if (Resource.setrlimit(Resource.RLIMIT_NOFILE(), rlp) != 0) {
-                    Log.log().string("setrlimit to increase file descriptor limit failed, errno ").signed(CErrorNumber.getCErrorNumber()).newline();
+                    Log.log().string("setrlimit to increase file descriptor limit failed, errno ").signed(Errno.errno()).newline();
                 }
             } else {
-                Log.log().string("getrlimit failed, errno ").signed(CErrorNumber.getCErrorNumber()).newline();
+                Log.log().string("getrlimit failed, errno ").signed(Errno.errno()).newline();
             }
         }
 
@@ -178,8 +179,8 @@ final class PosixNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
         private boolean doLoad() {
             // Make sure the jvm.lib is available for linking
             // Need a better place to put this.
-            if (Platform.includedIn(Platform.LINUX.class) ||
-                            Platform.includedIn(Platform.DARWIN.class)) {
+            if (Platform.includedIn(InternalPlatform.LINUX_JNI.class) ||
+                            Platform.includedIn(InternalPlatform.DARWIN_JNI.class)) {
                 Jvm.initialize();
             }
 
@@ -202,11 +203,14 @@ final class PosixNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
                 return findBuiltinSymbol(name);
             }
             assert dlhandle.isNonNull();
-            return PosixUtils.dlsym(dlhandle, name);
+            try (CCharPointerHolder symbol = CTypeConversion.toCString(name)) {
+                return Dlfcn.dlsym(dlhandle, symbol.get());
+            }
         }
     }
 }
 
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
 @TargetClass(className = "java.io.UnixFileSystem")
 final class Target_java_io_UnixFileSystem_JNI {
     @Alias
