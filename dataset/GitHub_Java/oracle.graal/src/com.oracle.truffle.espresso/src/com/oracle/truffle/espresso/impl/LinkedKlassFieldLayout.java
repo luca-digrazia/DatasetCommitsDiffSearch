@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
@@ -32,18 +31,13 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import java.util.ArrayList;
 import java.util.List;
 
-final class LinkedKlassFieldLayout {
+class LinkedKlassFieldLayout {
     private static final int N_PRIMITIVES = 8;
     private static final JavaKind[] order = {JavaKind.Long, JavaKind.Double, JavaKind.Int, JavaKind.Float, JavaKind.Short, JavaKind.Char, JavaKind.Byte, JavaKind.Boolean};
 
-    // instance fields declared in the corresponding LinkedKlass (includes hidden fields)
-    @CompilerDirectives.CompilationFinal(dimensions = 1) //
     final LinkedField[] instanceFields;
-    // static fields declared in the corresponding LinkedKlass (no hidden fields)
-    @CompilerDirectives.CompilationFinal(dimensions = 1) //
     final LinkedField[] staticFields;
 
-    @CompilerDirectives.CompilationFinal(dimensions = 2) //
     final int[][] leftoverHoles;
 
     final int primitiveFieldTotalByteCount;
@@ -64,11 +58,11 @@ final class LinkedKlassFieldLayout {
         this.staticObjectFields = staticObjectFields;
     }
 
-    static LinkedKlassFieldLayout create(ParserKlass parserKlass, LinkedKlass superKlass) {
-        FieldCounter fieldCounter = new FieldCounter(parserKlass);
+    static LinkedKlassFieldLayout create(LinkedKlass linkedKlass) {
+        FieldCounter fieldCounter = new FieldCounter(linkedKlass);
 
         // Stats about primitive fields
-        int superTotalInstanceByteCount;
+        int superTotalByteCount;
         int superTotalStaticByteCount;
         int[][] leftoverHoles;
 
@@ -81,15 +75,16 @@ final class LinkedKlassFieldLayout {
         int nextStaticFieldTableSlot = 0;
         int nextStaticObjectFieldIndex;
 
+        LinkedKlass superKlass = linkedKlass.getSuperKlass();
         if (superKlass != null) {
-            superTotalInstanceByteCount = superKlass.getPrimitiveFieldTotalByteCount();
+            superTotalByteCount = superKlass.getPrimitiveFieldTotalByteCount();
             superTotalStaticByteCount = superKlass.getPrimitiveStaticFieldTotalByteCount();
             leftoverHoles = superKlass.getLeftoverHoles();
             nextFieldTableSlot = superKlass.getFieldTableLength();
             nextObjectFieldIndex = superKlass.getObjectFieldsCount();
             nextStaticObjectFieldIndex = superKlass.getStaticObjectFieldsCount();
         } else {
-            superTotalInstanceByteCount = 0;
+            superTotalByteCount = 0;
             superTotalStaticByteCount = 0;
             leftoverHoles = new int[0][];
             nextFieldTableSlot = 0;
@@ -97,18 +92,37 @@ final class LinkedKlassFieldLayout {
             nextStaticObjectFieldIndex = 0;
         }
 
-        PrimitiveFieldIndexes instancePrimitiveFieldIndexes = new PrimitiveFieldIndexes(fieldCounter.instancePrimitiveFields, superTotalInstanceByteCount, leftoverHoles);
-        PrimitiveFieldIndexes staticPrimitiveFieldIndexes = new PrimitiveFieldIndexes(fieldCounter.staticPrimitiveFields, superTotalStaticByteCount, null);
+        int[] primitiveOffsets = new int[N_PRIMITIVES];
+        int[] staticPrimitiveOffsets = new int[N_PRIMITIVES];
+
+        int startOffset = startOffset(superTotalByteCount, fieldCounter.instancePrimitiveFields);
+        int staticStartOffset = startOffset(superTotalStaticByteCount, fieldCounter.staticPrimitiveFields);
+
+        primitiveOffsets[0] = startOffset;
+        staticPrimitiveOffsets[0] = staticStartOffset;
+        for (int i = 1; i < N_PRIMITIVES; i++) {
+            primitiveOffsets[i] = primitiveOffsets[i - 1] + fieldCounter.instancePrimitiveFields[i - 1] * order[i - 1].getByteCount();
+            staticPrimitiveOffsets[i] = staticPrimitiveOffsets[i - 1] + fieldCounter.staticPrimitiveFields[i - 1] * order[i - 1].getByteCount();
+        }
+
+        FillingSchedule schedule = FillingSchedule.create(superTotalByteCount, startOffset, fieldCounter.instancePrimitiveFields, leftoverHoles);
+        FillingSchedule staticSchedule = FillingSchedule.create(superTotalStaticByteCount, staticStartOffset, fieldCounter.staticPrimitiveFields);
 
         LinkedField[] instanceFields = new LinkedField[fieldCounter.instanceFields];
         LinkedField[] staticFields = new LinkedField[fieldCounter.staticFields];
 
-        for (ParserField parserField : parserKlass.getFields()) {
+        for (ParserField parserField : linkedKlass.getParserKlass().getFields()) {
             JavaKind kind = parserField.getKind();
             int index;
             if (parserField.isStatic()) {
                 if (kind.isPrimitive()) {
-                    index = staticPrimitiveFieldIndexes.getIndex(kind);
+                    ScheduleEntry entry = staticSchedule.query(kind);
+                    if (entry != null) {
+                        index = entry.offset;
+                    } else {
+                        index = staticPrimitiveOffsets[indexFromKind(kind)];
+                        staticPrimitiveOffsets[indexFromKind(kind)] += kind.getByteCount();
+                    }
                 } else {
                     index = nextStaticObjectFieldIndex++;
                 }
@@ -116,7 +130,13 @@ final class LinkedKlassFieldLayout {
                 staticFields[nextStaticFieldTableSlot++] = linkedField;
             } else {
                 if (kind.isPrimitive()) {
-                    index = instancePrimitiveFieldIndexes.getIndex(kind);
+                    ScheduleEntry entry = schedule.query(kind);
+                    if (entry != null) {
+                        index = entry.offset;
+                    } else {
+                        index = primitiveOffsets[indexFromKind(kind)];
+                        primitiveOffsets[indexFromKind(kind)] += kind.getByteCount();
+                    }
                 } else {
                     index = nextObjectFieldIndex++;
                 }
@@ -134,12 +154,13 @@ final class LinkedKlassFieldLayout {
         return new LinkedKlassFieldLayout(
                         instanceFields,
                         staticFields,
-                        instancePrimitiveFieldIndexes.schedule.nextLeftoverHoles,
-                        instancePrimitiveFieldIndexes.offsets[N_PRIMITIVES - 1],
-                        staticPrimitiveFieldIndexes.offsets[N_PRIMITIVES - 1],
+                        schedule.nextLeftoverHoles,
+                        primitiveOffsets[N_PRIMITIVES - 1],
+                        staticPrimitiveOffsets[N_PRIMITIVES - 1],
                         nextFieldTableSlot,
                         nextObjectFieldIndex,
-                        nextStaticObjectFieldIndex);
+                        nextStaticObjectFieldIndex
+        );
     }
 
     private static int indexFromKind(JavaKind kind) {
@@ -159,6 +180,22 @@ final class LinkedKlassFieldLayout {
         // @formatter:on
     }
 
+    // Find first primitive to set, and align on it.
+    private static int startOffset(int superTotalByteCount, int[] primitiveCounts) {
+        int i = 0;
+        while (i < N_PRIMITIVES && primitiveCounts[i] == 0) {
+            i++;
+        }
+        if (i == N_PRIMITIVES) {
+            return superTotalByteCount;
+        }
+        int r = superTotalByteCount % order[i].getByteCount();
+        if (r == 0) {
+            return superTotalByteCount;
+        }
+        return superTotalByteCount + order[i].getByteCount() - r;
+    }
+
     private static final class FieldCounter {
         final int[] instancePrimitiveFields = new int[N_PRIMITIVES];
         final int[] staticPrimitiveFields = new int[N_PRIMITIVES];
@@ -169,10 +206,10 @@ final class LinkedKlassFieldLayout {
         final int instanceFields;
         final int staticFields;
 
-        FieldCounter(ParserKlass parserKlass) {
+        FieldCounter(LinkedKlass linkedKlass) {
             int iFields = 0;
             int sFields = 0;
-            for (ParserField f : parserKlass.getFields()) {
+            for (ParserField f : linkedKlass.getParserKlass().getFields()) {
                 JavaKind kind = f.getKind();
                 if (f.isStatic()) {
                     sFields++;
@@ -187,117 +224,71 @@ final class LinkedKlassFieldLayout {
                 }
             }
             // All hidden fields are of Object kind
-            hiddenFieldNames = getHiddenFieldNames(parserKlass);
+            hiddenFieldNames = getHiddenFieldNames(linkedKlass);
             instanceFields = iFields + hiddenFieldNames.length;
             staticFields = sFields;
         }
 
         @SuppressWarnings({"rawtypes", "unchecked"})
-        private static Symbol<Name>[] getHiddenFieldNames(ParserKlass parserKlass) {
-            Symbol<Type> type = parserKlass.getType();
+        private static Symbol<Name>[] getHiddenFieldNames(LinkedKlass klass) {
+            Symbol<Type> type = klass.getType();
             if (type == Type.java_lang_invoke_MemberName) {
                 return new Symbol[]{
-                                Name.HIDDEN_VMTARGET,
-                                Name.HIDDEN_VMINDEX
+                        Name.HIDDEN_VMTARGET,
+                        Name.HIDDEN_VMINDEX
                 };
             } else if (type == Type.java_lang_reflect_Method) {
                 return new Symbol[]{
-                                Name.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
-                                Name.HIDDEN_METHOD_KEY
+                        Name.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
+                        Name.HIDDEN_METHOD_KEY
                 };
             } else if (type == Type.java_lang_reflect_Constructor) {
                 return new Symbol[]{
-                                Name.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
-                                Name.HIDDEN_CONSTRUCTOR_KEY
+                        Name.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
+                        Name.HIDDEN_CONSTRUCTOR_KEY
                 };
             } else if (type == Type.java_lang_reflect_Field) {
                 return new Symbol[]{
-                                Name.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
-                                Name.HIDDEN_FIELD_KEY
+                        Name.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
+                        Name.HIDDEN_FIELD_KEY
                 };
             } else if (type == Type.java_lang_ref_Reference) {
                 return new Symbol[]{
-                                // All references (including strong) get an extra hidden field, this
-                                // simplifies the code
-                                // for weak/soft/phantom/final references.
-                                Name.HIDDEN_HOST_REFERENCE
+                        // All references (including strong) get an extra hidden field, this
+                        // simplifies the code
+                        // for weak/soft/phantom/final references.
+                        Name.HIDDEN_HOST_REFERENCE
                 };
             } else if (type == Type.java_lang_Throwable) {
                 return new Symbol[]{
-                                Name.HIDDEN_FRAMES
+                        Name.HIDDEN_FRAMES
                 };
             } else if (type == Type.java_lang_Thread) {
                 return new Symbol[]{
-                                Name.HIDDEN_HOST_THREAD,
-                                Name.HIDDEN_IS_ALIVE,
-                                Name.HIDDEN_INTERRUPTED,
-                                Name.HIDDEN_DEATH,
-                                Name.HIDDEN_DEATH_THROWABLE,
-                                Name.HIDDEN_SUSPEND_LOCK,
+                        Name.HIDDEN_HOST_THREAD,
+                        Name.HIDDEN_IS_ALIVE,
+                        Name.HIDDEN_INTERRUPTED,
+                        Name.HIDDEN_DEATH,
+                        Name.HIDDEN_DEATH_THROWABLE,
+                        Name.HIDDEN_SUSPEND_LOCK,
 
-                                // Only used for j.l.management bookkeeping.
-                                Name.HIDDEN_THREAD_BLOCKED_OBJECT,
-                                Name.HIDDEN_THREAD_BLOCKED_COUNT,
-                                Name.HIDDEN_THREAD_WAITED_COUNT
+                        // Only used for j.l.management bookkeeping.
+                        Name.HIDDEN_THREAD_BLOCKED_OBJECT,
+                        Name.HIDDEN_THREAD_BLOCKED_COUNT,
+                        Name.HIDDEN_THREAD_WAITED_COUNT
                 };
             } else if (type == Type.java_lang_Class) {
                 return new Symbol[]{
-                                Name.HIDDEN_SIGNERS,
-                                Name.HIDDEN_MIRROR_KLASS,
-                                Name.HIDDEN_PROTECTION_DOMAIN
+                        Name.HIDDEN_SIGNERS,
+                        Name.HIDDEN_MIRROR_KLASS,
+                        Name.HIDDEN_PROTECTION_DOMAIN
                 };
             } else if (type == Type.java_lang_ClassLoader) {
                 return new Symbol[]{
-                                Name.HIDDEN_CLASS_LOADER_REGISTRY
+                        Name.HIDDEN_CLASS_LOADER_REGISTRY
                 };
             }
             return Symbol.EMPTY_ARRAY;
-        }
-    }
-
-    private static final class PrimitiveFieldIndexes {
-        final int[] offsets;
-        final FillingSchedule schedule;
-
-        PrimitiveFieldIndexes(int[] primitiveFields, int superTotalByteCount, int[][] leftoverHoles) {
-            offsets = new int[N_PRIMITIVES];
-            offsets[0] = startOffset(superTotalByteCount, primitiveFields);
-            for (int i = 1; i < N_PRIMITIVES; i++) {
-                offsets[i] = offsets[i - 1] + primitiveFields[i - 1] * order[i - 1].getByteCount();
-            }
-            if (leftoverHoles == null) {
-                schedule = FillingSchedule.create(superTotalByteCount, offsets[0], primitiveFields);
-            } else {
-                schedule = FillingSchedule.create(superTotalByteCount, offsets[0], primitiveFields, leftoverHoles);
-            }
-        }
-
-        int getIndex(JavaKind kind) {
-            ScheduleEntry entry = schedule.query(kind);
-            if (entry != null) {
-                return entry.offset;
-            } else {
-                int offsetsIndex = indexFromKind(kind);
-                int prevOffset = offsets[offsetsIndex];
-                offsets[offsetsIndex] += kind.getByteCount();
-                return prevOffset;
-            }
-        }
-
-        // Find first primitive to set, and align on it.
-        private static int startOffset(int superTotalByteCount, int[] primitiveCounts) {
-            int i = 0;
-            while (i < N_PRIMITIVES && primitiveCounts[i] == 0) {
-                i++;
-            }
-            if (i == N_PRIMITIVES) {
-                return superTotalByteCount;
-            }
-            int r = superTotalByteCount % order[i].getByteCount();
-            if (r == 0) {
-                return superTotalByteCount;
-            }
-            return superTotalByteCount + order[i].getByteCount() - r;
         }
     }
 
