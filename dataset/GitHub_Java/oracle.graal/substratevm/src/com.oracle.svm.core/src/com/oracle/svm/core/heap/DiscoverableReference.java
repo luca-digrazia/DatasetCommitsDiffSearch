@@ -24,21 +24,16 @@
  */
 package com.oracle.svm.core.heap;
 
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.ObjectAccess;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.ExcludeFromReferenceMap;
-import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
-
-// Checkstyle: stop
-import sun.misc.Unsafe;
-// Checkstyle resume
 
 /**
  * This class is the plumbing under java.lang.ref.Reference. Instances of this class are discovered
@@ -74,8 +69,6 @@ public class DiscoverableReference {
     /*
      * List access methods.
      */
-
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
     /** Push a DiscoverableReference onto the list. */
     public DiscoverableReference prependToDiscoveredReference(DiscoverableReference newNext) {
@@ -190,7 +183,7 @@ public class DiscoverableReference {
 
     private static long getFieldOffset(String fieldName) {
         try {
-            return UNSAFE.objectFieldOffset(DiscoverableReference.class.getDeclaredField(fieldName));
+            return UnsafeAccess.UNSAFE.objectFieldOffset(DiscoverableReference.class.getDeclaredField(fieldName));
         } catch (NoSuchFieldException ex) {
             throw VMError.shouldNotReachHere(ex);
         }
@@ -219,7 +212,6 @@ public class DiscoverableReference {
             /* No instances. */
         }
 
-        @NeverInline("Prevent the access from moving around")
         public static Pointer getReferentPointer(DiscoverableReference that) {
             return that.getReferentPointer();
         }

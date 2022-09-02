@@ -81,7 +81,7 @@ public class FeebleReference<T> extends DiscoverableReference {
     }
 
     /** Is this FeebleReference on the list? */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     public boolean isEnlisted() {
         return (next != this);
     }
@@ -91,12 +91,12 @@ public class FeebleReference<T> extends DiscoverableReference {
      */
 
     /* For GR-14335 */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     public boolean hasList() {
         return (list != null);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     public FeebleReferenceList<T> getList() {
         return list.get();
     }
@@ -116,7 +116,7 @@ public class FeebleReference<T> extends DiscoverableReference {
      */
 
     /** Follow the next pointer. */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     FeebleReference<? extends T> listGetNext() {
         return (isEnlisted() ? next : null);
     }
@@ -128,7 +128,7 @@ public class FeebleReference<T> extends DiscoverableReference {
     }
 
     /** Remove this element from a list. */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     void listRemove() {
         next = this;
     }

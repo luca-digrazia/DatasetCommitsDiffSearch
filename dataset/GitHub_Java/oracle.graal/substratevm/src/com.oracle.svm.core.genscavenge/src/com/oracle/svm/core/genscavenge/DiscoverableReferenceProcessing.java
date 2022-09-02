@@ -32,6 +32,7 @@ import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.heap.DiscoverableReference;
 import com.oracle.svm.core.heap.FeebleReference;
 import com.oracle.svm.core.heap.FeebleReferenceList;
+import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
@@ -142,7 +143,7 @@ public class DiscoverableReferenceProcessing {
             return false;
         }
         /* Read the header. */
-        final UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointer(refPointer);
+        final UnsignedWord header = ObjectHeader.readHeaderFromPointer(refPointer);
         /* It might be a forwarding pointer. */
         if (ObjectHeaderImpl.getObjectHeaderImpl().isForwardedHeader(header)) {
             /* If the referent got forwarded, then update the referent. */
@@ -208,19 +209,22 @@ public class DiscoverableReferenceProcessing {
         final boolean refYoung = (!refNull) && youngGen.slowlyFindPointer(refPointer);
         final boolean refOldFrom = (!refNull) && oldGen.slowlyFindPointerInFromSpace(refPointer);
         final boolean refOldTo = (!refNull) && oldGen.slowlyFindPointerInToSpace(refPointer);
+        final boolean refOldPinnedFrom = (!refNull) && oldGen.slowlyFindPointerInPinnedFromSpace(refPointer);
+        final boolean refOldPinnedTo = (!refNull) && oldGen.slowlyFindPointerInPinnedToSpace(refPointer);
         /* The referent might already have survived, or might not have. */
-        if (!(refNull || refYoung || refBootImage || refOldFrom)) {
+        if (!(refNull || refYoung || refBootImage || refOldFrom || refOldPinnedFrom)) {
             final Log witness = Log.log();
             witness.string("[DiscoverableReference.verify:");
             witness.string("  epoch: ").unsigned(HeapImpl.getHeapImpl().getGCImpl().getCollectionEpoch());
             witness.string("  refBootImage: ").bool(refBootImage);
             witness.string("  refYoung: ").bool(refYoung);
             witness.string("  refOldFrom: ").bool(refOldFrom);
+            witness.string("  refOldPinnedFrom: ").bool(refOldPinnedFrom);
             witness.string("  referent should be in heap.");
             witness.string("]").newline();
             return false;
         }
-        assert !refOldTo : "referent should be in the heap.";
+        assert (!(refOldTo || refOldPinnedTo)) : "referent should be in the heap.";
         return true;
     }
 
@@ -280,7 +284,8 @@ public class DiscoverableReferenceProcessing {
             if (SubstrateOptions.MultiThreaded.getValue()) {
                 trace.string("  broadcasting").newline();
                 /* Notify anyone blocked waiting for FeebleReferences to be available. */
-                FeebleReferenceList.signalWaiters();
+                FeebleReferenceList.guaranteeIsLocked();
+                FeebleReferenceList.broadcast();
             }
             trace.string("]").newline();
         }
