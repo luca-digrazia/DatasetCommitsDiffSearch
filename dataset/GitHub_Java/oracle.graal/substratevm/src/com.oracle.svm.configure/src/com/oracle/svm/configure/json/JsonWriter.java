@@ -68,13 +68,8 @@ public class JsonWriter implements AutoCloseable {
     }
 
     public JsonWriter quote(String s) throws IOException {
-        writer.write(quoteString(s));
-        return this;
-    }
-
-    public static String quoteString(String s) {
         if (s == null) {
-            return "null";
+            return append("null");
         }
         StringBuilder sb = new StringBuilder(2 + s.length() + 8 /* room for escaping */);
         sb.append('"');
@@ -90,7 +85,8 @@ public class JsonWriter implements AutoCloseable {
             }
         }
         sb.append('"');
-        return sb.toString();
+        writer.write(sb.toString());
+        return this;
     }
 
     public JsonWriter newline() throws IOException {
