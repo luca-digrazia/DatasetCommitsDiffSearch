@@ -120,19 +120,20 @@ public class Driver {
     }
 
     private static String getVersion() {
-        String version = HomeFinder.getInstance().getVersion();
-        if (version.equals("snapshot")) {
+        String version = System.getProperty("org.graalvm.version");
+        if (version == null) {
+            version = System.getProperty("graalvm.version");
+        }
+        if (version == null) {
             return "Development Build";
         } else {
             return version;
         }
     }
 
-    public void runDriver(List<String> sulongArgs, List<String> userArgs, boolean verbose, boolean help, boolean earlyExit) {
-        runDriverExit(sulongArgs, userArgs, verbose, help, earlyExit);
-    }
+    public static final String VERSIION = getVersion();
 
-    public final void runDriverExit(List<String> sulongArgs, List<String> userArgs, boolean verbose, boolean help, boolean earlyExit) {
+    protected void runDriver(List<String> sulongArgs, List<String> userArgs, boolean verbose, boolean help, boolean earlyExit) {
         try {
             System.exit(runDriverReturn(sulongArgs, userArgs, verbose, help, earlyExit));
         } catch (IOException e) {
@@ -143,7 +144,7 @@ public class Driver {
         }
     }
 
-    public final int runDriverReturn(List<String> sulongArgs, List<String> userArgs, boolean verbose, boolean help, boolean earlyExit) throws Exception {
+    protected int runDriverReturn(List<String> sulongArgs, List<String> userArgs, boolean verbose, boolean help, boolean earlyExit) throws Exception {
         ArrayList<String> toolArgs = new ArrayList<>(sulongArgs.size() + userArgs.size());
         // add custom sulong flags
         toolArgs.addAll(sulongArgs);
@@ -210,15 +211,17 @@ public class Driver {
             System.out.println("##################################################");
             System.out.println("This it the the GraalVM wrapper script for " + getTool());
             System.out.println();
+            System.out.println(">>> WARNING: This tool is experimental. Functionality may be added, changed or removed without prior notice. <<<");
+            System.out.println();
             System.out.println("Its purpose is to make it easy to compile native projects to be used with");
             System.out.println("GraalVM's LLVM IR engine (bin/lli).");
             System.out.println("More infos: https://www.graalvm.org/docs/reference-manual/languages/llvm/");
             System.out.println("Wrapped executable: " + exe);
-            System.out.println("GraalVM version: " + getVersion());
+            System.out.println("GraalVM version: " + VERSIION);
         }
         if (verbose) {
             System.out.println("GraalVM wrapper script for " + getTool());
-            System.out.println("GraalVM version: " + getVersion());
+            System.out.println("GraalVM version: " + VERSIION);
             System.out.println("running: " + String.join(" ", toolArgs));
         }
         if (help) {

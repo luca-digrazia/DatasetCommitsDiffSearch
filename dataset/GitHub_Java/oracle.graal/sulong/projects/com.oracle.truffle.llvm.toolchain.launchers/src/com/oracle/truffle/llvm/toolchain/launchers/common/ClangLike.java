@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.toolchain.launchers.common;
 
-import com.oracle.truffle.llvm.toolchain.launchers.darwin.DarwinLinker;
 import com.oracle.truffle.llvm.toolchain.launchers.linux.LinuxLinker;
 
 import java.nio.file.Files;
@@ -145,7 +144,7 @@ public class ClangLike extends Driver {
 
     protected List<String> getArgs() {
         List<String> sulongArgs = new ArrayList<>();
-        if (os == OS.DARWIN && Files.isExecutable(Paths.get(XCRUN)) && Files.isExecutable(Paths.get(exe))) {
+        if (os == OS.DARWIN && Files.isExecutable(Paths.get(XCRUN))) {
             sulongArgs.add(XCRUN);
             sulongArgs.add("--sdk");
             sulongArgs.add("macosx");
@@ -164,9 +163,7 @@ public class ClangLike extends Driver {
         if (needLinkerFlags) {
             sulongArgs.add("-L" + getSulongHome().resolve(platform).resolve("lib"));
             if (os == OS.LINUX) {
-                sulongArgs.addAll(Arrays.asList("-fuse-ld=" + getLLVMExecutable(LinuxLinker.LLD), "-Wl," + String.join(",", LinuxLinker.getLinkerFlags())));
-            } else if (os == OS.DARWIN) {
-                sulongArgs.add("-fuse-ld=" + DarwinLinker.LD);
+                sulongArgs.addAll(Arrays.asList("-fuse-ld=lld", "-Wl," + String.join(",", LinuxLinker.getLinkerFlags())));
             }
         }
         return sulongArgs;
