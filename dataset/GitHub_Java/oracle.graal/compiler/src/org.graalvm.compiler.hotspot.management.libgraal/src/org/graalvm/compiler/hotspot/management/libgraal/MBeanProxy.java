@@ -266,11 +266,9 @@ class MBeanProxy<T extends DynamicMBean> {
      * @return the {@code instance} if successfully registered or {@code null} when the registration
      *         in not accepted because the isolate is closing
      */
-    static <T extends MBeanProxy<?>> T enqueueForRegistrationAndNotify(T instance, HotSpotGraalRuntime runtime) {
+    static synchronized <T extends MBeanProxy<?>> T enqueueForRegistrationAndNotify(T instance, HotSpotGraalRuntime runtime) {
         T res = enqueueForRegistration(instance, runtime);
-        if (res != null) {
-            signalRegistrationRequest();
-        }
+        signalRegistrationRequest();
         return res;
     }
 
