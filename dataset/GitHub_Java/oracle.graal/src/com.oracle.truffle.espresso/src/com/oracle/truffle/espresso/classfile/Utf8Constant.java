@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,7 +41,7 @@ public final class Utf8Constant implements PoolConstant {
     private byte validationCache;
 
     @Override
-    public Tag tag() {
+    public final Tag tag() {
         return Tag.UTF8;
     }
 
@@ -124,7 +124,7 @@ public final class Utf8Constant implements PoolConstant {
     }
 
     @Override
-    public String toString() {
+    public final String toString() {
         return value.toString();
     }
 

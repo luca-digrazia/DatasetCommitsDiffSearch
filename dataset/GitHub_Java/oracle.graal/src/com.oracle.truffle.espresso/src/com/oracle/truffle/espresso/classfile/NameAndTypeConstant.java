@@ -23,12 +23,35 @@
 package com.oracle.truffle.espresso.classfile;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 
 public interface NameAndTypeConstant extends PoolConstant {
 
-    Utf8Constant getName(ConstantPool pool, int thisIndex);
+    /**
+     * Gets the name of this name+descriptor pair constant.
+     *
+     * @param pool the constant pool that maybe be required to convert a constant pool index to a
+     *            name
+     */
+    Symbol<Name> getName(ConstantPool pool);
 
-    Utf8Constant getType(ConstantPool pool, int thisIndex);
+    /**
+     * Gets the descriptor of this name+descriptor pair constant.
+     *
+     * @param pool the constant pool that maybe be required to convert a constant pool index to a
+     *            name
+     */
+    Symbol<? extends Descriptor> getDescriptor(ConstantPool pool);
+
+    default void validateMethod(ConstantPool pool) {
+        validateMethod(pool, true);
+    }
+
+    void validateMethod(ConstantPool pool, boolean allowClinit);
+
+    void validateField(ConstantPool pool);
 
     @Override
     default Tag tag() {
@@ -36,31 +59,12 @@ public interface NameAndTypeConstant extends PoolConstant {
     }
 
     @Override
-    default String toString(ConstantPool pool, int thisIndex) {
-        return getName(pool, thisIndex) + ":" + getType(pool, thisIndex);
+    default String toString(ConstantPool pool) {
+        return getName(pool) + ":" + getDescriptor(pool);
     }
 
-    public static final class Resolved implements NameAndTypeConstant {
+    final class Indexes implements NameAndTypeConstant {
 
-        private final Utf8Constant name;
-        private final Utf8Constant type;
-
-        Resolved(Utf8Constant name, Utf8Constant type) {
-            this.name = name;
-            this.type = type;
-        }
-
-        public Utf8Constant getName(ConstantPool pool, int thisIndex) {
-            return name;
-        }
-
-        public Utf8Constant getType(ConstantPool pool, int thisIndex) {
-            return type;
-        }
-
-    }
-
-    public static final class Indexes implements NameAndTypeConstant {
         private final char nameIndex;
         private final char typeIndex;
 
@@ -69,18 +73,37 @@ public interface NameAndTypeConstant extends PoolConstant {
             this.typeIndex = PoolConstant.u2(typeIndex);
         }
 
-        private NameAndTypeConstant replace(ConstantPool pool, int thisIndex) {
-            Utf8Constant name = pool.utf8At(nameIndex);
-            Utf8Constant type = pool.utf8At(typeIndex);
-            return (NameAndTypeConstant) pool.updateAt(thisIndex, new Resolved(name, type));
+        @Override
+        public Symbol<Name> getName(ConstantPool pool) {
+            return pool.symbolAt(nameIndex);
         }
 
-        public Utf8Constant getName(ConstantPool pool, int thisIndex) {
-            return replace(pool, thisIndex).getName(pool, thisIndex);
+        @Override
+        public Symbol<? extends Descriptor> getDescriptor(ConstantPool pool) {
+            return pool.symbolAt(typeIndex);
         }
 
-        public Utf8Constant getType(ConstantPool pool, int thisIndex) {
-            return replace(pool, thisIndex).getType(pool, thisIndex);
+        @Override
+        public void validate(ConstantPool pool) {
+            Symbol<? extends Descriptor> descriptor = getDescriptor(pool);
+            if (descriptor.length() > 0 && descriptor.byteAt(0) == '(') {
+                validateMethod(pool);
+            } else {
+                // Fails with empty name.
+                validateField(pool);
+            }
+        }
+
+        @Override
+        public void validateMethod(ConstantPool pool, boolean allowClinit) {
+            pool.utf8At(nameIndex).validateMethodName(allowClinit);
+            pool.utf8At(typeIndex).validateSignature();
+        }
+
+        @Override
+        public void validateField(ConstantPool pool) {
+            pool.utf8At(nameIndex).validateFieldName();
+            pool.utf8At(typeIndex).validateType(false);
         }
     }
 }

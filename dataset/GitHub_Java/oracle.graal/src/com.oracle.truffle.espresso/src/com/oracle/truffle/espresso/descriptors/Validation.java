@@ -1,30 +1,8 @@
-/*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.truffle.espresso.descriptors;
 
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.jni.ModifiedUtf8;
+import com.oracle.truffle.espresso.jni.Utf8;
 
 public final class Validation {
     private Validation() {
@@ -57,8 +35,8 @@ public final class Validation {
 
     /**
      * Method names are further constrained so that, with the exception of the special method names
-     * <init> and <clinit> (&sect;2.9), they must not contain the ASCII characters < or > (that is,
-     * left angle bracket or right angle bracket).
+     * <init> and <clinit> (§2.9), they must not contain the ASCII characters < or > (that is, left
+     * angle bracket or right angle bracket).
      *
      * Does not check that the byte sequence is well-formed modified-UTF8 string.
      */
@@ -81,10 +59,10 @@ public final class Validation {
 
     /**
      * For historical reasons, the syntax of binary names that appear in class file structures
-     * differs from the syntax of binary names documented in JLS &sect;13.1. In this internal form,
-     * the ASCII periods (.) that normally separate the identifiers which make up the binary name
-     * are replaced by ASCII forward slashes (/). The identifiers themselves must be unqualified
-     * names (&sect;4.2.2).
+     * differs from the syntax of binary names documented in JLS §13.1. In this internal form, the
+     * ASCII periods (.) that normally separate the identifiers which make up the binary name are
+     * replaced by ASCII forward slashes (/). The identifiers themselves must be unqualified names
+     * (§4.2.2).
      */
     public static boolean validBinaryName(ByteSequence bytes) {
         if (bytes.length() == 0) {
@@ -94,8 +72,7 @@ public final class Validation {
             return false;
         }
         int prev = 0;
-        int i = 0;
-        while (i < bytes.length()) {
+        for (int i = 0; i < bytes.length(); ++i) {
             while (i < bytes.length() && bytes.byteAt(i) != '/') {
                 ++i;
             }
@@ -103,7 +80,6 @@ public final class Validation {
                 return false;
             }
             prev = i + 1;
-            ++i;
         }
         return true;
     }
@@ -248,6 +224,6 @@ public final class Validation {
     }
 
     public static boolean validModifiedUTF8(ByteSequence bytes) {
-        return ModifiedUtf8.isValid(bytes.getUnderlyingBytes(), bytes.offset(), bytes.length());
+        return Utf8.isValid(bytes.getUnderlyingBytes(), bytes.offset(), bytes.length());
     }
 }
