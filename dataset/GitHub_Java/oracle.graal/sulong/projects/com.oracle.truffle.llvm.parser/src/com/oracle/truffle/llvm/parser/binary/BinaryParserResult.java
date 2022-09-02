@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,9 +29,11 @@
  */
 package com.oracle.truffle.llvm.parser.binary;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.LibraryLocator;
 import org.graalvm.polyglot.io.ByteSequence;
 
@@ -41,16 +43,18 @@ import org.graalvm.polyglot.io.ByteSequence;
  */
 public final class BinaryParserResult {
 
-    private final List<String> libraries;
-    private final List<String> paths;
+    private final ArrayList<String> libraries;
+    private final ArrayList<String> paths;
     private final ByteSequence bitcode;
     private final LibraryLocator locator;
+    private final Source source;
 
-    BinaryParserResult(List<String> libraries, List<String> paths, ByteSequence bitcode, LibraryLocator locator) {
+    BinaryParserResult(ArrayList<String> libraries, ArrayList<String> paths, ByteSequence bitcode, LibraryLocator locator, Source source) {
         this.libraries = libraries;
         this.paths = paths;
         this.bitcode = bitcode;
         this.locator = locator;
+        this.source = source;
     }
 
     public List<String> getLibraries() {
@@ -67,5 +71,9 @@ public final class BinaryParserResult {
 
     public LibraryLocator getLocator() {
         return locator;
+    }
+
+    public Source getSource() {
+        return source;
     }
 }
