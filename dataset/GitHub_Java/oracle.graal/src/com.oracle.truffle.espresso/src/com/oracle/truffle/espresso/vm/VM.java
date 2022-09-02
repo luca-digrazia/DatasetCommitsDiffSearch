@@ -899,48 +899,39 @@ public final class VM extends NativeEnv implements ContextAccess {
         return false;
     }
 
-    /**
-     * Returns the caller frame, 'depth' levels up. If securityStackWalk is true, some Espresso
-     * frames are skipped according to {@link #isIgnoredBySecurityStackWalk}.
-     */
     private static FrameInstance getCallerFrame(int depth, boolean securityStackWalk) {
-        if (depth == JVM_CALLER_DEPTH) {
-            return getCallerFrame(1, securityStackWalk);
-        }
-        assert depth >= 0;
+        // TODO(peterssen): HotSpot verifies that the method is marked as @CallerSensitive.
+        // Non-Espresso frames (e.g TruffleNFI) are ignored.
+        // The call stack should look like this:
+        // 2 : the @CallerSensitive annotated method.
+        // ... : skipped non-Espresso frames.
+        // 1 : getCallerClass method.
+        // ... :
+        // 0 : the callee.
+        //
+        // JVM_CALLER_DEPTH => the caller.
+        int callerDepth = (depth == JVM_CALLER_DEPTH) ? 2 : depth + 1;
 
-        // Ignores non-Espresso frames.
-        //
-        // The call stack at this point looks something like this:
-        //
-        // [0] [ current frame e.g. AccessController.doPrivileged, Reflection.getCallerClass ]
-        // [.] [ (skipped intermediate frames) ]
-        // ...
-        // [n] [ caller ]
-        FrameInstance callerFrame = Truffle.getRuntime().iterateFrames(
+        final int[] depthCounter = new int[]{callerDepth};
+        FrameInstance target = Truffle.getRuntime().iterateFrames(
                         new FrameInstanceVisitor<FrameInstance>() {
-                            private int n;
-
                             @Override
                             public FrameInstance visitFrame(FrameInstance frameInstance) {
                                 Method m = getMethodFromFrame(frameInstance);
                                 if (m != null) {
                                     if (!securityStackWalk || !isIgnoredBySecurityStackWalk(m, m.getMeta())) {
-                                        if (n == depth) {
+                                        if (--depthCounter[0] < 0) {
                                             return frameInstance;
                                         }
-                                        ++n;
                                     }
                                 }
                                 return null;
                             }
                         });
-
-        if (callerFrame != null) {
-            return callerFrame;
+        if (target != null) {
+            return target;
         }
-
-        throw EspressoError.shouldNotReachHere(String.format("Caller frame not found at depth %d", depth));
+        throw EspressoError.shouldNotReachHere();
     }
 
     private static EspressoRootNode getEspressoRootFromFrame(FrameInstance frameInstance) {
@@ -1224,7 +1215,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         if (StaticObject.isNull(action)) {
             throw getMeta().throwEx(NullPointerException.class);
         }
-        FrameInstance callerFrame = getCallerFrame(1, false);
+        FrameInstance callerFrame = getCallerFrame(0, false);
         assert callerFrame != null : "No caller ?";
         Klass caller = getMethodFromFrame(callerFrame).getDeclaringKlass();
         StaticObject acc = context;
