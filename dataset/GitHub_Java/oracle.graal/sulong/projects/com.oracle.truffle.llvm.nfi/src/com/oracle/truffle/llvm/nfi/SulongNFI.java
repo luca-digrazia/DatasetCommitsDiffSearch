@@ -89,7 +89,7 @@ public final class SulongNFI extends TruffleLanguage<Env> {
             TruffleFile file = env.getTruffleFile(descriptor.getFilename());
             try {
                 Source source = Source.newBuilder("llvm", file).build();
-                CallTarget target = env.parsePublic(source);
+                CallTarget target = env.parse(source);
                 return wrap(SulongNFI.this, target);
             } catch (IOException ex) {
                 throw new SulongNFIException(ex.getMessage());
