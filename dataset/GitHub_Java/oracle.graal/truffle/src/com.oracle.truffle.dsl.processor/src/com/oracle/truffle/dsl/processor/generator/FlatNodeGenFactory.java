@@ -226,6 +226,9 @@ public class FlatNodeGenFactory {
         this.sharedCaches = sharedCaches;
 
         List<Object> stateObjects = new ArrayList<>();
+        if (needsAOTReset()) {
+            stateObjects.add(AOT_PREPARED);
+        }
         List<SpecializationData> excludeObjects = new ArrayList<>();
         int activeStateStartIndex = -1;
         int activeStateEndIndex = -1;
@@ -234,15 +237,10 @@ public class FlatNodeGenFactory {
             boolean primary = stateNode == node;
             if (primary && activeStateStartIndex == -1) {
                 activeStateStartIndex = stateObjects.size();
-
-                if (needsAOTReset()) {
-                    stateObjects.add(AOT_PREPARED);
-                }
             }
             if (!primary && activeStateStartIndex != -1 && activeStateEndIndex == -1) {
                 activeStateEndIndex = stateObjects.size();
             }
-
             boolean needsRewrites = stateNode.needsRewrites(context);
             if (!needsRewrites) {
                 continue;
@@ -344,7 +342,8 @@ public class FlatNodeGenFactory {
     }
 
     private boolean needsAOTReset() {
-        return node.isGenerateAOT() && needsRewrites();
+        // TODO check for available AOT specializations
+        return node.isGenerateAOT() && node.needsRewrites(context);
     }
 
     private boolean hasMultipleNodes() {
