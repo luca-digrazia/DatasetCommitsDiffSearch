@@ -390,10 +390,10 @@ public abstract class ShapeImpl extends Shape {
                 invalidateLeafAssumption();
                 next = newSingleEntry(transition, successor);
             } else if (isSingleEntry(prev)) {
-                StrongKeyWeakValueEntry<Object, ShapeImpl> entry = asSingleEntry(prev);
-                Transition exTra;
+                StrongKeyWeakValueEntry<Transition, ShapeImpl> entry = asSingleEntry(prev);
+                Transition exTra = entry.getKey();
                 ShapeImpl exSucc = entry.getValue();
-                if (exSucc != null && (exTra = unwrapKey(entry.getKey())) != null) {
+                if (exSucc != null) {
                     next = newTransitionMap(exTra, exSucc, transition, successor);
                 } else {
                     next = newSingleEntry(transition, successor);
@@ -428,14 +428,6 @@ public abstract class ShapeImpl extends Shape {
     }
 
     @SuppressWarnings("unchecked")
-    private static Transition unwrapKey(Object key) {
-        if (key instanceof WeakKey<?>) {
-            return ((WeakKey<Transition>) key).get();
-        }
-        return (Transition) key;
-    }
-
-    @SuppressWarnings("unchecked")
     private static TransitionMap<Transition, ShapeImpl> asTransitionMap(Object map) {
         return (TransitionMap<Transition, ShapeImpl>) map;
     }
@@ -445,11 +437,7 @@ public abstract class ShapeImpl extends Shape {
     }
 
     private static Object newSingleEntry(Transition transition, ShapeImpl successor) {
-        Object key = transition;
-        if (transition.hasConstantLocation()) {
-            key = new WeakKey<>(transition);
-        }
-        return new StrongKeyWeakValueEntry<>(key, successor);
+        return new StrongKeyWeakValueEntry<>(transition, successor);
     }
 
     private static boolean isSingleEntry(Object trans) {
@@ -457,8 +445,8 @@ public abstract class ShapeImpl extends Shape {
     }
 
     @SuppressWarnings("unchecked")
-    private static StrongKeyWeakValueEntry<Object, ShapeImpl> asSingleEntry(Object trans) {
-        return (StrongKeyWeakValueEntry<Object, ShapeImpl>) trans;
+    private static StrongKeyWeakValueEntry<Transition, ShapeImpl> asSingleEntry(Object trans) {
+        return (StrongKeyWeakValueEntry<Transition, ShapeImpl>) trans;
     }
 
     /**
@@ -482,13 +470,11 @@ public abstract class ShapeImpl extends Shape {
         if (trans == null) {
             return;
         } else if (isSingleEntry(trans)) {
-            StrongKeyWeakValueEntry<Object, ShapeImpl> entry = asSingleEntry(trans);
+            StrongKeyWeakValueEntry<Transition, ShapeImpl> entry = asSingleEntry(trans);
             ShapeImpl shape = entry.getValue();
             if (shape != null) {
-                Transition key = unwrapKey(entry.getKey());
-                if (key != null) {
-                    consumer.accept(key, shape);
-                }
+                Transition key = entry.getKey();
+                consumer.accept(key, shape);
             }
         } else {
             assert isTransitionMap(trans);
@@ -502,15 +488,13 @@ public abstract class ShapeImpl extends Shape {
         if (trans == null) {
             return null;
         } else if (isSingleEntry(trans)) {
-            StrongKeyWeakValueEntry<Object, ShapeImpl> entry = asSingleEntry(trans);
-            ShapeImpl shape = entry.getValue();
-            if (shape != null) {
-                Transition key = unwrapKey(entry.getKey());
-                if (key != null && transition.equals(key)) {
-                    return shape;
-                }
+            StrongKeyWeakValueEntry<Transition, ShapeImpl> entry = asSingleEntry(trans);
+            Transition key = entry.getKey();
+            if (transition.equals(key)) {
+                return entry.getValue();
+            } else {
+                return null;
             }
-            return null;
         } else {
             assert isTransitionMap(trans);
             TransitionMap<Transition, ShapeImpl> map = asTransitionMap(trans);
@@ -535,13 +519,11 @@ public abstract class ShapeImpl extends Shape {
         if (trans == null) {
             return null;
         } else if (isSingleEntry(trans)) {
-            StrongKeyWeakValueEntry<Object, ShapeImpl> entry = asSingleEntry(trans);
+            StrongKeyWeakValueEntry<Transition, ShapeImpl> entry = asSingleEntry(trans);
             ShapeImpl shape = entry.getValue();
             if (shape != null) {
-                Transition key = unwrapKey(entry.getKey());
-                if (key != null) {
-                    return consumer.apply(key, shape);
-                }
+                Transition key = entry.getKey();
+                return consumer.apply(key, shape);
             }
             return null;
         } else {
