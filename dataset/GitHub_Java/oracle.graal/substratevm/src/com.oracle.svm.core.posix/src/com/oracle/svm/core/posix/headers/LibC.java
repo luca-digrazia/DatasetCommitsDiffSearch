@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,11 +24,11 @@
  */
 package com.oracle.svm.core.posix.headers;
 
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
-import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.SignedWord;
 import org.graalvm.word.UnsignedWord;
@@ -40,7 +40,7 @@ import com.oracle.svm.core.annotate.Uninterruptible;
 /**
  * Basic functions from the standard C library that we require to be present on all Posix platforms.
  */
-@Platforms({InternalPlatform.LINUX_AND_JNI.class, InternalPlatform.DARWIN_AND_JNI.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 public class LibC {
 
     /**
@@ -181,6 +181,14 @@ public class LibC {
     /** Copy a zero-terminated string from source to a newly allocated destination. */
     @CFunction(transition = CFunction.Transition.NO_TRANSITION)
     public static native CCharPointer strdup(CCharPointer src);
+
+    /** Returns a pointer to the first occurrence of the character c in the string s. */
+    @CFunction(transition = CFunction.Transition.NO_TRANSITION)
+    public static native CCharPointer strchr(CCharPointer s, int c);
+
+    /** Calculate the length of a string. */
+    @CFunction(transition = CFunction.Transition.NO_TRANSITION)
+    public static native UnsignedWord strlen(CCharPointer s);
 
     /* Split a string into substrings at locations of delimiters, modifying the string in place. */
     @CFunction(transition = CFunction.Transition.NO_TRANSITION)
