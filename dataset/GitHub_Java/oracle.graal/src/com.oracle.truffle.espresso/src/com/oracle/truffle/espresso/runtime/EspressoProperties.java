@@ -226,19 +226,9 @@ public interface EspressoProperties {
 
     static Builder processOptions(EspressoLanguage language, Builder builder, OptionValues options) {
         // Always set JavaHome first.
-        Path javaHome = options.hasBeenSet(EspressoOptions.JavaHome)
-                        ? options.get(EspressoOptions.JavaHome)
-                        : builder.javaHome();
-        /*
-         * On Java 8, --java.JavaHome must point to the /jre folder, this is usability
-         * improvement/hack so users do not have to worry about appending /jre or not depending on
-         * the version.
-         */
-        Path java8Home = javaHome.resolve("jre");
-        if (Files.isDirectory(java8Home)) {
-            javaHome = java8Home;
+        if (options.hasBeenSet(EspressoOptions.JavaHome)) {
+            builder.javaHome(options.get(EspressoOptions.JavaHome));
         }
-        builder.javaHome(javaHome);
 
         if (options.hasBeenSet(EspressoOptions.EspressoLibraryPath)) {
             builder.espressoLibraryPath(options.get(EspressoOptions.EspressoLibraryPath));
@@ -356,7 +346,7 @@ abstract class PlatformBuilder extends EspressoProperties.Builder {
 
     @Override
     Path defaultJavaHome() {
-        throw EspressoError.shouldNotReachHere("Java home not defined, use --java.JavaHome=/path/to/java/home");
+        throw EspressoError.shouldNotReachHere("Java 8 home not defined, use --java.JavaHome=/path/to/java8/home/jre");
     }
 
     @Override
