@@ -204,7 +204,7 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
 
         @Specialization(replaces = "doCached")
         static Object doPolymorphic(LLVMFunctionDescriptor self, Object[] args,
-                        @Exclusive @Cached IndirectCallNode call) {
+                        @Cached IndirectCallNode call) {
             return call.call(self.getForeignCallTarget(), args);
         }
 
