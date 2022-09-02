@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,20 +24,11 @@
  */
 package org.graalvm.compiler.truffle.runtime.hotspot.java;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
-
-import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.debug.DebugOptions;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.hotspot.CompilerConfigurationFactory;
 import org.graalvm.compiler.hotspot.HotSpotGraalOptionValues;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.compiler.hotspot.HotSpotTruffleCompilerImpl;
 import org.graalvm.compiler.truffle.compiler.hotspot.HotSpotTruffleCompilerImpl.Options;
 import org.graalvm.compiler.truffle.runtime.hotspot.AbstractHotSpotTruffleRuntime;
@@ -48,39 +39,28 @@ final class HotSpotTruffleRuntime extends AbstractHotSpotTruffleRuntime {
     }
 
     @Override
-    public Map<String, Object> createInitialOptions() {
-        final UnmodifiableMapCursor<OptionKey<?>, Object> optionValues = HotSpotGraalOptionValues.HOTSPOT_OPTIONS.getMap().getEntries();
-        Map<String, Object> res = new HashMap<>();
-        while (optionValues.advance()) {
-            final OptionKey<?> key = optionValues.getKey();
-            Object value = optionValues.getValue();
-            if (value == null) {
-                value = key.getDefaultValue();
-            }
-            res.put(key.getName(), value);
+    public <T> T getGraalOptions(Class<T> optionValuesType) {
+        if (optionValuesType == OptionValues.class) {
+            return optionValuesType.cast(HotSpotGraalOptionValues.defaultOptions());
         }
-        return res;
+        return super.getGraalOptions(optionValuesType);
+    }
+
+    @Override
+    protected boolean isPrintGraphEnabled() {
+        return DebugOptions.PrintGraph.getValue(getGraalOptions(OptionValues.class)) != DebugOptions.PrintGraphTarget.Disable;
     }
 
     @Override
     protected String initLazyCompilerConfigurationName() {
-        final OptionValues options = TruffleCompilerOptions.getOptions();
-        CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(Options.TruffleCompilerConfiguration.getValue(options), options);
+        final OptionValues options = getGraalOptions(OptionValues.class);
+        String factoryName = Options.TruffleCompilerConfiguration.getValue(options);
+        CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(factoryName, options);
         return compilerConfigurationFactory.getName();
     }
 
     @Override
     public TruffleCompiler newTruffleCompiler() {
         return HotSpotTruffleCompilerImpl.create(this);
-    }
-
-    @Override
-    protected Path getGraphDumpDirectory() throws IOException {
-        return DebugOptions.getDumpDirectory(HotSpotGraalOptionValues.HOTSPOT_OPTIONS);
-    }
-
-    @Override
-    public void log(String message) {
-        TTY.println(message);
     }
 }

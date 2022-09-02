@@ -27,7 +27,6 @@ package org.graalvm.compiler.truffle.runtime.hotspot.libgraal;
 import static java.lang.String.format;
 import static java.lang.System.lineSeparator;
 import static java.util.stream.Collectors.joining;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.AddInlinedTarget;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.AddTargetToDequeue;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.AsCompilableTruffleAST;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.AsJavaConstant;
@@ -67,7 +66,6 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLi
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetSuppliedString;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetTruffleCallBoundaryMethods;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetURI;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.InlinedTargets;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsCancelled;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsInliningForced;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsLastTier;
@@ -483,16 +481,6 @@ final class TruffleFromLibGraalEntryPoints {
     @TruffleFromLibGraal(SetInlinedCallCount)
     static void setInlinedCallCount(Object inliningPlan, int count) {
         ((TruffleMetaAccessProvider) inliningPlan).setInlinedCallCount(count);
-    }
-
-    @TruffleFromLibGraal(AddInlinedTarget)
-    static void addInlinedTarget(Object inlining, Object target) {
-        ((TruffleMetaAccessProvider) inlining).addInlinedTarget(((CompilableTruffleAST) target));
-    }
-
-    @TruffleFromLibGraal(InlinedTargets)
-    static Object[] inlinedTargets(Object inlining) {
-        return ((TruffleMetaAccessProvider) inlining).inlinedTargets();
     }
     /*----------------------*/
 

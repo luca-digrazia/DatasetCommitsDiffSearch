@@ -63,6 +63,7 @@ import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue.Priority;
 import org.graalvm.compiler.truffle.runtime.debug.JFRListener;
 import org.graalvm.compiler.truffle.runtime.debug.StatisticsListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceASTCompilationListener;
+import org.graalvm.compiler.truffle.runtime.debug.TraceCallTreeListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceCompilationListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceCompilationPolymorphismListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceSplittingListener;
@@ -418,6 +419,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     protected void installDefaultListeners() {
         TraceCompilationListener.install(this);
         TraceCompilationPolymorphismListener.install(this);
+        TraceCallTreeListener.install(this);
         TraceSplittingListener.install(this);
         StatisticsListener.install(this);
         TraceASTCompilationListener.install(this);
