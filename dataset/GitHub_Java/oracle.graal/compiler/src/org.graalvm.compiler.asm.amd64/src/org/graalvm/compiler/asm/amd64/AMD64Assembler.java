@@ -3139,14 +3139,14 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         SSEOp.XOR.emit(this, PS, dst, src);
     }
 
-    public final void decl(Register dst) {
+    protected final void decl(Register dst) {
         // Use two-byte form (one-byte form is a REX prefix in 64-bit mode)
         prefix(dst);
         emitByte(0xFF);
         emitModRM(1, dst);
     }
 
-    public final void incl(Register dst) {
+    protected final void incl(Register dst) {
         // Use two-byte form (one-byte from is a REX prefix in 64-bit mode)
         prefix(dst);
         emitByte(0xFF);
