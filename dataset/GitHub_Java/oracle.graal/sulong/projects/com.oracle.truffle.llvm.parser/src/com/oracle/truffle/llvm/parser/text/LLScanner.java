@@ -40,7 +40,6 @@ import java.util.regex.Pattern;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
-import com.oracle.truffle.llvm.runtime.options.TargetStream;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 final class LLScanner {
@@ -96,10 +95,6 @@ final class LLScanner {
 
         final TruffleFile llFile = findLLPathMapping(bcPath, pathMappings, context);
         if (llFile == null || !llFile.exists() || !llFile.isReadable()) {
-            TargetStream stream = context.llDebugVerboseStream();
-            if (stream != null) {
-                stream.println("Cannot find .ll file for " + bcPath);
-            }
             return NOT_FOUND;
         }
 
