@@ -45,6 +45,7 @@ import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.runtime.dispatch.BaseInterop;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.UnsafeAccess;
@@ -60,20 +61,71 @@ import com.oracle.truffle.espresso.vm.UnsafeAccess;
 public class StaticObject implements TruffleObject, Cloneable {
 
     public static final StaticObject[] EMPTY_ARRAY = new StaticObject[0];
-    public static final StaticObject NULL = new StaticObject(null);
+    public static final StaticObject NULL = new StaticObject();
     public static final String CLASS_TO_STATIC = "static";
 
     private final Klass klass; // != PrimitiveKlass
 
-    private Object arrayOrForeignObject;
+    private final Object arrayOrForeignObject;
 
-    private boolean isForeign;
+    private final boolean isForeign;
 
     private EspressoLock lock;
 
     // region Constructors
-    protected StaticObject(Klass klass) {
+
+    // Dedicated constructor for NULL.
+    private StaticObject() {
+        assert NULL == null : "Only meant for StaticObject.NULL";
+        this.klass = null;
+        this.arrayOrForeignObject = null;
+        this.isForeign = false;
+    }
+
+    // Constructor for regular objects.
+    protected StaticObject(ObjectKlass klass) {
+        assert klass != null;
+        assert klass != klass.getMeta().java_lang_Class;
         this.klass = klass;
+        this.arrayOrForeignObject = null;
+        this.isForeign = false;
+    }
+
+    // Constructor for Class objects.
+    protected StaticObject(Klass klass) {
+        ObjectKlass guestClass = klass.getMeta().java_lang_Class;
+        this.klass = guestClass;
+        this.arrayOrForeignObject = null;
+        this.isForeign = false;
+    }
+
+    // Constructor for static fields storage.
+    protected StaticObject(ObjectKlass klass, @SuppressWarnings("unused") Void unused) {
+        assert klass != null;
+        this.klass = klass;
+        this.arrayOrForeignObject = null;
+        this.isForeign = false;
+    }
+
+    /**
+     * Constructor for Array objects.
+     */
+    private StaticObject(ArrayKlass klass, Object array) {
+        this.klass = klass;
+        assert klass.isArray();
+        assert array != null;
+        assert !(array instanceof StaticObject);
+        assert array.getClass().isArray();
+        this.arrayOrForeignObject = array;
+        this.isForeign = false;
+    }
+
+    private StaticObject(Klass klass, Object foreignObject, @SuppressWarnings("unused") Void unused) {
+        this.klass = klass;
+        assert foreignObject != null;
+        assert !(foreignObject instanceof StaticObject) : "Espresso objects cannot be wrapped";
+        this.arrayOrForeignObject = foreignObject;
+        this.isForeign = true;
     }
 
     @ExplodeLoop
@@ -111,7 +163,7 @@ public class StaticObject implements TruffleObject, Cloneable {
 
     public static StaticObject createClass(Klass klass) {
         ObjectKlass guestClass = klass.getMeta().java_lang_Class;
-        StaticObject newObj = guestClass.getLinkedKlass().getShape(false).getFactory().create(guestClass);
+        StaticObject newObj = guestClass.getLinkedKlass().getShape(false).getFactory().create(klass);
         newObj.initInstanceFields(guestClass);
         if (klass.getContext().getJavaVersion().modulesEnabled()) {
             klass.getMeta().java_lang_Class_classLoader.setObject(newObj, klass.getDefiningClassLoader());
@@ -124,7 +176,7 @@ public class StaticObject implements TruffleObject, Cloneable {
     }
 
     public static StaticObject createStatics(ObjectKlass klass) {
-        StaticObject newObj = klass.getLinkedKlass().getShape(true).getFactory().create(klass);
+        StaticObject newObj = klass.getLinkedKlass().getShape(true).getFactory().create(klass, null);
         newObj.initStaticFields(klass);
         return trackAllocation(klass, newObj);
     }
@@ -134,8 +186,7 @@ public class StaticObject implements TruffleObject, Cloneable {
         assert array != null;
         assert !(array instanceof StaticObject);
         assert array.getClass().isArray();
-        StaticObject newObj = new StaticObject(klass);
-        newObj.arrayOrForeignObject = array;
+        StaticObject newObj = new StaticObject(klass, array);
         return trackAllocation(klass, newObj);
     }
 
@@ -156,19 +207,14 @@ public class StaticObject implements TruffleObject, Cloneable {
         if (interopLibrary.isNull(foreignObject)) {
             return createForeignNull(foreignObject);
         }
-        StaticObject newObj = new StaticObject(klass);
-        newObj.arrayOrForeignObject = foreignObject;
-        newObj.isForeign = true;
+        StaticObject newObj = new StaticObject(klass, foreignObject, null);
         return trackAllocation(klass, newObj);
     }
 
     public static StaticObject createForeignNull(Object foreignObject) {
         assert foreignObject != null;
         assert InteropLibrary.getUncached().isNull(foreignObject);
-        StaticObject newObj = new StaticObject(null);
-        newObj.arrayOrForeignObject = foreignObject;
-        newObj.isForeign = true;
-        return newObj;
+        return new StaticObject(null, foreignObject, null);
     }
 
     // Shallow copy.
@@ -492,7 +538,11 @@ public class StaticObject implements TruffleObject, Cloneable {
 
     // region Factory interface.
     public interface StaticObjectFactory {
+        StaticObject create(ObjectKlass klass);
+
         StaticObject create(Klass klass);
+
+        StaticObject create(ObjectKlass klass, Void unused);
     }
     // endregion Factory interface.
 
@@ -500,8 +550,20 @@ public class StaticObject implements TruffleObject, Cloneable {
         public final byte[] primitive;
         public final Object[] object;
 
+        private DefaultArrayBasedStaticObject(ObjectKlass klass, int primitiveArraySize, int objectArraySize) {
+            super(klass);
+            primitive = new byte[primitiveArraySize];
+            object = new Object[objectArraySize];
+        }
+
         private DefaultArrayBasedStaticObject(Klass klass, int primitiveArraySize, int objectArraySize) {
             super(klass);
+            primitive = new byte[primitiveArraySize];
+            object = new Object[objectArraySize];
+        }
+
+        private DefaultArrayBasedStaticObject(ObjectKlass klass, Void unused, int primitiveArraySize, int objectArraySize) {
+            super(klass, unused);
             primitive = new byte[primitiveArraySize];
             object = new Object[objectArraySize];
         }
@@ -517,8 +579,18 @@ public class StaticObject implements TruffleObject, Cloneable {
         }
 
         @Override
+        public StaticObject create(ObjectKlass klass) {
+            return new DefaultArrayBasedStaticObject(klass, primitiveArraySize, objectArraySize);
+        }
+
+        @Override
         public StaticObject create(Klass klass) {
             return new DefaultArrayBasedStaticObject(klass, primitiveArraySize, objectArraySize);
+        }
+
+        @Override
+        public StaticObject create(ObjectKlass klass, Void unused) {
+            return new DefaultArrayBasedStaticObject(klass, unused, primitiveArraySize, objectArraySize);
         }
     }
 }
