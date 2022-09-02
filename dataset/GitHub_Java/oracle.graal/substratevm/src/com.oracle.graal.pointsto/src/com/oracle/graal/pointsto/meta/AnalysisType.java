@@ -558,6 +558,17 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     public void registerAsReachable() {
         if (!isReachable) {
+            if (superClass != null) {
+                /*
+                 * The super class must be registered as reachable before this class because other
+                 * threads may query the fields which also collects the super class fields. Field
+                 * lookup guarantees that the type has already been marked as reachable.
+                 */
+                superClass.registerAsReachable();
+            }
+            for (AnalysisType iface : interfaces) {
+                iface.registerAsReachable();
+            }
             /* Races are not a problem because every thread is going to do the same steps. */
             isReachable = true;
             universe.hostVM.checkForbidden(this, UsageKind.Reachable);
@@ -571,18 +582,19 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
                 registerAsAllocated(null);
 
                 componentType.registerAsReachable();
+                // elementalType.registerAsReachable();
+                if (elementalType.getSuperclass() != null) {
+                    elementalType.getSuperclass().getArrayClass(dimension).registerAsReachable();
+                }
                 if (elementalType.isInterface()) {
                     universe.objectType().getArrayClass(dimension).registerAsReachable();
                 }
                 if (dimension >= 2) {
                     universe.objectType().getArrayClass(dimension - 1).registerAsReachable();
                 }
-            }
-            if (superClass != null) {
-                superClass.registerAsReachable();
-            }
-            for (AnalysisType iface : interfaces) {
-                iface.registerAsReachable();
+                for (AnalysisType interf : elementalType.getInterfaces()) {
+                    interf.getArrayClass(dimension).registerAsReachable();
+                }
             }
 
             /* Schedule the registration task. */
