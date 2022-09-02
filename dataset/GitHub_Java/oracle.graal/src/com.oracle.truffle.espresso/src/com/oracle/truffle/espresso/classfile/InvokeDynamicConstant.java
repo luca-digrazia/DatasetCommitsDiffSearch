@@ -30,8 +30,6 @@ public interface InvokeDynamicConstant extends PoolConstant {
 
     int getBootstrapMethodAttrIndex();
 
-    int getNameAndTypeIndex();
-
     Symbol<Symbol.Signature> getSignature(ConstantPool pool);
 
     default Tag tag() {
@@ -53,16 +51,9 @@ public interface InvokeDynamicConstant extends PoolConstant {
         }
 
         @Override
-        public int getNameAndTypeIndex() {
-            return nameAndTypeIndex;
-        }
-
-        @Override
         public final Symbol<Symbol.Signature> getSignature(ConstantPool pool) {
             return Signatures.check(pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool));
         }
-
-
     }
 
     @Override
