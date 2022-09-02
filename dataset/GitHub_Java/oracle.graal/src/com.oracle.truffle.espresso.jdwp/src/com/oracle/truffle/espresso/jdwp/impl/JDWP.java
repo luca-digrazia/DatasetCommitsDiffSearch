@@ -1156,7 +1156,6 @@ final class JDWP {
                     }
                 }
                 LocalRef[] locals = method.getLocalVariableTable().getLocals();
-                LocalRef[] genericLocals = method.getLocalVariableTypeTable().getLocals();
 
                 reply.writeInt(argCnt);
                 reply.writeInt(locals.length);
@@ -1164,14 +1163,9 @@ final class JDWP {
                     reply.writeLong(local.getStartBCI());
                     reply.writeString(local.getNameAsString());
                     reply.writeString(local.getTypeAsString());
-                    String genericSignature = "";
-                    for (LocalRef genericLocal : genericLocals) {
-                        if (genericLocal.getNameAsString().equals(local.getNameAsString())) {
-                            // found a generic local
-                            genericSignature = genericLocal.getTypeAsString();
-                        }
-                    }
-                    reply.writeString(genericSignature);
+                    // TODO(Gregersen) - generic signature
+                    // tracked by /browse/GR-19818
+                    reply.writeString("");
                     reply.writeInt(local.getEndBCI() - local.getStartBCI());
                     reply.writeInt(local.getSlot());
                 }
