@@ -168,13 +168,13 @@ public class EspressoScope {
         @ExportMessage
         @CompilerDirectives.TruffleBoundary
         boolean isMemberReadable(String member) {
-            return slots.containsKey(member) || identifiers.containsKey(member);
+            return identifiers.containsKey(member);
         }
 
         @ExportMessage
         @CompilerDirectives.TruffleBoundary
         boolean isMemberModifiable(String member) {
-            return (slots.containsKey(member) || identifiers.containsKey(member)) && frame != null;
+            return identifiers.containsKey(member) && frame != null;
         }
 
         @ExportMessage
