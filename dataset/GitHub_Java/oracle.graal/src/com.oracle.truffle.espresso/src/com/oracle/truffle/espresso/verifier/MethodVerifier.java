@@ -657,12 +657,6 @@ public final class MethodVerifier implements ContextAccess {
             stackFrames[BCI] = frame;
             previous = frame;
         }
-        // GR-19627 HotSpot's ad-hoc behavior: StackMapTable indices are range-checked first,
-        // possibly throwing VerifyError. Then, ClassFormatError is thrown if the attribute was
-        // truncated.
-        if (stackMapTableAttribute.isTruncated()) {
-            throw new ClassFormatError("Truncated StackMap attribute in " + getThisKlass() + "." + getMethodName());
-        }
     }
 
     /**
@@ -2278,8 +2272,8 @@ public final class MethodVerifier implements ContextAccess {
                 try {
                     field = pool.resolvedFieldAt(thisKlass, fieldCPI);
                 } catch (EspressoException e) {
-                    if (getMeta().IllegalArgumentException.isAssignableFrom(e.getExceptionObject().getKlass())) {
-                        throw new VerifyError(EspressoException.getMessage(e.getExceptionObject()));
+                    if (getMeta().IllegalArgumentException.isAssignableFrom(e.getException().getKlass())) {
+                        throw new VerifyError(EspressoException.getMessage(e.getException()));
                     }
                     throw e;
                 }
@@ -2329,8 +2323,8 @@ public final class MethodVerifier implements ContextAccess {
                 try {
                     method = pool.resolvedMethodAt(thisKlass, methodCPI);
                 } catch (EspressoException e) {
-                    if (getMeta().IllegalArgumentException.isAssignableFrom(e.getExceptionObject().getKlass())) {
-                        throw new VerifyError(EspressoException.getMessage(e.getExceptionObject()));
+                    if (getMeta().IllegalArgumentException.isAssignableFrom(e.getException().getKlass())) {
+                        throw new VerifyError(EspressoException.getMessage(e.getException()));
                     }
                     throw e;
                 }
