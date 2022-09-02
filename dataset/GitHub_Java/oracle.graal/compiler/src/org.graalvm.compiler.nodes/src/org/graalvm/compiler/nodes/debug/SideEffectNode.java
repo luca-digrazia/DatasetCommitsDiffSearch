@@ -33,13 +33,17 @@ import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
+import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.word.LocationIdentity;
 
+/**
+ * Debug node that can be used when an arbitrary side-effect and when a
+ * {@link LocationIdentity#ANY_LOCATION} kill is needed.
+ */
 @NodeInfo(cycles = NodeCycles.CYCLES_IGNORED, size = NodeSize.SIZE_IGNORED, allowedUsageTypes = {InputType.Memory})
-public class SideEffectNode extends AbstractMemoryCheckpoint implements LIRLowerable, MemoryCheckpoint.Single {
+public class SideEffectNode extends AbstractMemoryCheckpoint implements LIRLowerable, SingleMemoryKill {
     public static final NodeClass<SideEffectNode> TYPE = NodeClass.create(SideEffectNode.class);
 
     @OptionalInput ValueNode value;
@@ -60,7 +64,9 @@ public class SideEffectNode extends AbstractMemoryCheckpoint implements LIRLower
 
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        generator.setResult(this, generator.operand(value));
+        if (value != null) {
+            generator.setResult(this, generator.operand(value));
+        }
     }
 
     @Override
