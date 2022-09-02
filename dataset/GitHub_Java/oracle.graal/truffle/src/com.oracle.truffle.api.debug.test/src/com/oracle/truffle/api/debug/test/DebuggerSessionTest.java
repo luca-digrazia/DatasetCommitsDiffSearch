@@ -43,6 +43,8 @@ package com.oracle.truffle.api.debug.test;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -69,12 +71,38 @@ import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.GCUtils;
+import com.oracle.truffle.api.test.ReflectionUtils;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 
 public class DebuggerSessionTest extends AbstractDebugTest {
+
+    private static void suspend(DebuggerSession session, Thread thread) {
+        invoke(session, "suspend", new Class<?>[]{Thread.class}, thread);
+    }
+
+    private static void suspendAll(DebuggerSession session) {
+        invoke(session, "suspendAll", new Class<?>[]{});
+    }
+
+    private static void resume(DebuggerSession session, Thread thread) {
+        invoke(session, "resume", new Class<?>[]{Thread.class}, thread);
+    }
+
+    private static void invoke(DebuggerSession session, String name, Class<?>[] classes, Object... arguments) throws AssertionError {
+        try {
+            Method method = session.getClass().getDeclaredMethod(name, classes);
+            ReflectionUtils.setAccessible(method, true);
+            method.invoke(session, arguments);
+        } catch (Throwable e) {
+            if (e instanceof InvocationTargetException && e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw new AssertionError(e);
+        }
+    }
 
     @Test
     public void testSuspendNextExecution1() {
@@ -167,7 +195,7 @@ public class DebuggerSessionTest extends AbstractDebugTest {
         try (DebuggerSession session = startSession()) {
             // do suspend next for a few times
             for (int i = 0; i < 100; i++) {
-                session.suspend(getEvalThread());
+                suspend(session, getEvalThread());
                 startEval(testSource);
                 expectSuspended((SuspendedEvent event) -> {
                     checkState(event, 2, true, "STATEMENT").prepareContinue();
@@ -184,14 +212,14 @@ public class DebuggerSessionTest extends AbstractDebugTest {
                         "STATEMENT)");
 
         try (DebuggerSession session = startSession()) {
-            session.suspend(getEvalThread());
+            suspend(session, getEvalThread());
             startEval(testSource);
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 2, true, "STATEMENT").prepareContinue();
             });
 
             // prepareContinue should be ignored here as suspensions counts more
-            session.suspend(getEvalThread());
+            suspend(session, getEvalThread());
 
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 3, true, "STATEMENT").prepareContinue();
@@ -208,14 +236,14 @@ public class DebuggerSessionTest extends AbstractDebugTest {
                         "STATEMENT)");
 
         try (DebuggerSession session = startSession()) {
-            session.suspend(getEvalThread());
+            suspend(session, getEvalThread());
             startEval(testSource);
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 2, true, "STATEMENT").prepareKill();
             });
 
             // For prepareKill additional suspensions should be ignored
-            session.suspend(getEvalThread());
+            suspend(session, getEvalThread());
 
             expectKilled();
         }
@@ -229,7 +257,7 @@ public class DebuggerSessionTest extends AbstractDebugTest {
 
         try (DebuggerSession session = startSession()) {
             for (int i = 0; i < 10; i++) {
-                session.suspendAll();
+                suspendAll(session);
                 startEval(testSource);
                 expectSuspended((SuspendedEvent event) -> {
                     checkState(event, 2, true, "STATEMENT").prepareContinue();
@@ -246,14 +274,14 @@ public class DebuggerSessionTest extends AbstractDebugTest {
                         "STATEMENT)");
 
         try (DebuggerSession session = startSession()) {
-            session.suspendAll();
+            suspendAll(session);
             startEval(testSource);
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 2, true, "STATEMENT").prepareContinue();
             });
 
             // prepareContinue should be ignored here as suspenions counts higher
-            session.suspendAll();
+            suspendAll(session);
 
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 3, true, "STATEMENT").prepareContinue();
@@ -270,14 +298,14 @@ public class DebuggerSessionTest extends AbstractDebugTest {
                         "STATEMENT)");
 
         try (DebuggerSession session = startSession()) {
-            session.suspendAll();
+            suspendAll(session);
             startEval(testSource);
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 2, true, "STATEMENT").prepareKill();
             });
 
             // For prepareKill additional suspensions should be ignored
-            session.suspendAll();
+            suspendAll(session);
 
             expectKilled();
         }
@@ -297,7 +325,7 @@ public class DebuggerSessionTest extends AbstractDebugTest {
                     checkState(event, 2, true, "STATEMENT").prepareStepOver(1);
                 });
                 // resume events are ignored by stepping
-                session.resume(getEvalThread());
+                resume(session, getEvalThread());
                 expectDone();
             }
         }
@@ -312,14 +340,14 @@ public class DebuggerSessionTest extends AbstractDebugTest {
         try (DebuggerSession session = startSession()) {
             for (int i = 0; i < 10; i++) {
                 session.suspendNextExecution();
-                session.resume(getEvalThread());
+                resume(session, getEvalThread());
                 startEval(testSource);
 
                 // even if the thread is resumed suspend next execution will trigger.
                 expectSuspended((SuspendedEvent event) -> {
                     checkState(event, 2, true, "STATEMENT").prepareStepOver(1);
                 });
-                session.resume(getEvalThread());
+                resume(session, getEvalThread());
                 expectDone();
             }
         }
@@ -349,7 +377,7 @@ public class DebuggerSessionTest extends AbstractDebugTest {
 
         try (DebuggerSession session = startSession()) {
             for (int i = 0; i < 10; i++) {
-                session.suspendAll();
+                suspendAll(session);
                 session.resumeAll();
                 startEval(testSource);
                 expectDone();
@@ -365,7 +393,7 @@ public class DebuggerSessionTest extends AbstractDebugTest {
 
         try (DebuggerSession session = startSession()) {
             for (int i = 0; i < 10; i++) {
-                session.suspend(getEvalThread());
+                suspend(session, getEvalThread());
                 session.resumeAll();
                 startEval(testSource);
                 expectDone();
@@ -436,10 +464,10 @@ public class DebuggerSessionTest extends AbstractDebugTest {
 
         // if the engine disposes the session should still work
         session.suspendNextExecution();
-        session.suspend(Thread.currentThread());
-        session.suspendAll();
+        suspend(session, Thread.currentThread());
+        suspendAll(session);
         session.install(Breakpoint.newBuilder(getSourceImpl(testSource)).lineIs(2).build());
-        session.resume(Thread.currentThread());
+        resume(session, Thread.currentThread());
         session.resumeAll();
         session.getDebugger();
         session.getBreakpoints();
@@ -454,12 +482,12 @@ public class DebuggerSessionTest extends AbstractDebugTest {
         }
 
         try {
-            session.suspend(Thread.currentThread());
+            suspend(session, Thread.currentThread());
             Assert.fail();
         } catch (IllegalStateException e) {
         }
         try {
-            session.suspendAll();
+            suspendAll(session);
             Assert.fail();
         } catch (IllegalStateException e) {
         }
@@ -470,7 +498,7 @@ public class DebuggerSessionTest extends AbstractDebugTest {
         } catch (IllegalStateException e) {
         }
         try {
-            session.resume(Thread.currentThread());
+            resume(session, Thread.currentThread());
             Assert.fail();
         } catch (IllegalStateException e) {
         }
