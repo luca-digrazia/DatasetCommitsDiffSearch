@@ -1774,18 +1774,18 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
     // region Class/Method/Field resolution
 
-    private Klass resolveType(int opcode, char cpi) {
-        assert opcode == INSTANCEOF || opcode == CHECKCAST || opcode == NEW || opcode == ANEWARRAY || opcode == MULTIANEWARRAY;
+    private Klass resolveType(@SuppressWarnings("unused") int opcode, char cpi) {
+        // TODO(peterssen): Check opcode.
         return getConstantPool().resolvedKlassAt(getMethod().getDeclaringKlass(), cpi);
     }
 
-    private Method resolveMethod(int opcode, char cpi) {
-        assert Bytecodes.isInvoke(opcode);
+    private Method resolveMethod(@SuppressWarnings("unused") int opcode, char cpi) {
+        // TODO(peterssen): Check opcode.
         return getConstantPool().resolvedMethodAt(getMethod().getDeclaringKlass(), cpi);
     }
 
-    private Field resolveField(int opcode, char cpi) {
-        assert opcode == GETFIELD || opcode == GETSTATIC || opcode == PUTFIELD || opcode == PUTSTATIC;
+    private Field resolveField(@SuppressWarnings("unused") int opcode, char cpi) {
+        // TODO(peterssen): Check opcode.
         return getConstantPool().resolvedFieldAt(getMethod().getDeclaringKlass(), cpi);
     }
 
