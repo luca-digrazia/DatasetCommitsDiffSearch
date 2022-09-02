@@ -62,7 +62,6 @@ import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.classfile.ExceptionsAttribute;
 import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
-import com.oracle.truffle.espresso.classfile.SignatureAttribute;
 import com.oracle.truffle.espresso.classfile.SourceFileAttribute;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -124,7 +123,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private ObjectKlass[] checkedExceptions;
 
     private final Method proxy;
-    private String genericSignature;
 
     public Method identity() {
         return proxy == null ? this : proxy;
@@ -891,18 +889,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         int lastLine = table.getLastLine();
         int lineAt = table.getLineNumber((int) codeIndex);
         return lastLine == lineAt;
-    }
-
-    public String getGenericSignatureAsString() {
-        if (genericSignature == null) {
-            SignatureAttribute attr = (SignatureAttribute) linkedMethod.getAttribute(SignatureAttribute.NAME);
-            if (attr == null) {
-                genericSignature = ""; // if no generics, the generic signature is empty
-            } else {
-                genericSignature = pool.symbolAt(attr.getSignatureIndex()).toString();
-            }
-        }
-        return genericSignature;
     }
 
     // endregion jdwp-specific
