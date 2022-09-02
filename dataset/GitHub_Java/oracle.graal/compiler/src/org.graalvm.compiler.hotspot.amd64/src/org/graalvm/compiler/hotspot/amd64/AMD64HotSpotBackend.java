@@ -213,8 +213,7 @@ public class AMD64HotSpotBackend extends HotSpotHostBackend implements LIRGenera
         assert gen.getDeoptimizationRescueSlot() == null || frameMap.frameNeedsAllocating() : "method that can deoptimize must have a frame";
         OptionValues options = lir.getOptions();
         DebugContext debug = lir.getDebug();
-        boolean omitFrame = CanOmitFrame.getValue(options) && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame() && !gen.hasForeignCall() &&
-                        !((AMD64FrameMap) frameMap).useStandardFrameProlog();
+        boolean omitFrame = CanOmitFrame.getValue(options) && !frameMap.frameNeedsAllocating() && !lir.hasArgInCallerFrame() && !gen.hasForeignCall();
 
         Stub stub = gen.getStub();
         AMD64MacroAssembler masm = new AMD64MacroAssembler(getTarget(), options);
