@@ -24,12 +24,15 @@
  */
 package com.oracle.svm.driver;
 
+import com.oracle.svm.driver.MacroOption.MacroOptionKind;
+
 import java.util.List;
 import java.util.Queue;
 
-import com.oracle.svm.driver.MacroOption.MacroOptionKind;
-
 class ServerOptionHandler extends NativeImage.OptionHandler<NativeImageServer> {
+
+    private static final String noServerOption = "--no-server";
+    private static final String verboseServerOption = "--verbose-server";
 
     private static final String helpTextServer = NativeImage.getResource("/HelpServer.txt");
 
@@ -49,24 +52,26 @@ class ServerOptionHandler extends NativeImage.OptionHandler<NativeImageServer> {
                 nativeImage.showNewline();
                 System.exit(0);
                 return true;
-            case DefaultOptionHandler.noServerOption:
+            case noServerOption:
                 args.poll();
                 nativeImage.setUseServer(false);
                 return true;
-            case DefaultOptionHandler.verboseServerOption:
+            case verboseServerOption:
                 args.poll();
                 nativeImage.setVerboseServer(true);
                 return true;
         }
 
-        if (headArg.startsWith(DefaultOptionHandler.serverOptionPrefix)) {
-            String optionTail = args.poll().substring(DefaultOptionHandler.serverOptionPrefix.length());
+        String oServer = "--server";
+        if (headArg.startsWith(oServer)) {
+            String optionTail = args.poll().substring(oServer.length());
+            String oAll = "-all";
             boolean machineWide = false;
-            String oList = "list";
-            String oCleanup = "cleanup";
-            String oShutdown = "shutdown";
-            String oWipe = "wipe";
-            String oSession = "session=";
+            String oList = "-list";
+            String oCleanup = "-cleanup";
+            String oShutdown = "-shutdown";
+            String oWipe = "-wipe";
+            String oSession = "-session=";
             boolean serverCleanup = false;
             boolean serverShutdown = false;
             if (optionTail.startsWith(oList)) {
@@ -89,7 +94,6 @@ class ServerOptionHandler extends NativeImage.OptionHandler<NativeImageServer> {
             } else if (optionTail.startsWith(oShutdown)) {
                 optionTail = optionTail.substring(oShutdown.length());
                 serverShutdown = true;
-                String oAll = "-all";
                 if (optionTail.startsWith(oAll)) {
                     optionTail = optionTail.substring(oAll.length());
                     machineWide = true;
@@ -113,10 +117,10 @@ class ServerOptionHandler extends NativeImage.OptionHandler<NativeImageServer> {
     @Override
     void addFallbackBuildArgs(List<String> buildArgs) {
         if (!nativeImage.useServer()) {
-            buildArgs.add(DefaultOptionHandler.noServerOption);
+            buildArgs.add(noServerOption);
         }
         if (nativeImage.verboseServer()) {
-            buildArgs.add(DefaultOptionHandler.verboseServerOption);
+            buildArgs.add(verboseServerOption);
         }
     }
 }
