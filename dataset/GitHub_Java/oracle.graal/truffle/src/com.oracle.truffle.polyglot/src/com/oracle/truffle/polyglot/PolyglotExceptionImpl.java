@@ -101,17 +101,17 @@ final class PolyglotExceptionImpl {
     private final Value guestObject;
     private final String message;
 
-    PolyglotExceptionImpl(PolyglotEngineImpl engine, PolyglotContextImpl.State polyglotContextState, Throwable original) {
-        this(engine.impl, engine, polyglotContextState, null, original, false, false);
+    PolyglotExceptionImpl(PolyglotEngineImpl engine, boolean polyglotContextCancellingOrCancelled, Throwable original) {
+        this(engine.impl, engine, polyglotContextCancellingOrCancelled, null, original, false, false);
     }
 
     // Exception coming from an instrument
     PolyglotExceptionImpl(PolyglotImpl polyglot, Throwable original) {
-        this(polyglot, null, null, null, original, true, false);
+        this(polyglot, null, false, null, original, true, false);
     }
 
     @SuppressWarnings("deprecation")
-    PolyglotExceptionImpl(PolyglotImpl polyglot, PolyglotEngineImpl engine, PolyglotContextImpl.State polyglotContextState, PolyglotLanguageContext languageContext, Throwable original,
+    PolyglotExceptionImpl(PolyglotImpl polyglot, PolyglotEngineImpl engine, boolean polyglotContextCancellingOrCancelled, PolyglotLanguageContext languageContext, Throwable original,
                     boolean allowInterop,
                     boolean entered) {
         this.polyglot = polyglot;
@@ -127,14 +127,12 @@ final class PolyglotExceptionImpl {
             try {
                 ExceptionType exceptionType = interop.getExceptionType(exception);
                 this.internal = false;
-                boolean truffleException = exception instanceof com.oracle.truffle.api.TruffleException;
-                this.cancelled = (polyglotContextState != null && (polyglotContextState.isCancelling() || polyglotContextState == PolyglotContextImpl.State.CLOSED_CANCELLED) && truffleException) ||
-                                isLegacyTruffleExceptionCancelled(exception);
+                this.cancelled = polyglotContextCancellingOrCancelled || isLegacyTruffleExceptionCancelled(exception);
                 this.syntaxError = exceptionType == ExceptionType.PARSE_ERROR;
                 this.exit = exceptionType == ExceptionType.EXIT;
                 this.exitStatus = this.exit ? interop.getExceptionExitStatus(exception) : 0;
                 this.incompleteSource = this.syntaxError ? interop.isExceptionIncompleteSource(exception) : false;
-                this.interrupted = (exceptionType == ExceptionType.INTERRUPT) && !this.cancelled;
+                this.interrupted = exceptionType == ExceptionType.INTERRUPT;
 
                 if (interop.hasSourceLocation(exception)) {
                     this.sourceLocation = newSourceSection(interop.getSourceLocation(exception));
@@ -160,24 +158,13 @@ final class PolyglotExceptionImpl {
                 throw CompilerDirectives.shouldNotReachHere(ume);
             }
         } else {
+            this.cancelled = polyglotContextCancellingOrCancelled || (exception instanceof CancelExecution) || isLegacyTruffleExceptionCancelled(exception);
             /*
              * When polyglot context is invalid, we cannot obtain the exception type from
              * InterruptExecution exception via interop. Please note that in this case the
              * InterruptExecution was thrown before the context was made invalid.
              */
-            boolean interruptException = (exception instanceof PolyglotEngineImpl.InterruptExecution) || (exception != null && exception.getCause() instanceof InterruptedException) ||
-                            (isHostException(engine, exception) && asHostException() instanceof InterruptedException);
-            boolean truffleException = exception instanceof com.oracle.truffle.api.TruffleException;
-            /*
-             * In case the exception is not a cancel exception, but the context is in cancelling or
-             * cancelled state, set the cancelled flag, but only if the original exception is a
-             * truffle exception or interrupt exception.
-             */
-            this.cancelled = (polyglotContextState != null && (polyglotContextState.isCancelling() || polyglotContextState == PolyglotContextImpl.State.CLOSED_CANCELLED) &&
-                            (interruptException || truffleException)) ||
-                            (exception instanceof CancelExecution) ||
-                            isLegacyTruffleExceptionCancelled(exception);
-            this.interrupted = interruptException && !this.cancelled;
+            this.interrupted = (exception instanceof PolyglotEngineImpl.InterruptExecution) || (exception != null && exception.getCause() instanceof InterruptedException);
             this.internal = !interrupted && !cancelled && !resourceExhausted;
             this.syntaxError = false;
             this.incompleteSource = false;
@@ -499,19 +486,13 @@ final class PolyglotExceptionImpl {
      * printStackTrace.
      */
     private abstract static class PrintStreamOrWriter {
-        /**
-         * Returns the object to be locked when using this StreamOrWriter.
-         */
+        /** Returns the object to be locked when using this StreamOrWriter. */
         abstract Object lock();
 
-        /**
-         * Prints the specified string.
-         */
+        /** Prints the specified string. */
         abstract void print(Object o);
 
-        /**
-         * Prints the specified string as a line on this StreamOrWriter.
-         */
+        /** Prints the specified string as a line on this StreamOrWriter. */
         abstract void println(Object o);
 
         abstract void printStackTrace(Throwable t);

@@ -2110,7 +2110,6 @@ final class PolyglotContextImpl implements com.oracle.truffle.polyglot.PolyglotI
 
         this.config = newConfig;
         initializeStaticContext(this);
-        threadLocalActions.onContextPatch();
         if (!newConfig.logLevels.isEmpty()) {
             EngineAccessor.LANGUAGE.configureLoggers(this, newConfig.logLevels, getAllLoggers());
         }
@@ -2280,7 +2279,6 @@ final class PolyglotContextImpl implements com.oracle.truffle.polyglot.PolyglotI
                 EngineAccessor.SOURCE.invalidateAfterPreinitialiation(sourceToInvalidate);
             }
             context.sourcesToInvalidate = null;
-            context.threadLocalActions.prepareContextStore();
             fs.onPreInitializeContextEnd();
             internalFs.onPreInitializeContextEnd();
             FileSystems.resetDefaultFileSystemProvider();

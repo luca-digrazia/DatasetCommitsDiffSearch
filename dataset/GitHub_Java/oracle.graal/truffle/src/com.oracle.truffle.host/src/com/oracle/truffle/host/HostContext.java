@@ -53,7 +53,6 @@ import java.util.function.Predicate;
 
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractHostAccess;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -88,8 +87,6 @@ final class HostContext {
     private boolean hostClassLoadingAllowed;
     private boolean hostLookupAllowed;
 
-    final AbstractHostAccess access;
-
     @SuppressWarnings("serial") final HostException stackoverflowError = new HostException(new StackOverflowError() {
         @SuppressWarnings("sync-override")
         @Override
@@ -107,7 +104,6 @@ final class HostContext {
 
     HostContext(HostLanguage hostLanguage) {
         this.language = hostLanguage;
-        this.access = hostLanguage.access;
     }
 
     /*
