@@ -32,6 +32,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Array;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 import org.graalvm.compiler.core.common.util.TypeConversion;
 import org.graalvm.compiler.options.Option;
@@ -41,6 +42,8 @@ import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
@@ -76,6 +79,7 @@ import com.oracle.svm.core.log.StringBuilderLog;
 import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.RuntimeOptionKey;
+import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.stack.StackFrameVisitor;
@@ -232,17 +236,16 @@ public final class Deoptimizer {
      */
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static DeoptimizedFrame checkDeoptimized(Pointer sourceSp) {
-        if (DeoptimizationSupport.enabled()) {
-            CodePointer returnAddress = FrameAccess.singleton().readReturnAddress(sourceSp);
-            /* A frame is deoptimized when the return address was patched to the deoptStub. */
-            if (returnAddress.equal(DeoptimizationSupport.getDeoptStubPointer())) {
-                /* The DeoptimizedFrame instance is stored above the return address. */
-                DeoptimizedFrame result = KnownIntrinsics.convertUnknownValue(sourceSp.readObject(0), DeoptimizedFrame.class);
-                assert result != null;
-                return result;
-            }
+        CodePointer returnAddress = FrameAccess.singleton().readReturnAddress(sourceSp);
+        /* A frame is deoptimized when the return address was patched to the deoptStub. */
+        if (DeoptimizationSupport.enabled() && returnAddress.equal(DeoptimizationSupport.getDeoptStubPointer())) {
+            /* The DeoptimizedFrame instance is stored above the return address. */
+            DeoptimizedFrame result = KnownIntrinsics.convertUnknownValue(sourceSp.readObject(0), DeoptimizedFrame.class);
+            assert result != null;
+            return result;
+        } else {
+            return null;
         }
-        return null;
     }
 
     private static void installDeoptimizedFrame(Pointer sourceSp, DeoptimizedFrame deoptimizedFrame) {
@@ -717,11 +720,11 @@ public final class Deoptimizer {
         VMError.guarantee(sourceChunk.getTotalFrameSize() >= FrameAccess.wordSize(), "Insufficient space in frame for pointer to DeoptimizedFrame");
 
         /* Allocate a buffer to hold the contents of the new target frame. */
-        DeoptimizedFrame deoptimizedFrame = DeoptimizedFrame.factory(targetContentSize, sourceChunk.getEncodedFrameSize(), CodeInfoTable.lookupInstalledCode(pc), topFrame, pc);
+        DeoptimizedFrame deoptimizedFrame = DeoptimizedFrame.factory(targetContentSize, sourceChunk.getTotalFrameSize(), CodeInfoTable.lookupInstalledCode(pc), topFrame, pc);
 
         installDeoptimizedFrame(sourceSp, deoptimizedFrame);
 
-        if (Options.TraceDeoptimization.getValue()) {
+        if (isTraceDeoptimization()) {
             printDeoptimizedFrame(Log.log(), sourceSp, deoptimizedFrame, frameInfo, false);
         }
         logDeoptSourceFrameOperation(sourceSp, deoptimizedFrame, frameInfo);
@@ -1228,5 +1231,33 @@ public final class Deoptimizer {
         private Pointer addressOfFrameArray0() {
             return Word.objectToUntrackedPointer(frameBuffer).add(arrayBaseOffset);
         }
+    }
+
+    static boolean isTraceDeoptimization() {
+        if (Deoptimizer.Options.TraceDeoptimization.hasBeenSet(RuntimeOptionValues.singleton())) {
+            return Deoptimizer.Options.TraceDeoptimization.getValue();
+        }
+        if (ImageSingletons.contains(TraceDeoptimizationSupplier.class)) {
+            return ImageSingletons.lookup(TraceDeoptimizationSupplier.class).traceDeoptimization();
+        }
+        return false;
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public static void registerTraceDeoptimizationSupplier(TraceDeoptimizationSupplier traceDeoptimizationSupplier) {
+        Objects.requireNonNull(traceDeoptimizationSupplier, "TraceDeoptimizationSupplier must be non null.");
+        ImageSingletons.add(TraceDeoptimizationSupplier.class, traceDeoptimizationSupplier);
+    }
+
+    /**
+     * An interface to allow a custom enabling of deoptimization tracing. The implementation should
+     * be registered using
+     * {@link #registerTraceDeoptimizationSupplier(com.oracle.svm.core.deopt.Deoptimizer.TraceDeoptimizationSupplier)
+     * registerTraceDeoptimizationSupplier} in an image building time. When the
+     * {@link Deoptimizer.Options#TraceDeoptimization} option is not set the registered
+     * implementation is used to check if the deoptimization tracing should be enabled.
+     */
+    public interface TraceDeoptimizationSupplier {
+        boolean traceDeoptimization();
     }
 }
