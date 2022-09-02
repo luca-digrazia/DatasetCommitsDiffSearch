@@ -152,11 +152,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                     // FIXME(peterssen): Also, do use proper nodes.
                     if (shiftedArgs[i] instanceof TruffleObject) {
                         if (ForeignAccess.sendIsNull(Message.IS_NULL.createNode(), (TruffleObject) shiftedArgs[i])) {
-                            if (params[i] == StaticObject.class) {
-                                shiftedArgs[i] = StaticObject.NULL;
-                            } else {
-                                shiftedArgs[i] = null;
-                            }
+                            shiftedArgs[i] = StaticObject.NULL;
                         }
                     } else {
                         // TruffleNFI pass booleans as byte, do the proper conversion.
@@ -369,15 +365,15 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             // @formatter:off
             // Checkstyle: stop
             switch (kind) {
-                case Boolean : args[i] = varargs.popBoolean();   break;
-                case Byte    : args[i] = varargs.popByte();      break;
-                case Short   : args[i] = varargs.popShort();     break;
-                case Char    : args[i] = varargs.popChar();      break;
-                case Int     : args[i] = varargs.popInt();       break;
-                case Float   : args[i] = varargs.popFloat();     break;
-                case Long    : args[i] = varargs.popLong();      break;
-                case Double  : args[i] = varargs.popDouble();    break;
-                case Object  : args[i] = varargs.popObject();    break;
+                case Boolean: args[i] = varargs.popBoolean();   break;
+                case Byte: args[i] = varargs.popByte();         break;
+                case Short: args[i] = varargs.popShort();       break;
+                case Char: args[i] = varargs.popChar();         break;
+                case Int: args[i] = varargs.popInt();           break;
+                case Float: args[i] = varargs.popFloat();       break;
+                case Long: args[i] = varargs.popLong();         break;
+                case Double: args[i] = varargs.popDouble();     break;
+                case Object: args[i] = varargs.popObject();     break;
                 default:
                     throw EspressoError.shouldNotReachHere("invalid parameter kind: " + kind);
             }
@@ -928,8 +924,9 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         Object[] args = popVarArgs(varargsPtr, resolutionSeed.getParsedSignature());
         // System.err.println("callVirtualMethod " + resolutionSeed + " " + Arrays.toString(args));
         Method m = receiver.getKlass().vtableLookup(resolutionSeed.getVTableIndex());
+        // Method m = receiver.getKlass().lookupMethod(resolutionSeed.getName(),
+        // resolutionSeed.getRawSignature());
         assert m != null;
-        assert m.getName() == resolutionSeed.getName() && resolutionSeed.getRawSignature() == m.getRawSignature();
         return m.invokeDirect(receiver, args);
     }
 
@@ -1300,18 +1297,35 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         // @formatter:off
         // Checkstyle: stop
         switch (componentKind) {
-            case Boolean : GetBooleanArrayRegion(array, 0, length, address);  break;
-            case Byte    : GetByteArrayRegion(array, 0, length, address);     break;
-            case Short   : GetShortArrayRegion(array, 0, length, address);    break;
-            case Char    : GetCharArrayRegion(array, 0, length, address);     break;
-            case Int     : GetIntArrayRegion(array, 0, length, address);      break;
-            case Float   : GetFloatArrayRegion(array, 0, length, address);    break;
-            case Long    : GetLongArrayRegion(array, 0, length, address);     break;
-            case Double  : GetDoubleArrayRegion(array, 0, length, address);   break;
-            case Object  : // fall through
-            case Void    : // fall through
-            case Illegal : // fall through
-            default      : throw EspressoError.shouldNotReachHere();
+            case Boolean:
+                GetBooleanArrayRegion(array, 0, length, address);
+                break;
+            case Byte:
+                GetByteArrayRegion(array, 0, length, address);
+                break;
+            case Short:
+                GetShortArrayRegion(array, 0, length, address);
+                break;
+            case Char:
+                GetCharArrayRegion(array, 0, length, address);
+                break;
+            case Int:
+                GetIntArrayRegion(array, 0, length, address);
+                break;
+            case Float:
+                GetFloatArrayRegion(array, 0, length, address);
+                break;
+            case Long:
+                GetLongArrayRegion(array, 0, length, address);
+                break;
+            case Double:
+                GetDoubleArrayRegion(array, 0, length, address);
+                break;
+            case Object: // fall through
+            case Void: // fall through
+            case Illegal: // fall through
+            default:
+                throw EspressoError.shouldNotReachHere();
         }
         // @formatter:on
         // Checkstyle: resume
@@ -1330,15 +1344,32 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             // @formatter:off
             // Checkstyle: stop
             switch (componentKind) {
-                case Boolean : SetBooleanArrayRegion(array, 0, length, carrayPtr);   break;
-                case Byte    : SetByteArrayRegion(array, 0, length, carrayPtr);      break;
-                case Short   : SetShortArrayRegion(array, 0, length, carrayPtr);     break;
-                case Char    : SetCharArrayRegion(array, 0, length, carrayPtr);      break;
-                case Int     : SetIntArrayRegion(array, 0, length, carrayPtr);       break;
-                case Float   : SetFloatArrayRegion(array, 0, length, carrayPtr);     break;
-                case Long    : SetLongArrayRegion(array, 0, length, carrayPtr);      break;
-                case Double  : SetDoubleArrayRegion(array, 0, length, carrayPtr);    break;
-                default      : throw EspressoError.shouldNotReachHere();
+                case Boolean:
+                    SetBooleanArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                case Byte:
+                    SetByteArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                case Short:
+                    SetShortArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                case Char:
+                    SetCharArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                case Int:
+                    SetIntArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                case Float:
+                    SetFloatArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                case Long:
+                    SetLongArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                case Double:
+                    SetDoubleArrayRegion(array, 0, length, carrayPtr);
+                    break;
+                default:
+                    throw EspressoError.shouldNotReachHere();
             }
             // @formatter:on
             // Checkstyle: resume
@@ -1937,15 +1968,32 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             // @formatter:off
             // Checkstyle: stop
             switch (componentKind) {
-                case Boolean : SetBooleanArrayRegion(array, 0, length, bufPtr);  break;
-                case Byte    : SetByteArrayRegion(array, 0, length, bufPtr);     break;
-                case Short   : SetShortArrayRegion(array, 0, length, bufPtr);    break;
-                case Char    : SetCharArrayRegion(array, 0, length, bufPtr);     break;
-                case Int     : SetIntArrayRegion(array, 0, length, bufPtr);      break;
-                case Float   : SetFloatArrayRegion(array, 0, length, bufPtr);    break;
-                case Long    : SetLongArrayRegion(array, 0, length, bufPtr);     break;
-                case Double  : SetDoubleArrayRegion(array, 0, length, bufPtr);   break;
-                default      : throw EspressoError.shouldNotReachHere();
+                case Boolean:
+                    SetBooleanArrayRegion(array, 0, length, bufPtr);
+                    break;
+                case Byte:
+                    SetByteArrayRegion(array, 0, length, bufPtr);
+                    break;
+                case Short:
+                    SetShortArrayRegion(array, 0, length, bufPtr);
+                    break;
+                case Char:
+                    SetCharArrayRegion(array, 0, length, bufPtr);
+                    break;
+                case Int:
+                    SetIntArrayRegion(array, 0, length, bufPtr);
+                    break;
+                case Float:
+                    SetFloatArrayRegion(array, 0, length, bufPtr);
+                    break;
+                case Long:
+                    SetLongArrayRegion(array, 0, length, bufPtr);
+                    break;
+                case Double:
+                    SetDoubleArrayRegion(array, 0, length, bufPtr);
+                    break;
+                default:
+                    throw EspressoError.shouldNotReachHere();
             }
             // @formatter:on
             // Checkstyle: resume

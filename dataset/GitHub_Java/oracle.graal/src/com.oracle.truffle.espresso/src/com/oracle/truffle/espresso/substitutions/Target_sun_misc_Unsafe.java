@@ -73,12 +73,12 @@ public final class Target_sun_misc_Unsafe {
         EspressoContext context = self.getKlass().getContext();
         Meta meta = context.getMeta();
 
-        if (StaticObject.isNull(hostClass) || StaticObject.isNull(data)) {
+        if (hostClass == StaticObject.NULL || data == StaticObject.NULL) {
             throw meta.throwEx(meta.IllegalArgumentException);
         }
 
         byte[] bytes = data.unwrap();
-        StaticObject[] patches = StaticObject.isNull(constantPoolPatches) ? null : constantPoolPatches.unwrap();
+        StaticObject[] patches = constantPoolPatches == StaticObject.NULL ? null : constantPoolPatches.unwrap();
         Klass hostKlass = hostClass.getMirrorKlass();
         ClassfileStream cfs = new ClassfileStream(bytes, null);
         ClassfileParser parser = new ClassfileParser(cfs, null, hostKlass, context, patches);
@@ -451,7 +451,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return holder.getFloatFieldVolatile(f);
+        return Float.intBitsToFloat((holder).getIntFieldVolatile(f));
     }
 
     @Substitution(hasReceiver = true)
@@ -481,7 +481,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return holder.getDoubleField(f);
+        return Double.longBitsToDouble((holder).getLongFieldVolatile(f));
     }
 
     @Substitution(hasReceiver = true)
@@ -560,7 +560,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        holder.setIntFieldVolatile(f, value);
+        holder.setIntField(f, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -588,7 +588,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        holder.setBooleanFieldVolatile(f, value);
+        holder.setBooleanField(f, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -602,7 +602,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        holder.setCharFieldVolatile(f, value);
+        holder.setCharField(f, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -616,7 +616,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        holder.setShortFieldVolatile(f, value);
+        holder.setShortField(f, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -630,7 +630,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        holder.setByteFieldVolatile(f, value);
+        holder.setByteField(f, value);
     }
 
     @Substitution(methodName = "shouldBeInitialized", hasReceiver = true)

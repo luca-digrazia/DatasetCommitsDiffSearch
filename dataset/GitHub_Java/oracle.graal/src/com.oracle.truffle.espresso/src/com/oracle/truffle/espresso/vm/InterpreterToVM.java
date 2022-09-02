@@ -23,10 +23,6 @@
 
 package com.oracle.truffle.espresso.vm;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.function.IntFunction;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
@@ -49,8 +45,11 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.MemoryErrorDelegate;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
-
 import sun.misc.Unsafe;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.function.IntFunction;
 
 public final class InterpreterToVM implements ContextAccess {
 
@@ -259,17 +258,17 @@ public final class InterpreterToVM implements ContextAccess {
 
     public static float getFieldFloat(StaticObject obj, Field field) {
         assert field.getKind() == JavaKind.Float && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        return obj.getFloatField(field);
+        return Float.intBitsToFloat(obj.getIntField(field));
     }
 
     public static double getFieldDouble(StaticObject obj, Field field) {
         assert field.getKind() == JavaKind.Double && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        return obj.getDoubleField(field);
+        return Double.longBitsToDouble(obj.getLongField(field));
     }
 
     public static StaticObject getFieldObject(StaticObject obj, Field field) {
         assert field.getKind() == JavaKind.Object && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        return obj.getField(field);
+        return (StaticObject) (obj.getField(field));
     }
 
     public static char getFieldChar(StaticObject obj, Field field) {
@@ -309,12 +308,12 @@ public final class InterpreterToVM implements ContextAccess {
 
     public static void setFieldFloat(float value, StaticObject obj, Field field) {
         assert field.getKind() == JavaKind.Float && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        obj.setFloatField(field, value);
+        obj.setIntField(field, Float.floatToRawIntBits(value));
     }
 
     public static void setFieldDouble(double value, StaticObject obj, Field field) {
         assert field.getKind() == JavaKind.Double && field.getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        obj.setDoubleField(field, value);
+        obj.setLongField(field, Double.doubleToRawLongBits(value));
     }
 
     public static void setFieldObject(StaticObject value, StaticObject obj, Field field) {
@@ -433,7 +432,7 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     public static StaticObject fillInStackTrace(ArrayList<FrameInstance> frames, StaticObject throwable, Meta meta) {
-        FrameCounter c = new FrameCounter();
+        Counter c = new Counter();
         int size = EspressoContext.DEFAULT_STACK_SIZE;
         frames.clear();
         Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Object>() {
@@ -461,16 +460,16 @@ public final class InterpreterToVM implements ContextAccess {
         return throwable;
     }
 
-    private static class FrameCounter {
+    static class Counter {
         public int value = 0;
-        private boolean skipFillInStackTrace = true;
-        private boolean skipThrowableInit = true;
+        public boolean skipFillInStackTrace = true;
+        public boolean skipThrowableInit = true;
 
         public int inc() {
             return value++;
         }
 
-        boolean checkFillIn(Method m) {
+        public boolean checkFillIn(Method m) {
             if (!skipFillInStackTrace) {
                 return false;
             }
@@ -480,7 +479,7 @@ public final class InterpreterToVM implements ContextAccess {
             return skipFillInStackTrace;
         }
 
-        boolean checkThrowableInit(Method m) {
+        public boolean checkThrowableInit(Method m) {
             if (!skipThrowableInit) {
                 return false;
             }

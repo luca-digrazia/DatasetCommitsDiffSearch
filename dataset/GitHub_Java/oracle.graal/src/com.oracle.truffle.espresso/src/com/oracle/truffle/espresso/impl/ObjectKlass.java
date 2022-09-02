@@ -196,7 +196,20 @@ public final class ObjectKlass extends Klass {
             if (getSuperKlass() != null) {
                 getSuperKlass().initialize();
             }
-            verifyKlass();
+            if (VERIFY) {
+                for (Method m : declaredMethods) {
+                    CodeAttribute code = m.hasCode() ? m.getCodeAttribute() : null;
+                    try {
+                        MethodVerifier.verify(code, getConstantPool());
+                    } catch (Throwable e) {
+                        if (!(e.getClass() == VerifyError.class || e.getClass() == ClassFormatError.class)) {
+                            e.printStackTrace();
+                        }
+                        throw e;
+                    }
+                }
+            }
+
             /**
              * Spec fragment: Then, initialize each final static field of C with the constant value
              * in its ConstantValue attribute (§4.7.2), in the order the fields appear in the
@@ -516,18 +529,5 @@ public final class ObjectKlass extends Klass {
             }
         }
         return null;
-    }
-
-    private void verifyKlass() {
-        if (VERIFY) {
-            for (Method m : declaredMethods) {
-                CodeAttribute code = m.hasCode() ? m.getCodeAttribute() : null;
-                try {
-                    MethodVerifier.verify(code, getConstantPool());
-                } catch (Throwable e) {
-                    throw e;
-                }
-            }
-        }
     }
 }

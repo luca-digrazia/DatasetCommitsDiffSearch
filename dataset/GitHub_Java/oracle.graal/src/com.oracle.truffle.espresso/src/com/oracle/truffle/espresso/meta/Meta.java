@@ -106,18 +106,6 @@ public final class Meta implements ContextAccess {
         Long = knownKlass(Type.Long);
         Void = knownKlass(Type.Void);
 
-        BOXED_PRIMITIVE_KLASSES = new ObjectKlass[]{
-                        Boolean,
-                        Byte,
-                        Character,
-                        Short,
-                        Float,
-                        Integer,
-                        Double,
-                        Long,
-                        Void
-        };
-
         Boolean_valueOf = Boolean.lookupDeclaredMethod(Name.valueOf, Signature.Boolean_boolean);
         Byte_valueOf = Byte.lookupDeclaredMethod(Name.valueOf, Signature.Byte_byte);
         Character_valueOf = Character.lookupDeclaredMethod(Name.valueOf, Signature.Character_char);
@@ -224,7 +212,6 @@ public final class Meta implements ContextAccess {
         Thread_blockerLock = Thread.lookupDeclaredField(Name.blockerLock, Object.getType());
         Thread_daemon = Thread.lookupDeclaredField(Name.daemon, Type._boolean);
         Thread_checkAccess = Thread.lookupDeclaredMethod(Name.checkAccess, Signature._void);
-        Thread_stop = Thread.lookupDeclaredMethod(Name.stop, Signature._void);
         ThreadGroup_maxPriority = ThreadGroup.lookupDeclaredField(Name.maxPriority, Type._int);
         Thread_state = Thread.lookupDeclaredField(Name.threadStatus, Type._int);
 
@@ -424,7 +411,6 @@ public final class Meta implements ContextAccess {
     public final Method Thread_exit;
     public final Method Thread_run;
     public final Method Thread_checkAccess;
-    public final Method Thread_stop;
     public final Field HIDDEN_IS_ALIVE;
     public final Field Thread_group;
     public final Field Thread_name;
@@ -484,8 +470,6 @@ public final class Meta implements ContextAccess {
 
     @CompilationFinal(dimensions = 1) //
     public final ObjectKlass[] ARRAY_SUPERINTERFACES;
-
-    @CompilationFinal(dimensions = 1) public final ObjectKlass[] BOXED_PRIMITIVE_KLASSES;
 
     private static boolean isKnownClass(java.lang.Class<?> clazz) {
         // Cheap check: (host) known classes are loaded by the BCL.
