@@ -621,6 +621,7 @@ public class TestBase implements Feedback {
 
     @Override
     public String acceptPassword() {
+        String s = null;
         if (feedbackDelegate != null) {
             return feedbackDelegate.acceptPassword();
         }
