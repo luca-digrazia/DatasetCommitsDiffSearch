@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,39 +40,35 @@
  */
 package com.oracle.truffle.polyglot;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.library.ExportLibrary;
 
 /**
  * Exception wrapper for an error occurred in the host language.
  */
 @SuppressWarnings("serial")
-final class HostException extends RuntimeException implements TruffleException {
+@ExportLibrary(value = InteropLibrary.class, delegateTo = "delegate")
+final class HostException extends AbstractTruffleException {
+
+    private final Throwable original;
+    final HostObject delegate;
 
     HostException(Throwable original) {
-        this.initCause(original);
+        this(original, PolyglotContextImpl.currentNotEntered());
+    }
+
+    HostException(Throwable original, PolyglotContextImpl context) {
+        this.original = original;
+        this.delegate = HostObject.forException(original, context != null ? context.getHostContext() : null, this);
     }
 
     Throwable getOriginal() {
-        return getCause();
+        return original;
     }
 
     @Override
     public String getMessage() {
         return getOriginal().getMessage();
     }
-
-    @Override
-    public synchronized Throwable fillInStackTrace() {
-        return this;
-    }
-
-    public Node getLocation() {
-        return null;
-    }
-
-    public boolean isCancelled() {
-        return getCause() instanceof InterruptedException;
-    }
-
 }

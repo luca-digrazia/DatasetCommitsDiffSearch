@@ -904,11 +904,6 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public void finalizeStore(Object polyglotEngine) {
-            ((PolyglotEngineImpl) polyglotEngine).finalizeStore();
-        }
-
-        @Override
         public Object getEngineLock(Object polyglotEngine) {
             return ((PolyglotEngineImpl) polyglotEngine).lock;
         }
