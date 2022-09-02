@@ -2386,7 +2386,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 NodeData parsedNode = parser.parse(element);
                 if (parsedNode != null) {
                     List<CodeExecutableElement> executables = NodeFactoryFactory.createFactoryMethods(parsedNode, ElementFilter.constructorsIn(element.getEnclosedElements()));
-                    TypeElement type = ElementUtils.castTypeElement(NodeCodeGenerator.factoryOrNodeType(parsedNode));
+                    TypeElement type = ElementUtils.castTypeElement(NodeCodeGenerator.nodeType(parsedNode));
                     for (CodeExecutableElement executableElement : executables) {
                         executableElement.setEnclosingElement(type);
                     }

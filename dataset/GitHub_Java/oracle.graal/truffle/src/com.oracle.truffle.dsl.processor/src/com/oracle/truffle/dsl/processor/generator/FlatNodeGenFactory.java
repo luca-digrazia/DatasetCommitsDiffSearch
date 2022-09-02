@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -45,6 +45,8 @@ import static com.oracle.truffle.dsl.processor.java.ElementUtils.boxType;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.createReferenceName;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.executableEquals;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.findAnnotationMirror;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.findExecutableElement;
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.findVariableElement;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.firstLetterLowerCase;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.firstLetterUpperCase;
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.getAnnotationValue;
@@ -100,8 +102,25 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Introspection;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.library.LibraryFactory;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.Node.Child;
+import com.oracle.truffle.api.nodes.Node.Children;
+import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.nodes.NodeInterface;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.SlowPathException;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.TruffleTypes;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.AbstractDSLExpressionVisitor;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.Binary;
@@ -154,7 +173,6 @@ public class FlatNodeGenFactory {
     private static final String VARARGS_NAME = "args";
 
     private final ProcessorContext context;
-    private final TruffleTypes types = ProcessorContext.getInstance().getTypes();
     private final NodeData node;
     private final TypeSystemData typeSystem;
     private final TypeMirror genericType;
@@ -239,7 +257,7 @@ public class FlatNodeGenFactory {
         this.executeAndSpecializeType = createExecuteAndSpecializeType();
         this.needsLocking = exclude.computeStateLength() != 0 || reachableSpecializations.stream().anyMatch((s) -> !s.getCaches().isEmpty());
         this.libraryConstants = libraryConstants;
-        substitutions.put(ElementUtils.findExecutableElement(types.LibraryFactory, "resolve"),
+        substitutions.put(ElementUtils.findExecutableElement(context.getDeclaredType(LibraryFactory.class), "resolve"),
                         (binary) -> substituteLibraryCall(binary));
     }
 
@@ -425,7 +443,7 @@ public class FlatNodeGenFactory {
             for (NodeExecutionData execution : node.getChildExecutions()) {
                 if (execution.getChild() != null && execution.getChild().needsGeneratedField()) {
                     clazz.add(createNodeField(PRIVATE, execution.getNodeType(), nodeFieldName(execution),
-                                    types.Node_Child));
+                                    Child.class));
                 }
             }
         }
@@ -443,7 +461,7 @@ public class FlatNodeGenFactory {
         for (ExecutableTypeData type : executableTypes) {
             if (isVoid(type.getReturnType())) {
                 voidExecutableTypes.add(type);
-            } else if (type.hasUnexpectedValue() && !typeEquals(genericReturnType, type.getReturnType())) {
+            } else if (type.hasUnexpectedValue(context) && !typeEquals(genericReturnType, type.getReturnType())) {
                 specializedExecutableTypes.add(type);
             } else {
                 genericExecutableTypes.add(type);
@@ -498,13 +516,12 @@ public class FlatNodeGenFactory {
             }
         }
 
-        AnnotationMirror nodeInfo = null;
+        NodeInfo nodeInfo = null;
         try {
-            nodeInfo = ElementUtils.findAnnotationMirror(node.getTemplateType(), types.NodeInfo);
+            nodeInfo = node.getTemplateType().getAnnotation(NodeInfo.class);
         } catch (UnsupportedOperationException e) {
         }
-        String cost = nodeInfo != null ? ElementUtils.getAnnotationValue(VariableElement.class, nodeInfo, "cost").getSimpleName().toString() : null;
-        if (cost == null || cost.equals("MONOMORPHIC") /* the default */) {
+        if (nodeInfo == null || nodeInfo.cost() == NodeCost.MONOMORPHIC /* the default */) {
             if (primaryNode) {
                 clazz.add(createGetCostMethod(false));
             }
@@ -553,10 +570,10 @@ public class FlatNodeGenFactory {
                 uncached.add(createUncachedExecute(type));
             }
 
-            if (cost == null || cost.equals("MONOMORPHIC") /* the default */) {
+            if (nodeInfo == null || nodeInfo.cost() == NodeCost.MONOMORPHIC /* the default */) {
                 uncached.add(createGetCostMethod(true));
             }
-            CodeExecutableElement isAdoptable = CodeExecutableElement.cloneNoAnnotations(ElementUtils.findExecutableElement(types.Node, "isAdoptable"));
+            CodeExecutableElement isAdoptable = CodeExecutableElement.cloneNoAnnotations(ElementUtils.findExecutableElement(context.getDeclaredType(Node.class), "isAdoptable"));
             isAdoptable.createBuilder().returnFalse();
             uncached.add(isAdoptable);
 
@@ -594,8 +611,8 @@ public class FlatNodeGenFactory {
     }
 
     private void generateReflectionInfo(CodeTypeElement clazz) {
-        clazz.getImplements().add(types.Introspection_Provider);
-        CodeExecutableElement reflection = new CodeExecutableElement(modifiers(PUBLIC), types.Introspection, "getIntrospectionData");
+        clazz.getImplements().add(context.getType(Introspection.Provider.class));
+        CodeExecutableElement reflection = new CodeExecutableElement(modifiers(PUBLIC), context.getType(Introspection.class), "getIntrospectionData");
 
         CodeTreeBuilder builder = reflection.createBuilder();
 
@@ -693,7 +710,7 @@ public class FlatNodeGenFactory {
             index++;
         }
 
-        builder.startReturn().startStaticCall(types.Introspection_Provider, "create").string("data").end().end();
+        builder.startReturn().startStaticCall(context.getType(Introspection.Provider.class), "create").string("data").end().end();
 
         clazz.add(reflection);
     }
@@ -726,13 +743,13 @@ public class FlatNodeGenFactory {
                 Modifier visibility = Modifier.PRIVATE;
 
                 CodeVariableElement cachedField;
-                if (isAssignable(type, types.NodeInterface)) {
-                    cachedField = createNodeField(visibility, type, fieldName, types.Node_Child);
+                if (isAssignable(type, context.getType(NodeInterface.class))) {
+                    cachedField = createNodeField(visibility, type, fieldName, Child.class);
                 } else if (isNodeInterfaceArray(type)) {
-                    cachedField = createNodeField(visibility, type, fieldName, types.Node_Children);
+                    cachedField = createNodeField(visibility, type, fieldName, Children.class);
                 } else {
                     cachedField = createNodeField(visibility, type, fieldName, null);
-                    AnnotationMirror mirror = findAnnotationMirror(parameter.getVariableElement().getAnnotationMirrors(), types.Cached);
+                    AnnotationMirror mirror = findAnnotationMirror(parameter.getVariableElement().getAnnotationMirrors(), context.getType(Cached.class));
                     int dimensions = getAnnotationValue(Integer.class, mirror, "dimensions");
                     setFieldCompilationFinal(cachedField, dimensions);
                 }
@@ -745,7 +762,7 @@ public class FlatNodeGenFactory {
             for (CacheExpression cache : cacheExpressions) {
                 CodeVariableElement supplierField = new CodeVariableElement(modifiers(PRIVATE),
                                 cache.getReferenceType(), createElementReferenceName(cache));
-                supplierField.getAnnotationMirrors().add(new CodeAnnotationMirror(types.CompilerDirectives_CompilationFinal));
+                supplierField.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(CompilationFinal.class)));
                 clazz.getEnclosedElements().add(supplierField);
             }
         }
@@ -770,10 +787,10 @@ public class FlatNodeGenFactory {
                 TypeMirror type = parameter.getType();
                 Modifier visibility = useSpecializationClass ? null : Modifier.PRIVATE;
                 CodeVariableElement cachedField;
-                if (isAssignable(type, types.NodeInterface)) {
-                    cachedField = createNodeField(visibility, type, fieldName, types.Node_Child);
+                if (isAssignable(type, context.getType(NodeInterface.class))) {
+                    cachedField = createNodeField(visibility, type, fieldName, Child.class);
                 } else if (isNodeInterfaceArray(type)) {
-                    cachedField = createNodeField(visibility, type, fieldName, types.Node_Children);
+                    cachedField = createNodeField(visibility, type, fieldName, Children.class);
                 } else {
                     cachedField = createNodeField(visibility, type, fieldName, null);
                     if (cache.isCached()) {
@@ -790,10 +807,10 @@ public class FlatNodeGenFactory {
                 TypeMirror type;
                 int compilationFinalDimensions;
                 if (assumption.getExpression().getResolvedType().getKind() == TypeKind.ARRAY) {
-                    type = new ArrayCodeTypeMirror(types.Assumption);
+                    type = context.getType(Assumption[].class);
                     compilationFinalDimensions = 1;
                 } else {
-                    type = types.Assumption;
+                    type = context.getType(Assumption.class);
                     compilationFinalDimensions = -1;
                 }
                 CodeVariableElement assumptionField;
@@ -812,7 +829,7 @@ public class FlatNodeGenFactory {
                 TypeMirror baseType;
                 boolean useNode = specializationClassIsNode(specialization);
                 if (useNode) {
-                    baseType = types.Node;
+                    baseType = context.getType(Node.class);
                 } else {
                     baseType = context.getType(Object.class);
                 }
@@ -823,21 +840,21 @@ public class FlatNodeGenFactory {
 
                 TypeMirror referenceType = new GeneratedTypeMirror("", typeName);
 
-                DeclaredType annotationType;
+                Class<?> annotationType;
                 if (useNode) {
-                    annotationType = types.Node_Child;
+                    annotationType = Child.class;
                     if (specialization.getMaximumNumberOfInstances() > 1) {
-                        cacheType.add(createNodeField(null, referenceType, "next_", types.Node_Child));
+                        cacheType.add(createNodeField(null, referenceType, "next_", Child.class));
                     }
 
                     CodeExecutableElement getNodeCost = new CodeExecutableElement(modifiers(PUBLIC),
-                                    types.NodeCost, "getCost");
-                    getNodeCost.createBuilder().startReturn().staticReference(types.NodeCost,
+                                    context.getType(NodeCost.class), "getCost");
+                    getNodeCost.createBuilder().startReturn().staticReference(context.getType(NodeCost.class),
                                     "NONE").end();
                     cacheType.add(getNodeCost);
 
                 } else {
-                    annotationType = types.CompilerDirectives_CompilationFinal;
+                    annotationType = CompilationFinal.class;
                     if (specialization.getMaximumNumberOfInstances() > 1) {
                         cacheType.add(createNodeField(null, referenceType, "next_", annotationType));
                     }
@@ -902,7 +919,7 @@ public class FlatNodeGenFactory {
     private static final String INSERT_ACCESSOR_NAME = "insertAccessor";
 
     private CodeExecutableElement createInsertAccessor(boolean array) {
-        CodeTypeParameterElement tVar = new CodeTypeParameterElement(CodeNames.of("T"), types.Node);
+        CodeTypeParameterElement tVar = new CodeTypeParameterElement(CodeNames.of("T"), context.getType(Node.class));
         TypeMirror type = tVar.createMirror(null, null);
         if (array) {
             type = new ArrayCodeTypeMirror(type);
@@ -931,7 +948,7 @@ public class FlatNodeGenFactory {
         if (type == null) {
             return false;
         }
-        return type.getKind() == TypeKind.ARRAY && isAssignable(((ArrayType) type).getComponentType(), types.NodeInterface);
+        return type.getKind() == TypeKind.ARRAY && isAssignable(((ArrayType) type).getComponentType(), context.getType(NodeInterface.class));
     }
 
     private static void setFieldCompilationFinal(CodeVariableElement field, int dimensions) {
@@ -939,7 +956,7 @@ public class FlatNodeGenFactory {
             // no need for the compilation final annotation.
             return;
         }
-        CodeAnnotationMirror annotation = new CodeAnnotationMirror(ProcessorContext.getInstance().getTypes().CompilerDirectives_CompilationFinal);
+        CodeAnnotationMirror annotation = new CodeAnnotationMirror(ProcessorContext.getInstance().getDeclaredType(CompilationFinal.class));
         if (dimensions > 0 || field.getType().getKind() == TypeKind.ARRAY) {
             annotation.setElementValue(annotation.findExecutableElement("dimensions"), new CodeAnnotationValue(dimensions < 0 ? 0 : dimensions));
         }
@@ -952,7 +969,7 @@ public class FlatNodeGenFactory {
         if (useSpecializationClass) {
             for (CacheExpression cache : specialization.getCaches()) {
                 TypeMirror type = cache.getParameter().getType();
-                if (isAssignable(type, types.NodeInterface)) {
+                if (isAssignable(type, context.getType(NodeInterface.class))) {
                     return true;
                 } else if (isNodeInterfaceArray(type)) {
                     return true;
@@ -1062,7 +1079,7 @@ public class FlatNodeGenFactory {
         CodeVariableElement var;
         do {
             String useConstantName = constantName = constantName + "_";
-            TypeElement resolvedLibrary = (TypeElement) ProcessorContext.getInstance().getTypes().LibraryFactory.asElement();
+            TypeElement resolvedLibrary = ProcessorContext.getInstance().getTypeElement(LibraryFactory.class);
             DeclaredCodeTypeMirror constantType = new DeclaredCodeTypeMirror(resolvedLibrary, Arrays.asList(libraryType.asType()));
             var = constants.computeIfAbsent(constantName, (c) -> {
                 CodeVariableElement newVar = new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), constantType, useConstantName);
@@ -1179,7 +1196,17 @@ public class FlatNodeGenFactory {
     }
 
     private CodeAnnotationMirror createExplodeLoop() {
-        return new CodeAnnotationMirror(types.ExplodeLoop);
+        DeclaredType explodeLoopType = context.getDeclaredType(ExplodeLoop.class);
+        CodeAnnotationMirror explodeLoop = new CodeAnnotationMirror(explodeLoopType);
+
+        DeclaredType loopExplosionKind = context.getDeclaredType(ExplodeLoop.LoopExplosionKind.class);
+        if (loopExplosionKind != null) {
+            VariableElement kindValue = findVariableElement(loopExplosionKind, "FULL_EXPLODE_UNTIL_RETURN");
+            if (kindValue != null) {
+                explodeLoop.setElementValue(findExecutableElement(explodeLoopType, "kind"), new CodeAnnotationValue(kindValue));
+            }
+        }
+        return explodeLoop;
     }
 
     private List<SpecializationData> filterCompatibleSpecializations(Collection<SpecializationData> specializations, ExecutableTypeData forType) {
@@ -1319,7 +1346,7 @@ public class FlatNodeGenFactory {
 
         boolean isExecutableInUncached = forType.getEvaluatedCount() != node.getExecutionCount();
         if (!isExecutableInUncached) {
-            method.getAnnotationMirrors().add(new CodeAnnotationMirror(types.CompilerDirectives_TruffleBoundary));
+            method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
         }
 
         if (forType.getMethod() != null) {
@@ -1435,7 +1462,7 @@ public class FlatNodeGenFactory {
         if (hasUnexpected) {
             builder.startTryBlock();
             builder.tree(delegateBuilder.build());
-            builder.end().startCatchBlock(types.UnexpectedResultException, "ex");
+            builder.end().startCatchBlock(context.getType(UnexpectedResultException.class), "ex");
             if (isVoid(type.getReturnType())) {
                 builder.returnStatement();
             } else {
@@ -1638,14 +1665,14 @@ public class FlatNodeGenFactory {
 
     private CodeTree createThrowUnsupported(final CodeTreeBuilder parent, final FrameState frameState) {
         CodeTreeBuilder builder = parent.create();
-        builder.startThrow().startNew(types.UnsupportedSpecializationException);
+        builder.startThrow().startNew(context.getType(UnsupportedSpecializationException.class));
         ExecutableElement method = parent.findMethod();
         if (method != null && method.getModifiers().contains(STATIC)) {
             builder.string("null");
         } else {
             builder.string("this");
         }
-        builder.startNewArray(new ArrayCodeTypeMirror(types.Node), null);
+        builder.startNewArray(new ArrayCodeTypeMirror(context.getType(Node.class)), null);
         List<CodeTree> values = new ArrayList<>();
 
         for (NodeExecutionData execution : node.getChildExecutions()) {
@@ -1971,7 +1998,7 @@ public class FlatNodeGenFactory {
         builder.tree(createTryExecuteChild(targetValue, executeChild.code, true, executeChild.throwsUnexpectedResult));
         builder.end();
         if (executeChild.throwsUnexpectedResult) {
-            builder.startCatchBlock(types.UnexpectedResultException, "ex");
+            builder.startCatchBlock(getType(UnexpectedResultException.class), "ex");
             FrameState slowPathFrameState = originalFrameState.copy();
             slowPathFrameState.setValue(execution, targetValue.makeGeneric(context).accessWith(CodeTreeBuilder.singleString("ex.getResult()")));
 
@@ -2003,7 +2030,7 @@ public class FlatNodeGenFactory {
         TypeMirror sourceType = executableType.getReturnType();
         TypeMirror targetType = target.getTypeMirror();
         CodeTree result = expect(sourceType, targetType, execute);
-        return new ChildExecutionResult(result, executableType.hasUnexpectedValue() || needsCastTo(sourceType, targetType));
+        return new ChildExecutionResult(result, executableType.hasUnexpectedValue(context) || needsCastTo(sourceType, targetType));
     }
 
     private ChildExecutionResult createExecuteChild(CodeTreeBuilder parent, FrameState originalFrameState, FrameState frameState, NodeExecutionData execution, LocalVariable target) {
@@ -2119,7 +2146,7 @@ public class FlatNodeGenFactory {
                 continue;
             }
 
-            if (!executable.hasUnexpectedValue()) {
+            if (!executable.hasUnexpectedValue(context)) {
                 filteredTypes.add(executable);
                 continue;
             } else {
@@ -2140,24 +2167,24 @@ public class FlatNodeGenFactory {
     }
 
     private Element createGetCostMethod(boolean uncached) {
-        TypeMirror returnType = types.NodeCost;
+        TypeMirror returnType = getType(NodeCost.class);
         CodeExecutableElement executable = new CodeExecutableElement(modifiers(PUBLIC), returnType, "getCost");
         executable.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
         CodeTreeBuilder builder = executable.createBuilder();
 
         if (uncached) {
-            builder.startReturn().staticReference(types.NodeCost, "MEGAMORPHIC").end();
+            builder.startReturn().staticReference(getType(NodeCost.class), "MEGAMORPHIC").end();
         } else {
             if (needsRewrites()) {
                 FrameState frameState = FrameState.load(this, NodeExecutionMode.UNCACHED, executable);
                 builder.tree(state.createLoad(frameState));
                 builder.startIf().tree(state.createIs(frameState, new Object[0], reachableSpecializationsArray)).end();
                 builder.startBlock();
-                builder.startReturn().staticReference(types.NodeCost, "UNINITIALIZED").end();
+                builder.startReturn().staticReference(getType(NodeCost.class), "UNINITIALIZED").end();
                 builder.end();
                 if (reachableSpecializations.size() == 1 && !reachableSpecializations.iterator().next().hasMultipleInstances()) {
                     builder.startElseBlock();
-                    builder.startReturn().staticReference(types.NodeCost, "MONOMORPHIC").end();
+                    builder.startReturn().staticReference(getType(NodeCost.class), "MONOMORPHIC").end();
                     builder.end();
                 } else {
                     builder.startElseIf();
@@ -2180,16 +2207,16 @@ public class FlatNodeGenFactory {
                     if (!additionalChecks.isEmpty()) {
                         builder.startIf().tree(combineTrees(" && ", additionalChecks.toArray(new CodeTree[0]))).end().startBlock();
                     }
-                    builder.startReturn().staticReference(types.NodeCost, "MONOMORPHIC").end();
+                    builder.startReturn().staticReference(getType(NodeCost.class), "MONOMORPHIC").end();
                     if (!additionalChecks.isEmpty()) {
                         builder.end();
                     }
                     builder.end();
 
-                    builder.startReturn().staticReference(types.NodeCost, "POLYMORPHIC").end();
+                    builder.startReturn().staticReference(getType(NodeCost.class), "POLYMORPHIC").end();
                 }
             } else {
-                builder.startReturn().staticReference(types.NodeCost, "MONOMORPHIC").end();
+                builder.startReturn().staticReference(getType(NodeCost.class), "MONOMORPHIC").end();
             }
         }
 
@@ -2212,7 +2239,7 @@ public class FlatNodeGenFactory {
 
             CodeTreeBuilder builder = method.createBuilder();
             if (uncached) {
-                method.getAnnotationMirrors().add(new CodeAnnotationMirror(types.CompilerDirectives_TruffleBoundary));
+                method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
                 builder.startThrow().startNew(context.getType(AssertionError.class));
                 builder.doubleQuote("This getter method cannot be used for uncached node versions as it requires child nodes to be present.");
                 builder.end().end();
@@ -2251,13 +2278,13 @@ public class FlatNodeGenFactory {
         return context.getType(clazz);
     }
 
-    private static CodeVariableElement createNodeField(Modifier visibility, TypeMirror type, String name, DeclaredType annotationClass, Modifier... modifiers) {
+    private static CodeVariableElement createNodeField(Modifier visibility, TypeMirror type, String name, Class<?> annotationClass, Modifier... modifiers) {
         CodeVariableElement childField = new CodeVariableElement(modifiers(modifiers), type, name);
         if (annotationClass != null) {
-            if (annotationClass == ProcessorContext.getInstance().getTypes().CompilerDirectives_CompilationFinal) {
+            if (annotationClass == CompilationFinal.class) {
                 setFieldCompilationFinal(childField, 0);
             } else {
-                childField.getAnnotationMirrors().add(new CodeAnnotationMirror(annotationClass));
+                childField.getAnnotationMirrors().add(new CodeAnnotationMirror(ProcessorContext.getInstance().getDeclaredType(annotationClass)));
             }
         }
         setVisibility(childField.getModifiers(), visibility);
@@ -2446,7 +2473,7 @@ public class FlatNodeGenFactory {
             executable = new CodeExecutableElement(modifiers(PUBLIC), returnType, methodName);
         }
 
-        DeclaredType unexpectedResult = types.UnexpectedResultException;
+        DeclaredType unexpectedResult = context.getDeclaredType(UnexpectedResultException.class);
         Iterator<TypeMirror> thrownTypes = executable.getThrownTypes().iterator();
         while (thrownTypes.hasNext()) {
             if (typeEquals(unexpectedResult, thrownTypes.next())) {
@@ -2492,7 +2519,7 @@ public class FlatNodeGenFactory {
     }
 
     private boolean needsUnexpectedResultException(ExecutableTypeData executedType) {
-        if (!executedType.hasUnexpectedValue()) {
+        if (!executedType.hasUnexpectedValue(context)) {
             return false;
         }
 
@@ -2873,7 +2900,7 @@ public class FlatNodeGenFactory {
                 if (!pushEnclosingNode) {
                     extractInBoundary |= cachesRequireFastPathBoundary(caches);
                     if (specialization.getFrame() != null) {
-                        if (ElementUtils.typeEquals(specialization.getFrame().getType(), types.VirtualFrame)) {
+                        if (ElementUtils.typeEquals(specialization.getFrame().getType(), context.getType(VirtualFrame.class))) {
                             // not supported for frames
                             extractInBoundary = false;
                         }
@@ -2900,8 +2927,8 @@ public class FlatNodeGenFactory {
             }
 
             if (pushEnclosingNode || extractInBoundary) {
-                innerBuilder.startStatement().type(types.Node).string(" prev_ = ").//
-                                startStaticCall(types.NodeUtil, "pushEncapsulatingNode").string("this").end().end();
+                innerBuilder.startStatement().type(context.getType(Node.class)).string(" prev_ = ").//
+                                startStaticCall(context.getType(NodeUtil.class), "pushEncapsulatingNode").string("this").end().end();
                 innerBuilder.startTryBlock();
             }
 
@@ -2917,7 +2944,7 @@ public class FlatNodeGenFactory {
 
             if (pushEnclosingNode || extractInBoundary) {
                 innerBuilder.end().startFinallyBlock();
-                innerBuilder.startStatement().startStaticCall(types.NodeUtil, "popEncapsulatingNode").string("prev_").end().end();
+                innerBuilder.startStatement().startStaticCall(context.getType(NodeUtil.class), "popEncapsulatingNode").string("prev_").end().end();
                 innerBuilder.end();
             }
             builder.end(nonBoundaryIfCount.blockCount);
@@ -2956,8 +2983,8 @@ public class FlatNodeGenFactory {
                 if (pushBoundary) {
                     builder.startBlock();
                     builder.startStatement();
-                    builder.type(types.Node);
-                    builder.string(" prev_ = ").startStaticCall(types.NodeUtil, "pushEncapsulatingNode").string("this").end().end();
+                    builder.type(context.getType(Node.class));
+                    builder.string(" prev_ = ").startStaticCall(context.getType(NodeUtil.class), "pushEncapsulatingNode").string("this").end().end();
                     builder.startTryBlock();
                 }
                 BlockState innerIfCount = BlockState.NONE;
@@ -3046,7 +3073,7 @@ public class FlatNodeGenFactory {
 
                 if (pushBoundary) {
                     builder.end().startFinallyBlock();
-                    builder.startStatement().startStaticCall(types.NodeUtil, "popEncapsulatingNode").string("prev_").end().end();
+                    builder.startStatement().startStaticCall(context.getType(NodeUtil.class), "popEncapsulatingNode").string("prev_").end().end();
                     builder.end();
                     builder.end();
                 }
@@ -3161,7 +3188,7 @@ public class FlatNodeGenFactory {
         CodeExecutableElement boundaryMethod = new CodeExecutableElement(modifiers(PRIVATE), parentMethod.getReturnType(), boundaryMethodName);
         frameState.addParametersTo(boundaryMethod, Integer.MAX_VALUE, STATE_VALUE, includeFrameParameter,
                         createSpecializationLocalName(specialization));
-        boundaryMethod.getAnnotationMirrors().add(new CodeAnnotationMirror(types.CompilerDirectives_TruffleBoundary));
+        boundaryMethod.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
         boundaryMethod.getThrownTypes().addAll(parentMethod.getThrownTypes());
         innerBuilder = boundaryMethod.createBuilder();
         ((CodeTypeElement) parentMethod.getEnclosingElement()).add(boundaryMethod);
@@ -3479,7 +3506,7 @@ public class FlatNodeGenFactory {
     }
 
     private CodeTree createAssumptionGuard(CodeTree assumptionValue) {
-        return CodeTreeBuilder.createBuilder().startStaticCall(types.Assumption, "isValidAssumption").tree(assumptionValue).end().build();
+        return CodeTreeBuilder.createBuilder().startStaticCall(context.getType(Assumption.class), "isValidAssumption").tree(assumptionValue).end().build();
     }
 
     private static CodeTree combineTrees(String sep, CodeTree... trees) {
@@ -3569,7 +3596,7 @@ public class FlatNodeGenFactory {
         TypeMirror[] exceptionTypes = new TypeMirror[specialization.getExceptions().size()];
         for (int i = 0; i < exceptionTypes.length; i++) {
             TypeMirror type = specialization.getExceptions().get(i).getJavaClass();
-            if (!isAssignable(type, types.SlowPathException) && !isAssignable(type, context.getType(ArithmeticException.class))) {
+            if (!isAssignable(type, context.getType(SlowPathException.class)) && !isAssignable(type, context.getType(ArithmeticException.class))) {
                 nonSlowPath = true;
             }
             exceptionTypes[i] = type;
@@ -3629,7 +3656,7 @@ public class FlatNodeGenFactory {
 
         if (hasReexecutingRewrite) {
             if (hasUnexpectedResultRewrite) {
-                builder.startIf().string("ex").instanceOf(types.UnexpectedResultException).end().startBlock();
+                builder.startIf().string("ex").instanceOf(context.getType(UnexpectedResultException.class)).end().startBlock();
                 builder.tree(createReturnUnexpectedResult(forType, true));
                 builder.end().startElseBlock();
                 builder.tree(createCallExecuteAndSpecialize(forType, frameState));
@@ -3904,11 +3931,11 @@ public class FlatNodeGenFactory {
             } else {
                 insertTarget = "super";
             }
-            TypeMirror nodeType = types.Node;
-            TypeMirror nodeArrayType = new ArrayCodeTypeMirror(types.Node);
+            TypeMirror nodeType = context.getType(Node.class);
+            TypeMirror nodeArrayType = context.getType(Node[].class);
 
             boolean isNode = isAssignable(parameter.getType(), nodeType);
-            boolean isNodeInterface = isNode || isAssignable(type, types.NodeInterface);
+            boolean isNodeInterface = isNode || isAssignable(type, context.getType(NodeInterface.class));
             boolean isNodeArray = isAssignable(type, nodeArrayType);
             boolean isNodeInterfaceArray = isNodeArray || isNodeInterfaceArray(type);
 
@@ -4002,7 +4029,7 @@ public class FlatNodeGenFactory {
         CodeTreeBuilder builder = new CodeTreeBuilder(null);
         String refName = name + "_";
         CodeTree useValue;
-        if ((ElementUtils.isAssignable(type, types.Node) || ElementUtils.isAssignable(type, new ArrayCodeTypeMirror(types.Node))) &&
+        if ((ElementUtils.isAssignable(type, context.getType(Node.class)) || ElementUtils.isAssignable(type, context.getType(Node[].class))) &&
                         (!cache.isAlwaysInitialized())) {
             useValue = builder.create().startCall("super.insert").tree(value).end().build();
         } else {
@@ -4365,7 +4392,7 @@ public class FlatNodeGenFactory {
         for (TypeMirror sourceType : sourceTypes) {
             ExecutableTypeData executableType = resolveTargetExecutable(execution, sourceType);
             elseIf = builder.startIf(elseIf);
-            throwsUnexpected |= executableType.hasUnexpectedValue();
+            throwsUnexpected |= executableType.hasUnexpectedValue(context);
             builder.startGroup();
             builder.tree(state.createContainsOnly(frameState, originalSourceTypes.indexOf(sourceType), 1, new Object[]{typeGuard}, new Object[]{typeGuard}));
             builder.string(" && ");
@@ -4471,7 +4498,7 @@ public class FlatNodeGenFactory {
         }
 
         public CodeVariableElement declareFields(CodeTypeElement clazz) {
-            return clazz.add(createNodeField(PRIVATE, bitSetType, name + "_", context.getTypes().CompilerDirectives_CompilationFinal));
+            return clazz.add(createNodeField(PRIVATE, bitSetType, name + "_", CompilationFinal.class));
         }
 
         public CodeTree createLoad(FrameState frameState) {
@@ -4813,7 +4840,7 @@ public class FlatNodeGenFactory {
                 if (!calledMethod.getThrownTypes().isEmpty()) {
                     outer: for (TypeMirror thrownType : calledMethod.getThrownTypes()) {
                         if (!ElementUtils.isAssignable(thrownType, ProcessorContext.getInstance().getType(RuntimeException.class)) &&
-                                        !ElementUtils.isAssignable(thrownType, ProcessorContext.getInstance().getTypes().UnexpectedResultException)) {
+                                        !ElementUtils.isAssignable(thrownType, ProcessorContext.getInstance().getType(UnexpectedResultException.class))) {
 
                             for (TypeMirror caughtType : caughtTypes) {
                                 if (ElementUtils.typeEquals(caughtType, thrownType)) {
