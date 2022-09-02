@@ -29,8 +29,11 @@
  */
 package com.oracle.truffle.wasm.binary;
 
+
 import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.DECLARED;
+import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.IMPORTED;
 import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.UNRESOLVED_GET;
+import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.UNRESOLVED_IMPORT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BLOCK;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BR_IF;
@@ -226,14 +229,12 @@ import com.oracle.truffle.wasm.binary.constants.ExportIdentifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
 import com.oracle.truffle.wasm.binary.constants.ImportIdentifier;
-import com.oracle.truffle.wasm.binary.constants.LimitsPrefix;
 import com.oracle.truffle.wasm.binary.exception.WasmException;
 import com.oracle.truffle.wasm.binary.exception.WasmLinkerException;
 import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.collection.ByteArrayList;
 
-/**
- * Simple recursive-descend parser for the binary WebAssembly format.
+/** Simple recursive-descend parser for the binary WebAssembly format.
  */
 public class BinaryReader extends BinaryStreamReader {
 
@@ -254,23 +255,20 @@ public class BinaryReader extends BinaryStreamReader {
     //  to track the current largest function index.
     private int moduleFunctionIndex;
 
-    BinaryReader(WasmLanguage language, WasmModule module, byte[] data) {
+    BinaryReader(WasmLanguage language, String moduleName, byte[] data) {
         super(data);
         this.language = language;
-        this.module = module;
+        this.module = new WasmModule(moduleName);
         this.bytesConsumed = new byte[1];
         this.moduleFunctionIndex = 0;
     }
 
     WasmModule readModule() {
-        validateMagicNumberAndVersion();
-        readSections();
-        return module;
-    }
-
-    private void validateMagicNumberAndVersion() {
+        final WasmContext context = language.getContextReference().get();
         Assert.assertIntEqual(read4(), MAGIC, "Invalid MAGIC number");
         Assert.assertIntEqual(read4(), VERSION, "Invalid VERSION number");
+        readSections();
+        return module;
     }
 
     private void readSections() {
@@ -357,16 +355,16 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case ImportIdentifier.TABLE: {
                     // TODO: This table is normally supposed to be provided by the external environment (e.g. JS).
-                    byte elemType = readElemType();
+                    byte elemType = read1();
                     Assert.assertIntEqual(elemType, 0x70, "Invalid element type for table import");
                     byte limitsPrefix = read1();
                     switch (limitsPrefix) {
-                        case LimitsPrefix.NO_MAX: {
+                        case 0x00: {
                             int initSize = readUnsignedInt32();  // initial size (in number of entries)
                             module.table().initialize(initSize);
                             break;
                         }
-                        case LimitsPrefix.WITH_MAX: {
+                        case 0x01: {
                             int initSize = readUnsignedInt32();  // initial size (in number of entries)
                             int maxSize = readUnsignedInt32();  // max size (in number of entries)
                             module.table().initialize(initSize, maxSize);
@@ -381,11 +379,11 @@ public class BinaryReader extends BinaryStreamReader {
                     // TODO: This memory is normally supposed to be provided by the external environment (e.g. JS).
                     byte limitsPrefix = read1();
                     switch (limitsPrefix) {
-                        case LimitsPrefix.NO_MAX: {
+                        case 0x00: {
                             readUnsignedInt32();  // initial size (in number of entries)
                             break;
                         }
-                        case LimitsPrefix.WITH_MAX: {
+                        case 0x01: {
                             readUnsignedInt32();  // initial size (in number of entries)
                             readUnsignedInt32();  // max size (in number of entries)
                             break;
@@ -569,11 +567,6 @@ public class BinaryReader extends BinaryStreamReader {
         int startNumericLiteralOffset = state.numericLiteralOffset();
         int startBranchTableOffset = state.branchTableOffset();
         WasmBlockNode currentBlock = new WasmBlockNode(module, codeEntry, startOffset, returnTypeId, startStackSize, startByteConstantOffset, startIntConstantOffset, startNumericLiteralOffset, startBranchTableOffset);
-
-        // Push the current block return length in the return lengths stack.
-        // Used when branching out of nested blocks (br and br_if instructions).
-        state.pushBlockReturnLength(currentBlock.returnTypeLength());
-
         int opcode;
         do {
             opcode = read1() & 0xFF;
@@ -583,31 +576,29 @@ public class BinaryReader extends BinaryStreamReader {
                 case NOP:
                     break;
                 case BLOCK: {
-                    // Save the current block's stack pointer, in case we branch out of
-                    // the nested block (continuation stack pointer).
-                    state.pushStackState(state.stackSize());
+                    state.pushStackState();
+                    state.pushBlockReturnLength(currentBlock.returnTypeLength());
                     WasmBlockNode nestedBlock = readBlock(codeEntry, state);
                     nestedControlTable.add(nestedBlock);
+                    state.popBlockReturnLength();
                     state.popStackState();
                     break;
                 }
                 case LOOP: {
-                    // Save the current block's stack pointer, in case we branch out of
-                    // the nested block (continuation stack pointer).
-                    state.pushStackState(state.stackSize());
+                    state.pushStackState();
+                    state.pushBlockReturnLength(currentBlock.returnTypeLength());
                     WasmLoopNode loopBlock = readLoop(codeEntry, state);
                     nestedControlTable.add(loopBlock);
+                    state.popBlockReturnLength();
                     state.popStackState();
                     break;
                 }
                 case IF: {
-                    // Save the current block's stack pointer, in case we branch out of
-                    // the nested block (continuation stack pointer).
-                    // For the if block, we save the stack size reduced by 1, because of the
-                    // condition value that will be popped before executing the if statement.
-                    state.pushStackState(state.stackSize() - 1);
+                    state.pushStackState();
+                    state.pushBlockReturnLength(currentBlock.returnTypeLength());
                     WasmIfNode ifNode = readIf(codeEntry, state);
                     nestedControlTable.add(ifNode);
+                    state.popBlockReturnLength();
                     state.popStackState();
                     break;
                 }
@@ -1038,11 +1029,6 @@ public class BinaryReader extends BinaryStreamReader {
         currentBlock.setBranchTableLength(state.branchTableOffset() - startBranchTableOffset);
         // TODO: Restore this check, when we fix the case where the block contains a return instruction.
         // checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
-
-        // Pop the current block return length in the return lengths stack.
-        // Used when branching out of nested blocks (br and br_if instructions).
-        state.popBlockReturnLength();
-
         return currentBlock;
     }
 
@@ -1203,11 +1189,12 @@ public class BinaryReader extends BinaryStreamReader {
         for (int i = startingGlobalIndex; i != startingGlobalIndex + numGlobals; i++) {
             byte type = readValueType();
             // 0x00 means const, 0x01 means var
-            byte mutability = read1();
+            byte mut = read1();
             long value = 0;
             GlobalResolution resolution;
+            byte instruction;
             int existingIndex = -1;
-            byte instruction = read1();
+            instruction = read1();
             // Global initialization expressions must be constant expressions:
             // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
             switch (instruction) {
@@ -1251,7 +1238,7 @@ public class BinaryReader extends BinaryStreamReader {
             }
             instruction = read1();
             Assert.assertByteEqual(instruction, (byte) END, "Global initialization must end with END.");
-            final int address = module.symbolTable().declareGlobal(language.getContextReference().get(), i, type, mutability, resolution);
+            final int address = module.symbolTable().declareGlobal(language.getContextReference().get(), i, type, mut, resolution);
             if (resolution.isResolved()) {
                 globals.storeLong(address, value);
             } else {
@@ -1375,7 +1362,7 @@ public class BinaryReader extends BinaryStreamReader {
         return readUnsignedInt32();
     }
 
-    private int readLocalIndex() {
+    public int readLocalIndex() {
         return readUnsignedInt32();
     }
 
@@ -1383,7 +1370,7 @@ public class BinaryReader extends BinaryStreamReader {
         return readUnsignedInt32(bytesConsumed);
     }
 
-    private int readLabelIndex() {
+    public int readLabelIndex() {
         return readUnsignedInt32();
     }
 
@@ -1399,10 +1386,6 @@ public class BinaryReader extends BinaryStreamReader {
         return read1();
     }
 
-    private byte readElemType() {
-        return read1();
-    }
-
     private String readName() {
         int nameLength = readVectorLength();
         byte[] name = new byte[nameLength];
@@ -1410,127 +1393,5 @@ public class BinaryReader extends BinaryStreamReader {
             name[i] = read1();
         }
         return new String(name, StandardCharsets.US_ASCII);
-    }
-
-    private boolean tryJumpToSection(int targetSectionId) {
-        offset = 0;
-        validateMagicNumberAndVersion();
-        while (!isEOF()) {
-            byte sectionID = read1();
-            int size = readUnsignedInt32();
-            if (sectionID == targetSectionId) {
-                return true;
-            }
-            offset += size;
-        }
-        return false;
-    }
-
-    /**
-     * Reset the state of the globals in a module that had already been parsed and linked.
-     */
-    void resetGlobalState() {
-        int globalIndex = 0;
-        if (tryJumpToSection(IMPORT)) {
-            int numImports = readVectorLength();
-            for (int i = 0; i != numImports; ++i) {
-                String moduleName = readName();
-                String memberName = readName();
-                byte importType = readImportType();
-                switch (importType) {
-                    case ImportIdentifier.FUNCTION: {
-                        readTableIndex();
-                        break;
-                    }
-                    case ImportIdentifier.TABLE: {
-                        readElemType();
-                        byte limitsPrefix = read1();
-                        switch (limitsPrefix) {
-                            case LimitsPrefix.NO_MAX: {
-                                readUnsignedInt32();
-                                break;
-                            }
-                            case LimitsPrefix.WITH_MAX: {
-                                readUnsignedInt32();
-                                readUnsignedInt32();
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                    case ImportIdentifier.MEMORY: {
-                        byte limitsPrefix = read1();
-                        switch (limitsPrefix) {
-                            case LimitsPrefix.NO_MAX: {
-                                readUnsignedInt32();
-                                break;
-                            }
-                            case LimitsPrefix.WITH_MAX: {
-                                readUnsignedInt32();
-                                readUnsignedInt32();
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                    case ImportIdentifier.GLOBAL: {
-                        readValueType();
-                        byte mutability = read1();
-                        if (mutability == GlobalModifier.MUTABLE) {
-                            throw new WasmLinkerException("Cannot reset imports of mutable global variables (not implemented).");
-                        }
-                        globalIndex++;
-                        break;
-                    }
-                    default: {
-                        // The module should have been parsed already.
-                    }
-                }
-            }
-        }
-        if (tryJumpToSection(GLOBAL)) {
-            final Globals globals = language.getContextReference().get().globals();
-            int numGlobals = readVectorLength();
-            int startingGlobalIndex = globalIndex;
-            for (; globalIndex != startingGlobalIndex + numGlobals; globalIndex++) {
-                readValueType();
-                // Read mutability;
-                read1();
-                byte instruction = read1();
-                long value = 0;
-                switch (instruction) {
-                    case I32_CONST: {
-                        value = readSignedInt32();
-                        break;
-                    }
-                    case I64_CONST: {
-                        value = readSignedInt64();
-                        break;
-                    }
-                    case F32_CONST: {
-                        value = readFloatAsInt32();
-                        break;
-                    }
-                    case F64_CONST: {
-                        value = readFloatAsInt64();
-                        break;
-                    }
-                    case GLOBAL_GET: {
-                        int existingIndex = readGlobalIndex();
-                        if (module.symbolTable().globalMutability(existingIndex) == GlobalModifier.MUTABLE) {
-                            throw new WasmLinkerException("Cannot reset global variables that were initialized " +
-                                            "with a non-constant global variable (not implemented).");
-                        }
-                        final int existingAddress = module.symbolTable().globalAddress(existingIndex);
-                        value = globals.loadAsLong(existingAddress);
-                        break;
-                    }
-                }
-                // Read END.
-                read1();
-                final int address = module.symbolTable().globalAddress(globalIndex);
-                globals.storeLong(address, value);
-            }
-        }
     }
 }
