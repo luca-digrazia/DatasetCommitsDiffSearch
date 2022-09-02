@@ -87,6 +87,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCIBackend;
+import org.graalvm.nativeimage.ImageInfo;
 
 //JaCoCo Exclude
 
@@ -94,8 +95,6 @@ import jdk.vm.ci.runtime.JVMCIBackend;
  * Singleton class holding the instance of the {@link GraalRuntime}.
  */
 public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
-
-    private static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
 
     private static boolean checkArrayIndexScaleInvariants(MetaAccessProvider metaAccess) {
         assert metaAccess.getArrayIndexScale(JavaKind.Byte) == 1;
@@ -161,7 +160,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         compilerConfigurationName = compilerConfigurationFactory.getName();
 
         compiler = new HotSpotGraalCompiler(jvmciRuntime, this, options);
-        if (IS_AOT) {
+        if (ImageInfo.inImageRuntimeCode()) {
             management = null;
         } else {
             management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
