@@ -93,7 +93,7 @@ public class ContextSensitiveAnalysisObject extends AnalysisObject {
         }
     }
 
-    protected void mergeInstanceFieldFlow(BigBang bb, FieldTypeStore fieldTypeStore) {
+    private void mergeInstanceFieldFlow(BigBang bb, FieldTypeStore fieldTypeStore) {
         mergeInstanceFieldFlow(bb, fieldTypeStore, type.getContextInsensitiveAnalysisObject());
     }
 
@@ -101,7 +101,7 @@ public class ContextSensitiveAnalysisObject extends AnalysisObject {
      * Merge the read and write flows of the fieldTypeStore with those of the context insensitive
      * object.
      */
-    protected static void mergeInstanceFieldFlow(BigBang bb, FieldTypeStore fieldTypeStore, AnalysisObject object) {
+    private static void mergeInstanceFieldFlow(BigBang bb, FieldTypeStore fieldTypeStore, AnalysisObject object) {
         AnalysisField field = fieldTypeStore.field();
 
         FieldTypeFlow readFieldFlow = fieldTypeStore.readFlow();
