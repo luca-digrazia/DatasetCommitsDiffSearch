@@ -1,26 +1,42 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.instrumentation;
 
@@ -29,9 +45,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
@@ -43,8 +64,8 @@ import com.oracle.truffle.api.source.SourceSection;
  * them by calling {@link Builder#build()}.
  *
  * @see SourceSectionFilter#newBuilder()
- * @see Instrumenter#attachFactory(SourceSectionFilter, ExecutionEventNodeFactory)
- * @see Instrumenter#attachListener(SourceSectionFilter, ExecutionEventListener)
+ * @see Instrumenter#attachExecutionEventFactory(SourceSectionFilter, ExecutionEventNodeFactory)
+ * @see Instrumenter#attachExecutionEventListener(SourceSectionFilter, ExecutionEventListener)
  * @since 0.12
  */
 public final class SourceSectionFilter {
@@ -55,6 +76,7 @@ public final class SourceSectionFilter {
      * @since 0.18
      */
     public static final SourceSectionFilter ANY = newBuilder().build();
+    private static final ConcurrentHashMap<Set<Class<?>>, TaggedNode> TAGGED_NODE_CACHE = new ConcurrentHashMap<>();
 
     private final EventFilterExpression[] expressions;
 
@@ -76,6 +98,7 @@ public final class SourceSectionFilter {
      * @see Builder#indexIn(int, int)
      * @see Builder#lineIn(int, int)
      * @see Builder#lineIs(int)
+     * @see Builder#rootNameIs(Predicate)
      * @see Builder#build()
      *
      * @return a new builder to create new {@link SourceSectionFilter} instances
@@ -102,6 +125,134 @@ public final class SourceSectionFilter {
         return b.toString();
     }
 
+    /**
+     * Checks if the filter includes the given node, i.e. do the properties of the node's source
+     * section meet the conditions set by the filter.
+     *
+     * @param node The node to check.
+     * @return True of the filter includes the node, false otherwise.
+     * @since 19.0.
+     */
+    public boolean includes(Node node) {
+        if (!InstrumentationHandler.isInstrumentableNode(node)) {
+            return false;
+        }
+        return includesImpl(node, node.getSourceSection());
+    }
+
+    /**
+     * Checks if the filter includes the given root node, i.e. do the properties of the given source
+     * section meet the conditions set by the filter without an instrumented node.
+     *
+     * @param rootNode The root node to be checked against the filter.
+     * @param nodeSourceSection The source section of the node to be checked against the filter.
+     *
+     * @return {@code true} if the filter includes the source section and node. {@code false}
+     *         otherwise.
+     * @since 21.3.0
+     *
+     */
+    public boolean includes(RootNode rootNode, SourceSection nodeSourceSection, Set<Class<?>> originalTags) {
+        Set<Class<?>> providedTags = getProvidedTags(rootNode);
+        Set<Class<?>> tags = originalTags == null ? Collections.emptySet() : originalTags;
+        TaggedNode node = TAGGED_NODE_CACHE.get(tags);
+        if (node == null) {
+            Set<Class<?>> newTags = new HashSet<>(tags); // defensively copy
+            node = TAGGED_NODE_CACHE.computeIfAbsent(newTags, TaggedNode::new);
+        }
+        for (EventFilterExpression exp : expressions) {
+            if (originalTags == null && isTagExpression(exp)) {
+                continue;
+            }
+            if (!exp.isIncluded(providedTags, node, nodeSourceSection)) {
+                return false;
+            }
+            if (!exp.isRootIncluded(providedTags, nodeSourceSection, rootNode, 0)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isTagExpression(EventFilterExpression exp) {
+        if (exp instanceof Not) {
+            return isTagExpression(((Not) exp).delegate);
+        } else {
+            return exp instanceof EventFilterExpression.TagIs;
+        }
+    }
+
+    /*
+     * Since root nodes themselves cannot be instrumented, this node is used by the {@link
+     * #includes(RootNode, SourceSection)} method as a substitute node to check the tags
+     */
+    private static final class TaggedNode extends Node implements InstrumentableNode {
+
+        private final Set<Class<?>> tags;
+
+        TaggedNode(Set<Class<?>> tags) {
+            this.tags = tags;
+        }
+
+        @Override
+        public boolean isInstrumentable() {
+            return true;
+        }
+
+        @Override
+        public WrapperNode createWrapper(ProbeNode probe) {
+            // Never used since this is a dummy node
+            return null;
+        }
+
+        @Override
+        @TruffleBoundary
+        public boolean hasTag(Class<? extends Tag> tag) {
+            return tags.contains(tag);
+        }
+    }
+
+    private boolean includesImpl(Node node, SourceSection sourceSection) {
+        Set<Class<?>> tags = node != null ? getProvidedTags(node) : Collections.emptySet();
+        for (EventFilterExpression exp : expressions) {
+            if (!exp.isIncluded(tags, node, sourceSection)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Set<Class<?>> getProvidedTags(Node node) {
+        Objects.requireNonNull(node);
+        RootNode root = node.getRootNode();
+        if (root == null) {
+            return Collections.emptySet();
+        }
+        Object polyglotEngine = InstrumentAccessor.nodesAccess().getPolyglotEngine(root);
+        if (polyglotEngine == null) {
+            return Collections.emptySet();
+        }
+        InstrumentationHandler handler = (InstrumentationHandler) InstrumentAccessor.engineAccess().getInstrumentationHandler(polyglotEngine);
+        return handler.getProvidedTags(node);
+    }
+
+    /**
+     * Returns which tags are required to be materialized in order for this filter to be correct.
+     * Returns <code>null</code> to indicate that all provided tags are required.
+     */
+    Set<Class<?>> getLimitedTags() {
+        Set<Class<?>> requiredTags = null;
+        for (EventFilterExpression expression : expressions) {
+            if (expression instanceof EventFilterExpression.TagIs) {
+                if (requiredTags == null) {
+                    requiredTags = new HashSet<>();
+                }
+                expression.collectReferencedTags(requiredTags);
+            }
+        }
+        return requiredTags;
+    }
+
     // implementation
     Set<Class<?>> getReferencedTags() {
         Set<Class<?>> usedTags = new HashSet<>();
@@ -120,9 +271,9 @@ public final class SourceSectionFilter {
         return true;
     }
 
-    boolean isInstrumentedRoot(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
+    boolean isInstrumentedRoot(Set<Class<?>> providedTags, SourceSection rootSourceSection, RootNode rootNode, int rootNodeBits) {
         for (EventFilterExpression exp : expressions) {
-            if (!exp.isRootIncluded(providedTags, rootSourceSection)) {
+            if (!exp.isRootIncluded(providedTags, rootSourceSection, rootNode, rootNodeBits)) {
                 return false;
             }
         }
@@ -130,9 +281,7 @@ public final class SourceSectionFilter {
     }
 
     boolean isInstrumentedNode(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
-        if (sourceSection == null) {
-            return false;
-        }
+        assert InstrumentationHandler.isInstrumentableNode(instrumentedNode);
         for (EventFilterExpression exp : expressions) {
             if (!exp.isIncluded(providedTags, instrumentedNode, sourceSection)) {
                 return false;
@@ -146,7 +295,7 @@ public final class SourceSectionFilter {
             return false;
         }
         for (EventFilterExpression exp : expressions) {
-            assert exp.isSourceOnly();
+            assert exp.isSourceOnly() : exp.toString();
             if (!exp.isSourceIncluded(source)) {
                 return false;
             }
@@ -162,8 +311,19 @@ public final class SourceSectionFilter {
      */
     public final class Builder {
         private List<EventFilterExpression> expressions = new ArrayList<>();
+        private boolean includeInternal = true;
 
         private Builder() {
+        }
+
+        /**
+         * Add a source filter.
+         *
+         * @since 0.32
+         */
+        public Builder sourceFilter(SourceFilter sourceFilter) {
+            expressions.addAll(Arrays.asList(sourceFilter.expressions));
+            return this;
         }
 
         /**
@@ -194,6 +354,25 @@ public final class SourceSectionFilter {
         }
 
         /**
+         * Adds custom predicate to filter inclusion for {@link RootNode#getName() root names}. The
+         * root name might be <code>null</code> if not provided by the guest language. If the
+         * language returns a changing value it is unspecified which root name is going to be
+         * matched. The predicate must always return the same result for a {@link String} instance
+         * otherwise the behavior is undefined. The predicate should be able run on multiple threads
+         * at the same time.
+         *
+         * @param predicate a test for inclusion
+         * @since 0.27
+         */
+        public Builder rootNameIs(Predicate<String> predicate) {
+            if (predicate == null) {
+                throw new IllegalArgumentException("Predicate must not be null.");
+            }
+            expressions.add(new EventFilterExpression.RootNameIs(predicate));
+            return this;
+        }
+
+        /**
          * Add a filter for all source sections that declare one of the given mime-types. Mime-types
          * which are compared must match exactly one of the mime-types specified by the target guest
          * language.
@@ -209,7 +388,7 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all source sections that are tagged with one of the given String tags.
+         * Add a filter for all source sections that are tagged with one of the given tags.
          *
          * @param tags matches one of the given tags
          * @return the builder to chain calls
@@ -222,7 +401,7 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections that declare not one of the given String tags.
+         * Add a filter for all source sections that are not tagged with one of the given tags.
          *
          * @param tags matches not one of the given tags
          * @return the builder to chain calls
@@ -235,7 +414,7 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections that equal one of the given source sections.
+         * Add a filter for all source sections that equal one of the given source sections.
          *
          * @param section matches one of the given source sections
          * @return the builder to chain calls
@@ -248,7 +427,7 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all root sources sections that equal one of the given source sections.
+         * Add a filter for all root source sections that equal one of the given source sections.
          * All descendant source sections of a matching root source section are included in the
          * filter. This can mean in the dynamic language domain that all nodes of a function for
          * which the root source section matches the given source section is instrumented but its
@@ -265,10 +444,10 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections which indices are not contained in one of the given
+         * Add a filter for all source sections which indices are not contained in one of the given
          * index ranges.
          *
-         * @param ranges matches indices that are not contained one of the given index ranges
+         * @param ranges matches indices that are not contained in one of the given index ranges
          * @return the builder to chain calls
          * @since 0.12
          */
@@ -279,10 +458,10 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections which indices are contained in one of the given
+         * Add a filter for all source sections which indices are contained in one of the given
          * index ranges.
          *
-         * @param ranges matches indices that are contained one of the given index ranges
+         * @param ranges matches indices that are contained in one of the given index ranges
          * @return the builder to chain calls
          * @since 0.12
          */
@@ -293,7 +472,7 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections where the index is inside a startIndex (inclusive)
+         * Add a filter for all source sections where the index is inside a startIndex (inclusive)
          * plus a given length (exclusive).
          *
          * @param startIndex the start index (inclusive)
@@ -306,10 +485,10 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections which lines are contained in one of the given index
-         * ranges. Line indices must be greater or equal to <code>1</code>.
+         * Add a filter for all source sections where lines are contained in one of the given index
+         * ranges. Line indices must be greater than or equal to <code>1</code>.
          *
-         * @param ranges matches lines that are contained one of the given index ranges
+         * @param ranges matches lines that are contained in one of the given index ranges
          * @return the builder to chain calls
          * @since 0.12
          */
@@ -320,10 +499,10 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections which lines are not contained in one of the given
-         * index ranges. Line indices must be greater or equal to <code>1</code>.
+         * Add a filter for all source sections where lines are not contained in one of the given
+         * index ranges. Line indices must be greater than or equal to <code>1</code>.
          *
-         * @param ranges matches lines that are not contained one of the given index ranges
+         * @param ranges matches lines that are not contained in one of the given index ranges
          * @return the builder to chain calls
          * @since 0.12
          */
@@ -334,7 +513,7 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections where the line is inside a startLine (first index
+         * Add a filter for all source sections where the line is inside a startLine (first index
          * inclusive) plus a given length (last index exclusive).
          *
          * @param startLine the start line (inclusive)
@@ -343,12 +522,15 @@ public final class SourceSectionFilter {
          * @since 0.12
          */
         public Builder lineIn(int startLine, int length) {
+            if (startLine < 1) {
+                throw new IllegalArgumentException(String.format("Start line indices must be >= 1 but were %s.", startLine));
+            }
             return lineIn(IndexRange.byLength(startLine, length));
         }
 
         /**
-         * Add a filter for all sources sections start in one of the given index ranges. Line
-         * indices must be greater or equal to <code>1</code>.
+         * Add a filter for all source sections where the line starts in one of the given index
+         * ranges. Line indices must be greater than or equal to <code>1</code>.
          *
          * @param ranges matches lines that start in one of the given index ranges
          * @return the builder to chain calls
@@ -361,8 +543,8 @@ public final class SourceSectionFilter {
         }
 
         /**
-         * Add a filter for all sources sections end in one of the given index ranges. Line indices
-         * must be greater or equal to <code>1</code>.
+         * Add a filter for all source sections where the line ends in one of the given index
+         * ranges. Line indices must be greater than or equal to <code>1</code>.
          *
          * @param ranges matches lines that end in one of the given index ranges
          * @return the builder to chain calls
@@ -374,18 +556,90 @@ public final class SourceSectionFilter {
             return this;
         }
 
+        /**
+         * Add a filter for all source sections where the columns are contained in one of the given
+         * index ranges. Column indices must be greater than or equal to <code>1</code>.
+         *
+         * @param ranges matches columns that are contained in one of the given index ranges
+         * @return the builder to chain calls
+         * @since 0.33
+         */
+        public Builder columnIn(IndexRange... ranges) {
+            verifyLineIndices(ranges);
+            expressions.add(new EventFilterExpression.ColumnIn(ranges));
+            return this;
+        }
+
+        /**
+         * Add a filter for all source sections where columns are not contained in one of the given
+         * index ranges. Column indices must be greater than or equal to <code>1</code>.
+         *
+         * @param ranges matches columns that are not contained in one of the given index ranges
+         * @return the builder to chain calls
+         * @since 0.33
+         */
+        public Builder columnNotIn(IndexRange... ranges) {
+            verifyLineIndices(ranges);
+            expressions.add(new Not(new EventFilterExpression.ColumnIn(ranges)));
+            return this;
+        }
+
+        /**
+         * Add a filter for all source sections where the column is inside a startColumn (first
+         * index inclusive) plus a given length (last index exclusive).
+         *
+         * @param startColumn the start column (inclusive)
+         * @param length the number of matched columns
+         * @return the builder to chain calls
+         * @since 0.33
+         */
+        public Builder columnIn(int startColumn, int length) {
+            if (startColumn < 1) {
+                throw new IllegalArgumentException(String.format("Start line indices must be >= 1 but were %s.", startColumn));
+            }
+            return columnIn(IndexRange.byLength(startColumn, length));
+        }
+
+        /**
+         * Add a filter for all source sections where the column starts in one of the given index
+         * ranges. Column indices must be greater than or equal to <code>1</code>.
+         *
+         * @param ranges matches columns that start in one of the given index ranges
+         * @return the builder to chain calls
+         * @since 0.33
+         */
+        public Builder columnStartsIn(IndexRange... ranges) {
+            verifyLineIndices(ranges);
+            expressions.add(new EventFilterExpression.ColumnStartsIn(ranges));
+            return this;
+        }
+
+        /**
+         * Add a filter for all sources sections where the column ends in one of the given index
+         * ranges. Column indices must be greater than or equal to <code>1</code>.
+         *
+         * @param ranges matches columns that end in one of the given index ranges
+         * @return the builder to chain calls
+         * @since 0.33
+         */
+        public Builder columnEndsIn(IndexRange... ranges) {
+            verifyLineIndices(ranges);
+            expressions.add(new EventFilterExpression.ColumnEndsIn(ranges));
+            return this;
+        }
+
         private void verifyLineIndices(IndexRange... ranges) {
             verifyNotNull(ranges);
             for (IndexRange indexRange : ranges) {
                 if (indexRange.startIndex < 1) {
-                    throw new IllegalArgumentException(String.format("Start line indices must be >= 1 but were %s.", indexRange.startIndex));
+                    throw new IllegalArgumentException(String.format("Start line/column must be >= 1 but was %s.", indexRange.startIndex));
                 }
             }
         }
 
         /**
          * Add a filter for all sources sections where the line is exactly the given line. Line
-         * indices must be greater or equal to <code>1</code>. *
+         * indices must be greater than or equal to <code>1</code>. *
          *
          * @param line the line to be matched
          * @return the builder to chain calls
@@ -396,27 +650,57 @@ public final class SourceSectionFilter {
         }
 
         /**
+         * Add a filter that includes or excludes {@link RootNode#isInternal() internal root nodes}.
+         * By default, internal roots are included, call with <code>false</code> to exclude internal
+         * code from instrumentation.
+         *
+         * @return the builder to chain calls
+         * @since 0.29
+         */
+        public Builder includeInternal(boolean internal) {
+            this.includeInternal = internal;
+            return this;
+        }
+
+        /**
+         * Adds all the filters defined in the given {@link SourceSectionFilter filter}.
+         *
+         * @param filter an existing filter to be included
+         * @return the builder to chain calls
+         * @since 0.30
+         */
+        public Builder and(SourceSectionFilter filter) {
+            for (EventFilterExpression e : filter.expressions) {
+                expressions.add(e);
+            }
+            return this;
+        }
+
+        /**
          * Finalizes and constructs the {@link SourceSectionFilter} instance.
          *
          * @return the built filter expression
          * @since 0.12
          */
         public SourceSectionFilter build() {
+            if (!includeInternal) {
+                expressions.add(new EventFilterExpression.IgnoreInternal());
+            }
             Collections.sort(expressions);
             return new SourceSectionFilter(expressions.toArray(new EventFilterExpression[0]));
         }
 
-        private void verifyNotNull(Object[] values) {
-            if (values == null) {
-                throw new IllegalArgumentException("Given arguments must not be null.");
-            }
-            for (int i = 0; i < values.length; i++) {
-                if (values[i] == null) {
-                    throw new IllegalArgumentException("None of the given argument values must be null.");
-                }
+    }
+
+    static void verifyNotNull(Object[] values) {
+        if (values == null) {
+            throw new IllegalArgumentException("Given arguments must not be null.");
+        }
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] == null) {
+                throw new IllegalArgumentException("None of the given argument values must be null.");
             }
         }
-
     }
 
     /**
@@ -424,7 +708,7 @@ public final class SourceSectionFilter {
      *
      * @since 0.17
      */
-    public interface SourcePredicate {
+    public interface SourcePredicate extends Predicate<Source> {
 
         /**
          * Returns <code>true</code> if the given source should be tested positive and
@@ -450,7 +734,7 @@ public final class SourceSectionFilter {
         final int startIndex;
         final int endIndex;
 
-        private IndexRange(int startIndex, int endIndex) {
+        IndexRange(int startIndex, int endIndex) {
             this.startIndex = startIndex;
             this.endIndex = endIndex;
         }
@@ -461,7 +745,7 @@ public final class SourceSectionFilter {
          * <code>startIndex <= endIndex</code>.
          *
          * @param startIndex the start index (inclusive)
-         * @param endIndex the end index (inclusive)
+         * @param endIndex the end index (exclusive)
          * @return a new index range
          * @throws IllegalArgumentException if parameter invariants are violated
          * @since 0.12
@@ -504,12 +788,12 @@ public final class SourceSectionFilter {
          */
         @Override
         public String toString() {
-            return "[" + startIndex + "-" + endIndex + "[";
+            return "[" + startIndex + "-" + endIndex + "]";
         }
 
     }
 
-    private abstract static class EventFilterExpression implements Comparable<EventFilterExpression> {
+    abstract static class EventFilterExpression implements Comparable<EventFilterExpression> {
 
         protected abstract int getOrder();
 
@@ -523,14 +807,15 @@ public final class SourceSectionFilter {
 
         abstract boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection);
 
-        abstract boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection);
+        abstract boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits);
 
         boolean isSourceOnly() {
             return false;
         }
 
+        @Override
         public final int compareTo(EventFilterExpression o) {
-            return o.getOrder() - getOrder();
+            return getOrder() - o.getOrder();
         }
 
         static void appendRanges(StringBuilder builder, IndexRange[] ranges) {
@@ -541,11 +826,11 @@ public final class SourceSectionFilter {
             }
         }
 
-        private static final class SourceFilterIs extends EventFilterExpression {
+        static final class SourceFilterIs extends EventFilterExpression {
 
-            private final SourcePredicate predicate;
+            private final Predicate<Source> predicate;
 
-            SourceFilterIs(SourcePredicate predicate) {
+            SourceFilterIs(Predicate<Source> predicate) {
                 this.predicate = predicate;
             }
 
@@ -563,15 +848,21 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
-                if (rootSourceSection == null) {
-                    return true;
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
                 }
-                return isSourceIncluded(rootSourceSection.getSource());
+                if (RootNodeBits.isSameSource(rootNodeBits) && rootSourceSection != null) {
+                    return isSourceIncluded(rootSourceSection.getSource());
+                }
+                return true;
             }
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                if (sourceSection == null) {
+                    return false;
+                }
                 return isSourceIncluded(sourceSection.getSource());
             }
 
@@ -586,7 +877,46 @@ public final class SourceSectionFilter {
             }
         }
 
-        private static final class SourceIs extends EventFilterExpression {
+        private static final class RootNameIs extends EventFilterExpression {
+
+            private final Predicate<String> predicate;
+
+            RootNameIs(Predicate<String> predicate) {
+                this.predicate = predicate;
+            }
+
+            @Override
+            boolean isSourceOnly() {
+                return false;
+            }
+
+            @Override
+            boolean isSourceIncluded(Source src) {
+                return true;
+            }
+
+            @Override
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection, RootNode rootNode, int rootNodeBits) {
+                return predicate.test(rootNode.getName());
+            }
+
+            @Override
+            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                return true;
+            }
+
+            @Override
+            protected int getOrder() {
+                return 3;
+            }
+
+            @Override
+            public String toString() {
+                return String.format("root name is included by custom filter %s", predicate.toString());
+            }
+        }
+
+        static final class SourceIs extends EventFilterExpression {
 
             private final Source[] sources;
 
@@ -602,7 +932,7 @@ public final class SourceSectionFilter {
             @Override
             boolean isSourceIncluded(Source src) {
                 for (Source otherSource : sources) {
-                    if (src == otherSource) {
+                    if (src.equals(otherSource)) {
                         return true;
                     }
                 }
@@ -610,15 +940,21 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
-                if (rootSourceSection == null) {
-                    return true;
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
                 }
-                return isSourceIncluded(rootSourceSection.getSource());
+                if (RootNodeBits.isSameSource(rootNodeBits) && rootSourceSection != null) {
+                    return isSourceIncluded(rootSourceSection.getSource());
+                }
+                return true;
             }
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                if (sourceSection == null) {
+                    return false;
+                }
                 return isSourceIncluded(sourceSection.getSource());
             }
 
@@ -642,11 +978,14 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
-                if (rootSourceSection == null) {
-                    return true;
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
                 }
-                return isSourceIncluded(rootSourceSection.getSource());
+                if (RootNodeBits.isSameSource(rootNodeBits) && rootSourceSection != null) {
+                    return isSourceIncluded(rootSourceSection.getSource());
+                }
+                return true;
             }
 
             @Override
@@ -669,6 +1008,9 @@ public final class SourceSectionFilter {
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                if (sourceSection == null) {
+                    return false;
+                }
                 return isSourceIncluded(sourceSection.getSource());
             }
 
@@ -720,7 +1062,7 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection) {
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
                 for (Class<?> tag : tags) {
                     if (providedTags.contains(tag)) {
                         return true;
@@ -754,6 +1096,9 @@ public final class SourceSectionFilter {
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection s) {
+                if (s == null) {
+                    return false;
+                }
                 for (SourceSection compareSection : sourceSections) {
                     if (s.equals(compareSection)) {
                         return true;
@@ -763,19 +1108,46 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection) {
-                if (rootSection == null) {
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
+                }
+                if (rootSourceSection == null) {
                     return true;
                 }
-                Source rootSource = rootSection.getSource();
-                if (rootSource != null) {
+                boolean rootIncluded = canContainSource(rootSourceSection, rootNodeBits);
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootIncluded) {
+                    int rootStart = rootSourceSection.getCharIndex();
+                    int rootEnd = rootSourceSection.getCharEndIndex();
+                    for (SourceSection compareSection : sourceSections) {
+                        int compareStart = compareSection.getCharIndex();
+                        int compareEnd = compareSection.getCharEndIndex();
+                        if (compareStart >= rootStart && compareEnd <= rootEnd) {
+                            return true;
+                        }
+                    }
+                    /*
+                     * If the source section is not contained within the root and the source
+                     * sections are hierarchical the source section cannot be contained in this root
+                     * node.
+                     */
+                    return false;
+                }
+                return rootIncluded;
+            }
+
+            private boolean canContainSource(SourceSection rootSourceSection, int rootNodeBits) {
+                if (RootNodeBits.isSameSource(rootNodeBits)) {
+                    Source rootSource = rootSourceSection.getSource();
                     for (SourceSection compareSection : sourceSections) {
                         if (rootSource.equals(compareSection.getSource())) {
                             return true;
                         }
                     }
+                    return false;
+                } else {
+                    return true;
                 }
-                return false;
             }
 
             @Override
@@ -808,11 +1180,10 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection) {
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
                 if (rootSection == null) {
                     return false;
                 }
-
                 for (SourceSection compareSection : sourceSections) {
                     if (rootSection.equals(compareSection)) {
                         return true;
@@ -842,16 +1213,23 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
-                if (rootSourceSection == null) {
-                    return true;
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
                 }
-                return isIncluded(null, null, rootSourceSection);
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootSourceSection != null) {
+                    return IndexIn.isIndexIn(rootSourceSection, ranges);
+                }
+                return true;
             }
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
-                if (!sourceSection.isAvailable()) {
+                return isIndexIn(sourceSection, ranges);
+            }
+
+            private static boolean isIndexIn(SourceSection sourceSection, IndexRange[] ranges) {
+                if (sourceSection == null || !sourceSection.isAvailable()) {
                     return false;
                 }
                 int otherStart = sourceSection.getCharIndex();
@@ -887,19 +1265,19 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection) {
-                if (rootSection == null) {
-                    return true;
-                }
-                if (!rootSection.isAvailable()) {
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
                     return false;
                 }
-                return LineIn.isLineIn(rootSection, ranges);
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootSection != null) {
+                    return LineIn.isLineIn(rootSection, ranges);
+                }
+                return true;
             }
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
-                if (!sourceSection.isAvailable()) {
+                if (sourceSection == null || !sourceSection.isAvailable()) {
                     return false;
                 }
                 int otherStart = sourceSection.getStartLine();
@@ -934,18 +1312,21 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection) {
-                if (rootSection == null) {
-                    return true;
-                }
-                if (!rootSection.isAvailable()) {
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
                     return false;
                 }
-                return LineIn.isLineIn(rootSection, ranges);
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootSection != null) {
+                    return LineIn.isLineIn(rootSection, ranges);
+                }
+                return true;
             }
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                if (sourceSection == null || !sourceSection.isAvailable()) {
+                    return false;
+                }
                 int otherStart = sourceSection.getStartLine();
                 int otherEnd;
                 if (sourceSection.getSource() == null) {
@@ -984,14 +1365,14 @@ public final class SourceSectionFilter {
             }
 
             @Override
-            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSourceSection) {
-                if (rootSourceSection == null) {
-                    return true;
-                }
-                if (!rootSourceSection.isAvailable()) {
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
                     return false;
                 }
-                return isIncluded(null, null, rootSourceSection);
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootSection != null) {
+                    return LineIn.isLineIn(rootSection, ranges);
+                }
+                return true;
             }
 
             @Override
@@ -1000,7 +1381,7 @@ public final class SourceSectionFilter {
             }
 
             static boolean isLineIn(SourceSection sourceSection, IndexRange[] ranges) {
-                if (!sourceSection.isAvailable()) {
+                if (sourceSection == null || !sourceSection.isAvailable()) {
                     return false;
                 }
                 int otherStart = sourceSection.getStartLine();
@@ -1032,11 +1413,200 @@ public final class SourceSectionFilter {
             }
         }
 
+        private static final class ColumnStartsIn extends EventFilterExpression {
+
+            private final IndexRange[] ranges;
+
+            ColumnStartsIn(IndexRange[] ranges) {
+                this.ranges = ranges;
+            }
+
+            @Override
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
+                }
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootSection != null &&
+                                rootSection.getStartLine() == rootSection.getEndLine()) {
+                    return ColumnIn.isColumnIn(rootSection, ranges);
+                }
+                return true;
+            }
+
+            @Override
+            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                if (!sourceSection.isAvailable()) {
+                    return false;
+                }
+                int otherStart = sourceSection.getStartColumn();
+                for (IndexRange indexRange : ranges) {
+                    if (indexRange.contains(otherStart, otherStart)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @Override
+            protected int getOrder() {
+                return 12;
+            }
+
+            @Override
+            public String toString() {
+                StringBuilder builder = new StringBuilder("(column-starts-between ");
+                appendRanges(builder, ranges);
+                builder.append(")");
+                return builder.toString();
+            }
+        }
+
+        private static final class ColumnEndsIn extends EventFilterExpression {
+
+            private final IndexRange[] ranges;
+
+            ColumnEndsIn(IndexRange[] ranges) {
+                this.ranges = ranges;
+            }
+
+            @Override
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
+                }
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootSection != null &&
+                                rootSection.getStartLine() == rootSection.getEndLine()) {
+                    return ColumnIn.isColumnIn(rootSection, ranges);
+                }
+                return true;
+            }
+
+            @Override
+            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                int otherStart = sourceSection.getStartColumn();
+                int otherEnd;
+                if (sourceSection.getSource() == null) {
+                    otherEnd = otherStart;
+                } else {
+                    otherEnd = sourceSection.getEndColumn();
+                }
+                for (IndexRange indexRange : ranges) {
+                    if (indexRange.contains(otherEnd, otherEnd)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @Override
+            protected int getOrder() {
+                return 12;
+            }
+
+            @Override
+            public String toString() {
+                StringBuilder builder = new StringBuilder("(column-ends-between ");
+                appendRanges(builder, ranges);
+                builder.append(")");
+                return builder.toString();
+            }
+        }
+
+        private static final class ColumnIn extends EventFilterExpression {
+
+            private final IndexRange[] ranges;
+
+            ColumnIn(IndexRange[] ranges) {
+                this.ranges = ranges;
+            }
+
+            @Override
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
+                if (RootNodeBits.isNoSourceSection(rootNodeBits)) {
+                    return false;
+                }
+                if (RootNodeBits.isSourceSectionsHierachical(rootNodeBits) && rootSection != null &&
+                                rootSection.getStartLine() == rootSection.getEndLine()) {
+                    return isColumnIn(rootSection, ranges);
+                }
+                return true;
+            }
+
+            @Override
+            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection sourceSection) {
+                return isColumnIn(sourceSection, ranges);
+            }
+
+            static boolean isColumnIn(SourceSection sourceSection, IndexRange[] ranges) {
+                if (!sourceSection.isAvailable()) {
+                    return false;
+                }
+                int otherStart = sourceSection.getStartColumn();
+                int otherEnd;
+                if (sourceSection.getSource() == null) {
+                    otherEnd = otherStart;
+                } else {
+                    otherEnd = sourceSection.getEndColumn();
+                }
+                for (IndexRange indexRange : ranges) {
+                    if (indexRange.contains(otherStart, otherEnd)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            @Override
+            protected int getOrder() {
+                return 12;
+            }
+
+            @Override
+            public String toString() {
+                StringBuilder builder = new StringBuilder("(column-between ");
+                appendRanges(builder, ranges);
+                builder.append(")");
+                return builder.toString();
+            }
+        }
+
+        private static final class IgnoreInternal extends EventFilterExpression {
+
+            IgnoreInternal() {
+            }
+
+            @Override
+            boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection s) {
+                return s == null || !s.getSource().isInternal();
+            }
+
+            @Override
+            boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
+                // assert that the RootNode is internal when it's Source is internal
+                assert rootNode == null ||
+                                rootSection == null ||
+                                !rootSection.getSource().isInternal() ||
+                                rootSection.getSource().isInternal() && rootNode.isInternal() : "The root's source is internal, but the root node is not. Root node = " + rootNode.getClass();
+                return rootNode == null || !rootNode.isInternal();
+            }
+
+            @Override
+            protected int getOrder() {
+                return 1;
+            }
+
+            @Override
+            public String toString() {
+                return "ignore internal";
+            }
+
+        }
+
     }
 
     private static final class Not extends EventFilterExpression {
 
-        private final EventFilterExpression delegate;
+        final EventFilterExpression delegate;
 
         Not(EventFilterExpression delegate) {
             this.delegate = delegate;
@@ -1058,7 +1628,7 @@ public final class SourceSectionFilter {
         }
 
         @Override
-        boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection) {
+        boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
             return true;
         }
 
