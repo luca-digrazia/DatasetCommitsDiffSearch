@@ -44,7 +44,7 @@ import com.oracle.truffle.wasm.test.WasmTestToolkit;
 public class WasmCompilationTest extends WasmTest {
     @Override
     @Test
-    public void runTests() throws InterruptedException {
+    public void runTests() {
         super.runTests();
     }
 
@@ -59,6 +59,7 @@ public class WasmCompilationTest extends WasmTest {
             for (int i = 0; i != 1_000_000; ++i) {
                 function.execute();
             }
+            Thread.sleep(1000000);
             element.data.validator.accept(function.execute());
         } catch (IOException | InterruptedException e) {
             Assert.fail(String.format("WasmInterpretationTest failed for program: %s", element.program));

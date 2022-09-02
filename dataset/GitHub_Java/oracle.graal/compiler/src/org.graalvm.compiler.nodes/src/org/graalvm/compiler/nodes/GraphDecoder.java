@@ -109,6 +109,9 @@ public class GraphDecoder {
         /** All merges created during loop explosion. */
         public final EconomicSet<Node> loopExplosionMerges;
 
+        /** Known values that were written to the frames. */
+        public final EconomicMap<Integer, ValueNode> frameSlotStates;
+
         /**
          * The start of explosion, and the merge point for when irreducible loops are detected. Only
          * used when {@link MethodScope#loopExplosion} is {@link LoopExplosionKind#MERGE_EXPLODE}.
@@ -121,6 +124,7 @@ public class GraphDecoder {
             this.encodedGraph = encodedGraph;
             this.loopExplosion = loopExplosion;
             this.returnAndUnwindNodes = new ArrayList<>(2);
+            this.frameSlotStates = EconomicMap.create();
 
             if (encodedGraph != null) {
                 reader = UnsafeArrayTypeReader.create(encodedGraph.getEncoding(), encodedGraph.getStartOffset(), architecture.supportsUnalignedMemoryAccess());
@@ -319,7 +323,7 @@ public class GraphDecoder {
         public static final NodeClass<ProxyPlaceholder> TYPE = NodeClass.create(ProxyPlaceholder.class);
 
         @Input ValueNode value;
-        @Input(InputType.Association) Node proxyPoint;
+        @Input(InputType.Unchecked) Node proxyPoint;
 
         public ProxyPlaceholder(ValueNode value, MergeNode proxyPoint) {
             super(TYPE, value.stamp(NodeView.DEFAULT));
@@ -582,7 +586,6 @@ public class GraphDecoder {
         } else if (node instanceof Invoke) {
             InvokeData invokeData = readInvokeData(methodScope, nodeOrderId, (Invoke) node);
             resultScope = handleInvoke(methodScope, loopScope, invokeData);
-
         } else if (node instanceof ReturnNode || node instanceof UnwindNode) {
             methodScope.returnAndUnwindNodes.add((ControlSinkNode) node);
         } else {
@@ -1336,11 +1339,6 @@ public class GraphDecoder {
      * @param methodScope The current method.
      */
     protected void cleanupGraph(MethodScope methodScope) {
-        for (MergeNode merge : graph.getNodes(MergeNode.TYPE)) {
-            for (ProxyPlaceholder placeholder : merge.usages().filter(ProxyPlaceholder.class).snapshot()){
-                placeholder.replaceAndDelete(placeholder.value);
-            }
-        }
         assert verifyEdges();
     }
 

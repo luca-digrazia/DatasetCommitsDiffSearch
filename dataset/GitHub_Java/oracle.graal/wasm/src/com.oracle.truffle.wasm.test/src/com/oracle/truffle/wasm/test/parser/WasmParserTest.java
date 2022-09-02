@@ -44,7 +44,7 @@ public class WasmParserTest extends WasmTest {
 
     @Override
     @Test
-    public void runTests() throws InterruptedException {
+    public void runTests() {
         super.runTests();
     }
 
