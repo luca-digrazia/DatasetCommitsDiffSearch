@@ -42,7 +42,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
-import org.graalvm.compiler.truffle.runtime.collection.TraversingBlockingQueue;
+import org.graalvm.compiler.truffle.runtime.collection.BTreeQueue;
+import org.graalvm.compiler.truffle.runtime.collection.DelegatingBlockingQueue;
 
 /**
  * The compilation queue accepts compilation requests, and schedules compilations.
@@ -130,7 +131,11 @@ public class BackgroundCompileQueue {
             long compilerIdleDelay = runtime.getCompilerIdleDelay(callTarget);
             long keepAliveTime = compilerIdleDelay >= 0 ? compilerIdleDelay : 0;
 
-            initQueue(callTarget);
+            if (callTarget.getOptionValue(PolyglotCompilerOptions.ConfigurableCompilationQueue)) {
+                this.compilationQueue = new DelegatingBlockingQueue<>(new BTreeQueue<>());
+            } else {
+                this.compilationQueue = new IdlingPriorityBlockingQueue<>();
+            }
             ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(threads, threads,
                             keepAliveTime, TimeUnit.MILLISECONDS,
                             compilationQueue, factory) {
@@ -149,14 +154,6 @@ public class BackgroundCompileQueue {
             }
 
             return compilationExecutorService = threadPoolExecutor;
-        }
-    }
-
-    private void initQueue(OptimizedCallTarget callTarget) {
-        if (callTarget.getOptionValue(PolyglotCompilerOptions.ConfigurableCompilationQueue)) {
-            this.compilationQueue = new TraversingBlockingQueue<>();
-        } else {
-            this.compilationQueue = new IdlingPriorityBlockingQueue<>();
         }
     }
 
