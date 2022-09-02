@@ -614,7 +614,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         if (getLocalFlags().isLocale()) {
             bailOut("locale-specific case folding is not supported");
         }
-        CaseFoldTable.CaseFoldingAlgorithm caseFolding = getLocalFlags().isUnicode(mode) ? CaseFoldTable.CaseFoldingAlgorithm.PythonUnicode : CaseFoldTable.CaseFoldingAlgorithm.PythonAscii;
+        CaseFoldTable.CaseFoldingAlgorithm caseFolding = getLocalFlags().isUnicode() ? CaseFoldTable.CaseFoldingAlgorithm.PythonUnicode : CaseFoldTable.CaseFoldingAlgorithm.PythonAscii;
         CaseFoldTable.applyCaseFold(curCharClass, charClassCaseFoldTmp, caseFolding);
     }
 
@@ -660,16 +660,18 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
 
     private void parse() {
         PythonFlags startFlags;
+        globalFlags = globalFlags.fixFlags(inSource, mode);
 
         // The pattern can contain inline switches for global flags. However, these inline switches
         // need to be taken into account when processing whatever came before them too. Therefore,
         // we redo the parse if any inline switches changed the set of active global flags.
         do {
             startFlags = globalFlags;
-            disjunction();
-        } while (!globalFlags.equals(startFlags));
 
-        globalFlags = globalFlags.fixFlags(inSource, mode);
+            disjunction();
+
+            globalFlags = globalFlags.fixFlags(inSource, mode);
+        } while (!globalFlags.equals(startFlags));
 
         if (!atEnd()) {
             assert curChar() == ')';
@@ -847,7 +849,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                 emitSnippet("$");
                 return true;
             case 'b':
-                if (getLocalFlags().isUnicode(mode)) {
+                if (getLocalFlags().isUnicode()) {
                     emitSnippet(UNICODE_WORD_BOUNDARY_SNIPPET);
                 } else if (getLocalFlags().isLocale()) {
                     bailOut("locale-specific word boundary assertions not supported");
@@ -856,7 +858,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                 }
                 return true;
             case 'B':
-                if (getLocalFlags().isUnicode(mode)) {
+                if (getLocalFlags().isUnicode()) {
                     emitSnippet(UNICODE_WORD_NON_BOUNDARY_SNIPPET);
                 } else if (getLocalFlags().isLocale()) {
                     bailOut("locale-specific word boundary assertions not supported");
@@ -895,7 +897,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             case 'W':
                 char className = (char) curChar();
                 advance();
-                if (getLocalFlags().isUnicode(mode)) {
+                if (getLocalFlags().isUnicode()) {
                     if (inCharClass) {
                         if (UNICODE_CHAR_CLASS_REPLACEMENTS.containsKey(className)) {
                             emitSnippet(UNICODE_CHAR_CLASS_REPLACEMENTS.get(className));
