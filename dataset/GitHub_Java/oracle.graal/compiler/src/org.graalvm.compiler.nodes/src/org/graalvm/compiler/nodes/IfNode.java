@@ -471,14 +471,14 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     private static Node getParentSwitchNode(Node node, ValueNode switchValue) {
-        if (node.predecessor() instanceof BeginNode && node.predecessor().hasNoUsages()) {
+        if (node.predecessor() instanceof AbstractBeginNode) {
             if (node.predecessor().predecessor() instanceof IfNode) {
                 IfNode potentialResult = (IfNode) node.predecessor().predecessor();
                 if (maybeIsInSwitch(potentialResult.condition()) && sameSwitchValue(potentialResult.condition(), switchValue)) {
                     return potentialResult;
                 }
             }
-        } else if (node.predecessor() instanceof FixedGuardNode && node.predecessor().hasNoUsages()) {
+        } else if (node.predecessor() instanceof FixedGuardNode) {
             FixedGuardNode potentialResult = (FixedGuardNode) node.predecessor();
             if (maybeIsInSwitch(potentialResult.condition()) && sameSwitchValue(potentialResult.condition(), switchValue)) {
                 return potentialResult;
@@ -501,11 +501,9 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     private static Node getChildSwitchNode(Node node, ValueNode switchValue) {
         Node potentialResult = null;
         if (node instanceof IfNode) {
-            if (((IfNode) node).falseSuccessor() instanceof BeginNode && ((IfNode) node).falseSuccessor().hasNoUsages()) {
-                potentialResult = ((IfNode) node).falseSuccessor().next();
-            }
+            potentialResult = ((IfNode) node).falseSuccessor().next();
 
-        } else if (node instanceof FixedGuardNode && node.hasNoUsages()) {
+        } else if (node instanceof FixedGuardNode) {
             potentialResult = ((FixedGuardNode) node).next();
         }
         if (potentialResult != null && isInSwitch(potentialResult, switchValue)) {
@@ -517,7 +515,10 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     private static boolean updateSwitchData(Node node, List<KeyData> keyData, List<AbstractBeginNode> successors, double[] cumulative, List<AbstractBeginNode> duplicates) {
         if (node instanceof IfNode) {
             IfNode ifnode = (IfNode) node;
-            long key = ((IntegerEqualsNode) ifnode.condition()).getY().asJavaConstant().asInt();
+            long key = ((IntegerEqualsNode) ifnode.condition()).getY().asJavaConstant().asLong();
+            if (!isValidKey(key)) {
+                return false;
+            }
             if (isDuplicateKey((int) key, keyData)) {
                 // Unreachable: will be manually killed.
                 duplicates.add(ifnode.trueSuccessor());
@@ -532,7 +533,10 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         } else if (node instanceof FixedGuardNode) {
             FixedGuardNode guardNode = (FixedGuardNode) node;
             double keyProbability = 0.0d;
-            long key = ((IntegerEqualsNode) guardNode.condition()).getY().asJavaConstant().asInt();
+            long key = ((IntegerEqualsNode) guardNode.condition()).getY().asJavaConstant().asLong();
+            if (!isValidKey(key)) {
+                return false;
+            }
             if (isDuplicateKey((int) key, keyData)) {
                 // Unreachable.
                 return true;
@@ -567,6 +571,13 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             FixedGuardNode guardNode = (FixedGuardNode) node;
             guardNode.setNext(null);
         }
+    }
+
+    private static boolean isValidKey(long key) {
+        if (key != (int) key) {
+            return false;
+        }
+        return true;
     }
 
     private static boolean isDuplicateKey(int key, List<KeyData> keyData) {
@@ -660,7 +671,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             }
             if (lowestSwitchNode instanceof FixedGuardNode) {
                 FixedNode defaultNode = ((FixedGuardNode) lowestSwitchNode).next();
-                lowestSwitchNode.clearSuccessors();
                 successors.add(BeginNode.begin(defaultNode));
             }
 
@@ -701,8 +711,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             for (AbstractBeginNode duplicate : unreachable) {
                 GraphUtil.killCFG(duplicate);
             }
-            tool.addToWorkList(toInsert.predecessor());
-            tool.addToWorkList(toInsert.defaultSuccessor());
+
             tool.addToWorkList(toInsert);
             return true;
         }
