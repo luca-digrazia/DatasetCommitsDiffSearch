@@ -110,7 +110,7 @@ public final class LLVMPhiManager {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     public static ArrayList<Phi>[] getPhisForSuccessors(TerminatingInstruction terminatingInstruction, List<Phi> phis) {
         assert phis != null;
 
