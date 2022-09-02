@@ -22,14 +22,12 @@
  */
 package com.oracle.truffle.espresso.vm;
 
-import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_FRAMES;
-import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_METHOD_KEY;
-import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_1;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_2;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_4;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_6;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_8;
+import static com.oracle.truffle.espresso.substitutions.Target_java_lang_Class.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS;
 
 import java.io.File;
 import java.lang.reflect.Array;
@@ -95,6 +93,7 @@ import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Class;
 import com.oracle.truffle.nfi.types.NativeSimpleType;
 
 /**
@@ -517,9 +516,9 @@ public final class VM extends NativeEnv implements ContextAccess {
                 return null;
             }
         });
-        //StaticObject backtrace = getMeta().Object.allocateInstance();
-        ((StaticObjectImpl) self).setHiddenField(HIDDEN_FRAMES, frames.toArray(new FrameInstance[0]));
-        getMeta().Throwable_backtrace.set(self, self);
+        StaticObject backtrace = getMeta().Object.allocateInstance();
+        ((StaticObjectImpl) backtrace).setHiddenField("$$frames", frames.toArray(new FrameInstance[0]));
+        getMeta().Throwable_backtrace.set(self, backtrace);
         return self;
     }
 
@@ -530,7 +529,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         if (StaticObject.isNull(backtrace)) {
             return 0;
         }
-        return ((FrameInstance[]) ((StaticObjectImpl) backtrace).getHiddenField(HIDDEN_FRAMES)).length;
+        return ((FrameInstance[]) ((StaticObjectImpl) backtrace).getHiddenField("$$frames")).length;
     }
 
     @VmImpl
@@ -538,7 +537,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     public @Host(StackTraceElement.class) StaticObject JVM_GetStackTraceElement(@Host(Throwable.class) StaticObject self, int index) {
         StaticObject ste = getMeta().StackTraceElement.allocateInstance();
         StaticObject backtrace = (StaticObject) getMeta().Throwable_backtrace.get(self);
-        FrameInstance[] frames = ((FrameInstance[]) ((StaticObjectImpl) backtrace).getHiddenField(HIDDEN_FRAMES));
+        FrameInstance[] frames = ((FrameInstance[]) ((StaticObjectImpl) backtrace).getHiddenField("$$frames"));
         FrameInstance frame = frames[index];
 
         EspressoRootNode rootNode = (EspressoRootNode) ((RootCallTarget) frame.getCallTarget()).getRootNode();
@@ -852,7 +851,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
-            target = (Method) ((StaticObjectImpl) curMethod).getHiddenField(HIDDEN_METHOD_KEY);
+            target = (Method) ((StaticObjectImpl) curMethod).getHiddenField(Target_java_lang_Class.HIDDEN_METHOD_KEY);
             if (target == null) {
                 curMethod = (StaticObject) meta.Method_root.get(curMethod);
             }
@@ -872,10 +871,10 @@ public final class VM extends NativeEnv implements ContextAccess {
 
         Method method = Method.getHostReflectiveMethodRoot(guestReflectionMethod);
         MethodParametersAttribute methodParameters = (MethodParametersAttribute) method.getAttribute(Name.MethodParameters);
-        // assert methodParameters != null;
+        assert methodParameters != null;
 
         if (methodParameters == null) {
-            return StaticObject.NULL;
+            return new StaticObjectArray(getMeta().Parameter, new Parameter[0]);
         }
         // Verify first.
         int cpLength = method.getConstantPool().length();

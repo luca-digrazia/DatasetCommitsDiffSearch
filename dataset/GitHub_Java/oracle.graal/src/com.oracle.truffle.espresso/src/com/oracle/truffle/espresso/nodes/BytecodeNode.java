@@ -295,7 +295,7 @@ import com.oracle.truffle.object.DebugCounter;
  */
 public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
-    public static final boolean DEBUG_GENERAL = false;
+    public static final boolean DEBUG_GENERAL = true;
 
     public static final DebugCounter bcCount = DebugCounter.create("Bytecodes executed");
 
@@ -349,8 +349,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
         int n = 0;
         if (hasReceiver) {
-            assert frameArguments[0] != StaticObject.NULL: "null receiver in init arguments !";
-            setLocalObject(frame, n, (StaticObjectImpl) frameArguments[0]);
+            setLocalObject(frame, n, (StaticObject) frameArguments[0]);
             n += JavaKind.Object.getSlotCount();
         }
         for (int i = 0; i < argCount; ++i) {
@@ -500,6 +499,10 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         int top = 0;
 
         initArguments(frame);
+
+        if (this.toString().contains("getGenericSignature")) {
+            int dood = 1;
+        }
 
         loop: while (true) {
             int curOpcode;
@@ -1080,8 +1083,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                         case ATHROW:
                             CompilerDirectives.transferToInterpreter();
                             if (DEBUG_GENERAL) {
-                                reportThrow(curBCI, getMethod());
-                                reportError(new EspressoException(nullCheck(peekObject(frame, top - 1))));
+                                System.err.println("Throwing at " + curBCI + " in " + getMethod());
                             }
                             throw new EspressoException(nullCheck(peekObject(frame, top - 1)));
 
@@ -1124,13 +1126,16 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                     }
                     // @formatter:on
                     // Checkstyle: resume
-                } catch (EspressoException e) {
-                    throw e;
                 } catch (RuntimeException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    if (DEBUG_GENERAL) {
-                        reportVMError(e, curBCI, this);
+                    if (e instanceof EspressoException) {
+                        throw e;
                     }
+                    if (DEBUG_GENERAL) {
+                        System.err.println("Internal error (caught in invocation): " + this +
+                                        "\nBCI:" + curBCI);
+                        e.printStackTrace();
+                    }
+                    CompilerDirectives.transferToInterpreter();
                     throw getMeta().throwEx(VirtualMachineError.class);
                 }
             } catch (EspressoException e) {
@@ -1212,23 +1217,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
             }
         }
         return newTop;
-    }
-
-    @TruffleBoundary
-    static private void reportThrow(int curBCI, Method method) {
-        System.err.println("Throwing at " + curBCI + " in " + method);
-    }
-
-    @TruffleBoundary
-    static private void reportVMError(RuntimeException e, int curBCI, BytecodeNode thisNode) {
-        System.err.println("Internal error (caught in invocation): " + thisNode +
-                        "\n\tBCI:" + curBCI);
-        e.printStackTrace();
-    }
-
-    @TruffleBoundary
-    static private void reportError(EspressoException e) {
-        System.err.println("\tError thrown: " + e.getException().getKlass().toString() + ": " + e.getMessage());
     }
 
     private JavaKind peekKind(VirtualFrame frame, int slot) {
@@ -1551,7 +1539,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
         StaticObjectImpl unboxedAppendix = appendix.get(0);
 
-        return injectAndCall(frame, top, curBCI, new InvokeDynamicCallSiteNode(memberName, unboxedAppendix, parsedInvokeSignature, meta), opCode);
+        return injectAndCall(frame, top, curBCI, new InvokeDynamicCallSiteNode(memberName, unboxedAppendix, parsedInvokeSignature), opCode);
     }
 
     public static StaticObject signatureToMethodType(Symbol<Type>[] signature, Klass declaringKlass, Meta meta) {
