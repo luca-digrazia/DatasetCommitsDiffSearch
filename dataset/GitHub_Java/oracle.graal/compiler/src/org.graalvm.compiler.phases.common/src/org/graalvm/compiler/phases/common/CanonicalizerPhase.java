@@ -24,8 +24,13 @@
  */
 package org.graalvm.compiler.phases.common;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.Constant;
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.CFG_SIMPLIFICATION;
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.FINAL_CANONICALIZATION;
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.GVN;
+import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.READ_CANONICALIZATION;
+
+import java.util.EnumSet;
+
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
@@ -62,12 +67,8 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.Phase;
 
-import java.util.EnumSet;
-
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.CFG_SIMPLIFICATION;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.FINAL_CANONICALIZATION;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.GVN;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.READ_CANONICALIZATION;
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.Constant;
 
 public class CanonicalizerPhase extends BasePhase<CoreProviders> {
 
@@ -95,6 +96,7 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
     private static final CounterKey COUNTER_INFER_STAMP_CALLED = DebugContext.counter("InferStampCalled");
     private static final CounterKey COUNTER_STAMP_CHANGED = DebugContext.counter("StampChanged");
     private static final CounterKey COUNTER_SIMPLIFICATION_CONSIDERED_NODES = DebugContext.counter("SimplificationConsideredNodes");
+    private static final CounterKey COUNTER_CUSTOM_SIMPLIFICATION_CONSIDERED_NODES = DebugContext.counter("CustomSimplificationConsideredNodes");
     private static final CounterKey COUNTER_GLOBAL_VALUE_NUMBERING_HITS = DebugContext.counter("GlobalValueNumberingHits");
 
     private final EnumSet<CanonicalizerFeature> features;
@@ -415,19 +417,27 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
                     }
                 }
 
-                if (features.contains(CFG_SIMPLIFICATION) && nodeClass.isSimplifiable()) {
-                    debug.log(DebugContext.VERBOSE_LEVEL, "Canonicalizer: simplifying %s", node);
-                    COUNTER_SIMPLIFICATION_CONSIDERED_NODES.increment(debug);
+                if (features.contains(CFG_SIMPLIFICATION)) {
                     if (customSimplification != null) {
+                        debug.log(DebugContext.VERBOSE_LEVEL, "Canonicalizer: customSimplification simplifying %s", node);
+                        COUNTER_CUSTOM_SIMPLIFICATION_CONSIDERED_NODES.increment(debug);
+
                         customSimplification.simplify(node, tool);
+                        if (node.isDeleted()) {
+                            debug.log("Canonicalizer: customSimplification simplified %s", node);
+                            return true;
+                        }
                     }
-                    if (node.isAlive()) {
+                    if (nodeClass.isSimplifiable()) {
+                        debug.log(DebugContext.VERBOSE_LEVEL, "Canonicalizer: simplifying %s", node);
+                        COUNTER_SIMPLIFICATION_CONSIDERED_NODES.increment(debug);
+
                         node.simplify(tool);
                         if (node.isDeleted()) {
                             debug.log("Canonicalizer: simplified %s", node);
+                            return true;
                         }
                     }
-                    return node.isDeleted();
                 }
                 return false;
             } catch (Throwable throwable) {
@@ -584,11 +594,6 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
             @Override
             public Integer smallestCompareWidth() {
                 return context.getLowerer().smallestCompareWidth();
-            }
-
-            @Override
-            public boolean supportsRounding() {
-                return context.getLowerer().supportsRounding();
             }
 
             @Override
