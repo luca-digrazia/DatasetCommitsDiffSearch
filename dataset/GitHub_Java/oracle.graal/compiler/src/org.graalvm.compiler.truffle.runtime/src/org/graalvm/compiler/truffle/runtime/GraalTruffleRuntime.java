@@ -756,6 +756,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     public void finishCompilation(OptimizedCallTarget optimizedCallTarget, CancellableCompileTask task, boolean mayBeAsynchronous) {
+        getListener().onCompilationQueued(optimizedCallTarget);
 
         if (!mayBeAsynchronous) {
             try {
@@ -1061,9 +1062,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     /**
      * Gets a closeable that will be used in a try-with-resources statement surrounding the run-loop
-     * of a Truffle compiler thread. In conjunction with
-     * {@link #getCompilerIdleDelay(OptimizedCallTarget)}, this can be used to release resources
-     * held by idle Truffle compiler threads.
+     * of a Truffle compiler thread. In conjunction with {@link #getCompilerIdleDelay()}, this can
+     * be used to release resources held by idle Truffle compiler threads.
      *
      * If a non-null value is returned, its {@link AutoCloseable#close()} must not throw an
      * exception.
@@ -1074,10 +1074,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     /**
      * Gets the time in milliseconds an idle Truffle compiler thread will wait for new tasks before
-     * terminating. A value of {@code <= 0} means that Truffle compiler threads block indefinitely
+     * terminating. A value of {@code < 0} means that Truffle compiler threads block indefinitely
      * waiting for a task and thus never terminate.
      */
-    protected long getCompilerIdleDelay(@SuppressWarnings("unused") OptimizedCallTarget callTarget) {
-        return 0;
+    protected long getCompilerIdleDelay() {
+        return -1;
     }
 }
