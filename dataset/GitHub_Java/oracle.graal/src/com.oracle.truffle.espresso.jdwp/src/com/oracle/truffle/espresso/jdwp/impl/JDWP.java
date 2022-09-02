@@ -89,14 +89,18 @@ final class JDWP {
                     // we know it's a class type in the format Lsomething;
                     slashName = signature.substring(1, signature.length() - 1);
                 }
+                try {
+                    KlassRef[] loaded = context.findLoadedClass(slashName);
 
-                KlassRef[] loaded = context.findLoadedClass(slashName);
-
-                reply.writeInt(loaded.length);
-                for (KlassRef klass : loaded) {
-                    reply.writeByte(TypeTag.getKind(klass));
-                    reply.writeLong(context.getIds().getIdAsLong(klass));
-                    reply.writeInt(klass.getStatus());
+                    reply.writeInt(loaded.length);
+                    for (KlassRef klass : loaded) {
+                        reply.writeByte(TypeTag.getKind(klass));
+                        reply.writeLong(context.getIds().getIdAsLong(klass));
+                        reply.writeInt(klass.getStatus());
+                    }
+                } catch (IllegalStateException e) {
+                    JDWPLogger.log("Invalid class name in CLASSES_BY_SIGNATURE: %s", JDWPLogger.LogLevel.ALL, slashName);
+                    reply.writeInt(0);
                 }
                 return new CommandResult(reply);
             }
@@ -2005,7 +2009,7 @@ final class JDWP {
 
                 CallFrame[] frames = suspendedInfo.getStackFrames();
 
-                if (length == -1 || length > frames.length) {
+                if (length == -1) {
                     length = frames.length;
                 }
                 reply.writeInt(length);
