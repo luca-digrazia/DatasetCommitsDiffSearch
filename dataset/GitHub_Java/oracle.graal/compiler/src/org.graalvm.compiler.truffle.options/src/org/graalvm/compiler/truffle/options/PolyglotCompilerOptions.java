@@ -258,7 +258,7 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Minimum number of invocations or loop iterations needed to compile a guest language root.",
                     category = OptionCategory.EXPERT)
-    public static final OptionKey<Integer> CompilationThreshold = new OptionKey<>(10000);
+    public static final OptionKey<Integer> CompilationThreshold = new OptionKey<>(1000);
 
     @Option(help = "Minimum number of calls before a call target is compiled", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> MinInvokeThreshold = new OptionKey<>(3);
@@ -288,7 +288,7 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Minimum number of invocations or loop iterations needed to compile a guest language root in low tier mode.",
             category = OptionCategory.EXPERT)
-    public static final OptionKey<Integer> FirstTierCompilationThreshold = new OptionKey<>(400);
+    public static final OptionKey<Integer> FirstTierCompilationThreshold = new OptionKey<>(100);
 
     @Option(help = "Minimum number of calls before a call target is compiled in the first tier.", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> FirstTierMinInvokeThreshold = new OptionKey<>(1);
@@ -385,6 +385,9 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Maximum depth for recursive inlining.", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> InliningRecursionDepth = new OptionKey<>(2);
+
+    @Option(help = "Perform a set of optimizations on each explored call target during inlining.", category = OptionCategory.INTERNAL)
+    public static final OptionKey<Boolean> InliningTruffleTierOnExpand = new OptionKey<>(true);
 
     // Splitting
 
@@ -504,10 +507,10 @@ public final class PolyglotCompilerOptions {
     public static final OptionKey<String> InliningPolicy = new OptionKey<>("");
 
     @Option(help = "The base expansion budget for language-agnostic inlining.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Integer> InliningExpansionBudget = new OptionKey<>(30_000);
+    public static final OptionKey<Integer> InliningExpansionBudget = new OptionKey<>(12_000);
 
     @Option(help = "The base inlining budget for language-agnostic inlining", category = OptionCategory.EXPERT)
-    public static final OptionKey<Integer> InliningInliningBudget = new OptionKey<>(30_000);
+    public static final OptionKey<Integer> InliningInliningBudget = new OptionKey<>(12_000);
 
     // @formatter:on
 
