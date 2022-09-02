@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
@@ -41,23 +42,20 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMBuiltin;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public final class LLVMPThreadThreadIntrinsics {
-
+public class LLVMPThreadThreadIntrinsics {
     @NodeChild(type = LLVMExpressionNode.class, value = "thread")
     @NodeChild(type = LLVMExpressionNode.class, value = "attr")
     @NodeChild(type = LLVMExpressionNode.class, value = "startRoutine")
     @NodeChild(type = LLVMExpressionNode.class, value = "arg")
     public abstract static class LLVMPThreadCreate extends LLVMBuiltin {
-
         @Child LLVMStoreNode store = null;
 
         @Specialization
-        protected int doIntrinsic(LLVMPointer thread, @SuppressWarnings("unused") LLVMPointer attr, LLVMPointer startRoutine, LLVMPointer arg, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        protected int doIntrinsic(VirtualFrame frame, LLVMPointer thread, LLVMPointer attr, LLVMPointer startRoutine, LLVMPointer arg, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
             if (store == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 store = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.I64);
             }
-
             UtilFunctionCall.FunctionCallRunnable init = new UtilFunctionCall.FunctionCallRunnable(startRoutine, arg, ctx, true);
             Thread t = ctx.getEnv().createThread(init);
             store.executeWithTarget(thread, t.getId());
@@ -72,9 +70,8 @@ public final class LLVMPThreadThreadIntrinsics {
 
     @NodeChild(type = LLVMExpressionNode.class, value = "retval")
     public abstract static class LLVMPThreadExit extends LLVMBuiltin {
-
         @Specialization
-        protected int doIntrinsic(Object retval, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        protected int doIntrinsic(VirtualFrame frame, Object retval, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
             UtilAccessCollectionWithBoundary.put(ctx.retValStorage, Thread.currentThread().getId(), retval);
             throw new PThreadExitException();
         }
@@ -83,11 +80,10 @@ public final class LLVMPThreadThreadIntrinsics {
     @NodeChild(type = LLVMExpressionNode.class, value = "th")
     @NodeChild(type = LLVMExpressionNode.class, value = "threadReturn")
     public abstract static class LLVMPThreadJoin extends LLVMBuiltin {
-
         @Child LLVMStoreNode storeNode;
 
         @Specialization
-        protected int doIntrinsic(long th, LLVMPointer threadReturn, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        protected int doIntrinsic(VirtualFrame frame, long th, LLVMPointer threadReturn, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
             if (storeNode == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 storeNode = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.POINTER);
@@ -112,9 +108,8 @@ public final class LLVMPThreadThreadIntrinsics {
     @NodeChild(type = LLVMExpressionNode.class, value = "onceControl")
     @NodeChild(type = LLVMExpressionNode.class, value = "initRoutine")
     public abstract static class LLVMPThreadOnce extends LLVMBuiltin {
-
         @Specialization
-        protected int doIntrinsic(LLVMPointer onceControl, LLVMPointer initRoutine, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        protected int doIntrinsic(VirtualFrame frame, LLVMPointer onceControl, LLVMPointer initRoutine, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
             synchronized (ctx.onceStorage) {
                 if (ctx.onceStorage.contains(onceControl)) {
                     return 0;
@@ -130,17 +125,15 @@ public final class LLVMPThreadThreadIntrinsics {
     @NodeChild(type = LLVMExpressionNode.class, value = "t1")
     @NodeChild(type = LLVMExpressionNode.class, value = "t2")
     public abstract static class LLVMPThreadEqual extends LLVMBuiltin {
-
         @Specialization
-        protected int doIntrinsic(long t1, long t2) {
+        protected int doIntrinsic(VirtualFrame frame, long t1, long t2) {
             return t1 == t2 ? 1 : 0;
         }
     }
 
     public abstract static class LLVMPThreadSelf extends LLVMBuiltin {
-
         @Specialization
-        protected long doIntrinsic() {
+        protected long doIntrinsic(VirtualFrame frame) {
             return Thread.currentThread().getId();
         }
     }

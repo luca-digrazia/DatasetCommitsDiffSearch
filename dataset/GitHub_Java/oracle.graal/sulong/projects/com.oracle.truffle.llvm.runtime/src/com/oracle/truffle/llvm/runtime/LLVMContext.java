@@ -93,13 +93,13 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMContext {
     // the long-key is the thread-id
-    private final ConcurrentMap<Long, Object> threadReturnValueStorage;
-    private final ConcurrentMap<Long, Thread> threadStorage;
+    public final ConcurrentMap<Long, Object> retValStorage;
+    public final ConcurrentMap<Long, Thread> threadStorage;
 
     // list with all created threads for the case that a thread id doest not stay runtime unique
-    private final ArrayList<Thread> createdThreads;
+    public final List<Thread> createdThreads;
 
-    private final ArrayList<LLVMPointer> onceStorage;
+    public final List<LLVMPointer> onceStorage;
 
     public int curKeyVal;
     public final Object keyLockObj;
@@ -235,7 +235,7 @@ public final class LLVMContext {
             tracer = null;
         }
         // pthread storages
-        this.threadReturnValueStorage = new ConcurrentHashMap<>();
+        this.retValStorage = new ConcurrentHashMap<>();
         this.threadStorage = new ConcurrentHashMap<>();
         this.createdThreads = new ArrayList<>();
         this.onceStorage = new ArrayList<>();
@@ -429,16 +429,10 @@ public final class LLVMContext {
 
     void dispose(LLVMMemory memory) {
         // join all created pthread - threads
-        synchronized (createdThreads) {
-            synchronized (threadStorage) {
-                for (Thread createdThread : createdThreads) {
-                    try {
-                        createdThread.join();
-                    } catch (InterruptedException e) {
-                        // ignored
-                    }
-                }
-                createdThreads.clear();
+        for (int i = 0; i < createdThreads.size(); i++) {
+            try {
+                createdThreads.get(i).join();
+            } catch (InterruptedException e) {
             }
         }
 
@@ -797,45 +791,6 @@ public final class LLVMContext {
 
     public synchronized List<LLVMThread> getRunningThreads() {
         return Collections.unmodifiableList(runningThreads);
-    }
-
-    public boolean shouldExecuteOnce(LLVMPointer onceControl) {
-        boolean shouldExecute = true;
-        synchronized (onceStorage) {
-            if (onceStorage.contains(onceControl)) {
-                shouldExecute = false;
-            } else {
-                onceStorage.add(onceControl);
-            }
-        }
-        return shouldExecute;
-    }
-
-    @TruffleBoundary
-    public synchronized Thread createThread(Runnable runnable) {
-        synchronized (createdThreads) {
-            synchronized (threadStorage) {
-                final Thread thread = env.createThread(runnable);
-                createdThreads.add(thread);
-                threadStorage.put(thread.getId(), thread);
-                return thread;
-            }
-        }
-    }
-
-    @TruffleBoundary
-    public Thread getThread(long threadID) {
-        return threadStorage.get(threadID);
-    }
-
-    @TruffleBoundary
-    public void setThreadReturnValue(long threadId, Object value) {
-        threadReturnValueStorage.put(threadId, value);
-    }
-
-    @TruffleBoundary
-    public Object getThreadReturnValue(long threadId) {
-        return threadReturnValueStorage.get(threadId);
     }
 
     public void addDataLayout(DataLayout layout) {

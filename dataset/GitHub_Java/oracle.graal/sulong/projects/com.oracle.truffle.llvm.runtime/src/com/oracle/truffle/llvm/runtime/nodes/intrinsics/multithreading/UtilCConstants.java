@@ -35,8 +35,7 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-public final class UtilCConstants {
-
+public class UtilCConstants {
     private final ConcurrentHashMap<CConstant, Integer> valueMap;
     private final LLVMContext ctx;
 
