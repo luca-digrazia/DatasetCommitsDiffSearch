@@ -51,7 +51,7 @@ import java.util.function.Consumer;
  */
 public final class HeapDump {
     // constants for the Java Profiler Heap Dump Format
-    private static final String MAGIC = "JAVA PROFILE 1.0.1";
+    private static final String MAGIC_WITH_SEGMENTS = "JAVA PROFILE 1.0.1";
     private static final int TAG_STRING = 0x01;
     private static final int TAG_LOAD_CLASS = 0x02;
     private static final int TAG_STACK_FRAME = 0x04;
@@ -150,9 +150,6 @@ public final class HeapDump {
         private int defaultStackTrace;
         private Long timeBase;
         int objectCounter;
-        private int stackFrameCounter;
-        private int stackTraceCounter;
-        private int classCounter;
 
         private Builder(Identifiers ids, OutputStream os) {
             this.whole = new DataOutputStream(os);
@@ -160,7 +157,7 @@ public final class HeapDump {
         }
 
         private void dumpPrologue(Identifiers ids1, final long millis) throws IOException {
-            whole.write(MAGIC.getBytes());
+            whole.write(MAGIC_WITH_SEGMENTS.getBytes());
             whole.write(0); // null terminated string
             whole.writeInt(ids1.sizeOf());
             whole.writeLong(millis);
@@ -230,7 +227,7 @@ public final class HeapDump {
         }
 
         int writeStackFrame(HeapDump thiz, ClassInstance language, String rootName, String sourceFile, int lineNumber) throws IOException {
-            int id = ++stackFrameCounter;
+            int id = ++objectCounter;
             int rootNameId = writeString(rootName);
             int signatureId = writeString("");
             int sourceFileId = writeString(sourceFile);
@@ -247,7 +244,7 @@ public final class HeapDump {
         }
 
         int writeStackTrace(int threadId, int... frames) throws IOException {
-            int id = ++stackTraceCounter;
+            int id = ++objectCounter;
             whole.writeByte(TAG_STACK_TRACE);
             whole.writeInt(0); // ms
             whole.writeInt(12 + ids.sizeOf() * frames.length); // size of following entries
@@ -261,13 +258,12 @@ public final class HeapDump {
         }
 
         int writeLoadClass(String className) throws IOException {
-            int classSerial = ++classCounter;
             int classId = ++objectCounter;
             int classNameId = writeString(className);
             whole.writeByte(TAG_LOAD_CLASS);
             whole.writeInt(0); // ms
             whole.writeInt(8 + ids.sizeOf() * 2); // size of following entries
-            whole.writeInt(classSerial); // class serial number
+            whole.writeInt(classId); // class serial number
             ids.writeID(whole, classId); // class object ID
             writeDefaultStackTraceSerialNumber(whole);
             ids.writeID(whole, classNameId); // class name string ID
@@ -504,12 +500,26 @@ public final class HeapDump {
      */
     public final class ThreadBuilder {
 
+        private String groupName;
         private final List<Object[]> stacks;
         private final String name;
 
         private ThreadBuilder(String name) {
             this.stacks = new ArrayList<>();
             this.name = name;
+        }
+
+        /**
+         * Specifies group name this thread belongs to.
+         *
+         * @param group name of the group the thread belongs to
+         * @return {@code this} builder
+         *
+         * @since 21.1
+         */
+        public ThreadBuilder group(String group) {
+            this.groupName = group;
+            return this;
         }
 
         /**
