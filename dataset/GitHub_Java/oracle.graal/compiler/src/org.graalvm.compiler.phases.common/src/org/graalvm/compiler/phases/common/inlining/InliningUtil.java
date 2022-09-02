@@ -72,6 +72,7 @@ import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.InliningLog;
 import org.graalvm.compiler.nodes.Invoke;
+import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
@@ -86,9 +87,8 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.WithExceptionNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
-import org.graalvm.compiler.nodes.extended.ForeignCall;
+import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.GuardedNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
@@ -502,7 +502,6 @@ public class InliningUtil extends ValueMergeUtil {
     @SuppressWarnings("try")
     public static EconomicSet<Node> inlineForCanonicalization(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck, ResolvedJavaMethod inlineeMethod,
                     Consumer<UnmodifiableEconomicMap<Node, Node>> duplicatesConsumer, String reason, String phase) {
-        assert invoke.asNode().graph().getSpeculationLog() == inlineGraph.getSpeculationLog();
         EconomicSetNodeEventListener listener = new EconomicSetNodeEventListener();
         /*
          * This code relies on the fact that Graph.addDuplicates doesn't trigger the
@@ -815,10 +814,10 @@ public class InliningUtil extends ValueMergeUtil {
             // This is a frame state for a side effect within an intrinsic
             // that was parsed for post-parse intrinsification
             for (Node usage : frameState.usages()) {
-                if (usage instanceof ForeignCall) {
+                if (usage instanceof ForeignCallNode) {
                     // A foreign call inside an intrinsic needs to have
                     // the BCI of the invoke being intrinsified
-                    ForeignCall foreign = (ForeignCall) usage;
+                    ForeignCallNode foreign = (ForeignCallNode) usage;
                     foreign.setBci(invoke.bci());
                 }
             }
@@ -826,12 +825,12 @@ public class InliningUtil extends ValueMergeUtil {
 
         /*
          * Inlining util can be used to inline a replacee graph that has a different return kind
-         * than the original call, i.e., a non void return for a void method, in this case we simply
+         * than the oginal call, i.e., a non void return for a void method, in this case we simply
          * use the state after discarding the return value
          */
-        boolean voidReturnMismatch = frameState.stackSize() > 0 && stateAfterReturn.stackSize() == 0;
+        boolean voidReturnMissmatch = frameState.stackSize() > 0 && stateAfterReturn.stackSize() == 0;
 
-        if (voidReturnMismatch) {
+        if (voidReturnMissmatch) {
             stateAfterReturn = stateAfterReturn.duplicateWithVirtualState();
         } else {
             // pop return kind from invoke's stateAfter and replace with this frameState's return
@@ -916,20 +915,17 @@ public class InliningUtil extends ValueMergeUtil {
                             }
                         }
                     } else if (fixedStateSplit instanceof ExceptionObjectNode) {
-                        /**
-                         * The target invoke does not have an exception edge. This means that the
-                         * bytecode parser made the wrong assumption of making an exception for the
-                         * partial intrinsic exit. We therefore replace the WithExceptionNode with a
-                         * non throwing version -- the deoptimization occurs when the invoke throws.
-                         */
-                        WithExceptionNode oldException = (WithExceptionNode) fixedStateSplit.predecessor();
-                        FixedNode newNode = oldException.replaceWithNonThrowing();
-                        if (replacements != null && oldException != newNode) {
-                            replacements.put(oldException, newNode);
+                        // The target invoke does not have an exception edge. This means that the
+                        // bytecode parser made the wrong assumption of making an
+                        // InvokeWithExceptionNode for the partial intrinsic exit. We therefore
+                        // replace the InvokeWithExceptionNode with a normal
+                        // InvokeNode -- the deoptimization occurs when the invoke throws.
+                        InvokeWithExceptionNode oldInvoke = (InvokeWithExceptionNode) fixedStateSplit.predecessor();
+                        InvokeNode newInvoke = oldInvoke.replaceWithInvoke();
+                        if (replacements != null) {
+                            replacements.put(oldInvoke, newInvoke);
                         }
-                        if (newNode instanceof StateSplit) {
-                            handleAfterBciFrameState(((StateSplit) newNode).stateAfter(), invoke, alwaysDuplicateStateAfter);
-                        }
+                        handleAfterBciFrameState(newInvoke.stateAfter(), invoke, alwaysDuplicateStateAfter);
                     } else {
                         try (DebugCloseable position = fixedStateSplit.withNodeSourcePosition()) {
                             FixedNode deoptimizeNode = addDeoptimizeNode(graph, DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.NotCompiledExceptionHandler);
