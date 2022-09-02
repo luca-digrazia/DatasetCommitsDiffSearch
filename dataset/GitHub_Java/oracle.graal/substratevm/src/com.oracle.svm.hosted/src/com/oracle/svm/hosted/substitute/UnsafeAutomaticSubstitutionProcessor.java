@@ -764,7 +764,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                 for (Node signExtendNodeUsage : signExtendNode.usages()) {
                     if (signExtendNodeUsage instanceof StoreFieldNode && offsetField == null) {
                         offsetField = ((StoreFieldNode) signExtendNodeUsage).field();
-                    } else if (isAllowedUnsafeValueSink(signExtendNodeUsage)) {
+                    } else if (isAllowedUnsafeValueSink(valueNodeUsage)) {
                         continue;
                     } else {
                         illegalUseFound = true;
