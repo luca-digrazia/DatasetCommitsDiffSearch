@@ -63,7 +63,6 @@ public final class Field extends Member<Type> implements FieldRef {
     public Symbol<Type> getType() {
         return descriptor;
     }
-
     public Attribute[] getAttributes() {
         return linkedField.getParserField().getAttributes();
     }
@@ -159,9 +158,7 @@ public final class Field extends Member<Type> implements FieldRef {
             synchronized (this) {
                 tk = typeKlassCache;
                 if (tk == null) {
-                    tk = getDeclaringKlass().getMeta().resolveSymbolOrFail(getType(),
-                                    getDeclaringKlass().getDefiningClassLoader(),
-                                    getDeclaringKlass().protectionDomain());
+                    tk = getDeclaringKlass().getMeta().resolveSymbolOrFail(getType(), getDeclaringKlass().getDefiningClassLoader());
                     typeKlassCache = tk;
                 }
             }

@@ -97,7 +97,6 @@ public final class HotSwapClassInfo extends ClassInfo {
         return newName != null && !newName.equals(originalName);
     }
 
-    @Override
     public HotSwapClassInfo[] getInnerClasses() {
         return innerClasses.toArray(new HotSwapClassInfo[innerClasses.size()]);
     }
@@ -124,27 +123,23 @@ public final class HotSwapClassInfo extends ClassInfo {
         return outerClassInfo;
     }
 
-    void outerRenamed(String oldName, String replacementName) {
-        methodFingerprint = methodFingerprint != null ? methodFingerprint.replace(oldName, replacementName) : null;
-        fieldFingerprint = fieldFingerprint != null ? fieldFingerprint.replace(oldName, replacementName) : null;
+    void outerRenamed(String oldName, String newName) {
+        methodFingerprint = methodFingerprint != null ? methodFingerprint.replace(oldName, newName) : null;
+        fieldFingerprint = fieldFingerprint != null ? fieldFingerprint.replace(oldName, newName) : null;
     }
 
-    @Override
     public String getClassFingerprint() {
         return classFingerprint;
     }
 
-    @Override
     public String getMethodFingerprint() {
         return methodFingerprint;
     }
 
-    @Override
     public String getFieldFingerprint() {
         return fieldFingerprint;
     }
 
-    @Override
     public String getEnclosingMethodFingerprint() {
         return enclosingMethodFingerprint;
     }
