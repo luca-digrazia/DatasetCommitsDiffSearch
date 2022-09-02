@@ -56,8 +56,6 @@ import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmVoidResult;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
 
 @NodeInfo(language = "wasm", description = "The root node of all WebAssembly functions")
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
@@ -117,17 +115,15 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
         // WebAssembly structure dictates that a function's arguments are provided to the function
         // as local variables, followed by any additional local variables that the function
         // declares. A VirtualFrame contains a special array for the arguments, so we need to move
-        // the arguments to the array that holds the locals.
-        long[] locals = new long[body.codeEntry().numLocals()];
-        frame.setObject(codeEntry.localsSlot(), locals);
-        argumentsToLocals(frame, locals);
+        // them to the locals.
+        argumentsToLocals(frame);
 
         // WebAssembly rules dictate that a function's locals must be initialized to zero before
         // function invocation. For more information, check the specification:
         // https://webassembly.github.io/spec/core/exec/instructions.html#function-calls
-        initializeLocals(locals);
+        initializeLocals(frame);
 
-        body.execute(context, frame, locals, stack);
+        body.execute(context, frame, stack);
 
         switch (body.returnTypeId()) {
             case 0x00:
@@ -153,52 +149,61 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
                 return Double.longBitsToDouble(returnValue);
             }
             default:
-                throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, this, "Unknown return type id: " + body.returnTypeId());
+                assert false;
+                return null;
         }
     }
 
     @ExplodeLoop
-    private void argumentsToLocals(VirtualFrame frame, long[] locals) {
+    private void argumentsToLocals(VirtualFrame frame) {
         Object[] args = frame.getArguments();
         int numArgs = body.instance().symbolTable().function(codeEntry().functionIndex()).numArguments();
         assert args.length == numArgs : "Expected number of arguments " + numArgs + ", actual " + args.length;
         for (int i = 0; i != numArgs; ++i) {
-            final Object arg = args[i];
-            byte type = body.codeEntry().localType(i);
-            switch (type) {
-                case WasmType.I32_TYPE:
-                    locals[i] = (int) arg;
+            FrameSlot slot = codeEntry.localSlot(i);
+            FrameSlotKind kind = frame.getFrameDescriptor().getFrameSlotKind(slot);
+            switch (kind) {
+                case Int: {
+                    int argument = (int) args[i];
+                    frame.setInt(slot, argument);
                     break;
-                case WasmType.I64_TYPE:
-                    locals[i] = (long) arg;
+                }
+                case Long: {
+                    long argument = (long) args[i];
+                    frame.setLong(slot, argument);
                     break;
-                case WasmType.F32_TYPE:
-                    locals[i] = Float.floatToRawIntBits((float) arg);
+                }
+                case Float: {
+                    float argument = (float) args[i];
+                    frame.setFloat(slot, argument);
                     break;
-                case WasmType.F64_TYPE:
-                    locals[i] = Double.doubleToRawLongBits((double) arg);
+                }
+                case Double: {
+                    double argument = (double) args[i];
+                    frame.setDouble(slot, argument);
                     break;
+                }
             }
         }
     }
 
     @ExplodeLoop
-    private void initializeLocals(long[] locals) {
+    private void initializeLocals(VirtualFrame frame) {
         int numArgs = body.instance().symbolTable().function(codeEntry().functionIndex()).numArguments();
         for (int i = numArgs; i != body.codeEntry().numLocals(); ++i) {
             byte type = body.codeEntry().localType(i);
             switch (type) {
                 case WasmType.I32_TYPE:
-                    // Already set to 0 at allocation.
+                    body.setInt(frame, i, 0);
                     break;
                 case WasmType.I64_TYPE:
-                    // Already set to 0 at allocation.
+                    body.setLong(frame, i, 0);
                     break;
                 case WasmType.F32_TYPE:
-                    locals[i] = Float.floatToRawIntBits(0.0f);
+                    body.setFloat(frame, i, 0);
                     break;
                 case WasmType.F64_TYPE:
-                    locals[i] = Double.doubleToRawLongBits(0.0);
+                    body.setDouble(frame, i, 0);
                     break;
             }
         }
