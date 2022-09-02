@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.hosted.classinitialization;
 
-import java.lang.annotation.Annotation;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,15 +36,10 @@ import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
-import com.oracle.svm.core.annotate.Delete;
-import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.classinitialization.EnsureClassInitializedNode;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
 import com.oracle.svm.hosted.substitute.SubstitutionMethod;
-import com.oracle.svm.hosted.substitute.SubstitutionType;
-
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Keeps a type-hierarchy dependency graph for {@link AnalysisType}s from {@code universe}. Each
@@ -222,18 +216,7 @@ public class TypeInitializerGraph {
     }
 
     private void addInitializer(AnalysisType t) {
-        ResolvedJavaType rt = t.getWrappedWithoutResolve();
-        boolean isSubstituted = false;
-        if (rt instanceof SubstitutionType) {
-            SubstitutionType substitutionType = (SubstitutionType) rt;
-            for (Annotation annotation : substitutionType.getAnnotations()) {
-                if (annotation instanceof Substitute || annotation instanceof Delete) {
-                    isSubstituted = true;
-                    break;
-                }
-            }
-        }
-        types.put(t, isSubstituted ? Safety.UNSAFE : initialTypeInitializerSafety(t));
+        types.put(t, initialTypeInitializerSafety(t));
         dependencies.put(t, new HashSet<>());
     }
 
