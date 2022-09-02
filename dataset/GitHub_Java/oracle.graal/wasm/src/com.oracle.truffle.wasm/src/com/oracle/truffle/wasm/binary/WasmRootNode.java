@@ -55,7 +55,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
         this.body = null;
     }
 
-    protected ContextReference<WasmContext> contextReference() {
+    private ContextReference<WasmContext> contextReference() {
         if (rawContextReference == null) {
             rawContextReference = lookupContextReference(WasmLanguage.class);
         }
