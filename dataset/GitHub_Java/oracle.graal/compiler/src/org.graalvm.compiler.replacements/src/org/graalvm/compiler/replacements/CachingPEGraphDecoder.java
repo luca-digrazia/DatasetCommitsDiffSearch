@@ -57,8 +57,6 @@ import org.graalvm.compiler.phases.util.Providers;
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * A graph decoder that provides all necessary encoded graphs on-the-fly (by parsing the methods and
  * encoding the graphs).
@@ -80,8 +78,7 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
                     NodePlugin[] nodePlugins, ResolvedJavaMethod peRootForInlining, SourceLanguagePositionProvider sourceLanguagePositionProvider,
                     BasePhase<? super CoreProviders> postParsingPhase, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
         super(architecture, graph, providers, loopExplosionPlugin,
-                        invocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, peRootForInlining, sourceLanguagePositionProvider,
-                        new ConcurrentHashMap<>(), new ConcurrentHashMap<>());
+                        invocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, peRootForInlining, sourceLanguagePositionProvider);
 
         this.providers = providers;
         this.graphBuilderConfig = graphBuilderConfig;
