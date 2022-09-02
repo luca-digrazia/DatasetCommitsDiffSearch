@@ -321,7 +321,6 @@ import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ControlSplitNode;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.EntryMarkerNode;
@@ -1235,7 +1234,7 @@ public class BytecodeParser implements GraphBuilderContext {
         AbstractBeginNode successor = graph.add(new BeginNode());
         DeoptimizeNode deopt = graph.add(new DeoptimizeNode(InvalidateRecompile, Unresolved));
         deopt.updateNodeSourcePosition(() -> createBytecodePosition());
-        append(new IfNode(graph.addOrUniqueWithInputs(IsNullNode.create(object)), successor, deopt, 1, ProfileSource.INJECTED));
+        append(new IfNode(graph.addOrUniqueWithInputs(IsNullNode.create(object)), successor, deopt, 1));
         lastInstr = successor;
         frameState.push(JavaKind.Int, appendConstant(JavaConstant.INT_0));
     }
@@ -1506,8 +1505,8 @@ public class BytecodeParser implements GraphBuilderContext {
         return graph.addOrUniqueWithInputs(x);
     }
 
-    protected ValueNode genIfNode(LogicNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double d, ProfileSource profileSource) {
-        return new IfNode(condition, trueSuccessor, falseSuccessor, d, profileSource);
+    protected ValueNode genIfNode(LogicNode condition, FixedNode trueSuccessor, FixedNode falseSuccessor, double d) {
+        return new IfNode(condition, trueSuccessor, falseSuccessor, d);
     }
 
     protected void genThrow() {
@@ -2882,7 +2881,7 @@ public class BytecodeParser implements GraphBuilderContext {
         return graph.unique(nextBciNode);
     }
 
-    protected void genIntegerSwitch(ValueNode value, ArrayList<BciBlock> actualSuccessors, int[] keys, double[] keyProbabilities, int[] keySuccessors, ProfileSource profileSource) {
+    protected void genIntegerSwitch(ValueNode value, ArrayList<BciBlock> actualSuccessors, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
         if (value.isConstant()) {
             JavaConstant constant = (JavaConstant) value.asConstant();
             int constantValue = constant.asInt();
@@ -2896,7 +2895,7 @@ public class BytecodeParser implements GraphBuilderContext {
         } else {
             this.controlFlowSplit = true;
             double[] successorProbabilities = successorProbabilites(actualSuccessors.size(), keySuccessors, keyProbabilities);
-            IntegerSwitchNode switchNode = append(new IntegerSwitchNode(value, actualSuccessors.size(), keys, keyProbabilities, keySuccessors, profileSource));
+            IntegerSwitchNode switchNode = append(new IntegerSwitchNode(value, actualSuccessors.size(), keys, keyProbabilities, keySuccessors));
             for (int i = 0; i < actualSuccessors.size(); i++) {
                 switchNode.setBlockSuccessor(i, createBlockTarget(successorProbabilities[i], actualSuccessors.get(i), frameState));
             }
@@ -3336,7 +3335,7 @@ public class BytecodeParser implements GraphBuilderContext {
                             ValueNode exception = frameState.stack[0];
                             FixedNode trueSuccessor = graph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
                             FixedNode nextDispatch = createTarget(nextBlock, frameState);
-                            append(new IfNode(graph.addOrUniqueWithInputs(createInstanceOf(checkedCatchType, exception)), trueSuccessor, nextDispatch, 0, ProfileSource.INJECTED));
+                            append(new IfNode(graph.addOrUniqueWithInputs(createInstanceOf(checkedCatchType, exception)), trueSuccessor, nextDispatch, 0));
                             return;
                         }
                     }
@@ -3358,7 +3357,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 frameState.push(JavaKind.Object, exception);
                 FixedNode nextDispatch = createTarget(nextBlock, frameState);
                 piNodeAnchor.setNext(catchSuccessor);
-                IfNode ifNode = append(new IfNode(graph.unique(createInstanceOf(checkedCatchType, exception)), piNodeAnchor, nextDispatch, 0.5, ProfileSource.UNKNOWN));
+                IfNode ifNode = append(new IfNode(graph.unique(createInstanceOf(checkedCatchType, exception)), piNodeAnchor, nextDispatch, 0.5));
                 assert ifNode.trueSuccessor() == piNodeAnchor;
                 piNode.setGuard(ifNode.trueSuccessor());
             } else {
@@ -3593,21 +3592,16 @@ public class BytecodeParser implements GraphBuilderContext {
         LogicNode condition = createLogicNode(canonicalizedCondition.getCanonicalCondition(), a, b);
 
         double probability = -1;
-        ProfileSource profileSource = ProfileSource.UNKNOWN;
         if (condition instanceof IntegerEqualsNode) {
             probability = extractInjectedProbability((IntegerEqualsNode) condition);
             // the probability coming from here is about the actual condition
-            if (probability != -1) {
-                profileSource = ProfileSource.INJECTED;
-            }
         }
 
         if (probability == -1) {
             probability = getProfileProbability(canonicalizedCondition.mustNegate());
-            profileSource = getProfileSource();
         }
 
-        genIf(condition, trueSuccessor, falseSuccessor, probability, profileSource);
+        genIf(condition, trueSuccessor, falseSuccessor, probability);
     }
 
     protected double getProfileProbability(boolean negate) {
@@ -3631,21 +3625,6 @@ public class BytecodeParser implements GraphBuilderContext {
         return clampProbability(probability);
     }
 
-    /**
-     * Returns the source of probability information at the current position. This is
-     * {@link ProfileSource#PROFILED} if mature profiling info is available at this point,
-     * {@link ProfileSource#UNKNOWN} otherwise.
-     */
-    protected ProfileSource getProfileSource() {
-        assert assertAtIfBytecode();
-        double probability = profilingInfo != null && profilingInfo.isMature() ? profilingInfo.getBranchTakenProbability(bci()) : -1;
-
-        if (probability < 0) {
-            return ProfileSource.UNKNOWN;
-        }
-        return ProfileSource.PROFILED;
-    }
-
     private double extractInjectedProbability(IntegerEqualsNode condition) {
         // Propagate injected branch probability if any.
         IntegerEqualsNode equalsNode = condition;
@@ -3666,7 +3645,7 @@ public class BytecodeParser implements GraphBuilderContext {
         return -1;
     }
 
-    protected void genIf(LogicNode conditionInput, BciBlock trueBlockInput, BciBlock falseBlockInput, double probabilityInput, ProfileSource profileSource) {
+    protected void genIf(LogicNode conditionInput, BciBlock trueBlockInput, BciBlock falseBlockInput, double probabilityInput) {
         BciBlock trueBlock = trueBlockInput;
         BciBlock falseBlock = falseBlockInput;
         LogicNode condition = conditionInput;
@@ -3732,7 +3711,7 @@ public class BytecodeParser implements GraphBuilderContext {
                      */
                     double calculatedProbability = negated ? BranchProbabilityNode.DEOPT_PROBABILITY : 1.0 - BranchProbabilityNode.DEOPT_PROBABILITY;
                     FixedNode deoptSuccessor = BeginNode.begin(deopt);
-                    ValueNode ifNode = genIfNode(condition, negated ? deoptSuccessor : noDeoptSuccessor, negated ? noDeoptSuccessor : deoptSuccessor, calculatedProbability, profileSource);
+                    ValueNode ifNode = genIfNode(condition, negated ? deoptSuccessor : noDeoptSuccessor, negated ? noDeoptSuccessor : deoptSuccessor, calculatedProbability);
                     postProcessIfNode(ifNode);
                     append(ifNode);
                 }
@@ -3777,7 +3756,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
             }
 
-            ValueNode ifNode = genIfNode(condition, trueSuccessor, falseSuccessor, probability, profileSource);
+            ValueNode ifNode = genIfNode(condition, trueSuccessor, falseSuccessor, probability);
             postProcessIfNode(ifNode);
             append(ifNode);
         }
@@ -4632,7 +4611,7 @@ public class BytecodeParser implements GraphBuilderContext {
                         firstSucc = secondSucc;
                         secondSucc = tmp;
                     }
-                    genIf(instanceOfNode, firstSucc, secondSucc, getProfileProbability(negate), getProfileSource());
+                    genIf(instanceOfNode, firstSucc, secondSucc, getProfileProbability(negate));
                 } else {
                     appendGoto(firstSucc);
                 }
@@ -5092,21 +5071,6 @@ public class BytecodeParser implements GraphBuilderContext {
         return prob;
     }
 
-    private ProfileSource getSwitchProfileSource(int bci) {
-        if (profilingInfo != null && profilingInfo.isMature()) {
-            double[] probabilities = profilingInfo.getSwitchProbabilities(bci);
-            for (double p : probabilities) {
-                if (p < 0) {
-                    // No complete profiling information is available.
-                    return ProfileSource.UNKNOWN;
-                }
-            }
-            return ProfileSource.PROFILED;
-        } else {
-            return ProfileSource.UNKNOWN;
-        }
-    }
-
     private static boolean allPositive(double[] a) {
         for (double d : a) {
             if (d < 0) {
@@ -5220,8 +5184,7 @@ public class BytecodeParser implements GraphBuilderContext {
             }
         }
 
-        ProfileSource profileSource = getSwitchProfileSource(bci);
-        genIntegerSwitch(value, actualSuccessors, keys, keyProbabilities, keySuccessors, profileSource);
+        genIntegerSwitch(value, actualSuccessors, keys, keyProbabilities, keySuccessors);
 
     }
 
