@@ -114,8 +114,7 @@ public abstract class StaticShape<T> {
 
         public <T> StaticShape<T> build(StaticShape<T> parentShape) {
             Objects.requireNonNull(parentShape);
-            GeneratorClassLoader gcl = getOrCreateClassLoader(parentShape.getStorageClass());
-            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, parentShape);
+            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(parentShape);
             return build(sg, parentShape);
         }
 
