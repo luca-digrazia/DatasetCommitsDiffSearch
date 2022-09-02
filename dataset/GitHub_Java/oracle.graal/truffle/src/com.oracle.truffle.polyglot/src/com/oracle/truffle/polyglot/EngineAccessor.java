@@ -162,11 +162,6 @@ final class EngineAccessor extends Accessor {
     }
 
     @Override
-    protected void onEngineClosed(Object runtimeData) {
-        super.onEngineClosed(runtimeData);
-    }
-
-    @Override
     protected CastUnsafe getCastUnsafe() {
         return super.getCastUnsafe();
     }

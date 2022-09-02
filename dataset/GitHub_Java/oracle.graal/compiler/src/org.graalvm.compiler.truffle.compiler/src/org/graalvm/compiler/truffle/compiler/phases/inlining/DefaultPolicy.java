@@ -29,17 +29,15 @@ import java.util.PriorityQueue;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.options.OptionValues;
 
-import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
-
 final class DefaultPolicy implements InliningPolicy {
 
     private static final int MAX_DEPTH = 15;
     private static final Comparator<CallNode> CALL_NODE_COMPARATOR = (o1, o2) -> Double.compare(o2.getRootRelativeFrequency(), o1.getRootRelativeFrequency());
-    private final OptionValues options;
+    private final OptionValues optionValues;
     private int expandedCount = 0;
 
-    DefaultPolicy(OptionValues options) {
-        this.options = options;
+    DefaultPolicy(OptionValues optionValues) {
+        this.optionValues = optionValues;
     }
 
     private static PriorityQueue<CallNode> getQueue(CallTree tree, CallNode.State state) {
@@ -68,7 +66,7 @@ final class DefaultPolicy implements InliningPolicy {
     }
 
     private void inline(CallTree tree) {
-        final int inliningBudget = getPolyglotOptionValue(options, PolyglotCompilerOptions.InliningInliningBudget);
+        final int inliningBudget = PolyglotCompilerOptions.getValue(optionValues, PolyglotCompilerOptions.InliningInliningBudget);
         final PriorityQueue<CallNode> inlineQueue = getQueue(tree, CallNode.State.Expanded);
         CallNode candidate;
         while ((candidate = inlineQueue.poll()) != null) {
@@ -84,7 +82,7 @@ final class DefaultPolicy implements InliningPolicy {
     }
 
     private void expand(CallTree tree) {
-        final int expansionBudget = getPolyglotOptionValue(options, PolyglotCompilerOptions.InliningExpansionBudget);
+        final int expansionBudget = PolyglotCompilerOptions.getValue(optionValues, PolyglotCompilerOptions.InliningExpansionBudget);
         final PriorityQueue<CallNode> expandQueue = getQueue(tree, CallNode.State.Cutoff);
         CallNode candidate;
         while ((candidate = expandQueue.poll()) != null) {
@@ -95,7 +93,7 @@ final class DefaultPolicy implements InliningPolicy {
             if (expandedCount > expansionBudget) {
                 break;
             }
-            final Integer maximumRecursiveInliningValue = getPolyglotOptionValue(options, PolyglotCompilerOptions.InliningRecursionDepth);
+            final Integer maximumRecursiveInliningValue = PolyglotCompilerOptions.getValue(optionValues, PolyglotCompilerOptions.InliningRecursionDepth);
             if (candidate.getRecursionDepth() > maximumRecursiveInliningValue || candidate.getDepth() > MAX_DEPTH) {
                 continue;
             }

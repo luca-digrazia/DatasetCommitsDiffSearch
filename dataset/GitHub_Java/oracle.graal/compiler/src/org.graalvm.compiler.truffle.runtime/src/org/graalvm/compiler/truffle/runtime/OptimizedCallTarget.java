@@ -527,7 +527,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     public final <T> T getOptionValue(OptionKey<T> key) {
-        return TruffleRuntimeOptions.getPolyglotOptionValue(getOptionValues(), key);
+        return PolyglotCompilerOptions.getValue(getOptionValues(), key);
     }
 
     /**
@@ -697,7 +697,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                 throw new OptimizationFailedException(error, this);
             }
 
-            boolean truffleCompilationExceptionsAreFatal = engine.compilationExceptionsAreFatal || engine.performanceWarningsAreFatal;
+            boolean truffleCompilationExceptionsAreFatal = TruffleRuntimeOptions.areTruffleCompilationExceptionsFatal(this);
             if (getOptionValue(PolyglotCompilerOptions.CompilationExceptionsArePrinted) || truffleCompilationExceptionsAreFatal) {
                 log(reasonAndStackTrace.get());
                 if (truffleCompilationExceptionsAreFatal) {

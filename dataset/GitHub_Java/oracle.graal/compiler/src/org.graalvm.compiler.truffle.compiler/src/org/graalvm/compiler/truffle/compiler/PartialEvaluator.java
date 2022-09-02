@@ -35,7 +35,6 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Itera
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.LanguageAgnosticInlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumGraalNodeCount;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumInlineNodeCount;
-import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
 
 import java.io.Closeable;
 import java.net.URI;
@@ -88,6 +87,7 @@ import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
@@ -194,7 +194,7 @@ public abstract class PartialEvaluator {
         if (instrumentation == null) {
             synchronized (this) {
                 if (instrumentation == null) {
-                    long[] accessTable = new long[getPolyglotOptionValue(PolyglotCompilerOptions.InstrumentationTableSize)];
+                    long[] accessTable = new long[PolyglotCompilerOptionsScope.getValue(PolyglotCompilerOptions.InstrumentationTableSize)];
                     instrumentation = new InstrumentPhase.Instrumentation(accessTable);
                 }
             }
@@ -251,7 +251,7 @@ public abstract class PartialEvaluator {
     private StructuredGraph createGraphForPE(DebugContext debug, String name, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log,
                     Cancellable cancellable) {
         // @formatter:off
-        StructuredGraph.Builder builder = new StructuredGraph.Builder(TruffleCompilerOptions.getOptions(), debug, allowAssumptions).
+        StructuredGraph.Builder builder = new StructuredGraph.Builder(TruffleCompilerRuntime.getRuntime().getOptions(OptionValues.class), debug, allowAssumptions).
                 name(name).
                 method(rootMethod).
                 speculationLog(log).
@@ -435,7 +435,7 @@ public abstract class PartialEvaluator {
         }
 
         private void logGraphTooBig() {
-            if (!graphTooBigReported && getPolyglotOptionValue(TraceInlining)) {
+            if (!graphTooBigReported && PolyglotCompilerOptionsScope.getValue(TraceInlining)) {
                 graphTooBigReported = true;
                 final HashMap<String, Object> properties = new HashMap<>();
                 properties.put("graph node count", graph.getNodeCount());
@@ -561,7 +561,7 @@ public abstract class PartialEvaluator {
         plugins.clearInlineInvokePlugins();
         plugins.appendInlineInvokePlugin(replacements);
         plugins.appendInlineInvokePlugin(new ParsingInlineInvokePlugin(replacements, parsingInvocationPlugins, loopExplosionPlugin));
-        if (!getPolyglotOptionValue(PrintExpansionHistogram)) {
+        if (!PolyglotCompilerOptionsScope.getValue(PrintExpansionHistogram)) {
             plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
         }
 
@@ -582,7 +582,7 @@ public abstract class PartialEvaluator {
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         InlineInvokePlugin[] inlineInvokePlugins;
         HistogramInlineInvokePlugin histogramPlugin = null;
-        Boolean printTruffleExpansionHistogram = getPolyglotOptionValue(PrintExpansionHistogram);
+        Boolean printTruffleExpansionHistogram = PolyglotCompilerOptionsScope.getValue(PrintExpansionHistogram);
         if (printTruffleExpansionHistogram) {
             histogramPlugin = new HistogramInlineInvokePlugin(graph);
             inlineInvokePlugins = new InlineInvokePlugin[]{replacements, inlineInvokePlugin, histogramPlugin};
@@ -662,7 +662,7 @@ public abstract class PartialEvaluator {
 
         // Do single partial escape and canonicalization pass.
         try (DebugContext.Scope pe = debug.scope("TrufflePartialEscape", graph)) {
-            new PartialEscapePhase(getPolyglotOptionValue(IterativePartialEscape), canonicalizer, graph.getOptions()).apply(graph, tierContext);
+            new PartialEscapePhase(PolyglotCompilerOptionsScope.getValue(IterativePartialEscape), canonicalizer, graph.getOptions()).apply(graph, tierContext);
         } catch (Throwable t) {
             debug.handle(t);
         }
@@ -678,12 +678,12 @@ public abstract class PartialEvaluator {
     }
 
     private void agnosticInliningOrGraphPE(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, CoreProviders baseContext, HighTierContext tierContext) {
-        if (getPolyglotOptionValue(LanguageAgnosticInlining)) {
+        if (PolyglotCompilerOptionsScope.getValue(LanguageAgnosticInlining)) {
             AgnosticInliningPhase agnosticInlining = new AgnosticInliningPhase(this, inliningDecision, compilable);
             agnosticInlining.apply(graph, baseContext);
         } else {
-            final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(inliningDecision, graph, getPolyglotOptionValue(MaximumGraalNodeCount),
-                            getPolyglotOptionValue(MaximumInlineNodeCount));
+            final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(inliningDecision, graph, PolyglotCompilerOptionsScope.getValue(MaximumGraalNodeCount),
+                            PolyglotCompilerOptionsScope.getValue(MaximumInlineNodeCount));
             doGraphPE(compilable, graph, tierContext, inliningDecision, plugin, EconomicMap.create());
         }
         removeInlineTokenNodes(graph);
@@ -691,10 +691,10 @@ public abstract class PartialEvaluator {
 
     protected void applyInstrumentationPhases(StructuredGraph graph, HighTierContext tierContext) {
         if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue(graph.getOptions())) {
-            new InstrumentBranchesPhase(snippetReflection, getInstrumentation()).apply(graph, tierContext);
+            new InstrumentBranchesPhase(PolyglotCompilerOptionsScope.getOptionValues(), snippetReflection, getInstrumentation()).apply(graph, tierContext);
         }
         if (TruffleCompilerOptions.TruffleInstrumentBoundaries.getValue(graph.getOptions())) {
-            new InstrumentTruffleBoundariesPhase(snippetReflection, getInstrumentation()).apply(graph, tierContext);
+            new InstrumentTruffleBoundariesPhase(PolyglotCompilerOptionsScope.getOptionValues(), snippetReflection, getInstrumentation()).apply(graph, tierContext);
         }
     }
 
@@ -715,7 +715,7 @@ public abstract class PartialEvaluator {
             }
         }
 
-        if (!getPolyglotOptionValue(InlineAcrossTruffleBoundary)) {
+        if (!PolyglotCompilerOptionsScope.getValue(InlineAcrossTruffleBoundary)) {
             // Do not inline across Truffle boundaries.
             for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.TYPE)) {
                 TruffleCompilerRuntime.InlineKind inlineKind = rt.getInlineKind(mct.targetMethod(), false);
@@ -769,7 +769,7 @@ public abstract class PartialEvaluator {
         }
 
         public static boolean isEnabled() {
-            return getPolyglotOptionValue(TracePerformanceWarnings) || getPolyglotOptionValue(PerformanceWarningsAreFatal); // TODO
+            return PolyglotCompilerOptionsScope.getValue(TracePerformanceWarnings) || PolyglotCompilerOptionsScope.getValue(PerformanceWarningsAreFatal); // TODO
         }
 
         public static void logPerformanceWarning(String callTargetName, List<? extends Node> locations, String details, Map<String, Object> properties) {
@@ -792,7 +792,7 @@ public abstract class PartialEvaluator {
             if (locations == null || locations.isEmpty()) {
                 return;
             }
-            int limit = getPolyglotOptionValue(TraceStackTraceLimit); // TODO
+            int limit = PolyglotCompilerOptionsScope.getValue(TraceStackTraceLimit); // TODO
             if (limit <= 0) {
                 return;
             }
@@ -877,7 +877,7 @@ public abstract class PartialEvaluator {
                 }
             }
 
-            if (hasWarnings() && getPolyglotOptionValue(PerformanceWarningsAreFatal)) { // TODO
+            if (hasWarnings() && PolyglotCompilerOptionsScope.getValue(PerformanceWarningsAreFatal)) { // TODO
                 throw new AssertionError("Performance warning detected and is fatal.");
             }
         }

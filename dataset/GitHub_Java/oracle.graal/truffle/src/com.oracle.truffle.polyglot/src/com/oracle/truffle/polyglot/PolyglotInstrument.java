@@ -62,7 +62,6 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
     private volatile OptionValuesImpl optionValues;
     private volatile boolean initialized;
     private volatile boolean created;
-    int requestedAsyncStackDepth = 0;
 
     PolyglotInstrument(PolyglotEngineImpl engine, InstrumentCache cache) {
         super(engine.impl);
@@ -72,15 +71,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
 
     @Override
     public OptionDescriptors getOptions() {
-        try {
-            engine.checkState();
-            return getOptionsInternal();
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(engine, t);
-        }
-    }
-
-    OptionDescriptors getOptionsInternal() {
+        engine.checkState();
         ensureInitialized();
         return options;
     }
@@ -89,7 +80,7 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
         if (optionValues == null) {
             synchronized (instrumentLock) {
                 if (optionValues == null) {
-                    optionValues = new OptionValuesImpl(engine, getOptionsInternal(), false);
+                    optionValues = new OptionValuesImpl(engine, getOptions(), false);
                 }
             }
         }
@@ -167,17 +158,21 @@ class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.tr
 
     @Override
     public <T> T lookup(Class<T> serviceClass) {
-        try {
-            engine.checkState();
-            return lookupInternal(serviceClass);
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(engine, t);
-        }
+        return lookup(serviceClass, true);
     }
 
-    <T> T lookupInternal(Class<T> serviceClass) {
+    <T> T lookup(Class<T> serviceClass, boolean wrapExceptions) {
+        engine.checkState();
         if (cache.supportsService(serviceClass)) {
-            ensureCreated();
+            try {
+                ensureCreated();
+            } catch (Throwable t) {
+                if (wrapExceptions) {
+                    throw PolyglotImpl.wrapGuestException(engine, t);
+                } else {
+                    throw t;
+                }
+            }
             return INSTRUMENT.getInstrumentationHandlerService(engine.instrumentationHandler, this, serviceClass);
         } else {
             return null;

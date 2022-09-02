@@ -889,7 +889,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         if (sourceEngine != creatorApi) {
             throw new IllegalStateException("Engine instances that were indirectly received using Context.get() cannot be closed.");
         }
-        ensureClosed(cancelIfExecuting, true);
+        ensureClosed(cancelIfExecuting, false);
     }
 
     @TruffleBoundary
@@ -912,11 +912,11 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         return context.getLanguageInstance();
     }
 
-    void ensureClosed(boolean cancelIfExecuting, boolean closeContexts) {
-        ensureClosed(cancelIfExecuting, closeContexts, true);
+    void ensureClosed(boolean cancelIfExecuting, boolean ignoreCloseFailure) {
+        ensureClosed(cancelIfExecuting, ignoreCloseFailure, true);
     }
 
-    private synchronized void ensureClosed(boolean cancelIfExecuting, boolean closeContexts, boolean closeLogHandler) {
+    private synchronized void ensureClosed(boolean cancelIfExecuting, boolean ignoreCloseFailure, boolean closeLogHandler) {
         if (!closed) {
             workContextReferenceQueue();
             List<PolyglotContextImpl> localContexts = collectAliveContexts();
@@ -924,40 +924,55 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
              * Check ahead of time for open contexts to fail early and avoid closing only some
              * contexts.
              */
-            if (closeContexts) {
-                if (!cancelIfExecuting) {
-                    for (PolyglotContextImpl context : localContexts) {
-                        assert !Thread.holdsLock(context);
-                        synchronized (context) {
-                            if (context.hasActiveOtherThread(false) && context.closingThread == null) {
+            boolean stillRunning = false;
+            if (!cancelIfExecuting) {
+                for (PolyglotContextImpl context : localContexts) {
+                    assert !Thread.holdsLock(context);
+                    synchronized (context) {
+                        if (context.hasActiveOtherThread(false) && context.closingThread == null) {
+                            if (!ignoreCloseFailure) {
                                 throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
                                                 "Set cancelIfExecuting to true to stop the execution on this thread."));
+                            } else {
+                                stillRunning = true;
                             }
                         }
                     }
                 }
-                for (PolyglotContextImpl context : localContexts) {
-                    assert !Thread.holdsLock(context);
+            }
+            for (PolyglotContextImpl context : localContexts) {
+                assert !Thread.holdsLock(context);
+                try {
                     boolean closeCompleted = context.closeImpl(cancelIfExecuting, cancelIfExecuting, true);
                     if (!closeCompleted && !cancelIfExecuting) {
-                        throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
-                                        "Set cancelIfExecuting to true to stop the execution on this thread."));
+                        if (!ignoreCloseFailure) {
+                            throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
+                                            "Set cancelIfExecuting to true to stop the execution on this thread."));
+                        } else {
+                            stillRunning = true;
+                        }
                     }
                     context.checkSubProcessFinished();
-                }
-                if (cancelIfExecuting) {
-                    getCancelHandler().cancel(localContexts);
+                } catch (Throwable e) {
+                    if (!ignoreCloseFailure) {
+                        throw e;
+                    } else {
+                        stillRunning = true;
+                    }
                 }
             }
+            if (cancelIfExecuting) {
+                getCancelHandler().cancel(localContexts);
+            }
 
-            if (!boundEngine && closeContexts) {
+            if (!boundEngine && !stillRunning) {
                 for (PolyglotContextImpl context : localContexts) {
                     PolyglotContextImpl.disposeStaticContext(context);
                 }
             }
 
             // don't commit changes to contexts if still running
-            if (closeContexts) {
+            if (!stillRunning) {
                 contexts.clear();
             }
 
@@ -967,7 +982,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 try {
                     instrumentImpl.notifyClosing();
                 } catch (Throwable e) {
-                    if (closeContexts) {
+                    if (!ignoreCloseFailure) {
                         throw e;
                     }
                 }
@@ -976,14 +991,14 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 try {
                     instrumentImpl.ensureClosed();
                 } catch (Throwable e) {
-                    if (closeContexts) {
+                    if (!ignoreCloseFailure) {
                         throw e;
                     }
                 }
             }
             // don't commit to the close if still running as this might cause races in the executing
             // context.
-            if (closeContexts) {
+            if (!stillRunning) {
                 Object loggers = getEngineLoggers();
                 if (loggers != null) {
                     LANGUAGE.closeEngineLoggers(loggers);
@@ -993,9 +1008,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 }
                 ENGINES.remove(this);
                 closed = true;
-            } else if (logHandler != null) {
-                // called from shutdown hook, at least flush the logging handler
-                logHandler.flush();
             }
         }
     }
@@ -1120,7 +1132,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     engine.createdLocation.printStackTrace();
                 }
                 if (engine != null) {
-                    engine.ensureClosed(false, false);
+                    engine.ensureClosed(false, true);
                 }
             }
         }
@@ -1416,7 +1428,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     PolyglotContextImpl.disposeStaticContext(null);
                     config.fileSystem = oldFileSystem;
                     config.internalFileSystem = oldInternalFileSystem;
-                    ensureClosed(true, true, false);
+                    ensureClosed(true, false, false);
                     PolyglotEngineImpl engine = new PolyglotEngineImpl(this);
                     synchronized (engine) {
                         engine.creatorApi = getAPIAccess().newEngine(engine);

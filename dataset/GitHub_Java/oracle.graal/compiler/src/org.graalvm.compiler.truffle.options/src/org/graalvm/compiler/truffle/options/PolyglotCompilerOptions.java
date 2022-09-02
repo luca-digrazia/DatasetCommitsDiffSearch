@@ -31,9 +31,12 @@ import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionStability;
 import org.graalvm.options.OptionType;
+import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.Option;
+import java.util.ServiceLoader;
+import java.util.function.Supplier;
 
 /**
  * Truffle compilation options that can be configured per {@link Engine engine} instance. These
@@ -239,16 +242,16 @@ public final class PolyglotCompilerOptions {
     @Option(help = "Run the partial escape analysis iteratively in Truffle compilation.", category = OptionCategory.INTERNAL)
     public static final OptionKey<Boolean> IterativePartialEscape = new OptionKey<>(false);
 
-    @Option(help = "Method filter for host methods in which to add instrumentation.", category = OptionCategory.EXPERT)
+    @Option(help = "Method filter for host methods in which to add instrumentation.", category = OptionCategory.USER)
     public static final OptionKey<String> InstrumentFilter = new OptionKey<>("*.*.*");
 
-    @Option(help = "Maximum number of instrumentation counters available.", category = OptionCategory.EXPERT)
+    @Option(help = "Maximum number of instrumentation counters available.", category = OptionCategory.USER)
     public static final OptionKey<Integer> InstrumentationTableSize = new OptionKey<>(10000);
 
-    @Option(help = "Stop partial evaluation when the graph exceeded this many nodes.", category = OptionCategory.EXPERT)
+    @Option(help = "Stop partial evaluation when the graph exceeded this many nodes.", category = OptionCategory.USER)
     public static final OptionKey<Integer> MaximumGraalNodeCount = new OptionKey<>(400000);
 
-    @Option(help = "Ignore further truffle inlining decisions when the graph exceeded this many nodes.", category = OptionCategory.EXPERT)
+    @Option(help = "Ignore further truffle inlining decisions when the graph exceeded this many nodes.", category = OptionCategory.USER)
     public static final OptionKey<Integer> MaximumInlineNodeCount = new OptionKey<>(150000);
 
     // Language agnostic inlining
@@ -266,6 +269,46 @@ public final class PolyglotCompilerOptions {
     public static final OptionKey<Integer> InliningInliningBudget = new OptionKey<>(50_000);
 
     // @formatter:on
+
+    private static volatile Iterable<OptionsResolver> resolvers;
+
+    /**
+     * Uses the --engine option if set, otherwise fallback on the -Dgraal option.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T getValue(OptionValues polyglotValues, OptionKey<T> key) {
+        if (polyglotValues != null && polyglotValues.hasBeenSet(key)) {
+            return polyglotValues.get(key);
+        }
+        for (OptionsResolver resolver : lookupResolvers()) {
+            Supplier<T> valueSupplier = resolver.resolve(key);
+            if (valueSupplier != null) {
+                return valueSupplier.get();
+            }
+        }
+        return key.getDefaultValue();
+    }
+
+    public static <T> boolean hasBeenSet(OptionValues polyglotValues, OptionKey<T> key) {
+        if (polyglotValues != null && polyglotValues.hasBeenSet(key)) {
+            return true;
+        }
+        for (OptionsResolver resolver : lookupResolvers()) {
+            if (resolver.hasBeenSet(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Iterable<OptionsResolver> lookupResolvers() {
+        Iterable<OptionsResolver> result = resolvers;
+        if (result == null) {
+            result = ServiceLoader.load(OptionsResolver.class);
+            resolvers = result;
+        }
+        return result;
+    }
 
     public static OptionDescriptors getDescriptors() {
         return new PolyglotCompilerOptionsOptionDescriptors();

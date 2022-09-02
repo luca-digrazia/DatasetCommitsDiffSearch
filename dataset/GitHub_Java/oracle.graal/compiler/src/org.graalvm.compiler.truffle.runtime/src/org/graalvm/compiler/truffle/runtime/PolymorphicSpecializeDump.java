@@ -40,14 +40,15 @@ import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 
 class PolymorphicSpecializeDump {
 
-    public static void dumpPolymorphicSpecialize(OptimizedCallTarget callTarget, List<Node> toDump) {
+    public static void dumpPolymorphicSpecialize(OptimizedCallTarget callTarget, List<Node> toDump, List<OptimizedDirectCallNode> knownCallNodes) {
         assert toDump.size() > 0;
+        assert knownCallNodes.size() > 0;
         try (TruffleDebugContext debugContext = openDebugContext(callTarget)) {
             Collections.reverse(toDump);
-            PolymorphicSpecializeDump.PolymorphicSpecializeGraph graph = new PolymorphicSpecializeDump.PolymorphicSpecializeGraph(toDump);
+            PolymorphicSpecializeDump.PolymorphicSpecializeGraph graph = new PolymorphicSpecializeDump.PolymorphicSpecializeGraph(knownCallNodes, toDump);
             final GraphOutput<PolymorphicSpecializeGraph, ?> output = debugContext.buildOutput(
                             GraphOutput.newBuilder(new PolymorphicSpecializeDump.PolymorphicSpecializeGraphStructure()).protocolVersion(6, 1));
-            output.beginGroup(graph, "Polymorphic Specialize [" + callTarget + "]", "Polymorphic Specialize", null, 0, null);
+            output.beginGroup(graph, "Polymorphic Specialize [" + knownCallNodes.get(0).getCurrentCallTarget() + "]", "Polymorphic Specialize", null, 0, null);
             output.print(graph, null, 0, toDump.get(toDump.size() - 1).toString());
             output.endGroup();
             output.close();
@@ -57,7 +58,7 @@ class PolymorphicSpecializeDump {
     }
 
     private static TruffleDebugContext openDebugContext(OptimizedCallTarget callTarget) {
-        return GraalTruffleRuntime.getRuntime().getTruffleCompiler(callTarget).openDebugContext(TruffleRuntimeOptions.getOptionsForCompiler(callTarget), null);
+        return GraalTruffleRuntime.getRuntime().getTruffleCompiler().openDebugContext(TruffleRuntimeOptions.getOptionsForCompiler(callTarget), null);
     }
 
     static class PolymorphicSpecializeGraph {
@@ -108,10 +109,13 @@ class PolymorphicSpecializeDump {
             return n;
         }
 
-        PolymorphicSpecializeGraph(List<Node> nodeChain) {
+        PolymorphicSpecializeGraph(List<OptimizedDirectCallNode> needsSplitCallNodes, List<Node> nodeChain) {
             DumpNode last = null;
             for (int i = 0; i < nodeChain.size(); i++) {
                 if (i == 0) {
+                    for (OptimizedDirectCallNode callNode : needsSplitCallNodes) {
+                        makeNode(callNode);
+                    }
                     last = makeNode(nodeChain.get(i));
                     for (DumpNode dumpNode : nodes) {
                         dumpNode.edge = new DumpEdge(last);

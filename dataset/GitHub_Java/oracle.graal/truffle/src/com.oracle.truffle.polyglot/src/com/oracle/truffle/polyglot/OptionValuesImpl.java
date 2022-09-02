@@ -213,7 +213,9 @@ final class OptionValuesImpl implements OptionValues {
     @SuppressWarnings("deprecation")
     @Override
     public <T> void set(OptionKey<T> optionKey, T value) {
-        throw new UnsupportedOperationException("OptionValues#set() is no longer supported");
+        assert contains(optionKey);
+        optionKey.getType().validate(value);
+        values.put(optionKey, value);
     }
 
     @Override
