@@ -196,7 +196,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     final PolyglotLanguage language;
     final boolean eventsEnabled;
 
-    private volatile Thread creatingThread;
+    private volatile boolean creating;
     private volatile boolean initialized;
     volatile boolean finalized;
     @CompilationFinal private volatile Value hostBindings;
@@ -408,27 +408,10 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     }
 
     void ensureCreated(PolyglotLanguage accessingLanguage) {
-        if (creatingThread == Thread.currentThread()) {
+        if (creating) {
             throw new PolyglotIllegalStateException(String.format("Cyclic access to language context for language %s. " +
                             "The context is currently being created.", language.getId()));
-        } else if (creatingThread != null) {
-            // Wait for creation
-            boolean interrupted = false;
-            synchronized (context) {
-                while (creatingThread != null) {
-                    try {
-                        context.wait();
-                    } catch (InterruptedException e) {
-                        // Keep waiting
-                        interrupted = true;
-                    }
-                }
-            }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
         }
-
         if (lazy == null) {
             checkAccess(accessingLanguage);
 
@@ -438,7 +421,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             try {
                 synchronized (context) {
                     if (lazy == null) {
-                        Env localEnv = LANGUAGE.createEnv(this, lang.spi, envConfig.out,
+                        Env localEnv = LANGUAGE.createEnv(PolyglotLanguageContext.this, lang.spi, envConfig.out,
                                         envConfig.err,
                                         envConfig.in,
                                         creatorConfig,
@@ -448,13 +431,13 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                                         envConfig.internalFileSystem,
                                         context.engine.getFileTypeDetectorsSupplier());
                         Lazy localLazy = new Lazy(lang, envConfig);
-                        PolyglotValue.createDefaultValues(getImpl(), this, localLazy.valueCache);
+                        PolyglotValue.createDefaultValues(getImpl(), PolyglotLanguageContext.this, localLazy.valueCache);
                         checkThreadAccess(localEnv);
 
                         // no more errors after this line
-                        creatingThread = Thread.currentThread();
-                        env = localEnv;
-                        lazy = localLazy;
+                        creating = true;
+                        PolyglotLanguageContext.this.env = localEnv;
+                        PolyglotLanguageContext.this.lazy = localLazy;
                         assert EngineAccessor.LANGUAGE.getLanguage(env) != null;
 
                         try {
@@ -475,12 +458,11 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                             context.weakReference.freeInstances.add(lang);
                             lang = null; // commit language use
                         } catch (Throwable e) {
-                            env = null;
-                            lazy = null;
+                            PolyglotLanguageContext.this.env = null;
+                            PolyglotLanguageContext.this.lazy = null;
                             throw e;
                         } finally {
-                            creatingThread = null;
-                            context.notifyAll();
+                            creating = false;
                         }
                     }
                 }
