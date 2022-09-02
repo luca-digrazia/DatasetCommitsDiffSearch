@@ -24,7 +24,8 @@
  */
 package org.graalvm.compiler.hotspot;
 
-import java.lang.reflect.Method;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.util.Objects;
 
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
@@ -36,24 +37,24 @@ import jdk.vm.ci.services.Services;
  */
 public class HotSpotGraalServices {
 
-    private static final Method metaDataImplicitExceptionBytes;
-    private static final Method runtimeExitHotSpot;
-    private static final Method scopeOpenLocalScope;
-    private static final Method scopeEnterGlobalScope;
+    private static final MethodHandle metaDataImplicitExceptionBytes;
+    private static final MethodHandle runtimeExitHotSpot;
+    private static final MethodHandle scopeOpenLocalScope;
+    private static final MethodHandle scopeEnterGlobalScope;
 
     static {
-        Method implicitExceptionBytes = null;
-        Method exitHotSpot = null;
-        Method enterGlobalScope = null;
-        Method openLocalScope = null;
+        MethodHandle implicitExceptionBytes = null;
+        MethodHandle exitHotSpot = null;
+        MethodHandle enterGlobalScope = null;
+        MethodHandle openLocalScope = null;
         boolean firstFound = false;
         try {
             Class<?> scopeClass = Class.forName("jdk.vm.ci.hotspot.HotSpotObjectConstantScope");
-            enterGlobalScope = scopeClass.getDeclaredMethod("enterGlobalScope");
+            enterGlobalScope = MethodHandles.lookup().unreflect(scopeClass.getDeclaredMethod("enterGlobalScope"));
             firstFound = true;
-            openLocalScope = scopeClass.getDeclaredMethod("openLocalScope", Object.class);
-            implicitExceptionBytes = HotSpotMetaData.class.getDeclaredMethod("implicitExceptionBytes");
-            exitHotSpot = HotSpotJVMCIRuntime.class.getDeclaredMethod("exitHotSpot", Integer.TYPE);
+            openLocalScope = MethodHandles.lookup().unreflect(scopeClass.getDeclaredMethod("openLocalScope", Object.class));
+            implicitExceptionBytes = MethodHandles.lookup().unreflect(HotSpotMetaData.class.getDeclaredMethod("implicitExceptionBytes"));
+            exitHotSpot = MethodHandles.lookup().unreflect(HotSpotJVMCIRuntime.class.getDeclaredMethod("exitHotSpot", Integer.TYPE));
         } catch (Exception e) {
             // If the very first method is unavailable assume nothing is available. Otherwise only
             // some are missing so complain about it.
@@ -63,8 +64,11 @@ public class HotSpotGraalServices {
         }
         metaDataImplicitExceptionBytes = implicitExceptionBytes;
         runtimeExitHotSpot = exitHotSpot;
-        scopeEnterGlobalScope = enterGlobalScope;
         scopeOpenLocalScope = openLocalScope;
+        scopeEnterGlobalScope = enterGlobalScope;
+        assert (implicitExceptionBytes != null) == (exitHotSpot != null);
+        assert (implicitExceptionBytes != null) == (openLocalScope != null);
+        assert (implicitExceptionBytes != null) == (enterGlobalScope != null);
     }
 
     /**
@@ -85,7 +89,7 @@ public class HotSpotGraalServices {
     public static CompilationContext enterGlobalCompilationContext() {
         if (scopeEnterGlobalScope != null) {
             try {
-                AutoCloseable impl = (AutoCloseable) scopeEnterGlobalScope.invoke(null);
+                AutoCloseable impl = (AutoCloseable) scopeEnterGlobalScope.invoke();
                 return impl == null ? null : new CompilationContext(impl);
             } catch (Throwable throwable) {
                 throw new InternalError(throwable);
@@ -95,10 +99,11 @@ public class HotSpotGraalServices {
         }
     }
 
+    @SuppressWarnings("unused")
     public static CompilationContext openLocalCompilationContext(Object description) {
         if (scopeOpenLocalScope != null) {
             try {
-                AutoCloseable impl = (AutoCloseable) scopeOpenLocalScope.invoke(null, Objects.requireNonNull(description));
+                AutoCloseable impl = (AutoCloseable) scopeOpenLocalScope.invoke(Objects.requireNonNull(description));
                 return impl == null ? null : new CompilationContext(impl);
             } catch (Throwable throwable) {
                 throw new InternalError(throwable);
@@ -111,7 +116,7 @@ public class HotSpotGraalServices {
     public static void exit(int status) {
         if (Services.IS_IN_NATIVE_IMAGE) {
             try {
-                runtimeExitHotSpot.invoke(HotSpotJVMCIRuntime.runtime(), status);
+                runtimeExitHotSpot.invoke(status);
             } catch (Throwable throwable) {
                 throw new InternalError(throwable);
             }

@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,14 +27,15 @@ package org.graalvm.compiler.hotspot.management;
 import static java.lang.Thread.currentThread;
 
 import java.lang.management.ManagementFactory;
+import java.util.List;
 
 import org.graalvm.compiler.serviceprovider.ServiceProvider;
-import org.graalvm.compiler.serviceprovider.GraalServices.JMXService;
+import org.graalvm.compiler.serviceprovider.JMXService;
 
 import com.sun.management.ThreadMXBean;
 
 /**
- * Implementation of {@link JMXService} for JDK 11 and later.
+ * Implementation of {@link JMXService} for LabsJDK 11.
  */
 @ServiceProvider(JMXService.class)
 public class JMXServiceProvider extends JMXService {
@@ -57,5 +60,10 @@ public class JMXServiceProvider extends JMXService {
     @Override
     protected boolean isCurrentThreadCpuTimeSupported() {
         return threadMXBean.isThreadCpuTimeSupported();
+    }
+
+    @Override
+    protected List<String> getInputArguments() {
+        return ManagementFactory.getRuntimeMXBean().getInputArguments();
     }
 }
