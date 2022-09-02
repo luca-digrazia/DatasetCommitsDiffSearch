@@ -78,8 +78,8 @@ public final class HeapMonitor implements Closeable {
     private final TruffleInstrument.Env env;
 
     private final ReferenceQueue<Object> referenceQueue = new ReferenceQueue<>();
-    private final ConcurrentLinkedQueue<ObjectWeakReference> newReferences = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<ObjectWeakReference> processedReferences = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<ObjectPhantomReference> newReferences = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<ObjectPhantomReference> processedReferences = new ConcurrentLinkedQueue<>();
     private final Map<LanguageInfo, Map<String, HeapSummary>> summaryData = new LinkedHashMap<>();
     private Thread referenceThread;
 
@@ -249,7 +249,7 @@ public final class HeapMonitor implements Closeable {
 
     private void processNewReferences() {
         synchronized (summaryData) {
-            ObjectWeakReference reference;
+            ObjectPhantomReference reference;
             while ((reference = newReferences.poll()) != null) {
                 HeapSummary summary = getSummary(summaryData, reference.language, reference.metaObject);
                 summary.totalInstances++;
@@ -334,13 +334,13 @@ public final class HeapMonitor implements Closeable {
     }
 
     private void cleanReferenceQueue() {
-        ObjectWeakReference reference = (ObjectWeakReference) referenceQueue.poll();
+        ObjectPhantomReference reference = (ObjectPhantomReference) referenceQueue.poll();
         if (reference == null) {
             // nothing to do avoid locking
             return;
         }
-        Set<ObjectWeakReference> collectedNewReferences = new HashSet<>();
-        Set<ObjectWeakReference> collectedProcessedReferences = new HashSet<>();
+        Set<ObjectPhantomReference> collectedNewReferences = new HashSet<>();
+        Set<ObjectPhantomReference> collectedProcessedReferences = new HashSet<>();
         synchronized (summaryData) {
             do {
                 HeapSummary counter = getSummary(summaryData, reference.language, reference.metaObject);
@@ -355,7 +355,7 @@ public final class HeapMonitor implements Closeable {
                     counter.totalBytes += bytesDiff;
                     collectedNewReferences.add(reference);
                 }
-            } while ((reference = (ObjectWeakReference) referenceQueue.poll()) != null);
+            } while ((reference = (ObjectPhantomReference) referenceQueue.poll()) != null);
             // note that ConcurrentLinkedQueue actually supports doing this
             // the iterator does not throw a ConcurrentModificationException
             newReferences.removeAll(collectedNewReferences);
@@ -379,7 +379,7 @@ public final class HeapMonitor implements Closeable {
             if (initializedLanguages.containsKey(language)) {
                 String metaInfo = getMetaObjectString(language, object);
                 if (metaInfo != null) {
-                    newReferences.add(new ObjectWeakReference(object, referenceQueue, language, metaInfo.intern(), event.getOldSize(), event.getNewSize()));
+                    newReferences.add(new ObjectPhantomReference(object, referenceQueue, language, metaInfo.intern(), event.getOldSize(), event.getNewSize()));
                 }
             }
         }
@@ -396,7 +396,7 @@ public final class HeapMonitor implements Closeable {
                             return toString;
                         }
                     }
-                    return "Unknown";
+                    return "Uknown";
                 } finally {
                     RECURSIVE.set(Boolean.FALSE);
                 }
@@ -405,7 +405,7 @@ public final class HeapMonitor implements Closeable {
         }
     }
 
-    private static final class ObjectWeakReference extends WeakReference<Object> {
+    private static final class ObjectPhantomReference extends WeakReference<Object> {
         final String metaObject; // is NULL_NAME for null
         final LanguageInfo language;
         final long oldSize;
@@ -413,7 +413,7 @@ public final class HeapMonitor implements Closeable {
 
         boolean processed;
 
-        ObjectWeakReference(Object obj, ReferenceQueue<Object> rq, LanguageInfo language, String metaObject, long oldSize, long newSize) {
+        ObjectPhantomReference(Object obj, ReferenceQueue<Object> rq, LanguageInfo language, String metaObject, long oldSize, long newSize) {
             super(obj, rq);
             this.language = language;
             this.metaObject = metaObject;
