@@ -46,7 +46,7 @@ public final class PEAgnosticInlineInvokePlugin implements InlineInvokePlugin {
     private final PartialEvaluator partialEvaluator;
     private JavaConstant lastDirectCallNode;
     private boolean indirectCall;
-    private boolean hasMaterializedCall;
+    private boolean notInlinedExists;
 
     public PEAgnosticInlineInvokePlugin(TruffleMetaAccessProvider truffleMetaAccessProvider, PartialEvaluator partialEvaluator) {
         this.truffleMetaAccessProvider = truffleMetaAccessProvider;
@@ -72,7 +72,7 @@ public final class PEAgnosticInlineInvokePlugin implements InlineInvokePlugin {
 
     @Override
     public void notifyNotInlined(GraphBuilderContext b, ResolvedJavaMethod original, Invoke invoke) {
-        hasMaterializedCall = true;
+        notInlinedExists = true;
         if (original.equals(partialEvaluator.callDirectMethod)) {
             if (lastDirectCallNode == null) {
                 if (indirectCall) {
@@ -95,7 +95,7 @@ public final class PEAgnosticInlineInvokePlugin implements InlineInvokePlugin {
         return indirectInvokes;
     }
 
-    public boolean hasMaterializedCall() {
-        return hasMaterializedCall;
+    public boolean graphHasCalls() {
+        return notInlinedExists;
     }
 }
