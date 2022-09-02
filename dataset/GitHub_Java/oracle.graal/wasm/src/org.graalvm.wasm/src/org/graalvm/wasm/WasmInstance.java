@@ -73,14 +73,7 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         return module().name();
     }
 
-    /**
-     * Try to infer the entry function for this instance. Not part from the spec, for testing
-     * purpose only.
-     *
-     * @return exported function named {@code _main}, exported function named {@code _start}, start
-     *         function or {@code null} in this order.
-     */
-    public WasmFunctionInstance inferEntryPoint() {
+    public WasmFunctionInstance getEntryPoint() {
         final WasmFunction mainFunction = symbolTable().exportedFunctions().get("_main");
         if (mainFunction != null) {
             return functionInstance(mainFunction);
