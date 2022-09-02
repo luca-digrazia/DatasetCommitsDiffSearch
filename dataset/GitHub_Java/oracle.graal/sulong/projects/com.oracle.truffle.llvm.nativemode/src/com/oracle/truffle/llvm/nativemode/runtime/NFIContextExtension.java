@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.nativemode.runtime;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.WeakHashMap;
 
@@ -43,6 +42,7 @@ import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage.Env;
@@ -54,7 +54,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.runtime.ContextExtension;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.interop.nfi.LLVMNativeWrapper;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMCallNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -68,97 +67,24 @@ import org.graalvm.collections.Equivalence;
 
 public final class NFIContextExtension extends NativeContextExtension {
 
-    private static final String SIGNATURE_SOURCE_NAME = "llvm-nfi-signature";
-    private static final int WELL_KNOWN_CACHE_INITIAL_SIZE = 16;
-
-    /**
-     * Used to cache well-known native functions that are used by the LLVM runtime directly from
-     * Truffle nodes.
-     */
-    static final class WellKnownFunction {
-
-        /**
-         * Index into the {@link NFIContextExtension#wellKnownFunctionCache} array. This array is
-         * created once per context. Calls from the fast-path can get the function from that array.
-         */
-        final int index;
-
-        /**
-         * The name of the function.
-         */
-        final String name;
-
-        /**
-         * Cached source for the signature of the well-known function. This is cached per engine.
-         * Each context has to lookup the native function separately, but the NFI signature can
-         * be shared.
-         */
-        final Source signatureSource;
-
-        WellKnownFunction(int index, String name, Source signatureSource) {
-            this.index = index;
-            this.name = name;
-            this.signatureSource = signatureSource;
-        }
-    }
-
     private static final class SignatureSourceCache {
 
-        /**
-         * Cache mapping function types to the {@link Source} of a matching NFI signature. The
-         * argument types of the {@link FunctionType} correspond 1:1 to the arguments in the NFI
-         * signature arguments.
-         */
-        private final WeakHashMap<FunctionType, Source> sigCache;
-
-        /**
-         * Cache mapping function types to the {@link Source} of a matching NFI signature. The
-         * {@link FunctionType} contains a first argument that points to the Sulong stack. This
-         * argument is removed from the NFI signature.
-         */
-        private final WeakHashMap<FunctionType, Source> sigCacheSkipStackArg;
-
-        /**
-         * Cache of well-known native functions, mapping their name to a matching NFI signature and
-         * a unique index.
-         */
-        private final EconomicMap<String, WellKnownFunction> wellKnown;
-        private int nextIndex;
+        private final ArrayList<WeakHashMap<FunctionType, Source>> cache;
 
         SignatureSourceCache() {
-            sigCache = new WeakHashMap<>();
-            sigCacheSkipStackArg = new WeakHashMap<>();
-
-            wellKnown = EconomicMap.create();
-            nextIndex = 0;
+            // skipArgs is always either 0 or 1
+            cache = new ArrayList<>(2);
+            cache.add(new WeakHashMap<>());
+            cache.add(new WeakHashMap<>());
         }
 
-        Source getSignatureSource(FunctionType type) throws UnsupportedNativeTypeException {
-            return getSignatureSource(type, sigCache, 0);
-        }
-
-        Source getSignatureSourceSkipStackArg(FunctionType type) throws UnsupportedNativeTypeException {
-            return getSignatureSource(type, sigCacheSkipStackArg, LLVMCallNode.USER_ARGUMENT_OFFSET);
-        }
-
-        private static Source getSignatureSource(FunctionType type, WeakHashMap<FunctionType, Source> map, int skipArgs) throws UnsupportedNativeTypeException {
-            synchronized (map) {
-                Source ret = map.get(type);
-                if (ret == null) {
-                    String sig = getNativeSignature(type, skipArgs);
-                    ret = Source.newBuilder("nfi", sig, SIGNATURE_SOURCE_NAME).build();
-                    map.put(type, ret);
-                }
-                return ret;
-            }
-        }
-
-        synchronized WellKnownFunction getWellKnownFunction(String name, String signature) {
-            WellKnownFunction ret = wellKnown.get(name);
+        synchronized Source get(FunctionType type, int skipArgs) throws UnsupportedNativeTypeException {
+            WeakHashMap<FunctionType, Source> map = cache.get(skipArgs);
+            Source ret = map.get(type);
             if (ret == null) {
-                Source signatureSource = Source.newBuilder("nfi", signature, SIGNATURE_SOURCE_NAME).build();
-                ret = new WellKnownFunction(nextIndex++, name, signatureSource);
-                wellKnown.put(name, ret);
+                String sig = getNativeSignature(type, skipArgs);
+                ret = Source.newBuilder("nfi", sig, "llvm-nfi-signature").build();
+                map.put(type, ret);
             }
             return ret;
         }
@@ -177,7 +103,7 @@ public final class NFIContextExtension extends NativeContextExtension {
 
     private static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
 
-    private Object defaultLibraryHandle;
+    @CompilerDirectives.CompilationFinal private Object defaultLibraryHandle;
     private boolean internalLibrariesAdded = false;
     private final List<Object> libraryHandles = new ArrayList<>();
     private final EconomicMap<TruffleFile, CallTarget> visited = EconomicMap.create();
@@ -186,14 +112,10 @@ public final class NFIContextExtension extends NativeContextExtension {
     private final SignatureSourceCache signatureSourceCache;
     private final EconomicMap<Source, Object> signatureCache = EconomicMap.create(Equivalence.IDENTITY);
 
-    // This is an array instead of an ArrayList because it's accessed from the fast-path.
-    private Object[] wellKnownFunctionCache;
-
     private NFIContextExtension(Env env, SignatureSourceCache signatureSourceCache) {
         assert env.getOptions().get(SulongEngineOption.ENABLE_NFI);
         this.env = env;
         this.signatureSourceCache = signatureSourceCache;
-        this.wellKnownFunctionCache = new Object[WELL_KNOWN_CACHE_INITIAL_SIZE];
     }
 
     @Override
@@ -239,7 +161,7 @@ public final class NFIContextExtension extends NativeContextExtension {
         Object wrapper = null;
 
         try {
-            Source signatureSource = signatureSourceCache.getSignatureSource(function.getType());
+            Source signatureSource = getNativeSignatureSource(function.getType(), 0);
             Object signature = getCachedSignature(signatureSource);
             wrapper = SignatureLibrary.getUncached().createClosure(signature, new LLVMNativeWrapper(function, code));
         } catch (UnsupportedNativeTypeException ex) {
@@ -460,53 +382,9 @@ public final class NFIContextExtension extends NativeContextExtension {
     }
 
     @Override
-    public WellKnownNativeFunctionNode getWellKnownNativeFunction(String name, String signature) {
+    public Source getNativeSignatureSource(FunctionType type, int skipArguments) throws UnsupportedNativeTypeException {
         CompilerAsserts.neverPartOfCompilation();
-        WellKnownFunction fn = signatureSourceCache.getWellKnownFunction(name, signature);
-        return WellKnownNFIFunctionNodeGen.create(fn);
-    }
-
-    private Object createWellKnownFunction(WellKnownFunction fn) {
-        CompilerAsserts.neverPartOfCompilation();
-        NativeLookupResult result = getNativeFunctionOrNull(fn.name);
-        if (result != null) {
-            CallTarget parsedSignature = env.parseInternal(fn.signatureSource);
-            Object signature = parsedSignature.call();
-            return SignatureLibrary.getUncached().bind(signature, result.getObject());
-        }
-        throw new LLVMLinkerException(String.format("External function %s cannot be found.", fn.name));
-    }
-
-    @TruffleBoundary
-    private Object getWellKnownFuctionSlowPath(WellKnownFunction fn) {
-        synchronized (this) {
-            if (wellKnownFunctionCache.length <= fn.index) {
-                int newLength = Math.max(wellKnownFunctionCache.length * 2, fn.index);
-                wellKnownFunctionCache = Arrays.copyOf(wellKnownFunctionCache, newLength);
-            }
-            Object ret = wellKnownFunctionCache[fn.index];
-            if (ret == null) {
-                ret = createWellKnownFunction(fn);
-                wellKnownFunctionCache[fn.index] = ret;
-            }
-            return ret;
-        }
-    }
-
-    Object getCachedWellKnownFunction(WellKnownFunction fn) {
-        if (fn.index < wellKnownFunctionCache.length) {
-            Object ret = wellKnownFunctionCache[fn.index];
-            if (ret != null) {
-                return ret;
-            }
-        }
-        return getWellKnownFuctionSlowPath(fn);
-    }
-
-    @Override
-    public Source getNativeSignatureSourceSkipStackArg(FunctionType type) throws UnsupportedNativeTypeException {
-        CompilerAsserts.neverPartOfCompilation();
-        return signatureSourceCache.getSignatureSourceSkipStackArg(type);
+        return signatureSourceCache.get(type, skipArguments);
     }
 
     @TruffleBoundary
