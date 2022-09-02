@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,7 +34,11 @@ import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.Builder;
+import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
 import org.graalvm.compiler.options.OptionValues;
@@ -50,7 +54,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Exercise
- * {@link org.graalvm.compiler.nodes.spi.Replacements#getIntrinsicGraph(ResolvedJavaMethod, CompilationIdentifier, DebugContext)}
+ * {@link org.graalvm.compiler.nodes.spi.Replacements#getIntrinsicGraph(ResolvedJavaMethod, CompilationIdentifier, DebugContext, AllowAssumptions, Cancellable)}
  * with regular method substitutions and encoded graphs.
  */
 @RunWith(Parameterized.class)
@@ -95,7 +99,11 @@ public class RootMethodSubstitutionTest extends GraalCompilerTest {
                         }
                     }
                     if (!original.isNative()) {
-                        ret.add(new Object[]{original});
+                        // Make sure the plugin we found hasn't been overridden.
+                        InvocationPlugin plugin = providers.getReplacements().getGraphBuilderPlugins().getInvocationPlugins().lookupInvocation(original);
+                        if (plugin instanceof MethodSubstitutionPlugin) {
+                            ret.add(new Object[]{original});
+                        }
                     }
                 }
             }
@@ -107,8 +115,23 @@ public class RootMethodSubstitutionTest extends GraalCompilerTest {
 
     private StructuredGraph getIntrinsicGraph(boolean useEncodedGraphs) {
         OptionValues options = new OptionValues(getDebugContext().getOptions(), GraalOptions.UseEncodedGraphs, useEncodedGraphs);
-        DebugContext debugContext = DebugContext.create(options, getDebugContext().getDescription(), getDebugHandlersFactories());
-        return getReplacements().getIntrinsicGraph(method, CompilationIdentifier.INVALID_COMPILATION_ID, debugContext);
+        DebugContext debugContext = new Builder(options, getDebugHandlersFactories()).description(getDebugContext().getDescription()).build();
+        return getReplacements().getIntrinsicGraph(method, CompilationIdentifier.INVALID_COMPILATION_ID, debugContext, AllowAssumptions.YES, null);
+    }
+
+    StructuredGraph expectedGraph;
+    StructuredGraph actualGraph;
+
+    @Override
+    protected void checkHighTierGraph(StructuredGraph graph) {
+        // Capture the graphs after high tier
+        if (expectedGraph == null) {
+            expectedGraph = (StructuredGraph) graph.copy(graph.getDebug());
+        } else {
+            assert actualGraph == null;
+            actualGraph = (StructuredGraph) graph.copy(graph.getDebug());
+        }
+        super.checkHighTierGraph(graph);
     }
 
     @Test
@@ -121,7 +144,9 @@ public class RootMethodSubstitutionTest extends GraalCompilerTest {
         assertTrue(encodedGraph != null, "must produce a graph");
         getCode(method, encodedGraph);
 
-        assertEquals(regularGraph, encodedGraph, true, false);
+        // Compare the high tier graphs since the final graph might have scheduler
+        // differences because of different usage ordering.
+        assertEquals(expectedGraph, actualGraph, true, false);
     }
 
 }
