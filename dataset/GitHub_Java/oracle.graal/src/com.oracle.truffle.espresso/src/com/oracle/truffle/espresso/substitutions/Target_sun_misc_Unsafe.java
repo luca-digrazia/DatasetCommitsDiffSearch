@@ -84,7 +84,9 @@ public final class Target_sun_misc_Unsafe {
         StaticObject[] patches = constantPoolPatches == StaticObject.NULL ? null : ((StaticObjectArray) constantPoolPatches).unwrap();
         Klass hostKlass = hostClass.getMirrorKlass();
         ClassfileStream cfs = new ClassfileStream(bytes, null);
+
         ClassfileParser parser = new ClassfileParser(cfs, null, hostKlass, context, patches);
+
         ParserKlass parserKlass = parser.parseClass();
         StaticObject classLoader = hostKlass.getDefiningClassLoader();
         return defineAnonymousKlass(parserKlass, context, classLoader, parser.getThisKlassIndex(), hostKlass).mirror();
@@ -214,11 +216,22 @@ public final class Target_sun_misc_Unsafe {
         }
         if (holder.isStaticStorage()) {
             // Lookup static field in current class.
-            return holder.getKlass().lookupStaticField(slot);
+            for (Field f : holder.getKlass().getDeclaredFields()) {
+                if (f.isStatic() && f.getSlot() == slot) {
+                    return f;
+                }
+            }
         } else {
-            return holder.getKlass().lookupField(slot);
+            // Lookup nstance field in current class and superclasses.
+            for (Klass k = holder.getKlass(); k != null; k = k.getSuperKlass()) {
+                for (Field f : k.getDeclaredFields()) {
+                    if (!f.isStatic() && f.getSlot() == slot) {
+                        return f;
+                    }
+                }
+            }
         }
-
+        throw EspressoError.shouldNotReachHere("Field with slot " + slot + " not found");
     }
 
     @Substitution(hasReceiver = true)
@@ -416,7 +429,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getBooleanVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return ((StaticObjectImpl) holder).getWordFieldVolatile(f) != 0;
+        return (boolean) ((StaticObjectImpl) holder).getFieldVolatile(f);
     }
 
     @Substitution(hasReceiver = true)
@@ -425,7 +438,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getByteVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (byte) ((StaticObjectImpl) holder).getWordFieldVolatile(f);
+        return (byte) ((StaticObjectImpl) holder).getFieldVolatile(f);
     }
 
     @Substitution(hasReceiver = true)
@@ -434,7 +447,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getShortVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (short) ((StaticObjectImpl) holder).getWordFieldVolatile(f);
+        return (short) ((StaticObjectImpl) holder).getFieldVolatile(f);
     }
 
     @Substitution(hasReceiver = true)
@@ -443,7 +456,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getCharVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (char) ((StaticObjectImpl) holder).getWordFieldVolatile(f);
+        return (char) ((StaticObjectImpl) holder).getFieldVolatile(f);
     }
 
     @Substitution(hasReceiver = true)
@@ -461,7 +474,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getIntVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return ((StaticObjectImpl) holder).getWordFieldVolatile(f);
+        return (int) ((StaticObjectImpl) holder).getFieldVolatile(f);
     }
 
     @Substitution(hasReceiver = true)

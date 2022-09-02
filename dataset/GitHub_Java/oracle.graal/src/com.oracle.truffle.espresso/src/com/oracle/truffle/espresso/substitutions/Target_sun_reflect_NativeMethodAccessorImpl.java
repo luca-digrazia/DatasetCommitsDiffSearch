@@ -280,16 +280,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
                     // resolve interface call
                     // Match resolution errors with those thrown due to reflection inlining
                     // Linktime resolution & IllegalAccessCheck already done by Class.getMethod()
-                    method = reflectedMethod;
-                    method = targetKlass.itableLookup(method.getDeclaringKlass(), method.getITableIndex());
-                    if (method != null) {
-                        // Check for abstract methods as well
-                        if (!method.hasCode()) {
-                            // new default: 65315
-                            throw meta.throwExWithCause(meta.InvocationTargetException, Meta.initEx(meta.AbstractMethodError));
-                        }
-                    }
-                    // throw EspressoError.unimplemented("reflective interface calls");
+                    throw EspressoError.unimplemented("reflective interface calls");
                     // This is what it should look like for interfaces.
                     // try {
                     // method = resolveInterfaceCall(klass, reflectedMethod, targetKlass, receiver);
@@ -303,7 +294,8 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
                     // if the method can be overridden, we resolve using the vtable index.
                     method = reflectedMethod;
                     // VTable is live, use it
-                    method = targetKlass.vtableLookup(method.getVTableIndex());
+                    method = targetKlass.vtableLooup(method.getVTableIndex());
+                    // No vtable in Espresso, just lookup.
                     if (method != null) {
                         // Check for abstract methods as well
                         if (method.isAbstract()) {

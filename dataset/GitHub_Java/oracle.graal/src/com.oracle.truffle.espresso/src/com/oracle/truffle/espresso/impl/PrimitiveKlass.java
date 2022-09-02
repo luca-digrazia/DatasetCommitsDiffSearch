@@ -66,16 +66,6 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public Field lookupField(int slot) {
-        return null;
-    }
-
-    @Override
-    public Field lookupStaticField(int slot) {
-        return null;
-    }
-
-    @Override
     public Method itableLookup(Klass interfKlass, int itableIndex) {
         return null;
     }
