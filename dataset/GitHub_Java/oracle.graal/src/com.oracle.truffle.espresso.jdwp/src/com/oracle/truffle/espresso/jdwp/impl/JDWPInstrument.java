@@ -27,7 +27,6 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 
 import java.io.IOException;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -41,7 +40,6 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
     private JDWPContext context;
     private DebuggerConnection connection;
     private Collection<Thread> activeThreads = new ArrayList<>();
-    private PrintStream err;
 
     @Override
     protected void onCreate(TruffleInstrument.Env instrumentEnv) {
@@ -50,7 +48,6 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         this.env = instrumentEnv;
         this.env.registerService(controller);
         this.env.getInstrumenter().attachContextsListener(controller, false);
-        this.err = new PrintStream(env.err());
     }
 
     public void reset(boolean prepareForReconnect) {
@@ -95,18 +92,9 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
             try {
                 doConnect();
             } catch (IOException e) {
-                printError("Critical failure in establishing jdwp connection: " + e.getLocalizedMessage());
-                printStackTrace(e);
+                JDWPLogger.log("Critical failure in establishing jdwp connection: %s", JDWPLogger.LogLevel.ALL, e.getLocalizedMessage());
             }
         }
-    }
-
-    public void printStackTrace(Throwable e) {
-        e.printStackTrace(err);
-    }
-
-    public void printError(String message) {
-        err.println(message);
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -122,8 +110,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
                 handshakeThread.start();
             }
         } catch (IOException e) {
-            printError("Critical failure in establishing jdwp connection: " + e.getLocalizedMessage());
-            printStackTrace(e);
+            JDWPLogger.log("Critical failure in establishing jdwp connection: %s", JDWPLogger.LogLevel.ALL, e.getLocalizedMessage());
         }
     }
 
@@ -139,8 +126,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         try {
             doConnect();
         } catch (IOException e) {
-            printError("Critical failure in establishing jdwp connection: " + e.getLocalizedMessage());
-            printStackTrace(e);
+            JDWPLogger.log("Critical failure in establishing jdwp connection: %s", JDWPLogger.LogLevel.ALL, e.getLocalizedMessage());
         }
     }
 
