@@ -76,6 +76,7 @@ import com.oracle.truffle.api.object.HiddenKey;
 import com.oracle.truffle.api.object.IncompatibleLocationException;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.LocationFactory;
+import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.utilities.AlwaysValidAssumption;
@@ -1689,7 +1690,7 @@ abstract class DynamicObjectLibraryImpl {
         }
 
         static Shape shapeSetDynamicType(Shape shape, Object newType) {
-            return ((ShapeImpl) shape).setDynamicType(newType);
+            return shape.changeType((ObjectType) newType);
         }
     }
 
