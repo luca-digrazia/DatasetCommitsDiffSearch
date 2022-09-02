@@ -34,7 +34,6 @@ import static com.oracle.truffle.espresso.classfile.Constants.SAME_FRAME_EXTENDE
 import static com.oracle.truffle.espresso.classfile.Constants.SAME_LOCALS_1_STACK_ITEM_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.SAME_LOCALS_1_STACK_ITEM_EXTENDED;
 import static com.oracle.truffle.espresso.verifier.MethodVerifier.failFormat;
-import static com.oracle.truffle.espresso.verifier.MethodVerifier.failFormatNoFallback;
 
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.classfile.attributes.StackMapTableAttribute;
@@ -69,7 +68,7 @@ final class StackMapFrameParser {
         // either VerifyError or ClassFormatError only if verified. Here the
         // attribute is marked for the verifier.
         if (!stream.isAtEndOfFile()) {
-            throw failFormatNoFallback("Truncated StackMap attribute in " + verifier.getThisKlass().getExternalName() + "." + verifier.getMethodName());
+            throw failFormat("Truncated StackMap attribute in " + verifier.getThisKlass().getExternalName() + "." + verifier.getMethodName());
         }
     }
 
@@ -84,7 +83,7 @@ final class StackMapFrameParser {
         }
         if (frameType < SAME_LOCALS_1_STACK_ITEM_EXTENDED) {
             // [128, 246] is reserved and still unused
-            throw failFormatNoFallback("Encountered reserved StackMapFrame tag: " + frameType);
+            throw new MethodVerifier.VerifierError("Encountered reserved StackMapFrame tag: " + frameType, MethodVerifier.VerifierError.Kind.ClassFormat, false);
         }
         if (frameType == SAME_LOCALS_1_STACK_ITEM_EXTENDED) {
             int offsetDelta = stream.readU2();
@@ -138,7 +137,7 @@ final class StackMapFrameParser {
             case ITEM_NewObject:
                 return new UninitializedVariable(stream.readU2());
             default:
-                throw failFormatNoFallback("Unrecognized verification type info tag: " + tag);
+                throw failFormat("Unrecognized verification type info tag: " + tag);
         }
     }
 }
