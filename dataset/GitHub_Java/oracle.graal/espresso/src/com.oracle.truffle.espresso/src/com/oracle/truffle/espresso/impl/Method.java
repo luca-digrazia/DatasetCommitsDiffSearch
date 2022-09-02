@@ -363,10 +363,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return getMethodVersion().getCallTargetNoInit();
     }
 
-    public CallTarget getCallTargetNoSubstitution() {
-        return getMethodVersion().getCallTargetNoSubstitution();
-    }
-
     public boolean usesMonitors() {
         if (usesMonitors != -1) {
             return usesMonitors != 0;
@@ -589,7 +585,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
-            target = (Method) curMethod.getHiddenField(meta.HIDDEN_METHOD_KEY);
+            target = (Method) meta.HIDDEN_METHOD_KEY.getHiddenObject(curMethod);
             if (target == null) {
                 curMethod = (StaticObject) meta.java_lang_reflect_Method_root.get(curMethod);
             }
@@ -602,7 +598,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
-            target = (Method) curMethod.getHiddenField(meta.HIDDEN_CONSTRUCTOR_KEY);
+            target = (Method) meta.HIDDEN_CONSTRUCTOR_KEY.getHiddenObject(curMethod);
             if (target == null) {
                 curMethod = (StaticObject) meta.java_lang_reflect_Constructor_root.get(curMethod);
             }
@@ -1075,18 +1071,14 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
 
         public CallTarget getCallTarget() {
-            return getCallTarget(true, false);
+            return getCallTarget(true);
         }
 
         public CallTarget getCallTargetNoInit() {
-            return getCallTarget(false, false);
+            return getCallTarget(false);
         }
 
-        public CallTarget getCallTargetNoSubstitution() {
-            return getCallTarget(true, true);
-        }
-
-        private CallTarget getCallTarget(boolean initKlass, boolean noSubstitution) {
+        public CallTarget getCallTarget(boolean initKlass) {
             if (callTarget == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 Meta meta = getMeta();
@@ -1126,11 +1118,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                      * apply for classes/methods in the boot or platform class loaders. A warning is
                      * logged is the validation fails.
                      */
-                    if (!noSubstitution) {
-                        EspressoRootNode redirectedMethod = getSubstitutions().get(getMethod());
-                        if (redirectedMethod != null) {
-                            callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
-                        }
+                    EspressoRootNode redirectedMethod = getSubstitutions().get(getMethod());
+                    if (redirectedMethod != null) {
+                        callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
                     }
 
                     if (callTarget == null) {

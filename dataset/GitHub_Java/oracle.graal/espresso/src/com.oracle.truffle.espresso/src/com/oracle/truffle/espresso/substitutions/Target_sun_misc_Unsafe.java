@@ -653,7 +653,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getBooleanVolatile(holder);
+        return f.getByteVolatile(holder) != 0;
     }
 
     @TruffleBoundary(allowInlining = true)

@@ -1859,7 +1859,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         while (target == null) {
             target = (Method) meta.HIDDEN_METHOD_KEY.getHiddenObject(curMethod);
             if (target == null) {
-                curMethod = meta.java_lang_reflect_Method_root.getObject(curMethod);
+                curMethod = (StaticObject) meta.java_lang_reflect_Method_root.get(curMethod);
             }
         }
         return curMethod;
@@ -1872,7 +1872,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         while (target == null) {
             target = (Field) meta.HIDDEN_FIELD_KEY.getHiddenObject(curField);
             if (target == null) {
-                curField = meta.java_lang_reflect_Field_root.getObject(curField);
+                curField = (StaticObject) meta.java_lang_reflect_Field_root.get(curField);
             }
         }
         return curField;
@@ -1885,7 +1885,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         while (target == null) {
             target = (Method) meta.HIDDEN_CONSTRUCTOR_KEY.getHiddenObject(curConstructor);
             if (target == null) {
-                curConstructor = meta.java_lang_reflect_Constructor_root.getObject(curConstructor);
+                curConstructor = (StaticObject) meta.java_lang_reflect_Constructor_root.get(curConstructor);
             }
         }
         return curConstructor;
