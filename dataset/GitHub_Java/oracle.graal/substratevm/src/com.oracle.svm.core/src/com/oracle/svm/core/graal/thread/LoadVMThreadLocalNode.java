@@ -45,7 +45,7 @@ import com.oracle.svm.core.threadlocal.VMThreadLocalInfo;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
 @NodeInfo(cycles = NodeCycles.CYCLES_2, size = NodeSize.SIZE_1)
-public class LoadVMThreadLocalNode extends FixedWithNextNode implements Lowerable {
+public class LoadVMThreadLocalNode extends FixedWithNextNode implements VMThreadLocalAccess, Lowerable {
     public static final NodeClass<LoadVMThreadLocalNode> TYPE = NodeClass.create(LoadVMThreadLocalNode.class);
 
     protected final VMThreadLocalInfo threadLocalInfo;
@@ -66,7 +66,7 @@ public class LoadVMThreadLocalNode extends FixedWithNextNode implements Lowerabl
 
         ConstantNode offset = ConstantNode.forLong(threadLocalInfo.offset, holder.graph());
         AddressNode address = graph().unique(new OffsetAddressNode(holder, offset));
-        JavaReadNode read = graph().add(new JavaReadNode(threadLocalInfo.storageKind, address, threadLocalInfo.locationIdentity, barrierType, true));
+        JavaReadNode read = graph().add(new JavaReadNode(stamp, threadLocalInfo.storageKind, address, threadLocalInfo.locationIdentity, barrierType, true));
         graph().replaceFixedWithFixed(this, read);
         tool.getLowerer().lower(read, tool);
     }

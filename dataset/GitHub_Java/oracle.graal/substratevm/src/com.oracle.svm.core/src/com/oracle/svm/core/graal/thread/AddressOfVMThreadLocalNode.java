@@ -24,54 +24,48 @@
  */
 package com.oracle.svm.core.graal.thread;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
-
-import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
+import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.AbstractStateSplit;
+import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.extended.JavaWriteNode;
-import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
-import org.graalvm.compiler.nodes.memory.address.AddressNode;
-import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
+import org.graalvm.compiler.nodes.calc.AddNode;
+import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 
+import com.oracle.svm.core.FrameAccess;
+import com.oracle.svm.core.graal.nodes.FloatingWordCastNode;
 import com.oracle.svm.core.threadlocal.VMThreadLocalInfo;
 
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public class StoreVMThreadLocalNode extends AbstractStateSplit implements VMThreadLocalAccess, Lowerable {
-    public static final NodeClass<StoreVMThreadLocalNode> TYPE = NodeClass.create(StoreVMThreadLocalNode.class);
+import jdk.vm.ci.meta.JavaKind;
+
+@NodeInfo(cycles = NodeCycles.CYCLES_1, size = NodeSize.SIZE_1)
+public class AddressOfVMThreadLocalNode extends FloatingNode implements VMThreadLocalAccess, Lowerable {
+    public static final NodeClass<AddressOfVMThreadLocalNode> TYPE = NodeClass.create(AddressOfVMThreadLocalNode.class);
 
     protected final VMThreadLocalInfo threadLocalInfo;
-    protected final BarrierType barrierType;
     @Input protected ValueNode holder;
-    @Input protected ValueNode value;
 
-    public StoreVMThreadLocalNode(VMThreadLocalInfo threadLocalInfo, ValueNode holder, ValueNode value, BarrierType barrierType) {
-        super(TYPE, StampFactory.forVoid());
+    public AddressOfVMThreadLocalNode(VMThreadLocalInfo threadLocalInfo, ValueNode holder) {
+        super(TYPE, FrameAccess.getWordStamp());
         this.threadLocalInfo = threadLocalInfo;
-        this.barrierType = barrierType;
         this.holder = holder;
-        this.value = value;
-    }
-
-    public ValueNode getValue() {
-        return value;
     }
 
     @Override
     public void lower(LoweringTool tool) {
         assert threadLocalInfo.offset >= 0;
 
-        ConstantNode offset = ConstantNode.forLong(threadLocalInfo.offset, graph());
-        AddressNode address = graph().unique(new OffsetAddressNode(holder, offset));
-        JavaWriteNode write = graph().add(new JavaWriteNode(threadLocalInfo.storageKind, address, threadLocalInfo.locationIdentity, value, barrierType, true));
-        write.setStateAfter(stateAfter());
-        graph().replaceFixedWithFixed(this, write);
-        tool.getLowerer().lower(write, tool);
+        ValueNode base = holder;
+        if (base.getStackKind() == JavaKind.Object) {
+            base = graph().unique(new FloatingWordCastNode(FrameAccess.getWordStamp(), base));
+        }
+        assert base.getStackKind() == FrameAccess.getWordKind();
+
+        ConstantNode offset = ConstantNode.forIntegerKind(FrameAccess.getWordKind(), threadLocalInfo.offset, graph());
+        ValueNode address = graph().unique(new AddNode(base, offset));
+        replaceAtUsagesAndDelete(address);
     }
 }
