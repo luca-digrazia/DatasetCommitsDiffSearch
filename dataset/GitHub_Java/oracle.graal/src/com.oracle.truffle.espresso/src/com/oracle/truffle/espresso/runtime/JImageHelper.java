@@ -23,27 +23,39 @@
 
 package com.oracle.truffle.espresso.runtime;
 
+import java.io.File;
+
 import com.oracle.truffle.api.interop.TruffleObject;
 
 /**
  * 
  */
-public class JImageHelper {
+public class JImageHelper implements ModulesReaderHelper {
 
     // pointer to native JImageFile
     private final TruffleObject jimage;
     private final JImageLibrary library;
 
-    JImageHelper(JImageLibrary library, TruffleObject jimage) {
-        this.library = library;
-        this.jimage = jimage;
+    JImageHelper(File file, EspressoContext context) {
+        this.library = context.jimageLibrary();
+        jimage = library.init(file.getPath());
     }
 
+    @Override
     public void close() {
         library.close(jimage);
     }
 
-    public byte[] getClassBytes(String name) {
-        return library.getClassBytes(jimage, name);
+    @Override
+    public byte[] getClassBytes(String moduleName, String name) {
+        return library.getClassBytes(jimage, moduleName, name);
+    }
+
+    @Override
+    public String packageToModule(String packageName) {
+        if (!library.getContext().modulesInitialized()) {
+            return JAVA_BASE;
+        }
+        return library.packageToModule(jimage, packageName);
     }
 }
