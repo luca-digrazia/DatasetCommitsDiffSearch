@@ -25,6 +25,7 @@
 package com.oracle.truffle.tools.agentscript.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
@@ -51,7 +52,6 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.graalvm.tools.insight.Insight;
 
 @SuppressWarnings({"unused", "static-method"})
 @ExportLibrary(InteropLibrary.class)
@@ -88,9 +88,9 @@ final class AgentObject implements TruffleObject {
         warnMsg();
         switch (name) {
             case "id":
-                return Insight.ID;
+                return InsightInstrument.ID;
             case "version":
-                return Insight.VERSION;
+                return InsightInstrument.VERSION;
         }
         throw UnknownIdentifierException.create(name);
     }
@@ -114,7 +114,7 @@ final class AgentObject implements TruffleObject {
                                 try {
                                     interop.execute(args[1], new SourceEventObject(source));
                                 } catch (RuntimeException ex) {
-                                    if (interop.isException(ex)) {
+                                    if (ex instanceof TruffleException) {
                                         InsightException.throwWhenExecuted(instrumenter, source, ex);
                                     } else {
                                         throw ex;
@@ -130,14 +130,14 @@ final class AgentObject implements TruffleObject {
                     case ENTER: {
                         CompilerDirectives.transferToInterpreter();
                         SourceSectionFilter filter = createFilter(obj, args);
-                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(args[1], null));
+                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, args[1], null));
                         obj.data.registerHandle(type, handle, args[1]);
                         break;
                     }
                     case RETURN: {
                         CompilerDirectives.transferToInterpreter();
                         SourceSectionFilter filter = createFilter(obj, args);
-                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(null, args[1]));
+                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, null, args[1]));
                         obj.data.registerHandle(type, handle, args[1]);
                         break;
                     }
@@ -217,14 +217,10 @@ final class AgentObject implements TruffleObject {
                         try {
                             Object fn = iop.readMember(config, "rootNameFilter");
                             if (fn != null && !iop.isNull(fn)) {
-                                if (iop.isString(fn)) {
-                                    builder.rootNameIs(new RegexNameFilter(iop.asString(fn)));
-                                } else {
-                                    if (!iop.isExecutable(fn)) {
-                                        throw new IllegalArgumentException("rootNameFilter should be a string, a regular expression!");
-                                    }
-                                    builder.rootNameIs(new RootNameFilter(fn));
+                                if (!iop.isExecutable(fn)) {
+                                    throw new IllegalArgumentException("rootNameFilter has to be a function!");
                                 }
+                                builder.rootNameIs(new RootNameFilter(fn));
                             }
                         } catch (UnknownIdentifierException ex) {
                             // OK
