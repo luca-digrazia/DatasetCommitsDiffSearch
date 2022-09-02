@@ -295,7 +295,7 @@ public abstract class ThreadLocalHandshake {
          * concurrent calls for the same thread), so resetInterrupted() must be called outside the
          * lock.
          */
-        private boolean interrupted;
+        private volatile boolean interrupted;
 
         private final LinkedList<HandshakeEntry> handshakes = new LinkedList<>();
 
@@ -577,14 +577,18 @@ public abstract class ThreadLocalHandshake {
         }
 
         private void interruptIfPending(final Interrupter interrupter) {
+            boolean doInterrupt = false;
             lock.lock();
             try {
                 if (interrupter != null && isPending()) {
-                    interrupted = true;
-                    interrupter.interrupt(Thread.currentThread());
+                    doInterrupt = true;
                 }
             } finally {
                 lock.unlock();
+            }
+            if (doInterrupt) {
+                interrupted = true;
+                interrupter.interrupt(Thread.currentThread());
             }
         }
 

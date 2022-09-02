@@ -75,7 +75,6 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
-import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import org.graalvm.polyglot.Context;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -297,6 +296,9 @@ public class TruffleSafepointTest {
 
     @Test
     public void testSynchronousRecursiveError() throws InterruptedException, AssertionError, ExecutionException {
+        // GR-29896 does not yet work on SVM.
+        Assume.assumeFalse(TruffleOptions.AOT);
+
         try (TestSetup setup = setupSafepointLoop(1, (s, node) -> {
             TruffleSafepoint.poll(node);
             return false;
@@ -462,6 +464,9 @@ public class TruffleSafepointTest {
 
     @Test
     public void testHasPendingSideEffectingActions() {
+        // GR-29896 does not yet work on SVM.
+        Assume.assumeFalse(TruffleOptions.AOT);
+
         AtomicReference<Thread> thread = new AtomicReference<>();
         CountDownLatch waitSideEffectsDisabled = new CountDownLatch(1);
         CountDownLatch waitSubmitted = new CountDownLatch(1);
@@ -564,6 +569,9 @@ public class TruffleSafepointTest {
 
     @Test
     public void testException() {
+        // GR-29896 does not yet work on SVM.
+        Assume.assumeFalse(TruffleOptions.AOT);
+
         forEachConfig((threads, events) -> {
 
             AtomicReference<CountDownLatch> latchRef = new AtomicReference<>(null);
@@ -1126,6 +1134,9 @@ public class TruffleSafepointTest {
 
     @Test
     public void testNonSideEffectInvalidErrorThrown() throws InterruptedException {
+        // GR-29896 does not yet work on SVM.
+        Assume.assumeFalse(TruffleOptions.AOT);
+
         try (TestSetup setup = setupSafepointLoop(1, (s, node) -> {
             TruffleSafepoint.poll(node);
             return false;
@@ -1547,10 +1558,14 @@ public class TruffleSafepointTest {
         }
     }
 
+    static boolean isGraalRuntime() {
+        return Truffle.getRuntime().getName().contains("Graal");
+    }
+
     protected Context createTestContext() {
         Context.Builder b = Context.newBuilder();
         b.allowExperimentalOptions(true);
-        if (AbstractPolyglotTest.isGraalRuntime()) {
+        if (isGraalRuntime()) {
             b.option("engine.CompileImmediately", "true");
             b.option("engine.BackgroundCompilation", "false");
         }
