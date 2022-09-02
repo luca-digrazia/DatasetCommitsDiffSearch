@@ -26,19 +26,17 @@ package org.graalvm.component.installer.remote;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.Iterator;
 import org.graalvm.component.installer.CommandInput;
 import org.graalvm.component.installer.Commands;
-import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.ComponentIterable;
 import org.graalvm.component.installer.ComponentParam;
 import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.SoftwareChannel;
-import org.graalvm.component.installer.model.CatalogContents;
 import org.graalvm.component.installer.model.ComponentInfo;
+import org.graalvm.component.installer.model.ComponentRegistry;
 import org.graalvm.component.installer.persist.MetadataLoader;
 
 /**
@@ -50,7 +48,7 @@ public class CatalogIterable implements ComponentIterable {
     private final CommandInput input;
     private final Feedback feedback;
     private final SoftwareChannel factory;
-    private ComponentCollection remoteRegistry;
+    private ComponentRegistry remoteRegistry;
     private boolean verifyJars;
 
     public CatalogIterable(CommandInput input, Feedback feedback, SoftwareChannel fact) {
@@ -73,9 +71,9 @@ public class CatalogIterable implements ComponentIterable {
         return new It();
     }
 
-    ComponentCollection getRegistry() throws IOException {
+    ComponentRegistry getRegistry() {
         if (remoteRegistry == null) {
-            remoteRegistry = new CatalogContents(feedback, factory.getStorage(), input.getLocalRegistry());
+            remoteRegistry = factory.getRegistry();
         }
         return remoteRegistry;
     }
@@ -100,12 +98,14 @@ public class CatalogIterable implements ComponentIterable {
             String s = input.nextParameter();
             ComponentInfo info;
             try {
-                info = getRegistry().findComponent(s.toLowerCase());
+                if (getRegistry().findComponent(s.toLowerCase()) == null) {
+                    thrownUnknown(s, true);
+                }
+
+                info = getRegistry().loadSingleComponent(s.toLowerCase(), false);
                 if (info == null) {
                     thrownUnknown(s, true);
                 }
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
             } catch (FailedOperationException ex) {
                 thrownUnknown(s, false);
                 throw ex;
@@ -137,12 +137,12 @@ public class CatalogIterable implements ComponentIterable {
         @Override
         protected FileDownloader createDownloader() {
             FileDownloader d = super.createDownloader();
-            return channel.configureDownloader(getCatalogInfo(), d);
+            return channel.configureDownloader(d);
         }
 
         @Override
         protected MetadataLoader metadataFromLocal(Path localFile) throws IOException {
-            return channel.createLocalFileLoader(getCatalogInfo(), localFile, isVerifyJars());
+            return channel.createLocalFileLoader(localFile, isVerifyJars());
         }
 
         @Override

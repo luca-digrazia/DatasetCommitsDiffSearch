@@ -66,6 +66,7 @@ public class JarArchive implements Archive {
 
     @Override
     public void close() throws IOException {
+        jarFile.close();
     }
 
     @Override

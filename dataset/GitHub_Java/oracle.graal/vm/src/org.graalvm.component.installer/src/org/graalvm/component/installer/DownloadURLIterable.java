@@ -40,7 +40,7 @@ public class DownloadURLIterable implements ComponentIterable {
     private boolean verifyJars;
 
     public DownloadURLIterable(Feedback feedback, CommandInput input) {
-        this.feedback = feedback.withBundle(DownloadURLIterable.class);
+        this.feedback = feedback;
         this.input = input;
         this.verifyJars = false;
     }
@@ -52,17 +52,7 @@ public class DownloadURLIterable implements ComponentIterable {
 
     @Override
     public void setVerifyJars(boolean verify) {
-        verifyJars = verify;
-    }
-
-    @Override
-    public ComponentIterable matchVersion(Version.Match m) {
-        return this;
-    }
-
-    @Override
-    public ComponentIterable allowIncompatible() {
-        return this;
+        throw new UnsupportedOperationException("Not supported yet.");
     }
 
     class It implements Iterator<ComponentParam> {
@@ -86,11 +76,6 @@ public class DownloadURLIterable implements ComponentIterable {
             p.setVerifyJars(verifyJars);
             return p;
         }
-    }
-
-    @Override
-    public ComponentParam createParam(String cmdString, ComponentInfo info) {
-        return null;
     }
 
     static class DownloadURLParam extends RemoteComponentParam {

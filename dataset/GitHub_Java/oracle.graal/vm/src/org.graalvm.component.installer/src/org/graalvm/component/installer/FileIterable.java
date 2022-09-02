@@ -34,9 +34,23 @@ import java.util.Iterator;
 import java.util.ServiceLoader;
 import org.graalvm.component.installer.persist.MetadataLoader;
 
-public class FileIterable extends AbstractIterable {
+public class FileIterable implements ComponentIterable {
+    private final CommandInput input;
+    private final Feedback feedback;
+    private boolean verifyJars;
+
     public FileIterable(CommandInput input, Feedback fb) {
-        super(input, fb);
+        this.input = input;
+        this.feedback = fb;
+    }
+
+    public boolean isVerifyJars() {
+        return verifyJars;
+    }
+
+    @Override
+    public void setVerifyJars(boolean verifyJars) {
+        this.verifyJars = verifyJars;
     }
 
     private File getFile(String pathSpec) {
@@ -57,7 +71,7 @@ public class FileIterable extends AbstractIterable {
 
             @Override
             public ComponentParam next() {
-                return new FileComponent(getFile(input.requiredParameter()), isVerifyJars(), feedback);
+                return new FileComponent(getFile(input.requiredParameter()), verifyJars, feedback);
             }
         };
     }
@@ -71,7 +85,7 @@ public class FileIterable extends AbstractIterable {
         public FileComponent(File localFile, boolean verifyJars, Feedback feedback) {
             this.localFile = localFile;
             this.verifyJars = verifyJars;
-            this.feedback = feedback.withBundle(FileComponent.class);
+            this.feedback = feedback;
         }
 
         @Override
@@ -81,14 +95,10 @@ public class FileIterable extends AbstractIterable {
             }
             byte[] fileStart = null;
 
-            if (localFile.isFile()) {
-                try (ReadableByteChannel ch = FileChannel.open(localFile.toPath(), StandardOpenOption.READ)) {
-                    ByteBuffer bb = ByteBuffer.allocate(8);
-                    ch.read(bb);
-                    fileStart = bb.array();
-                }
-            } else {
-                fileStart = new byte[]{0, 0, 0, 0, 0, 0, 0, 0};
+            try (ReadableByteChannel ch = FileChannel.open(localFile.toPath(), StandardOpenOption.READ)) {
+                ByteBuffer bb = ByteBuffer.allocate(8);
+                ch.read(bb);
+                fileStart = bb.array();
             }
 
             for (ComponentArchiveReader provider : ServiceLoader.load(ComponentArchiveReader.class)) {

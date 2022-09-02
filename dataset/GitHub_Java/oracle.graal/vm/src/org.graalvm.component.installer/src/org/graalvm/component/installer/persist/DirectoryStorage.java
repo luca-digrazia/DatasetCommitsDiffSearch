@@ -57,7 +57,6 @@ import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.CommonConstants;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.SystemUtils;
-import org.graalvm.component.installer.Version;
 import org.graalvm.component.installer.model.ComponentInfo;
 
 /**
@@ -75,11 +74,6 @@ public class DirectoryStorage implements ComponentStorage {
      * Suffix for the component metadata files, including comma.
      */
     private static final String COMPONENT_FILE_SUFFIX = ".component"; // NOI18N
-    
-    /**
-     * Metadata for natively installed component. 
-     */
-    private static final String NATIVE_COMPONENT_FILE_SUFFIX = ".meta"; // NOI18N
 
     /**
      * Suffix for the filelist metadata files.
@@ -129,8 +123,6 @@ public class DirectoryStorage implements ComponentStorage {
 
     private Properties loaded;
 
-    private ComponentInfo graalCore;
-
     private static final String GRAALVM_SOURCE = "source"; // NOI18N
     private static final Pattern SOURCE_REVISION = Pattern.compile("\\b([a-z-._]+):([0-9a-f]+)\\b"); // NOI18N
     private static final String REVISION_PREFIX = "source_"; // NOI18N
@@ -155,11 +147,6 @@ public class DirectoryStorage implements ComponentStorage {
         } catch (IOException ex) {
             throw feedback.failure("ERROR_ReadingRealeaseFile", ex, graalVersionFile, ex.getMessage());
         }
-    }
-
-    public Version getGraalVMVersion() {
-        String s = SystemUtils.normalizeOldVersions(loadGraalVersionInfo().get(CommonConstants.CAP_GRAALVM_VERSION));
-        return Version.fromString(s);
     }
 
     @SuppressWarnings("unchecked")
@@ -209,23 +196,15 @@ public class DirectoryStorage implements ComponentStorage {
         File[] files = d.listFiles(new FileFilter() {
             @Override
             public boolean accept(File child) {
-                if (!Files.isRegularFile(child.toPath())) {
-                    return false;
-                }
-                return child.getName().endsWith(COMPONENT_FILE_SUFFIX) ||
-                        child.getName().endsWith(NATIVE_COMPONENT_FILE_SUFFIX);
+                return Files.isRegularFile(child.toPath()) && child.getName().endsWith(COMPONENT_FILE_SUFFIX);
             }
         });
         if (files != null) {
             Set<String> result = new HashSet<>();
             for (File f : files) {
                 String s = registryPath.relativize(f.toPath()).toString();
-                int lastDot = s.lastIndexOf('.');
-                result.add(s.substring(0, lastDot));
-            }
-            // GraalVM core is always present
-            if (Files.exists(graalHomePath.resolve("bin"))) {
-                result.add(BundleConstants.GRAAL_COMPONENT_ID);
+                int e = s.length() - COMPONENT_FILE_SUFFIX.length();
+                result.add(s.substring(0, e));
             }
             return result;
         } else {
@@ -274,44 +253,19 @@ public class DirectoryStorage implements ComponentStorage {
         if (licType != null) {
             ci.setLicenseType(licType);
         }
-        String postInst = loaded.getProperty(BundleConstants.BUNDLE_MESSAGE_POSTINST);
-        if (postInst != null) {
-            String text = postInst.replace("\\n", "\n").replace("\\\\", "\\"); // NOI18N
-            ci.setPostinstMessage(text);
-        }
         return ci;
     }
 
-    private ComponentInfo getCoreInfo() {
-        if (graalCore != null) {
-            return graalCore;
-        }
-        Version v = getGraalVMVersion();
-        ComponentInfo ci = new ComponentInfo(BundleConstants.GRAAL_COMPONENT_ID, feedback.l10n("NAME_GraalCoreComponent"),
-                        v.toString());
-        graalCore = ci;
-        return graalCore;
-    }
-
     @Override
-    public Set<ComponentInfo> loadComponentMetadata(String tag) throws IOException {
+    public ComponentInfo loadComponentMetadata(String tag) throws IOException {
         Path cmpFile = registryPath.resolve(SystemUtils.fileName(tag + COMPONENT_FILE_SUFFIX));
-        boolean nc = false;
         if (!Files.exists(cmpFile)) {
-            if (BundleConstants.GRAAL_COMPONENT_ID.equals(tag)) {
-                return Collections.singleton(getCoreInfo());
-            }
-            cmpFile = registryPath.resolve(SystemUtils.fileName(tag + NATIVE_COMPONENT_FILE_SUFFIX));
-            if (!Files.exists(cmpFile)) {
-                return null;
-            }
-            nc = true;
+            return null;
         }
         try (InputStream fileStream = Files.newInputStream(cmpFile)) {
             ComponentInfo info = loadMetadataFrom(fileStream);
             info.setInfoPath(cmpFile.toString());
-            info.setNativeComponent(nc);
-            return Collections.singleton(info);
+            return info;
         }
     }
 
@@ -423,9 +377,6 @@ public class DirectoryStorage implements ComponentStorage {
      */
     @Override
     public void saveComponent(ComponentInfo info) throws IOException {
-        if (info.isNativeComponent()) {
-            return;
-        }
         assert info != null;
         Path cmpFile = registryPath.resolve(SystemUtils.fileName(info.getId() + COMPONENT_FILE_SUFFIX));
         try (OutputStream compFile = Files.newOutputStream(cmpFile, StandardOpenOption.CREATE,
