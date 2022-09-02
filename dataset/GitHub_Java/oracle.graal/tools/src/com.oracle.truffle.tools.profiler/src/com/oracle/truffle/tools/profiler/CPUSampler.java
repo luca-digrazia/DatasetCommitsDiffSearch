@@ -692,6 +692,7 @@ public final class CPUSampler implements Closeable {
                     }
                 }
             }
+
         }
 
         private void record(StackSample sample, ProfilerNode<Payload> threadNode, TruffleContext context, long timestamp) {
