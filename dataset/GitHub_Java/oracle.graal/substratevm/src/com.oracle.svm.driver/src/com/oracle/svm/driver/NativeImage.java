@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -67,13 +67,10 @@ import java.util.function.Supplier;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.graal.pointsto.api.PointstoOptions;
@@ -89,7 +86,7 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.driver.MacroOption.EnabledOption;
 import com.oracle.svm.driver.MacroOption.MacroOptionKind;
 import com.oracle.svm.driver.MacroOption.Registry;
-import com.oracle.svm.hosted.AbstractNativeImageClassLoaderSupport;
+import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageSystemClassLoader;
 import com.oracle.svm.util.ModuleSupport;
 
@@ -98,8 +95,6 @@ public class NativeImage {
     private static final String DEFAULT_GENERATOR_CLASS_NAME = "com.oracle.svm.hosted.NativeImageGeneratorRunner";
     private static final String DEFAULT_GENERATOR_9PLUS_SUFFIX = "$JDK9Plus";
     private static final String CUSTOM_SYSTEM_CLASS_LOADER = NativeImageSystemClassLoader.class.getCanonicalName();
-
-    private static final int WINDOWS_MAX_COMMAND_LENGTH = 32768;
 
     static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
 
@@ -181,8 +176,6 @@ public class NativeImage {
     final String oHFallbackThreshold = oH(SubstrateOptions.FallbackThreshold);
     final String oHFallbackExecutorJavaArg = oH(FallbackExecutor.Options.FallbackExecutorJavaArg);
     final String oRRuntimeJavaArg = oR(Options.FallbackExecutorRuntimeJavaArg);
-    final String oHTraceClassInitialization = oH(SubstrateOptions.TraceClassInitialization);
-    final String oHTraceObjectInstantiation = oH(SubstrateOptions.TraceObjectInstantiation);
 
     /* List arguments */
     final String oHSubstitutionFiles = oH(ConfigurationFiles.Options.SubstitutionFiles);
@@ -1058,12 +1051,13 @@ public class NativeImage {
             replaceArg(imageBuilderJavaArgs, oXms, Long.toUnsignedString(xmxValue));
         }
 
+        imageBuilderJavaArgs.add("-javaagent:" + config.getAgentJAR().toAbsolutePath().toString() + (traceClassInitialization() ? "=traceInitialization" : ""));
         imageBuilderJavaArgs.add("-Djdk.internal.lambda.disableEagerInitialization=true");
         // The following two are for backwards compatibility reasons. They should be removed.
         imageBuilderJavaArgs.add("-Djdk.internal.lambda.eagerlyInitialize=false");
         imageBuilderJavaArgs.add("-Djava.lang.invoke.InnerClassLambdaMetafactory.initializeLambdas=false");
         if (!imageIncludeBuiltinModules.isEmpty()) {
-            imageBuilderJavaArgs.add("-D" + AbstractNativeImageClassLoaderSupport.PROPERTY_IMAGEINCLUDEBUILTINMODULES + "=" + String.join(",", imageIncludeBuiltinModules));
+            imageBuilderJavaArgs.add("-D" + ImageClassLoader.PROPERTY_IMAGEINCLUDEBUILTINMODULES + "=" + String.join(",", imageIncludeBuiltinModules));
         }
 
         /* After JavaArgs consolidation add the user provided JavaArgs */
@@ -1077,10 +1071,6 @@ public class NativeImage {
         consolidateListArgs(imageBuilderArgs, oHDynamicProxyConfigurationFiles, ",", canonicalizedPathStr);
         consolidateListArgs(imageBuilderArgs, oHResourceConfigurationFiles, ",", canonicalizedPathStr);
         consolidateListArgs(imageBuilderArgs, oHJNIConfigurationFiles, ",", canonicalizedPathStr);
-        consolidateListArgs(imageBuilderArgs, oHTraceClassInitialization, ",", Function.identity());
-        consolidateListArgs(imageBuilderArgs, oHTraceObjectInstantiation, ",", Function.identity());
-
-        imageBuilderJavaArgs.addAll(getAgentArguments());
 
         BiFunction<String, String, String> takeLast = (a, b) -> b;
         String imagePathStr = consolidateArgs(imageBuilderArgs, oHPath, Function.identity(), canonicalizedPathStr, () -> null, takeLast);
@@ -1183,38 +1173,15 @@ public class NativeImage {
         return customImageClasspath.isEmpty();
     }
 
-    private boolean isListArgumentSet(String argPrefix) {
-        return imageBuilderArgs.stream().anyMatch(arg -> arg.startsWith(argPrefix) && !arg.equals(argPrefix));
-    }
-
-    private String getListArgumentValue(String argPrefix) {
-        VMError.guarantee(isListArgumentSet(argPrefix));
-        return imageBuilderArgs.stream().filter(arg -> arg.startsWith(argPrefix)).map(arg -> arg.substring(argPrefix.length())).collect(Collectors.joining());
-    }
-
-    private List<String> getAgentArguments() {
-        List<String> args = new ArrayList<>();
-        String agentOptions = "";
-        boolean shouldTraceClassInitialization = isListArgumentSet(oHTraceClassInitialization);
-        boolean shouldTraceObjectInstantiation = isListArgumentSet(oHTraceObjectInstantiation);
-        if (shouldTraceClassInitialization) {
-            String classesToTrace = getListArgumentValue(oHTraceClassInitialization);
-            agentOptions = getAgentOptions(classesToTrace, "c");
-        }
-        if (shouldTraceObjectInstantiation) {
-            String objectsToTrace = getListArgumentValue(oHTraceObjectInstantiation);
-            agentOptions += getAgentOptions(objectsToTrace, "o");
+    private boolean traceClassInitialization() {
+        String lastTracelArgument = null;
+        for (String imageBuilderArg : imageBuilderArgs) {
+            if (imageBuilderArg.contains("TraceClassInitialization")) {
+                lastTracelArgument = imageBuilderArg;
+            }
         }
 
-        if (!agentOptions.isEmpty()) {
-            args.add("-agentlib:native-image-diagnostics-agent=" + agentOptions);
-        }
-        args.add("-javaagent:" + config.getAgentJAR().toAbsolutePath().toString() + (agentOptions.isEmpty() ? "" : "=" + agentOptions));
-        return args;
-    }
-
-    private static String getAgentOptions(String options, String optionName) {
-        return Arrays.stream(options.split(",")).map(option -> optionName + "=" + option).collect(Collectors.joining(","));
+        return "-H:+TraceClassInitialization".equals(lastTracelArgument);
     }
 
     private String mainClass;
@@ -1231,7 +1198,8 @@ public class NativeImage {
 
     protected int buildImage(List<String> javaArgs, LinkedHashSet<Path> bcp, LinkedHashSet<Path> cp, LinkedHashSet<String> imageArgs, LinkedHashSet<Path> imagecp) {
         /* Construct ProcessBuilder command from final arguments */
-        List<String> command = new ArrayList<>();
+        ProcessBuilder pb = new ProcessBuilder();
+        List<String> command = pb.command();
         command.add(canonicalize(config.getJavaExecutable()).toString());
         command.addAll(javaArgs);
         if (!bcp.isEmpty()) {
@@ -1259,34 +1227,12 @@ public class NativeImage {
 
         int exitStatus = 1;
         try {
-            if (Platform.includedIn(Platform.WINDOWS.class)) {
-                int totalLength = command.stream().mapToInt(s -> s.length() + 1).sum();
-                if (totalLength >= WINDOWS_MAX_COMMAND_LENGTH) {
-                    Path argsFile = Files.createTempFile("native-image", "args");
-                    argsFile.toFile().deleteOnExit();
-                    Files.write(argsFile, (Iterable<String>) command.stream().skip(1).map(NativeImage::quoteFileArg)::iterator);
-                    List<String> atCommand = new ArrayList<>();
-                    atCommand.add(command.get(0));
-                    atCommand.add("@" + argsFile);
-                    command = atCommand;
-                }
-            }
-            ProcessBuilder pb = new ProcessBuilder();
-            pb.command(command);
             Process p = pb.inheritIO().start();
             exitStatus = p.waitFor();
         } catch (IOException | InterruptedException e) {
             throw showError(e.getMessage());
         }
         return exitStatus;
-    }
-
-    private static String quoteFileArg(String arg) {
-        String result = arg.replaceAll(Pattern.quote("\\"), Matcher.quoteReplacement("\\\\"));
-        if (result.contains(" ")) {
-            result = "\"" + result + "\"";
-        }
-        return result;
     }
 
     private static final Function<BuildConfiguration, NativeImage> defaultNativeImageProvider = config -> IS_AOT ? NativeImageServer.create(config) : new NativeImage(config);
