@@ -23,16 +23,7 @@
 package com.oracle.truffle.espresso.descriptors;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.Arrays;
-import java.util.Date;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -212,8 +203,6 @@ public final class Symbol<T> extends ByteSequence {
 
         // j.l.Class
         public static final Symbol<Name> getName = StaticSymbols.putName("getName");
-        public static final Symbol<Name> getSimpleName = StaticSymbols.putName("getSimpleName");
-        public static final Symbol<Name> getTypeName = StaticSymbols.putName("getTypeName");
         public static final Symbol<Name> forName = StaticSymbols.putName("forName");
         public static final Symbol<Name> module = StaticSymbols.putName("module");
         public static final Symbol<Name> classLoader = StaticSymbols.putName("classLoader");
@@ -224,7 +213,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> findNative = StaticSymbols.putName("findNative");
         public static final Symbol<Name> getSystemClassLoader = StaticSymbols.putName("getSystemClassLoader");
         public static final Symbol<Name> loadClass = StaticSymbols.putName("loadClass");
-        public static final Symbol<Name> getResourceAsStream = StaticSymbols.putName("getResourceAsStream");
         public static final Symbol<Name> parent = StaticSymbols.putName("parent");
         public static final Symbol<Name> unnamedModule = StaticSymbols.putName("unnamedModule");
         public static final Symbol<Name> HIDDEN_CLASS_LOADER_REGISTRY = StaticSymbols.putName("0HIDDEN_CLASS_LOADER_REGISTRY");
@@ -304,11 +292,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> address = StaticSymbols.putName("address");
         public static final Symbol<Name> capacity = StaticSymbols.putName("capacity");
         public static final Symbol<Name> wait = StaticSymbols.putName("wait");
-
-        // java.io.InputStream
-        public static final Symbol<Name> available = StaticSymbols.putName("available");
-        public static final Symbol<Name> read = StaticSymbols.putName("read");
-        public static final Symbol<Name> close = StaticSymbols.putName("close");
 
         // java.lang.invoke.*
         // CallSite
@@ -410,25 +393,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> StackMapTable = StaticSymbols.putName("StackMapTable");
         public static final Symbol<Name> Synthetic = StaticSymbols.putName("Synthetic");
 
-        // Interop conversions
-        public static final Symbol<Name> seconds = StaticSymbols.putName("seconds");
-        public static final Symbol<Name> nanos = StaticSymbols.putName("nanos");
-        public static final Symbol<Name> year = StaticSymbols.putName("year");
-        public static final Symbol<Name> month = StaticSymbols.putName("month");
-        public static final Symbol<Name> day = StaticSymbols.putName("day");
-        public static final Symbol<Name> toLocalDate = StaticSymbols.putName("toLocalDate");
-        public static final Symbol<Name> toLocalTime = StaticSymbols.putName("toLocalTime");
-        public static final Symbol<Name> toInstant = StaticSymbols.putName("toInstant");
-        public static final Symbol<Name> getZone = StaticSymbols.putName("getZone");
-        public static final Symbol<Name> getId = StaticSymbols.putName("getId");
-        public static final Symbol<Name> of = StaticSymbols.putName("of");
-
-        public static final Symbol<Name> hour = StaticSymbols.putName("hour");
-        public static final Symbol<Name> minute = StaticSymbols.putName("minute");
-        public static final Symbol<Name> second = StaticSymbols.putName("second");
-        public static final Symbol<Name> nano = StaticSymbols.putName("nano");
-        public static final Symbol<Name> atZone = StaticSymbols.putName("atZone");
-
         // Hidden field names. Starts with a 0 in order for the names to be illegal identifiers.
 
         // MemberName
@@ -514,8 +478,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> java_lang_ClassLoader = StaticSymbols.putType(java.lang.ClassLoader.class);
         public static final Symbol<Type> java_lang_ClassLoader$NativeLibrary = StaticSymbols.putType("Ljava/lang/ClassLoader$NativeLibrary;");
         public static final Symbol<Type> sun_misc_Launcher$ExtClassLoader = StaticSymbols.putType("Lsun/misc/Launcher$ExtClassLoader;");
-
-        public static final Symbol<Type> java_io_InputStream = StaticSymbols.putType(InputStream.class);
 
         public static final Symbol<Type> jdk_internal_loader_ClassLoaders$PlatformClassLoader = StaticSymbols.putType("Ljdk/internal/loader/ClassLoaders$PlatformClassLoader;");
 
@@ -701,16 +663,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> sun_management_ManagementFactoryHelper = StaticSymbols.putType("Lsun/management/ManagementFactoryHelper;");
         public static final Symbol<Type> java_lang_management_MemoryUsage = StaticSymbols.putType(java.lang.management.MemoryUsage.class);
         public static final Symbol<Type> java_lang_management_ThreadInfo = StaticSymbols.putType(java.lang.management.ThreadInfo.class);
-
-        // Interop conversions.
-        public static final Symbol<Type> java_time_Duration = StaticSymbols.putType(Duration.class);
-        public static final Symbol<Type> java_time_LocalTime = StaticSymbols.putType(LocalTime.class);
-        public static final Symbol<Type> java_time_LocalDateTime = StaticSymbols.putType(LocalDateTime.class);
-        public static final Symbol<Type> java_time_LocalDate = StaticSymbols.putType(LocalDate.class);
-        public static final Symbol<Type> java_time_Instant = StaticSymbols.putType(Instant.class);
-        public static final Symbol<Type> java_time_ZonedDateTime = StaticSymbols.putType(ZonedDateTime.class);
-        public static final Symbol<Type> java_util_Date = StaticSymbols.putType(Date.class);
-        public static final Symbol<Type> java_time_ZoneId = StaticSymbols.putType(ZoneId.class);
     }
 
     /**
@@ -739,12 +691,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> _void = StaticSymbols.putSignature(Type._void);
         public static final Symbol<Signature> _boolean = StaticSymbols.putSignature(Type._boolean);
         public static final Symbol<Signature> Class = StaticSymbols.putSignature(Type.java_lang_Class);
-        public static final Symbol<Signature> LocalDate = StaticSymbols.putSignature(Type.java_time_LocalDate);
-        public static final Symbol<Signature> LocalTime = StaticSymbols.putSignature(Type.java_time_LocalTime);
-        public static final Symbol<Signature> Instant = StaticSymbols.putSignature(Type.java_time_Instant);
-        public static final Symbol<Signature> ZoneId = StaticSymbols.putSignature(Type.java_time_ZoneId);
-        public static final Symbol<Signature> ZonedDateTime_ZoneId = StaticSymbols.putSignature(Type.java_time_ZonedDateTime, Type.java_time_ZoneId);
-        public static final Symbol<Signature> ZoneId_String = StaticSymbols.putSignature(Type.java_time_ZoneId, Type.java_lang_String);
 
         public static final Symbol<Signature> _void_Object = StaticSymbols.putSignature(Type._void, Type.java_lang_Object);
 
@@ -766,8 +712,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> _void_String_Throwable = StaticSymbols.putSignature(Type._void, Type.java_lang_String, Type.java_lang_Throwable);
         public static final Symbol<Signature> _void_String = StaticSymbols.putSignature(Type._void, Type.java_lang_String);
         public static final Symbol<Signature> Class_String = StaticSymbols.putSignature(Type.java_lang_Class, Type.java_lang_String);
-        public static final Symbol<Signature> InputStream_String = StaticSymbols.putSignature(Type.java_io_InputStream, Type.java_lang_String);
-        public static final Symbol<Signature> _int_byte_array_int_int = StaticSymbols.putSignature(Type._int, Type._byte_array, Type._int, Type._int);
         public static final Symbol<Signature> ByteBuffer_byte_array = StaticSymbols.putSignature(Type.java_nio_ByteBuffer, Type._byte_array);
         public static final Symbol<Signature> _long_ClassLoader_String = StaticSymbols.putSignature(Type._long, Type.java_lang_ClassLoader, Type.java_lang_String);
         public static final Symbol<Signature> _void_Exception = StaticSymbols.putSignature(Type._void, Type.java_lang_Exception);
