@@ -96,7 +96,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     @Before
     @Override
     public void before() {
-        setupContext("engine.MultiTier", "false");
+        super.before();
         OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
         osrThreshold = target.getOptionValue(OSRCompilationThreshold);
     }
