@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,77 +25,56 @@
 package org.graalvm.compiler.truffle.test;
 
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.core.common.GraalBailoutException;
+import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.junit.AfterClass;
+import org.graalvm.polyglot.Context;
 import org.junit.Assert;
 import org.junit.Assume;
-import org.junit.BeforeClass;
+import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 
 public class NodeLimitTest extends PartialEvaluationTest {
 
-    public NodeLimitTest() {
-        runtime = Truffle.getRuntime();
+    @Before
+    public void before() {
+        setupContext();
+        Assume.assumeFalse(dummyTarget().getOptionValue(PolyglotCompilerOptions.CompileImmediately));
     }
 
-    static TruffleCompilerOptions.TruffleOptionsOverrideScope performanceWarningsAreFatalScope;
-
-    @BeforeClass
-    public static void beforeClass() {
-        Assume.assumeFalse(TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompileImmediately));
-        performanceWarningsAreFatalScope = TruffleCompilerOptions.overrideOptions(SharedTruffleCompilerOptions.TrufflePerformanceWarningsAreFatal, false);
-    }
-
-    @AfterClass
-    public static void afterClass() {
-        performanceWarningsAreFatalScope.close();
+    private static OptimizedCallTarget dummyTarget() {
+        return (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
     }
 
     @Test
-    public void oneRootNodeTest() {
-        fullTest(createRootNodeFillerOnly(), createRootNodeFillerAndTest());
+    public void oneRootNodeTestSmallGraalNodeCount() {
+        expectBailout(NodeLimitTest::createRootNode);
     }
 
     @Test
-    public void oneRootNodeTestEscapingFrame() {
-        fullTest(createRootNodeFillerThatUsedFrame(), createRootNodeFillerAndTestThatUsedFrame());
+    public void oneRootNodeTestEnoughGraalNodeCount() {
+        expectAllOK(NodeLimitTest::createRootNode);
     }
 
-    @Test
-    public void testWithTruffleInlining() {
-        fullTest(createRootNodeWithCall(createRootNodeFillerOnly()), createRootNodeWithCall(createRootNodeFillerAndTest()));
-    }
-
-    @Test
+    @Test(expected = PermanentBailoutException.class)
     public void testDefaultLimit() {
         // NOTE: the following code is intentionally written to explode during partial evaluation!
         // It is wrong in almost every way possible.
-        final RootNode rootNode = new RootNode(null) {
+        final RootNode rootNode = new TestRootNode() {
             @Override
             public Object execute(VirtualFrame frame) {
                 recurse();
-                assertNotInCompilation();
+                foo();
                 return null;
             }
 
@@ -114,163 +93,65 @@ public class NodeLimitTest extends PartialEvaluationTest {
                     }
                 };
             }
-
-            private void assertNotInCompilation() {
-                for (; globalI < 100_000; globalI++) {
-                    global++;
-                }
-                CompilerAsserts.neverPartOfCompilation();
-            }
         };
-        partialEval((OptimizedCallTarget) runtime.createCallTarget(rootNode), new Object[]{}, StructuredGraph.AllowAssumptions.YES, CompilationIdentifier.INVALID_COMPILATION_ID);
+        partialEval((OptimizedCallTarget) Truffle.getRuntime().createCallTarget(rootNode), new Object[]{}, CompilationIdentifier.INVALID_COMPILATION_ID);
     }
 
-    private static TruffleRuntime runtime;
+    private static class TestRootNode extends RootNode {
+        // Used as a black hole for filler code
+        @SuppressWarnings("unused") private int global;
+        @SuppressWarnings("unused") private int globalI;
 
-    // Used as a black hole for filler code
-    @SuppressWarnings("unused") private static int global;
-    @SuppressWarnings("unused") private static int globalI;
+        protected TestRootNode() {
+            super(null);
+        }
 
-    private static RootNode createRootNodeFillerOnly() {
-        return new RootNode(null) {
+        @Override
+        public Object execute(VirtualFrame frame) {
+            foo();
+            return null;
+        }
 
-            @Override
-            public Object execute(VirtualFrame frame) {
-                foo();
-                return null;
+        protected void foo() {
+            for (; globalI < 1000; globalI++) {
+                global += globalI;
             }
 
-            private void foo() {
-                for (; globalI < 1000; globalI++) {
-                    global += globalI;
-                }
-
-            }
-        };
-    }
-
-    private static RootNode createRootNodeFillerAndTest() {
-        return new RootNode(null) {
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                foo();
-                return null;
-            }
-
-            private void foo() {
-                for (; globalI < 1000; globalI++) {
-                    global += globalI;
-                }
-                testMethod();
-            }
-
-            void testMethod() {
-                CompilerAsserts.neverPartOfCompilation();
-            }
-        };
-    }
-
-    private static RootNode createRootNodeFillerThatUsedFrame() {
-        FrameDescriptor descriptor = new FrameDescriptor();
-        final FrameSlot slot = descriptor.addFrameSlot("test");
-        return new RootNode(null, descriptor) {
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                frame.setInt(slot, foo());
-                return null;
-            }
-
-            private int foo() {
-                for (; globalI < 1000; globalI++) {
-                    global += globalI;
-                }
-                return global;
-            }
-        };
-    }
-
-    private static RootNode createRootNodeFillerAndTestThatUsedFrame() {
-        FrameDescriptor descriptor = new FrameDescriptor();
-        FrameSlot slot = (descriptor.getSlots().isEmpty()) ? descriptor.addFrameSlot("test", null, FrameSlotKind.Int) : descriptor.findFrameSlot("test");
-        return new RootNode(null, descriptor) {
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                frame.setInt(slot, global);
-                foo();
-                testMethod(frame);
-                return null;
-            }
-
-            private int foo() {
-                for (; globalI < 1000; globalI++) {
-                    global += globalI;
-                }
-                return global;
-            }
-
-            void testMethod(VirtualFrame frame) {
-                global += (int) frame.getArguments()[0];
-                global += FrameUtil.getIntSafe(frame, slot);
-                CompilerAsserts.neverPartOfCompilation();
-            }
-        };
-    }
-
-    private void fullTest(RootNode rootNodeFillerOnly, RootNode rootNodeFillerAndTest) {
-        expectNeverPartOfCompilation(rootNodeFillerOnly, rootNodeFillerAndTest);
-        expectAllOK(rootNodeFillerOnly, rootNodeFillerAndTest);
-    }
-
-    private void expectNeverPartOfCompilation(RootNode fillerOnly, RootNode fillerAndTest) {
-        try {
-            peRootNodeWithFillerAndTest(getBaselineGraphNodeCount(fillerOnly) + 50, fillerAndTest);
-            throw new AssertionError("Expected to throw but did not.");
-        } catch (GraalBailoutException e) {
-            Assert.assertEquals("CompilerAsserts.neverPartOfCompilation()", e.getMessage());
         }
     }
 
-    private void expectAllOK(RootNode fillerOnly, RootNode fillerAndTest) {
-        peRootNodeWithFillerAndTest(getBaselineGraphNodeCount(fillerOnly) - 10, fillerAndTest);
+    private static RootNode createRootNode() {
+        return new TestRootNode();
+    }
+
+    private void expectBailout(Supplier<RootNode> rootNodeFactory) {
+        try {
+            peRootNode(getBaselineGraphNodeCount(rootNodeFactory.get()) / 2, rootNodeFactory);
+        } catch (PermanentBailoutException ignored) {
+            // Expected, intentionally ignored
+            return;
+        } catch (Throwable e) {
+            Assert.fail("Unexpected exception caught.");
+        }
+        Assert.fail("Expected permanent bailout that never happened.");
+    }
+
+    private void expectAllOK(Supplier<RootNode> rootNodeFactory) {
+        peRootNode(getBaselineGraphNodeCount(rootNodeFactory.get()) * 2, rootNodeFactory);
     }
 
     private int getBaselineGraphNodeCount(RootNode rootNode) {
-        final OptimizedCallTarget baselineGraphTarget = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
-        final StructuredGraph baselineGraph = partialEval(baselineGraphTarget, new Object[]{}, StructuredGraph.AllowAssumptions.YES, CompilationIdentifier.INVALID_COMPILATION_ID);
+        final OptimizedCallTarget baselineGraphTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(rootNode);
+        final StructuredGraph baselineGraph = partialEval(baselineGraphTarget, new Object[]{}, CompilationIdentifier.INVALID_COMPILATION_ID);
         return baselineGraph.getNodeCount();
     }
 
     @SuppressWarnings("try")
-    private void peRootNodeWithFillerAndTest(int nodeLimit, RootNode rootNode) {
-        try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleMaximumGraalNodeCount, nodeLimit)) {
-            RootCallTarget target = runtime.createCallTarget(rootNode);
-            final Object[] arguments = {1};
-            globalI = 0;
-            partialEval((OptimizedCallTarget) target, arguments, StructuredGraph.AllowAssumptions.YES, CompilationIdentifier.INVALID_COMPILATION_ID);
-        }
+    private void peRootNode(int nodeLimit, Supplier<RootNode> rootNodeFactory) {
+        setupContext(Context.newBuilder().allowAllAccess(true).allowExperimentalOptions(true).option("engine.MaximumGraalNodeCount", Integer.toString(nodeLimit)).build());
+        RootCallTarget target = Truffle.getRuntime().createCallTarget(rootNodeFactory.get());
+        final Object[] arguments = {1};
+        partialEval((OptimizedCallTarget) target, arguments, CompilationIdentifier.INVALID_COMPILATION_ID);
     }
 
-    private static RootNode createRootNodeWithCall(final RootNode rootNode) {
-        return new RootNode(null) {
-
-            @Child OptimizedDirectCallNode call = (OptimizedDirectCallNode) runtime.createDirectCallNode(runtime.createCallTarget(rootNode));
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                foo();
-                call.call(new Object[0]);
-                return null;
-            }
-
-            private void foo() {
-                for (; globalI < 1000; globalI++) {
-                    global += globalI;
-                }
-
-            }
-        };
-    }
 }
