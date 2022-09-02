@@ -1198,6 +1198,13 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             negated = true;
         }
         int firstPosInside = position;
+        collectCharClassContents(start, firstPosInside);
+        if (negated) {
+            negateCharClass();
+        }
+    }
+
+    private void collectCharClassContents(int start, int firstPosInside) {
         classBody: while (true) {
             if (atEnd()) {
                 throw syntaxErrorAtAbs("unterminated character set", start);
@@ -1224,10 +1231,10 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     if (match("&")) {
                         CodePointSetAccumulator curCharClassBackup = curCharClass;
                         curCharClass = acquireCodePointSetAccumulator();
-                        collectCharClass();
+                        collectCharClassContents(start, firstPosInside);
                         curCharClassBackup.intersectWith(curCharClass.get());
                         curCharClass = curCharClassBackup;
-                        break classBody;
+                        return;
                     }
                 default:
                     lowerBound = Optional.of(ch);
@@ -1263,9 +1270,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 curCharClass.addCodePoint(lowerBound.get());
             }
         }
-        if (negated) {
-            negateCharClass();
-        }
     }
 
     private CodePointSetAccumulator acquireCodePointSetAccumulator() {
@@ -1291,7 +1295,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         } else {
             collectCharClass();
         }
-        curCharClassBackup.addSet(curCharClass.get());
+        curCharClass.copyTo(curCharClassBackup);
         releaseCodePointSetAccumulator(curCharClass);
         curCharClass = curCharClassBackup;
     }
