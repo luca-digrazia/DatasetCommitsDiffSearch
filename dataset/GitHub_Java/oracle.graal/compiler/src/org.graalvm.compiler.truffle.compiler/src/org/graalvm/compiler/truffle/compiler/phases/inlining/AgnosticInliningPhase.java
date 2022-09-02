@@ -45,6 +45,7 @@ public class AgnosticInliningPhase extends BasePhase<CoreProviders> {
     private final CallNodeProvider callNodeProvider;
     private final CompilableTruffleAST compilableTruffleAST;
     private static final InliningPolicyProvider POLICY_PROVIDER;
+
     // Set the POLICY_PROVIDER to the highest priority one.
     static {
         final Iterable<InliningPolicyProvider> services = GraalServices.load(InliningPolicyProvider.class);
@@ -52,17 +53,17 @@ public class AgnosticInliningPhase extends BasePhase<CoreProviders> {
         for (InliningPolicyProvider provider : services) {
             providers.add(provider);
         }
-        final String policy = TruffleCompilerOptions.getValue(SharedTruffleCompilerOptions.TruffleInliningPolicy);
-        POLICY_PROVIDER = policy.equals("") ? maxPriorityProvider(providers) : chosenProvider(providers, policy);
+        final Integer priority = TruffleCompilerOptions.getValue(SharedTruffleCompilerOptions.TruffleInliningPolicyPriority);
+        POLICY_PROVIDER = priority == -1 ? maxPriorityProvider(providers) : chosenProvider(providers, priority);
     }
 
-    private static InliningPolicyProvider chosenProvider(ArrayList<InliningPolicyProvider> providers, String name) {
+    private static InliningPolicyProvider chosenProvider(ArrayList<InliningPolicyProvider> providers, Integer priority) {
         for (InliningPolicyProvider provider : providers) {
-            if (provider.getName().equals(name)) {
+            if (provider.getPriority() == priority) {
                 return provider;
             }
         }
-        throw new IllegalStateException("No inlining policy provider with provided name: " + name);
+        throw new IllegalStateException("No inlining policy provider with the provided priority: " + priority);
     }
 
     private static InliningPolicyProvider maxPriorityProvider(ArrayList<InliningPolicyProvider> providers) {

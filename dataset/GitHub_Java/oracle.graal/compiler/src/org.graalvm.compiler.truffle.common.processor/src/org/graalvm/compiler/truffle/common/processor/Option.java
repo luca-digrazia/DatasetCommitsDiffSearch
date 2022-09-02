@@ -111,11 +111,11 @@ public class Option {
             .def("false")
             .help("Use language-agnostic inlining (overrides the TruffleFunctionInlining setting, option is experimental)."),
 
-        option("TruffleInliningPolicy")
-            .type("String")
+        option("TruffleInliningPolicyPriority")
+            .type("Integer")
             .category("EXPERT")
-            .def("\"\"")
-            .help("Explicitly pick a inlining policy by name. Highest priority chosen by default."),
+            .def("-1")
+            .help("Explicitly pick an inlining policy by priority. Highest priority chosen by default."),
 
         option("TruffleInliningExpansionBaseBudget")
             .type("Integer")
