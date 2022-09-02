@@ -98,7 +98,6 @@ public final class CPUSamplerData {
      * profiling run.
      *
      * @return A {@link LongSummaryStatistics} of the sample bias.
-     * @since 21.3.0
      */
     public LongSummaryStatistics getSampleBias() {
         LongSummaryStatistics statistics = new LongSummaryStatistics();
@@ -111,7 +110,6 @@ public final class CPUSamplerData {
      * sample. This method provides a summary of said times during the profiling run.
      *
      * @return A {@link LongSummaryStatistics} of the sample duration.
-     * @since 21.3.0
      */
     public LongSummaryStatistics getSampleDuration() {
         LongSummaryStatistics statistics = new LongSummaryStatistics();
