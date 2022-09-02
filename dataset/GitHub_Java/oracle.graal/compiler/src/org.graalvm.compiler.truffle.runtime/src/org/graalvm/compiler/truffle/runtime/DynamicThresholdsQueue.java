@@ -28,16 +28,18 @@ import java.util.concurrent.TimeUnit;
 
 public class DynamicThresholdsQueue extends TraversingBlockingQueue {
 
-    public static final double ACTIVATION_TRIGGER = 3;
-    public static final double MINIMAL_SCALE = 0.25;
     private final GraalTruffleRuntime runtime;
     private final int threads;
+    private final double minScale;
+    private final int minNormalLoad;
+    private final int maxNormalLoad;
 
-    private boolean active;
-
-    public DynamicThresholdsQueue(GraalTruffleRuntime runtime, int threads) {
+    public DynamicThresholdsQueue(GraalTruffleRuntime runtime, int threads, double minScale, int minNormalLoad, int maxNormalLoad) {
         this.runtime = runtime;
         this.threads = threads;
+        this.minScale = minScale;
+        this.minNormalLoad = minNormalLoad;
+        this.maxNormalLoad = maxNormalLoad;
     }
 
     private double load() {
@@ -46,31 +48,57 @@ public class DynamicThresholdsQueue extends TraversingBlockingQueue {
 
     @Override
     public boolean add(Runnable e) {
-        if (!active && load() > ACTIVATION_TRIGGER) {
-            active = true;
-        }
+        scaleThresholds();
         return super.add(e);
     }
 
     @Override
+    public boolean offer(Runnable e) {
+        scaleThresholds();
+        return super.offer(e);
+    }
+
+    @Override
+    public boolean offer(Runnable e, long timeout, TimeUnit unit) throws InterruptedException {
+        scaleThresholds();
+        return super.offer(e, timeout, unit);
+    }
+
+    @Override
     public Runnable poll(long timeout, TimeUnit unit) throws InterruptedException {
-        if (active) {
-            scaleThresholds();
-        }
+        scaleThresholds();
         return super.poll(timeout, unit);
     }
 
     @Override
     public Runnable poll() {
-        if (active) {
-            scaleThresholds();
-        }
+        scaleThresholds();
         return super.poll();
     }
 
     private void scaleThresholds() {
-        double slope = (1 - MINIMAL_SCALE) / (ACTIVATION_TRIGGER - 1);
-        double intercept = 1 - slope * ACTIVATION_TRIGGER;
-        runtime.setCompilationThresholdScale(slope * load() + intercept);
+        runtime.setCompilationThresholdScale(FixedPointMath.toFixedPoint(scale()));
+    }
+
+    /**
+     * @return f(x) where x is the load of the queue and f is a function that
+     *
+     *         - Grows linearly between coordinates (0, minScale) and (minNormalLoad, 1)
+     *
+     *         - Equals 1 for all x between minNormalLoad and maxNormalLoad (inclusively)
+     *
+     *         - For all x > maxNormalLoad - grows at the same rate as for x < minNormalLoad, but
+     *         starting at coordinate (maxNormalLoad, 1)
+     */
+    private double scale() {
+        double x = load();
+        if (minNormalLoad <= x && x <= maxNormalLoad) {
+            return 1;
+        }
+        double slope = (1 - minScale) / (minNormalLoad - 1);
+        if (x < minNormalLoad) {
+            return slope * x + minScale;
+        }
+        return slope * x + (1 - slope * maxNormalLoad);
     }
 }
