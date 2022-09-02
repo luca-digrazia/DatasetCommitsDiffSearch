@@ -135,7 +135,7 @@ public final class LibGraalScope implements AutoCloseable {
             long isolateAddress = isolateBox[0];
             long isolateThread = getIsolateThreadIn(isolateAddress);
             long isolateId = getIsolateId(isolateThread);
-            LibGraalIsolate isolate = LibGraalIsolate.forIsolateId(isolateId, isolateAddress);
+            LibGraalIsolate isolate = LibGraalIsolate.forIsolateId(isolateId);
             shared = new Shared(firstAttach ? detachAction : null, isolate, isolateThread);
         } else {
             shared = parent.shared;
@@ -170,7 +170,7 @@ public final class LibGraalScope implements AutoCloseable {
                 alreadyAttached = true;
             }
             long isolateId = getIsolateId(isolateThread);
-            LibGraalIsolate isolate = LibGraalIsolate.forIsolateId(isolateId, isolateAddress);
+            LibGraalIsolate isolate = LibGraalIsolate.forIsolateId(isolateId);
             shared = new Shared(alreadyAttached ? null : DetachAction.DETACH, isolate, isolateThread);
         } else {
             shared = parent.shared;
@@ -246,19 +246,6 @@ public final class LibGraalScope implements AutoCloseable {
      */
     static Class<?>[] sig(Class<?>... types) {
         return types;
-    }
-
-    /**
-     * Returns the nesting depth of this {@code LibGraalScope} object.
-     */
-    public int getDepth() {
-        int depth = 0;
-        LibGraalScope ancestor = parent;
-        while (ancestor != null) {
-            depth++;
-            ancestor = ancestor.parent;
-        }
-        return depth;
     }
 
     /**
