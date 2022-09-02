@@ -478,9 +478,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     public int popInt(VirtualFrame frame, int slot) {
         int result = peekInt(frame, slot);
-        if (CompilerDirectives.inCompiledCode()) {
-            putInt(frame, slot, 0);
-        }
+        frame.setLong(stackSlots[slot], 0L);
         return result;
     }
 
@@ -514,9 +512,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     public float popFloat(VirtualFrame frame, int slot) {
         float result = peekFloat(frame, slot);
-        if (CompilerDirectives.inCompiledCode()) {
-            putFloat(frame, slot, 0f);
-        }
+        frame.setLong(stackSlots[slot], 0L);
         return result;
     }
 
@@ -526,9 +522,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     public long popLong(VirtualFrame frame, int slot) {
         long result = peekLong(frame, slot);
-        if (CompilerDirectives.inCompiledCode()) {
-            putLong(frame, slot - 1, 0L);
-        }
+        frame.setLong(stackSlots[slot - 1], 0L);
         return result;
     }
 
@@ -538,9 +532,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     public double popDouble(VirtualFrame frame, int slot) {
         double result = peekDouble(frame, slot);
-        if (CompilerDirectives.inCompiledCode()) {
-            putDouble(frame, slot - 1, 0d);
-        }
+        frame.setLong(stackSlots[slot - 1], 0L);
         return result;
     }
 
