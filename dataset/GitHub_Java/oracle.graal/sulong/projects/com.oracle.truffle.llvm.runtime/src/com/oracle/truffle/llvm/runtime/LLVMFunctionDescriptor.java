@@ -278,10 +278,9 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
     private void setFunction(Function newFunction) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         synchronized (this) {
+            functionAssumption.invalidate();
             this.function = newFunction;
-            final Assumption oldAssumption = functionAssumption;
             this.functionAssumption = Truffle.getRuntime().createAssumption("LLVMFunctionDescriptor.functionAssumption");
-            oldAssumption.invalidate();
         }
     }
 
