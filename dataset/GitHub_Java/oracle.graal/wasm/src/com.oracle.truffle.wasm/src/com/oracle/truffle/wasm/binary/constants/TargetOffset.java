@@ -1,9 +1,8 @@
 package com.oracle.truffle.wasm.binary.constants;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.nodes.RepeatingNode;
 
-public class TargetOffset implements RepeatingNode.ShouldContinue {
+public class TargetOffset {
     @CompilationFinal public final int value;
 
     public TargetOffset(int value) {
@@ -16,6 +15,10 @@ public class TargetOffset implements RepeatingNode.ShouldContinue {
 
     public boolean isMinusOne() {
         return value == -1;
+    }
+
+    public boolean isZero() {
+        return value == 0;
     }
 
     public TargetOffset decrement() {
@@ -70,9 +73,4 @@ public class TargetOffset implements RepeatingNode.ShouldContinue {
                     new TargetOffset(31),
                     new TargetOffset(32)
     };
-
-    @Override
-    public boolean shouldContinue() {
-        return value == 0;
-    }
 }
