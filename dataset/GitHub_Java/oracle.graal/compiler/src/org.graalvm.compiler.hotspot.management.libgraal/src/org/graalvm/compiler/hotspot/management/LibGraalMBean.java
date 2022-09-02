@@ -631,7 +631,7 @@ public class LibGraalMBean implements DynamicMBean {
             for (String objectId : objectIds) {
                 try {
                     ObjectName objectName = new ObjectName(objectId);
-                    if (aggregatedMemoryPoolBean != null && parseMemoryPoolObjectName(objectName) != null) {
+                    if (parseMemoryPoolObjectName(objectName) != null) {
                         aggregatedMemoryPoolBean.removeDelegate(objectName);
                     }
                     if (mBeanServer.isRegistered(objectName)) {

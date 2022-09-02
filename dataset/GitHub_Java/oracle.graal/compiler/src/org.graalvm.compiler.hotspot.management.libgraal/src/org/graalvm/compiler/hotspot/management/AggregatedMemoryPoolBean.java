@@ -27,14 +27,12 @@ package org.graalvm.compiler.hotspot.management;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import javax.management.AttributeNotFoundException;
 import javax.management.DynamicMBean;
 import javax.management.MBeanException;
-import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 import javax.management.ReflectionException;
 import javax.management.openmbean.CompositeData;
@@ -47,21 +45,18 @@ import org.graalvm.nativeimage.Platforms;
 @Platforms(Platform.HOSTED_ONLY.class)
 public final class AggregatedMemoryPoolBean implements MemoryPoolMXBean {
 
-    private static final String OBJECT_NAME = "java.lang:type=MemoryPool,name=Libgraal";
+    private static final String[] MEMORY_MANAGER_NAMES = new String[0];
 
     private final ObjectName objectName;
-    private final String[] memoryManagerNames;
     private final String name;
     private final MemoryType type;
     private final Map<ObjectName, DynamicMBean> delegates;
 
-    AggregatedMemoryPoolBean(DynamicMBean delegate, ObjectName delegateObjectName) throws MalformedObjectNameException {
+    AggregatedMemoryPoolBean(ObjectName aggregateBeanObjectName, DynamicMBean delegate, ObjectName delegateObjectName) {
         this.delegates = Collections.synchronizedMap(new HashMap<>());
-        this.objectName = new ObjectName(OBJECT_NAME);
+        this.objectName = aggregateBeanObjectName;
         String typeName = safeReadAttribute(delegate, "Type", String.class);
         this.type = typeName != null ? MemoryType.valueOf(typeName) : MemoryType.NON_HEAP;
-        String[] names = safeReadAttribute(delegate, "MemoryManagerNames", String[].class);
-        this.memoryManagerNames = names != null ? names : new String[]{"unknown"};
         this.name = String.format("Aggregated %s", delegate.getMBeanInfo().getDescription());
         this.delegates.put(delegateObjectName, delegate);
     }
@@ -134,7 +129,7 @@ public final class AggregatedMemoryPoolBean implements MemoryPoolMXBean {
 
     @Override
     public String[] getMemoryManagerNames() {
-        return Arrays.copyOf(memoryManagerNames, memoryManagerNames.length);
+        return MEMORY_MANAGER_NAMES;
     }
 
     @Override
