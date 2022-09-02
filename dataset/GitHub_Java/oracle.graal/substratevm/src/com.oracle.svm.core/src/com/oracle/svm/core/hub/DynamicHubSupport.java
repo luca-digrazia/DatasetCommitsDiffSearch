@@ -37,6 +37,7 @@ import com.oracle.svm.core.c.NonmovableArrays;
 
 public final class DynamicHubSupport {
 
+    private int maxTypeId;
     @UnknownObjectField(types = {byte[].class}) private byte[] referenceMapEncoding;
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -44,11 +45,21 @@ public final class DynamicHubSupport {
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
+    public void setMaxTypeId(int maxTypeId) {
+        this.maxTypeId = maxTypeId;
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public int getMaxTypeId() {
+        return maxTypeId;
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
     public void setData(NonmovableArray<Byte> referenceMapEncoding) {
         this.referenceMapEncoding = NonmovableArrays.getHostedArray(referenceMapEncoding);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.")
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static NonmovableArray<Byte> getReferenceMapEncoding() {
         return NonmovableArrays.fromImageHeap(ImageSingletons.lookup(DynamicHubSupport.class).referenceMapEncoding);
     }
