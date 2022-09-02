@@ -593,9 +593,6 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
             int scratchOffset = DeoptimizedFrame.getScratchSpaceOffset();
             asm.str(64, r0, AArch64Address.createUnscaledImmediateAddress(r1, scratchOffset));
 
-            // Move DeoptimizedFrame into the first argument register (static method)
-            asm.mov(64, r0, r1);
-
             super.enter(tasm);
         }
     }
@@ -610,7 +607,15 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
             AArch64MacroAssembler asm = (AArch64MacroAssembler) tasm.asm;
 
             /* The new stack pointer is passed in as the first method parameter. */
-            asm.mov(64, sp, r0);
+            Register firstParameter = tasm.frameMap.getRegisterConfig().getCallingConventionRegisters(SubstrateCallingConventionType.JavaCall, tasm.target.wordJavaKind).get(0);
+            asm.mov(64, sp, firstParameter);
+            /*
+             * Compensate that we set the stack pointer after the return address was pushed. Note
+             * that the "new" frame location does not have a valid return address at this point.
+             * That is OK because the return address for the deoptimization target frame will be
+             * patched into this location.
+             */
+            asm.sub(64, sp, sp, FrameAccess.returnAddressSize());
 
             super.enter(tasm);
         }
@@ -623,7 +628,7 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
 
             // Restore the return value registers (the DeoptimizedFrame is in r1).
             int scratchOffset = DeoptimizedFrame.getScratchSpaceOffset();
-            asm.ldr(64, r0, AArch64Address.createUnscaledImmediateAddress(r0, scratchOffset));
+            asm.ldr(64, r0, AArch64Address.createUnscaledImmediateAddress(r1, scratchOffset));
         }
     }
 
