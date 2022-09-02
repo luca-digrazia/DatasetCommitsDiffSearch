@@ -84,12 +84,6 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 final class Target_java_lang_Object {
 
     @Substitute
-    @TargetElement(name = "registerNatives")
-    private static void registerNativesSubst() {
-        /* We reimplemented all native methods, so nothing to do. */
-    }
-
-    @Substitute
     @TargetElement(name = "getClass")
     private Object getClassSubst() {
         return readHub(this);
