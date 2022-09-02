@@ -41,18 +41,18 @@ import javax.management.DynamicMBean;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 
-import org.graalvm.compiler.core.GraalServiceThread;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.libgraal.jni.HotSpotToSVMScope;
 import org.graalvm.libgraal.jni.JNI;
 import org.graalvm.libgraal.jni.JNIUtil;
-import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.WordFactory;
 
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import org.graalvm.compiler.core.GraalServiceThread;
+import org.graalvm.nativeimage.CurrentIsolate;
 
 class MBeanProxy<T extends DynamicMBean> {
 
@@ -82,9 +82,7 @@ class MBeanProxy<T extends DynamicMBean> {
     private static final byte[] SVM_HS_ENTRYPOINTS_CLASS = null;
 
     /**
-     * Pending MBeans registrations on HotSpot side.
-     *
-     * Access is synchronized on {@code MBeanProxy.class}.
+     * Pending MBeans registrations on HotSpot side. Guarded by: {@code MBeanProxy.class}.
      */
     private static Queue<MBeanProxy<?>> registrations = new ArrayDeque<>();
 
@@ -100,16 +98,13 @@ class MBeanProxy<T extends DynamicMBean> {
 
     /**
      * MBeans to un-register on HotSpot side when isolate is closed. The first add to the list
-     * registers a shutdown hook performing the un-registration.
-     *
-     * Access is synchronized on {@code MBeanProxy.class}.
+     * registers a shutdown hook performing the un-registration. Guarded by:
+     * {@code MBeanProxy.class}.
      */
     private static final List<MBeanProxy<?>> mBeansToUnregisterOnIsolateClose = new LinkedList<>();
 
     /**
-     * Lifecycle state.
-     *
-     * Access is synchronized on {@code MBeanProxy.class}.
+     * Lifecycle state. Guarded by: {@code MBeanProxy.class}.
      *
      * @see State
      */
@@ -422,8 +417,12 @@ class MBeanProxy<T extends DynamicMBean> {
     @SuppressWarnings("try")
     private static void registerNatives(JNI.JNIEnv env, JNI.JObject classLoader, JNI.JClass target) {
         try (HotSpotToSVMScope<Id> s = new HotSpotToSVMScope<>(Id.RegisterNatives, env)) {
+            JNI.JClass runtimeClass = findClassInHotSpot(env, classLoader, SVMToHotSpotCalls.CLASS_RUNTIME, true);
             JNI.JClass libgraalClass = findClassInHotSpot(env, classLoader, SVMToHotSpotCalls.CLASS_LIBGRAAL, true);
-            SVMToHotSpotCalls.registerNatives(env, libgraalClass, target);
+            JNI.JObject runtime = SVMToHotSpotCalls.getRuntime(env, runtimeClass);
+            if (runtime.isNonNull()) {
+                SVMToHotSpotCalls.registerNatives(env, libgraalClass, runtime, target);
+            }
             checkException(env, "Failed to register natives");
         }
     }
@@ -464,7 +463,7 @@ class MBeanProxy<T extends DynamicMBean> {
     private static void unregister(List<MBeanProxy<?>> toUnregister) {
         JNI.JNIEnv env = getCurrentJNIEnv();
         JNI.JClass svmHsEntryPoints = getHotSpotEntryPoints();
-        JNI.JObject factory = getFactory(getCurrentJNIEnv(), svmHsEntryPoints);
+        JNI.JObject factory = getFactory(getCurrentJNIEnv(), getHotSpotEntryPoints());
         try (HotSpotToSVMScope<Id> s = new HotSpotToSVMScope<>(Id.UnregisterMBeans, env)) {
             JNI.JObjectArray objectNamesHandle = JNIUtil.NewObjectArray(env, toUnregister.size(), SVMToHotSpotCalls.findClass(env, getBinaryName(String.class.getName())), WordFactory.nullPointer());
             for (int i = 0; i < toUnregister.size(); i++) {

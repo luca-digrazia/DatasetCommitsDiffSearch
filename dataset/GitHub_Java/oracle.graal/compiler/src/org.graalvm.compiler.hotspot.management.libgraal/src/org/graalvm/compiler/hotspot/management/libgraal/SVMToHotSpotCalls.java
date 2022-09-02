@@ -46,6 +46,7 @@ import org.graalvm.word.WordFactory;
 final class SVMToHotSpotCalls {
 
     private static final String CLASS_SERVICES = "jdk/vm/ci/services/Services";
+    static final String CLASS_RUNTIME = "jdk/vm/ci/hotspot/HotSpotJVMCIRuntime";
     static final String CLASS_LIBGRAAL = "org/graalvm/libgraal/LibGraal";
 
     private static final String[] METHOD_GET_FACTORY = {
@@ -86,7 +87,7 @@ final class SVMToHotSpotCalls {
     };
     private static final String[] METHOD_REGISTER_NATIVES = {
                     "registerNativeMethods",
-                    "(Ljava/lang/Class;)V"
+                    "(Ljdk/vm/ci/hotspot/HotSpotJVMCIRuntime;Ljava/lang/Class;)V"
     };
     private static final String[] FIELD_NATIVES_REGISTERED = {
                     "nativesRegistered",
@@ -189,10 +190,11 @@ final class SVMToHotSpotCalls {
         return env.getFunctions().getCallStaticObjectMethodA().call(env, runtimeClass, runtimeId, nullPointer());
     }
 
-    static void registerNatives(JNI.JNIEnv env, JNI.JClass libgraal, JNI.JClass target) {
+    static void registerNatives(JNI.JNIEnv env, JNI.JClass libgraal, JNI.JObject runtime, JNI.JClass target) {
         JNI.JMethodID registerId = findMethod(env, libgraal, true, false, METHOD_REGISTER_NATIVES);
-        JNI.JValue params = StackValue.get(1, JNI.JValue.class);
-        params.addressOf(0).setJObject(target);
+        JNI.JValue params = StackValue.get(2, JNI.JValue.class);
+        params.addressOf(0).setJObject(runtime);
+        params.addressOf(1).setJObject(target);
         env.getFunctions().getCallStaticObjectMethodA().call(env, libgraal, registerId, params);
     }
 
