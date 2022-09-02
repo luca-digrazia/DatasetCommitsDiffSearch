@@ -111,9 +111,11 @@ public final class NFIContextExtension implements ContextExtension {
         }
     }
 
-    public synchronized void addNativeLibrary(ExternalLibrary library) {
-        if (!nativeLibraries.contains(library)) {
-            nativeLibraries.add(library);
+    public void addNativeLibrary(ExternalLibrary library) {
+        synchronized (nativeLibraries) {
+            if (!nativeLibraries.contains(library)) {
+                nativeLibraries.add(library);
+            }
         }
     }
 
@@ -135,7 +137,7 @@ public final class NFIContextExtension implements ContextExtension {
         return wrapper;
     }
 
-    private synchronized void addLibraries(LLVMContext context) {
+    private void addLibraries(LLVMContext context) {
         CompilerAsserts.neverPartOfCompilation();
         if (!internalLibrariesAdded) {
             ExternalLibrary externalLibrary = context.addInternalLibrary("libsulong-native." + getNativeLibrarySuffix(), "<default nfi library>");
@@ -147,7 +149,7 @@ public final class NFIContextExtension implements ContextExtension {
         }
     }
 
-    private synchronized void addLibrary(ExternalLibrary lib, LLVMContext context) throws UnsatisfiedLinkError {
+    private void addLibrary(ExternalLibrary lib, LLVMContext context) throws UnsatisfiedLinkError {
         CompilerAsserts.neverPartOfCompilation();
         if (!libraryHandles.containsKey(lib) && !handleSpecialLibraries(lib)) {
             try {
@@ -278,42 +280,48 @@ public final class NFIContextExtension implements ContextExtension {
         return types;
     }
 
-    public synchronized NativeLookupResult getNativeFunctionOrNull(LLVMContext context, String name) {
+    public NativeLookupResult getNativeFunctionOrNull(LLVMContext context, String name) {
         CompilerAsserts.neverPartOfCompilation();
-        addLibraries(context);
-
-        MapCursor<ExternalLibrary, Object> cursor = libraryHandles.getEntries();
-        while (cursor.advance()) {
-            Object symbol = getNativeFunctionOrNull(cursor.getValue(), name);
-            if (symbol != null) {
-                return new NativeLookupResult(cursor.getKey(), symbol);
+        synchronized (libraryHandles) {
+            synchronized (nativeLibraries) {
+                addLibraries(context);
             }
+            MapCursor<ExternalLibrary, Object> cursor = libraryHandles.getEntries();
+            while (cursor.advance()) {
+                Object symbol = getNativeFunctionOrNull(cursor.getValue(), name);
+                if (symbol != null) {
+                    return new NativeLookupResult(cursor.getKey(), symbol);
+                }
+            }
+            Object symbol = getNativeFunctionOrNull(defaultLibraryHandle, name);
+            if (symbol != null) {
+                assert isInitialized();
+                return new NativeLookupResult(defaultLibrary, symbol);
+            }
+            return null;
         }
-        Object symbol = getNativeFunctionOrNull(defaultLibraryHandle, name);
-        if (symbol != null) {
-            assert isInitialized();
-            return new NativeLookupResult(defaultLibrary, symbol);
-        }
-        return null;
     }
 
-    private synchronized NativeLookupResult getNativeDataObjectOrNull(LLVMContext context, String name) {
+    private NativeLookupResult getNativeDataObjectOrNull(LLVMContext context, String name) {
         CompilerAsserts.neverPartOfCompilation();
-        addLibraries(context);
-
-        MapCursor<ExternalLibrary, Object> cursor = libraryHandles.getEntries();
-        while (cursor.advance()) {
-            Object symbol = getNativeDataObjectOrNull(cursor.getValue(), name);
-            if (symbol != null) {
-                return new NativeLookupResult(cursor.getKey(), symbol);
+        synchronized (libraryHandles) {
+            synchronized (nativeLibraries) {
+                addLibraries(context);
             }
+            MapCursor<ExternalLibrary, Object> cursor = libraryHandles.getEntries();
+            while (cursor.advance()) {
+                Object symbol = getNativeDataObjectOrNull(cursor.getValue(), name);
+                if (symbol != null) {
+                    return new NativeLookupResult(cursor.getKey(), symbol);
+                }
+            }
+            Object symbol = getNativeDataObjectOrNull(defaultLibraryHandle, name);
+            if (symbol != null) {
+                assert isInitialized();
+                return new NativeLookupResult(defaultLibrary, symbol);
+            }
+            return null;
         }
-        Object symbol = getNativeDataObjectOrNull(defaultLibraryHandle, name);
-        if (symbol != null) {
-            assert isInitialized();
-            return new NativeLookupResult(defaultLibrary, symbol);
-        }
-        return null;
     }
 
     private static Object getNativeDataObjectOrNull(Object libraryHandle, String name) {
