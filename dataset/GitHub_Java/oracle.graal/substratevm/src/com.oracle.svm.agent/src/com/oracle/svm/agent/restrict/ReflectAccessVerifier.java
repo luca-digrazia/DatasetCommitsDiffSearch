@@ -247,4 +247,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         return false;
     }
 
+    public void collectInnerClasses(JNIEnvironment jni) {
+        typeAccessChecker.collectInnerClasses(jni, agent.handles());
+    }
 }

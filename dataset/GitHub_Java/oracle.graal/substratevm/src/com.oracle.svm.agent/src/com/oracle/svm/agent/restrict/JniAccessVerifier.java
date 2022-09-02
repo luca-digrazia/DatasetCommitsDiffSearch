@@ -221,4 +221,7 @@ public class JniAccessVerifier extends AbstractAccessVerifier {
         return typeAccessChecker.getType(arrayClass) != null;
     }
 
+    public void collectInnerClasses(JNIEnvironment jni) {
+        typeAccessChecker.collectInnerClasses(jni, agent.handles());
+    }
 }

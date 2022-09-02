@@ -1154,6 +1154,9 @@ final class BreakpointInterceptor {
     }
 
     public static void onVMInit(JvmtiEnv jvmti, JNIEnvironment jni) {
+        if (accessVerifier != null) {
+            accessVerifier.collectInnerClasses(jni);
+        }
         Map<Long, Breakpoint> breakpoints;
         if (experimentalClassLoaderSupport) {
             // Breakpoints are added when class loaders are added and must be thread-safe
