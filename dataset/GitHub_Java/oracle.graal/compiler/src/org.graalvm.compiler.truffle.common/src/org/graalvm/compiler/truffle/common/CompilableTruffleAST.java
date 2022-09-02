@@ -90,9 +90,9 @@ public interface CompilableTruffleAST {
     int getCallCount();
 
     /**
-     * Cancel the compilation of this truffle ast.
+     * Cancel the installed task, i.e. cancel the compilation of this truffle ast.
      */
-    boolean cancelCompilation(Object source, CharSequence reason);
+    boolean cancelInstalledTask(Object source, CharSequence reason);
 
     /**
      * @param ast the ast to compare to
