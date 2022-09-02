@@ -40,9 +40,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 
 public final class OptimizedCompilationProfile {
-    private static final String ARGUMENT_TYPES_ASSUMPTION_NAME = "Profiled Argument Types";
-    private static final String RETURN_TYPE_ASSUMPTION_NAME = "Profiled Return Type";
-
     /**
      * Number of times an installed code for this tree was seen invalidated.
      */
@@ -135,7 +132,7 @@ public final class OptimizedCompilationProfile {
              * creating an invalid assumption but leaving the type field null.
              */
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            profiledArgumentTypesAssumption = createInvalidAssumption(ARGUMENT_TYPES_ASSUMPTION_NAME);
+            profiledArgumentTypesAssumption = createInvalidAssumption("Profiled Argument Types");
         }
 
         if (profiledArgumentTypesAssumption.isValid()) {
@@ -153,7 +150,7 @@ public final class OptimizedCompilationProfile {
              * creating an invalid assumption but leaving the type field null.
              */
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            profiledReturnTypeAssumption = createInvalidAssumption(RETURN_TYPE_ASSUMPTION_NAME);
+            profiledReturnTypeAssumption = createInvalidAssumption("Profiled Return Type");
         }
 
         if (profiledReturnTypeAssumption.isValid()) {
@@ -213,7 +210,7 @@ public final class OptimizedCompilationProfile {
             // for immediate compiles.
             if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleReturnTypeSpeculation)) {
                 profiledReturnType = classOf(result);
-                profiledReturnTypeAssumption = createValidAssumption(RETURN_TYPE_ASSUMPTION_NAME);
+                profiledReturnTypeAssumption = createValidAssumption("Profiled Return Type");
             }
         } else if (profiledReturnType != null) {
             if (result == null || profiledReturnType != result.getClass()) {
@@ -337,10 +334,8 @@ public final class OptimizedCompilationProfile {
                 result[i] = classOf(args[i]);
             }
             profiledArgumentTypes = result;
-            profiledArgumentTypesAssumption = createValidAssumption(ARGUMENT_TYPES_ASSUMPTION_NAME);
-        } else {
-            profiledArgumentTypesAssumption = createInvalidAssumption(ARGUMENT_TYPES_ASSUMPTION_NAME);
         }
+        profiledArgumentTypesAssumption = createValidAssumption("Profiled Argument Types");
     }
 
     private void updateProfiledArgumentTypes(Object[] args, Class<?>[] types) {
@@ -349,7 +344,7 @@ public final class OptimizedCompilationProfile {
         for (int j = 0; j < types.length; j++) {
             types[j] = joinTypes(types[j], classOf(args[j]));
         }
-        profiledArgumentTypesAssumption = createValidAssumption(ARGUMENT_TYPES_ASSUMPTION_NAME);
+        profiledArgumentTypesAssumption = createValidAssumption("Profiled Argument Types");
     }
 
     private static boolean checkProfiledArgumentTypes(Object[] args, Class<?>[] types) {
