@@ -61,7 +61,7 @@ class SubstrateAArch64Feature implements Feature {
             }
         });
 
-        if (!SubstrateOptions.useLLVMBackend()) {
+        if (SubstrateOptions.CompilerBackend.getValue().equals("lir")) {
             ImageSingletons.add(SubstrateBackendFactory.class, new SubstrateBackendFactory() {
                 @Override
                 public SubstrateBackend newBackend(Providers newProviders) {

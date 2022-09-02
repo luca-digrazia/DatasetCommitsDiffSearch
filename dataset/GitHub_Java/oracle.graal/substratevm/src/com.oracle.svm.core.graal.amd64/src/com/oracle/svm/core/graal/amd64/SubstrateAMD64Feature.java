@@ -63,8 +63,6 @@ class SubstrateAMD64Feature implements Feature {
         });
 
         if (CompilerBackend.getValue().equals("lir")) {
-            AMD64CalleeSavedRegisters.createAndRegister();
-
             ImageSingletons.add(SubstrateBackendFactory.class, new SubstrateBackendFactory() {
                 @Override
                 public SubstrateBackend newBackend(Providers newProviders) {

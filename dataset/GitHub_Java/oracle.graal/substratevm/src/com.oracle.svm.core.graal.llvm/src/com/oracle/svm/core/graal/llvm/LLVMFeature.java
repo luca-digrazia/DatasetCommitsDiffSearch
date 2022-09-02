@@ -39,7 +39,6 @@ import java.util.Map;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
-import org.graalvm.compiler.core.llvm.LLVMUtils;
 import org.graalvm.compiler.core.llvm.LLVMUtils.TargetSpecific;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
@@ -73,8 +72,7 @@ import com.oracle.svm.core.graal.nodes.ReadExceptionObjectNode;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.snippets.ExceptionUnwind;
-import com.oracle.svm.core.thread.VMThreads.StatusSupport;
+import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.FeatureImpl;
 import com.oracle.svm.hosted.c.util.FileUtils;
@@ -152,9 +150,9 @@ public class LLVMFeature implements Feature, GraalFeature {
             }
         });
 
-        ImageSingletons.add(ExceptionUnwind.class, new ExceptionUnwind() {
+        ImageSingletons.add(SnippetRuntime.ExceptionUnwind.class, new SnippetRuntime.ExceptionUnwind() {
             @Override
-            protected void customUnwindException(Pointer callerSP) {
+            public void unwindException(Pointer callerSP) {
                 LLVMPersonalityFunction.raiseException();
             }
         });
@@ -206,7 +204,7 @@ public class LLVMFeature implements Feature, GraalFeature {
              * code. We therefore need the CFunctionEpilogueNode to restore the Java state before we
              * handle the exception.
              */
-            CFunctionEpilogueNode cFunctionEpilogueNode = new CFunctionEpilogueNode(StatusSupport.STATUS_IN_NATIVE);
+            CFunctionEpilogueNode cFunctionEpilogueNode = new CFunctionEpilogueNode();
             graph.add(cFunctionEpilogueNode);
             graph.addAfterFixed(readRegNode, cFunctionEpilogueNode);
             cFunctionEpilogueNode.lower(tool);
@@ -239,7 +237,7 @@ public class LLVMFeature implements Feature, GraalFeature {
         String output = null;
         try (OutputStream os = new ByteArrayOutputStream()) {
             List<String> cmd = new ArrayList<>();
-            cmd.add(LLVMUtils.getLLVMBinDir().resolve("llvm-config").toString());
+            cmd.add("llvm-config");
             cmd.add("--version");
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(true);
