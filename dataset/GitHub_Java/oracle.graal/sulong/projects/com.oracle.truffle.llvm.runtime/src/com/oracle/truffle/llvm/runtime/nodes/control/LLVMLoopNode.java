@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -53,6 +53,8 @@ public abstract class LLVMLoopNode extends LLVMControlFlowNode {
     }
 
     public abstract void executeLoop(VirtualFrame frame);
+
+    public abstract int[] getSuccessors();
 
     @Override
     public WrapperNode createWrapper(ProbeNode probe) {

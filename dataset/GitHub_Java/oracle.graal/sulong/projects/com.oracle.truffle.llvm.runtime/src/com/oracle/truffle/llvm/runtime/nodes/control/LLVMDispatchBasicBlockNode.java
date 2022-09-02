@@ -266,16 +266,16 @@ public abstract class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                 assert noPhisNecessary(resumeNode);
                 nullDeadSlots(frame, bb.nullableAfter);
                 resumeNode.execute(frame);
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+                CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException("must not reach here");
             } else if (controlFlowNode instanceof LLVMUnreachableNode) {
                 LLVMUnreachableNode unreachableNode = (LLVMUnreachableNode) controlFlowNode;
                 assert noPhisNecessary(unreachableNode);
                 unreachableNode.execute(frame);
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+                CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException("must not reach here");
             } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+                CompilerDirectives.transferToInterpreter();
                 throw new UnsupportedOperationException("unexpected controlFlowNode type: " + controlFlowNode);
             }
         }

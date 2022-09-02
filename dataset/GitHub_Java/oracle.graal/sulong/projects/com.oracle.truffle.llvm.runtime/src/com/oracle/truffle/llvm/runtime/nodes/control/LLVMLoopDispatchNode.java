@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -301,7 +301,7 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
                     continue outer;
                 }
             } else {    // some control flow nodes should be never part of a loop
-                CompilerDirectives.transferToInterpreterAndInvalidate();
+                CompilerAsserts.neverPartOfCompilation();
                 throw new UnsupportedOperationException("unexpected controlFlowNode type: " + controlFlowNode);
             }
         }
