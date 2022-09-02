@@ -1087,9 +1087,11 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @TargetElement(name = "getPackage", onlyWith = JDK8OrEarlier.class)
     public native Package getPackageJDK8OrEarlier();
 
-    @KeepOriginal
+    @Substitute
     @TargetElement(name = "getPackage", onlyWith = JDK9OrLater.class)
-    public native Package getPackageJDK9OrLater();
+    public Package getPackageJDK9OrLater() {
+        throw VMError.unsupportedFeature("JDK9OrLater: DynamicHub.getPackage()");
+    }
 
     @Substitute //
     @TargetElement(onlyWith = JDK9OrLater.class)
