@@ -570,8 +570,8 @@ public final class LLVMContext {
     public ExternalLibrary addExternalLibrary(String lib, Object reason, LibraryLocator locator) {
         CompilerAsserts.neverPartOfCompilation();
         ExternalLibrary newLib = createExternalLibrary(lib, reason, locator);
-        if (isDefaultLibrary(newLib)) {
-            // Disallow loading default libraries explicitly.
+        if (isInternalLibrary(newLib)) {
+            // Disallow loading internal libraries explicitly.
             return null;
         }
         ExternalLibrary existingLib = getOrAddExternalLibrary(newLib);
@@ -616,8 +616,8 @@ public final class LLVMContext {
      */
     public boolean ensureExternalLibraryAdded(ExternalLibrary newLib) {
         CompilerAsserts.neverPartOfCompilation();
-        if (isDefaultLibrary(newLib)) {
-            // Disallow loading default libraries explicitly.
+        if (isInternalLibrary(newLib)) {
+            // Disallow loading internal libraries explicitly.
             return false;
         }
         ExternalLibrary existingLib = getOrAddExternalLibrary(newLib);
@@ -635,10 +635,6 @@ public final class LLVMContext {
         if (lib.getPath() != null) {
             return isInternalLibraryPath(lib.getPath());
         }
-        return isDefaultLibrary(lib);
-    }
-
-    private boolean isDefaultLibrary(ExternalLibrary lib) {
         return internalLibraryNames.contains(lib.getName());
     }
 
