@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,41 +30,42 @@
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.multithreading;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
+import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64Error;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMReadStringNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMBuiltin;
+import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI64StoreNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI8StoreNode.LLVMI8OffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.pthread.LLVMPThreadContext;
+import com.oracle.truffle.llvm.runtime.pthread.LLVMThreadException;
+import com.oracle.truffle.llvm.runtime.pthread.PThreadExitException;
 
 public final class LLVMPThreadThreadIntrinsics {
 
     @NodeChild(type = LLVMExpressionNode.class, value = "thread")
-    @NodeChild(type = LLVMExpressionNode.class, value = "attr")
     @NodeChild(type = LLVMExpressionNode.class, value = "startRoutine")
     @NodeChild(type = LLVMExpressionNode.class, value = "arg")
     public abstract static class LLVMPThreadCreate extends LLVMBuiltin {
 
-        @Child LLVMStoreNode store = null;
-
         @Specialization
-        protected int doIntrinsic(LLVMPointer thread, @SuppressWarnings("unused") LLVMPointer attr, LLVMPointer startRoutine, LLVMPointer arg, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-            if (store == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                store = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.I64);
+        @TruffleBoundary
+        protected int doIntrinsic(LLVMPointer thread, LLVMPointer startRoutine, LLVMPointer arg,
+                        @Cached LLVMI64StoreNode store,
+                        @CachedContext(LLVMLanguage.class) LLVMContext context) {
+            LLVMPThreadStart.LLVMPThreadRunnable init = new LLVMPThreadStart.LLVMPThreadRunnable(startRoutine, arg, context);
+            final Thread t = context.getpThreadContext().createThread(init);
+            if (t == null) {
+                return LLVMAMD64Error.EAGAIN;
             }
-
-            UtilFunctionCall.FunctionCallRunnable init = new UtilFunctionCall.FunctionCallRunnable(startRoutine, arg, ctx, true);
-            Thread t = ctx.getEnv().createThread(init);
             store.executeWithTarget(thread, t.getId());
-            synchronized (ctx.createdThreads) {
-                UtilAccessCollectionWithBoundary.add(ctx.createdThreads, t);
-            }
-            UtilAccessCollectionWithBoundary.put(ctx.threadStorage, t.getId(), t);
             t.start();
             return 0;
         }
@@ -74,66 +75,40 @@ public final class LLVMPThreadThreadIntrinsics {
     public abstract static class LLVMPThreadExit extends LLVMBuiltin {
 
         @Specialization
-        protected int doIntrinsic(Object retval, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-            UtilAccessCollectionWithBoundary.put(ctx.retValStorage, Thread.currentThread().getId(), retval);
+        protected int doIntrinsic(Object returnValue,
+                        @CachedContext(LLVMLanguage.class) LLVMContext context) {
+            setThreadReturnValue(returnValue, context);
             throw new PThreadExitException();
         }
+
+        @TruffleBoundary
+        private static void setThreadReturnValue(Object returnValue, LLVMContext context) {
+            context.getpThreadContext().setThreadReturnValue(Thread.currentThread().getId(), returnValue);
+        }
     }
 
-    @NodeChild(type = LLVMExpressionNode.class, value = "th")
-    @NodeChild(type = LLVMExpressionNode.class, value = "threadReturn")
+    @NodeChild(type = LLVMExpressionNode.class, value = "threadId")
     public abstract static class LLVMPThreadJoin extends LLVMBuiltin {
 
-        @Child LLVMStoreNode storeNode;
-
         @Specialization
-        protected int doIntrinsic(long th, LLVMPointer threadReturn, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-            if (storeNode == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                storeNode = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.POINTER);
-            }
-            try {
-                Thread thread = UtilAccessCollectionWithBoundary.get(ctx.threadStorage, th);
-                if (thread == null) {
-                    return 0;
+        @TruffleBoundary
+        protected Object doIntrinsic(long threadID,
+                        @CachedContext(LLVMLanguage.class) LLVMContext context) {
+            final Thread thread = context.getpThreadContext().getThread(threadID);
+            if (thread != null) {
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new LLVMThreadException(this, "Failed to join thread", e);
                 }
-                thread.join();
-                Object retVal = UtilAccessCollectionWithBoundary.get(ctx.retValStorage, th);
-                if (!threadReturn.isNull()) {
-                    storeNode.executeWithTarget(threadReturn, retVal);
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
             }
-            return 0;
-        }
-    }
 
-    @NodeChild(type = LLVMExpressionNode.class, value = "onceControl")
-    @NodeChild(type = LLVMExpressionNode.class, value = "initRoutine")
-    public abstract static class LLVMPThreadOnce extends LLVMBuiltin {
-
-        @Specialization
-        protected int doIntrinsic(LLVMPointer onceControl, LLVMPointer initRoutine, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-            synchronized (ctx.onceStorage) {
-                if (ctx.onceStorage.contains(onceControl)) {
-                    return 0;
-                }
-                ctx.onceStorage.add(onceControl);
-            }
-            UtilFunctionCall.FunctionCallRunnable init = new UtilFunctionCall.FunctionCallRunnable(initRoutine, null, ctx, false);
-            init.run();
-            return 0;
-        }
-    }
-
-    @NodeChild(type = LLVMExpressionNode.class, value = "t1")
-    @NodeChild(type = LLVMExpressionNode.class, value = "t2")
-    public abstract static class LLVMPThreadEqual extends LLVMBuiltin {
-
-        @Specialization
-        protected int doIntrinsic(long t1, long t2) {
-            return t1 == t2 ? 1 : 0;
+            LLVMPThreadContext pthreadContext = context.getpThreadContext();
+            Object threadReturnValue = pthreadContext.getThreadReturnValue(threadID);
+            pthreadContext.clearThreadReturnValue(threadID);
+            pthreadContext.clearThreadID(threadID);
+            return threadReturnValue;
         }
     }
 
@@ -141,7 +116,77 @@ public final class LLVMPThreadThreadIntrinsics {
 
         @Specialization
         protected long doIntrinsic() {
+            return getThreadId();
+        }
+
+        @TruffleBoundary
+        private static long getThreadId() {
             return Thread.currentThread().getId();
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class, value = "id")
+    @NodeChild(type = LLVMExpressionNode.class, value = "namePointer")
+    public abstract static class LLVMPThreadSetName extends LLVMBuiltin {
+
+        @Specialization
+        protected int doIntrinsic(long id, LLVMPointer namePointer,
+                        @Cached LLVMReadStringNode readString,
+                        @CachedContext(LLVMLanguage.class) LLVMContext context) {
+
+            String name = readString.executeWithTarget(namePointer);
+            final LLVMPThreadContext threadContext = context.getpThreadContext();
+            Thread thread = threadContext.getThread(id);
+            if (thread == null) {
+                return LLVMAMD64Error.ERANGE;
+            }
+            setName(thread, name);
+            return 0;
+        }
+
+        @TruffleBoundary
+        protected void setName(Thread thread, String name) {
+            thread.setName(name);
+
+        }
+
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class, value = "threadID")
+    @NodeChild(type = LLVMExpressionNode.class, value = "buffer")
+    @NodeChild(type = LLVMExpressionNode.class, value = "targetLen")
+    public abstract static class LLVMPThreadGetName extends LLVMBuiltin {
+
+        @Child private LLVMI8OffsetStoreNode write = LLVMI8OffsetStoreNode.create();
+
+        @Specialization
+        protected int doIntrinsic(long threadID, LLVMPointer buffer, long targetLen,
+                        @CachedContext(LLVMLanguage.class) LLVMContext context) {
+            Thread thread = context.getpThreadContext().getThread(threadID);
+            if (thread == null) {
+                return LLVMAMD64Error.ERANGE;
+            }
+            byte[] byteString = getThreadNameAsBytes(thread);
+            long bytesWritten = 0;
+            for (int i = 0; i < byteString.length && i < targetLen - 1; i++) {
+                write.executeWithTarget(buffer, bytesWritten, byteString[i]);
+                bytesWritten++;
+            }
+            write.executeWithTarget(buffer, bytesWritten, (byte) 0);
+            if (targetLen <= byteString.length) {
+                return LLVMAMD64Error.ERANGE;
+            }
+            return 0;
+        }
+
+        @TruffleBoundary
+        protected byte[] getThreadNameAsBytes(Thread thread) {
+            if (thread == null) {
+                throw new IllegalStateException("The thread is null");
+            } else if (thread.getName() == null) {
+                throw new IllegalStateException("The thread's name is null");
+            }
+            return thread.getName().getBytes();
         }
     }
 }

@@ -38,6 +38,9 @@ import jdk.jfr.internal.Type;
  * current JFR epoch.
  */
 public class JfrTraceId {
+    public static final long BIT = 1;
+    public static final long META_SHIFT = 8;
+
     private static final int TRACE_ID_SHIFT = 16;
 
     private static final long JDK_JFR_EVENT_SUBCLASS = 16;

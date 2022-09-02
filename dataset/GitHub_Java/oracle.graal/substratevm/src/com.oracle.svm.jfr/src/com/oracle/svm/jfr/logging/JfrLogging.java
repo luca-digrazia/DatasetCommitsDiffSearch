@@ -75,7 +75,8 @@ public class JfrLogging {
     @Platforms(Platform.HOSTED_ONLY.class)
     private static String[] createLogLevels() {
         LogLevel[] values = LogLevel.values();
-        String[] result = new String[getMaxLogLevel(values) + 1];
+        int maxLevel = getMaxLogLevel(values);
+        String[] result = new String[maxLevel + 1];
         for (LogLevel logLevel : values) {
             result[getLevel(logLevel)] = logLevel.toString().toLowerCase();
         }
@@ -94,25 +95,16 @@ public class JfrLogging {
     @Platforms(Platform.HOSTED_ONLY.class)
     private static String[] createLogTagSets() {
         LogTag[] values = LogTag.values();
-        String[] result = new String[getMaxLogTagSetId(values) + 1];
+        String[] result = new String[JfrLogConfiguration.LOG_TAG_SETS.size()];
         for (LogTag logTagSet : values) {
-            StringBuilder builder = new StringBuilder();
+            StringBuilder str = new StringBuilder();
             for (JfrLogTag logTag : JfrLogConfiguration.LOG_TAG_SETS.get(logTagSet)) {
-                if (builder.length() > 0) {
-                    builder.append(",");
+                if (str.length() > 0) {
+                    str.append(",");
                 }
-                builder.append(logTag.toString().toLowerCase());
+                str.append(logTag.toString().toLowerCase());
             }
-            result[getId(logTagSet)] = builder.toString();
-        }
-        return result;
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    private static int getMaxLogTagSetId(LogTag[] values) {
-        int result = 0;
-        for (LogTag logTagSet : values) {
-            result = Math.max(result, getId(logTagSet));
+            result[getId(logTagSet)] = str.toString();
         }
         return result;
     }
