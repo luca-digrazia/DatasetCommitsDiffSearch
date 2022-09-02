@@ -1034,8 +1034,7 @@ public abstract class Source {
                 useTruffleFile = useTruffleFile.exists() ? useTruffleFile.getCanonicalFile() : useTruffleFile;
                 if (useContent == CONTENT_UNSET) {
                     if (isCharacterBased(useFileSystemContext, language, useMimeType)) {
-                        String fileMimeType = useMimeType == null ? SourceAccessor.detectMimeType(useTruffleFile, getValidMimeTypes(useFileSystemContext, language)) : useMimeType;
-                        useEncoding = useEncoding == null ? findEncoding(useTruffleFile, fileMimeType) : useEncoding;
+                        useEncoding = useEncoding == null ? findEncoding(useTruffleFile, useMimeType) : useEncoding;
                         useContent = read(useTruffleFile, useEncoding);
                     } else {
                         useContent = ByteSequence.create(useTruffleFile.readAllBytes());
@@ -1283,7 +1282,7 @@ public abstract class Source {
     }
 
     private static Charset findEncoding(TruffleFile file, String mimeType) {
-        Charset encoding = mimeType == null ? null : SourceAccessor.detectEncoding(file, mimeType);
+        Charset encoding = SourceAccessor.detectEncoding(file, mimeType);
         encoding = encoding == null ? StandardCharsets.UTF_8 : encoding;
         return encoding;
     }
