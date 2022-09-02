@@ -29,13 +29,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.Queue;
 
 import org.graalvm.compiler.options.OptionType;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.driver.MacroOption.MacroOptionKind;
-import com.oracle.svm.driver.NativeImage.ArgumentQueue;
 
 class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
 
@@ -55,16 +54,16 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
 
     boolean useDebugAttach = false;
 
-    private static void singleArgumentCheck(ArgumentQueue args, String arg) {
+    private static void singleArgumentCheck(Queue<String> args, String arg) {
         if (!args.isEmpty()) {
             NativeImage.showError("Option " + arg + " cannot be combined with other options.");
         }
     }
 
-    private static final String javaRuntimeVersion = System.getProperty("java.runtime.version");
+    private static String javaRuntimeVersion = System.getProperty("java.runtime.version");
 
     @Override
-    public boolean consume(ArgumentQueue args) {
+    public boolean consume(Queue<String> args) {
         String headArg = args.peek();
         switch (headArg) {
             case "--help":
@@ -152,18 +151,6 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 args.poll();
                 NativeImage.showWarning("Ignoring server-mode native-image argument " + headArg + ".");
                 return true;
-            case "--exclude-config":
-                args.poll();
-                String excludeJar = args.poll();
-                if (excludeJar == null) {
-                    NativeImage.showError(headArg + " requires two arguments: a jar regular expression and a resource regular expression");
-                }
-                String excludeConfig = args.poll();
-                if (excludeConfig == null) {
-                    NativeImage.showError(headArg + " requires resource regular expression");
-                }
-                nativeImage.addExcludeConfig(Pattern.compile(excludeJar), Pattern.compile(excludeConfig));
-                return true;
         }
 
         String debugAttach = "--debug-attach";
@@ -191,12 +178,7 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             processClasspathArgs(cpArgs);
             return true;
         }
-        if (headArg.startsWith(NativeImage.oH)) {
-            args.poll();
-            nativeImage.addCustomImageBuilderArgs(NativeImage.injectHostedOptionOrigin(headArg, args.argumentOrigin));
-            return true;
-        }
-        if (headArg.startsWith(NativeImage.oR)) {
+        if (headArg.startsWith(NativeImage.oH) || headArg.startsWith(NativeImage.oR)) {
             args.poll();
             nativeImage.addCustomImageBuilderArgs(headArg);
             return true;
