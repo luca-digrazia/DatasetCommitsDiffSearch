@@ -58,7 +58,6 @@ import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.InvalidBufferOffsetException;
 import com.oracle.truffle.api.interop.StopIterationException;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownKeyException;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
@@ -85,7 +84,6 @@ import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
@@ -727,7 +725,8 @@ final class HostObject implements TruffleObject {
     private static boolean isPEFriendlyBuffer(ByteBuffer buffer) {
         final Class<? extends ByteBuffer> clazz = buffer.getClass();
         final boolean result = CompilerDirectives.isPartialEvaluationConstant(clazz) &&
-                        (clazz == HEAP_BYTE_BUFFER_CLASS || clazz == HEAP_BYTE_BUFFER_R_CLASS || clazz == DIRECT_BYTE_BUFFER_CLASS || clazz == DIRECT_BYTE_BUFFER_R_CLASS);
+                        clazz == HEAP_BYTE_BUFFER_CLASS || clazz == HEAP_BYTE_BUFFER_R_CLASS ||
+                        clazz == DIRECT_BYTE_BUFFER_CLASS || clazz == DIRECT_BYTE_BUFFER_R_CLASS;
         assert result : "Unexpected Buffer subclass";
         return result;
     }
@@ -735,8 +734,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public byte readBufferByte(long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -746,7 +744,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Byte.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             return isPEFriendlyBuffer(buffer) ? buffer.get((int) index) : getBufferByteBoundary(buffer, (int) index);
         } catch (IndexOutOfBoundsException e) {
             error.enter();
@@ -762,8 +760,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferByte(long index, byte value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -773,7 +770,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Byte.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             if (isPEFriendlyBuffer(buffer)) {
                 buffer.put((int) index, value);
             } else {
@@ -783,7 +780,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Byte.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -796,8 +792,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public short readBufferShort(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -807,7 +802,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Short.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final short result = isPEFriendlyBuffer(buffer) ? buffer.getShort((int) index) : getBufferShortBoundary(buffer, (int) index);
@@ -827,8 +822,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferShort(ByteOrder order, long index, short value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -838,7 +832,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Short.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -851,7 +845,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Short.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -864,8 +857,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public int readBufferInt(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -875,7 +867,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Integer.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final int result = isPEFriendlyBuffer(buffer) ? buffer.getInt((int) index) : getBufferIntBoundary(buffer, (int) index);
@@ -895,8 +887,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferInt(ByteOrder order, long index, int value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -906,7 +897,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Integer.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -919,7 +910,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Integer.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -932,8 +922,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public long readBufferLong(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -943,7 +932,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Long.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final long result = isPEFriendlyBuffer(buffer) ? buffer.getLong((int) index) : getBufferLongBoundary(buffer, (int) index);
@@ -963,8 +952,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferLong(ByteOrder order, long index, long value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -974,7 +962,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Long.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -987,7 +975,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Long.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -1000,8 +987,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public float readBufferFloat(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -1011,7 +997,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Float.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final float result = isPEFriendlyBuffer(buffer) ? buffer.getFloat((int) index) : getBufferFloatBoundary(buffer, (int) index);
@@ -1031,8 +1017,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferFloat(ByteOrder order, long index, float value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -1042,7 +1027,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Float.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -1055,7 +1040,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Float.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -1068,8 +1052,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public double readBufferDouble(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -1079,7 +1062,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Double.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final double result = isPEFriendlyBuffer(buffer) ? buffer.getDouble((int) index) : getBufferDoubleBoundary(buffer, (int) index);
@@ -1099,8 +1082,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferDouble(ByteOrder order, long index, double value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -1110,7 +1092,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Double.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
+            final ByteBuffer buffer = (ByteBuffer) obj;
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -1123,7 +1105,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Double.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -1758,272 +1739,6 @@ final class HostObject implements TruffleObject {
         }
     }
 
-    @ExportMessage
-    boolean hasHashEntries(@Shared("isMap") @Cached IsMapNode isMap) {
-        return isMap.execute(this);
-    }
-
-    @ExportMessage
-    abstract static class GetHashSize {
-
-        @Specialization(guards = "isMap.execute(receiver)", limit = "1")
-        protected static long doMap(HostObject receiver,
-                        @Shared("isMap") @Cached IsMapNode isMap,
-                        @Shared("error") @Cached BranchProfile error) {
-            return sizeImpl((Map<?, ?>) receiver.obj);
-        }
-
-        @TruffleBoundary
-        private static int sizeImpl(Map<?, ?> map) {
-            return map.size();
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMap.execute(receiver)", limit = "1")
-        protected static long doNotMap(HostObject receiver, @Shared("isMap") @Cached IsMapNode isMap) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage(name = "isHashValueReadable")
-    @ExportMessage(name = "isHashEntryModifiable")
-    @ExportMessage(name = "isHashEntryRemovable")
-    boolean isHashValueReadable(Object key,
-                    @Shared("isMap") @Cached IsMapNode isMap,
-                    @Shared("containsKey") @Cached ContainsKeyNode containsKey) {
-        return isMap.execute(this) && containsKey.execute(this, key);
-    }
-
-    @ExportMessage
-    abstract static class ReadHashValue {
-
-        private static final Object UNDEFINED = new Object();
-
-        @SuppressWarnings("unchecked")
-        @Specialization(guards = "isMap.execute(receiver)", limit = "1")
-        protected static Object doMap(HostObject receiver, Object key,
-                        @Shared("isMap") @Cached IsMapNode isMap,
-                        @Shared("toHost") @Cached ToHostNode toHost,
-                        @Shared("toGuest") @Cached ToGuestValueNode toGuest,
-                        @Shared("error") @Cached BranchProfile error) throws UnknownKeyException {
-            Object hostKey;
-            try {
-                hostKey = toHost.execute(key, Object.class, null, receiver.languageContext, true);
-            } catch (PolyglotEngineException e) {
-                error.enter();
-                throw UnknownKeyException.create(key);
-            }
-            Object hostResult = getImpl((Map<Object, Object>) receiver.obj, hostKey, UNDEFINED);
-            if (hostResult == UNDEFINED) {
-                error.enter();
-                throw UnknownKeyException.create(key);
-            }
-            return toGuest.execute(receiver.languageContext, hostResult);
-        }
-
-        @TruffleBoundary
-        private static Object getImpl(Map<Object, Object> map, Object key, Object defaultValue) {
-            return map.getOrDefault(key, defaultValue);
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMap.execute(receiver)", limit = "1")
-        protected static Object doNotMap(HostObject receiver, Object key, @Shared("isMap") @Cached IsMapNode isMap) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage
-    boolean isHashEntryInsertable(Object key,
-                    @Shared("isMap") @Cached IsMapNode isMap,
-                    @Shared("containsKey") @Cached ContainsKeyNode containsKey) {
-        return isMap.execute(this) && !containsKey.execute(this, key);
-    }
-
-    @ExportMessage
-    abstract static class WriteHashEntry {
-
-        @SuppressWarnings("unchecked")
-        @Specialization(guards = "isMap.execute(receiver)", limit = "1")
-        protected static void doMap(HostObject receiver, Object key, Object value,
-                        @Shared("isMap") @Cached IsMapNode isMap,
-                        @Shared("toHost") @Cached ToHostNode toHost,
-                        @Shared("error") @Cached BranchProfile error) throws UnsupportedTypeException {
-
-            Object hostKey;
-            Object hostValue;
-            try {
-                hostKey = toHost.execute(key, Object.class, null, receiver.languageContext, true);
-            } catch (PolyglotEngineException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{key}, getMessage(e));
-            }
-            try {
-                hostValue = toHost.execute(value, Object.class, null, receiver.languageContext, true);
-            } catch (PolyglotEngineException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, getMessage(e));
-            }
-            putImpl((Map<Object, Object>) receiver.obj, hostKey, hostValue);
-        }
-
-        @TruffleBoundary
-        private static void putImpl(Map<Object, Object> map, Object key, Object value) {
-            map.put(key, value);
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMap.execute(receiver)", limit = "1")
-        protected static void doNotMap(HostObject receiver, Object key, Object value, @Shared("isMap") @Cached IsMapNode isMap) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage
-    abstract static class RemoveHashEntry {
-
-        @SuppressWarnings("unchecked")
-        @Specialization(guards = "isMap.execute(receiver)", limit = "1")
-        protected static void doMap(HostObject receiver, Object key,
-                        @Shared("isMap") @Cached IsMapNode isMap,
-                        @Shared("toHost") @Cached ToHostNode toHost,
-                        @Shared("error") @Cached BranchProfile error) throws UnknownKeyException {
-            Object hostKey;
-            try {
-                hostKey = toHost.execute(key, Object.class, null, receiver.languageContext, true);
-            } catch (PolyglotEngineException e) {
-                error.enter();
-                throw UnknownKeyException.create(key);
-            }
-            boolean removed = removeImpl((Map<Object, Object>) receiver.obj, hostKey);
-            if (!removed) {
-                error.enter();
-                throw UnknownKeyException.create(key);
-            }
-        }
-
-        @TruffleBoundary
-        private static boolean removeImpl(Map<?, ?> map, Object key) {
-            if (map.containsKey(key)) {
-                map.remove(key);
-                return true;
-            } else {
-                return false;
-            }
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMap.execute(receiver)", limit = "1")
-        protected static void doNotMap(HostObject receiver, Object key, @Shared("isMap") @Cached IsMapNode isMap) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage
-    abstract static class GetHashEntriesIterator {
-
-        @SuppressWarnings("unchecked")
-        @Specialization(guards = "isMap.execute(receiver)", limit = "1")
-        protected static Object doMap(HostObject receiver,
-                        @Shared("isMap") @Cached IsMapNode isMap,
-                        @Shared("toGuest") @Cached ToGuestValueNode toGuest) {
-            return toGuest.execute(receiver.languageContext, iteratorImpl((Map<Object, Object>) receiver.obj));
-        }
-
-        @TruffleBoundary
-        private static Object iteratorImpl(Map<?, ?> map) {
-            return map.entrySet().iterator();
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMap.execute(receiver)", limit = "1")
-        protected static Object doNotMap(HostObject receiver, @Shared("isMap") @Cached IsMapNode isMap) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage
-    boolean isHashEntry(@Shared("isMapEntry") @Cached IsMapEntryNode isMapEntry) {
-        return isMapEntry.execute(this);
-    }
-
-    @ExportMessage
-    abstract static class GetHashEntryKey {
-
-        @Specialization(guards = "isMapEntry.execute(receiver)", limit = "1")
-        protected static Object doMapEntry(HostObject receiver,
-                        @Shared("isMapEntry") @Cached IsMapEntryNode isMapEntry,
-                        @Shared("toGuest") @Cached ToGuestValueNode toGuest) {
-            Object hostResult = getKeyImpl((Map.Entry<?, ?>) receiver.obj);
-            return toGuest.execute(receiver.languageContext, hostResult);
-        }
-
-        @TruffleBoundary
-        private static Object getKeyImpl(Map.Entry<?, ?> entry) {
-            return entry.getKey();
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMapEntry.execute(receiver)", limit = "1")
-        protected static Object doNotMapEntry(HostObject receiver, @Shared("isMapEntry") @Cached IsMapEntryNode isMapEntry) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage
-    abstract static class GetHashEntryValue {
-
-        @Specialization(guards = "isMapEntry.execute(receiver)", limit = "1")
-        protected static Object doMapEntry(HostObject receiver,
-                        @Shared("isMapEntry") @Cached IsMapEntryNode isMapEntry,
-                        @Shared("toGuest") @Cached ToGuestValueNode toGuest) {
-            Object hostResult = getValueImpl((Map.Entry<?, ?>) receiver.obj);
-            return toGuest.execute(receiver.languageContext, hostResult);
-        }
-
-        @TruffleBoundary
-        private static Object getValueImpl(Map.Entry<?, ?> entry) {
-            return entry.getValue();
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMapEntry.execute(receiver)", limit = "1")
-        protected static Object doNotMapEntry(HostObject receiver, @Shared("isMapEntry") @Cached IsMapEntryNode isMapEntry) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage
-    abstract static class SetHashEntryValue {
-
-        @Specialization(guards = "isMapEntry.execute(receiver)", limit = "1")
-        @SuppressWarnings("unchecked")
-        protected static void doMapEntry(HostObject receiver, Object value,
-                        @Shared("isMapEntry") @Cached IsMapEntryNode isMapEntry,
-                        @Shared("toHost") @Cached ToHostNode toHost,
-                        @Shared("error") @Cached BranchProfile error) throws UnsupportedTypeException {
-            Object hostValue;
-            try {
-                hostValue = toHost.execute(value, Object.class, null, receiver.languageContext, true);
-            } catch (PolyglotEngineException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, getMessage(e));
-            }
-            setValueImpl((Map.Entry<Object, Object>) receiver.obj, hostValue);
-        }
-
-        @TruffleBoundary
-        private static Object setValueImpl(Map.Entry<Object, Object> entry, Object value) {
-            return entry.setValue(value);
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMapEntry.execute(receiver)", limit = "1")
-        protected static void doNotMapEntry(HostObject receiver, Object value, @Shared("isMapEntry") @Cached IsMapEntryNode isMapEntry) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
     @SuppressWarnings("static-method")
     @ExportMessage
     boolean hasMetaObject() {
@@ -2546,64 +2261,6 @@ final class HostObject implements TruffleObject {
                         @Cached(value = "receiver.getHostClassCache().isIteratorAccess()", allowUncached = true) boolean isIteratorAccess) {
             assert receiver.getHostClassCache().isIteratorAccess() == isIteratorAccess;
             return isIteratorAccess && receiver.obj instanceof Iterator;
-        }
-    }
-
-    @GenerateUncached
-    abstract static class IsMapNode extends Node {
-
-        public abstract boolean execute(HostObject receiver);
-
-        @Specialization
-        public boolean doDefault(HostObject receiver,
-                        @Cached(value = "receiver.getHostClassCache().isMapAccess()", allowUncached = true) boolean isMapAccess) {
-            assert receiver.getHostClassCache().isMapAccess() == isMapAccess;
-            return isMapAccess && receiver.obj instanceof Map;
-        }
-    }
-
-    @GenerateUncached
-    abstract static class ContainsKeyNode extends Node {
-
-        public abstract boolean execute(HostObject receiver, Object key);
-
-        @Specialization(guards = "isMap.execute(receiver)", limit = "1")
-        protected static boolean doMap(HostObject receiver, Object key,
-                        @Shared("isMap") @Cached IsMapNode isMap,
-                        @Cached ToHostNode toHost,
-                        @Cached BranchProfile error) {
-            Object hostKey;
-            try {
-                hostKey = toHost.execute(key, Object.class, null, receiver.languageContext, true);
-            } catch (PolyglotEngineException e) {
-                error.enter();
-                return false;
-            }
-            return containsKeyImpl((Map<?, ?>) receiver.obj, hostKey);
-        }
-
-        @TruffleBoundary
-        private static boolean containsKeyImpl(Map<?, ?> map, Object key) {
-            return map.containsKey(key);
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "!isMap.execute(receiver)", limit = "1")
-        protected static boolean doNotMap(HostObject receiver, Object key, @Shared("isMap") @Cached IsMapNode isMap) {
-            return false;
-        }
-    }
-
-    @GenerateUncached
-    abstract static class IsMapEntryNode extends Node {
-
-        public abstract boolean execute(HostObject receiver);
-
-        @Specialization
-        public boolean doDefault(HostObject receiver,
-                        @Cached(value = "receiver.getHostClassCache().isMapAccess()", allowUncached = true) boolean isMapAccess) {
-            assert receiver.getHostClassCache().isMapAccess() == isMapAccess;
-            return isMapAccess && receiver.obj instanceof Map.Entry;
         }
     }
 }
