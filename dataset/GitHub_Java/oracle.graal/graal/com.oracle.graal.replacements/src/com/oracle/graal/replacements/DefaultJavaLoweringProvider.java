@@ -273,7 +273,10 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             graph.addAfterFixed(valueAnchorNode, memoryRead);
         } else {
             assert load.getKind() != Kind.Illegal;
-            ReadNode memoryRead = createUnsafeRead(graph, load, null);
+            // An unsafe read must not float outside its block otherwise
+            // it may float above an explicit null check on its object.
+            AbstractBeginNode guard = AbstractBeginNode.prevBegin(load);
+            ReadNode memoryRead = createUnsafeRead(graph, load, guard);
             graph.replaceFixedWithFixed(load, memoryRead);
         }
     }
@@ -292,11 +295,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         }
         Stamp loadStamp = loadStamp(load.stamp(), readKind, compressible);
         ReadNode memoryRead = graph.add(new ReadNode(object, location, loadStamp, guard, BarrierType.NONE));
-        if (guard == null) {
-            // An unsafe read must not float otherwise it may float above
-            // a test guaranteeing the read is safe.
-            memoryRead.setForceFixed(true);
-        }
         ValueNode readValue = implicitLoadConvert(graph, readKind, memoryRead, compressible);
         load.replaceAtUsages(readValue);
         return memoryRead;

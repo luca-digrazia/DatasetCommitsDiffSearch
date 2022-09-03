@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.phases.common;
 
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.graph.Graph.NodeEvent.*;
-import static jdk.internal.jvmci.meta.LocationIdentity.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.graph.Graph.NodeEventScope;
@@ -37,7 +36,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.util.*;
@@ -168,7 +166,6 @@ public class FloatingReadPhase extends Phase {
     }
 
     @Override
-    @SuppressWarnings("try")
     protected void run(StructuredGraph graph) {
         Map<LoopBeginNode, Set<LocationIdentity>> modifiedInLoops = null;
         if (graph.hasLoops()) {
@@ -330,7 +327,7 @@ public class FloatingReadPhase extends Phase {
 
         private static void processFloatable(FloatableAccessNode accessNode, MemoryMapImpl state) {
             StructuredGraph graph = accessNode.graph();
-            LocationIdentity locationIdentity = accessNode.getLocationIdentity();
+            LocationIdentity locationIdentity = accessNode.location().getLocationIdentity();
             if (accessNode.canFloat()) {
                 assert accessNode.getNullCheck() == false;
                 MemoryNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
