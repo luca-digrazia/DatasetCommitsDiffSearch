@@ -450,9 +450,7 @@ public class PartialEvaluator {
         if (!TruffleCompilerOptions.TruffleInlineAcrossTruffleBoundary.getValue()) {
             // Do not inline across Truffle boundaries.
             for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.TYPE)) {
-                if (mct.targetMethod().getAnnotation(TruffleBoundary.class) != null) {
-                    mct.invoke().setUseForInlining(false);
-                }
+                mct.invoke().setUseForInlining(false);
             }
         }
     }

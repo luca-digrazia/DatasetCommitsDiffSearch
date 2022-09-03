@@ -26,7 +26,6 @@ import static com.oracle.graal.compiler.common.GraalInternalError.*;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.util.*;
@@ -69,7 +68,7 @@ public class GraphDecoder {
     }
 
     /** Decoding state maintained for each encoded graph. */
-    protected class MethodScope {
+    protected static class MethodScope {
         /** The target graph where decoded nodes are added to. */
         public final StructuredGraph graph;
         /** The encode graph that is decoded. */
@@ -91,7 +90,7 @@ public class GraphDecoder {
             this.returnNodes = new ArrayList<>();
 
             if (encodedGraph != null) {
-                reader = UnsafeArrayTypeReader.create(encodedGraph.getEncoding(), encodedGraph.getStartOffset(), architecture.supportsUnalignedMemoryAccess());
+                reader = new UnsafeArrayTypeReader(encodedGraph.getEncoding(), encodedGraph.getStartOffset());
                 if (encodedGraph.nodeStartOffsets == null) {
                     int nodeCount = reader.getUVInt();
                     long[] nodeStartOffsets = new long[nodeCount];
@@ -250,21 +249,14 @@ public class GraphDecoder {
         }
     }
 
-    protected final Architecture architecture;
-
-    public GraphDecoder(Architecture architecture) {
-        this.architecture = architecture;
-    }
-
     public final void decode(StructuredGraph graph, EncodedGraph encodedGraph) {
         MethodScope methodScope = new MethodScope(graph, encodedGraph, LoopExplosionKind.NONE);
         decode(methodScope, null);
-        cleanupGraph(methodScope, null);
+        cleanupGraph(methodScope);
         methodScope.graph.verify();
     }
 
     protected final void decode(MethodScope methodScope, FixedWithNextNode startNode) {
-        Graph.Mark start = methodScope.graph.getMark();
         LoopScope loopScope = new LoopScope(methodScope);
         FixedNode firstNode;
         if (startNode != null) {
@@ -292,14 +284,9 @@ public class GraphDecoder {
         }
 
         if (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE) {
-            /*
-             * The startNode can get deleted during graph cleanup, so we use its predecessor (if
-             * available) as the starting point for loop detection.
-             */
-            FixedNode detectLoopsStart = startNode.predecessor() != null ? (FixedNode) startNode.predecessor() : startNode;
-            cleanupGraph(methodScope, start);
+            cleanupGraph(methodScope);
             Debug.dump(methodScope.graph, "Before loop detection");
-            detectLoops(methodScope.graph, detectLoopsStart);
+            detectLoops(methodScope.graph, firstNode);
         }
     }
 
@@ -1124,21 +1111,18 @@ public class GraphDecoder {
         }
     }
 
-    protected void cleanupGraph(MethodScope methodScope, Graph.Mark start) {
+    protected void cleanupGraph(MethodScope methodScope) {
         assert verifyEdges(methodScope);
 
         Debug.dump(methodScope.graph, "Before removing redundant merges");
-        for (Node node : methodScope.graph.getNewNodes(start)) {
-            if (node instanceof MergeNode) {
-                MergeNode mergeNode = (MergeNode) node;
-                if (mergeNode.forwardEndCount() == 1) {
-                    methodScope.graph.reduceTrivialMerge(mergeNode);
-                }
+        for (MergeNode mergeNode : methodScope.graph.getNodes(MergeNode.TYPE)) {
+            if (mergeNode.forwardEndCount() == 1) {
+                methodScope.graph.reduceTrivialMerge(mergeNode);
             }
         }
 
         Debug.dump(methodScope.graph, "Before removing redundant begins");
-        for (Node node : methodScope.graph.getNewNodes(start)) {
+        for (Node node : methodScope.graph.getNodes()) {
             if (node instanceof BeginNode || node instanceof KillingBeginNode) {
                 if (!(node.predecessor() instanceof ControlSplitNode) && node.hasNoUsages()) {
                     GraphUtil.unlinkFixedNode((AbstractBeginNode) node);
@@ -1148,7 +1132,7 @@ public class GraphDecoder {
         }
 
         Debug.dump(methodScope.graph, "Before removing unused non-fixed nodes");
-        for (Node node : methodScope.graph.getNewNodes(start)) {
+        for (Node node : methodScope.graph.getNodes()) {
             if (!(node instanceof FixedNode) && node.hasNoUsages()) {
                 GraphUtil.killCFG(node);
             }

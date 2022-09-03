@@ -24,14 +24,12 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import jdk.internal.jvmci.common.*;
-import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.meta.JavaTypeProfile.*;
-
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.graph.spi.*;
@@ -342,12 +340,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             EndNode end1 = (EndNode) next1;
             EndNode end2 = (EndNode) next2;
             if (end1.merge() == end2.merge()) {
-                for (PhiNode phi : end1.merge().phis()) {
-                    if (phi.valueAt(end1) != phi.valueAt(end2)) {
-                        return false;
-                    }
-                }
-                // They go to the same MergeNode and merge the same values
+                // They go to the same MergeNode
                 return true;
             }
         } else if (next1 instanceof DeoptimizeNode && next2 instanceof DeoptimizeNode) {
@@ -658,10 +651,10 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     private ConditionalNode canonicalizeConditionalCascade(ValueNode trueValue, ValueNode falseValue) {
-        if (trueValue.getStackKind() != falseValue.getStackKind()) {
+        if (trueValue.getKind() != falseValue.getKind()) {
             return null;
         }
-        if (trueValue.getStackKind() != Kind.Int && trueValue.getStackKind() != Kind.Long) {
+        if (trueValue.getKind() != Kind.Int && trueValue.getKind() != Kind.Long) {
             return null;
         }
         if (trueValue.isConstant() && falseValue.isConstant()) {
@@ -1022,7 +1015,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                         return;
                     }
                 } else {
-                    throw new JVMCIError("Illegal state");
+                    throw new GraalInternalError("Illegal state");
                 }
             } else if (node instanceof AbstractMergeNode && !(node instanceof LoopBeginNode)) {
                 for (AbstractEndNode endNode : ((AbstractMergeNode) node).cfgPredecessors()) {

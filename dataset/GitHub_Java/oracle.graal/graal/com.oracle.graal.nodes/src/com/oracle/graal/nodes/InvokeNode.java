@@ -30,7 +30,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 
