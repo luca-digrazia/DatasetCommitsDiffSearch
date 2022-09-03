@@ -22,16 +22,27 @@
  */
 package com.oracle.max.graal.graph;
 
+import java.util.AbstractMap.SimpleEntry;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
 
 public final class NodeMap<T> {
-
-    private final Object[] values;
     private final Graph graph;
+    private Object[] values;
+    private int size;
 
-    NodeMap(Graph graph) {
+    public NodeMap(Graph graph) {
         this.graph = graph;
-        values = new Object[graph.nextId];
+        values = new Object[graph.nodeIdCount()];
+        size = values.length;
+    }
+
+    public NodeMap(NodeMap<T> copyFrom) {
+        this.graph = copyFrom.graph;
+        this.values = Arrays.copyOf(copyFrom.values, copyFrom.values.length);
+        this.size = copyFrom.size;
     }
 
     @SuppressWarnings("unchecked")
@@ -40,26 +51,80 @@ public final class NodeMap<T> {
         return (T) values[node.id()];
     }
 
+    public Graph graph() {
+        return graph;
+    }
+
     public void set(Node node, T value) {
         check(node);
         values[node.id()] = value;
     }
 
     public int size() {
-        return values.length;
+        return size;
+    }
+
+    public boolean isNew(Node node) {
+        return node.id() >= size;
+    }
+
+    public void grow(Node upTo) {
+        if (isNew(upTo)) {
+            size = upTo.id() + 1;
+            if (values.length < size) {
+                values = Arrays.copyOf(values, size + 9); // TODO implement a better growth policy
+            }
+        }
     }
 
     private void check(Node node) {
-        assert node.graph == graph : "this node is not part of the graph";
-        assert node.id() < values.length : "this node was added to the graph after creating the node map";
+        assert node.graph() == graph : "this node is not part of the graph";
+        assert !isNew(node) : "this node was added to the graph after creating the node map : " + node;
     }
-    
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < values.length; i++) {
-            sb.append("[").append(i).append(" -> ").append(values[i]).append("]").append('\n');
-        }
-        return sb.toString();
+
+    public Iterable<Entry<Node, T>> entries() {
+        return new Iterable<Entry<Node, T>>() {
+            @Override
+            public Iterator<Entry<Node, T>> iterator() {
+                return new Iterator<Entry<Node, T>>() {
+                    int i = 0;
+                    @Override
+                    public boolean hasNext() {
+                        forward();
+                        return i < NodeMap.this.values.length;
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public Entry<Node, T> next() {
+                        final int pos = i;
+                        Node key = NodeMap.this.graph.getNode(pos);
+                        T value = (T) NodeMap.this.values[pos];
+                        i++;
+                        forward();
+                        return new SimpleEntry<Node, T>(key, value){
+                            private static final long serialVersionUID = 7813842391085737738L;
+                            @Override
+                            public T setValue(T v) {
+                                T oldv = super.setValue(v);
+                                NodeMap.this.values[pos] = v;
+                                return oldv;
+                            }
+                        };
+                    }
+
+                    @Override
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    private void forward() {
+                        while (i < NodeMap.this.values.length && (NodeMap.this.graph.getNode(i) == null || NodeMap.this.values[i] == null)) {
+                            i++;
+                        }
+                    }
+                };
+            }
+        };
     }
 }

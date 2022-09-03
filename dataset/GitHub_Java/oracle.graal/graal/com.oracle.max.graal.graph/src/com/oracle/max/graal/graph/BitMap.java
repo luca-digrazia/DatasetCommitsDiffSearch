@@ -163,11 +163,11 @@ public final class BitMap implements Serializable {
         }
     }
 
-    private int bitInWord(int i) {
+    private static int bitInWord(int i) {
         return i & BIT_INDEX_MASK;
     }
 
-    private int wordIndex(int i) {
+    private static int wordIndex(int i) {
         return (i >> ADDRESS_BITS_PER_WORD) - 1;
     }
 
@@ -258,6 +258,27 @@ public final class BitMap implements Serializable {
                 extra[i] |= other.extra[i];
             }
         }
+    }
+
+    /**
+     * Performs the union operation on this bitmap with the specified bitmap. That is, all bits set in either of the two
+     * bitmaps will be set in this bitmap following this operation. It returns whether this bitmap was changed by the operation.
+     *
+     * @param other the other bitmap for the union operation
+     */
+    public boolean setUnionWithResult(BitMap other) {
+        long temp = low | other.low;
+        boolean changed = temp != low;
+        low = temp;
+
+        if (extra != null && other.extra != null) {
+            for (int i = 0; i < extra.length && i < other.extra.length; i++) {
+                temp = extra[i] | other.extra[i];
+                changed = changed || temp != extra[i];
+                extra[i] |= temp;
+            }
+        }
+        return changed;
     }
 
     /**
@@ -436,7 +457,7 @@ public final class BitMap implements Serializable {
         return -1;
     }
 
-    private int bitIndex(int index) {
+    private static int bitIndex(int index) {
         return (index + 1) << ADDRESS_BITS_PER_WORD;
     }
 
@@ -580,10 +601,8 @@ public final class BitMap implements Serializable {
      * @param length the number of bits represented in the returned string. If {@code length < 0 || length > size()},
      *            then the value of {@link #length()} is used.
      */
-    public String toBinaryString(int length) {
-        if (length < 0 || length > size) {
-            length = length();
-        }
+    public String toBinaryString() {
+        int length = length();
         if (length == 0) {
             return "";
         }
@@ -606,9 +625,9 @@ public final class BitMap implements Serializable {
         if (size == 0) {
             return "";
         }
-        int size = align(this.size, 4);
-        StringBuilder sb = new StringBuilder(size / 4);
-        for (int i = 0; i < size; i += 4) {
+        int hexSize = align(this.size, 4);
+        StringBuilder sb = new StringBuilder(hexSize / 4);
+        for (int i = 0; i < hexSize; i += 4) {
             int nibble = get(i) ? 1 : 0;
             if (get(i + 1)) {
                 nibble |= 2;
@@ -645,14 +664,9 @@ public final class BitMap implements Serializable {
      * @param arr the destination
      * @param off the byte index in {@code arr} at which to start writing
      * @param numberOfBytes the number of bytes worth of bits to copy from this bit map.
-     *        The number of bits copied is {@code numberOfBytes * 8}. If {@code numberOfBytes}
-     *        is -1, then {@code ((size() + 7) / 8)} is used instead.
      * @return the number of bytes written to {@code arr}
      */
     public int copyTo(byte[] arr, int off, int numberOfBytes) {
-        if (numberOfBytes < 0) {
-            numberOfBytes = (size + 7) / 8;
-        }
         for (int i = 0; i < numberOfBytes; ++i) {
             long word = low;
             int byteInWord;
