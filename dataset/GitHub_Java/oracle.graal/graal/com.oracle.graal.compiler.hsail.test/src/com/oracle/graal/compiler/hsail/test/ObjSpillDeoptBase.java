@@ -86,8 +86,4 @@ public abstract class ObjSpillDeoptBase extends GraalKernelTester {
         dispatchMethodKernel(getSize());
     }
 
-    @Override
-    protected boolean supportsRequiredCapabilities() {
-        return canDeoptimize();
-    }
 }

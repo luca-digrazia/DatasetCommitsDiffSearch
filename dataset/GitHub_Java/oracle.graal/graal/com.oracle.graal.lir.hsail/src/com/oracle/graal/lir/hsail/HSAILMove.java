@@ -33,7 +33,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.hsail.*;
 
 /**
  * Implementation of move instructions.
@@ -168,25 +167,6 @@ public class HSAILMove {
             HSAILAddress addr = address.toAddress();
             masm.emitLoad(kind, result, addr);
         }
-
-        public boolean usesThreadRegister() {
-            return (address.toAddress().getBase() == HSAIL.threadRegister);
-        }
-    }
-
-    /**
-     * A LoadOp that uses the HSAIL ld_acq instruction
-     */
-    public static class LoadAcquireOp extends LoadOp {
-        public LoadAcquireOp(Kind kind, AllocatableValue result, HSAILAddressValue address, LIRFrameState state) {
-            super(kind, result, address, state);
-        }
-
-        @Override
-        public void emitMemAccess(HSAILAssembler masm) {
-            HSAILAddress addr = address.toAddress();
-            masm.emitLoadAcquire(result, addr);
-        }
     }
 
     public static class StoreOp extends MemOp {
@@ -203,22 +183,6 @@ public class HSAILMove {
             assert isRegister(input);
             HSAILAddress addr = address.toAddress();
             masm.emitStore(kind, input, addr);
-        }
-    }
-
-    /**
-     * A StoreOp that uses the HSAIL st_rel instruction
-     */
-    public static class StoreReleaseOp extends StoreOp {
-        public StoreReleaseOp(Kind kind, HSAILAddressValue address, AllocatableValue input, LIRFrameState state) {
-            super(kind, address, input, state);
-        }
-
-        @Override
-        public void emitMemAccess(HSAILAssembler masm) {
-            assert isRegister(input);
-            HSAILAddress addr = address.toAddress();
-            masm.emitStoreRelease(input, addr);
         }
     }
 
@@ -262,6 +226,67 @@ public class HSAILMove {
                 default:
                     throw GraalInternalError.shouldNotReachHere();
             }
+        }
+    }
+
+    public static class LoadCompressedPointer extends LoadOp {
+
+        private final long base;
+        private final int shift;
+        private final int alignment;
+        @Temp({REG}) private AllocatableValue scratch;
+
+        public LoadCompressedPointer(Kind kind, AllocatableValue result, AllocatableValue scratch, HSAILAddressValue address, LIRFrameState state, long base, int shift, int alignment) {
+            super(kind, result, address, state);
+            this.base = base;
+            this.shift = shift;
+            this.alignment = alignment;
+            this.scratch = scratch;
+            assert kind == Kind.Object || kind == Kind.Long;
+        }
+
+        @Override
+        public void emitMemAccess(HSAILAssembler masm) {
+            // we will do a 32 bit load, zero extending into a 64 bit register
+            masm.emitLoad(result, address.toAddress(), "u32");
+            boolean testForNull = (kind == Kind.Object);
+            decodePointer(masm, result, base, shift, alignment, testForNull);
+        }
+    }
+
+    public static class StoreCompressedPointer extends HSAILLIRInstruction {
+
+        protected final Kind kind;
+        private final long base;
+        private final int shift;
+        private final int alignment;
+        @Temp({REG}) private AllocatableValue scratch;
+        @Alive({REG}) protected AllocatableValue input;
+        @Alive({COMPOSITE}) protected HSAILAddressValue address;
+        @State protected LIRFrameState state;
+
+        public StoreCompressedPointer(Kind kind, HSAILAddressValue address, AllocatableValue input, AllocatableValue scratch, LIRFrameState state, long base, int shift, int alignment) {
+            this.base = base;
+            this.shift = shift;
+            this.alignment = alignment;
+            this.scratch = scratch;
+            this.kind = kind;
+            this.address = address;
+            this.state = state;
+            this.input = input;
+            assert kind == Kind.Object || kind == Kind.Long;
+        }
+
+        @Override
+        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
+            masm.emitMov(kind, scratch, input);
+            boolean testForNull = (kind == Kind.Object);
+            encodePointer(masm, scratch, base, shift, alignment, testForNull);
+            if (state != null) {
+                throw new InternalError("NYI");
+                // crb.recordImplicitException(masm.position(), state);
+            }
+            masm.emitStore(scratch, address.toAddress(), "u32");
         }
     }
 
@@ -498,20 +523,6 @@ public class HSAILMove {
             }
         } else {
             throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    public static class WorkItemAbsIdOp extends HSAILLIRInstruction {
-
-        @Def({REG}) protected AllocatableValue result;
-
-        public WorkItemAbsIdOp(AllocatableValue result) {
-            this.result = result;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            masm.emitWorkItemAbsId(result);
         }
     }
 

@@ -23,24 +23,35 @@
 package com.oracle.graal.lir.hsail;
 
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.hsail.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Implementation of compare operations.
  */
 public enum HSAILCompare {
-    ICMP, LCMP, ACMP, FCMP, DCMP;
+    ICMP(Kind.Int),
+    LCMP(Kind.Long),
+    ACMP(Kind.Object),
+    FCMP(Kind.Float),
+    DCMP(Kind.Double);
+
+    public final Kind kind;
+
+    private HSAILCompare(Kind kind) {
+        this.kind = kind;
+    }
 
     public static class CompareOp extends HSAILLIRInstruction {
 
         @Opcode private final HSAILCompare opcode;
-        @Use({REG, STACK, CONST}) protected Value x;
-        @Use({REG, STACK, CONST}) protected Value y;
+        @Use({REG, CONST}) protected Value x;
+        @Use({REG, CONST}) protected Value y;
         @Def({REG}) protected Value z;
         private final Condition condition;
         public boolean unordered = false;
@@ -55,7 +66,7 @@ public enum HSAILCompare {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, HSAILAssembler masm) {
-            emit(crb, masm, condition, x, y, z, unordered);
+            emit(crb, masm, opcode, condition, x, y, z, unordered);
         }
 
         @Override
@@ -67,11 +78,11 @@ public enum HSAILCompare {
     }
 
     @SuppressWarnings("unused")
-    public static void emit(CompilationResultBuilder crb, HSAILAssembler masm, Condition condition, Value x, Value y, Value z, boolean unorderedIsTrue) {
-        emitCompare(masm, condition, x, y, unorderedIsTrue);
+    public static void emit(CompilationResultBuilder crb, HSAILAssembler masm, HSAILCompare opcode, Condition condition, Value x, Value y, Value z, boolean unorderedIsTrue) {
+        masm.emitCompare(opcode.kind, x, y, conditionToString(condition), unorderedIsTrue, isUnsignedCompare(condition));
     }
 
-    private static String conditionToString(Condition condition) {
+    public static String conditionToString(Condition condition) {
         switch (condition) {
             case EQ:
                 return "eq";
@@ -105,9 +116,4 @@ public enum HSAILCompare {
                 return false;
         }
     }
-
-    private static void emitCompare(HSAILAssembler masm, Condition condition, Value src0, Value src1, boolean unordered) {
-        masm.emitCompare(src0, src1, conditionToString(condition), unordered, isUnsignedCompare(condition));
-    }
-
 }

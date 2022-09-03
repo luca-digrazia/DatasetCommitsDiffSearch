@@ -62,7 +62,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public boolean canStoreConstant(Constant c) {
+    public boolean canStoreConstant(Constant c, boolean isCompressed) {
         // Operand b must be in the .reg state space.
         return false;
     }
@@ -81,7 +81,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitMove(Value input) {
-        Variable result = newVariable(input.getLIRKind());
+        Variable result = newVariable(input.getPlatformKind());
         emitMove(result, input);
         return result;
     }
@@ -149,9 +149,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
                 }
             }
         }
-
-        LIRKind resultKind = getAddressKind(base, displacement, index);
-        return new HSAILAddressValue(resultKind, baseRegister, finalDisp);
+        return new HSAILAddressValue(target().wordKind, baseRegister, finalDisp);
     }
 
     @Override
@@ -186,7 +184,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
                     double trueDestinationProbability) {
         // We don't have to worry about mirroring the condition on HSAIL.
         Condition finalCondition = cond;
-        Variable result = newVariable(left.getLIRKind());
+        Variable result = newVariable(left.getKind());
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
             case Int:
@@ -211,14 +209,14 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     @Override
     public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
         Variable result = emitAnd(left, right);
-        Variable dummyResult = newVariable(left.getLIRKind());
+        Variable dummyResult = newVariable(left.getKind());
         append(new CompareBranchOp(mapKindToCompareOp(left.getKind()), Condition.EQ, result, Constant.forInt(0), dummyResult, dummyResult, trueDestination, falseDestination, false));
     }
 
     @Override
     public Variable emitConditionalMove(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
         Condition finalCondition = cond;
-        Variable result = newVariable(trueValue.getLIRKind());
+        Variable result = newVariable(trueValue.getKind());
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
             case Int:
@@ -249,7 +247,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public Variable emitNegate(Value input) {
-        Variable result = newVariable(LIRKind.derive(input));
+        Variable result = newVariable(input.getKind());
         switch (input.getKind()) {
             case Int:
                 // Note: The Int case also handles the negation of shorts, bytes, and chars because
@@ -280,7 +278,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public Variable emitNot(Value input) {
-        Variable result = newVariable(LIRKind.derive(input));
+        Variable result = newVariable(input.getKind());
         switch (input.getKind()) {
             case Int:
                 // Note: The Int case also covers other primitive integral types smaller than an int
@@ -298,7 +296,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     }
 
     public Variable emitTestAddressAdd(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IADD, result, a, loadNonConst(b)));
@@ -323,7 +321,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitAdd(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IADD, result, a, loadNonConst(b)));
@@ -348,7 +346,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitSub(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(ISUB, result, a, loadNonConst(b)));
@@ -370,7 +368,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitMul(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IMUL, result, a, loadNonConst(b)));
@@ -391,7 +389,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     }
 
     public Variable emitUMul(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(LUMUL, result, a, loadNonConst(b)));
@@ -406,18 +404,8 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitMulHigh(Value a, Value b) {
-        throw GraalInternalError.unimplemented();
-    }
-
-    @Override
-    public Value emitUMulHigh(Value a, Value b) {
-        throw GraalInternalError.unimplemented();
-    }
-
-    @Override
     public Value emitDiv(Value a, Value b, LIRFrameState state) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IDIV, result, a, loadNonConst(b)));
@@ -440,7 +428,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Value emitRem(Value a, Value b, LIRFrameState state) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IREM, result, a, loadNonConst(b)));
@@ -472,7 +460,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitAnd(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IAND, result, a, loadNonConst(b)));
@@ -488,7 +476,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitOr(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IOR, result, a, loadNonConst(b)));
@@ -504,7 +492,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
 
     @Override
     public Variable emitXor(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new Op2Reg(IXOR, result, a, loadNonConst(b)));
@@ -527,7 +515,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public Variable emitShl(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 // Note: The Int case also covers the shifting of bytes, shorts and chars because
@@ -552,7 +540,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public Variable emitShr(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 // Note: The Int case also covers the shifting of bytes, shorts and chars because
@@ -577,7 +565,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public Variable emitUShr(Value a, Value b) {
-        Variable result = newVariable(LIRKind.derive(a, b).changeType(a.getPlatformKind()));
+        Variable result = newVariable(a.getKind());
         switch (a.getKind()) {
             case Int:
                 append(new ShiftOp(IUSHR, result, a, b));
@@ -625,24 +613,24 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
             case D2I:
             case F2I:
                 to = "s32";
-                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
+                result = newVariable(Kind.Int);
                 break;
             case D2L:
             case F2L:
                 to = "s64";
-                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
+                result = newVariable(Kind.Long);
                 break;
             case F2D:
             case I2D:
             case L2D:
                 to = "f64";
-                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Double));
+                result = newVariable(Kind.Double);
                 break;
             case D2F:
             case I2F:
             case L2F:
                 to = "f32";
-                result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Float));
+                result = newVariable(Kind.Float);
                 break;
             default:
                 throw GraalInternalError.shouldNotReachHere();
@@ -655,7 +643,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     @Override
     public Value emitNarrow(Value inputVal, int bits) {
         Variable input = load(inputVal);
-        Variable result = newVariable(LIRKind.derive(inputVal).changeType(bits > 32 ? Kind.Long : Kind.Int));
+        Variable result = newVariable(bits > 32 ? Kind.Long : Kind.Int);
         append(new ConvertOp(result, input, "s" + bits, input.getKind() == Kind.Long ? "s64" : "s32"));
         return result;
     }
@@ -663,7 +651,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     @Override
     public Value emitSignExtend(Value inputVal, int fromBits, int toBits) {
         Variable input = load(inputVal);
-        Variable result = newVariable(LIRKind.derive(inputVal).changeType(toBits > 32 ? Kind.Long : Kind.Int));
+        Variable result = newVariable(toBits > 32 ? Kind.Long : Kind.Int);
         append(new ConvertOp(result, input, "s" + toBits, "s" + fromBits));
         return result;
     }
@@ -671,13 +659,13 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     @Override
     public Value emitZeroExtend(Value inputVal, int fromBits, int toBits) {
         Variable input = load(inputVal);
-        Variable result = newVariable(LIRKind.derive(inputVal).changeType(toBits > 32 ? Kind.Long : Kind.Int));
+        Variable result = newVariable(toBits > 32 ? Kind.Long : Kind.Int);
         append(new ConvertOp(result, input, "u" + toBits, "u" + fromBits));
         return result;
     }
 
     @Override
-    public Value emitReinterpret(LIRKind to, Value inputVal) {
+    public Value emitReinterpret(PlatformKind to, Value inputVal) {
         Variable result = newVariable(to);
         emitMove(result, inputVal);
         return result;
@@ -695,23 +683,21 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitBitCount(Value value) {
-        Variable result = newVariable(LIRKind.derive(value).changeType(Kind.Int));
+    public void emitBitCount(Variable result, Value value) {
         if (value.getKind().getStackKind() == Kind.Int) {
             append(new HSAILBitManipulationOp(IPOPCNT, result, value));
         } else {
             append(new HSAILBitManipulationOp(LPOPCNT, result, value));
         }
-        return result;
     }
 
     @Override
-    public Value emitBitScanForward(Value value) {
+    public void emitBitScanForward(Variable result, Value value) {
         throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public Value emitBitScanReverse(Value value) {
+    public void emitBitScanReverse(Variable result, Value value) {
         throw GraalInternalError.unimplemented();
     }
 
@@ -723,7 +709,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public Value emitMathAbs(Value input) {
-        Variable result = newVariable(LIRKind.derive(input));
+        Variable result = newVariable(input.getPlatformKind());
         append(new Op1Reg(ABS, result, input));
         return result;
     }
@@ -735,7 +721,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      * @return Value representing the result of the operation
      */
     public Value emitMathCeil(Value input) {
-        Variable result = newVariable(LIRKind.derive(input));
+        Variable result = newVariable(input.getPlatformKind());
         append(new Op1Reg(CEIL, result, input));
         return result;
     }
@@ -747,7 +733,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      * @return Value representing the result of the operation
      */
     public Value emitMathFloor(Value input) {
-        Variable result = newVariable(LIRKind.derive(input));
+        Variable result = newVariable(input.getPlatformKind());
         append(new Op1Reg(FLOOR, result, input));
         return result;
     }
@@ -759,7 +745,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      * @return Value representing the result of the operation
      */
     public Value emitMathRint(Value input) {
-        Variable result = newVariable(LIRKind.derive(input));
+        Variable result = newVariable(input.getPlatformKind());
         append(new Op1Reg(RINT, result, input));
         return result;
     }
@@ -772,7 +758,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public Value emitMathSqrt(Value input) {
-        Variable result = newVariable(LIRKind.derive(input));
+        Variable result = newVariable(input.getPlatformKind());
         append(new Op1Reg(SQRT, result, input));
         return result;
     }
@@ -798,12 +784,12 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Value emitByteSwap(Value input) {
+    public void emitByteSwap(Variable result, Value input) {
         throw GraalInternalError.unimplemented();
     }
 
     @Override
-    public Value emitArrayEquals(Kind kind, Value array1, Value array2, Value length) {
+    public void emitArrayEquals(Kind kind, Variable result, Value array1, Value array2, Value length) {
         // TODO Auto-generated method stub
         throw GraalInternalError.unimplemented();
     }
@@ -812,7 +798,7 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
     public void emitReturn(Value input) {
         AllocatableValue operand = Value.ILLEGAL;
         if (input != null) {
-            operand = resultOperandFor(input.getLIRKind());
+            operand = resultOperandFor(input.getKind());
             emitMove(operand, input);
         }
         append(new ReturnOp(operand));
@@ -842,6 +828,16 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      * series of cascading compare and branch instructions. This is currently the recommended way of
      * generating performant HSAIL code for switch constructs.
      *
+     * In Java bytecode the keys for switch statements are always ints.
+     *
+     * The x86 backend also adds support for handling keys of type long or Object but these two
+     * special cases are for handling the TypeSwitchNode, which is a node that the JVM produces for
+     * handling operations related to method dispatch. We haven't yet added support for the
+     * TypeSwitchNode, so for the time being we have added a check to ensure that the keys are of
+     * type int. This also allows us to flag any test cases/execution paths that may trigger the
+     * creation of a TypeSwitchNode which we don't support yet.
+     *
+     *
      * @param strategy the strategy used for this switch.
      * @param keyTargets array of branch targets for each of the cases.
      * @param defaultTarget the branch target for the default case.
@@ -849,16 +845,12 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        switch (key.getKind()) {
-            case Int:
-            case Long:
-            case Object:
-                // Append the LIR instruction for generating compare and branch instructions.
-                append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key));
-                break;
-            default:
-                // Throw an exception if the key kind is anything else.
-                throw GraalInternalError.unimplemented("Switch statements not supported for keys of type " + key.getKind());
+        if ((key.getKind() == Kind.Int) || (key.getKind() == Kind.Long)) {
+            // Append the LIR instruction for generating compare and branch instructions.
+            append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key));
+        } else {
+            // Throw an exception if the keys aren't ints.
+            throw GraalInternalError.unimplemented("Switch statements are only supported for keys of type int or long, not " + key.getKind());
         }
     }
 
