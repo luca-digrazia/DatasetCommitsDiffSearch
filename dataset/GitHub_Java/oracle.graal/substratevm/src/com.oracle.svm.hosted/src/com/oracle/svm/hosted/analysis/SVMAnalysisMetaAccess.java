@@ -44,6 +44,6 @@ public class SVMAnalysisMetaAccess extends AnalysisMetaAccess {
 
     @Override
     public int getArrayIndexScale(JavaKind elementKind) {
-        return getObjectLayout().getArrayIndexScale(elementKind);
+        return getObjectLayout().getArrayBaseOffset(elementKind);
     }
 }
