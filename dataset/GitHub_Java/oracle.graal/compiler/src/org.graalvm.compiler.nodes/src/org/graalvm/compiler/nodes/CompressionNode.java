@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -72,7 +72,7 @@ public abstract class CompressionNode extends UnaryNode implements ConvertNode, 
     @Override
     public Stamp foldStamp(Stamp newStamp) {
         assert newStamp.isCompatible(getValue().stamp(NodeView.DEFAULT));
-        return stamp.improveWith(mkStamp(newStamp));
+        return mkStamp(newStamp);
     }
 
     protected abstract Constant compress(Constant c);
@@ -145,8 +145,8 @@ public abstract class CompressionNode extends UnaryNode implements ConvertNode, 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         boolean nonNull;
-        if (stamp instanceof AbstractObjectStamp) {
-            nonNull = StampTool.isPointerNonNull(stamp);
+        if (value.stamp(NodeView.DEFAULT) instanceof AbstractObjectStamp) {
+            nonNull = StampTool.isPointerNonNull(value.stamp(NodeView.DEFAULT));
         } else {
             // metaspace pointers are never null
             nonNull = true;
