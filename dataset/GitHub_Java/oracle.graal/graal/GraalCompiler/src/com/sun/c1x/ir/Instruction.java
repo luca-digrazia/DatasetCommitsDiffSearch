@@ -66,7 +66,7 @@ public abstract class Instruction extends Value {
         return (Instruction) successors().get(super.successorCount() + SUCCESSOR_NEXT);
     }
 
-    private Node setNext(Instruction next) {
+    public Node setNext(Instruction next) {
         return successors().set(super.successorCount() + SUCCESSOR_NEXT, next);
     }
 
@@ -83,9 +83,6 @@ public abstract class Instruction extends Value {
      * List of associated exception handlers.
      */
     private List<ExceptionHandler> exceptionHandlers = ExceptionHandler.ZERO_HANDLERS;
-
-
-    private boolean isAppended = false;
 
     /**
      * Constructs a new instruction with the specified value type.
@@ -124,7 +121,7 @@ public abstract class Instruction extends Value {
      * @return {@code true} if this instruction has been added to the basic block containing it
      */
     public final boolean isAppended() {
-        return isAppended;
+        return next() != this;
     }
 
 
@@ -140,7 +137,9 @@ public abstract class Instruction extends Value {
         if (next != null) {
             assert !(this instanceof BlockEnd);
             next.setBCI(bci);
-            next.isAppended = true;
+            if (next.next() == next) {
+                next.setNext(null);
+            }
         }
         return next;
     }

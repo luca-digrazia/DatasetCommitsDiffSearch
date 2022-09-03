@@ -22,7 +22,6 @@
  */
 package com.sun.c1x.ir;
 
-import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
@@ -30,36 +29,12 @@ import com.sun.cri.ci.*;
 /**
  * The {@code Phi} instruction represents the merging of dataflow
  * in the instruction graph. It refers to a join block and a variable.
+ *
+ * @author Ben L. Titzer
  */
 public final class Phi extends Value {
 
-    private static final int INPUT_COUNT = 1;
-    private static final int INPUT_BLOCK = 0;
-
-    private static final int SUCCESSOR_COUNT = 0;
-
-    @Override
-    protected int inputCount() {
-        return super.inputCount() + INPUT_COUNT;
-    }
-
-    @Override
-    protected int successorCount() {
-        return super.successorCount() + SUCCESSOR_COUNT;
-    }
-
-    /**
-     * The join block for this phi.
-     */
-     @Override
-    public BlockBegin block() {
-        return (BlockBegin) inputs().get(super.inputCount() + INPUT_BLOCK);
-    }
-
-    public BlockBegin setBlock(Value n) {
-        return (BlockBegin) inputs().set(super.inputCount() + INPUT_BLOCK, n);
-    }
-
+    private final BlockBegin block;
     private final int index;
 
     /**
@@ -67,12 +42,20 @@ public final class Phi extends Value {
      * @param kind the type of the variable
      * @param block the join point
      * @param index the index into the stack (if < 0) or local variables
-     * @param graph
      */
-    public Phi(CiKind kind, BlockBegin block, int index, Graph graph) {
-        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public Phi(CiKind kind, BlockBegin block, int index) {
+        super(kind);
+        this.block = block;
         this.index = index;
-        setBlock(block);
+    }
+
+    /**
+     * Get the join block for this phi.
+     * @return the join block of this phi
+     */
+    @Override
+    public BlockBegin block() {
+        return block;
     }
 
     /**
@@ -117,10 +100,10 @@ public final class Phi extends Value {
      */
     public Value inputAt(int i) {
         FrameState state;
-        if (block().isExceptionEntry()) {
-            state = block().exceptionHandlerStates().get(i);
+        if (block.isExceptionEntry()) {
+            state = block.exceptionHandlerStates().get(i);
         } else {
-            state = block().blockPredecessors().get(i).end().stateAfter();
+            state = block.blockPredecessors().get(i).end().stateAfter();
         }
         return inputIn(state);
     }
@@ -143,10 +126,10 @@ public final class Phi extends Value {
      * @return the number of inputs in this phi
      */
     public int phiInputCount() {
-        if (block().isExceptionEntry()) {
-            return block().exceptionHandlerStates().size();
+        if (block.isExceptionEntry()) {
+            return block.exceptionHandlerStates().size();
         } else {
-            return block().blockPredecessors().size();
+            return block.blockPredecessors().size();
         }
     }
 
