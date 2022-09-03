@@ -1362,7 +1362,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             final boolean needsFrame = node.isFrameUsedByAnyGuard(getContext());
 
             if (!needsFrame) {
-                method.getAnnotationMirrors().add(new CodeAnnotationMirror(getContext().getTruffleTypes().getTruffleBoundary()));
+                method.getAnnotationMirrors().add(new CodeAnnotationMirror(getContext().getTruffleTypes().getSlowPath()));
             }
 
             addInternalValueParameters(method, node.getGenericSpecialization(), needsFrame, !needsFrame, false);
@@ -1993,7 +1993,7 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             }
             String prefix = expect ? "expect" : "execute";
             String suffix = execution.getIndex() > -1 ? String.valueOf(execution.getIndex()) : "";
-            return prefix + ElementUtils.firstLetterUpperCase(child.getName()) + ElementUtils.firstLetterUpperCase(ElementUtils.getTypeId(param.getType())) + suffix;
+            return prefix + ElementUtils.firstLetterUpperCase(child.getName()) + ElementUtils.firstLetterUpperCase(ElementUtils.getSimpleName(param.getType())) + suffix;
         }
 
         private List<CodeExecutableElement> createExecuteChilds(Parameter param, Set<TypeData> expectTypes) {
@@ -2530,11 +2530,10 @@ public class NodeCodeGenerator extends AbstractCompilationUnitFactory<NodeData> 
             } else {
                 builder.startNewArray(classArray, null);
                 for (SpecializationData specialization : list) {
-                    SpecializationData s = specialization;
-                    if (s.isGeneric() || s.isPolymorphic()) {
-                        s = getModel().getNode().getUninitializedSpecialization();
+                    if (specialization.isGeneric() || specialization.isPolymorphic()) {
+                        specialization = getModel().getNode().getUninitializedSpecialization();
                     }
-                    builder.startGroup().string(nodeSpecializationClassName(s)).string(".class").end();
+                    builder.startGroup().string(nodeSpecializationClassName(specialization)).string(".class").end();
                 }
                 builder.end();
             }
