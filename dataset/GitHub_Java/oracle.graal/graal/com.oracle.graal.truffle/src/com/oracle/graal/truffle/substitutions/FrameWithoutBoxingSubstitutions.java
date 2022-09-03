@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,14 +24,14 @@ package com.oracle.graal.truffle.substitutions;
 
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.truffle.*;
-import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.truffle.api.frame.*;
 
 @ClassSubstitution(FrameWithoutBoxing.class)
 public class FrameWithoutBoxingSubstitutions {
 
-    @MethodSubstitution(isStatic = false)
-    public static MaterializedFrame materialize(FrameWithoutBoxing frame) {
-        return MaterializeFrameNode.materialize(frame);
+    @SuppressWarnings("unused")
+    @MethodSubstitution(isStatic = false, forced = true)
+    public static PackedFrame pack(FrameWithoutBoxing frame) {
+        return null;
     }
 }
