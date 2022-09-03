@@ -267,7 +267,7 @@ public class SnippetIntrinsificationPhase extends Phase {
                 }
                 FixedNode next = checkCastNode.next();
                 checkCastNode.setNext(null);
-                checkCastNode.replaceAtPredecessor(next);
+                checkCastNode.replaceAtPredecessors(next);
                 GraphUtil.killCFG(checkCastNode);
             }
         }
