@@ -354,7 +354,7 @@ class CFGPrinter extends CompilationPrinter {
         out.print(HOVER_END).println(COLUMN_END);
 
         out.print("instruction ");
-        out.print(HOVER_START).print(node.getShortName()).print(HOVER_SEP).print(node.getClass().getName()).print(HOVER_END).print(" ");
+        out.print(HOVER_START).print(node.getNodeClass().shortName()).print(HOVER_SEP).print(node.getClass().getName()).print(HOVER_END).print(" ");
         printNamedNodes(node, node.inputs().iterator(), "", "", "#NDF");
         printNamedNodes(node, node.successors().iterator(), "#", "", "#NDF");
         for (Map.Entry<Object, Object> entry : props.entrySet()) {
@@ -370,7 +370,7 @@ class CFGPrinter extends CompilationPrinter {
         int lastIndex = -1;
         while (iter.hasNext()) {
             Position pos = iter.nextPosition();
-            if (hideSuffix != null && pos.getName().endsWith(hideSuffix)) {
+            if (hideSuffix != null && node.getNodeClass().getName(pos).endsWith(hideSuffix)) {
                 continue;
             }
 
@@ -378,10 +378,10 @@ class CFGPrinter extends CompilationPrinter {
                 if (lastIndex != -1) {
                     out.print(suffix);
                 }
-                out.print(prefix).print(pos.getName()).print(": ");
+                out.print(prefix).print(node.getNodeClass().getName(pos)).print(": ");
                 lastIndex = pos.getIndex();
             }
-            out.print(nodeToString(pos.get(node))).print(" ");
+            out.print(nodeToString(node.getNodeClass().get(node, pos))).print(" ");
         }
         if (lastIndex != -1) {
             out.print(suffix);
