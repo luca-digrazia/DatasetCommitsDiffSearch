@@ -104,12 +104,12 @@ class LLVMRootNodeFactory {
         String[] stringArgs = getStringArgs(args);
         int argsMemory = stringArgs.length * LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
         LLVMAddress allocatedArgsStartAddress = LLVMMemory.allocateMemory(argsMemory);
-        long allocatedArgsPtr = allocatedArgsStartAddress.getVal();
+        LLVMAddress allocatedArgs = allocatedArgsStartAddress;
         for (int i = 0; i < stringArgs.length; i++) {
             String string = stringArgs[i];
             LLVMAddress allocatedCString = LLVMHeap.allocateCString(string);
-            LLVMMemory.putAddress(allocatedArgsPtr, allocatedCString);
-            allocatedArgsPtr += LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE;
+            LLVMMemory.putAddress(allocatedArgs, allocatedCString);
+            allocatedArgs = allocatedArgs.increment(LLVMAddress.WORD_LENGTH_BIT / Byte.SIZE);
         }
         return allocatedArgsStartAddress;
     }
