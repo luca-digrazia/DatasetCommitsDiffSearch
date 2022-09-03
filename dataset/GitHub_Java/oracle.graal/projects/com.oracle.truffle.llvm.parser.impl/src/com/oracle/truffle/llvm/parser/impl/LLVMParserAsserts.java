@@ -40,10 +40,4 @@ public class LLVMParserAsserts {
         return objects;
     }
 
-    public static void assertNotNull(Object object) {
-        if (object == null) {
-            throw new AssertionError();
-        }
-    }
-
 }
