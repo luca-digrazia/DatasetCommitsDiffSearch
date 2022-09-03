@@ -108,7 +108,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
         private final StackInterval[] stackSlotMap;
         private final PriorityQueue<StackInterval> unhandled;
         private final PriorityQueue<StackInterval> active;
-        private final AbstractBlockBase<?>[] sortedBlocks;
+        private final List<? extends AbstractBlockBase<?>> sortedBlocks;
         private final int maxOpId;
 
         @SuppressWarnings("try")
@@ -131,7 +131,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
 
         @SuppressWarnings("try")
         private void allocate() {
-            Debug.dump(Debug.INFO_LOG_LEVEL, lir, "After StackSlot numbering");
+            Debug.dump(lir, "After StackSlot numbering");
 
             long currentFrameSize = StackSlotAllocatorUtil.allocatedFramesize.isEnabled() ? frameMapBuilder.getFrameMap().currentFrameSize() : 0;
             Set<LIRInstruction> usePos;
@@ -145,14 +145,14 @@ public final class LSStackSlotAllocator extends AllocationPhase {
                     assert verifyIntervals();
                 }
             }
-            if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
+            if (Debug.isDumpEnabled()) {
                 dumpIntervals("Before stack slot allocation");
             }
             // step 4: allocate stack slots
             try (DebugCloseable t = AllocateSlotsTimer.start()) {
                 allocateStackSlots();
             }
-            if (Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
+            if (Debug.isDumpEnabled()) {
                 dumpIntervals("After stack slot allocation");
             }
 
@@ -160,7 +160,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
             try (DebugCloseable t = AssignSlotsTimer.start()) {
                 assignStackSlots(usePos);
             }
-            Debug.dump(Debug.INFO_LOG_LEVEL, lir, "After StackSlot assignment");
+            Debug.dump(lir, "After StackSlot assignment");
             if (StackSlotAllocatorUtil.allocatedFramesize.isEnabled()) {
                 StackSlotAllocatorUtil.allocatedFramesize.add(frameMapBuilder.getFrameMap().currentFrameSize() - currentFrameSize);
             }
@@ -175,7 +175,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
          *
          * @return The id of the last operation.
          */
-        private static int numberInstructions(LIR lir, AbstractBlockBase<?>[] sortedBlocks) {
+        private static int numberInstructions(LIR lir, List<? extends AbstractBlockBase<?>> sortedBlocks) {
             int opId = 0;
             int index = 0;
             for (AbstractBlockBase<?> block : sortedBlocks) {
@@ -256,13 +256,13 @@ public final class LSStackSlotAllocator extends AllocationPhase {
                      */
                     location = StackSlot.get(current.kind(), slot.getRawOffset(), slot.getRawAddFrameSize());
                     StackSlotAllocatorUtil.reusedSlots.increment();
-                    Debug.log(Debug.BASIC_LOG_LEVEL, "Reuse stack slot %s (reallocated from %s) for virtual stack slot %s", location, slot, virtualSlot);
+                    Debug.log(1, "Reuse stack slot %s (reallocated from %s) for virtual stack slot %s", location, slot, virtualSlot);
                 } else {
                     // Allocate new stack slot.
                     location = frameMapBuilder.getFrameMap().allocateSpillSlot(virtualSlot.getLIRKind());
                     StackSlotAllocatorUtil.virtualFramesize.add(frameMapBuilder.getFrameMap().spillSlotSize(virtualSlot.getLIRKind()));
                     StackSlotAllocatorUtil.allocatedSlots.increment();
-                    Debug.log(Debug.BASIC_LOG_LEVEL, "New stack slot %s for virtual stack slot %s", location, virtualSlot);
+                    Debug.log(1, "New stack slot %s for virtual stack slot %s", location, virtualSlot);
                 }
             }
             Debug.log("Allocate location %s for interval %s", location, current);
@@ -433,7 +433,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
         }
 
         private void dumpIntervals(String label) {
-            Debug.dump(Debug.INFO_LOG_LEVEL, new StackIntervalDumper(Arrays.copyOf(stackSlotMap, stackSlotMap.length)), label);
+            Debug.dump(new StackIntervalDumper(Arrays.copyOf(stackSlotMap, stackSlotMap.length)), label);
         }
 
     }
