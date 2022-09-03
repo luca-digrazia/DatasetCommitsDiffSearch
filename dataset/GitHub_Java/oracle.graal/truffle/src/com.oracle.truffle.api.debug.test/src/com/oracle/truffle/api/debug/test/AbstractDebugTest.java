@@ -42,14 +42,11 @@ import com.oracle.truffle.api.debug.DebugStackFrame;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
-import com.oracle.truffle.api.debug.SourceElement;
-import com.oracle.truffle.api.debug.SuspendAnchor;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import com.oracle.truffle.tck.DebuggerTester;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 
 /**
@@ -57,7 +54,7 @@ import org.graalvm.polyglot.Source;
  */
 public abstract class AbstractDebugTest {
 
-    protected DebuggerTester tester;
+    private DebuggerTester tester;
     private final ArrayDeque<DebuggerTester> sessionStack = new ArrayDeque<>();
 
     AbstractDebugTest() {
@@ -85,14 +82,6 @@ public abstract class AbstractDebugTest {
         return tester.startSession();
     }
 
-    protected final DebuggerSession startSession(SourceElement... sourceElements) {
-        return tester.startSession(sourceElements);
-    }
-
-    protected final String getOutput() {
-        return tester.getOut();
-    }
-
     protected final Thread getEvalThread() {
         return tester.getEvalThread();
     }
@@ -109,7 +98,7 @@ public abstract class AbstractDebugTest {
         if (tester != null) {
             sessionStack.push(tester);
         }
-        tester = new DebuggerTester(Context.newBuilder().allowCreateThread(true));
+        tester = new DebuggerTester();
     }
 
     protected final void popContext() {
@@ -142,7 +131,7 @@ public abstract class AbstractDebugTest {
         Assert.assertEquals(expectedLineNumber, actualLineNumber);
         final String actualCode = suspendedEvent.getSourceSection().getCharacters().toString();
         Assert.assertEquals(expectedCode, actualCode);
-        final boolean actualIsBefore = (suspendedEvent.getSuspendAnchor() == SuspendAnchor.BEFORE);
+        final boolean actualIsBefore = suspendedEvent.isHaltedBefore();
         Assert.assertEquals(expectedIsBefore, actualIsBefore);
 
         checkStack(suspendedEvent.getTopStackFrame(), expectedFrame);
@@ -151,7 +140,7 @@ public abstract class AbstractDebugTest {
 
     protected void checkStack(DebugStackFrame frame, String... expectedFrame) {
         Map<String, DebugValue> values = new HashMap<>();
-        for (DebugValue value : frame.getScope().getDeclaredValues()) {
+        for (DebugValue value : frame) {
             values.put(value.getName(), value);
         }
         Assert.assertEquals(expectedFrame.length / 2, values.size());
@@ -168,10 +157,6 @@ public abstract class AbstractDebugTest {
         return tester.expectDone();
     }
 
-    protected final Throwable expectThrowable() {
-        return tester.expectThrowable();
-    }
-
     protected final void expectSuspended(SuspendedCallback handler) {
         tester.expectSuspended(handler);
     }
@@ -180,7 +165,4 @@ public abstract class AbstractDebugTest {
         tester.expectKilled();
     }
 
-    protected final void closeEngine() {
-        tester.closeEngine();
-    }
 }

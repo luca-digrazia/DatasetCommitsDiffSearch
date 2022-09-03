@@ -32,16 +32,12 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.instrumentation.LoadSourceEvent;
 import com.oracle.truffle.api.instrumentation.LoadSourceListener;
-import com.oracle.truffle.api.instrumentation.SourceFilter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter.IndexRange;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
 import org.graalvm.polyglot.Instrument;
@@ -90,38 +86,24 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
         assertEvents(impl.onlyNewEvents, source2);
         assertEvents(impl.allEvents, source1, source2);
 
-        // Load an internal source
-        Source source3 = Source.newBuilder(InstrumentationTestLanguage.ID, "STATEMENT", "test").internal(true).build();
-        for (int i = 0; i < runTimes; i++) {
-            run(source3);
-        }
-
-        assertEvents(impl.onlyNewEvents, source2, source3);
-        assertEvents(impl.allEvents, source1, source2, source3);
-        assertEvents(impl.allNotInternalEvents, source1, source2);
-
         // Disable the instrument by closing the engine.
         engine.close();
         engine = null;
         engine = getEngine();
 
-        Source source4 = lines("STATEMENT(EXPRESSION, EXPRESSION, EXPRESSION)");
+        Source source3 = lines("STATEMENT(EXPRESSION, EXPRESSION, EXPRESSION)");
         for (int i = 0; i < runTimes; i++) {
-            run(source4);
+            run(source3);
         }
 
-        assertEvents(impl.onlyNewEvents, source2, source3);
-        assertEvents(impl.allEvents, source1, source2, source3);
+        assertEvents(impl.onlyNewEvents, source2);
+        assertEvents(impl.allEvents, source1, source2);
 
         instrument = engine.getInstruments().get("testLoadSource1");
         impl = instrument.lookup(TestLoadSource1.class);
 
         assertEvents(impl.onlyNewEvents);
-        assertEvents(impl.allEvents, source4);
-    }
-
-    private static void assertEvents(List<com.oracle.truffle.api.source.Source> actualSources) {
-        Assert.assertEquals(0, actualSources.size());
+        assertEvents(impl.allEvents, source3);
     }
 
     private void assertEvents(List<com.oracle.truffle.api.source.Source> actualSources, Source... expectedSources) {
@@ -131,36 +113,22 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
         }
     }
 
-    private static void assertEvents(List<com.oracle.truffle.api.source.Source> actualSources, com.oracle.truffle.api.source.Source... expectedSources) {
-        Assert.assertEquals(expectedSources.length, actualSources.size());
-        for (int i = 0; i < expectedSources.length; i++) {
-            Assert.assertSame("index " + i, expectedSources[i], actualSources.get(i));
-        }
-    }
-
     @Registration(id = "testLoadSource1", services = SourceListenerTest.TestLoadSource1.class)
     public static class TestLoadSource1 extends TruffleInstrument {
         List<com.oracle.truffle.api.source.Source> onlyNewEvents = new ArrayList<>();
         List<com.oracle.truffle.api.source.Source> allEvents = new ArrayList<>();
-        List<com.oracle.truffle.api.source.Source> allNotInternalEvents = new ArrayList<>();
 
         @Override
         protected void onCreate(Env env) {
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, new LoadSourceListener() {
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.ANY, new LoadSourceListener() {
                 public void onLoad(LoadSourceEvent event) {
                     onlyNewEvents.add(event.getSource());
                 }
             }, false);
 
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, new LoadSourceListener() {
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.ANY, new LoadSourceListener() {
                 public void onLoad(LoadSourceEvent event) {
                     allEvents.add(event.getSource());
-                }
-            }, true);
-
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.newBuilder().includeInternal(false).build(), new LoadSourceListener() {
-                public void onLoad(LoadSourceEvent event) {
-                    allNotInternalEvents.add(event.getSource());
                 }
             }, true);
             env.registerService(this);
@@ -186,7 +154,7 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
         @Override
         protected void onCreate(Env env) {
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, new LoadSourceListener() {
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.ANY, new LoadSourceListener() {
                 public void onLoad(LoadSourceEvent source) {
                     throw new TestLoadSourceExceptionClass();
                 }
@@ -210,7 +178,6 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
     }
 
     @Registration(id = "testAllowOnlySourceQueries", services = {Object.class, TestAllowOnlySourceQueries.class})
-    @SuppressWarnings("deprecation")
     public static class TestAllowOnlySourceQueries extends TruffleInstrument {
 
         boolean success;
@@ -221,11 +188,9 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
                 public void onLoad(LoadSourceEvent source) {
                 }
             };
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.newBuilder().sourceIs(linesImpl("")).build(), dummySourceListener, true);
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.newBuilder().sourceIs(linesImpl("")).build(), dummySourceListener, true);
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.newBuilder().sourceIs((s) -> true).build(), dummySourceListener, true);
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.newBuilder().languageIs(InstrumentationTestLanguage.ID).build(), dummySourceListener, true);
-            env.getInstrumenter().attachLoadSourceListener(SourceFilter.newBuilder().includeInternal(false).build(), dummySourceListener, true);
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().sourceIs(linesImpl("")).build(), dummySourceListener, true);
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().sourceIs(linesImpl("")).build(), dummySourceListener, true);
+            env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().mimeTypeIs(InstrumentationTestLanguage.MIME_TYPE).build(), dummySourceListener, true);
 
             try {
                 env.getInstrumenter().attachLoadSourceListener(SourceSectionFilter.newBuilder().indexIn(IndexRange.between(0, 1)).build(), dummySourceListener, true);
@@ -261,24 +226,4 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
         }
     }
 
-    @Test
-    public void testLoadSourceNoRootSection() throws Exception {
-        Instrument instrument = engine.getInstruments().get("testLoadSource1");
-        TestLoadSource1 impl = instrument.lookup(TestLoadSource1.class);
-        com.oracle.truffle.api.source.Source source1 = com.oracle.truffle.api.source.Source.newBuilder("line1\nline2").mimeType("mime").name("NoName1").build();
-        com.oracle.truffle.api.source.Source source2 = com.oracle.truffle.api.source.Source.newBuilder("line3\nline4").mimeType("mime").name("NoName2").build();
-        com.oracle.truffle.api.source.Source source3 = com.oracle.truffle.api.source.Source.newBuilder("line5\nline6").mimeType("mime").name("NoName3").build();
-        Node node1 = new SourceSectionFilterTest.SourceSectionNode(source1.createSection(1));
-        RootNode rootA = SourceSectionFilterTest.createRootNode(engine, null, Boolean.FALSE, node1);
-        assertEvents(impl.allEvents);
-        Truffle.getRuntime().createCallTarget(rootA);
-        assertEvents(impl.allEvents, source1);
-
-        Node node2 = new SourceSectionFilterTest.SourceSectionNode(source2.createSection(2));
-        Node node3 = new SourceSectionFilterTest.SourceSectionNode(source3.createSection(2));
-        RootNode rootB = SourceSectionFilterTest.createRootNode(engine, null, Boolean.FALSE, node2, node3);
-        assertEvents(impl.allEvents, source1);
-        Truffle.getRuntime().createCallTarget(rootB);
-        assertEvents(impl.allEvents, source1, source2, source3);
-    }
 }

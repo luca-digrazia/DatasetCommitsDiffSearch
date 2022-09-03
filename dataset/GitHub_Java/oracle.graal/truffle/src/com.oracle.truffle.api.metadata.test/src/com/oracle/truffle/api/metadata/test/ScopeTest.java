@@ -44,12 +44,15 @@ import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
 import com.oracle.truffle.api.instrumentation.Instrumentable;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
+import com.oracle.truffle.api.metadata.Scope;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.test.AbstractInstrumentationTest;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.java.JavaInterop;
+import com.oracle.truffle.api.metadata.ScopeProvider;
+import com.oracle.truffle.api.metadata.ScopeProvider.AbstractScope;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
@@ -58,14 +61,13 @@ import org.graalvm.polyglot.Source;
 /**
  * Test of {@link Scope}.
  */
-@SuppressWarnings("deprecation")
 public class ScopeTest extends AbstractInstrumentationTest {
 
     @Test
     public void testDefaultScope() throws Throwable {
         assureEnabled(engine.getInstruments().get("testScopeInstrument"));
         TestScopeInstrument.INSTANCE.setTester(new DefaultScopeTester());
-        run("ROOT(DEFINE(\ntestFunction,ROOT(\nVARIABLE(a, 10),\nVARIABLE(b, 20),\nSTATEMENT)),\nCALL(testFunction))");
+        run("ROOT(DEFINE(testFunction,\nROOT(\nVARIABLE(a, 10),\nVARIABLE(b, 20),\nSTATEMENT)),\nCALL(testFunction))");
         TestScopeInstrument.INSTANCE.checkForFailure();
     }
 
@@ -124,11 +126,11 @@ public class ScopeTest extends AbstractInstrumentationTest {
 
         @SuppressWarnings("rawtypes")
         public void doTestScope(TruffleInstrument.Env env, Node node, VirtualFrame frame) {
-            Iterable<com.oracle.truffle.api.metadata.Scope> scopes = com.oracle.truffle.api.metadata.Scope.findScopes(env, node, null);
+            Iterable<Scope> scopes = Scope.findScopes(env, node, null);
             assertNotNull(scopes);
-            Iterator<com.oracle.truffle.api.metadata.Scope> iterator = scopes.iterator();
+            Iterator<Scope> iterator = scopes.iterator();
             assertTrue(iterator.hasNext());
-            com.oracle.truffle.api.metadata.Scope scope = iterator.next();
+            Scope scope = iterator.next();
             assertFalse(iterator.hasNext());
             int line = node.getSourceSection().getStartLine();
             if (line == 1 || line == 6) {
@@ -187,7 +189,7 @@ public class ScopeTest extends AbstractInstrumentationTest {
 
     @TruffleLanguage.Registration(id = "test-custom-scope-language", name = "", version = "", mimeType = "x-testCustomScope")
     @ProvidedTags({StandardTags.StatementTag.class})
-    public static class CustomScopeLanguage extends TruffleLanguage<Object> implements com.oracle.truffle.api.metadata.ScopeProvider<Object> {
+    public static class CustomScopeLanguage extends TruffleLanguage<Object> implements ScopeProvider<Object> {
 
         @Override
         protected Object createContext(Env env) {
@@ -210,7 +212,7 @@ public class ScopeTest extends AbstractInstrumentationTest {
         }
 
         @Override
-        public com.oracle.truffle.api.metadata.ScopeProvider.AbstractScope findScope(Object context, Node node, Frame frame) {
+        public AbstractScope findScope(Object context, Node node, Frame frame) {
             return new CustomScope(node, frame);
         }
 
@@ -239,7 +241,7 @@ public class ScopeTest extends AbstractInstrumentationTest {
             public CustomScopeNode() {
             }
 
-            @SuppressWarnings("all")
+            @SuppressWarnings("unused")
             public Object execute(VirtualFrame frame) {
                 return 1;
             }
@@ -256,7 +258,7 @@ public class ScopeTest extends AbstractInstrumentationTest {
         }
     }
 
-    private static class CustomScope extends com.oracle.truffle.api.metadata.ScopeProvider.AbstractScope {
+    private static class CustomScope extends AbstractScope {
 
         // Checkstyle: stop
         static CustomScope LAST_INSTANCE;
@@ -295,9 +297,9 @@ public class ScopeTest extends AbstractInstrumentationTest {
         protected Object getVariables(Frame f) {
             numGetVariables++;
             if (f == null) {
-                return JavaInterop.asTruffleObject("V1");
+                return "V1";
             } else {
-                return JavaInterop.asTruffleObject("V1V2V3");
+                return "V1V2V3";
             }
         }
 
@@ -305,14 +307,14 @@ public class ScopeTest extends AbstractInstrumentationTest {
         protected Object getArguments(Frame f) {
             numGetArguments++;
             if (f == null) {
-                return JavaInterop.asTruffleObject("A1");
+                return "A1";
             } else {
-                return JavaInterop.asTruffleObject("A1A2A3");
+                return "A1A2A3";
             }
         }
 
         @Override
-        protected com.oracle.truffle.api.metadata.ScopeProvider.AbstractScope findParent() {
+        protected AbstractScope findParent() {
             numFindParents++;
             Node parent = node.getParent();
             if (parent != null) {
@@ -329,12 +331,12 @@ public class ScopeTest extends AbstractInstrumentationTest {
         public void doTestScope(TruffleInstrument.Env env, Node node, VirtualFrame frame) {
             assertNull(CustomScope.LAST_INSTANCE);
             assertEquals(0, CustomScope.NUM_INSTANCES);
-            Iterable<com.oracle.truffle.api.metadata.Scope> findScopes = com.oracle.truffle.api.metadata.Scope.findScopes(env, node, null);
+            Iterable<Scope> findScopes = Scope.findScopes(env, node, null);
             assertNotNull(CustomScope.LAST_INSTANCE);
             assertEquals(1, CustomScope.NUM_INSTANCES);
-            Iterator<com.oracle.truffle.api.metadata.Scope> iterator = findScopes.iterator();
+            Iterator<Scope> iterator = findScopes.iterator();
             assertTrue(iterator.hasNext());
-            com.oracle.truffle.api.metadata.Scope scope = iterator.next();
+            Scope scope = iterator.next();
             assertEquals(1, CustomScope.NUM_INSTANCES);
 
             testScopeContent(scope, node, frame);
@@ -362,7 +364,7 @@ public class ScopeTest extends AbstractInstrumentationTest {
             assertEquals(3, CustomScope.NUM_INSTANCES);
         }
 
-        private static void testScopeContent(com.oracle.truffle.api.metadata.Scope scope, Node node, Frame frame) {
+        private static void testScopeContent(Scope scope, Node node, Frame frame) {
             assertEquals(0, CustomScope.LAST_INSTANCE.numGetNames);
             assertEquals("CustomScope.getName", scope.getName());
             assertEquals(1, CustomScope.LAST_INSTANCE.numGetNames);
@@ -372,15 +374,15 @@ public class ScopeTest extends AbstractInstrumentationTest {
             assertEquals(1, CustomScope.LAST_INSTANCE.numGetNodes);
 
             assertEquals(0, CustomScope.LAST_INSTANCE.numGetVariables);
-            assertEquals("V1", JavaInterop.asJavaObject((TruffleObject) scope.getVariables(null)));
+            assertEquals("V1", scope.getVariables(null));
             assertEquals(1, CustomScope.LAST_INSTANCE.numGetVariables);
-            assertEquals("V1V2V3", JavaInterop.asJavaObject((TruffleObject) scope.getVariables(frame)));
+            assertEquals("V1V2V3", scope.getVariables(frame));
             assertEquals(2, CustomScope.LAST_INSTANCE.numGetVariables);
 
             assertEquals(0, CustomScope.LAST_INSTANCE.numGetArguments);
-            assertEquals("A1", JavaInterop.asJavaObject((TruffleObject) scope.getArguments(null)));
+            assertEquals("A1", scope.getArguments(null));
             assertEquals(1, CustomScope.LAST_INSTANCE.numGetArguments);
-            assertEquals("A1A2A3", JavaInterop.asJavaObject((TruffleObject) scope.getArguments(frame)));
+            assertEquals("A1A2A3", scope.getArguments(frame));
             assertEquals(2, CustomScope.LAST_INSTANCE.numGetArguments);
             assertEquals(0, CustomScope.LAST_INSTANCE.numFindParents);
         }

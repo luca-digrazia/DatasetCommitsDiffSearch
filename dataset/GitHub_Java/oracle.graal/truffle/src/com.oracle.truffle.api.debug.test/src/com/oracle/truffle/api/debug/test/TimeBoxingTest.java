@@ -55,7 +55,7 @@ public class TimeBoxingTest {
                     }
                 }).suspendNextExecution();
             }
-        }, 0, 10);
+        }, 1000);
 
         try {
             context.eval(source); // throws KillException, wrapped by PolyglotException

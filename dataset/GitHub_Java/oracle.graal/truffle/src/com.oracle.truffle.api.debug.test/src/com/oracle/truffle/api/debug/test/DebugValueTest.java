@@ -93,7 +93,7 @@ public class DebugValueTest extends AbstractDebugTest {
                         "))\n");
         Context context = Context.create();
         context.eval(source);
-        Value functionValue = context.getPolyglotBindings().getMember("function");
+        Value functionValue = context.importSymbol("function");
         assertNotNull(functionValue);
         Debugger debugger = context.getEngine().getInstruments().get("debugger").lookup(Debugger.class);
 
@@ -165,15 +165,6 @@ public class DebugValueTest extends AbstractDebugTest {
         @MessageResolution(receiverType = NoAttributesTruffleObject.class)
         static final class NoAttributesMessageResolution {
 
-            @Resolve(message = "HAS_KEYS")
-            abstract static class NoAttributesHasKeysNode extends Node {
-
-                @SuppressWarnings("unused")
-                public Object access(NoAttributesTruffleObject ato) {
-                    return true;
-                }
-            }
-
             @Resolve(message = "KEYS")
             abstract static class NoAttributesKeysNode extends Node {
 
@@ -224,15 +215,6 @@ public class DebugValueTest extends AbstractDebugTest {
         @MessageResolution(receiverType = ModifiableAttributesTruffleObject.class)
         static final class ModifiableAttributesMessageResolution {
 
-            @Resolve(message = "HAS_KEYS")
-            abstract static class ModifiableAttributesHasKeysNode extends Node {
-
-                @SuppressWarnings("unused")
-                public Object access(ModifiableAttributesTruffleObject ato) {
-                    return true;
-                }
-            }
-
             @Resolve(message = "KEYS")
             abstract static class ModifiableAttributesKeysNode extends Node {
 
@@ -259,9 +241,7 @@ public class DebugValueTest extends AbstractDebugTest {
 
                 @SuppressWarnings("unused")
                 public int access(ModifiableAttributesTruffleObject ato, String propName) {
-                    return (ato.isReadable ? KeyInfo.READABLE : 0) |
-                                    (ato.isWritable ? KeyInfo.MODIFIABLE : 0) |
-                                    (ato.isInternal ? KeyInfo.INTERNAL : 0);
+                    return KeyInfo.newBuilder().setReadable(ato.isReadable).setWritable(ato.isWritable).setInternal(ato.isInternal).build();
                 }
             }
         }
