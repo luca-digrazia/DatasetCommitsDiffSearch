@@ -94,7 +94,7 @@ public class NativeImage {
 
     static final String graalvmVersion = System.getProperty("org.graalvm.version", System.getProperty("graalvm.version", "dev"));
 
-    static final String[] graalCompilerFlags = getResource("/graal-compiler-flags.config").split("\n");
+    static final String[] graalCompilerFlags = System.getProperty("native-image.graal-compiler-flags", "").split(" ");
 
     static String getResource(String resourceName) {
         try (InputStream input = NativeImage.class.getResourceAsStream(resourceName)) {
@@ -398,7 +398,7 @@ public class NativeImage {
 
         @Override
         public List<Path> getBuilderUpgradeModulePath() {
-            return getJars(rootDir.resolve(Paths.get("lib", "jvmci")), "graal");
+            return getJars(rootDir.resolve(Paths.get("lib", "jvmci")), "graal-management", "graal");
         }
 
         @Override
