@@ -72,13 +72,6 @@ public final class CPUTracer implements Closeable {
     public static class Instrument extends TruffleInstrument {
 
         /**
-         * Default constructor.
-         * @since 0.29
-         */
-        public Instrument() {
-        }
-
-        /**
          * A string used to identify the tracer, i.e. as the name of the tool.
          *
          * @since 0.29
@@ -86,12 +79,6 @@ public final class CPUTracer implements Closeable {
         public static final String ID = "cputracer";
         static CPUTracer tracer;
 
-        /**
-         * Called to create the Instrument.
-         *
-         * @param env environment information for the instrument
-         * @since 0.29
-         */
         @Override
         protected void onCreate(Env env) {
             tracer = new CPUTracer(env);
@@ -113,10 +100,6 @@ public final class CPUTracer implements Closeable {
             return CLI.buildFilter(roots, statements, calls, internals, filterRootName, filterFile, filterLanguage);
         }
 
-        /**
-         * @return A list of the options provided by the {@link CPUTracer}.
-         * @since 0.29
-         */
         @SuppressWarnings("deprecation")
         @Override
         protected List<OptionDescriptor> describeOptions() {
@@ -135,12 +118,6 @@ public final class CPUTracer implements Closeable {
             return descriptors;
         }
 
-        /**
-         * Called when the Instrument is to be disposed.
-         *
-         * @param env environment information for the instrument
-         * @since 0.29
-         */
         @Override
         protected void onDispose(Env env) {
             if (env.getOptions().get(CLI.ENABLED)) {
@@ -198,7 +175,6 @@ public final class CPUTracer implements Closeable {
      * only parts of the executed source code.
      *
      * @param filter The filter describing which part of the source code to trace
-     *               @since 0.29
      */
     public synchronized void setFilter(SourceSectionFilter filter) {
         verifyConfigAllowed();
