@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -79,7 +77,7 @@ public class GraalCompiler {
         Debug.scope("GraalCompiler", new Object[]{graph, runtime}, new Runnable() {
 
             public void run() {
-                final Assumptions assumptions = new Assumptions(OptAssumptions.getValue());
+                final Assumptions assumptions = new Assumptions(GraalOptions.OptAssumptions);
                 final LIR lir = Debug.scope("FrontEnd", new Callable<LIR>() {
 
                     public LIR call() {
@@ -140,20 +138,20 @@ public class GraalCompiler {
             new VerifyUsageWithEquals(runtime, Register.class).apply(graph);
         }
 
-        if (OptCanonicalizer.getValue()) {
+        if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
         }
 
         HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements);
 
         if (Inline.getValue() && !plan.isPhaseDisabled(InliningPhase.class)) {
-            if (IterativeInlining.getValue()) {
-                new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, OptEarlyReadElimination.getValue()).apply(graph, highTierContext);
+            if (GraalOptions.IterativeInlining) {
+                new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, GraalOptions.OptEarlyReadElimination).apply(graph, highTierContext);
             } else {
                 new InliningPhase(runtime, null, replacements, assumptions, cache, plan, optimisticOpts).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
 
-                if (ConditionalElimination.getValue() && OptCanonicalizer.getValue()) {
+                if (GraalOptions.ConditionalElimination && GraalOptions.OptCanonicalizer) {
                     new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
                     new IterativeConditionalEliminationPhase().apply(graph, highTierContext);
                 }

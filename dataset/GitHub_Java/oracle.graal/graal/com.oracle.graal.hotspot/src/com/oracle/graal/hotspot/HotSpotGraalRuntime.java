@@ -23,7 +23,6 @@
 package com.oracle.graal.hotspot;
 
 import static com.oracle.graal.graph.UnsafeAccess.*;
-//import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -160,16 +159,16 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
 
         // Set some global options:
         if (config.compileTheWorld) {
-            GraalOptions.CompileTheWorld.setValue(CompileTheWorld.SUN_BOOT_CLASS_PATH);
+            GraalOptions.CompileTheWorld = CompileTheWorld.SUN_BOOT_CLASS_PATH;
         }
         if (config.compileTheWorldStartAt != 1) {
-            GraalOptions.CompileTheWorldStartAt.setValue(config.compileTheWorldStartAt);
+            GraalOptions.CompileTheWorldStartAt = config.compileTheWorldStartAt;
         }
         if (config.compileTheWorldStopAt != Integer.MAX_VALUE) {
-            GraalOptions.CompileTheWorldStopAt.setValue(config.compileTheWorldStopAt);
+            GraalOptions.CompileTheWorldStopAt = config.compileTheWorldStopAt;
         }
-        GraalOptions.HotSpotPrintCompilation.setValue(config.printCompilation);
-        GraalOptions.HotSpotPrintInlining.setValue(config.printInlining);
+        GraalOptions.HotSpotPrintCompilation = config.printCompilation;
+        GraalOptions.HotSpotPrintInlining = config.printInlining;
 
         if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
             printConfig(config);
@@ -187,8 +186,8 @@ public abstract class HotSpotGraalRuntime implements GraalRuntime {
         replacements = new HotSpotReplacementsImpl(runtime, assumptions, runtime.getGraalRuntime().getTarget());
 
         backend = createBackend();
-        GraalOptions.StackShadowPages.setValue(config.stackShadowPages);
-        if (GraalOptions.CacheGraphs.getValue()) {
+        GraalOptions.StackShadowPages = config.stackShadowPages;
+        if (GraalOptions.CacheGraphs) {
             cache = new HotSpotGraphCache();
         }
     }

@@ -35,6 +35,8 @@ public final class Suites {
     private static final OptionValue<String> CompilerConfiguration = new OptionValue<>("basic");
     // @formatter:on
 
+    public static final Suites DEFAULT;
+
     private final PhaseSuite<HighTierContext> highTier;
     private final PhaseSuite<MidTierContext> midTier;
     private final PhaseSuite<LowTierContext> lowTier;
@@ -62,6 +64,8 @@ public final class Suites {
             }
             configurations.put(name.toLowerCase(), config);
         }
+
+        DEFAULT = createDefaultSuites();
     }
 
     private Suites(CompilerConfiguration config) {
