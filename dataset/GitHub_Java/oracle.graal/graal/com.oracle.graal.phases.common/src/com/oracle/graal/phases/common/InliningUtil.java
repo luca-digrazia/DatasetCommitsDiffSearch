@@ -70,50 +70,16 @@ public class InliningUtil {
 
         void scanInvokes(Iterable<? extends Node> newNodes);
 
-        boolean isWorthInlining(InlineInfo info, NodesToDoubles nodeProbabilities, NodesToDoubles nodeRelevance);
-    }
-
-    /**
-     * Print a HotSpot-style inlining message to the console.
-     */
-    private static void printInlining(final InlineInfo info, final boolean success, final String msg, final Object... args) {
-        printInlining(info.methodAt(0), info.invoke(), success, msg, args);
-    }
-
-    /**
-     * Print a HotSpot-style inlining message to the console.
-     */
-    private static void printInlining(final ResolvedJavaMethod method, final Invoke invoke, final boolean success, final String msg, final Object... args) {
-        if (GraalOptions.HotSpotPrintInlining) {
-            final int mod = method.getModifiers();
-            // 1234567
-            TTY.print("        ");     // print timestamp
-            // 1234
-            TTY.print("     ");        // print compilation number
-            // % s ! b n
-            TTY.print("%c%c%c%c%c ", ' ', Modifier.isSynchronized(mod) ? 's' : ' ', ' ', ' ', Modifier.isNative(mod) ? 'n' : ' ');
-            TTY.print("     ");        // more indent
-            TTY.print("    ");         // initial inlining indent
-            final int level = computeInliningLevel(invoke);
-            for (int i = 0; i < level; i++) {
-                TTY.print("  ");
-            }
-            TTY.println(String.format("@ %d  %s   %s%s", invoke.bci(), methodName(method, null), success ? "" : "not inlining ", String.format(msg, args)));
-        }
-    }
-
-    public static boolean logInlinedMethod(InlineInfo info, String msg, Object... args) {
-        logInliningDecision(info, true, msg, args);
-        return true;
+        boolean isWorthInlining(InlineInfo info);
     }
 
     public static boolean logNotInlinedMethod(InlineInfo info, String msg, Object... args) {
+
         logInliningDecision(info, false, msg, args);
         return false;
     }
 
     public static void logInliningDecision(InlineInfo info, boolean success, String msg, final Object... args) {
-        printInlining(info, success, msg, args);
         if (shouldLogInliningDecision()) {
             logInliningDecision(methodName(info), success, msg, args);
         }
@@ -126,6 +92,11 @@ public class InliningUtil {
                 Debug.log(msg, args);
             }
         });
+    }
+
+    public static boolean logInlinedMethod(InlineInfo info, String string, Object... args) {
+        logInliningDecision(info, true, string, args);
+        return true;
     }
 
     private static boolean logNotInlinedMethodAndReturnFalse(Invoke invoke, String msg) {
@@ -141,7 +112,6 @@ public class InliningUtil {
     }
 
     private static InlineInfo logNotInlinedMethodAndReturnNull(Invoke invoke, ResolvedJavaMethod method, String msg, Object... args) {
-        printInlining(method, invoke, false, msg, args);
         if (shouldLogInliningDecision()) {
             String methodString = methodName(method, invoke);
             logInliningDecision(methodString, false, msg, args);
@@ -150,7 +120,6 @@ public class InliningUtil {
     }
 
     private static boolean logNotInlinedMethodAndReturnFalse(Invoke invoke, ResolvedJavaMethod method, String msg) {
-        printInlining(method, invoke, false, msg, new Object[0]);
         if (shouldLogInliningDecision()) {
             String methodString = methodName(method, invoke);
             logInliningDecision(methodString, false, msg, new Object[0]);
@@ -252,18 +221,15 @@ public class InliningUtil {
 
         protected static void inline(Invoke invoke, ResolvedJavaMethod concrete, InliningCallback callback, Replacements replacements, Assumptions assumptions, boolean receiverNullCheck) {
             Class<? extends FixedWithNextNode> macroNodeClass = getMacroNodeClass(replacements, concrete);
-            StructuredGraph graph = (StructuredGraph) invoke.asNode().graph();
+            StructuredGraph graph = (StructuredGraph) invoke.graph();
             if (macroNodeClass != null) {
-                if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() != concrete) {
-                    assert ((MethodCallTargetNode) invoke.callTarget()).invokeKind() != InvokeKind.Static;
-                    InliningUtil.replaceInvokeCallTarget(invoke, graph, InvokeKind.Special, concrete);
-                }
                 FixedWithNextNode macroNode;
                 try {
                     macroNode = macroNodeClass.getConstructor(Invoke.class).newInstance(invoke);
                 } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
-                    throw new GraalInternalError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
+                    throw new GraalInternalError(e).addContext(invoke.node()).addContext("macroSubstitution", macroNodeClass);
                 }
+                macroNode.setProbability(invoke.node().probability());
                 CallTargetNode callTarget = invoke.callTarget();
                 if (invoke instanceof InvokeNode) {
                     graph.replaceFixedWithFixed((InvokeNode) invoke, graph.add(macroNode));
@@ -298,12 +264,12 @@ public class InliningUtil {
                 }
             });
         }
-    }
 
-    public static void replaceInvokeCallTarget(Invoke invoke, StructuredGraph graph, InvokeKind invokeKind, ResolvedJavaMethod targetMethod) {
-        MethodCallTargetNode oldCallTarget = (MethodCallTargetNode) invoke.callTarget();
-        MethodCallTargetNode newCallTarget = graph.add(new MethodCallTargetNode(invokeKind, targetMethod, oldCallTarget.arguments().toArray(new ValueNode[0]), oldCallTarget.returnType()));
-        invoke.asNode().replaceFirstInput(oldCallTarget, newCallTarget);
+        protected void replaceInvokeCallTarget(StructuredGraph graph, InvokeKind invokeKind, ResolvedJavaMethod targetMethod) {
+            MethodCallTargetNode oldCallTarget = invoke.methodCallTarget();
+            MethodCallTargetNode newCallTarget = graph.add(new MethodCallTargetNode(invokeKind, targetMethod, oldCallTarget.arguments().toArray(new ValueNode[0]), oldCallTarget.returnType()));
+            invoke.node().replaceFirstInput(oldCallTarget, newCallTarget);
+        }
     }
 
     /**
@@ -382,12 +348,12 @@ public class InliningUtil {
         @Override
         public void tryToDevirtualizeInvoke(StructuredGraph graph, MetaAccessProvider runtime, Assumptions assumptions) {
             createGuard(graph, runtime);
-            replaceInvokeCallTarget(invoke, graph, InvokeKind.Special, concrete);
+            replaceInvokeCallTarget(graph, InvokeKind.Special, concrete);
         }
 
         private void createGuard(StructuredGraph graph, MetaAccessProvider runtime) {
             InliningUtil.receiverNullCheck(invoke);
-            ValueNode receiver = ((MethodCallTargetNode) invoke.callTarget()).receiver();
+            ValueNode receiver = invoke.methodCallTarget().receiver();
             ConstantNode typeHub = ConstantNode.forConstant(type.getEncoding(Representation.ObjectHub), runtime, graph);
             LoadHubNode receiverHub = graph.add(new LoadHubNode(receiver, typeHub.kind()));
             CompareNode typeCheck = CompareNode.createCompareNode(Condition.EQ, receiverHub, typeHub);
@@ -398,9 +364,9 @@ public class InliningUtil {
             ValueNode anchoredReceiver = createAnchoredReceiver(graph, anchor, type, receiver, true);
             invoke.callTarget().replaceFirstInput(receiver, anchoredReceiver);
 
-            graph.addBeforeFixed(invoke.asNode(), receiverHub);
-            graph.addBeforeFixed(invoke.asNode(), guard);
-            graph.addBeforeFixed(invoke.asNode(), anchor);
+            graph.addBeforeFixed(invoke.node(), receiverHub);
+            graph.addBeforeFixed(invoke.node(), guard);
+            graph.addBeforeFixed(invoke.node(), anchor);
         }
 
         @Override
@@ -466,14 +432,15 @@ public class InliningUtil {
             int numberOfMethods = concretes.size();
             FixedNode continuation = invoke.next();
 
-            ValueNode originalReceiver = ((MethodCallTargetNode) invoke.callTarget()).receiver();
+            ValueNode originalReceiver = invoke.methodCallTarget().receiver();
             // setup merge and phi nodes for results and exceptions
             MergeNode returnMerge = graph.add(new MergeNode());
+            returnMerge.setProbability(invoke.probability());
             returnMerge.setStateAfter(invoke.stateAfter().duplicate(invoke.stateAfter().bci));
 
             PhiNode returnValuePhi = null;
-            if (invoke.asNode().kind() != Kind.Void) {
-                returnValuePhi = graph.unique(new PhiNode(invoke.asNode().kind(), returnMerge));
+            if (invoke.node().kind() != Kind.Void) {
+                returnValuePhi = graph.unique(new PhiNode(invoke.node().kind(), returnMerge));
             }
 
             MergeNode exceptionMerge = null;
@@ -483,6 +450,7 @@ public class InliningUtil {
                 ExceptionObjectNode exceptionEdge = (ExceptionObjectNode) invokeWithException.exceptionEdge();
 
                 exceptionMerge = graph.add(new MergeNode());
+                exceptionMerge.setProbability(exceptionEdge.probability());
 
                 FixedNode exceptionSux = exceptionEdge.next();
                 graph.addBeforeFixed(exceptionSux, exceptionMerge);
@@ -493,13 +461,20 @@ public class InliningUtil {
             // create one separate block for each invoked method
             BeginNode[] successors = new BeginNode[numberOfMethods + 1];
             for (int i = 0; i < numberOfMethods; i++) {
-                successors[i] = createInvocationBlock(graph, invoke, returnMerge, returnValuePhi, exceptionMerge, exceptionObjectPhi, true);
+                double probability = 0;
+                for (int j = 0; j < typesToConcretes.length; j++) {
+                    if (typesToConcretes[j] == i) {
+                        probability += ptypes.get(j).getProbability();
+                    }
+                }
+
+                successors[i] = createInvocationBlock(graph, invoke, returnMerge, returnValuePhi, exceptionMerge, exceptionObjectPhi, invoke.probability() * probability, true);
             }
 
             // create the successor for an unknown type
             FixedNode unknownTypeSux;
             if (shouldFallbackToInvoke()) {
-                unknownTypeSux = createInvocationBlock(graph, invoke, returnMerge, returnValuePhi, exceptionMerge, exceptionObjectPhi, false);
+                unknownTypeSux = createInvocationBlock(graph, invoke, returnMerge, returnValuePhi, exceptionMerge, exceptionObjectPhi, notRecordedTypeProbability, false);
             } else {
                 unknownTypeSux = graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TypeCheckedInliningViolated));
             }
@@ -514,7 +489,7 @@ public class InliningUtil {
                 GraphUtil.killCFG(invokeWithExceptionNode.exceptionEdge());
             }
 
-            assert invoke.asNode().isAlive();
+            assert invoke.node().isAlive();
 
             // replace the invoke with a switch on the type of the actual receiver
             createDispatchOnTypeBeforeInvoke(graph, successors, false);
@@ -522,8 +497,8 @@ public class InliningUtil {
             assert invoke.next() == continuation;
             invoke.setNext(null);
             returnMerge.setNext(continuation);
-            invoke.asNode().replaceAtUsages(returnValuePhi);
-            invoke.asNode().replaceAndDelete(null);
+            invoke.node().replaceAtUsages(returnValuePhi);
+            invoke.node().replaceAndDelete(null);
 
             ArrayList<PiNode> replacementNodes = new ArrayList<>();
 
@@ -533,7 +508,7 @@ public class InliningUtil {
                 Invoke invokeForInlining = (Invoke) node.next();
 
                 ResolvedJavaType commonType = getLeastCommonType(i);
-                ValueNode receiver = ((MethodCallTargetNode) invokeForInlining.callTarget()).receiver();
+                ValueNode receiver = invokeForInlining.methodCallTarget().receiver();
                 boolean exact = getTypeCount(i) == 1;
                 PiNode anchoredReceiver = createAnchoredReceiver(graph, node, commonType, receiver, exact);
                 invokeForInlining.callTarget().replaceFirstInput(receiver, anchoredReceiver);
@@ -553,8 +528,7 @@ public class InliningUtil {
                 FixedNode current = returnMerge;
                 int opportunities = 0;
                 do {
-                    if (current instanceof InvokeNode && ((InvokeNode) current).callTarget() instanceof MethodCallTargetNode &&
-                                    ((MethodCallTargetNode) ((InvokeNode) current).callTarget()).receiver() == originalReceiver) {
+                    if (current instanceof InvokeNode && ((InvokeNode) current).methodCallTarget().receiver() == originalReceiver) {
                         opportunities++;
                     } else if (current.inputs().contains(originalReceiver)) {
                         opportunities++;
@@ -606,12 +580,13 @@ public class InliningUtil {
             assert concretes.size() == 1 && ptypes.size() > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
 
             BeginNode calleeEntryNode = graph.add(new BeginNode());
+            calleeEntryNode.setProbability(invoke.probability());
 
             BeginNode unknownTypeSux = createUnknownTypeSuccessor(graph);
             BeginNode[] successors = new BeginNode[]{calleeEntryNode, unknownTypeSux};
             createDispatchOnTypeBeforeInvoke(graph, successors, false);
 
-            calleeEntryNode.setNext(invoke.asNode());
+            calleeEntryNode.setNext(invoke.node());
 
             ResolvedJavaMethod concrete = concretes.get(0);
             inline(invoke, concrete, callback, replacements, assumptions, false);
@@ -620,9 +595,9 @@ public class InliningUtil {
         private void createDispatchOnTypeBeforeInvoke(StructuredGraph graph, BeginNode[] successors, boolean invokeIsOnlySuccessor) {
             assert ptypes.size() > 1;
 
-            Kind hubKind = ((MethodCallTargetNode) invoke.callTarget()).targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
-            LoadHubNode hub = graph.add(new LoadHubNode(((MethodCallTargetNode) invoke.callTarget()).receiver(), hubKind));
-            graph.addBeforeFixed(invoke.asNode(), hub);
+            Kind hubKind = invoke.methodCallTarget().targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
+            LoadHubNode hub = graph.add(new LoadHubNode(invoke.methodCallTarget().receiver(), hubKind));
+            graph.addBeforeFixed(invoke.node(), hub);
 
             ResolvedJavaType[] keys = new ResolvedJavaType[ptypes.size()];
             double[] keyProbabilities = new double[ptypes.size() + 1];
@@ -637,37 +612,42 @@ public class InliningUtil {
             keySuccessors[keySuccessors.length - 1] = successors.length - 1;
 
             TypeSwitchNode typeSwitch = graph.add(new TypeSwitchNode(hub, successors, keys, keyProbabilities, keySuccessors));
-            FixedWithNextNode pred = (FixedWithNextNode) invoke.asNode().predecessor();
+            FixedWithNextNode pred = (FixedWithNextNode) invoke.node().predecessor();
             pred.setNext(typeSwitch);
         }
 
         private static BeginNode createInvocationBlock(StructuredGraph graph, Invoke invoke, MergeNode returnMerge, PhiNode returnValuePhi, MergeNode exceptionMerge, PhiNode exceptionObjectPhi,
-                        boolean useForInlining) {
-            Invoke duplicatedInvoke = duplicateInvokeForInlining(graph, invoke, exceptionMerge, exceptionObjectPhi, useForInlining);
+                        double probability, boolean useForInlining) {
+            Invoke duplicatedInvoke = duplicateInvokeForInlining(graph, invoke, exceptionMerge, exceptionObjectPhi, useForInlining, probability);
             BeginNode calleeEntryNode = graph.add(new BeginNode());
-            calleeEntryNode.setNext(duplicatedInvoke.asNode());
+            calleeEntryNode.setNext(duplicatedInvoke.node());
+            calleeEntryNode.setProbability(probability);
 
             EndNode endNode = graph.add(new EndNode());
+            endNode.setProbability(probability);
+
             duplicatedInvoke.setNext(endNode);
             returnMerge.addForwardEnd(endNode);
 
             if (returnValuePhi != null) {
-                returnValuePhi.addInput(duplicatedInvoke.asNode());
+                returnValuePhi.addInput(duplicatedInvoke.node());
             }
             return calleeEntryNode;
         }
 
-        private static Invoke duplicateInvokeForInlining(StructuredGraph graph, Invoke invoke, MergeNode exceptionMerge, PhiNode exceptionObjectPhi, boolean useForInlining) {
-            Invoke result = (Invoke) invoke.asNode().copyWithInputs();
+        private static Invoke duplicateInvokeForInlining(StructuredGraph graph, Invoke invoke, MergeNode exceptionMerge, PhiNode exceptionObjectPhi, boolean useForInlining, double probability) {
+            Invoke result = (Invoke) invoke.node().copyWithInputs();
             Node callTarget = result.callTarget().copyWithInputs();
-            result.asNode().replaceFirstInput(result.callTarget(), callTarget);
+            result.node().replaceFirstInput(result.callTarget(), callTarget);
             result.setUseForInlining(useForInlining);
+            result.setProbability(probability);
+            result.setInliningRelevance(invoke.inliningRelevance() * probability);
 
-            Kind kind = invoke.asNode().kind();
+            Kind kind = invoke.node().kind();
             if (kind != Kind.Void) {
                 FrameState stateAfter = invoke.stateAfter();
                 stateAfter = stateAfter.duplicate(stateAfter.bci);
-                stateAfter.replaceFirstInput(invoke.asNode(), result.asNode());
+                stateAfter.replaceFirstInput(invoke.node(), result.node());
                 result.setStateAfter(stateAfter);
             }
 
@@ -706,7 +686,7 @@ public class InliningUtil {
         }
 
         private void tryToDevirtualizeMultipleMethods(StructuredGraph graph) {
-            MethodCallTargetNode methodCallTarget = (MethodCallTargetNode) invoke.callTarget();
+            MethodCallTargetNode methodCallTarget = invoke.methodCallTarget();
             if (methodCallTarget.invokeKind() == InvokeKind.Interface) {
                 ResolvedJavaMethod targetMethod = methodCallTarget.targetMethod();
                 ResolvedJavaType leastCommonType = getLeastCommonType();
@@ -726,15 +706,17 @@ public class InliningUtil {
             InliningUtil.receiverNullCheck(invoke);
 
             BeginNode invocationEntry = graph.add(new BeginNode());
+            invocationEntry.setProbability(invoke.probability());
+
             BeginNode unknownTypeSux = createUnknownTypeSuccessor(graph);
             BeginNode[] successors = new BeginNode[]{invocationEntry, unknownTypeSux};
             createDispatchOnTypeBeforeInvoke(graph, successors, true);
 
-            invocationEntry.setNext(invoke.asNode());
-            ValueNode receiver = ((MethodCallTargetNode) invoke.callTarget()).receiver();
+            invocationEntry.setNext(invoke.node());
+            ValueNode receiver = invoke.methodCallTarget().receiver();
             PiNode anchoredReceiver = createAnchoredReceiver(graph, invocationEntry, target.getDeclaringClass(), receiver, false);
             invoke.callTarget().replaceFirstInput(receiver, anchoredReceiver);
-            replaceInvokeCallTarget(invoke, graph, kind, target);
+            replaceInvokeCallTarget(graph, kind, target);
         }
 
         private static BeginNode createUnknownTypeSuccessor(StructuredGraph graph) {
@@ -779,13 +761,15 @@ public class InliningUtil {
         @Override
         public void inline(StructuredGraph graph, MetaAccessProvider runtime, Replacements replacements, InliningCallback callback, Assumptions assumptions) {
             assumptions.record(takenAssumption);
+            Debug.log("recording assumption: %s", takenAssumption);
+
             super.inline(graph, runtime, replacements, callback, assumptions);
         }
 
         @Override
         public void tryToDevirtualizeInvoke(StructuredGraph graph, MetaAccessProvider runtime, Assumptions assumptions) {
             assumptions.record(takenAssumption);
-            replaceInvokeCallTarget(invoke, graph, InvokeKind.Special, concrete);
+            replaceInvokeCallTarget(graph, InvokeKind.Special, concrete);
         }
 
         @Override
@@ -805,7 +789,7 @@ public class InliningUtil {
             return null;
         }
         ResolvedJavaMethod caller = getCaller(invoke);
-        MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
+        MethodCallTargetNode callTarget = invoke.methodCallTarget();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
 
         if (callTarget.invokeKind() == InvokeKind.Special || targetMethod.canBeStaticallyBound()) {
@@ -950,21 +934,18 @@ public class InliningUtil {
         return graph.unique(new PiNode(receiver, exact ? StampFactory.exactNonNull(commonType) : StampFactory.declaredNonNull(commonType), anchor));
     }
 
-    // TODO (chaeubl): cleanup this method
     private static boolean checkInvokeConditions(Invoke invoke) {
-        if (invoke.predecessor() == null || !invoke.asNode().isAlive()) {
+        if (invoke.predecessor() == null || !invoke.node().isAlive()) {
             return logNotInlinedMethodAndReturnFalse(invoke, "the invoke is dead code");
         } else if (!(invoke.callTarget() instanceof MethodCallTargetNode)) {
             return logNotInlinedMethodAndReturnFalse(invoke, "the invoke has already been lowered, or has been created as a low-level node");
-        } else if (((MethodCallTargetNode) invoke.callTarget()).targetMethod() == null) {
+        } else if (invoke.methodCallTarget().targetMethod() == null) {
             return logNotInlinedMethodAndReturnFalse(invoke, "target method is null");
         } else if (invoke.stateAfter() == null) {
-            // TODO (chaeubl): why should an invoke not have a state after?
             return logNotInlinedMethodAndReturnFalse(invoke, "the invoke has no after state");
         } else if (!invoke.useForInlining()) {
             return logNotInlinedMethodAndReturnFalse(invoke, "the invoke is marked to be not used for inlining");
-        } else if (((MethodCallTargetNode) invoke.callTarget()).receiver() != null && ((MethodCallTargetNode) invoke.callTarget()).receiver().isConstant() &&
-                        ((MethodCallTargetNode) invoke.callTarget()).receiver().asConstant().isNull()) {
+        } else if (invoke.methodCallTarget().receiver() != null && invoke.methodCallTarget().receiver().isConstant() && invoke.methodCallTarget().receiver().asConstant().isNull()) {
             return logNotInlinedMethodAndReturnFalse(invoke, "receiver is null");
         } else {
             return true;
@@ -1036,7 +1017,7 @@ public class InliningUtil {
      */
     public static Map<Node, Node> inline(Invoke invoke, StructuredGraph inlineGraph, boolean receiverNullCheck) {
         NodeInputList<ValueNode> parameters = invoke.callTarget().arguments();
-        StructuredGraph graph = (StructuredGraph) invoke.asNode().graph();
+        StructuredGraph graph = (StructuredGraph) invoke.node().graph();
 
         FrameState stateAfter = invoke.stateAfter();
         assert stateAfter.isAlive();
@@ -1064,17 +1045,17 @@ public class InliningUtil {
             }
         }
         // ensure proper anchoring of things that were anchored to the StartNode
-        replacements.put(entryPointNode, BeginNode.prevBegin(invoke.asNode()));
+        replacements.put(entryPointNode, BeginNode.prevBegin(invoke.node()));
 
-        assert invoke.asNode().successors().first() != null : invoke;
-        assert invoke.asNode().predecessor() != null;
+        assert invoke.node().successors().first() != null : invoke;
+        assert invoke.node().predecessor() != null;
 
         Map<Node, Node> duplicates = graph.addDuplicates(nodes, replacements);
         FixedNode firstCFGNodeDuplicate = (FixedNode) duplicates.get(firstCFGNode);
         if (receiverNullCheck) {
             receiverNullCheck(invoke);
         }
-        invoke.asNode().replaceAtPredecessor(firstCFGNodeDuplicate);
+        invoke.node().replaceAtPredecessor(firstCFGNodeDuplicate);
 
         FrameState stateAtExceptionEdge = null;
         if (invoke instanceof InvokeWithExceptionNode) {
@@ -1113,8 +1094,27 @@ public class InliningUtil {
         }
 
         FrameState outerFrameState = null;
+        double invokeProbability = invoke.node().probability();
         int callerLockDepth = stateAfter.nestedLockDepth();
         for (Node node : duplicates.values()) {
+            if (GraalOptions.ProbabilityAnalysis) {
+                if (node instanceof FixedNode) {
+                    FixedNode fixed = (FixedNode) node;
+                    double newProbability = fixed.probability() * invokeProbability;
+                    if (GraalOptions.LimitInlinedProbability) {
+                        newProbability = Math.min(newProbability, invokeProbability);
+                    }
+                    fixed.setProbability(newProbability);
+                }
+                if (node instanceof Invoke) {
+                    Invoke newInvoke = (Invoke) node;
+                    double newRelevance = newInvoke.inliningRelevance() * invoke.inliningRelevance();
+                    if (GraalOptions.LimitInlinedRelevance) {
+                        newRelevance = Math.min(newRelevance, invoke.inliningRelevance());
+                    }
+                    newInvoke.setInliningRelevance(newRelevance);
+                }
+            }
             if (node instanceof FrameState) {
                 FrameState frameState = (FrameState) node;
                 assert frameState.bci != FrameState.BEFORE_BCI : frameState;
@@ -1132,7 +1132,7 @@ public class InliningUtil {
                     if (frameState.outerFrameState() == null) {
                         assert frameState.bci == FrameState.INVALID_FRAMESTATE_BCI || frameState.method() == inlineGraph.method();
                         if (outerFrameState == null) {
-                            outerFrameState = stateAfter.duplicateModified(invoke.bci(), stateAfter.rethrowException(), invoke.asNode().kind());
+                            outerFrameState = stateAfter.duplicateModified(invoke.bci(), stateAfter.rethrowException(), invoke.node().kind());
                             outerFrameState.setDuringCall(true);
                         }
                         frameState.setOuterFrameState(outerFrameState);
@@ -1152,7 +1152,7 @@ public class InliningUtil {
             } else {
                 returnValue = duplicates.get(returnNode.result());
             }
-            invoke.asNode().replaceAtUsages(returnValue);
+            invoke.node().replaceAtUsages(returnValue);
             Node returnDuplicate = duplicates.get(returnNode);
             returnDuplicate.clearInputs();
             Node n = invoke.next();
@@ -1160,19 +1160,19 @@ public class InliningUtil {
             returnDuplicate.replaceAndDelete(n);
         }
 
-        invoke.asNode().replaceAtUsages(null);
-        GraphUtil.killCFG(invoke.asNode());
+        invoke.node().replaceAtUsages(null);
+        GraphUtil.killCFG(invoke.node());
 
         return duplicates;
     }
 
     public static void receiverNullCheck(Invoke invoke) {
-        MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
-        StructuredGraph graph = (StructuredGraph) callTarget.graph();
+        MethodCallTargetNode callTarget = invoke.methodCallTarget();
+        StructuredGraph graph = (StructuredGraph) invoke.graph();
         NodeInputList<ValueNode> parameters = callTarget.arguments();
         ValueNode firstParam = parameters.size() <= 0 ? null : parameters.get(0);
         if (!callTarget.isStatic() && firstParam.kind() == Kind.Object && !firstParam.objectStamp().nonNull()) {
-            graph.addBeforeFixed(invoke.asNode(),
+            graph.addBeforeFixed(invoke.node(),
                             graph.add(new FixedGuardNode(graph.unique(new IsNullNode(firstParam)), DeoptimizationReason.NullCheckException, DeoptimizationAction.InvalidateReprofile, true)));
         }
     }

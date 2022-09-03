@@ -282,15 +282,7 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void storeLocal(Kind kind, int index) {
-        ValueNode value;
-        if (kind == Kind.Object) {
-            value = frameState.xpop();
-            // astore and astore_<n> may be used to store a returnAddress (jsr) see JVMS §6.5.astore
-            assert value.kind() == Kind.Object || value.kind() == Kind.Int;
-        } else {
-            value = frameState.pop(kind);
-        }
-        frameState.storeLocal(index, value);
+        frameState.storeLocal(index, frameState.pop(kind));
     }
 
     public static boolean covers(ExceptionHandler handler, int bci) {
@@ -1077,35 +1069,10 @@ public class GraphBuilderPhase extends Phase {
         }
     }
 
-    private void genInvokeDynamic(JavaMethod target) {
-        if (target instanceof ResolvedJavaMethod) {
-            Object appendix = constantPool.lookupAppendix(stream.readCPI4(), Bytecodes.INVOKEDYNAMIC);
-            if (appendix != null) {
-                frameState.apush(ConstantNode.forObject(appendix, runtime, currentGraph));
-            }
-            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(false), target.getSignature().getParameterCount(false));
-            appendInvoke(InvokeKind.Static, (ResolvedJavaMethod) target, args);
-        } else {
-            handleUnresolvedInvoke(target, InvokeKind.Static);
-        }
-    }
-
     private void genInvokeVirtual(JavaMethod target) {
         if (target instanceof ResolvedJavaMethod) {
-            // Special handling for runtimes that rewrite an invocation of MethodHandle.invoke(...)
-            // or MethodHandle.invokeExact(...) to a static adapter. HotSpot does this - see
-            // https://wikis.oracle.com/display/HotSpotInternals/Method+handles+and+invokedynamic
-            boolean hasReceiver = !isStatic(((ResolvedJavaMethod) target).getModifiers());
-            Object appendix = constantPool.lookupAppendix(stream.readCPI(), Bytecodes.INVOKEVIRTUAL);
-            if (appendix != null) {
-                frameState.apush(ConstantNode.forObject(appendix, runtime, currentGraph));
-            }
-            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(hasReceiver), target.getSignature().getParameterCount(hasReceiver));
-            if (hasReceiver) {
-                genInvokeIndirect(InvokeKind.Virtual, (ResolvedJavaMethod) target, args);
-            } else {
-                appendInvoke(InvokeKind.Static, (ResolvedJavaMethod) target, args);
-            }
+            ValueNode[] args = frameState.popArguments(target.getSignature().getParameterSlots(true), target.getSignature().getParameterCount(true));
+            genInvokeIndirect(InvokeKind.Virtual, (ResolvedJavaMethod) target, args);
         } else {
             handleUnresolvedInvoke(target, InvokeKind.Virtual);
         }
@@ -1796,15 +1763,15 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void traceState() {
-        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_STATE && Debug.isLogEnabled()) {
-            Debug.log(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
+        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_STATE && !TTY.isSuppressed()) {
+            TTY.println(String.format("|   state [nr locals = %d, stack depth = %d, method = %s]", frameState.localsSize(), frameState.stackSize(), method));
             for (int i = 0; i < frameState.localsSize(); ++i) {
                 ValueNode value = frameState.localAt(i);
-                Debug.log(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                TTY.println(String.format("|   local[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
             }
             for (int i = 0; i < frameState.stackSize(); ++i) {
                 ValueNode value = frameState.stackAt(i);
-                Debug.log(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
+                TTY.println(String.format("|   stack[%d] = %-8s : %s", i, value == null ? "bogus" : value.kind().getJavaName(), value));
             }
         }
     }
@@ -2001,7 +1968,6 @@ public class GraphBuilderPhase extends Phase {
             case INVOKESPECIAL  : cpi = stream.readCPI(); genInvokeSpecial(lookupMethod(cpi, opcode)); break;
             case INVOKESTATIC   : cpi = stream.readCPI(); genInvokeStatic(lookupMethod(cpi, opcode)); break;
             case INVOKEINTERFACE: cpi = stream.readCPI(); genInvokeInterface(lookupMethod(cpi, opcode)); break;
-            case INVOKEDYNAMIC  : cpi = stream.readCPI4(); genInvokeDynamic(lookupMethod(cpi, opcode)); break;
             case NEW            : genNewInstance(stream.readCPI()); break;
             case NEWARRAY       : genNewPrimitiveArray(stream.readLocalIndex()); break;
             case ANEWARRAY      : genNewObjectArray(stream.readCPI()); break;
@@ -2026,7 +1992,7 @@ public class GraphBuilderPhase extends Phase {
     }
 
     private void traceInstruction(int bci, int opcode, boolean blockStart) {
-        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_INSTRUCTIONS && Debug.isLogEnabled()) {
+        if (GraalOptions.TraceBytecodeParserLevel >= TRACELEVEL_INSTRUCTIONS && !TTY.isSuppressed()) {
             StringBuilder sb = new StringBuilder(40);
             sb.append(blockStart ? '+' : '|');
             if (bci < 10) {
@@ -2041,7 +2007,7 @@ public class GraphBuilderPhase extends Phase {
             if (!currentBlock.jsrScope.isEmpty()) {
                 sb.append(' ').append(currentBlock.jsrScope);
             }
-            Debug.log(sb.toString());
+            TTY.println(sb.toString());
         }
     }
 

@@ -152,22 +152,32 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitMove(AllocatableValue dst, Value src) {
+    public void emitMove(Value dst, Value src) {
         append(createMove(dst, src));
     }
 
-    private AMD64AddressValue prepareAddress(Value base, long displacement, Value index, int scale) {
+    private AMD64AddressValue prepareAddress(Kind kind, Value base, int displacement, Value index, int scale) {
         AllocatableValue baseRegister;
-        long finalDisp = displacement;
+        int finalDisp = displacement;
         if (isConstant(base)) {
             if (asConstant(base).isNull()) {
-                baseRegister = Value.ILLEGAL;
-            } else if (asConstant(base).getKind() != Kind.Object && !runtime.needsDataPatch(asConstant(base))) {
-                finalDisp += asConstant(base).asLong();
-                baseRegister = Value.ILLEGAL;
+                baseRegister = AllocatableValue.UNUSED;
+            } else if (asConstant(base).getKind() != Kind.Object) {
+                long newDisplacement = displacement + asConstant(base).asLong();
+                if (NumUtil.isInt(newDisplacement)) {
+                    assert !runtime.needsDataPatch(asConstant(base));
+                    finalDisp = (int) newDisplacement;
+                    baseRegister = AllocatableValue.UNUSED;
+                } else {
+                    Variable newBase = newVariable(Kind.Long);
+                    emitMove(newBase, base);
+                    baseRegister = newBase;
+                }
             } else {
                 baseRegister = load(base);
             }
+        } else if (base == Value.ILLEGAL) {
+            baseRegister = AllocatableValue.UNUSED;
         } else {
             baseRegister = asAllocatable(base);
         }
@@ -177,64 +187,59 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         if (index != Value.ILLEGAL && scale != 0) {
             scaleEnum = Scale.fromInt(scale);
             if (isConstant(index)) {
-                finalDisp += asConstant(index).asLong() * scale;
-                indexRegister = Value.ILLEGAL;
+                long newDisplacement = finalDisp + asConstant(index).asLong() * scale;
+                // only use the constant index if the resulting displacement fits into a 32 bit
+                // offset
+                if (NumUtil.isInt(newDisplacement)) {
+                    finalDisp = (int) newDisplacement;
+                    indexRegister = AllocatableValue.UNUSED;
+                } else {
+                    // create a temporary variable for the index, the pointer load cannot handle a
+                    // constant index
+                    Variable newIndex = newVariable(Kind.Long);
+                    emitMove(newIndex, index);
+                    indexRegister = newIndex;
+                }
             } else {
                 indexRegister = asAllocatable(index);
             }
         } else {
-            indexRegister = Value.ILLEGAL;
+            indexRegister = AllocatableValue.UNUSED;
             scaleEnum = Scale.Times1;
         }
 
-        int displacementInt;
-        if (NumUtil.isInt(finalDisp)) {
-            displacementInt = (int) finalDisp;
-        } else {
-            displacementInt = 0;
-            AllocatableValue displacementRegister = load(Constant.forLong(finalDisp));
-            if (baseRegister == Value.ILLEGAL) {
-                baseRegister = displacementRegister;
-            } else if (indexRegister == Value.ILLEGAL) {
-                indexRegister = displacementRegister;
-                scaleEnum = Scale.Times1;
-            } else {
-                baseRegister = emitAdd(baseRegister, displacementRegister);
-            }
-        }
-
-        return new AMD64AddressValue(target().wordKind, baseRegister, indexRegister, scaleEnum, displacementInt);
+        return new AMD64AddressValue(kind, baseRegister, indexRegister, scaleEnum, finalDisp);
     }
 
     @Override
-    public Variable emitLoad(Kind kind, Value base, long displacement, Value index, int scale, DeoptimizingNode deopting) {
-        AMD64AddressValue loadAddress = prepareAddress(base, displacement, index, scale);
-        Variable result = newVariable(kind);
-        append(new LoadOp(kind, result, loadAddress, deopting != null ? state(deopting) : null));
+    public Variable emitLoad(Kind kind, Value base, int displacement, Value index, int scale, DeoptimizingNode deopting) {
+        AMD64AddressValue loadAddress = prepareAddress(kind, base, displacement, index, scale);
+        Variable result = newVariable(loadAddress.getKind());
+        append(new LoadOp(result, loadAddress, deopting != null ? state(deopting) : null));
         return result;
     }
 
     @Override
-    public void emitStore(Kind kind, Value base, long displacement, Value index, int scale, Value inputVal, DeoptimizingNode deopting) {
-        AMD64AddressValue storeAddress = prepareAddress(base, displacement, index, scale);
+    public void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value inputVal, DeoptimizingNode deopting) {
+        AMD64AddressValue storeAddress = prepareAddress(kind, base, displacement, index, scale);
         LIRFrameState state = deopting != null ? state(deopting) : null;
 
         if (isConstant(inputVal)) {
             Constant c = asConstant(inputVal);
             if (canStoreConstant(c)) {
-                append(new StoreConstantOp(kind, storeAddress, c, state));
+                append(new StoreConstantOp(storeAddress, c, state));
                 return;
             }
         }
 
         Variable input = load(inputVal);
-        append(new StoreOp(kind, storeAddress, input, state));
+        append(new StoreOp(storeAddress, input, state));
     }
 
     @Override
-    public Variable emitLea(Value base, long displacement, Value index, int scale) {
+    public Variable emitLea(Value base, int displacement, Value index, int scale) {
         Variable result = newVariable(target().wordKind);
-        AMD64AddressValue address = prepareAddress(base, displacement, index, scale);
+        AMD64AddressValue address = prepareAddress(result.getKind(), base, displacement, index, scale);
         append(new LeaOp(result, address));
         return result;
     }

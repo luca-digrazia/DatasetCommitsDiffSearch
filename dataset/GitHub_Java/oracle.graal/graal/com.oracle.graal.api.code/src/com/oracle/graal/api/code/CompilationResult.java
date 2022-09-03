@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.api.code;
 
-import static java.util.Collections.*;
-
 import java.io.*;
 import java.util.*;
 
@@ -368,7 +366,7 @@ public class CompilationResult implements Serializable {
      */
     public void recordDataReference(int codePos, Constant data, int alignment, boolean inlined) {
         assert codePos >= 0 && data != null;
-        dataReferences.add(new DataPatch(codePos, data, alignment, inlined));
+        getDataReferences().add(new DataPatch(codePos, data, alignment, inlined));
     }
 
     /**
@@ -392,7 +390,7 @@ public class CompilationResult implements Serializable {
      * @param handlerPos the position of the handler
      */
     public void recordExceptionHandler(int codePos, int handlerPos) {
-        exceptionHandlers.add(new ExceptionHandler(codePos, handlerPos));
+        getExceptionHandlers().add(new ExceptionHandler(codePos, handlerPos));
     }
 
     /**
@@ -407,11 +405,11 @@ public class CompilationResult implements Serializable {
 
     private void addInfopoint(Infopoint infopoint) {
         // The infopoints list must always be sorted
-        if (!infopoints.isEmpty() && infopoints.get(infopoints.size() - 1).pcOffset >= infopoint.pcOffset) {
+        if (!getInfopoints().isEmpty() && getInfopoints().get(getInfopoints().size() - 1).pcOffset >= infopoint.pcOffset) {
             // This re-sorting should be very rare
-            Collections.sort(infopoints);
+            Collections.sort(getInfopoints());
         }
-        infopoints.add(infopoint);
+        getInfopoints().add(infopoint);
     }
 
     /**
@@ -423,7 +421,7 @@ public class CompilationResult implements Serializable {
      */
     public Mark recordMark(int codePos, Object id, Mark[] references) {
         Mark mark = new Mark(codePos, id, references);
-        marks.add(mark);
+        getMarks().add(mark);
         return mark;
     }
 
@@ -530,39 +528,27 @@ public class CompilationResult implements Serializable {
      * @return the list of infopoints, sorted by {@link Site#pcOffset}
      */
     public List<Infopoint> getInfopoints() {
-        if (infopoints.isEmpty()) {
-            return emptyList();
-        }
-        return unmodifiableList(infopoints);
+        return infopoints;
     }
 
     /**
      * @return the list of data references
      */
     public List<DataPatch> getDataReferences() {
-        if (dataReferences.isEmpty()) {
-            return emptyList();
-        }
-        return unmodifiableList(dataReferences);
+        return dataReferences;
     }
 
     /**
      * @return the list of exception handlers
      */
     public List<ExceptionHandler> getExceptionHandlers() {
-        if (exceptionHandlers.isEmpty()) {
-            return emptyList();
-        }
-        return unmodifiableList(exceptionHandlers);
+        return exceptionHandlers;
     }
 
     /**
      * @return the list of marks
      */
     public List<Mark> getMarks() {
-        if (marks.isEmpty()) {
-            return emptyList();
-        }
-        return unmodifiableList(marks);
+        return marks;
     }
 }

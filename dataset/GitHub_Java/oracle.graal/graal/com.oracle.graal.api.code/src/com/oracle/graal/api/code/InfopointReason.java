@@ -27,12 +27,6 @@ package com.oracle.graal.api.code;
  */
 public enum InfopointReason {
 
-    UNKNOWN,
-    SAFEPOINT,
-    CALL,
-    IMPLICIT_EXCEPTION,
-    METHOD_START,
-    METHOD_END,
-    LINE_NUMBER;
+    UNKNOWN, SAFEPOINT, CALL, IMPLICIT_EXCEPTION, METHOD_START, METHOD_END, LINE_NUMBER;
 
 }

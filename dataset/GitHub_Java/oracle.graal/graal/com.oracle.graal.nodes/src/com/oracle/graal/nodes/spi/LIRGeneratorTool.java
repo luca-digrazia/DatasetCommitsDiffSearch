@@ -29,11 +29,11 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 
-public interface LIRGeneratorTool {
+public abstract class LIRGeneratorTool {
 
-    TargetDescription target();
+    public abstract TargetDescription target();
 
-    CodeCacheProvider getRuntime();
+    public abstract CodeCacheProvider getRuntime();
 
     /**
      * Checks whether the supplied constant can be used without loading it into a register for most
@@ -43,99 +43,100 @@ public interface LIRGeneratorTool {
      * @return True if the constant can be used directly, false if the constant needs to be in a
      *         register.
      */
-    boolean canInlineConstant(Constant c);
+    public abstract boolean canInlineConstant(Constant c);
 
-    RegisterAttributes attributes(Register register);
+    public abstract RegisterAttributes attributes(Register register);
 
-    Value operand(ValueNode object);
+    public abstract Value operand(ValueNode object);
 
-    AllocatableValue newVariable(Kind kind);
+    public abstract AllocatableValue newVariable(Kind kind);
 
-    Value setResult(ValueNode x, Value operand);
+    public abstract Value setResult(ValueNode x, Value operand);
 
-    AllocatableValue emitMove(Value input);
+    public abstract Value emitMove(Value input);
 
-    void emitMove(AllocatableValue dst, Value src);
+    public abstract void emitMove(Value dst, Value src);
 
-    Value emitLoad(Kind kind, Value base, long displacement, Value index, int scale, DeoptimizingNode deopting);
+    public abstract Value emitLoad(Kind kind, Value base, int displacement, Value index, int scale, DeoptimizingNode deopting);
 
-    void emitStore(Kind kind, Value base, long displacement, Value index, int scale, Value input, DeoptimizingNode deopting);
+    public abstract void emitStore(Kind kind, Value base, int displacement, Value index, int scale, Value input, DeoptimizingNode deopting);
 
-    Value emitLea(Value base, long displacement, Value index, int scale);
+    public abstract Value emitLea(Value base, int displacement, Value index, int scale);
 
-    Value emitLea(StackSlot slot);
+    public abstract Value emitLea(StackSlot slot);
 
-    Value emitNegate(Value input);
+    public abstract Value emitNegate(Value input);
 
-    Value emitAdd(Value a, Value b);
+    public abstract Value emitAdd(Value a, Value b);
 
-    Value emitSub(Value a, Value b);
+    public abstract Value emitSub(Value a, Value b);
 
-    Value emitMul(Value a, Value b);
+    public abstract Value emitMul(Value a, Value b);
 
-    Value emitDiv(Value a, Value b, DeoptimizingNode deopting);
+    public abstract Value emitDiv(Value a, Value b, DeoptimizingNode deopting);
 
-    Value emitRem(Value a, Value b, DeoptimizingNode deopting);
+    public abstract Value emitRem(Value a, Value b, DeoptimizingNode deopting);
 
-    Value emitUDiv(Value a, Value b, DeoptimizingNode deopting);
+    public abstract Value emitUDiv(Value a, Value b, DeoptimizingNode deopting);
 
-    Value emitURem(Value a, Value b, DeoptimizingNode deopting);
+    public abstract Value emitURem(Value a, Value b, DeoptimizingNode deopting);
 
-    Value emitAnd(Value a, Value b);
+    public abstract Value emitAnd(Value a, Value b);
 
-    Value emitOr(Value a, Value b);
+    public abstract Value emitOr(Value a, Value b);
 
-    Value emitXor(Value a, Value b);
+    public abstract Value emitXor(Value a, Value b);
 
-    Value emitShl(Value a, Value b);
+    public abstract Value emitShl(Value a, Value b);
 
-    Value emitShr(Value a, Value b);
+    public abstract Value emitShr(Value a, Value b);
 
-    Value emitUShr(Value a, Value b);
+    public abstract Value emitUShr(Value a, Value b);
 
-    Value emitConvert(ConvertNode.Op opcode, Value inputVal);
+    public abstract Value emitConvert(ConvertNode.Op opcode, Value inputVal);
 
-    void emitMembar(int barriers);
+    public abstract void emitMembar(int barriers);
 
-    void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting);
+    public abstract void emitDeoptimize(DeoptimizationAction action, DeoptimizingNode deopting);
 
-    void emitNullCheck(ValueNode v, DeoptimizingNode deopting);
+    public abstract void emitNullCheck(ValueNode v, DeoptimizingNode deopting);
 
-    Value emitCall(RuntimeCallTarget callTarget, CallingConvention cc, DeoptimizingNode info, Value... args);
+    public abstract Value emitCall(RuntimeCallTarget callTarget, CallingConvention cc, DeoptimizingNode info, Value... args);
 
-    void emitIf(IfNode i);
+    public abstract void emitIf(IfNode i);
 
-    void emitConditional(ConditionalNode i);
+    public abstract void emitConditional(ConditionalNode i);
 
-    void emitSwitch(SwitchNode i);
+    public abstract void emitSwitch(SwitchNode i);
 
-    void emitInvoke(Invoke i);
+    public abstract void emitInvoke(Invoke i);
 
-    void visitRuntimeCall(RuntimeCallNode i);
+    public abstract void visitRuntimeCall(RuntimeCallNode i);
 
     // Handling of block-end nodes still needs to be unified in the LIRGenerator.
-    void visitMerge(MergeNode i);
+    public abstract void visitMerge(MergeNode i);
 
-    void visitEndNode(EndNode i);
+    public abstract void visitEndNode(EndNode i);
 
-    void visitLoopEnd(LoopEndNode i);
+    public abstract void visitLoopEnd(LoopEndNode i);
 
-    void visitCompareAndSwap(CompareAndSwapNode i);
+    public abstract void visitCompareAndSwap(CompareAndSwapNode i);
 
     // These methods define the contract a runtime specific backend must provide.
 
-    void visitReturn(ReturnNode i);
+    public abstract void visitReturn(ReturnNode i);
 
-    void visitSafepointNode(SafepointNode i);
+    public abstract void visitSafepointNode(SafepointNode i);
 
-    void visitBreakpointNode(BreakpointNode i);
+    public abstract void visitBreakpointNode(BreakpointNode i);
 
-    void emitUnwind(Value operand);
+    public abstract void emitUnwind(Value operand);
 
     /**
      * Called just before register allocation is performed on the LIR owned by this generator.
      */
-    void beforeRegisterAllocation();
+    public void beforeRegisterAllocation() {
+    }
 
-    void visitInfopointNode(InfopointNode i);
+    public abstract void visitInfopointNode(InfopointNode i);
 }

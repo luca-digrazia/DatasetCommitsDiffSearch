@@ -27,7 +27,6 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.debug.*;
@@ -100,20 +99,10 @@ public class TargetMethodAssembler {
             }
         }
 
-        List<DataPatch> ldp = compilationResult.getDataReferences();
-        DebugMetric[] dms = new DebugMetric[Kind.values().length];
-        for (int i = 0; i < dms.length; i++) {
-            dms[i] = Debug.metric("DataPatches-" + Kind.values()[i].toString());
-        }
-
-        for (DataPatch dp : ldp) {
-            dms[dp.constant.getKind().ordinal()].add(1);
-        }
-
         Debug.metric("TargetMethods").increment();
         Debug.metric("CodeBytesEmitted").add(compilationResult.getTargetCodeSize());
         Debug.metric("SafepointsEmitted").add(compilationResult.getInfopoints().size());
-        Debug.metric("DataPatches").add(ldp.size());
+        Debug.metric("DataPatches").add(compilationResult.getDataReferences().size());
         Debug.metric("ExceptionHandlersEmitted").add(compilationResult.getExceptionHandlers().size());
         Debug.log("Finished target method %s, isStub %b", name, isStub);
         return compilationResult;
@@ -175,36 +164,6 @@ public class TargetMethodAssembler {
             throw GraalInternalError.shouldNotReachHere();
         }
         return (int) c;
-    }
-
-    /**
-     * Returns the float value of any constant that can be represented by a 32-bit float value.
-     */
-    public float asFloatConst(Value value) {
-        assert (value.getKind().getStackKind() == Kind.Float && isConstant(value));
-        Constant constant = (Constant) value;
-        assert !runtime.needsDataPatch(constant) : constant + " should be in a DataPatch";
-        return constant.asFloat();
-    }
-
-    /**
-     * Returns the long value of any constant that can be represented by a 64-bit long value.
-     */
-    public long asLongConst(Value value) {
-        assert (value.getKind().getStackKind() == Kind.Long && isConstant(value));
-        Constant constant = (Constant) value;
-        assert !runtime.needsDataPatch(constant) : constant + " should be in a DataPatch";
-        return constant.asLong();
-    }
-
-    /**
-     * Returns the double value of any constant that can be represented by a 64-bit float value.
-     */
-    public double asDoubleConst(Value value) {
-        assert (value.getKind().getStackKind() == Kind.Double && isConstant(value));
-        Constant constant = (Constant) value;
-        assert !runtime.needsDataPatch(constant) : constant + " should be in a DataPatch";
-        return constant.asDouble();
     }
 
     /**

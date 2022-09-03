@@ -48,7 +48,7 @@ public class DebugInfoBuilder {
     protected HashMap<VirtualObjectNode, VirtualObject> virtualObjects = new HashMap<>();
     protected IdentityHashMap<VirtualObjectNode, EscapeObjectState> objectStates = new IdentityHashMap<>();
 
-    public LIRFrameState build(FrameState topState, LabelRef exceptionEdge) {
+    public LIRFrameState build(FrameState topState, short reason, LabelRef exceptionEdge) {
         assert virtualObjects.size() == 0;
         assert objectStates.size() == 0;
 
@@ -82,16 +82,21 @@ public class DebugInfoBuilder {
                 for (Entry<VirtualObjectNode, VirtualObject> entry : virtualObjectsCopy.entrySet()) {
                     if (entry.getValue().getValues() == null) {
                         VirtualObjectNode vobj = entry.getKey();
-                        Value[] values = new Value[vobj.entryCount()];
-                        if (values.length > 0) {
-                            changed = true;
-                            VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobj);
-                            assert currentField != null;
-                            for (int i = 0; i < vobj.entryCount(); i++) {
-                                values[i] = toValue(currentField.fieldValues().get(i));
+                        if (vobj instanceof BoxedVirtualObjectNode) {
+                            BoxedVirtualObjectNode boxedVirtualObjectNode = (BoxedVirtualObjectNode) vobj;
+                            entry.getValue().setValues(new Value[]{toValue(boxedVirtualObjectNode.getUnboxedValue())});
+                        } else {
+                            Value[] values = new Value[vobj.entryCount()];
+                            if (values.length > 0) {
+                                changed = true;
+                                VirtualObjectState currentField = (VirtualObjectState) objectStates.get(vobj);
+                                assert currentField != null;
+                                for (int i = 0; i < vobj.entryCount(); i++) {
+                                    values[i] = toValue(currentField.fieldValues().get(i));
+                                }
                             }
+                            entry.getValue().setValues(values);
                         }
-                        entry.getValue().setValues(values);
                     }
                 }
             } while (changed);
@@ -101,11 +106,11 @@ public class DebugInfoBuilder {
         }
         objectStates.clear();
 
-        return newLIRFrameState(exceptionEdge, frame, virtualObjectsArray);
+        return newLIRFrameState(reason, exceptionEdge, frame, virtualObjectsArray);
     }
 
-    protected LIRFrameState newLIRFrameState(LabelRef exceptionEdge, BytecodeFrame frame, VirtualObject[] virtualObjectsArray) {
-        return new LIRFrameState(frame, virtualObjectsArray, exceptionEdge);
+    protected LIRFrameState newLIRFrameState(short reason, LabelRef exceptionEdge, BytecodeFrame frame, VirtualObject[] virtualObjectsArray) {
+        return new LIRFrameState(frame, virtualObjectsArray, exceptionEdge, reason);
     }
 
     protected BytecodeFrame computeFrameForState(FrameState state) {
@@ -122,7 +127,7 @@ public class DebugInfoBuilder {
         if (state.outerFrameState() != null) {
             caller = computeFrameForState(state.outerFrameState());
         }
-        assert state.bci >= FrameState.BEFORE_BCI : "bci == " + state.bci;
+        assert state.bci != FrameState.UNKNOWN_BCI : "bci == " + state.bci;
         return new BytecodeFrame(caller, state.method(), state.bci, state.rethrowException(), state.duringCall(), values, numLocals, numStack, numLocks);
     }
 
@@ -160,14 +165,15 @@ public class DebugInfoBuilder {
         if (value instanceof VirtualObjectNode) {
             VirtualObjectNode obj = (VirtualObjectNode) value;
             EscapeObjectState state = objectStates.get(obj);
-            if (state == null && obj.entryCount() > 0) {
+            if (state == null && obj.entryCount() > 0 && !(obj instanceof BoxedVirtualObjectNode)) {
                 // null states occur for objects with 0 fields
                 throw new GraalInternalError("no mapping found for virtual object %s", obj);
             }
             if (state instanceof MaterializedObjectState) {
+                assert !(((MaterializedObjectState) state).materializedValue() instanceof VirtualObjectNode);
                 return toValue(((MaterializedObjectState) state).materializedValue());
             } else {
-                assert obj.entryCount() == 0 || state instanceof VirtualObjectState;
+                assert obj.entryCount() == 0 || state instanceof VirtualObjectState || obj instanceof BoxedVirtualObjectNode;
                 VirtualObject vobject = virtualObjects.get(value);
                 if (vobject == null) {
                     vobject = VirtualObject.get(obj.type(), null, virtualObjects.size());

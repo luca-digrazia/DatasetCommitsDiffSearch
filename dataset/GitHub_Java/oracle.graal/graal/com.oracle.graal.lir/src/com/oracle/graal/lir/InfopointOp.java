@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.lir;
 
+import static com.oracle.graal.lir.LIRInstruction.Opcode;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.lir.asm.*;
 
