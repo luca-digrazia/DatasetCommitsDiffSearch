@@ -163,14 +163,18 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         Stub stub = runtime().asStub(lirGen.method());
         if (stub != null) {
 
-            final Set<Register> definedRegisters = gatherDefinedRegisters(lir);
+            List<AMD64RegisterPreservationOp> registerPreservations = new ArrayList<>();
+            final Set<Register> definedRegisters = gatherDefinedRegisters(lir, registerPreservations);
             stub.initDefinedRegisters(definedRegisters);
 
-            // Eliminate unnecessary register preservation and
-            // record where preserved registers are saved
-            for (Map.Entry<LIRFrameState, AMD64SaveRegistersOp> e : gen.calleeSaveInfo.entrySet()) {
-                AMD64SaveRegistersOp save = e.getValue();
-                save.updateAndDescribePreservation(definedRegisters, e.getKey().debugInfo(), frameMap);
+            // Eliminate unnecessary register preservation
+            for (AMD64RegisterPreservationOp op : registerPreservations) {
+                op.doNotPreserve(definedRegisters);
+            }
+
+            // Record where preserved registers are saved
+            for (Map.Entry<LIRFrameState, AMD64RestoreRegistersOp> e : gen.calleeSaveInfo.entrySet()) {
+                e.getValue().describePreservation(e.getKey().debugInfo(), frameMap);
             }
         }
 
@@ -181,9 +185,10 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
      * Finds all the registers that are defined by some given LIR.
      * 
      * @param lir the LIR to examine
+     * @param registerPreservations register preservation operations in {@code lir} are added to this list
      * @return the registers that are defined by or used as temps for any instruction in {@code lir}
      */
-    private static Set<Register> gatherDefinedRegisters(LIR lir) {
+    private static Set<Register> gatherDefinedRegisters(LIR lir, List<AMD64RegisterPreservationOp> registerPreservations) {
         final Set<Register> definedRegisters = new HashSet<>();
         ValueProcedure defProc = new ValueProcedure() {
 
@@ -198,8 +203,11 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         };
         for (Block block : lir.codeEmittingOrder()) {
             for (LIRInstruction op : lir.lir(block)) {
-                if (op instanceof ParametersOp) {
-                    // Don't consider this as a definition
+                if (op instanceof AMD64RegisterPreservationOp) {
+                    // Don't consider these ops as definitions
+                    registerPreservations.add((AMD64RegisterPreservationOp) op);
+                } else if (op instanceof ParametersOp) {
+                    // Don't consider these ops as definitions
                 } else {
                     op.forEachTemp(defProc);
                     op.forEachOutput(defProc);

@@ -82,7 +82,7 @@ public class HotSpotInstalledCodeExecuteNode extends AbstractCallNode implements
         for (int i = 0; i < signature.length; i++) {
             signatureTypes[i] = tool.lookupJavaType(signature[i]);
         }
-        final int verifiedEntryPointOffset = HotSpotReplacementsUtil.verifiedEntryPointOffset();
+        final int verifiedEntryPointOffset = HotSpotSnippetUtils.verifiedEntryPointOffset();
 
         StructuredGraph g = (StructuredGraph) graph();
 

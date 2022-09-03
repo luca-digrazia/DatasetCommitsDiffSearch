@@ -27,7 +27,6 @@ import static com.oracle.graal.api.code.CallingConvention.Type.*;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotUnwindOp.*;
 
-import java.lang.reflect.*;
 import java.util.*;
 
 import com.oracle.graal.amd64.*;
@@ -182,7 +181,7 @@ final class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSpo
 
     @Override
     protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
-        boolean needsCalleeSave = ((HotSpotRuntimeCallTarget) callTarget).isCRuntimeCall();
+        boolean needsCalleeSave = callTarget.getDescriptor() == NewArrayRuntimeCall.NEW_ARRAY_RUNTIME;
         if (needsCalleeSave) {
             currentRuntimeCallInfo = info;
         }
@@ -191,7 +190,7 @@ final class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSpo
 
     @Override
     public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention cc, DeoptimizingNode info, Value... args) {
-        boolean needsCalleeSave = ((HotSpotRuntimeCallTarget) callTarget).isCRuntimeCall();
+        boolean needsCalleeSave = callTarget.getDescriptor() == NewArrayRuntimeCall.NEW_ARRAY_RUNTIME;
 
         RegisterValue[] savedRegisters = null;
         StackSlot[] savedRegisterLocations = null;
@@ -302,7 +301,6 @@ final class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSpo
         } else {
             assert invokeKind == InvokeKind.Static || invokeKind == InvokeKind.Special;
             HotSpotResolvedJavaMethod resolvedMethod = (HotSpotResolvedJavaMethod) callTarget.target();
-            assert !Modifier.isAbstract(resolvedMethod.getModifiers()) : "Cannot make direct call to abstract method.";
             Constant metaspaceMethod = resolvedMethod.getMetaspaceMethodConstant();
             append(new AMD64HotspotDirectStaticCallOp(callTarget.target(), result, parameters, temps, callState, invokeKind, metaspaceMethod));
         }
@@ -310,9 +308,9 @@ final class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSpo
 
     @Override
     protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
-        AllocatableValue metaspaceMethod = AMD64.rbx.asValue();
+        Value metaspaceMethod = AMD64.rbx.asValue();
         emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
-        AllocatableValue targetAddress = AMD64.rax.asValue();
+        Value targetAddress = AMD64.rax.asValue();
         emitMove(targetAddress, operand(callTarget.computedAddress()));
         append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
     }

@@ -22,8 +22,11 @@
  */
 package com.oracle.graal.hotspot.amd64;
 
+import static com.oracle.graal.amd64.AMD64.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.lir.LIRInstruction.Opcode;
@@ -43,7 +46,18 @@ final class AMD64HotSpotReturnOp extends AMD64HotSpotEpilogueOp {
 
     @Override
     public void emitCode(TargetMethodAssembler tasm, AMD64MacroAssembler masm) {
-        leaveFrameAndRestoreRbp(tasm, masm);
+        if (isStackSlot(savedRbp)) {
+            // Restoring RBP from the stack must be done before the frame is removed
+            masm.movq(rbp, (AMD64Address) tasm.asAddress(savedRbp));
+        } else {
+            Register framePointer = asRegister(savedRbp);
+            if (framePointer != rbp) {
+                masm.movq(rbp, framePointer);
+            }
+        }
+        if (tasm.frameContext != null) {
+            tasm.frameContext.leave(tasm);
+        }
         masm.ret(0);
     }
 }

@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
@@ -45,8 +46,8 @@ public class DeoptimizeCallerNode extends ControlSinkNode implements LIRLowerabl
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        ((HotSpotLIRGenerator) gen.getLIRGeneratorTool()).emitDeoptimizeCaller(action, reason);
+    public void generate(LIRGeneratorTool gen) {
+        ((HotSpotLIRGenerator) gen).emitDeoptimizeCaller(action, reason);
     }
 
     @NodeIntrinsic

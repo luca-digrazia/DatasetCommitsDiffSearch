@@ -86,11 +86,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     @Override
-    public Constant getEncoding() {
-        return getMetaspaceMethodConstant();
-    }
-
-    @Override
     public int getModifiers() {
         HotSpotVMConfig config = graalRuntime().getConfig();
         return unsafe.getInt(metaspaceMethod + config.methodAccessFlagsOffset) & Modifier.methodModifiers();

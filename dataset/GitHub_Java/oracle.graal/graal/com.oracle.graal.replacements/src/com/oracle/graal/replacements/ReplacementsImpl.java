@@ -296,14 +296,7 @@ public class ReplacementsImpl implements Replacements {
         private StructuredGraph parseGraph(final ResolvedJavaMethod methodToParse, final SnippetInliningPolicy policy) {
             StructuredGraph graph = graphCache.get(methodToParse);
             if (graph == null) {
-                StructuredGraph newGraph = Debug.scope("ParseGraph", new Object[]{methodToParse}, new Callable<StructuredGraph>() {
-
-                    public StructuredGraph call() throws Exception {
-                        return buildGraph(methodToParse, policy == null ? inliningPolicy(methodToParse) : policy);
-                    }
-                });
-
-                graphCache.putIfAbsent(methodToParse, newGraph);
+                graphCache.putIfAbsent(methodToParse, buildGraph(methodToParse, policy == null ? inliningPolicy(methodToParse) : policy));
                 graph = graphCache.get(methodToParse);
                 assert graph != null;
             }
@@ -318,6 +311,8 @@ public class ReplacementsImpl implements Replacements {
             GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault();
             GraphBuilderPhase graphBuilder = new GraphBuilderPhase(runtime, config, OptimisticOptimizations.NONE);
             graphBuilder.apply(graph);
+
+            Debug.dump(graph, "%s: %s", methodToParse.getName(), GraphBuilderPhase.class.getSimpleName());
 
             new WordTypeVerificationPhase(runtime, target.wordKind).apply(graph);
 

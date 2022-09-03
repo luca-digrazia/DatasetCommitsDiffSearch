@@ -29,7 +29,9 @@ import static com.oracle.graal.hotspot.amd64.AMD64HotSpotUnwindOp.*;
 import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
+import static com.oracle.graal.hotspot.nodes.NewArrayRuntimeCall.*;
 import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
+import static com.oracle.graal.hotspot.nodes.NewInstanceSlowStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.ThreadIsInterruptedStubCall.*;
@@ -41,8 +43,6 @@ import static com.oracle.graal.hotspot.replacements.AESCryptSubstitutions.Decryp
 import static com.oracle.graal.hotspot.replacements.AESCryptSubstitutions.EncryptBlockStubCall.*;
 import static com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions.DecryptAESCryptStubCall.*;
 import static com.oracle.graal.hotspot.replacements.CipherBlockChainingSubstitutions.EncryptAESCryptStubCall.*;
-import static com.oracle.graal.hotspot.stubs.NewArrayStub.*;
-import static com.oracle.graal.hotspot.stubs.NewInstanceStub.*;
 
 import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
@@ -110,9 +110,9 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg0:    hub */ rdx.asValue(word),
                 /* arg1: length */ rbx.asValue(Kind.Int));
 
-        addRuntimeCall(NEW_ARRAY_C, config.newArrayAddress,
+        addRuntimeCall(NEW_ARRAY_RUNTIME, config.newArrayAddress,
                 /*        temps */ null,
-                /*          ret */ ret(Kind.Void),
+                /*          ret */ rax.asValue(Kind.Object),
                 /* arg0: thread */ nativeCallingConvention(word,
                 /* arg1:    hub */                         word,
                 /* arg2: length */                         Kind.Int));
@@ -121,11 +121,10 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /*          ret */ rax.asValue(Kind.Object),
                 /* arg0:    hub */ rdx.asValue(word));
 
-        addRuntimeCall(NEW_INSTANCE_C, config.newInstanceAddress,
+        addRuntimeCall(NEW_INSTANCE_SLOW, config.newInstanceStub,
                 /*        temps */ null,
-                /*          ret */ ret(Kind.Void),
-                /* arg0: thread */ nativeCallingConvention(word,
-                /* arg1:    hub */                         word));
+                /*          ret */ rax.asValue(Kind.Object),
+                /* arg0:    hub */ rdx.asValue(word));
 
         addRuntimeCall(NEW_MULTI_ARRAY, config.newMultiArrayStub,
                 /*        temps */ null,
