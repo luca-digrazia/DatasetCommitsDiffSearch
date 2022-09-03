@@ -80,7 +80,8 @@ import com.oracle.graal.truffle.debug.AbstractDebugCompilationListener;
 import com.oracle.graal.truffle.debug.HistogramInlineInvokePlugin;
 import com.oracle.graal.truffle.nodes.AssumptionValidAssumption;
 import com.oracle.graal.truffle.nodes.asserts.NeverPartOfCompilationNode;
-import com.oracle.graal.truffle.nodes.frame.AllowMaterializeNode;
+import com.oracle.graal.truffle.nodes.frame.MaterializeFrameNode;
+import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode;
 import com.oracle.graal.truffle.phases.InstrumentBranchesPhase;
 import com.oracle.graal.truffle.phases.VerifyFrameDoesNotEscapePhase;
 import com.oracle.graal.truffle.substitutions.TruffleGraphBuilderPlugins;
@@ -518,12 +519,15 @@ public class PartialEvaluator {
 
     private static void postPartialEvaluation(final StructuredGraph graph) {
         NeverPartOfCompilationNode.verifyNotFoundIn(graph);
-        for (AllowMaterializeNode materializeNode : graph.getNodes(AllowMaterializeNode.TYPE).snapshot()) {
+        for (MaterializeFrameNode materializeNode : graph.getNodes(MaterializeFrameNode.TYPE).snapshot()) {
             materializeNode.replaceAtUsages(materializeNode.getFrame());
             graph.removeFixed(materializeNode);
         }
         for (VirtualObjectNode virtualObjectNode : graph.getNodes(VirtualObjectNode.TYPE)) {
-            if (virtualObjectNode instanceof VirtualInstanceNode) {
+            if (virtualObjectNode instanceof VirtualOnlyInstanceNode) {
+                VirtualOnlyInstanceNode virtualOnlyInstanceNode = (VirtualOnlyInstanceNode) virtualObjectNode;
+                virtualOnlyInstanceNode.setAllowMaterialization(true);
+            } else if (virtualObjectNode instanceof VirtualInstanceNode) {
                 VirtualInstanceNode virtualInstanceNode = (VirtualInstanceNode) virtualObjectNode;
                 ResolvedJavaType type = virtualInstanceNode.type();
                 if (type.getAnnotation(CompilerDirectives.ValueType.class) != null) {
