@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,36 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.api.code.DeoptimizationAction.*;
-import static com.oracle.graal.api.meta.DeoptimizationReason.*;
-import static com.oracle.graal.hotspot.nodes.CStringNode.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.word.Word.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.clearPendingException;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.getAndClearObjectResult;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.verifyOops;
+import static com.oracle.graal.replacements.nodes.CStringConstant.cstring;
+import static com.oracle.graal.word.Word.unsigned;
+import static jdk.vm.ci.meta.DeoptimizationReason.RuntimeConstraint;
 
-import java.lang.reflect.*;
-import java.util.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.List;
 
-import com.oracle.graal.api.meta.*;
+import jdk.vm.ci.meta.DeoptimizationAction;
+
+import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.Fold;
-import com.oracle.graal.word.*;
+import com.oracle.graal.hotspot.nodes.DeoptimizeCallerNode;
+import com.oracle.graal.hotspot.nodes.SnippetAnchorNode;
+import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
+import com.oracle.graal.hotspot.nodes.VMErrorNode;
+import com.oracle.graal.hotspot.word.KlassPointer;
+import com.oracle.graal.nodes.PiNode;
+import com.oracle.graal.nodes.extended.GuardingNode;
+import com.oracle.graal.replacements.Log;
+import com.oracle.graal.word.Pointer;
+import com.oracle.graal.word.Word;
 
 //JaCoCo Exclude
 
@@ -46,40 +60,55 @@ import com.oracle.graal.word.*;
  */
 public class StubUtil {
 
-    public static final ForeignCallDescriptor VM_MESSAGE_C = descriptorFor(StubUtil.class, "vmMessageC", false);
+    public static final ForeignCallDescriptor VM_MESSAGE_C = newDescriptor(StubUtil.class, "vmMessageC", void.class, boolean.class, Word.class, long.class, long.class, long.class);
+
+    public static ForeignCallDescriptor newDescriptor(Class<?> stubClass, String name, Class<?> resultType, Class<?>... argumentTypes) {
+        ForeignCallDescriptor d = new ForeignCallDescriptor(name, resultType, argumentTypes);
+        assert descriptorFor(stubClass, name).equals(d) : descriptorFor(stubClass, name) + " != " + d;
+        return d;
+    }
 
     /**
-     * Looks for a {@link CRuntimeCall} node intrinsic named {@code name} in {@code stubClass} and
-     * returns a {@link ForeignCallDescriptor} based on its signature and the value of {@code hasSideEffect}.
+     * Looks for a {@link StubForeignCallNode} node intrinsic named {@code name} in
+     * {@code stubClass} and returns a {@link ForeignCallDescriptor} based on its signature and the
+     * value of {@code hasSideEffect}.
      */
-    public static ForeignCallDescriptor descriptorFor(Class<?> stubClass, String name, boolean hasSideEffect) {
+    private static ForeignCallDescriptor descriptorFor(Class<?> stubClass, String name) {
         Method found = null;
         for (Method method : stubClass.getDeclaredMethods()) {
             if (Modifier.isStatic(method.getModifiers()) && method.getAnnotation(NodeIntrinsic.class) != null && method.getName().equals(name)) {
-                if (method.getAnnotation(NodeIntrinsic.class).value() == CRuntimeCall.class) {
-                    assert found == null : "found more than one C runtime call named " + name + " in " + stubClass;
-                    assert method.getParameterTypes().length != 0 && method.getParameterTypes()[0] == ForeignCallDescriptor.class : "first parameter of C runtime call '" + name + "' in " + stubClass +
+                if (method.getAnnotation(NodeIntrinsic.class).value().equals(StubForeignCallNode.class)) {
+                    assert found == null : "found more than one foreign call named " + name + " in " + stubClass;
+                    assert method.getParameterTypes().length != 0 && method.getParameterTypes()[0] == ForeignCallDescriptor.class : "first parameter of foreign call '" + name + "' in " + stubClass +
                                     " must be of type " + ForeignCallDescriptor.class.getSimpleName();
                     found = method;
                 }
             }
         }
-        assert found != null : "could not find C runtime call named " + name + " in " + stubClass;
+        assert found != null : "could not find foreign call named " + name + " in " + stubClass;
         List<Class<?>> paramList = Arrays.asList(found.getParameterTypes());
-        Class[] cCallTypes = paramList.subList(1, paramList.size()).toArray(new Class[paramList.size() - 1]);
-        return new ForeignCallDescriptor(name, hasSideEffect, found.getReturnType(), cCallTypes);
+        Class<?>[] cCallTypes = paramList.subList(1, paramList.size()).toArray(new Class<?>[paramList.size() - 1]);
+        return new ForeignCallDescriptor(name, found.getReturnType(), cCallTypes);
     }
 
-    public static void handlePendingException(boolean isObjectResult) {
-        if (clearPendingException(thread())) {
+    public static void handlePendingException(Word thread, boolean isObjectResult) {
+        if (clearPendingException(thread) != null) {
             if (isObjectResult) {
-                getAndClearObjectResult(thread());
+                getAndClearObjectResult(thread);
             }
-            DeoptimizeCallerNode.deopt(InvalidateReprofile, RuntimeConstraint);
+            DeoptimizeCallerNode.deopt(DeoptimizationAction.None, RuntimeConstraint);
         }
     }
 
-    @NodeIntrinsic(CRuntimeCall.class)
+    /**
+     * Determines if this is a HotSpot build where the ASSERT mechanism is enabled.
+     */
+    @Fold
+    public static boolean cAssertionsEnabled() {
+        return config().cAssertions;
+    }
+
+    @NodeIntrinsic(StubForeignCallNode.class)
     private static native void vmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
 
     /**
@@ -87,7 +116,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link Log#printf(String, long)} to avoid an object
      * constant in a RuntimeStub.</b>
-     * 
+     *
      * @param message a message string
      */
     public static void printf(String message) {
@@ -99,7 +128,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link Log#printf(String, long)} to avoid an object
      * constant in a RuntimeStub.</b>
-     * 
+     *
      * @param format a C style printf format value
      * @param value the value associated with the first conversion specifier in {@code format}
      */
@@ -112,7 +141,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link Log#printf(String, long, long)} to avoid an object
      * constant in a RuntimeStub.</b>
-     * 
+     *
      * @param format a C style printf format value
      * @param v1 the value associated with the first conversion specifier in {@code format}
      * @param v2 the value associated with the second conversion specifier in {@code format}
@@ -126,7 +155,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link Log#printf(String, long, long, long)} to avoid an
      * object constant in a RuntimeStub.</b>
-     * 
+     *
      * @param format a C style printf format value
      * @param v1 the value associated with the first conversion specifier in {@code format}
      * @param v2 the value associated with the second conversion specifier in {@code format}
@@ -148,7 +177,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link VMErrorNode#vmError(String, long)} to avoid an
      * object constant in a RuntimeStub.</b>
-     * 
+     *
      * @param message an error message
      */
     public static void fatal(String message) {
@@ -160,7 +189,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link Log#printf(String, long, long, long)} to avoid an
      * object constant in a RuntimeStub.</b>
-     * 
+     *
      * @param format a C style printf format value
      * @param value the value associated with the first conversion specifier in {@code format}
      */
@@ -173,7 +202,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link Log#printf(String, long, long, long)} to avoid an
      * object constant in a RuntimeStub.</b>
-     * 
+     *
      * @param format a C style printf format value
      * @param v1 the value associated with the first conversion specifier in {@code format}
      * @param v2 the value associated with the second conversion specifier in {@code format}
@@ -187,7 +216,7 @@ public class StubUtil {
      * <p>
      * <b>Stubs must use this instead of {@link Log#printf(String, long, long, long)} to avoid an
      * object constant in a RuntimeStub.</b>
-     * 
+     *
      * @param format a C style printf format value
      * @param v1 the value associated with the first conversion specifier in {@code format}
      * @param v2 the value associated with the second conversion specifier in {@code format}
@@ -205,15 +234,16 @@ public class StubUtil {
             Word verifyOopCounter = Word.unsigned(verifyOopCounterAddress());
             verifyOopCounter.writeInt(0, verifyOopCounter.readInt(0) + 1);
 
-            Pointer oop = Word.fromObject(object);
+            Pointer oop = Word.objectToTrackedPointer(object);
             if (object != null) {
+                GuardingNode anchorNode = SnippetAnchorNode.anchor();
                 // make sure object is 'reasonable'
                 if (!oop.and(unsigned(verifyOopMask())).equal(unsigned(verifyOopBits()))) {
                     fatal("oop not in heap: %p", oop.rawValue());
                 }
 
-                Word klass = oop.readWord(hubOffset());
-                if (klass.equal(Word.zero())) {
+                KlassPointer klass = loadHubIntrinsic(PiNode.piCastNonNull(object, anchorNode));
+                if (klass.isNull()) {
                     fatal("klass for oop %p is null", oop.rawValue());
                 }
             }
@@ -222,22 +252,22 @@ public class StubUtil {
     }
 
     @Fold
-    private static long verifyOopCounterAddress() {
+    static long verifyOopCounterAddress() {
         return config().verifyOopCounterAddress;
     }
 
     @Fold
-    private static long verifyOopMask() {
+    static long verifyOopMask() {
         return config().verifyOopMask;
     }
 
     @Fold
-    private static long verifyOopBits() {
+    static long verifyOopBits() {
         return config().verifyOopBits;
     }
 
     @Fold
-    private static int hubOffset() {
+    static int hubOffset() {
         return config().hubOffset;
     }
 }
