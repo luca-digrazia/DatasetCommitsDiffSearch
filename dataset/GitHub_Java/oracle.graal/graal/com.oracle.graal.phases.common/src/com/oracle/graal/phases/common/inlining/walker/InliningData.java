@@ -264,6 +264,11 @@ public class InliningData {
                 }
             }
 
+            if (concreteMethods.size() > maxMethodPerInlining) {
+                InliningUtil.logNotInlinedInvoke(invoke, inliningDepth(), targetMethod, "polymorphic call with more than %d target methods", maxMethodPerInlining);
+                return null;
+            }
+
             // Clear methods that fall below the threshold.
             if (notRecordedTypeProbability > 0) {
                 ArrayList<ResolvedJavaMethod> newConcreteMethods = new ArrayList<>();
@@ -284,11 +289,6 @@ public class InliningData {
 
                 concreteMethods = newConcreteMethods;
                 concreteMethodsProbabilities = newConcreteMethodsProbabilities;
-            }
-
-            if (concreteMethods.size() > maxMethodPerInlining) {
-                InliningUtil.logNotInlinedInvoke(invoke, inliningDepth(), targetMethod, "polymorphic call with more than %d target methods", maxMethodPerInlining);
-                return null;
             }
 
             // Clean out types whose methods are no longer available.
