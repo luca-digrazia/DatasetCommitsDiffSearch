@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class PolyglotRuntime {
     private final List<PolyglotEngine.LanguageShared> languages;
     final Object instrumentationHandler;
-    @SuppressWarnings("deprecation") final Map<String, PolyglotEngine.Instrument> instruments;
+    final Map<String, PolyglotEngine.Instrument> instruments;
     final Object[] debugger = {null};
     final PolyglotEngineProfile engineProfile;
     final AtomicInteger instanceCount = new AtomicInteger(0);
@@ -103,7 +103,6 @@ public final class PolyglotRuntime {
         return languages;
     }
 
-    @SuppressWarnings("deprecation")
     private Map<String, PolyglotEngine.Instrument> createInstruments(List<InstrumentCache> instrumentCaches) {
         Map<String, PolyglotEngine.Instrument> instr = new LinkedHashMap<>();
         for (InstrumentCache cache : instrumentCaches) {
@@ -111,18 +110,6 @@ public final class PolyglotRuntime {
             instr.put(cache.getId(), instrument);
         }
         return Collections.unmodifiableMap(instr);
-    }
-
-    /**
-     * Gets the map: {@linkplain Instrument#getId() Instrument ID} --> {@link Instrument} loaded in
-     * this {@linkplain PolyglotRuntime runtime}, whether the instrument is
-     * {@linkplain Instrument#isEnabled() enabled} or not.
-     *
-     * @return map of currently loaded instruments
-     * @since 0.25
-     */
-    public Map<String, ? extends Instrument> getInstruments() {
-        return instruments;
     }
 
     /**
@@ -203,127 +190,4 @@ public final class PolyglotRuntime {
             return new PolyglotRuntime(realOut, realErr, realIn);
         }
     }
-
-    /**
-     * A handle for an <em>instrument</em> installed in the {@linkplain PolyglotRuntime runtime},
-     * usable from other threads, that can observe and inject behavior into language execution. The
-     * handle provides access to the instrument's metadata and allows the instrument to be
-     * dynamically {@linkplain Instrument#setEnabled(boolean) enabled/disabled} in the runtime.
-     * <p>
-     * All methods here, as well as instrumentation services in general, can be used safely from
-     * threads other than the engine's single execution thread.
-     * <p>
-     * Refer to {@link TruffleInstrument} for information about implementing and installing
-     * instruments.
-     *
-     * @see PolyglotRuntime#getInstruments()
-     * @since 0.25
-     */
-    public class Instrument {
-
-        private final InstrumentCache info;
-        private final Object instrumentLock = new Object();
-        private volatile boolean enabled;
-
-        Instrument(InstrumentCache cache) {
-            this.info = cache;
-        }
-
-        /**
-         * Gets the id clients can use to acquire this instrument.
-         *
-         * @return this instrument's unique id
-         * @since 0.9
-         */
-        public String getId() {
-            return info.getId();
-        }
-
-        /**
-         * Gets a human readable name of this instrument.
-         *
-         * @return this instrument's user-friendly name
-         * @since 0.9
-         */
-        public String getName() {
-            return info.getName();
-        }
-
-        /**
-         * Gets the version of this instrument.
-         *
-         * @return this instrument's version
-         * @since 0.9
-         */
-        public String getVersion() {
-            return info.getVersion();
-        }
-
-        InstrumentCache getCache() {
-            return info;
-        }
-
-        /**
-         * Returns whether this instrument is currently enabled in the engine.
-         *
-         * @return this instrument's status in the engine
-         * @since 0.9
-         */
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        /**
-         * Returns an additional service provided by this instrument, specified by type.
-         * <p>
-         * Here is an example for locating a hypothetical <code>DebuggerController</code>:
-         *
-         * {
-         *
-         * @codesnippet DebuggerExampleTest}
-         *
-         * @param <T> the type of the service
-         * @param type class of the service that is being requested
-         * @return instance of requested type, <code>null</code> if no such service is available
-         * @since 0.9
-         */
-        public <T> T lookup(Class<T> type) {
-            return PolyglotEngine.Access.INSTRUMENT.getInstrumentationHandlerService(PolyglotRuntime.this.instrumentationHandler, this, type);
-        }
-
-        /**
-         * Enables/disables this instrument in the engine.
-         *
-         * @param enabled <code>true</code> to enable <code>false</code> to disable
-         * @since 0.9
-         */
-        public void setEnabled(final boolean enabled) {
-            if (PolyglotRuntime.this.instanceCount.get() == 0) {
-                throw new IllegalStateException("All engines have already been disposed");
-            }
-            setEnabledImpl(enabled, true);
-        }
-
-        void setEnabledImpl(final boolean enabled, boolean cleanup) {
-            synchronized (instrumentLock) {
-                if (this.enabled != enabled) {
-                    if (enabled) {
-                        PolyglotEngine.Access.INSTRUMENT.addInstrument(PolyglotRuntime.this.instrumentationHandler, this, getCache().getInstrumentationClass());
-                    } else {
-                        PolyglotEngine.Access.INSTRUMENT.disposeInstrument(PolyglotRuntime.this.instrumentationHandler, this, cleanup);
-                    }
-                    this.enabled = enabled;
-                }
-            }
-        }
-
-        /**
-         * @since 0.9
-         */
-        @Override
-        public String toString() {
-            return "Instrument [id=" + getId() + ", name=" + getName() + ", version=" + getVersion() + ", enabled=" + enabled + "]";
-        }
-    }
-
 }

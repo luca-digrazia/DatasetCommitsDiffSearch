@@ -522,13 +522,13 @@ public class PolyglotEngine {
          * {@codesnippet com.oracle.truffle.api.instrumentation.test.AbstractInstrumentationTest}
          * <p>
          *
-         * @param sharedRuntime an instance of runtime to associate this engine with
+         * @param runtime an instance of runtime to associate this engine with
          * @return this builder
          * @since 0.25
          * @see PolyglotRuntime
          */
-        public Builder runtime(PolyglotRuntime sharedRuntime) {
-            this.runtime = sharedRuntime;
+        public Builder runtime(PolyglotRuntime runtime) {
+            this.runtime = runtime;
             return this;
         }
 
@@ -592,21 +592,9 @@ public class PolyglotEngine {
      *
      * @return map of currently loaded instruments
      * @since 0.9
-     * @deprecated use {@link #getRuntime()}.{@link PolyglotRuntime#getInstruments()}.
      */
-    @Deprecated
     public Map<String, Instrument> getInstruments() {
         return shared.instruments;
-    }
-
-    /**
-     * Access to associated runtime.
-     * 
-     * @return the runtime associated with this engine
-     * @since 0.25
-     */
-    public PolyglotRuntime getRuntime() {
-        return shared;
     }
 
     /**
@@ -765,7 +753,7 @@ public class PolyglotEngine {
 
         if (referenceCount == 0) {
             // only dispose instruments if all engine group is disposed
-            for (PolyglotRuntime.Instrument instrument : getRuntime().getInstruments().values()) {
+            for (Instrument instrument : getInstruments().values()) {
                 try {
                     instrument.setEnabledImpl(false, false);
                 } catch (Exception | Error ex) {
@@ -983,7 +971,7 @@ public class PolyglotEngine {
         return sharedToLanguage.get(env);
     }
 
-    Env findEnv(Class<? extends TruffleLanguage> languageClazz, boolean failIfNotFound) {
+    Env findEnv(@SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> languageClazz, boolean failIfNotFound) {
         for (Language lang : languageArray) {
             Env env = lang.getEnv(false);
             if (env != null && languageClazz.isInstance(lang.getImpl(false))) {
@@ -1328,13 +1316,122 @@ public class PolyglotEngine {
      * Refer to {@link TruffleInstrument} for information about implementing and installing
      * instruments.
      *
+     * @see PolyglotEngine#getInstruments()
      * @since 0.9
-     * @deprecated Use {@link PolyglotRuntime.Instrument}.
      */
-    @Deprecated
-    public final class Instrument extends PolyglotRuntime.Instrument {
-        Instrument(PolyglotRuntime runtime, InstrumentCache cache) {
-            runtime.super(cache);
+    public final class Instrument {
+
+        private final PolyglotRuntime engineShared;
+        private final InstrumentCache info;
+        private final Object instrumentLock = new Object();
+        private volatile boolean enabled;
+
+        Instrument(PolyglotRuntime engineShared, InstrumentCache cache) {
+            this.engineShared = engineShared;
+            this.info = cache;
+        }
+
+        /**
+         * Gets the id clients can use to acquire this instrument.
+         *
+         * @return this instrument's unique id
+         * @since 0.9
+         */
+        public String getId() {
+            return info.getId();
+        }
+
+        /**
+         * Gets a human readable name of this instrument.
+         *
+         * @return this instrument's user-friendly name
+         * @since 0.9
+         */
+        public String getName() {
+            return info.getName();
+        }
+
+        /**
+         * Gets the version of this instrument.
+         *
+         * @return this instrument's version
+         * @since 0.9
+         */
+        public String getVersion() {
+            return info.getVersion();
+        }
+
+        InstrumentCache getCache() {
+            return info;
+        }
+
+        /**
+         * Returns whether this instrument is currently enabled in the engine.
+         *
+         * @return this instrument's status in the engine
+         * @since 0.9
+         */
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        /**
+         * Returns an additional service provided by this instrument, specified by type.
+         * <p>
+         * Here is an example for locating a hypothetical <code>DebuggerController</code>:
+         *
+         * {@codesnippet DebuggerExampleTest}
+         *
+         * @param <T> the type of the service
+         * @param type class of the service that is being requested
+         * @return instance of requested type, <code>null</code> if no such service is available
+         * @since 0.9
+         */
+        public <T> T lookup(Class<T> type) {
+            return Access.INSTRUMENT.getInstrumentationHandlerService(engineShared.instrumentationHandler, this, type);
+        }
+
+        /**
+         * Enables/disables this instrument in the engine.
+         *
+         * @param enabled <code>true</code> to enable <code>false</code> to disable
+         * @since 0.9
+         */
+        public void setEnabled(final boolean enabled) {
+            if (engineShared.instanceCount.get() == 0) {
+                throw new IllegalStateException("All engines have already been disposed");
+            }
+            if (executor() == null) {
+                setEnabledImpl(enabled, true);
+            } else {
+                ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor()) {
+                    @Override
+                    protected Void compute() {
+                        setEnabledImpl(enabled, true);
+                        return null;
+                    }
+                };
+                compute.perform();
+            }
+        }
+
+        void setEnabledImpl(final boolean enabled, boolean cleanup) {
+            synchronized (instrumentLock) {
+                if (this.enabled != enabled) {
+                    if (enabled) {
+                        Access.INSTRUMENT.addInstrument(engineShared.instrumentationHandler, this, getCache().getInstrumentationClass());
+                    } else {
+                        Access.INSTRUMENT.disposeInstrument(engineShared.instrumentationHandler, this, cleanup);
+                    }
+                    this.enabled = enabled;
+                }
+            }
+        }
+
+        /** @since 0.9 */
+        @Override
+        public String toString() {
+            return "Instrument [id=" + getId() + ", name=" + getName() + ", version=" + getVersion() + ", enabled=" + enabled + "]";
         }
     }
 
@@ -1809,7 +1906,7 @@ public class PolyglotEngine {
                 rootNode.engine.disposeImpl();
             }
 
-            private static LanguageShared findShared(Object obj) {
+            private LanguageShared findShared(Object obj) {
                 return ((Language) obj).shared;
             }
         }

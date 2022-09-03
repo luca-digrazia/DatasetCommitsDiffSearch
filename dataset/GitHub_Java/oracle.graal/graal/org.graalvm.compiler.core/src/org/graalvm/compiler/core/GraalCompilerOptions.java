@@ -32,8 +32,6 @@ import org.graalvm.compiler.options.OptionType;
 public class GraalCompilerOptions {
 
     // @formatter:off
-    @Option(help = "Repeatedly run the LIR code generation pass to improve statistical profiling results.", type = OptionType.Debug)
-    public static final OptionKey<Integer> EmitLIRRepeatCount = new OptionKey<>(0);
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<String> PrintFilter = new OptionKey<>(null);
     @Option(help = "", type = OptionType.Debug)
@@ -48,6 +46,8 @@ public class GraalCompilerOptions {
     public static final OptionKey<Boolean> ExitVMOnException = new OptionKey<>(false);
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintStackTraceOnException = new OptionKey<>(false);
+    @Option(help = "Pattern (see MethodFilter for format) for method that will trigger an exception when compiled. " +
+                   "This option exists to test handling compilation crashes gracefully.", type = OptionType.Debug)
+    public static final OptionKey<String> CrashAt = new OptionKey<>(null);
     // @formatter:on
-
 }
