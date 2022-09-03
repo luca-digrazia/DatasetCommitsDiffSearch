@@ -22,15 +22,12 @@
  */
 package com.oracle.graal.debug.internal;
 
-import static com.oracle.graal.debug.DebugCloseable.VOID_CLOSEABLE;
+import static com.oracle.graal.debug.DebugCloseable.*;
 
-import java.lang.management.ThreadMXBean;
-import java.util.concurrent.TimeUnit;
+import java.lang.management.*;
+import java.util.concurrent.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.debug.Management;
+import com.oracle.graal.debug.*;
 
 public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer {
 
@@ -44,7 +41,7 @@ public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer
     static class FlatTimer extends DebugValue implements DebugTimer {
         private TimerImpl accm;
 
-        FlatTimer(String name, boolean conditional) {
+        public FlatTimer(String name, boolean conditional) {
             super(name + "_Flat", conditional);
         }
 
@@ -115,7 +112,7 @@ public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer
 
     private final class SystemNanosTimer extends AbstractTimer {
 
-        SystemNanosTimer(TimerImpl timer) {
+        public SystemNanosTimer(TimerImpl timer) {
             super(timer);
         }
 
@@ -127,7 +124,7 @@ public final class TimerImpl extends AccumulatedDebugValue implements DebugTimer
 
     private final class CpuTimeTimer extends AbstractTimer {
 
-        CpuTimeTimer(TimerImpl timer) {
+        public CpuTimeTimer(TimerImpl timer) {
             super(timer);
         }
 

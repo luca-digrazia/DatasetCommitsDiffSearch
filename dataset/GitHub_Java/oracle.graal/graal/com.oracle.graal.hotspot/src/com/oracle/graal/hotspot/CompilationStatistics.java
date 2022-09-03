@@ -22,42 +22,25 @@
  */
 package com.oracle.graal.hotspot;
 
-import static java.lang.Thread.currentThread;
+import static java.lang.Thread.*;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Deque;
-import java.util.Locale;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.io.*;
+import java.lang.annotation.*;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.concurrent.*;
 
-import com.oracle.graal.debug.Management;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionValue;
-import com.sun.management.ThreadMXBean;
+import jdk.internal.jvmci.debug.*;
+import jdk.internal.jvmci.hotspot.*;
 
-import jdk.vm.ci.hotspot.HotSpotInstalledCode;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import com.oracle.graal.debug.*;
+import com.sun.management.*;
 
 @SuppressWarnings("unused")
 public final class CompilationStatistics {
 
-    public static class Options {
-        @Option(help = "Enables CompilationStatistics.")//
-        public static final OptionValue<Boolean> UseCompilationStatistics = new OptionValue<>(false);
-    }
-
     private static final long RESOLUTION = 100000000;
-    private static final boolean ENABLED = Options.UseCompilationStatistics.getValue();
+    private static final boolean ENABLED = Boolean.getBoolean("jvmci.comp.stats");
 
     private static final CompilationStatistics DUMMY = new CompilationStatistics(null, false);
 
