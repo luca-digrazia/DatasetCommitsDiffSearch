@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,23 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
-import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
+import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.replacements.SnippetTemplate.*;
 
-import java.lang.reflect.Field;
-import java.util.Arrays;
-
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.LocationIdentity;
-import sun.misc.Unsafe;
-
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.word.ObjectAccess;
+import com.oracle.graal.word.*;
 
 /**
  * This node can be used to add a counter to the code that will estimate the dynamic number of calls
@@ -96,47 +85,26 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
         }
     }
 
-    /**
-     * When {@link #SnippetCounters} are enabled make sure {@link #SNIPPET_COUNTER_LOCATION} is part
-     * of the private locations.
-     *
-     * @param privateLocations
-     * @return a copy of privateLocations with any needed locations added
-     */
-    public static LocationIdentity[] addSnippetCounters(LocationIdentity[] privateLocations) {
-        if (SnippetCounters.getValue()) {
-            for (LocationIdentity location : privateLocations) {
-                if (location.equals(SNIPPET_COUNTER_LOCATION)) {
-                    return privateLocations;
-                }
-            }
-            LocationIdentity[] result = Arrays.copyOf(privateLocations, privateLocations.length + 1);
-            result[result.length - 1] = SnippetCounterNode.SNIPPET_COUNTER_LOCATION;
-            return result;
-        }
-        return privateLocations;
-    }
-
-    /**
-     * We do not want to use the {@link LocationIdentity} of the {@link SnippetCounter#value} field,
-     * so that the usage in snippets is always possible. If a method accesses the counter via the
-     * field and the snippet, the result might not be correct though.
-     */
-    public static final LocationIdentity SNIPPET_COUNTER_LOCATION = NamedLocationIdentity.mutable("SnippetCounter");
-
     static class SnippetCounterSnippets implements Snippets {
 
         @Fold
-        static int countOffset() {
+        private static int countOffset() {
             try {
-                return (int) UNSAFE.objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
+                return (int) unsafe.objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
             } catch (Exception e) {
-                throw new JVMCIError(e);
+                throw new GraalInternalError(e);
             }
         }
 
+        /**
+         * We do not want to use the {@link LocationIdentity} of the {@link SnippetCounter#value}
+         * field, so that the usage in snippets is always possible. If a method accesses the counter
+         * via the field and the snippet, the result might not be correct though.
+         */
+        protected static final LocationIdentity SNIPPET_COUNTER_LOCATION = NamedLocationIdentity.mutable("SnippetCounter");
+
         @Snippet
-        public static void add(@ConstantParameter SnippetCounter counter, int increment) {
+        public static void add(SnippetCounter counter, int increment) {
             long loadedValue = ObjectAccess.readLong(counter, countOffset(), SNIPPET_COUNTER_LOCATION);
             ObjectAccess.writeLong(counter, countOffset(), loadedValue + increment, SNIPPET_COUNTER_LOCATION);
         }
@@ -145,7 +113,7 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
 
             private final SnippetInfo add = snippet(SnippetCounterSnippets.class, "add", SNIPPET_COUNTER_LOCATION);
 
-            Templates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
+            public Templates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
                 super(providers, snippetReflection, target);
             }
 
@@ -160,19 +128,4 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
         }
     }
 
-    private static final Unsafe UNSAFE = initUnsafe();
-
-    private static Unsafe initUnsafe() {
-        try {
-            return Unsafe.getUnsafe();
-        } catch (SecurityException se) {
-            try {
-                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-                theUnsafe.setAccessible(true);
-                return (Unsafe) theUnsafe.get(Unsafe.class);
-            } catch (Exception e) {
-                throw new RuntimeException("exception while trying to get Unsafe", e);
-            }
-        }
-    }
 }

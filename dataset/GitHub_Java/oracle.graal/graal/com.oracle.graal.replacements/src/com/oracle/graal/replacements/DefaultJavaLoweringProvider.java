@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,32 @@
  */
 package com.oracle.graal.replacements;
 
+import static com.oracle.graal.api.code.MemoryBarriers.*;
+import static com.oracle.graal.api.meta.DeoptimizationAction.*;
+import static com.oracle.graal.api.meta.DeoptimizationReason.*;
+import static com.oracle.graal.api.meta.LocationIdentity.*;
 import static com.oracle.graal.nodes.java.ArrayLengthNode.*;
-import static com.oracle.jvmci.code.MemoryBarriers.*;
-import static com.oracle.jvmci.meta.DeoptimizationAction.*;
-import static com.oracle.jvmci.meta.DeoptimizationReason.*;
-import static com.oracle.jvmci.meta.LocationIdentity.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.debug.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.util.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.meta.*;
 
 /**
  * VM-independent lowerings for standard Java nodes. VM-specific methods are abstract and must be
@@ -73,7 +72,6 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
 
     @Override
     public void lower(Node n, LoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) n.graph();
         if (n instanceof LoadFieldNode) {
             lowerLoadFieldNode((LoadFieldNode) n, tool);
         } else if (n instanceof StoreFieldNode) {
@@ -104,22 +102,11 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             boxingSnippets.lower((BoxNode) n, tool);
         } else if (n instanceof UnboxNode) {
             boxingSnippets.lower((UnboxNode) n, tool);
-        } else if (n instanceof TypeCheckNode) {
-            if (graph.getGuardsStage().areDeoptsFixed()) {
-                lowerTypeCheckNode((TypeCheckNode) n, tool, graph);
-            }
         } else if (n instanceof VerifyHeapNode) {
             lowerVerifyHeap((VerifyHeapNode) n);
         } else {
-            throw JVMCIError.shouldNotReachHere("Node implementing Lowerable not handled: " + n);
+            throw GraalInternalError.shouldNotReachHere("Node implementing Lowerable not handled: " + n);
         }
-    }
-
-    private void lowerTypeCheckNode(TypeCheckNode n, LoweringTool tool, StructuredGraph graph) {
-        ValueNode hub = createReadHub(graph, n.getValue(), null);
-        ValueNode clazz = graph.unique(ConstantNode.forConstant(tool.getStampProvider().createHubStamp((ObjectStamp) n.getValue().stamp()), n.type().getObjectHub(), tool.getMetaAccess()));
-        LogicNode objectEquals = graph.unique(PointerEqualsNode.create(hub, clazz));
-        n.replaceAndDelete(objectEquals);
     }
 
     protected void lowerVerifyHeap(VerifyHeapNode n) {
@@ -156,8 +143,13 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ValueNode object = storeField.isStatic() ? staticFieldBase(graph, field) : storeField.object();
         ValueNode value = implicitStoreConvert(graph, storeField.field().getKind(), storeField.value());
         ConstantLocationNode location = createFieldLocation(graph, field, false);
-        assert location != null;
 
+        if (location == null) {
+            /* Field has been eliminated, so no write necessary. */
+            assert !storeField.isVolatile() : "missing memory barriers";
+            graph.removeFixed(storeField);
+            return;
+        }
         WriteNode memoryWrite = graph.add(new WriteNode(object, value, location, fieldStoreBarrierType(storeField.field())));
         memoryWrite.setStateAfter(storeField.stateAfter());
         graph.replaceFixedWithFixed(storeField, memoryWrite);
@@ -757,7 +749,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             base = indexedLocation.getDisplacement();
             index = indexedLocation.getIndex();
         } else {
-            throw JVMCIError.shouldNotReachHere();
+            throw GraalInternalError.shouldNotReachHere();
         }
 
         base -= arrayBaseOffset(elementKind);

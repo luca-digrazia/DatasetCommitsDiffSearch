@@ -52,8 +52,8 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.common.*;
@@ -1098,12 +1098,11 @@ public class SnippetTemplate {
             // rewire outgoing memory edges
             replaceMemoryUsages(replacee, new MemoryOutputMap(replacee, duplicates));
 
-            if (returnNode != null) {
-                ReturnNode ret = (ReturnNode) duplicates.get(returnNode);
-                MemoryMapNode memoryMap = ret.getMemoryMap();
-                ret.setMemoryMap(null);
-                memoryMap.safeDelete();
-            }
+            ReturnNode ret = (ReturnNode) duplicates.get(returnNode);
+            MemoryMapNode memoryMap = ret.getMemoryMap();
+            ret.setMemoryMap(null);
+            memoryMap.safeDelete();
+
             if (memoryAnchor != null) {
                 // rewire incoming memory edges
                 MemoryAnchorNode memoryDuplicate = (MemoryAnchorNode) duplicates.get(memoryAnchor);
@@ -1299,7 +1298,7 @@ public class SnippetTemplate {
      * Gets a copy of the specialized graph.
      */
     public StructuredGraph copySpecializedGraph() {
-        return (StructuredGraph) snippet.copy();
+        return snippet.copy();
     }
 
     /**
