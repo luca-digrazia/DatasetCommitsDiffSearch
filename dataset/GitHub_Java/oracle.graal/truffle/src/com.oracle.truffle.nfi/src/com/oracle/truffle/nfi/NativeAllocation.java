@@ -26,11 +26,14 @@ package com.oracle.truffle.nfi;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 final class NativeAllocation extends PhantomReference<Object> {
 
-    public static void registerNativeAllocation(Object javaObject, Destructor destructor) {
-        add(new NativeAllocation(javaObject, destructor));
+    private static final Queue globalQueue = new Queue();
+
+    public static Queue getGlobalQueue() {
+        return globalQueue;
     }
 
     public abstract static class Destructor {
@@ -52,64 +55,88 @@ final class NativeAllocation extends PhantomReference<Object> {
         }
     }
 
-    private static final ReferenceQueue<Object> queue = new ReferenceQueue<>();
+    public static final class Queue {
+
+        // cyclic double linked list with sentry element
+        private final NativeAllocation first = new NativeAllocation(this);
+
+        public void registerNativeAllocation(Object javaObject, Destructor destructor) {
+            add(new NativeAllocation(javaObject, destructor, this));
+        }
+
+        private synchronized void add(NativeAllocation allocation) {
+            assert allocation.prev == null && allocation.next == null;
+
+            NativeAllocation second = first.next;
+            allocation.prev = first;
+            allocation.next = second;
+
+            first.next = allocation;
+            second.prev = allocation;
+        }
+
+        private synchronized void remove(NativeAllocation allocation) {
+            assert allocation.queue == this;
+            allocation.prev.next = allocation.next;
+            allocation.next.prev = allocation.prev;
+
+            allocation.next = null;
+            allocation.prev = null;
+        }
+    }
+
+    private static final ReferenceQueue<Object> refQueue = new ReferenceQueue<>();
 
     private final Destructor destructor;
 
-    // cyclic double linked list with sentry element
-    private static final NativeAllocation first = new NativeAllocation();
     private NativeAllocation prev;
     private NativeAllocation next;
 
-    private NativeAllocation() {
+    private final Queue queue;
+
+    private NativeAllocation(Queue queue) {
         super(null, null);
-        destructor = null;
-        prev = this;
-        next = this;
+        this.destructor = null;
+        this.prev = this;
+        this.next = this;
+        this.queue = queue;
     }
 
-    private NativeAllocation(Object referent, Destructor destructor) {
-        super(referent, queue);
+    private NativeAllocation(Object referent, Destructor destructor, Queue queue) {
+        super(referent, refQueue);
         this.destructor = destructor;
+        this.queue = queue;
     }
 
-    static {
-        Thread gc = new Thread(new Runnable() {
+    private static final AtomicReference<Thread> gcThread = new AtomicReference<>(null);
 
-            @Override
-            public void run() {
-                for (;;) {
-                    try {
-                        NativeAllocation alloc = (NativeAllocation) queue.remove();
-                        remove(alloc);
-                        alloc.destructor.destroy();
-                    } catch (InterruptedException ex) {
-                        // ignore
+    static void ensureGCThreadRunning() {
+        Thread thread = gcThread.get();
+        if (thread == null) {
+            thread = new Thread(new Runnable() {
+
+                @Override
+                public void run() {
+                    for (;;) {
+                        try {
+                            NativeAllocation alloc = (NativeAllocation) refQueue.remove();
+                            alloc.queue.remove(alloc);
+                            alloc.destructor.destroy();
+                        } catch (InterruptedException ex) {
+                            // ignore
+                        }
                     }
                 }
+            }, "nfi-gc");
+            if (gcThread.compareAndSet(null, thread)) {
+                thread.setDaemon(true);
+                thread.start();
+            } else {
+                Thread other = gcThread.get();
+                // nothing to do, another thread already started the GC thread
+                assert other != null && other != thread;
             }
-        }, "nfi-gc");
-        gc.setDaemon(true);
-        gc.start();
-    }
-
-    private static synchronized void add(NativeAllocation allocation) {
-        assert allocation.prev == null && allocation.next == null;
-
-        NativeAllocation second = first.next;
-        allocation.prev = first;
-        allocation.next = second;
-
-        first.next = allocation;
-        second.prev = allocation;
-    }
-
-    private static synchronized void remove(NativeAllocation allocation) {
-        allocation.prev.next = allocation.next;
-        allocation.next.prev = allocation.prev;
-
-        allocation.next = null;
-        allocation.prev = null;
+        }
     }
 
     private static native void free(long pointer);
