@@ -1227,9 +1227,4 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         }
         return false;
     }
-
-    @Override
-    public int getSuccessorCount() {
-        return 2;
-    }
 }

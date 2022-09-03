@@ -91,11 +91,6 @@ public abstract class SwitchNode extends ControlSplitNode {
     }
 
     @Override
-    public int getSuccessorCount() {
-        return successors.count();
-    }
-
-    @Override
     public double probability(AbstractBeginNode successor) {
         double sum = 0;
         for (int i = 0; i < keySuccessors.length; i++) {
