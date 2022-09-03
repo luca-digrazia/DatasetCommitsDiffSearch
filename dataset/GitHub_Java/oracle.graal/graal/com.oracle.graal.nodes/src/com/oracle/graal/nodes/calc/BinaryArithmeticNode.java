@@ -39,21 +39,19 @@ import com.oracle.graal.nodes.spi.*;
 @NodeInfo
 public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements ArithmeticLIRLowerable {
 
-    public static final NodeClass TYPE = NodeClass.get(BinaryArithmeticNode.class);
-
     protected interface SerializableBinaryFunction<T> extends Function<ArithmeticOpTable, BinaryOp<T>>, Serializable {
     }
 
     protected final SerializableBinaryFunction<OP> getOp;
 
-    protected BinaryArithmeticNode(NodeClass c, SerializableBinaryFunction<OP> getOp, ValueNode x, ValueNode y) {
-        super(c, getOp.apply(ArithmeticOpTable.forStamp(x.stamp())).foldStamp(x.stamp(), y.stamp()), x, y);
+    public BinaryArithmeticNode(SerializableBinaryFunction<OP> getOp, ValueNode x, ValueNode y) {
+        super(getOp.apply(ArithmeticOpTable.forStamp(x.stamp())).foldStamp(x.stamp(), y.stamp()), x, y);
         this.getOp = getOp;
     }
 
     protected final BinaryOp<OP> getOp(ValueNode forX, ValueNode forY) {
         ArithmeticOpTable table = ArithmeticOpTable.forStamp(forX.stamp());
-        assert table.equals(ArithmeticOpTable.forStamp(forY.stamp()));
+        assert table.toString().equals(ArithmeticOpTable.forStamp(forY.stamp()).toString());
         return getOp.apply(table);
     }
 

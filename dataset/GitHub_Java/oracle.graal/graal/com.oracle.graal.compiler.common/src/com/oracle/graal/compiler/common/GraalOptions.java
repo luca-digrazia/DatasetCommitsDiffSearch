@@ -63,9 +63,6 @@ public final class GraalOptions {
     @Option(help = "Inlines trivial methods during parsing of the bytecodes.", type = OptionType.Expert)
     public static final StableOptionValue<Boolean> InlineDuringParsing = new StableOptionValue<>(false);
 
-    @Option(help = "Traces .", type = OptionType.Debug)
-    public static final StableOptionValue<Boolean> TraceInlineDuringParsing = new StableOptionValue<>(false);
-
     @Option(help = "Maximum depth when inlining during parsing.", type = OptionType.Debug)
     public static final StableOptionValue<Integer> InlineDuringParsingMaxDepth = new StableOptionValue<>(10);
 
@@ -354,15 +351,4 @@ public final class GraalOptions {
      */
     @Option(help = "", type = OptionType.Debug)
     public static final OptionValue<Boolean> SnippetCounters = new OptionValue<>(false);
-
-    @Option(help = "Enable expensive assertions", type = OptionType.Debug)
-    public static final OptionValue<Boolean> DetailedAsserts = new StableOptionValue<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            boolean enabled = false;
-            // turn detailed assertions on when the general assertions are on (misusing the assert keyword for this)
-            assert (enabled = true) == true;
-            return enabled;
-        }
-    };
 }

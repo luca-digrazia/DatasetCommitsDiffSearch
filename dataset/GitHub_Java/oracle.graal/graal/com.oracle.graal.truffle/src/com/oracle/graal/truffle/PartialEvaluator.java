@@ -58,7 +58,6 @@ import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.graal.truffle.nodes.frame.*;
 import com.oracle.graal.truffle.nodes.frame.NewFrameNode.VirtualOnlyInstanceNode;
 import com.oracle.graal.truffle.phases.*;
-import com.oracle.graal.truffle.substitutions.*;
 import com.oracle.graal.virtual.phases.ea.*;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -218,7 +217,6 @@ public class PartialEvaluator {
         for (GraphBuilderPluginsProvider p : sl) {
             p.registerPlugins(providers.getMetaAccess(), plugins);
         }
-        TruffleGraphBuilderPlugins.registerPlugins(providers.getMetaAccess(), plugins);
         new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), new Assumptions(false), providers.getConstantReflection(), newConfig, plugins,
                         TruffleCompilerImpl.Optimizations).apply(graph);
         Debug.dump(graph, "After FastPE");
