@@ -38,7 +38,6 @@ import java.util.Set;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 import com.oracle.graal.compiler.common.Fields;
@@ -278,7 +277,6 @@ public class GraphDecoder {
         public final int exceptionOrderId;
         public final int exceptionStateOrderId;
         public final int exceptionNextOrderId;
-        public JavaConstant constantReceiver;
 
         protected InvokeData(Invoke invoke, ResolvedJavaType contextType, int invokeOrderId, int callTargetOrderId, int stateAfterOrderId, int nextOrderId, int nextNextOrderId, int exceptionOrderId,
                         int exceptionStateOrderId, int exceptionNextOrderId) {
@@ -856,6 +854,7 @@ public class GraphDecoder {
                 oldStateAfter.safeDelete();
             }
         }
+
         loopExit.safeDelete();
         assert loopExitSuccessor.predecessor() == null;
         if (merge != null) {
@@ -1010,18 +1009,14 @@ public class GraphDecoder {
              * or value numbering.
              */
             node = methodScope.graph.addWithoutUnique(node);
+
         } else {
             /* Allow subclasses to canonicalize and intercept nodes. */
-            Node addedNode = node;
             node = handleFloatingNodeBeforeAdd(methodScope, loopScope, node);
             if (!node.isAlive()) {
-                addedNode = node;
                 node = addFloatingNode(methodScope, node);
             }
-            /* The addedNode can be either the original value of node, or an existing node from the graph, or a node
-             * created by handleFloatingNodeBeforeAdd.
-             */
-            node = handleFloatingNodeAfterAdd(methodScope, loopScope, node, addedNode == node);
+            node = handleFloatingNodeAfterAdd(methodScope, loopScope, node);
         }
         registerNode(loopScope, nodeOrderId, node, false, false);
         return node;
@@ -1077,10 +1072,9 @@ public class GraphDecoder {
      * @param methodScope The current method.
      * @param loopScope The current loop.
      * @param node The node to be canonicalized.
-     * @param newlyAdded
      * @return The replacement for the node, or the node itself.
      */
-    protected Node handleFloatingNodeAfterAdd(MethodScope methodScope, LoopScope loopScope, Node node, boolean newlyAdded) {
+    protected Node handleFloatingNodeAfterAdd(MethodScope methodScope, LoopScope loopScope, Node node) {
         return node;
     }
 
@@ -1479,18 +1473,18 @@ public class GraphDecoder {
     protected boolean verifyEdges(MethodScope methodScope) {
         for (Node node : methodScope.graph.getNodes()) {
             assert node.isAlive();
-            for (Node i : node.inputs()) {
+            node.acceptInputs((n, i) -> {
                 assert i.isAlive();
-                assert i.usages().contains(node);
-            }
-            for (Node s : node.successors()) {
+                assert i.usages().contains(n);
+            });
+            node.acceptSuccessors((n, s) -> {
                 assert s.isAlive();
-                assert s.predecessor() == node;
-            }
+                assert s.predecessor() == n;
+            });
 
             for (Node usage : node.usages()) {
                 assert usage.isAlive();
-                assert usage.inputs().contains(node) : node + " / " + usage + " / " + usage.inputs().count();
+                assert usage.inputs().contains(node);
             }
             if (node.predecessor() != null) {
                 assert node.predecessor().isAlive();
