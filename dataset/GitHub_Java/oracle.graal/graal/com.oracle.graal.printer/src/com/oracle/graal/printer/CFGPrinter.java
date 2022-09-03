@@ -547,10 +547,8 @@ class CFGPrinter extends CompilationPrinter {
         String getFormattedOperand(Value operand) {
             String s = operand.toString();
             int last = s.lastIndexOf('|');
-            if (last != -1) {
-                return s.substring(0, last) + "|" + operand.getPlatformKind().getTypeChar();
-            }
-            return s;
+            assert last != -1;
+            return s.substring(0, last) + "|" + operand.getPlatformKind().getTypeChar();
         }
 
         @Override
