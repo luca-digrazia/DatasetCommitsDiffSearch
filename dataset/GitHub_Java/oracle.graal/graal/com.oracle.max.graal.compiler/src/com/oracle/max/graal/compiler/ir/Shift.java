@@ -31,17 +31,15 @@ import com.sun.cri.ci.*;
  */
 public abstract class Shift extends Binary {
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
-
     /**
      * Creates a new shift operation.
      * @param opcode the opcode of the shift
      * @param x the first input value
-     * @param y the second input value
+     * @param s the second input value
      */
-    public Shift(CiKind kind, int opcode, Value x, Value y, Graph graph) {
-        super(kind, opcode, x, y, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public Shift(CiKind kind, int opcode, Value x, Value s, Graph graph) {
+        super(kind, opcode, x, s, graph);
+        assert x == null || x.kind == kind;
     }
 
     @Override
@@ -53,7 +51,4 @@ public abstract class Shift extends Binary {
     public void print(LogStream out) {
         out.print(x()).print(' ').print(this.shortName()).print(' ').print(y());
     }
-
-    @Override
-    public abstract String shortName();
 }

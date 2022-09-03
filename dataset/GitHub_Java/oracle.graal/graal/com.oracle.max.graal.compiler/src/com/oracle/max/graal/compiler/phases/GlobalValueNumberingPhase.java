@@ -22,37 +22,32 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.criutils.*;
 import com.oracle.max.graal.compiler.*;
+import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
-import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.graph.collections.*;
 
 public class GlobalValueNumberingPhase extends Phase {
 
     @Override
-    protected void run(StructuredGraph graph) {
+    protected void run(Graph graph) {
         NodeBitMap visited = graph.createNodeBitMap();
         for (Node n : graph.getNodes()) {
-            apply(n, visited, graph);
+            apply(n, visited);
         }
     }
 
-    private void apply(Node n, NodeBitMap visited, StructuredGraph compilerGraph) {
-        if (!visited.isMarked(n)) {
+    private void apply(Node n, NodeBitMap visited) {
+        if (n != null && !visited.isMarked(n)) {
             visited.mark(n);
             for (Node input : n.inputs()) {
-                apply(input, visited, compilerGraph);
+                apply(input, visited);
             }
-            if (n.getNodeClass().valueNumberable()) {
-                Node newNode = compilerGraph.findDuplicate(n);
-                if (newNode != null) {
-                    n.replaceAndDelete(newNode);
-                    if (GraalOptions.Meter) {
-                        context.metrics.GlobalValueNumberingHits++;
-                    }
-                    if (GraalOptions.TraceGVN) {
-                        TTY.println("GVN applied and new node is " + newNode);
-                    }
+            Node newNode = n.graph().value(n);
+            if (newNode != n) {
+                GraalMetrics.GlobalValueNumberingHits++;
+                if (GraalOptions.TraceGVN) {
+                    TTY.println("GVN applied and new node is " + newNode);
                 }
             }
         }

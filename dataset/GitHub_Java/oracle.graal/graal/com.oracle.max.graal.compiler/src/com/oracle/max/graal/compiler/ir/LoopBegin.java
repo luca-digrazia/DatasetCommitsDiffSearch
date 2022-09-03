@@ -22,16 +22,27 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
+import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.graph.*;
 
 public class LoopBegin extends Merge {
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+    private double loopFrequency;
 
     public LoopBegin(Graph graph) {
-        super(INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(graph);
+        loopFrequency = 1;
+    }
+
+    public double loopFrequency() {
+        return loopFrequency;
+    }
+
+    public void setLoopFrequency(double loopFrequency) {
+        this.loopFrequency = loopFrequency;
     }
 
     public LoopEnd loopEnd() {
@@ -43,7 +54,6 @@ public class LoopBegin extends Merge {
                 }
             }
         }
-        assert false : "LoopBegin should always have a LoopEnd";
         return null;
     }
 
@@ -58,13 +68,70 @@ public class LoopBegin extends Merge {
     }
 
     @Override
-    public String shortName() {
-        return "LoopBegin";
+    public int phiPredecessorCount() {
+        return 2;
     }
 
     @Override
-    public Node copy(Graph into) {
-        LoopBegin x = new LoopBegin(into);
-        return x;
+    public int phiPredecessorIndex(Node pred) {
+        if (pred == forwardEdge()) {
+            return 0;
+        } else if (pred == this.loopEnd()) {
+            return 1;
+        }
+        throw Util.shouldNotReachHere("unknown pred : " + pred + "(sp=" + forwardEdge() + ", le=" + this.loopEnd() + ")");
+    }
+
+    @Override
+    public Node phiPredecessorAt(int index) {
+        if (index == 0) {
+            return forwardEdge();
+        } else if (index == 1) {
+            return loopEnd();
+        }
+        throw Util.shouldNotReachHere();
+    }
+
+    public Collection<LoopCounter> counters() {
+        return Util.filter(this.usages(), LoopCounter.class);
+    }
+
+    @Override
+    public Iterable<? extends Node> phiPredecessors() {
+        return Arrays.asList(new Node[]{this.forwardEdge(), this.loopEnd()});
+    }
+
+    public EndNode forwardEdge() {
+        return this.endAt(0);
+    }
+
+    @Override
+    public boolean verify() {
+        assertTrue(loopEnd() != null);
+        assertTrue(forwardEdge() != null);
+        return true;
+    }
+
+    @Override
+    public String toString() {
+        return "LoopBegin: " + super.toString();
+    }
+
+    @Override
+    public Iterable< ? extends Node> dataUsages() {
+        final Iterator< ? extends Node> dataUsages = super.dataUsages().iterator();
+        return new Iterable<Node>() {
+            @Override
+            public Iterator<Node> iterator() {
+                return new StateSplit.FilteringIterator(dataUsages, LoopEnd.class);
+            }
+        };
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("loopFrequency", String.format("%7.1f", loopFrequency));
+        return properties;
     }
 }

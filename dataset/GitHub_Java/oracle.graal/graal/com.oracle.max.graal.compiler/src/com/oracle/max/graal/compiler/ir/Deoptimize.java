@@ -22,19 +22,29 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
+import java.util.*;
+
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
-public class Deoptimize extends Instruction {
+@NodeInfo(shortName = "Deopt")
+public class Deoptimize extends FixedNode {
 
-    private static final int INPUT_COUNT = 0;
-    private static final int SUCCESSOR_COUNT = 0;
+    public static enum DeoptAction {
+        None,                           // just interpret, do not invalidate nmethod
+        Recompile,                      // recompile the nmethod; need not invalidate
+        InvalidateReprofile,            // invalidate the nmethod, reset IC, maybe recompile
+        InvalidateRecompile,            // invalidate the nmethod, recompile (probably)
+        InvalidateStopCompiling,        // invalidate the nmethod and do not compile
+    }
 
     private String message;
+    private final DeoptAction action;
 
-    public Deoptimize(Graph graph) {
-        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
+    public Deoptimize(DeoptAction action, Graph graph) {
+        super(CiKind.Illegal, graph);
+        this.action = action;
     }
 
     public void setMessage(String message) {
@@ -43,6 +53,10 @@ public class Deoptimize extends Instruction {
 
     public String message() {
         return message;
+    }
+
+    public DeoptAction action() {
+        return action;
     }
 
     @Override
@@ -56,14 +70,10 @@ public class Deoptimize extends Instruction {
     }
 
     @Override
-    public String shortName() {
-        return message == null ? "Deopt " : "Deopt " + message;
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        Deoptimize x = new Deoptimize(into);
-        x.setMessage(message);
-        return x;
+    public Map<Object, Object> getDebugProperties() {
+        Map<Object, Object> properties = super.getDebugProperties();
+        properties.put("message", message);
+        properties.put("action", action);
+        return properties;
     }
 }

@@ -22,45 +22,65 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.Canonicalizable;
 import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
+import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
 
 @NodeInfo(shortName = "+")
-public final class IntegerAdd extends IntegerArithmeticNode implements Canonicalizable {
+public final class IntegerAdd extends IntegerArithmeticNode {
+    private static final IntegerAddCanonicalizerOp CANONICALIZER = new IntegerAddCanonicalizerOp();
 
     public IntegerAdd(CiKind kind, Value x, Value y, Graph graph) {
         super(kind, kind == CiKind.Int ? Bytecodes.IADD : Bytecodes.LADD, x, y, graph);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public Node canonical(NotifyReProcess reProcess) {
-        if (x().isConstant() && !y().isConstant()) {
-            swapOperands();
+    public <T extends Op> T lookup(Class<T> clazz) {
+        if (clazz == CanonicalizerOp.class) {
+            return (T) CANONICALIZER;
         }
-        if (x().isConstant()) {
-            if (kind == CiKind.Int) {
-                return Constant.forInt(x().asConstant().asInt() + y().asConstant().asInt(), graph());
-            } else {
-                assert kind == CiKind.Long;
-                return Constant.forLong(x().asConstant().asLong() + y().asConstant().asLong(), graph());
+        return super.lookup(clazz);
+    }
+
+    private static class IntegerAddCanonicalizerOp implements CanonicalizerOp {
+        @Override
+        public Node canonical(Node node, NotifyReProcess reProcess) {
+            IntegerAdd add = (IntegerAdd) node;
+            Value x = add.x();
+            Value y = add.y();
+            CiKind kind = add.kind;
+            Graph graph = add.graph();
+            if (x.isConstant() && !y.isConstant()) {
+                add.swapOperands();
+                Value t = y;
+                y = x;
+                x = t;
             }
-        } else if (y().isConstant()) {
-            if (kind == CiKind.Int) {
-                int c = y().asConstant().asInt();
-                if (c == 0) {
-                    return x();
+            if (x.isConstant()) {
+                if (kind == CiKind.Int) {
+                    return Constant.forInt(x.asConstant().asInt() + y.asConstant().asInt(), graph);
+                } else {
+                    assert kind == CiKind.Long;
+                    return Constant.forLong(x.asConstant().asLong() + y.asConstant().asLong(), graph);
                 }
-            } else {
-                assert kind == CiKind.Long;
-                long c = y().asConstant().asLong();
-                if (c == 0) {
-                    return x();
+            } else if (y.isConstant()) {
+                if (kind == CiKind.Int) {
+                    int c = y.asConstant().asInt();
+                    if (c == 0) {
+                        return x;
+                    }
+                } else {
+                    assert kind == CiKind.Long;
+                    long c = y.asConstant().asLong();
+                    if (c == 0) {
+                        return x;
+                    }
                 }
             }
+            return add;
         }
-        return this;
     }
 }
