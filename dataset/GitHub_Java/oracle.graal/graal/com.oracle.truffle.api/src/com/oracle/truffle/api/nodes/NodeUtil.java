@@ -541,32 +541,21 @@ public class NodeUtil {
     }
 
     public static int countNodes(Node root) {
-        return countNodes(root, null);
-    }
-
-    public static int countNodes(Node root, Class<?> clazz) {
-        NodeCountVisitor nodeCount = new NodeCountVisitor(clazz);
+        NodeCountVisitor nodeCount = new NodeCountVisitor();
         root.accept(nodeCount);
         return nodeCount.nodeCount;
     }
 
-    private static final class NodeCountVisitor implements NodeVisitor {
+    private static class NodeCountVisitor implements NodeVisitor {
 
-        private final Class<?> clazz;
         int nodeCount;
-
-        private NodeCountVisitor(Class<?> clazz) {
-            this.clazz = clazz;
-        }
 
         @Override
         public boolean visit(Node node) {
             if (node instanceof RootNode && nodeCount > 0) {
                 return false;
             }
-            if (clazz == null || clazz.isInstance(node)) {
-                nodeCount++;
-            }
+            nodeCount++;
             return true;
         }
     }
