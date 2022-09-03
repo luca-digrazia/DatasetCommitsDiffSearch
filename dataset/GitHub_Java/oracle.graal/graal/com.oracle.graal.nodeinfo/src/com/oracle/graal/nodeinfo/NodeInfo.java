@@ -34,26 +34,23 @@ import static com.oracle.graal.nodeinfo.NodeSize.SIZE_UNSET;
 @Target(ElementType.TYPE)
 public @interface NodeInfo {
 
-    String shortName()
-
-    default "";
+    String shortName() default "";
 
     /**
      * The template used to build the {@link Verbosity#Name} version. Variable part are specified
      * using &#123;i#inputName&#125; or &#123;p#propertyName&#125;.
      */
-    String nameTemplate()
-
-    default "";
+    String nameTemplate() default "";
 
     InputType[] allowedUsageTypes() default {};
 
     /**
-     * A relative estimate of the number of CPU cycles needed to execute this instruction. It should
-     * serve as an estimation for the execution time of a high level node. The real execution time
-     * needed for a certain high-level node depends on the target architecture and the low-level
-     * representation of the instruction. However, this enum gives a rough estimation that can be
-     * used in order to compare different instructions based on their execution costs.
+     * An estimation of the number of CPU cycles needed to execute this node that can be used to
+     * compare its execution cost against other nodes.
+     *
+     * Implementations of graph cost models based on this value might throw an exception if a node's
+     * {@link NodeCycles} value is {@link NodeCycles#CYCLES_UNSET}. As such, it is recommended to
+     * specify a value for nodes likely to be inputs to a graph cost model.
      */
     NodeCycles cycles() default CYCLES_UNSET;
 
@@ -63,12 +60,12 @@ public @interface NodeInfo {
     String cyclesRationale() default "";
 
     /**
-     * A relative estimate of the size needed to represent this instruction in machine code. It
-     * should work as an estimation for the number of bytes needed to represent this high-level node
-     * in machine code. The real number of bytes generated for the given high-level node depends the
-     * target architecture and the low-level representation of the instruction. However, this enum
-     * gives a rough estimation that can be used in order to compare different instructions based on
-     * their sizes.
+     * An estimation of the code size needed to represent this node in machine code that can be used
+     * to compare its size cost against other nodes.
+     *
+     * Implementations of graph cost models based on this value might throw an exception if a node's
+     * {@link NodeSize} value is {@link NodeSize#SIZE_UNSET}. As such, it is recommended to specify
+     * a value for nodes likely to be inputs to a graph cost model.
      */
     NodeSize size() default SIZE_UNSET;
 
