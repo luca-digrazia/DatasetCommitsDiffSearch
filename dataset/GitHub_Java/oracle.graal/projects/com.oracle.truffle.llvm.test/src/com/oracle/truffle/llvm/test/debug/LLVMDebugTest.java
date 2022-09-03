@@ -29,6 +29,16 @@
  */
 package com.oracle.truffle.llvm.test.debug;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugScope;
 import com.oracle.truffle.api.debug.DebugStackFrame;
@@ -47,17 +57,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import static com.oracle.truffle.llvm.test.debug.StopRequest.Scope;
 import static org.junit.Assert.assertEquals;
 
@@ -72,6 +71,7 @@ public final class LLVMDebugTest {
 
     private static final String TRACE_EXT = ".txt";
     private static final String OPTION_ENABLE_LVI = "llvm.enableLVI";
+    private static final String OPTION_LAZY_PARSING = "llvm.lazyParsing";
 
     private static final String BC_O0 = "O0.bc";
     private static final String BC_O1 = "O1.bc";
@@ -82,7 +82,7 @@ public final class LLVMDebugTest {
         this.configuration = configuration;
     }
 
-    @Parameters(name = "{0} - {1}")
+    @Parameters(name = "{0}_{1}")
     public static Collection<Object[]> getConfigurations() {
         final Map<String, String[]> configs = new HashMap<>();
         configs.put("testPrimitives", new String[]{BC_O0, BC_MEM2REG});
@@ -104,7 +104,7 @@ public final class LLVMDebugTest {
 
     @Before
     public void before() {
-        tester = new DebuggerTester(Context.newBuilder().option(OPTION_ENABLE_LVI, "true"));
+        tester = new DebuggerTester(Context.newBuilder().option(OPTION_ENABLE_LVI, String.valueOf(true)).option(OPTION_LAZY_PARSING, String.valueOf(false)).allowAllAccess(true));
     }
 
     @After
@@ -220,7 +220,7 @@ public final class LLVMDebugTest {
             final int currentLine = event.getSourceSection().getStartLine();
 
             if (currentLine == info.getLastStop()) {
-                // since we are stepping on IR-instructions rather than source-statements it cllvman
+                // since we are stepping on IR-instructions rather than source-statements it can
                 // happen that we step at the same line multiple times, so we simply try the last
                 // action again. The exact stops differ between LLVM versions and optimization
                 // levels which would make it difficult to record an exact trace.
