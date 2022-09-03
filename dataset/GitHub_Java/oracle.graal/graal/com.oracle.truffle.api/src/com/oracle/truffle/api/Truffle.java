@@ -26,7 +26,6 @@ package com.oracle.truffle.api;
 
 import java.security.*;
 
-import com.oracle.jvmci.service.*;
 import com.oracle.truffle.api.impl.*;
 
 /**
@@ -37,8 +36,14 @@ public class Truffle {
     private static final TruffleRuntime RUNTIME = initRuntime();
 
     /**
-     * Gets the singleton {@link TruffleRuntime} object.
+     * Creates a new {@link TruffleRuntime} instance if the runtime has a specialized
+     * implementation.
+     *
+     * @throws UnsatisfiedLinkError if the runtime does not have a specialized implementation of
+     *             {@link TruffleRuntime}
      */
+    private static native TruffleRuntime createRuntime();
+
     public static TruffleRuntime getRuntime() {
         return RUNTIME;
     }
@@ -52,14 +57,14 @@ public class Truffle {
             return new DefaultTruffleRuntime();
         }
 
-        return AccessController.doPrivileged(new PrivilegedAction<TruffleRuntime>() {
-            public TruffleRuntime run() {
-                TruffleRuntimeAccess access = Services.loadSingle(TruffleRuntimeAccess.class, false);
-                if (access != null) {
-                    return access.getRuntime();
+        try {
+            return AccessController.doPrivileged(new PrivilegedAction<TruffleRuntime>() {
+                public TruffleRuntime run() {
+                    return createRuntime();
                 }
-                return new DefaultTruffleRuntime();
-            }
-        });
+            });
+        } catch (UnsatisfiedLinkError e) {
+            return new DefaultTruffleRuntime();
+        }
     }
 }
