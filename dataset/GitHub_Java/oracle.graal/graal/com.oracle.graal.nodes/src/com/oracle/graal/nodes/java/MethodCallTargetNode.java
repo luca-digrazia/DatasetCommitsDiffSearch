@@ -141,12 +141,9 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
             ValueNode receiver = receiver();
             ResolvedJavaType type = StampTool.typeOrNull(receiver);
             if (type != null && (invoke().stateAfter() != null || invoke().stateDuring() != null)) {
-                /*
-                 * either the holder class is exact, or the receiver object has an exact type, or
-                 * it's an array type
-                 */
+                // either the holder class is exact, or the receiver object has an exact type
                 ResolvedJavaMethod resolvedMethod = type.resolveMethod(targetMethod, invoke().getContextType());
-                if (resolvedMethod != null && (resolvedMethod.canBeStaticallyBound() || StampTool.isExactType(receiver) || type.isArray())) {
+                if (resolvedMethod != null && (resolvedMethod.canBeStaticallyBound() || StampTool.isExactType(receiver))) {
                     invokeKind = InvokeKind.Special;
                     targetMethod = resolvedMethod;
                     return this;
