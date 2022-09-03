@@ -597,8 +597,7 @@ class SourceSnippets {
  public static Source likeFileName(String fileName) throws IOException {
      // BEGIN: SourceSnippets#likeFileName
      File file = new File(fileName);
-     String language = Source.findLanguage(file);
-     Source source = Source.newBuilder(language, file.getCanonicalFile()).
+     Source source = Source.newBuilder(file.getCanonicalFile()).
          name(file.getPath()).
          build();
      // END: SourceSnippets#likeFileName
