@@ -862,7 +862,7 @@ public class PolyglotEngine {
                     Access.DEBUG.executionStarted(PolyglotEngine.this, -1, debugger, null);
                 }
                 if (target == null) {
-                    target = SymbolInvokerImpl.createCallTarget(language[0], compute == null ? value : compute.get());
+                    target = SymbolInvokerImpl.createCallTarget(language[0], compute == null ? value : compute.get(), args);
                 }
                 return target.call(args);
             } finally {
