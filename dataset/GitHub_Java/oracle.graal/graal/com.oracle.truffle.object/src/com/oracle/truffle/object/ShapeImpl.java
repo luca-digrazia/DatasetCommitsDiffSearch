@@ -318,17 +318,6 @@ public abstract class ShapeImpl extends Shape {
         return propertyMap;
     }
 
-    private ShapeImpl queryTransition(Transition transition) {
-        ShapeImpl cachedShape = this.getTransitionMapForRead().get(transition);
-        if (cachedShape != null) { // Shape already exists?
-            shapeCacheHitCount.inc();
-            return (ShapeImpl) layout.getStrategy().returnCached(cachedShape);
-        }
-        shapeCacheMissCount.inc();
-
-        return null;
-    }
-
     /**
      * Add a new property in the map, yielding a new or cached Shape object.
      *
@@ -358,16 +347,19 @@ public abstract class ShapeImpl extends Shape {
         assert !getPropertyListInternal(false).contains(prop);
         // invalidatePropertyAssumption(prop.getName());
 
-        AddPropertyTransition addTransition = new AddPropertyTransition(prop);
-        ShapeImpl cachedShape = queryTransition(addTransition);
-        if (cachedShape != null) {
-            return cachedShape;
+        AddPropertyTransition key = new AddPropertyTransition(prop);
+        Map<Transition, ShapeImpl> transitionMapForRead = this.getTransitionMapForRead();
+        ShapeImpl cachedShape = transitionMapForRead.get(key);
+        if (cachedShape != null) { // Shape already exists?
+            shapeCacheHitCount.inc();
+            return (ShapeImpl) layout.getStrategy().returnCached(cachedShape);
         }
+        shapeCacheMissCount.inc();
 
         ShapeImpl oldShape = (ShapeImpl) layout.getStrategy().ensureSpace(this, prop.getLocation());
 
-        ShapeImpl newShape = makeShapeWithAddedProperty(oldShape, addTransition);
-        oldShape.addDirectTransition(addTransition, newShape);
+        ShapeImpl newShape = makeShapeWithAddedProperty(oldShape, key);
+        oldShape.addDirectTransition(key, newShape);
         return newShape;
     }
 
@@ -425,15 +417,17 @@ public abstract class ShapeImpl extends Shape {
 
     private ShapeImpl addPrimitiveExtensionArray() {
         assert layout.hasPrimitiveExtensionArray() && !hasPrimitiveArray();
-        Transition transition = new ReservePrimitiveArrayTransition();
-        ShapeImpl cachedShape = queryTransition(transition);
+        Transition key = new ReservePrimitiveArrayTransition();
+        ShapeImpl cachedShape = this.getTransitionMapForRead().get(key);
         if (cachedShape != null) {
-            return cachedShape;
+            shapeCacheHitCount.inc();
+            return (ShapeImpl) layout.getStrategy().returnCached(cachedShape);
         }
+        shapeCacheMissCount.inc();
 
         ShapeImpl oldShape = (ShapeImpl) layout.getStrategy().ensureSpace(this, layout.getPrimitiveArrayLocation());
-        ShapeImpl newShape = makeShapeWithPrimitiveExtensionArray(oldShape, transition);
-        oldShape.addDirectTransition(transition, newShape);
+        ShapeImpl newShape = makeShapeWithPrimitiveExtensionArray(oldShape, key);
+        oldShape.addDirectTransition(key, newShape);
         return newShape;
     }
 
@@ -635,9 +629,9 @@ public abstract class ShapeImpl extends Shape {
     @Override
     public final ShapeImpl removeProperty(Property prop) {
         RemovePropertyTransition transition = new RemovePropertyTransition(prop);
-        ShapeImpl cachedShape = queryTransition(transition);
+        ShapeImpl cachedShape = getTransitionMapForRead().get(transition);
         if (cachedShape != null) {
-            return cachedShape;
+            return (ShapeImpl) layout.getStrategy().returnCached(cachedShape);
         }
 
         ShapeImpl shape = getShapeFromProperty(prop);
@@ -690,9 +684,9 @@ public abstract class ShapeImpl extends Shape {
     @Override
     public final ShapeImpl replaceProperty(Property oldProperty, Property newProperty) {
         Transition replacePropertyTransition = new Transition.ReplacePropertyTransition(oldProperty, newProperty);
-        ShapeImpl cachedShape = queryTransition(replacePropertyTransition);
+        ShapeImpl cachedShape = getTransitionMapForRead().get(replacePropertyTransition);
         if (cachedShape != null) {
-            return cachedShape;
+            return (ShapeImpl) layout.getStrategy().returnCached(cachedShape);
         }
 
         ShapeImpl top = this;
@@ -767,6 +761,9 @@ public abstract class ShapeImpl extends Shape {
         return newShape;
     }
 
+    /**
+     * NB: this is not an accurate property count.
+     */
     @Override
     public final int getPropertyCount() {
         return propertyCount;
@@ -849,14 +846,14 @@ public abstract class ShapeImpl extends Shape {
     @TruffleBoundary
     public final ShapeImpl changeType(ObjectType newOps) {
         ObjectTypeTransition transition = new ObjectTypeTransition(newOps);
-        ShapeImpl cachedShape = queryTransition(transition);
+        ShapeImpl cachedShape = getTransitionMapForRead().get(transition);
         if (cachedShape != null) {
             return cachedShape;
+        } else {
+            ShapeImpl newShape = createShape(layout, sharedData, this, newOps, propertyMap, transition, allocator(), id);
+            addDirectTransition(transition, newShape);
+            return newShape;
         }
-
-        ShapeImpl newShape = createShape(layout, sharedData, this, newOps, propertyMap, transition, allocator(), id);
-        addDirectTransition(transition, newShape);
-        return newShape;
     }
 
     @Override
