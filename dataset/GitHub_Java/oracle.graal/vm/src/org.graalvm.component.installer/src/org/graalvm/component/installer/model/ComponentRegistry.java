@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,27 +29,23 @@ import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.Set;
 import org.graalvm.component.installer.CommonConstants;
-import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.Version;
 
 /**
  * Models catalog of installed components. Works closely with {@link ComponentStorage} which handles
  * serialization.
  */
-public final class ComponentRegistry implements ComponentCollection {
-    private final ManagementStorage storage;
+public final class ComponentRegistry {
+    private final ComponentStorage storage;
     private final Feedback env;
 
     /**
@@ -61,10 +57,6 @@ public final class ComponentRegistry implements ComponentCollection {
      * Indexes files path -> component(s).
      */
     private Map<String, Collection<String>> fileIndex;
-
-    /**
-     * For each component ID, a list of components, in their ascending Version order.
-     */
     private Map<String, ComponentInfo> components = new HashMap<>();
     private Map<String, String> graalAttributes;
     private Map<String, Collection<String>> replacedFiles;
@@ -75,53 +67,12 @@ public final class ComponentRegistry implements ComponentCollection {
      */
     private boolean replaceFilesChanged;
 
-    /**
-     * Allows update to a newer distribution, not just patches. This will cause components from
-     * newer GraalVM distributions to be accepted, even though it means a reinstall. Normally just
-     * minor patches are accepted so the current component can be replaced.
-     */
-    private boolean allowDistUpdate;
-
-    public ComponentRegistry(Feedback env, ManagementStorage storage) {
+    public ComponentRegistry(Feedback env, ComponentStorage storage) {
         this.storage = storage;
         this.env = env;
     }
 
-    public boolean compatibleVersion(Version v) {
-        Version gv = getGraalVersion();
-        if (allowDistUpdate) {
-            return gv.updatable().equals(v.updatable());
-        } else {
-            return gv.onlyVersion().equals(v.installVersion());
-        }
-    }
-
-    /**
-     * @return True, if components from newer distributions are allowed.
-     */
-    public boolean isAllowDistUpdate() {
-        return allowDistUpdate;
-    }
-
-    /**
-     * Enables components from newer distributions.
-     * 
-     * @param allowDistUpdate
-     */
-    @Override
-    public void setAllowDistUpdate(boolean allowDistUpdate) {
-        this.allowDistUpdate = allowDistUpdate;
-    }
-
-    @Override
-    public ComponentInfo findComponent(String id, Version.Match vm) {
-        return findComponent(id);
-    }
-
-    @Override
-    public ComponentInfo findComponent(String idspec) {
-        Version.Match[] vmatch = new Version.Match[1];
-        String id = Version.idAndVersion(idspec, vmatch);
+    public ComponentInfo findComponent(String id) {
         if (!allLoaded) {
             return loadSingleComponent(id, false, false);
         }
@@ -135,14 +86,12 @@ public final class ComponentRegistry implements ComponentCollection {
 
     private String findAbbreviatedId(String id) {
         String candidate = null;
-        String lcid = id.toLowerCase(Locale.ENGLISH);
-        String end = "." + lcid; // NOI18N
+        String end = "." + id; // NOI18N
         for (String s : getComponentIDs()) {
-            String lcs = s.toLowerCase();
-            if (lcs.equals(lcid)) {
-                return s;
+            if (s.equals(id)) {
+                return id;
             }
-            if (lcs.toLowerCase().endsWith(end)) {
+            if (s.toLowerCase().endsWith(end)) {
                 if (candidate != null) {
                     throw env.failure("COMPONENT_AmbiguousIdFound", null, candidate, s);
                 }
@@ -160,7 +109,6 @@ public final class ComponentRegistry implements ComponentCollection {
         return graalAttributes;
     }
 
-    @Override
     public Collection<String> getComponentIDs() {
         if (!allLoaded) {
             try {
@@ -188,7 +136,7 @@ public final class ComponentRegistry implements ComponentCollection {
             }
         }
         if (allLoaded) {
-            components.remove(id);
+            components.remove(id, info);
         }
         storage.deleteComponent(id);
         updateReplacedFiles();
@@ -214,18 +162,10 @@ public final class ComponentRegistry implements ComponentCollection {
             }
         }
         if (allLoaded) {
-            addComponentToCache(info);
+            components.put(id, info);
         }
         storage.saveComponent(info);
         updateReplacedFiles();
-    }
-
-    private void addComponentToCache(ComponentInfo info) {
-        String id = info.getId();
-        ComponentInfo old = components.put(id, info);
-        if (old != null) {
-            throw new IllegalStateException("Replacing existing component");
-        }
     }
 
     private void computeReplacedFiles() {
@@ -300,19 +240,11 @@ public final class ComponentRegistry implements ComponentCollection {
         return loadSingleComponent(id, filelist, false);
     }
 
-    @Override
-    public Collection<ComponentInfo> loadComponents(String id, Version.Match selector, boolean filelist) {
-        ComponentInfo ci = loadSingleComponent(id, filelist);
-        return ci == null ? null : Collections.singletonList(ci);
-    }
-
     ComponentInfo loadSingleComponent(String id, boolean filelist, boolean notFoundFailure) {
         String fid = findAbbreviatedId(id);
         if (fid == null) {
             if (notFoundFailure) {
                 throw env.failure("REMOTE_UnknownComponentId", null, id);
-            } else {
-                return null;
             }
         }
         ComponentInfo info = components.get(fid);
@@ -321,17 +253,13 @@ public final class ComponentRegistry implements ComponentCollection {
         }
         String cid = id;
         try {
-            Collection<ComponentInfo> infos = storage.loadComponentMetadata(fid);
-            if (infos == null || infos.isEmpty()) {
+            info = storage.loadComponentMetadata(fid);
+            if (info == null) {
                 if (notFoundFailure) {
                     throw env.failure("REMOTE_UnknownComponentId", null, id);
                 }
                 return null;
             }
-            if (infos.size() != 1) {
-                throw new IllegalArgumentException("Wrong storage");
-            }
-            info = infos.iterator().next();
             cid = info.getId(); // may change if id was an abbreviation
             if (filelist) {
                 storage.loadComponentFiles(info);
@@ -397,18 +325,10 @@ public final class ComponentRegistry implements ComponentCollection {
         return dispCapName;
     }
 
-    @Override
     public String shortenComponentId(ComponentInfo info) {
         String id = info.getId();
         if (id.startsWith(CommonConstants.GRAALVM_CORE_PREFIX)) {
-            int l = CommonConstants.GRAALVM_CORE_PREFIX.length();
-            if (id.length() == l) {
-                return CommonConstants.GRAALVM_CORE_SHORT_ID;
-            }
-            if (id.charAt(l) != '.' && id.length() > l + 1) {
-                return id;
-            }
-            String shortId = id.substring(l + 1);
+            String shortId = id.substring(CommonConstants.GRAALVM_CORE_PREFIX.length());
             try {
                 ComponentInfo reg = findComponent(shortId);
                 if (reg == null || reg.getId().equals(id)) {
@@ -419,46 +339,5 @@ public final class ComponentRegistry implements ComponentCollection {
             }
         }
         return id;
-    }
-
-    public Date isLicenseAccepted(ComponentInfo info, String id) {
-        return storage.licenseAccepted(info, id);
-    }
-
-    public void acceptLicense(ComponentInfo info, String id, String text) {
-        acceptLicense(info, id, text, null);
-    }
-
-    public void acceptLicense(ComponentInfo info, String id, String text, Date d) {
-        try {
-            storage.recordLicenseAccepted(info, id, text, d);
-        } catch (IOException ex) {
-            env.error("ERROR_RecordLicenseAccepted", ex, ex.getLocalizedMessage());
-        }
-    }
-
-    private Version graalVer;
-
-    public Version getGraalVersion() {
-        if (graalVer == null) {
-            graalVer = Version.fromString(getGraalCapabilities().get(CommonConstants.CAP_GRAALVM_VERSION));
-        }
-        return graalVer;
-    }
-
-    public Map<String, Collection<String>> getAcceptedLicenses() {
-        return storage.findAcceptedLicenses();
-    }
-
-    public String licenseText(String licId) {
-        return storage.licenseText(licId);
-    }
-
-    public boolean isMacOsX() {
-        return storage.loadGraalVersionInfo().get("os_name").toLowerCase().contains("macos");
-    }
-
-    public void verifyAdministratorAccess() throws IOException {
-        storage.saveComponent(null);
     }
 }
