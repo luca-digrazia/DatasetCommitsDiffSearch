@@ -27,9 +27,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+
 import org.graalvm.polyglot.Context;
-import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
-import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -42,6 +41,9 @@ import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
+
+import org.graalvm.compiler.truffle.GraalTruffleRuntime;
+import org.graalvm.compiler.truffle.OptimizedCallTarget;
 
 /**
  * Test of consistent behavior of AllocationReporter when individual calls are optimized or
@@ -59,7 +61,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
         context.initialize(AllocationReporterLanguage.ID);
         final TestAllocationReporter tester = context.getEngine().getInstruments().get(TestAllocationReporter.ID).lookup(TestAllocationReporter.class);
         assertNotNull(tester);
-        final AllocationReporter reporter = (AllocationReporter) context.getPolyglotBindings().getMember(AllocationReporter.class.getSimpleName()).asHostObject();
+        final AllocationReporter reporter = (AllocationReporter) context.importSymbol(AllocationReporter.class.getSimpleName()).asHostObject();
         final Long[] value = new Long[]{1L};
         OptimizedCallTarget enterTarget = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
             @Override
@@ -104,7 +106,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
             assertEquals(expectedCounters, tester.getReturnCount());
 
             // Deoptimize enter:
-            enterTarget.invalidate(this, "test");
+            enterTarget.invalidate();
             assertNotCompiled(enterTarget);
             enterTarget.call();
             assertCompiled(returnTarget);
@@ -116,7 +118,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
             assertCompiled(returnTarget);
 
             // Deoptimize return:
-            returnTarget.invalidate(this, "test");
+            returnTarget.invalidate();
             assertCompiled(enterTarget);
             enterTarget.call();
             assertNotCompiled(returnTarget);
@@ -128,8 +130,8 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
             assertCompiled(returnTarget);
 
             // Deoptimize both:
-            enterTarget.invalidate(this, "test");
-            returnTarget.invalidate(this, "test");
+            enterTarget.invalidate();
+            returnTarget.invalidate();
             assertNotCompiled(enterTarget);
             enterTarget.call();
             assertNotCompiled(returnTarget);
@@ -151,7 +153,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
         value[0] = null;
         boolean expectedFailure = true;
         // Deoptimize for assertions to be active
-        enterTarget.invalidate(this, "test");
+        enterTarget.invalidate();
         try {
             enterTarget.call();
             expectedFailure = false;
@@ -161,7 +163,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
         assertTrue("onEnter(null) did not fail!", expectedFailure);
 
         // Deoptimize for assertions to be active
-        returnTarget.invalidate(this, "test");
+        returnTarget.invalidate();
 
         value[0] = Long.MIN_VALUE;
         try {
@@ -186,9 +188,20 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
 
         @Override
         protected AllocationReporter createContext(TruffleLanguage.Env env) {
-            AllocationReporter reporter = env.lookup(AllocationReporter.class);
-            env.exportSymbol(AllocationReporter.class.getSimpleName(), reporter);
-            return reporter;
+            return env.lookup(AllocationReporter.class);
+        }
+
+        @Override
+        protected Object findExportedSymbol(AllocationReporter context, String globalName, boolean onlyExplicit) {
+            if (AllocationReporter.class.getSimpleName().equals(globalName)) {
+                return context;
+            }
+            return null;
+        }
+
+        @Override
+        protected Object getLanguageGlobal(AllocationReporter context) {
+            return null;
         }
 
         @Override
