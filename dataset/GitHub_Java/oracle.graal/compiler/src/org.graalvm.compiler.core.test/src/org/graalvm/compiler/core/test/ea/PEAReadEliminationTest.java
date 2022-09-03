@@ -51,7 +51,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testIndexed1() {
-        StructuredGraph graph = processMethod("testIndexed1Snippet");
+        StructuredGraph graph = processMethod("testIndexed1Snippet", false);
         assertDeepEquals(0, graph.getNodes().filter(LoadIndexedNode.class).count());
     }
 
@@ -71,7 +71,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testIndexed2() {
-        StructuredGraph graph = processMethod("testIndexed2Snippet");
+        StructuredGraph graph = processMethod("testIndexed2Snippet", false);
         assertDeepEquals(3, graph.getNodes().filter(LoadIndexedNode.class).count());
         assertDeepEquals(7, graph.getNodes().filter(StoreIndexedNode.class).count());
     }
@@ -95,7 +95,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testIndexed3() {
-        StructuredGraph graph = processMethod("testIndexed3Snippet");
+        StructuredGraph graph = processMethod("testIndexed3Snippet", false);
         assertDeepEquals(3, graph.getNodes().filter(LoadIndexedNode.class).count());
     }
 
@@ -114,7 +114,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testIndexed4() {
-        StructuredGraph graph = processMethod("testIndexed4Snippet");
+        StructuredGraph graph = processMethod("testIndexed4Snippet", false);
         assertDeepEquals(3, graph.getNodes().filter(LoadIndexedNode.class).count());
     }
 
@@ -130,7 +130,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testUnsafe1() {
-        StructuredGraph graph = processMethod("testUnsafe1Snippet");
+        StructuredGraph graph = processMethod("testUnsafe1Snippet", false);
         assertDeepEquals(1, graph.getNodes().filter(RawLoadNode.class).count());
     }
 
@@ -143,7 +143,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testUnsafe2() {
-        StructuredGraph graph = processMethod("testUnsafe2Snippet");
+        StructuredGraph graph = processMethod("testUnsafe2Snippet", false);
         assertDeepEquals(3, graph.getNodes().filter(RawLoadNode.class).count());
     }
 
@@ -159,7 +159,7 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testUnsafe3() {
-        StructuredGraph graph = processMethod("testUnsafe3Snippet");
+        StructuredGraph graph = processMethod("testUnsafe3Snippet", false);
         assertDeepEquals(1, graph.getNodes().filter(RawLoadNode.class).count());
     }
 
@@ -173,11 +173,11 @@ public class PEAReadEliminationTest extends GraalCompilerTest {
 
     @Test
     public void testUnsafe4() {
-        StructuredGraph graph = processMethod("testUnsafe4Snippet");
+        StructuredGraph graph = processMethod("testUnsafe4Snippet", false);
         assertDeepEquals(3, graph.getNodes().filter(RawLoadNode.class).count());
     }
 
-    protected StructuredGraph processMethod(final String snippet) {
+    protected StructuredGraph processMethod(final String snippet, boolean doLowering) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
         HighTierContext context = getDefaultHighTierContext();
         new InliningPhase(new CanonicalizerPhase()).apply(graph, context);

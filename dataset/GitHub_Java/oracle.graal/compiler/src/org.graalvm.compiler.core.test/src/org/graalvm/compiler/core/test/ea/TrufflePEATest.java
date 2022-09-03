@@ -113,8 +113,12 @@ public class TrufflePEATest extends GraalCompilerTest {
         StructuredGraph graph = parseEager(snippet, StructuredGraph.AllowAssumptions.NO);
         HighTierContext context = getDefaultHighTierContext();
         DebugContext debug = graph.getDebug();
-        new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
-        new PartialEscapePhase(true, true, new CanonicalizerPhase(), null, graph.getOptions()).apply(graph, context);
+        try (DebugContext.Scope ds = debug.scope("Parsing", graph.asJavaMethod(), graph)) {
+            new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+            new PartialEscapePhase(true, true, new CanonicalizerPhase(), null, graph.getOptions()).apply(graph, context);
+        } catch (Throwable e) {
+            throw debug.handle(e);
+        }
         return graph;
     }
 
