@@ -25,8 +25,7 @@ package com.oracle.graal.lir.phases;
 import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
 
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.PostAllocationOptimizationContext;
-import com.oracle.graal.lir.profiling.*;
+import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase.*;
 import com.oracle.graal.options.*;
 
 public class PostAllocationOptimizationStage extends LIRPhaseSuite<PostAllocationOptimizationContext> {
@@ -40,8 +39,6 @@ public class PostAllocationOptimizationStage extends LIRPhaseSuite<PostAllocatio
         public static final NestedBooleanOptionValue LIROptRedundantMoveElimination = new NestedBooleanOptionValue(LIROptimization, true);
         @Option(help = "", type = OptionType.Debug)
         public static final NestedBooleanOptionValue LIROptNullCheckOptimizer = new NestedBooleanOptionValue(LIROptimization, true);
-        @Option(help = "", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LIROptMoveProfiling = new OptionValue<>(false);
         // @formatter:on
     }
 
@@ -57,9 +54,6 @@ public class PostAllocationOptimizationStage extends LIRPhaseSuite<PostAllocatio
         }
         if (Options.LIROptNullCheckOptimizer.getValue()) {
             appendPhase(new NullCheckOptimizer());
-        }
-        if (Options.LIROptMoveProfiling.getValue()) {
-            appendPhase(new MoveProfiling());
         }
     }
 }

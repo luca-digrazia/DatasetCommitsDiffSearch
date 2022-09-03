@@ -23,7 +23,7 @@
 package com.oracle.graal.lir.stackslotalloc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
+import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
 
 import java.util.*;
 import java.util.function.*;
@@ -33,6 +33,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -74,7 +75,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
     }
 
     public void allocateStackSlots(FrameMapBuilderTool builder, LIRGenerationResult res) {
-        try (DebugCloseable t = MainTimer.start()) {
+        try (TimerCloseable t = MainTimer.start()) {
             new Allocator(res.getLIR(), builder).allocate();
         }
     }
@@ -99,7 +100,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
             // insert by to
             this.active = new PriorityQueue<>((a, b) -> a.to() - b.to());
 
-            try (DebugCloseable t = NumInstTimer.start()) {
+            try (TimerCloseable t = NumInstTimer.start()) {
                 // step 1: number instructions
                 this.maxOpId = numberInstructions(lir, sortedBlocks);
             }
@@ -111,12 +112,12 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
             long currentFrameSize = Debug.isMeterEnabled() ? frameMapBuilder.getFrameMap().currentFrameSize() : 0;
             Set<LIRInstruction> usePos;
             // step 2: build intervals
-            try (Scope s = Debug.scope("StackSlotAllocationBuildIntervals"); Indent indent = Debug.logAndIndent("BuildIntervals"); DebugCloseable t = BuildIntervalsTimer.start()) {
+            try (Scope s = Debug.scope("StackSlotAllocationBuildIntervals"); Indent indent = Debug.logAndIndent("BuildIntervals"); TimerCloseable t = BuildIntervalsTimer.start()) {
                 usePos = buildIntervals();
             }
             // step 3: verify intervals
             if (Debug.isEnabled()) {
-                try (DebugCloseable t = VerifyIntervalsTimer.start()) {
+                try (TimerCloseable t = VerifyIntervalsTimer.start()) {
                     verifyIntervals();
                 }
             }
@@ -124,7 +125,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
                 dumpIntervals("Before stack slot allocation");
             }
             // step 4: allocate stack slots
-            try (DebugCloseable t = AllocateSlotsTimer.start()) {
+            try (TimerCloseable t = AllocateSlotsTimer.start()) {
                 allocateStackSlots();
             }
             if (Debug.isDumpEnabled()) {
@@ -132,7 +133,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
             }
 
             // step 5: assign stack slots
-            try (DebugCloseable t = AssignSlotsTimer.start()) {
+            try (TimerCloseable t = AssignSlotsTimer.start()) {
                 assignStackSlots(usePos);
             }
             Debug.dump(lir, "After StackSlot assignment");
@@ -363,26 +364,30 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
 
         private void assignStackSlots(Set<LIRInstruction> usePos) {
             for (LIRInstruction op : usePos) {
-                op.forEachInput(assignSlot);
-                op.forEachAlive(assignSlot);
-                op.forEachState(assignSlot);
+                op.forEachInput(this::assignSlot);
+                op.forEachAlive(this::assignSlot);
+                op.forEachState(this::assignSlot);
 
-                op.forEachTemp(assignSlot);
-                op.forEachOutput(assignSlot);
+                op.forEachTemp(this::assignSlot);
+                op.forEachOutput(this::assignSlot);
             }
         }
 
-        ValueProcedure assignSlot = new ValueProcedure() {
-            public Value doValue(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
-                if (isVirtualStackSlot(value)) {
-                    VirtualStackSlot slot = asVirtualStackSlot(value);
-                    StackInterval interval = get(slot);
-                    assert interval != null;
-                    return interval.location();
-                }
-                return value;
+        /**
+         * @see ValueProcedure
+         * @param value
+         * @param mode
+         * @param flags
+         */
+        private Value assignSlot(Value value, OperandMode mode, EnumSet<OperandFlag> flags) {
+            if (isVirtualStackSlot(value)) {
+                VirtualStackSlot slot = asVirtualStackSlot(value);
+                StackInterval interval = get(slot);
+                assert interval != null;
+                return interval.location();
             }
-        };
+            return value;
+        }
 
         // ====================
         //

@@ -29,6 +29,8 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugMemUseTracker.Closeable;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.options.*;
@@ -60,30 +62,6 @@ public abstract class LIRPhase<C> {
      */
     private final DebugMemUseTracker memUseTracker;
 
-    private static class LIRPhaseStatistics {
-        /**
-         * Records time spent within {@link #apply}.
-         */
-        private final DebugTimer timer;
-
-        /**
-         * Records memory usage within {@link #apply}.
-         */
-        private final DebugMemUseTracker memUseTracker;
-
-        LIRPhaseStatistics(Class<?> clazz) {
-            timer = Debug.timer("LIRPhaseTime_%s", clazz);
-            memUseTracker = Debug.memUseTracker("LIRPhaseMemUse_%s", clazz);
-        }
-    }
-
-    private static final ClassValue<LIRPhaseStatistics> statisticsClassValue = new ClassValue<LIRPhaseStatistics>() {
-        @Override
-        protected LIRPhaseStatistics computeValue(Class<?> c) {
-            return new LIRPhaseStatistics(c);
-        }
-    };
-
     private static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
 
     private static boolean checkName(String name) {
@@ -92,17 +70,15 @@ public abstract class LIRPhase<C> {
     }
 
     public LIRPhase() {
-        LIRPhaseStatistics statistics = statisticsClassValue.get(getClass());
-        timer = statistics.timer;
-        memUseTracker = statistics.memUseTracker;
+        timer = Debug.timer("LIRPhaseTime_%s", getClass());
+        memUseTracker = Debug.memUseTracker("LIRPhaseMemUse_%s", getClass());
     }
 
     protected LIRPhase(String name) {
         assert checkName(name);
         this.name = name;
-        LIRPhaseStatistics statistics = statisticsClassValue.get(getClass());
-        timer = statistics.timer;
-        memUseTracker = statistics.memUseTracker;
+        timer = Debug.timer("LIRPhaseTime_%s", getClass());
+        memUseTracker = Debug.memUseTracker("LIRPhaseMemUse_%s", getClass());
     }
 
     public final <B extends AbstractBlockBase<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context) {
@@ -111,7 +87,7 @@ public abstract class LIRPhase<C> {
 
     public final <B extends AbstractBlockBase<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context, boolean dumpLIR) {
         try (Scope s = Debug.scope(getName(), this)) {
-            try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {
+            try (TimerCloseable a = timer.start(); Closeable c = memUseTracker.start()) {
                 run(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
                 if (dumpLIR && Debug.isDumpEnabled(PHASE_DUMP_LEVEL)) {
                     Debug.dump(PHASE_DUMP_LEVEL, lirGenRes.getLIR(), "After phase %s", getName());
