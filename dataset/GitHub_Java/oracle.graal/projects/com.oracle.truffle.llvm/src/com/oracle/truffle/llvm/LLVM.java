@@ -180,23 +180,13 @@ public class LLVM {
 
             private void handleParserResult(LLVMContext context, LLVMParserResult result) {
                 context.getFunctionRegistry().register(result.getParsedFunctions());
-                context.registerGlobalVarInit(result.getGlobalVarInits());
-                context.registerGlobalVarDealloc(result.getGlobalVarDeallocs());
-                if (result.getConstructorFunctions() != null) {
-                    for (RootCallTarget constructorFunction : result.getConstructorFunctions()) {
-                        context.registerConstructorFunction(constructorFunction);
-                    }
-                }
+                context.registerStaticInitializer(result.getStaticInits());
+                context.registerStaticDestructor(result.getStaticDestructors());
                 if (result.getDestructorFunctions() != null) {
-                    for (RootCallTarget destructorFunction : result.getDestructorFunctions()) {
-                        context.registerDestructorFunction(destructorFunction);
-                    }
+                    context.registerDestructorFunction(result.getDestructorFunctions());
                 }
                 if (!context.isParseOnly()) {
-                    result.getGlobalVarInits().call();
-                    for (RootCallTarget constructorFunction : result.getConstructorFunctions()) {
-                        constructorFunction.call(result.getConstructorFunctions());
-                    }
+                    result.getStaticInits().call();
                 }
             }
 
@@ -229,10 +219,7 @@ public class LLVM {
                 // the PolyglotEngine calls this method for every mime type supported by the
                 // language
                 if (!context.getStack().isFreed()) {
-                    for (RootCallTarget destructorFunction : context.getDestructorFunctions()) {
-                        destructorFunction.call(destructorFunction);
-                    }
-                    for (RootCallTarget destructor : context.getGlobalVarDeallocs()) {
+                    for (RootCallTarget destructor : context.getStaticDestructors()) {
                         destructor.call();
                     }
                     context.getStack().free();
