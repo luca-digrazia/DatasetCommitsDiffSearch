@@ -138,12 +138,7 @@ public class WrappedConstantPool implements ConstantPool {
     public Object lookupConstant(int cpi) {
         Object con = wrapped.lookupConstant(cpi);
         if (con instanceof JavaType) {
-            if (con instanceof ResolvedJavaType) {
-                return universe.lookup((ResolvedJavaType) con);
-            } else {
-                /* The caller takes care of unresolved types. */
-                return con;
-            }
+            return universe.lookup((ResolvedJavaType) con);
         } else if (con instanceof JavaConstant) {
             return universe.lookup((JavaConstant) con);
         } else {
