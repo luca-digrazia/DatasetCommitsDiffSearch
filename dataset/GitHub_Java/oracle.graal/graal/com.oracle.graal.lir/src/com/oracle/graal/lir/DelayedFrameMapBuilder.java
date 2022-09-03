@@ -37,24 +37,26 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
 
     @FunctionalInterface
     public interface FrameMapFactory {
-        FrameMap newFrameMap(FrameMapBuilder frameMapBuilder);
+        FrameMap newFrameMap(RegisterConfig registerConfig);
     }
 
     private final RegisterConfig registerConfig;
     private final CodeCacheProvider codeCache;
-    private final FrameMapFactory factory;
+    protected final FrameMap frameMap;
     private final List<TrackedVirtualStackSlot> stackSlots;
     private final List<CallingConvention> calls;
 
     public DelayedFrameMapBuilder(FrameMapFactory factory, CodeCacheProvider codeCache, RegisterConfig registerConfig) {
         this.registerConfig = registerConfig == null ? codeCache.getRegisterConfig() : registerConfig;
         this.codeCache = codeCache;
-        this.factory = factory;
+        this.frameMap = factory.newFrameMap(registerConfig);
         this.stackSlots = new ArrayList<>();
         this.calls = new ArrayList<>();
+        this.mappables = new ArrayList<>();
     }
 
     private Set<VirtualStackSlot> freedSlots;
+    private final List<FrameMappable> mappables;
 
     public VirtualStackSlot allocateSpillSlot(LIRKind kind) {
         if (freedSlots != null) {
@@ -84,7 +86,7 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
             super(lirKind);
         }
 
-        public abstract StackSlot transform(FrameMap frameMap);
+        public abstract StackSlot transform();
     }
 
     private class SimpleVirtualStackSlot extends TrackedVirtualStackSlot {
@@ -96,7 +98,7 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
         }
 
         @Override
-        public StackSlot transform(FrameMap frameMap) {
+        public StackSlot transform() {
             int size = frameMap.spillSlotSize(getLIRKind());
             frameMap.spillSize = NumUtil.roundUp(frameMap.spillSize + size, size);
             return frameMap.allocateNewSpillSlot(getLIRKind(), 0);
@@ -117,7 +119,7 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
         }
 
         @Override
-        public StackSlot transform(FrameMap frameMap) {
+        public StackSlot transform() {
             frameMap.spillSize += (slots * frameMap.getTarget().wordSize);
 
             if (!objects.isEmpty()) {
@@ -179,14 +181,15 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
     }
 
     public FrameMap buildFrameMap(LIRGenerationResult res) {
-        FrameMap frameMap = factory.newFrameMap(this);
         HashMap<VirtualStackSlot, StackSlot> mapping = new HashMap<>();
         // fill
-        mapStackSlots(frameMap, mapping);
+        mapStackSlots(mapping);
         for (CallingConvention cc : calls) {
             frameMap.callsMethod(cc);
         }
-        // end fill
+        // rewrite
+        mappables.forEach(m -> m.map(mapping::get));
+        //
         if (freedSlots != null) {
             // If the freed slots cover the complete spill area (except for the return
             // address slot), then the spill size is reset to its initial value.
@@ -205,11 +208,15 @@ public class DelayedFrameMapBuilder implements FrameMapBuilder {
         return frameMap;
     }
 
-    protected void mapStackSlots(FrameMap frameMap, HashMap<VirtualStackSlot, StackSlot> mapping) {
+    protected void mapStackSlots(HashMap<VirtualStackSlot, StackSlot> mapping) {
         for (TrackedVirtualStackSlot virtualSlot : stackSlots) {
-            StackSlot slot = virtualSlot.transform(frameMap);
+            StackSlot slot = virtualSlot.transform();
             mapping.put(virtualSlot, slot);
         }
+    }
+
+    public void requireMapping(FrameMappable mappable) {
+        this.mappables.add(mappable);
     }
 
 }
