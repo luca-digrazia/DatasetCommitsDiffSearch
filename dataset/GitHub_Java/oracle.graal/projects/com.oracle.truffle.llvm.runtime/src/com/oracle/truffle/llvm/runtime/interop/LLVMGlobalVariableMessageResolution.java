@@ -53,12 +53,12 @@ public class LLVMGlobalVariableMessageResolution {
             return access(frame, receiver, (int) index);
         }
 
-        protected Object access(@SuppressWarnings("unused") VirtualFrame frame, LLVMSharedGlobalVariable receiver, int index) {
+        protected Object access(VirtualFrame frame, LLVMSharedGlobalVariable receiver, int index) {
             if (node == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 node = insert(LLVMAddressReadMessageResolutionNodeGen.create());
             }
-            return node.executeWithTarget(receiver, index);
+            return node.executeWithTarget(frame, receiver, index);
         }
 
         @SuppressWarnings("unused")
@@ -78,12 +78,12 @@ public class LLVMGlobalVariableMessageResolution {
             return access(frame, receiver, (int) index, value);
         }
 
-        protected Object access(@SuppressWarnings("unused") VirtualFrame frame, LLVMSharedGlobalVariable receiver, int index, Object value) {
+        protected Object access(VirtualFrame frame, LLVMSharedGlobalVariable receiver, int index, Object value) {
             if (node == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 node = insert(LLVMAddressWriteMessageResolutionNodeGen.create());
             }
-            return node.executeWithTarget(receiver, index, value);
+            return node.executeWithTarget(frame, receiver, index, value);
         }
 
         @SuppressWarnings("unused")
@@ -92,5 +92,6 @@ public class LLVMGlobalVariableMessageResolution {
             String message = String.format("Identifier %s is currently unsupported. Please use a numeric index to access a C pointer.", name);
             throw UnknownIdentifierException.raise(message);
         }
+
     }
 }

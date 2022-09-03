@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.interop;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
@@ -43,6 +42,7 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
@@ -66,6 +66,8 @@ public abstract class ToLLVMNode extends Node {
 
     @Child protected Node unbox = Message.UNBOX.createNode();
     @Child protected Node isBoxed = Message.IS_BOXED.createNode();
+    @Child protected Node isPointer = Message.IS_POINTER.createNode();
+    @Child protected Node asPointer = Message.AS_POINTER.createNode();
 
     public static ToLLVMNode createNode(Class<?> expectedType) {
         if (expectedType == TruffleObject.class) {
@@ -96,6 +98,14 @@ public abstract class ToLLVMNode extends Node {
     }
 
     public abstract Object executeWithTarget(Object value);
+
+    protected static boolean notLLVM(TruffleObject value) {
+        return LLVMExpressionNode.notLLVM(value);
+    }
+
+    protected static boolean checkIsPointer(Node isPointer, TruffleObject object) {
+        return ForeignAccess.sendIsPointer(isPointer, object);
+    }
 
     abstract static class ToIntNode extends ToLLVMNode {
 
@@ -150,14 +160,14 @@ public abstract class ToLLVMNode extends Node {
             return (int) toInt.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public int fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (int) convertPrimitive(int.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -214,14 +224,14 @@ public abstract class ToLLVMNode extends Node {
             return (long) toLong.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public long fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (long) convertPrimitive(long.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -279,14 +289,14 @@ public abstract class ToLLVMNode extends Node {
             return (short) toShort.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public long fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (short) convertPrimitive(short.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -344,14 +354,14 @@ public abstract class ToLLVMNode extends Node {
             return (byte) toByte.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public byte fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (byte) convertPrimitive(byte.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -409,14 +419,14 @@ public abstract class ToLLVMNode extends Node {
             return (char) toChar.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public char fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (char) convertPrimitive(char.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -473,14 +483,14 @@ public abstract class ToLLVMNode extends Node {
             return (float) toFloat.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public float fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (float) convertPrimitive(float.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -537,14 +547,14 @@ public abstract class ToLLVMNode extends Node {
             return (double) toDouble.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public double fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (double) convertPrimitive(double.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -602,14 +612,14 @@ public abstract class ToLLVMNode extends Node {
             return (boolean) toBoolean.executeWithTarget(boxed.getValue());
         }
 
-        @Specialization
+        @Specialization(guards = "notLLVM(obj)")
         public boolean fromTruffleObject(TruffleObject obj) {
             try {
                 Object unboxed = ForeignAccess.sendUnbox(unbox, obj);
                 return (boolean) convertPrimitive(boolean.class, unboxed);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
+                throw new IllegalStateException("Foreign value is not unboxable!", e);
             }
         }
     }
@@ -671,34 +681,24 @@ public abstract class ToLLVMNode extends Node {
             return shared.getDescriptor();
         }
 
-        protected static Class<? extends TruffleObject> getNativePointerClass() {
-            CompilerAsserts.neverPartOfCompilation();
-            try {
-                return Class.forName("com.oracle.truffle.nfi.NativePointer").asSubclass(TruffleObject.class);
-            } catch (ClassNotFoundException ex) {
-                throw new RuntimeException(ex);
-            }
+        @Specialization
+        public LLVMFunctionDescriptor id(LLVMFunctionDescriptor fd) {
+            return fd;
         }
 
-        protected static boolean notLLVM(TruffleObject value, Class<? extends TruffleObject> nativePointer) {
-            return LLVMExpressionNode.notLLVM(value) && !nativePointer.isInstance(value);
-        }
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = "nativePointer.isInstance(obj)")
-        public LLVMAddress fromNativePointer(TruffleObject obj, @Cached("getNativePointerClass()") Class<? extends TruffleObject> nativePointer) {
+        @Specialization(guards = {"checkIsPointer(isPointer, obj)", "notLLVM(obj)"})
+        public LLVMAddress fromNativePointer(TruffleObject obj) {
             try {
-                long raw = (Long) ForeignAccess.sendUnbox(unbox, obj);
+                long raw = ForeignAccess.sendAsPointer(asPointer, obj);
                 return LLVMAddress.fromLong(raw);
             } catch (UnsupportedMessageException ex) {
                 CompilerDirectives.transferToInterpreter();
-                throw new RuntimeException(ex);
+                throw new IllegalStateException("Foreign value is not a pointer!", ex);
             }
         }
 
-        @SuppressWarnings("unused")
-        @Specialization(guards = "notLLVM(obj, nativePointer)")
-        public TruffleObject fromTruffleObject(TruffleObject obj, @Cached("getNativePointerClass()") Class<? extends TruffleObject> nativePointer) {
+        @Specialization(guards = {"!checkIsPointer(isPointer, obj)", "notLLVM(obj)"})
+        public TruffleObject fromTruffleObject(TruffleObject obj) {
             return obj;
         }
     }
@@ -760,11 +760,18 @@ public abstract class ToLLVMNode extends Node {
             return shared.getDescriptor();
         }
 
-        protected boolean notLLVM(TruffleObject value) {
-            return LLVMExpressionNode.notLLVM(value);
+        @Specialization(guards = {"checkIsPointer(isPointer, obj)", "notLLVM(obj)"})
+        public LLVMAddress fromNativePointer(TruffleObject obj) {
+            try {
+                long raw = ForeignAccess.sendAsPointer(asPointer, obj);
+                return LLVMAddress.fromLong(raw);
+            } catch (UnsupportedMessageException ex) {
+                CompilerDirectives.transferToInterpreter();
+                throw new IllegalStateException("Foreign value is not a pointer!", ex);
+            }
         }
 
-        @Specialization(guards = "notLLVM(obj)")
+        @Specialization(guards = {"!checkIsPointer(isPointer, obj)", "notLLVM(obj)"})
         public TruffleObject fromTruffleObject(TruffleObject obj) {
             return obj;
         }
@@ -826,15 +833,22 @@ public abstract class ToLLVMNode extends Node {
         if (isPrimitiveType(requestedType)) {
             Object attr;
             if (value instanceof TruffleObject) {
-                if (!Boolean.TRUE.equals(ForeignAccess.sendIsBoxed(isBoxed, (TruffleObject) value))) {
-                    return null;
+                if (ForeignAccess.sendIsPointer(isPointer, (TruffleObject) value)) {
+                    try {
+                        attr = (long) ForeignAccess.sendAsPointer(asPointer, (TruffleObject) value);
+                    } catch (InteropException e) {
+                        CompilerDirectives.transferToInterpreter();
+                        throw UnsupportedTypeException.raise(new Object[]{value});
+                    }
+                } else if (ForeignAccess.sendIsBoxed(isBoxed, (TruffleObject) value)) {
+                    try {
+                        attr = ForeignAccess.sendUnbox(unbox, (TruffleObject) value);
+                    } catch (InteropException e) {
+                        CompilerDirectives.transferToInterpreter();
+                        throw UnsupportedTypeException.raise(new Object[]{value});
+                    }
                 }
-                try {
-                    attr = ForeignAccess.sendUnbox(unbox, (TruffleObject) value);
-                } catch (InteropException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw UnsupportedTypeException.raise(new Object[]{value});
-                }
+                return null;
             } else {
                 attr = value;
             }
@@ -846,6 +860,13 @@ public abstract class ToLLVMNode extends Node {
                 return new LLVMBoxedPrimitive(value);
             } else if (value instanceof LLVMSharedGlobalVariable) {
                 return ((LLVMSharedGlobalVariable) value).getDescriptor();
+            } else if (ForeignAccess.sendIsPointer(isPointer, (TruffleObject) value)) {
+                try {
+                    return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) value));
+                } catch (InteropException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw UnsupportedTypeException.raise(new Object[]{value});
+                }
             } else {
                 return value;
             }
@@ -866,6 +887,13 @@ public abstract class ToLLVMNode extends Node {
             return ((LLVMSharedGlobalVariable) value).getDescriptor();
         } else if (value instanceof TruffleObject && LLVMExpressionNode.notLLVM((TruffleObject) value)) {
             return value;
+        } else if (value instanceof TruffleObject && LLVMExpressionNode.notLLVM((TruffleObject) value) && ForeignAccess.sendIsPointer(isPointer, (TruffleObject) value)) {
+            try {
+                return LLVMAddress.fromLong(ForeignAccess.sendAsPointer(asPointer, (TruffleObject) value));
+            } catch (InteropException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedTypeException.raise(new Object[]{value});
+            }
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException();

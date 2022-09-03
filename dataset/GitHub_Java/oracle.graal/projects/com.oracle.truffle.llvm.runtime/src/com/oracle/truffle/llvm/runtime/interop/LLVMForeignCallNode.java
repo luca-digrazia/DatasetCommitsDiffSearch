@@ -43,9 +43,6 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.SlowPathForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
@@ -60,15 +57,15 @@ abstract class LLVMForeignCallNode extends LLVMNode {
     }
 
     public static class PackForeignArgumentsNode extends Node {
-        @Children private final ForeignToLLVM[] toLLVM;
+        @Children private final ToLLVMNode[] toLLVM;
 
         PackForeignArgumentsNode(Type[] parameterTypes, int argumentsLength) {
-            this.toLLVM = new ForeignToLLVM[argumentsLength];
+            this.toLLVM = new ToLLVMNode[argumentsLength];
             for (int i = 0; i < parameterTypes.length; i++) {
-                toLLVM[i] = ForeignToLLVM.create(parameterTypes[i]);
+                toLLVM[i] = ToLLVMNode.createNode(ToLLVMNode.convert(parameterTypes[i]));
             }
             for (int i = parameterTypes.length; i < argumentsLength; i++) {
-                toLLVM[i] = ForeignToLLVM.create(ForeignToLLVMType.ANY);
+                toLLVM[i] = ToLLVMNode.createNode(Object.class);
             }
         }
 
@@ -90,17 +87,17 @@ abstract class LLVMForeignCallNode extends LLVMNode {
     }
 
     protected static class SlowPackForeignArgumentsNode extends Node {
-        @Child SlowPathForeignToLLVM slowConvert = ForeignToLLVM.createSlowPathNode();
+        @Child ToLLVMNode slowConvert = ToLLVMNode.createNode(null);
 
         Object[] pack(LLVMFunctionDescriptor function, Object[] arguments, long stackPointer) {
             int actualArgumentsLength = Math.max(arguments.length, function.getType().getArgumentTypes().length);
             final Object[] packedArguments = new Object[1 + actualArgumentsLength];
             packedArguments[0] = stackPointer;
             for (int i = 0; i < function.getType().getArgumentTypes().length; i++) {
-                packedArguments[i + 1] = slowConvert.convert(function.getType().getArgumentTypes()[i], arguments[i]);
+                packedArguments[i + 1] = slowConvert.slowConvert(arguments[i], ToLLVMNode.convert(function.getType().getArgumentTypes()[i]));
             }
             for (int i = function.getType().getArgumentTypes().length; i < arguments.length; i++) {
-                packedArguments[i + 1] = slowConvert.convert(ForeignToLLVMType.ANY, arguments[i]);
+                packedArguments[i + 1] = slowConvert.slowConvert(arguments[i]);
             }
             return packedArguments;
         }

@@ -36,8 +36,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress.LLVMVirtualAllocationAddressTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionHandle;
@@ -46,6 +44,7 @@ import com.oracle.truffle.llvm.runtime.LLVMSharedGlobalVariable;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalVariable;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
@@ -205,13 +204,17 @@ public abstract class LLVMDataEscapeNode extends Node {
     }
 
     @Specialization
-    public TruffleObject escapingJavaByteArray(LLVMVirtualAllocationAddress address, LLVMContext context) {
-        return new LLVMVirtualAllocationAddressTruffleObject(address.copy());
-    }
-
-    @Specialization
     public Object escapingTruffleObject(LLVMGlobalVariable escapingValue, LLVMContext context) {
         return new LLVMSharedGlobalVariable(escapingValue, context);
+    }
+
+    public boolean notLLVM(TruffleObject v) {
+        return LLVMExpressionNode.notLLVM(v);
+    }
+
+    @Specialization(guards = {"notLLVM(escapingValue)"})
+    public Object escapingTruffleObject(TruffleObject escapingValue, LLVMContext context) {
+        return escapingValue;
     }
 
     @Specialization(guards = "escapingValue == null")
@@ -233,10 +236,10 @@ public abstract class LLVMDataEscapeNode extends Node {
             return ((LLVMTruffleObject) value).getObject();
         } else if (value instanceof LLVMTruffleObject) {
             throw new IllegalStateException("TruffleObject after pointer arithmetic must not leave Sulong.");
-        } else if (value instanceof LLVMVirtualAllocationAddress) {
-            return new LLVMVirtualAllocationAddressTruffleObject(((LLVMVirtualAllocationAddress) value).copy());
         } else if (value instanceof LLVMGlobalVariable) {
             return new LLVMSharedGlobalVariable((LLVMGlobalVariable) value, context);
+        } else if (value instanceof TruffleObject && LLVMExpressionNode.notLLVM((TruffleObject) value)) {
+            return value;
         } else if (value == null) {
             return new LLVMTruffleAddress(LLVMAddress.nullPointer(), new PointerType(null), context);
         } else {
