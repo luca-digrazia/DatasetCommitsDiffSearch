@@ -137,10 +137,12 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                 return this;
             }
 
+            assert targetMethod.getDeclaringClass().asExactType() == null : "should have been handled by canBeStaticallyBound";
+
             // check if the type of the receiver can narrow the result
             ValueNode receiver = receiver();
             ResolvedJavaType type = StampTool.typeOrNull(receiver);
-            if (type != null && (invoke().stateAfter() != null || invoke().stateDuring() != null)) {
+            if (type != null) {
                 // either the holder class is exact, or the receiver object has an exact type
                 ResolvedJavaMethod resolvedMethod = type.resolveMethod(targetMethod, invoke().getContextType());
                 if (resolvedMethod != null && (resolvedMethod.canBeStaticallyBound() || StampTool.isExactType(receiver))) {
