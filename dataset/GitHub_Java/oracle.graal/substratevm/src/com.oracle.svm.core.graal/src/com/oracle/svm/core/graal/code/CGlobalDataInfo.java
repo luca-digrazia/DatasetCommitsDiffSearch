@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,7 +31,6 @@ import org.graalvm.word.Pointer;
 import com.oracle.svm.core.c.CGlobalData;
 import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.CGlobalDataImpl;
-import com.oracle.svm.core.util.VMError;
 
 public final class CGlobalDataInfo {
     public static final String CGLOBALDATA_BASE_SYMBOL_NAME = "__svm_cglobaldata_base";
@@ -67,7 +64,6 @@ public final class CGlobalDataInfo {
     }
 
     public int getOffset() {
-        VMError.guarantee(offset >= 0, "Offset has not been initialized");
         return offset;
     }
 
@@ -77,10 +73,5 @@ public final class CGlobalDataInfo {
 
     public byte[] getBytes() {
         return bytes;
-    }
-
-    @Override
-    public String toString() {
-        return data.toString();
     }
 }

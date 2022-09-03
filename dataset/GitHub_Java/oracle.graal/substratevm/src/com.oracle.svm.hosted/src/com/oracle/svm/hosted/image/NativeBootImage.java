@@ -38,7 +38,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.oracle.svm.core.graal.posix.PosixCEntryPointSnippets;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
@@ -79,7 +78,6 @@ import com.oracle.svm.hosted.meta.MethodPointer;
 import jdk.vm.ci.code.site.DataSectionReference;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaMethod.Parameter;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public abstract class NativeBootImage extends AbstractBootImage {
@@ -176,11 +174,8 @@ public abstract class NativeBootImage extends AbstractBootImage {
             writer.append(sep);
             sep = ", ";
             writer.append(CSourceCodeWriter.findCTypeName(metaAccess, nativeLibs, (ResolvedJavaType) m.getSignature().getParameterType(i, m.getDeclaringClass())));
-            Parameter param = m.getParameters()[i];
-            if (param.isNamePresent()) {
-                writer.append(" ");
-                writer.append(param.getName());
-            }
+            writer.append(" ");
+            writer.append(m.getParameters()[i].getName());
         }
         writer.appendln(");");
         writer.appendln();
@@ -268,20 +263,21 @@ public abstract class NativeBootImage extends AbstractBootImage {
             codeCache.writeConstants(roDataBuffer);
             // - Non-heap global data goes at the beginning of the read-write data section.
             cGlobals.writeData(rwDataBuffer);
-            objectFile.createDefinedDataSymbol(CGlobalDataInfo.CGLOBALDATA_BASE_SYMBOL_NAME, rwDataSection.getElement(), Math.toIntExact(RWDATA_CGLOBALS_PARTITION_OFFSET));
+            objectFile.createDefinedSymbol(CGlobalDataInfo.CGLOBALDATA_BASE_SYMBOL_NAME, rwDataSection.getElement(), Math.toIntExact(RWDATA_CGLOBALS_PARTITION_OFFSET), false);
             // The read-only and writable partitions of the native image heap follow in the
             // read-only and read-write sections, respectively.
             heap.writeHeap(debug, roDataBuffer, rwDataBuffer);
-
-            if (SubstrateOptions.UseHeapBaseRegister.getValue()) {
-                objectFile.createDefinedDataSymbol(PosixCEntryPointSnippets.HEAP_BASE, rwDataSection.getElement(), Math.toIntExact(rwHeapPartitionOffset));
-            }
 
             // Mark the sections with the relocations from the maps.
             // - "null" as the objectMap is because relocations from text are always to constants.
             markRelocationSitesFromMaps(textBuffer, textImpl, null);
             markRelocationSitesFromMaps(roDataBuffer, roDataImpl, heap.objects);
             markRelocationSitesFromMaps(rwDataBuffer, rwDataImpl, heap.objects);
+
+            if (SubstrateOptions.UseHeapBaseRegister.getValue()) {
+                /* The symbol name must match the imported name in libchelper/heapbase.c */
+                objectFile.createDefinedSymbol("__svm_heap_base", rwDataSection.getElement(), Math.toIntExact(rwHeapPartitionOffset), false);
+            }
         }
 
         // [Footnote 1]
@@ -398,7 +394,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             if (data.symbolName != null) {
                 int offsetInSection = Math.toIntExact(RWDATA_CGLOBALS_PARTITION_OFFSET + dataInfo.getOffset());
                 if (data.bytesSupplier != null || data.sizeSupplier != null) { // Create symbol
-                    objectFile.createDefinedDataSymbol(data.symbolName, rwDataSection, offsetInSection);
+                    objectFile.createDefinedSymbol(data.symbolName, rwDataSection, offsetInSection, false);
                 } else { // No data, so this is purely a symbol reference: create relocation
                     if (objectFile.getSymbolTable().getSymbol(data.symbolName) == null) {
                         objectFile.createUndefinedSymbol(data.symbolName, true);
