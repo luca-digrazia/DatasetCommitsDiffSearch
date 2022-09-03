@@ -466,7 +466,7 @@ public class BasicNodeFactory implements NodeFactory {
             retOffsets = alloca.getOffsets();
         }
 
-        Parser asmParser = new Parser(asmExpression, asmFlags, argTypes, retType, retTypes, retOffsets, sourceSection);
+        Parser asmParser = new Parser(asmExpression, asmFlags, argTypes, retType, retTypes, retOffsets);
         LLVMInlineAssemblyRootNode assemblyRoot = asmParser.Parse();
         LLVMFunctionDescriptor asm = LLVMFunctionDescriptor.createDescriptor(runtime.getContext(), "<asm>", new FunctionType(MetaType.UNKNOWN, new Type[0], false), -1);
         asm.declareInSulong(Truffle.getRuntime().createCallTarget(assemblyRoot), false);
@@ -669,10 +669,8 @@ public class BasicNodeFactory implements NodeFactory {
                 return LLVMFAbsNodeGen.create(args[1], sourceSection);
             case "@llvm.returnaddress":
                 return LLVMReturnAddressNodeGen.create(args[1], sourceSection);
-            case "@llvm.lifetime.start.p0i8":
             case "@llvm.lifetime.start":
                 return LLVMLifetimeStartNodeGen.create(args[1], args[2], sourceSection);
-            case "@llvm.lifetime.end.p0i8":
             case "@llvm.lifetime.end":
                 return LLVMLifetimeEndNodeGen.create(args[1], args[2], sourceSection);
             case "@llvm.invariant.start":
