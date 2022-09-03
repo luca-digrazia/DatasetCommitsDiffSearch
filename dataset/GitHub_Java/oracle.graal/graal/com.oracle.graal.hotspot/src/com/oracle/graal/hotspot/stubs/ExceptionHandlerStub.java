@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.PatchReturnAddressNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.stubs.StubUtil.*;
@@ -32,8 +33,9 @@ import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
@@ -48,8 +50,8 @@ import com.oracle.graal.word.*;
  */
 public class ExceptionHandlerStub extends SnippetStub {
 
-    public ExceptionHandlerStub(Providers providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super(providers, target, linkage);
+    public ExceptionHandlerStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+        super(runtime, replacements, target, linkage);
     }
 
     /**
@@ -97,13 +99,9 @@ public class ExceptionHandlerStub extends SnippetStub {
             if (currentException != null) {
                 fatal("exception object in thread must be null, not %p", Word.fromObject(currentException).rawValue());
             }
-            if (cAssertionsEnabled()) {
-                // This thread-local is only cleared in DEBUG builds of the VM
-                // (see OptoRuntime::generate_exception_blob)
-                Word currentExceptionPc = readExceptionPc(thread());
-                if (currentExceptionPc.notEqual(Word.zero())) {
-                    fatal("exception PC in thread must be zero, not %p", currentExceptionPc.rawValue());
-                }
+            Word currentExceptionPc = readExceptionPc(thread());
+            if (currentExceptionPc.notEqual(Word.zero())) {
+                fatal("exception PC in thread must be zero, not %p", currentExceptionPc.rawValue());
             }
         }
     }
@@ -119,19 +117,12 @@ public class ExceptionHandlerStub extends SnippetStub {
         return Boolean.getBoolean("graal.logExceptionHandlerStub");
     }
 
-    /**
-     * Determines if either Java assertions are enabled for {@link ExceptionHandlerStub} or if this
-     * is a HotSpot build where the ASSERT mechanism is enabled.
-     * <p>
-     * This first check relies on the per-class assertion status which is why this method must be in
-     * this class.
-     */
     @Fold
     @SuppressWarnings("all")
     private static boolean assertionsEnabled() {
         boolean enabled = false;
         assert enabled = true;
-        return enabled || cAssertionsEnabled();
+        return enabled || graalRuntime().getConfig().cAssertions;
     }
 
     public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_PC = descriptorFor(ExceptionHandlerStub.class, "exceptionHandlerForPc");

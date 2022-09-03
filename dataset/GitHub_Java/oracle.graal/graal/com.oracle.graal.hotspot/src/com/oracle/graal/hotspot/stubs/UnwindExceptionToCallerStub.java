@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerInCallerNode.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
@@ -32,9 +33,10 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.phases.util.*;
+import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
@@ -45,8 +47,8 @@ import com.oracle.graal.word.*;
  */
 public class UnwindExceptionToCallerStub extends SnippetStub {
 
-    public UnwindExceptionToCallerStub(Providers providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super(providers, target, linkage);
+    public UnwindExceptionToCallerStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotForeignCallLinkage linkage) {
+        super(runtime, replacements, target, linkage);
     }
 
     /**
@@ -87,19 +89,12 @@ public class UnwindExceptionToCallerStub extends SnippetStub {
         return Boolean.getBoolean("graal.logUnwindExceptionToCallerStub");
     }
 
-    /**
-     * Determines if either Java assertions are enabled for {@link UnwindExceptionToCallerStub} or
-     * if this is a HotSpot build where the ASSERT mechanism is enabled.
-     * <p>
-     * This first check relies on the per-class assertion status which is why this method must be in
-     * this class.
-     */
     @Fold
     @SuppressWarnings("all")
     private static boolean assertionsEnabled() {
         boolean enabled = false;
         assert enabled = true;
-        return enabled || cAssertionsEnabled();
+        return enabled || graalRuntime().getConfig().cAssertions;
     }
 
     public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = descriptorFor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress");
