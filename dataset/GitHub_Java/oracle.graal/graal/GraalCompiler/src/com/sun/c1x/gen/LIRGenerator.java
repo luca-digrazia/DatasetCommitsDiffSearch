@@ -394,6 +394,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitExceptionObject(ExceptionObject x) {
+        assert currentBlock.isExceptionEntry() : "ExceptionObject only allowed in exception handler block";
         assert currentBlock.next() == x : "ExceptionObject must be first instruction of block";
 
         // no moves are created for phi functions at the begin of exception
@@ -579,6 +580,10 @@ public abstract class LIRGenerator extends ValueVisitor {
     public void visitLookupSwitch(LookupSwitch x) {
         CiValue tag = load(x.value());
         setNoResult(x);
+
+        if (x.isSafepoint()) {
+            emitXir(xir.genSafepoint(site(x)), x, stateFor(x), null, false);
+        }
 
         // move values into phi locations
         moveToPhi(x.stateAfter());
@@ -835,6 +840,10 @@ public abstract class LIRGenerator extends ValueVisitor {
         CiValue tag = value.result();
         setNoResult(x);
 
+        if (x.isSafepoint()) {
+            emitXir(xir.genSafepoint(site(x)), x, stateFor(x), null, false);
+        }
+
         // move values into phi locations
         moveToPhi(x.stateAfter());
 
@@ -876,7 +885,7 @@ public abstract class LIRGenerator extends ValueVisitor {
 
     @Override
     public void visitDeoptimize(Deoptimize deoptimize) {
-        DeoptimizationStub stub = new DeoptimizationStub(deoptimize.stateBefore());
+        DeoptimizationStub stub = new DeoptimizationStub(lastState);
         addDeoptimizationStub(stub);
         lir.branch(Condition.TRUE, stub.label, stub.info);
     }
@@ -1437,7 +1446,7 @@ public abstract class LIRGenerator extends ValueVisitor {
         }
 
         assert state != null;
-        return new LIRDebugInfo(state, x.exceptionEdge());
+        return new LIRDebugInfo(state, x.exceptionHandlers());
     }
 
     List<CiValue> visitInvokeArguments(CiCallingConvention cc, Invoke x, List<CiValue> pointerSlots) {
@@ -1601,16 +1610,5 @@ public abstract class LIRGenerator extends ValueVisitor {
     @Override
     public void visitFrameState(FrameState i) {
         // nothing to do for now
-    }
-
-    @Override
-    public void visitUnwind(Unwind x) {
-        // TODO ls: this needs some thorough testing...
-        CiValue operand = resultOperandFor(x.kind);
-        CiValue result = force(x.exception(), operand);
-        ArrayList<CiValue> args = new ArrayList<CiValue>(1);
-        args.add(result);
-        lir.callRuntime(CiRuntimeCall.UnwindException, CiValue.IllegalValue, args, null);
-        setNoResult(x);
     }
 }
