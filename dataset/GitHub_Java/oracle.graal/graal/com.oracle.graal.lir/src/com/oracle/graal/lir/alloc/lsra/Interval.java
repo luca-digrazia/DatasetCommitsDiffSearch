@@ -30,10 +30,11 @@ import java.util.*;
 
 import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.debug.*;
+
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.util.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 
 /**
@@ -291,7 +292,7 @@ public final class Interval {
     /**
      * Constants used in optimization of spilling of an interval.
      */
-    public enum SpillState {
+    enum SpillState {
         /**
          * Starting state of calculation: no definition found yet.
          */
@@ -568,7 +569,7 @@ public final class Interval {
         return kind;
     }
 
-    public void setKind(LIRKind kind) {
+    void setKind(LIRKind kind) {
         assert isRegister(operand) || this.kind().equals(LIRKind.Illegal) || this.kind().equals(kind) : "overwriting existing type";
         this.kind = kind;
     }
@@ -577,7 +578,7 @@ public final class Interval {
         return first;
     }
 
-    public int from() {
+    int from() {
         return first.from;
     }
 
@@ -593,11 +594,11 @@ public final class Interval {
         return usePosList.size();
     }
 
-    public void setLocationHint(Interval interval) {
+    void setLocationHint(Interval interval) {
         locationHint = interval;
     }
 
-    public boolean isSplitParent() {
+    boolean isSplitParent() {
         return splitParent == this;
     }
 
@@ -646,22 +647,22 @@ public final class Interval {
         return splitParent().spillState;
     }
 
-    public int spillDefinitionPos() {
+    int spillDefinitionPos() {
         return splitParent().spillDefinitionPos;
     }
 
-    public void setSpillState(SpillState state) {
+    void setSpillState(SpillState state) {
         assert state.ordinal() >= spillState().ordinal() : "state cannot decrease";
         splitParent().spillState = state;
     }
 
-    public void setSpillDefinitionPos(int pos) {
+    void setSpillDefinitionPos(int pos) {
         assert spillState() == SpillState.SpillInDominator || spillState() == SpillState.NoDefinitionFound || spillDefinitionPos() == -1 : "cannot set the position twice";
         splitParent().spillDefinitionPos = pos;
     }
 
     // returns true if this interval has a shadow copy on the stack that is always correct
-    public boolean alwaysInMemory() {
+    boolean alwaysInMemory() {
         return (splitParent().spillState == SpillState.SpillInDominator || splitParent().spillState == SpillState.StoreAtDefinition || splitParent().spillState == SpillState.StartInMemory) &&
                         !canMaterialize();
     }
@@ -738,7 +739,7 @@ public final class Interval {
     /**
      * Sets the value which is used for re-materialization.
      */
-    public void addMaterializationValue(JavaConstant value) {
+    void addMaterializationValue(JavaConstant value) {
         if (numMaterializationValuesAdded == 0) {
             materializedValue = value;
         } else {
@@ -1025,8 +1026,8 @@ public final class Interval {
         return prev;
     }
 
-    public void addUsePos(int pos, RegisterPriority registerPriority) {
-        assert covers(pos, LIRInstruction.OperandMode.USE) : String.format("use position %d not covered by live range of interval %s", pos, this);
+    void addUsePos(int pos, RegisterPriority registerPriority) {
+        assert covers(pos, LIRInstruction.OperandMode.USE) : "use position not covered by live range";
 
         // do not add use positions for precolored intervals because they are never used
         if (registerPriority != RegisterPriority.None && isVariable(operand)) {
@@ -1051,7 +1052,7 @@ public final class Interval {
         }
     }
 
-    public void addRange(int from, int to) {
+    void addRange(int from, int to) {
         assert from < to : "invalid range";
         assert first() == Range.EndMarker || to < first().next.from : "not inserting at begin of interval";
         assert from <= first().to : "not inserting at begin of interval";
