@@ -30,6 +30,7 @@ import com.oracle.graal.amd64.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
+import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.compiler.amd64.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.gen.*;
@@ -242,7 +243,16 @@ public class AMD64HotSpotNodeLIRBuilder extends AMD64NodeLIRBuilder implements H
         Value expected = gen.loadNonConst(operand(x.expectedValue()));
         Variable newVal = gen.load(operand(x.newValue()));
 
-        AMD64AddressValue address = getGen().emitAddress(operand(x.object()), 0, operand(x.offset()), 1);
+        int disp = 0;
+        AMD64AddressValue address;
+        Value index = operand(x.offset());
+        if (ValueUtil.isConstant(index) && NumUtil.isInt(ValueUtil.asConstant(index).asLong() + disp)) {
+            assert !gen.getCodeCache().needsDataPatch(asConstant(index));
+            disp += (int) ValueUtil.asConstant(index).asLong();
+            address = new AMD64AddressValue(kind, gen.load(operand(x.object())), disp);
+        } else {
+            address = new AMD64AddressValue(kind, gen.load(operand(x.object())), gen.load(index), Scale.Times1, disp);
+        }
 
         RegisterValue raxLocal = AMD64.rax.asValue(kind);
         gen.emitMove(raxLocal, expected);
