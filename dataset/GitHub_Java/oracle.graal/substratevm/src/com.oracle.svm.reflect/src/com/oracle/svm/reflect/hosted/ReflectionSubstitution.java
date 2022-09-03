@@ -27,15 +27,18 @@ package com.oracle.svm.reflect.hosted;
 /* Allow imports of java.lang.reflect and sun.misc.ProxyGenerator: Checkstyle: allow reflection. */
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.stream.Collectors;
 
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicInteger;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ImageClassLoader;
@@ -82,8 +85,42 @@ final class ReflectionSubstitution extends CustomSubstitution<ReflectionSubstitu
         imageClassLoader = classLoader;
     }
 
+    private static String getProxyTypeName(String typeName) {
+        return typeName.replaceAll("[$.\\[;]", PROXY_NAME_SEPARATOR);
+    }
+
     static String getStableProxyName(Member member) {
-        return "com.oracle.svm.reflect." + SubstrateUtil.uniqueShortName(member);
+        String className = getProxyTypeName(member.getDeclaringClass().getName());
+        String memberName = uniqueMemberName(member);
+        return "com.oracle.svm.reflect.proxies.Proxy" + PROXY_NAME_SEPARATOR + className + PROXY_NAME_SEPARATOR + memberName;
+    }
+
+    private static String uniqueMemberName(Member member) {
+        String uniqueMemberName;
+        if (member instanceof Field) {
+            uniqueMemberName = member.getName();
+        } else if (member instanceof Executable) {
+            if (member instanceof Constructor) {
+                uniqueMemberName = "constructor";
+            } else if (member instanceof Method) {
+                uniqueMemberName = member.getName();
+                uniqueMemberName += PROXY_NAME_SEPARATOR;
+                uniqueMemberName += getProxyTypeName(((Method) member).getReturnType().getName());
+            } else {
+                throw VMError.shouldNotReachHere();
+            }
+
+            uniqueMemberName += PROXY_NAME_SEPARATOR;
+            uniqueMemberName += Arrays.stream(((Executable) member).getParameters())
+                            .map(Parameter::getType)
+                            .map(Class::getName)
+                            .map(ReflectionSubstitution::getProxyTypeName)
+                            .collect(Collectors.joining(PROXY_NAME_SEPARATOR));
+        } else {
+            throw VMError.shouldNotReachHere("Proxies are defined only for Fields, Methods, and Constructors.");
+        }
+
+        return uniqueMemberName;
     }
 
     private static Class<?> getAccessorInterface(Member member) {
@@ -99,7 +136,7 @@ final class ReflectionSubstitution extends CustomSubstitution<ReflectionSubstitu
 
     /** Track classes in the `reflect` package across JDK versions. */
     private static Class<?> packageJdkInternalReflectClassForName(String className) {
-        final String packageName = (JavaVersionUtil.Java8OrEarlier ? "sun.reflect." : "jdk.internal.reflect.");
+        final String packageName = (GraalServices.Java8OrEarlier ? "sun.reflect." : "jdk.internal.reflect.");
         try {
             /* { Allow reflection in hosted code. Checkstyle: stop. */
             return Class.forName(packageName + className);
@@ -115,7 +152,7 @@ final class ReflectionSubstitution extends CustomSubstitution<ReflectionSubstitu
         /* { Allow reflection in hosted code. Checkstyle: stop. */
         try {
             if (generateProxyMethod == null) {
-                final String packageName = (JavaVersionUtil.Java8OrEarlier ? "sun.misc." : "java.lang.reflect.");
+                final String packageName = (GraalServices.Java8OrEarlier ? "sun.misc." : "java.lang.reflect.");
                 generateProxyMethod = Class.forName(packageName + "ProxyGenerator").getDeclaredMethod("generateProxyClass", String.class, Class[].class);
                 generateProxyMethod.setAccessible(true);
             }

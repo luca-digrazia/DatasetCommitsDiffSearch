@@ -71,7 +71,7 @@ public class LambdaProxyRenamingSubstitutionProcessor extends SubstitutionProces
     private final BigBang bb;
 
     private final ConcurrentHashMap<ResolvedJavaType, LambdaSubstitutionType> typeSubstitutions;
-    private final Set<String> uniqueLambdaProxyNames;
+    private final Set<String> nameSet;
 
     static boolean isLambdaType(ResolvedJavaType type) {
         return type.isFinalFlagSet() &&
@@ -81,7 +81,7 @@ public class LambdaProxyRenamingSubstitutionProcessor extends SubstitutionProces
 
     LambdaProxyRenamingSubstitutionProcessor(BigBang bigBang) {
         this.typeSubstitutions = new ConcurrentHashMap<>();
-        this.uniqueLambdaProxyNames = new HashSet<>();
+        this.nameSet = new HashSet<>();
         this.bb = bigBang;
     }
 
@@ -133,26 +133,26 @@ public class LambdaProxyRenamingSubstitutionProcessor extends SubstitutionProces
             if (!lambdaTargetInvokeOption.isPresent()) {
                 throw VMError.shouldNotReachHere("Lambda without a target invoke.");
             }
-            String lambdaTargetName = createStableLambdaName(key, lambdaTargetInvokeOption.get().getTargetMethod());
-            return new LambdaSubstitutionType(key, findUniqueLambdaProxyName(lambdaTargetName));
+            String stableName = createStableLambdaName(key, lambdaTargetInvokeOption.get().getTargetMethod());
+            return new LambdaSubstitutionType(key, findUniqueNameForSameTarget(stableName));
         });
     }
 
     /**
      * Finds a unique name for a lambda proxies with a same target originating from the same class.
      *
-     * NOTE: the name truly stable only in a single threaded build.
+     * NOTE: this is stable only in a single threaded build.
      */
-    private String findUniqueLambdaProxyName(String lambdaTargetName) {
-        synchronized (uniqueLambdaProxyNames) {
-            String newStableName = lambdaTargetName;
-            CharSequence stableNameBase = lambdaTargetName.subSequence(0, lambdaTargetName.length() - 1);
+    private String findUniqueNameForSameTarget(String stableName) {
+        synchronized (nameSet) {
+            String newStableName = stableName;
+            CharSequence stableNameBase = stableName.subSequence(0, stableName.length() - 1);
             int i = 1;
-            while (uniqueLambdaProxyNames.contains(newStableName)) {
+            while (nameSet.contains(newStableName)) {
                 newStableName = stableNameBase + "_" + i + ";";
                 i += 1;
             }
-            uniqueLambdaProxyNames.add(newStableName);
+            nameSet.add(stableName);
             return newStableName;
         }
     }
