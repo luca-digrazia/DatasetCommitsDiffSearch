@@ -29,48 +29,53 @@
  */
 package com.oracle.truffle.llvm.parser;
 
-import java.util.List;
-
-import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
-import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.llvm.runtime.LLVMScope;
 
 public final class LLVMParserResult {
 
-    private final LLVMParserRuntime runtime;
-    private final List<FunctionSymbol> externalFunctions;
-    private final List<GlobalVariable> definedGlobals;
-    private final List<GlobalVariable> externalGlobals;
-    private final List<String> importedSymbols;
+    private final LLVMScope scope;
+    private final RootCallTarget mainCallTarget;
+    private final RootCallTarget globalVarInits;
+    private final RootCallTarget globalVarDeallocs;
+    private final RootCallTarget constructorFunctions;
+    private final RootCallTarget destructorFunctions;
 
-    LLVMParserResult(LLVMParserRuntime runtime,
-                    List<FunctionSymbol> externalFunctions,
-                    List<GlobalVariable> definedGlobals,
-                    List<GlobalVariable> externalGlobals,
-                    List<String> importedSymbols) {
-        this.runtime = runtime;
-        this.externalFunctions = externalFunctions;
-        this.definedGlobals = definedGlobals;
-        this.externalGlobals = externalGlobals;
-        this.importedSymbols = importedSymbols;
+    LLVMParserResult(LLVMScope scope,
+                    RootCallTarget mainCallTarget,
+                    RootCallTarget globalVarInits,
+                    RootCallTarget globalVarDeallocs,
+                    RootCallTarget constructorFunctions,
+                    RootCallTarget destructorFunctions) {
+        this.scope = scope;
+        this.mainCallTarget = mainCallTarget;
+        this.globalVarInits = globalVarInits;
+        this.globalVarDeallocs = globalVarDeallocs;
+        this.constructorFunctions = constructorFunctions;
+        this.destructorFunctions = destructorFunctions;
     }
 
-    public LLVMParserRuntime getRuntime() {
-        return runtime;
+    public LLVMScope getScope() {
+        return scope;
     }
 
-    public List<FunctionSymbol> getExternalFunctions() {
-        return externalFunctions;
+    public RootCallTarget getMainCallTarget() {
+        return mainCallTarget;
     }
 
-    public List<GlobalVariable> getDefinedGlobals() {
-        return definedGlobals;
+    public RootCallTarget getGlobalVarInit() {
+        return globalVarInits;
     }
 
-    public List<GlobalVariable> getExternalGlobals() {
-        return externalGlobals;
+    public RootCallTarget getGlobalVarDealloc() {
+        return globalVarDeallocs;
     }
 
-    public List<String> getImportedSymbols() {
-        return importedSymbols;
+    public RootCallTarget getConstructorFunction() {
+        return constructorFunctions;
+    }
+
+    public RootCallTarget getDestructorFunction() {
+        return destructorFunctions;
     }
 }

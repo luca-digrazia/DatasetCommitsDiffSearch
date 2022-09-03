@@ -38,7 +38,6 @@ import java.util.Base64;
 import java.util.List;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
@@ -48,7 +47,6 @@ import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -110,17 +108,8 @@ public final class Runner {
         @Resolve(message = "READ")
         abstract static class ReadNode extends Node {
 
-            Object access(SulongLibrary boxed, String name) {
-                Object ret = lookup(boxed, name);
-                if (ret == null) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw UnknownIdentifierException.raise(name);
-                }
-                return ret;
-            }
-
             @TruffleBoundary
-            Object lookup(SulongLibrary boxed, String name) {
+            Object access(SulongLibrary boxed, String name) {
                 if (name.startsWith("@")) {
                     // safeguard: external users are never supposed to see the "@"
                     // TODO remove after getting rid of the @
