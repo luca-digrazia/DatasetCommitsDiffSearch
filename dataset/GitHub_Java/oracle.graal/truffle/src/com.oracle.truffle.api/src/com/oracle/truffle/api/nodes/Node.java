@@ -495,14 +495,13 @@ public abstract class Node implements NodeInterface, Cloneable {
         return null;
     }
 
-    protected void reportPolymorphicSpecialize() {
+    protected void splitCandidate() {
         CompilerAsserts.neverPartOfCompilation();
-        Node.ACCESSOR.nodes().reportPolymorphicSpecialize(this);
+        Node.ACCESSOR.nodes().splitCandidate(this);
     }
-
     protected void reportNodeCostChange(NodeCost oldCost, NodeCost newCost) {
         if (oldCost.compareTo(newCost) < 0 && newCost == NodeCost.POLYMORPHIC) {
-            reportPolymorphicSpecialize();
+            splitCandidate();
         }
     }
 
