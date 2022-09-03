@@ -139,11 +139,11 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
             }
 
             RegisterValue rax = AMD64.rax.asValue(kind);
-            emitMove(rax, expected);
+            emitMove(expected, rax);
             append(new CompareAndSwapOp(rax, address, rax, newVal));
 
             Variable result = newVariable(x.kind());
-            emitMove(result, rax);
+            emitMove(rax, result);
             setResult(x, result);
         }
 
@@ -161,9 +161,9 @@ public class AMD64HotSpotBackend extends HotSpotBackend {
         @Override
         protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
             Value metaspaceMethod = AMD64.rbx.asValue();
-            emitMove(metaspaceMethod, operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()));
+            emitMove(operand(((HotSpotIndirectCallTargetNode) callTarget).metaspaceMethod()), metaspaceMethod);
             Value targetAddress = AMD64.rax.asValue();
-            emitMove(targetAddress, operand(callTarget.computedAddress()));
+            emitMove(operand(callTarget.computedAddress()), targetAddress);
             append(new AMD64IndirectCallOp(callTarget.target(), result, parameters, temps, metaspaceMethod, targetAddress, callState));
         }
     }

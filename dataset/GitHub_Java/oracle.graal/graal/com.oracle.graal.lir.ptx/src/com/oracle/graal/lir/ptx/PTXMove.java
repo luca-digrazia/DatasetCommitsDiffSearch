@@ -157,27 +157,11 @@ public class PTXMove {
     public static class LeaOp extends PTXLIRInstruction {
 
         @Def({REG}) protected Value result;
-        @Use({ADDR, UNINITIALIZED}) protected PTXAddress address;
+        @Use({ADDR, STACK, UNINITIALIZED}) protected Value address;
 
-        public LeaOp(Value result, PTXAddress address) {
+        public LeaOp(Value result, Value address) {
             this.result = result;
             this.address = address;
-        }
-
-        @Override
-        public void emitCode(TargetMethodAssembler tasm, PTXAssembler masm) {
-            throw new InternalError("NYI");
-        }
-    }
-
-    public static class StackLeaOp extends PTXLIRInstruction {
-
-        @Def({REG}) protected Value result;
-        @Use({STACK, UNINITIALIZED}) protected StackSlot slot;
-
-        public StackLeaOp(Value result, StackSlot slot) {
-            this.result = result;
-            this.slot = slot;
         }
 
         @Override
