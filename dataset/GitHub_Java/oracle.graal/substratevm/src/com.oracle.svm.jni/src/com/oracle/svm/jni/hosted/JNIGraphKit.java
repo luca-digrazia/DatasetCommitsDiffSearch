@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,7 +24,6 @@ package com.oracle.svm.jni.hosted;
 
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
-import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
@@ -48,24 +45,26 @@ class JNIGraphKit extends HostedGraphKit {
     }
 
     private InvokeWithExceptionNode createStaticInvoke(String name, ValueNode... args) {
-        return createInvokeWithExceptionAndUnwind(findMethod(JNIGeneratedMethodSupport.class, name, true), InvokeKind.Static, getFrameState(), bci(), args);
+        return createInvokeWithExceptionAndUnwind(findMethod(JNIGeneratedMethodSupport.class, name, true), InvokeKind.Static, getFrameState(), bci(), bci(), args);
     }
 
-    private FixedWithNextNode createStaticInvokeRetainException(String name, ValueNode... args) {
+    private InvokeWithExceptionNode createStaticInvokeRetainException(String name, ValueNode... args) {
         ResolvedJavaMethod method = findMethod(JNIGeneratedMethodSupport.class, name, true);
         int invokeBci = bci();
-        startInvokeWithException(method, InvokeKind.Static, getFrameState(), invokeBci, args);
+        int exceptionEdgeBci = bci();
+        InvokeWithExceptionNode invoke = startInvokeWithException(method, InvokeKind.Static, getFrameState(), invokeBci, exceptionEdgeBci, args);
         exceptionPart();
         ExceptionObjectNode exception = exceptionObject();
         setPendingException(exception);
         endInvokeWithException();
-        return lastFixedNode;
+        return invoke;
     }
 
     public InvokeWithExceptionNode nativeCallAddress(ValueNode linkage) {
         ResolvedJavaMethod method = findMethod(JNIGeneratedMethodSupport.class, "nativeCallAddress", true);
         int invokeBci = bci();
-        return createInvokeWithExceptionAndUnwind(method, InvokeKind.Static, getFrameState(), invokeBci, linkage);
+        int exceptionEdgeBci = bci();
+        return createInvokeWithExceptionAndUnwind(method, InvokeKind.Static, getFrameState(), invokeBci, exceptionEdgeBci, linkage);
     }
 
     public InvokeWithExceptionNode nativeCallPrologue() {
@@ -111,7 +110,8 @@ class JNIGraphKit extends HostedGraphKit {
     public InvokeWithExceptionNode rethrowPendingException() {
         ResolvedJavaMethod method = findMethod(JNIGeneratedMethodSupport.class, "rethrowPendingException", true);
         int invokeBci = bci();
-        return createInvokeWithExceptionAndUnwind(method, InvokeKind.Static, getFrameState(), invokeBci);
+        int exceptionEdgeBci = bci();
+        return createInvokeWithExceptionAndUnwind(method, InvokeKind.Static, getFrameState(), invokeBci, exceptionEdgeBci);
     }
 
     public InvokeWithExceptionNode pinArrayAndGetAddress(ValueNode array, ValueNode isCopy) {
@@ -122,12 +122,12 @@ class JNIGraphKit extends HostedGraphKit {
         return createStaticInvoke("unpinArrayByAddress", address);
     }
 
-    public FixedWithNextNode getPrimitiveArrayRegionRetainException(JavaKind elementKind, ValueNode array, ValueNode start, ValueNode count, ValueNode buffer) {
+    public InvokeWithExceptionNode getPrimitiveArrayRegionRetainException(JavaKind elementKind, ValueNode array, ValueNode start, ValueNode count, ValueNode buffer) {
         assert elementKind.isPrimitive();
         return createStaticInvokeRetainException("getPrimitiveArrayRegion", createObject(elementKind), array, start, count, buffer);
     }
 
-    public FixedWithNextNode setPrimitiveArrayRegionRetainException(JavaKind elementKind, ValueNode array, ValueNode start, ValueNode count, ValueNode buffer) {
+    public InvokeWithExceptionNode setPrimitiveArrayRegionRetainException(JavaKind elementKind, ValueNode array, ValueNode start, ValueNode count, ValueNode buffer) {
         assert elementKind.isPrimitive();
         return createStaticInvokeRetainException("setPrimitiveArrayRegion", createObject(elementKind), array, start, count, buffer);
     }

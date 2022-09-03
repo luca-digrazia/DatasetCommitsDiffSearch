@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -78,7 +76,6 @@ import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.c.info.ElementInfo;
 import com.oracle.svm.hosted.c.info.StructFieldInfo;
 import com.oracle.svm.hosted.c.info.StructInfo;
-import com.oracle.svm.hosted.code.SimpleSignature;
 import com.oracle.svm.jni.JNIJavaCallWrappers;
 import com.oracle.svm.jni.access.JNINativeLinkage;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
@@ -140,7 +137,7 @@ public final class JNIJavaCallWrapperMethod extends JNIGeneratedMethod {
         this.signature = createSignature(metaAccess);
     }
 
-    private SimpleSignature createSignature(MetaAccessProvider metaAccess) {
+    private JNISignature createSignature(MetaAccessProvider metaAccess) {
         ResolvedJavaType objectHandle = metaAccess.lookupJavaType(JNIObjectHandle.class);
         List<JavaType> args = new ArrayList<>();
         args.add(metaAccess.lookupJavaType(JNIEnvironment.class));
@@ -173,7 +170,7 @@ public final class JNIJavaCallWrapperMethod extends JNIGeneratedMethod {
             // Constructor: returns `this` to implement NewObject
             returnType = objectHandle;
         }
-        return new SimpleSignature(args, returnType);
+        return new JNISignature(args, returnType);
     }
 
     @Override
@@ -310,7 +307,6 @@ public final class JNIJavaCallWrapperMethod extends JNIGeneratedMethod {
                 ValueNode created = kit.append(new NewInstanceNode(receiverClass, true));
                 AbstractMergeNode merge = kit.endIf();
                 receiver = kit.unique(new ValuePhiNode(StampFactory.object(), merge, new ValueNode[]{created, unboxed}));
-                merge.setStateAfter(kit.getFrameState().create(kit.bci(), merge));
             } else {
                 receiver = unboxed;
             }
