@@ -274,7 +274,7 @@ final class Target_java_io_UnixFileSystem {
                 // Other I/O problems cause an error return.
                 continue;
             } else {
-                throw PosixUtils.newIOExceptionWithLastError("Bad pathname");
+                throw new IOException(PosixUtils.lastErrorString("Bad pathname"));
             }
         }
 
@@ -282,7 +282,7 @@ final class Target_java_io_UnixFileSystem {
             // append unresolved subpath to resolved subpath
             String rs = CTypeConversion.toJavaString(r);
             if (rs.length() + 1 + unresolvedPart.length() > maxPathLen) {
-                throw PosixUtils.newIOExceptionWithLastError("Bad pathname");
+                throw new IOException(PosixUtils.lastErrorString("Bad pathname"));
             }
             return PosixUtils.collapse(rs + "/" + unresolvedPart);
         } else {
@@ -397,7 +397,7 @@ final class Target_java_io_UnixFileSystem {
         }
         if (fd < 0) {
             if (fd != EEXIST()) {
-                throw PosixUtils.newIOExceptionWithLastError(path);
+                throw new IOException(PosixUtils.lastErrorString(path));
             }
         } else {
             close(fd);
@@ -512,7 +512,7 @@ final class Target_java_io_FileInputStream {
             }
             return (int) r;
         }
-        throw PosixUtils.newIOExceptionWithLastError("");
+        throw new IOException(PosixUtils.lastErrorString(""));
     }
 
     @Substitute
@@ -522,9 +522,9 @@ final class Target_java_io_FileInputStream {
         int handle = PosixUtils.getFDHandle(fd);
 
         if ((cur = lseek(handle, WordFactory.zero(), SEEK_CUR())).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("Seek error");
+            throw new IOException(PosixUtils.lastErrorString("Seek error"));
         } else if ((end = lseek(handle, WordFactory.signed(n), SEEK_CUR())).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("Seek error");
+            throw new IOException(PosixUtils.lastErrorString("Seek error"));
         }
 
         return end.subtract(cur).rawValue();
@@ -610,9 +610,9 @@ final class Target_java_io_RandomAccessFile {
     private void seek(long pos) throws IOException {
         int handle = PosixUtils.getFDHandle(fd);
         if (pos < 0L) {
-            throw PosixUtils.newIOExceptionWithLastError("Negative seek offset");
+            throw new IOException("Negative seek offset");
         } else if (lseek(handle, WordFactory.signed(pos), SEEK_SET()).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("Seek failed");
+            throw new IOException(PosixUtils.lastErrorString("Seek failed"));
         }
 
     }
@@ -622,7 +622,7 @@ final class Target_java_io_RandomAccessFile {
         SignedWord ret;
         int handle = PosixUtils.getFDHandle(fd);
         if ((ret = lseek(handle, WordFactory.zero(), SEEK_CUR())).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("Seek failed");
+            throw new IOException(PosixUtils.lastErrorString("Seek failed"));
         }
         return ret.rawValue();
     }
@@ -657,11 +657,11 @@ final class Target_java_io_RandomAccessFile {
         int handle = PosixUtils.getFDHandle(fd);
 
         if ((cur = lseek(handle, WordFactory.zero(), SEEK_CUR())).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("Seek failed");
+            throw new IOException(PosixUtils.lastErrorString("Seek failed"));
         } else if ((end = lseek(handle, WordFactory.zero(), SEEK_END())).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("Seek failed");
+            throw new IOException(PosixUtils.lastErrorString("Seek failed"));
         } else if (lseek(handle, cur, SEEK_SET()).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("Seek failed");
+            throw new IOException(PosixUtils.lastErrorString("Seek failed"));
         }
         return end.rawValue();
     }
@@ -672,18 +672,18 @@ final class Target_java_io_RandomAccessFile {
         int handle = PosixUtils.getFDHandle(fd);
 
         if ((cur = lseek(handle, WordFactory.zero(), SEEK_CUR())).equal(WordFactory.signed(-1))) {
-            throw PosixUtils.newIOExceptionWithLastError("setLength failed");
+            throw new IOException(PosixUtils.lastErrorString("setLength failed"));
         }
         if (ftruncate(handle, newLength) == -1) {
-            throw PosixUtils.newIOExceptionWithLastError("setLength failed");
+            throw new IOException(PosixUtils.lastErrorString("setLength failed"));
         }
         if (cur.greaterThan(WordFactory.signed(newLength))) {
             if (lseek(handle, WordFactory.zero(), SEEK_END()).equal(WordFactory.signed(-1))) {
-                throw PosixUtils.newIOExceptionWithLastError("setLength failed");
+                throw new IOException(PosixUtils.lastErrorString("setLength failed"));
             }
         } else {
             if (lseek(handle, cur, SEEK_SET()).equal(WordFactory.signed(-1))) {
-                throw PosixUtils.newIOExceptionWithLastError("setLength failed");
+                throw new IOException(PosixUtils.lastErrorString("setLength failed"));
             }
         }
     }
@@ -737,7 +737,7 @@ final class Target_java_io_Console {
         // 055     if (tcgetattr(tty, &tio) == -1) {
         if (Termios.tcgetattr(tty, tio) == -1) {
             // 056         JNU_ThrowIOExceptionWithLastError(env, "tcgetattr failed");
-            throw PosixUtils.newIOExceptionWithLastError("tcgetattr failed");
+            throw new IOException("tcgetattr failed");
             // 057         return !on;
             /* Unreachable code. */
         }
@@ -754,7 +754,7 @@ final class Target_java_io_Console {
         // 065     if (tcsetattr(tty, TCSANOW, &tio) == -1) {
         if (Termios.tcsetattr(tty, Termios.TCSANOW(), tio) == -1) {
             // 066         JNU_ThrowIOExceptionWithLastError(env, "tcsetattr failed");
-            throw PosixUtils.newIOExceptionWithLastError("tcsetattr failed");
+            throw new IOException("tcsetattr failed");
         }
         // 068     return old;
         return old;
