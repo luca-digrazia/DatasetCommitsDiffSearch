@@ -47,8 +47,6 @@ import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFacto
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMRintFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMCMathsIntrinsicsFactory.LLVMSqrtFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMExitFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMTruffleOnlyIntrinsicsFactory.LLVMStrCmpFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMTruffleOnlyIntrinsicsFactory.LLVMStrlenFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.c.LLVMTruffleReadBytesFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleAddressToFunctionFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleBinaryFactory.LLVMTruffleHasSizeFactory;
@@ -73,7 +71,6 @@ import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleInvokeFa
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleInvokeFactory.LLVMTruffleInvokeLFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleInvokeFactory.LLVMTruffleInvokePFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleIsTruffleObjectFactory;
-import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleManagedMallocFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleReadFactory.LLVMTruffleReadBFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleReadFactory.LLVMTruffleReadCFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleReadFactory.LLVMTruffleReadDFactory;
@@ -111,26 +108,28 @@ import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleWriteFac
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleWriteFactory.LLVMTruffleWriteIdxPFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleWriteFactory.LLVMTruffleWriteLFactory;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.interop.LLVMTruffleWriteFactory.LLVMTruffleWritePFactory;
-import com.oracle.truffle.llvm.runtime.options.LLVMBaseOptionFacade;
+import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 
 /**
  * This class creates intrinsic functions and is designed to be inherited.
  */
 public class LLVMRuntimeIntrinsicFactory {
 
-    public static Map<String, NodeFactory<? extends LLVMNode>> getFunctionSubstitutionFactories() {
-        return new LLVMRuntimeIntrinsicFactory().getFactories();
+    public static Map<String, NodeFactory<? extends LLVMNode>> getFunctionSubstitutionFactories(LLVMOptimizationConfiguration optConfig) {
+        return new LLVMRuntimeIntrinsicFactory(optConfig).getFactories();
     }
 
     protected final Map<String, NodeFactory<? extends LLVMNode>> intrinsics;
+    protected final LLVMOptimizationConfiguration optConfig;
 
-    protected LLVMRuntimeIntrinsicFactory() {
+    protected LLVMRuntimeIntrinsicFactory(LLVMOptimizationConfiguration optConfig) {
         intrinsics = new HashMap<>();
+        this.optConfig = optConfig;
     }
 
     protected Map<String, NodeFactory<? extends LLVMNode>> getFactories() {
         intrinsifyAbortIntrinsics();
-        if (LLVMBaseOptionFacade.intrinsifyCLibraryFunctions()) {
+        if (optConfig.intrinsifyCLibraryFunctions()) {
             intrinsifyMathFunctions();
         }
         intrinsifyInteropIntrinsics();
@@ -210,8 +209,6 @@ public class LLVMRuntimeIntrinsicFactory {
         intrinsics.put("@truffle_read_n_bytes", LLVMTruffleReadNBytesFactory.getInstance());
 
         intrinsics.put("@truffle_is_truffle_object", LLVMTruffleIsTruffleObjectFactory.getInstance());
-
-        intrinsics.put("@truffle_managed_malloc", LLVMTruffleManagedMallocFactory.getInstance());
     }
 
     /**
@@ -230,9 +227,6 @@ public class LLVMRuntimeIntrinsicFactory {
         // C
         intrinsics.put("@abort", LLVMAbortFactory.getInstance());
         intrinsics.put("@exit", LLVMExitFactory.getInstance());
-
-        intrinsics.put("@strlen", LLVMStrlenFactory.getInstance());
-        intrinsics.put("@strcmp", LLVMStrCmpFactory.getInstance());
     }
 
     /**
