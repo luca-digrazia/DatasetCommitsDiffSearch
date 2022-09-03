@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,34 +20,44 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.hotspot.nodes;
+package com.oracle.graal.jtt.lang;
 
-import com.oracle.graal.hotspot.replacements.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.nodes.*;
+import org.junit.*;
 
-/**
- * {@link MacroNode Macro node} for {@link Class#getModifiers()}.
- * 
- * @see ClassSubstitutions#getModifiers(Class)
- */
-public class ClassGetModifiersNode extends MacroNode implements Canonicalizable {
+import com.oracle.graal.jtt.*;
 
-    public ClassGetModifiersNode(Invoke invoke) {
-        super(invoke);
-    }
+public final class Class_getModifiers02 extends JTTTest {
 
-    private ValueNode getJavaClass() {
-        return arguments.get(0);
-    }
-
-    public ValueNode canonical(CanonicalizerTool tool) {
-        ValueNode javaClass = getJavaClass();
-        if (javaClass.isConstant()) {
-            Class c = (Class) javaClass.asConstant().asObject();
-            return ConstantNode.forInt(c.getModifiers(), graph());
+    public static int test(int i) {
+        if (i == 0) {
+            return int.class.getModifiers();
         }
-        return this;
+        if (i == 1) {
+            return int[].class.getModifiers();
+        }
+        if (i == 2) {
+            return Object[][].class.getModifiers();
+        }
+        return Class_getModifiers02.class.getModifiers();
+    }
+
+    @Test
+    public void run0() throws Throwable {
+        runTest("test", 0);
+    }
+
+    @Test
+    public void run1() throws Throwable {
+        runTest("test", 1);
+    }
+
+    @Test
+    public void run2() throws Throwable {
+        runTest("test", 2);
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        runTest("test", 3);
     }
 }
