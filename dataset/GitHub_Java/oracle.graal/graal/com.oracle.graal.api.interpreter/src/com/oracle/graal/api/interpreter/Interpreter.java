@@ -25,8 +25,5 @@ package com.oracle.graal.api.interpreter;
 import com.oracle.graal.api.meta.*;
 
 public interface Interpreter extends VirtualMachineComponent {
-
-    boolean initialize(String args);
-
-    Object execute(ResolvedJavaMethod method, Object... arguments) throws Throwable;
+    Object execute(RiResolvedMethod method, Object... arguments);
 }

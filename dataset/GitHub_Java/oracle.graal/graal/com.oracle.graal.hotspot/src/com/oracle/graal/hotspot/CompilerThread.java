@@ -27,8 +27,6 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.printer.*;
 
 
 public final class CompilerThread extends Thread {
@@ -58,23 +56,12 @@ public final class CompilerThread extends Thread {
 
     @Override
     public void run() {
-        GraalDebugConfig hotspotDebugConfig = null;
         if (GraalOptions.Debug) {
-            PrintStream log = HotSpotGraalRuntime.getInstance().getVMToCompiler().log();
-            DebugEnvironment.initialize(log);
+            Debug.enable();
+            PrintStream log = HotSpotCompilerImpl.getInstance().getVMToCompiler().log();
+            HotSpotDebugConfig hotspotDebugConfig = new HotSpotDebugConfig(GraalOptions.Log, GraalOptions.Meter, GraalOptions.Time, GraalOptions.Dump, GraalOptions.MethodFilter, log);
+            Debug.setConfig(hotspotDebugConfig);
         }
-        try {
-            super.run();
-        } finally {
-            if (hotspotDebugConfig != null) {
-                for (DebugDumpHandler dumpHandler : hotspotDebugConfig.dumpHandlers()) {
-                    try {
-                        dumpHandler.close();
-                    } catch (Throwable t) {
-
-                    }
-                }
-            }
-        }
+        super.run();
     }
 }

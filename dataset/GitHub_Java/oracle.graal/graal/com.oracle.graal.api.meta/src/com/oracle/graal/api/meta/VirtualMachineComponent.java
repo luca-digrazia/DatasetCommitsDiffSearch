@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,11 +20,9 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.api.code;
-
-import com.oracle.graal.api.meta.*;
+package com.oracle.graal.api.meta;
 
 
-public interface CompilationQueue {
-    boolean enqueue(final RiResolvedMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable;
+public interface VirtualMachineComponent {
+    void setOption(String name, String value);
 }
