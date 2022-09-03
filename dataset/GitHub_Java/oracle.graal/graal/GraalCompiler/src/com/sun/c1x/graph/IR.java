@@ -165,7 +165,7 @@ public class IR {
             TTY.println("IR for " + compilation.method);
             final InstructionPrinter ip = new InstructionPrinter(TTY.out());
             final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly);
-            //getHIRStartBlock().iteratePreOrder(bp);
+            getHIRStartBlock().iteratePreOrder(bp);
         }
     }
 
@@ -216,7 +216,7 @@ public class IR {
         return maxLocks;
     }
 
-    public Instruction getHIRStartBlock() {
-        return (Instruction) compilation.graph.start().successors().get(0);
+    public BlockBegin getHIRStartBlock() {
+        return (BlockBegin) compilation.graph.start().successors().get(0);
     }
 }
