@@ -24,9 +24,13 @@
  */
 package com.oracle.truffle.nfi;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.CanResolve;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -39,29 +43,23 @@ class LibFFILibraryMessageResolution {
 
     abstract static class CachedLookupSymbolNode extends Node {
 
-        protected abstract TruffleObject executeLookup(LibFFILibrary receiver, String symbol);
+        protected abstract LibFFISymbol executeLookup(LibFFILibrary receiver, String symbol);
 
         @Specialization(guards = {"receiver == cachedReceiver", "symbol.equals(cachedSymbol)"})
         @SuppressWarnings("unused")
-        protected TruffleObject lookupCached(LibFFILibrary receiver, String symbol,
+        protected LibFFISymbol lookupCached(LibFFILibrary receiver, String symbol,
                         @Cached("receiver") LibFFILibrary cachedReceiver,
                         @Cached("symbol") String cachedSymbol,
-                        @Cached("lookup(cachedReceiver, cachedSymbol)") TruffleObject cachedRet) {
+                        @Cached("lookup(cachedReceiver, cachedSymbol)") LibFFISymbol cachedRet) {
             return cachedRet;
         }
 
         @Specialization(replaces = "lookupCached")
-        protected TruffleObject lookup(LibFFILibrary receiver, String symbol) {
-            UnknownIdentifierException unknown = null;
+        protected LibFFISymbol lookup(LibFFILibrary receiver, String symbol) {
             try {
-                try {
-                    return receiver.findSymbol(symbol);
-                } catch (UnknownIdentifierException ex) {
-                    unknown = ex;
-                }
                 return receiver.lookupSymbol(symbol);
             } catch (UnsatisfiedLinkError ex) {
-                throw unknown.raise();
+                throw UnknownIdentifierException.raise(symbol);
             }
         }
     }
@@ -71,8 +69,35 @@ class LibFFILibraryMessageResolution {
 
         @Child private CachedLookupSymbolNode cached = CachedLookupSymbolNodeGen.create();
 
-        public TruffleObject access(LibFFILibrary receiver, String symbol) {
+        public LibFFISymbol access(LibFFILibrary receiver, String symbol) {
             return cached.executeLookup(receiver, symbol);
+        }
+    }
+
+    @Resolve(message = "INVOKE")
+    abstract static class ExecuteSymbolNode extends Node {
+        @CompilerDirectives.CompilationFinal private String cachedSymbol;
+        @CompilerDirectives.CompilationFinal private TruffleObject cachedObj;
+        private Node execute;
+
+        public Object access(LibFFILibrary receiver, String symbol, Object[] args) {
+            TruffleObject obj;
+            if (symbol.equals(cachedSymbol)) {
+                obj = cachedObj;
+            } else {
+                CompilerDirectives.transferToInterpreter();
+                obj = receiver.findSymbol(symbol);
+                if (cachedObj == null) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    cachedObj = obj;
+                    execute = insert(Message.createExecute(args.length).createNode());
+                }
+            }
+            try {
+                return ForeignAccess.sendExecute(execute, obj, args);
+            } catch (InteropException ex) {
+                throw ex.raise();
+            }
         }
     }
 

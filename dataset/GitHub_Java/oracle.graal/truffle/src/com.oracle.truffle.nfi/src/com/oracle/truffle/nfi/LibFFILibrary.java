@@ -35,7 +35,6 @@ final class LibFFILibrary implements TruffleObject {
     static final LibFFILibrary DEFAULT = new LibFFILibrary(0);
 
     protected final long handle;
-    private Map<String, ? extends TruffleObject> symbols;
 
     static LibFFILibrary create(long handle) {
         assert handle != 0;
@@ -43,6 +42,8 @@ final class LibFFILibrary implements TruffleObject {
         NativeAllocation.registerNativeAllocation(ret, new Destructor(handle));
         return ret;
     }
+
+    private Map<String, TruffleObject> symbols;
 
     private LibFFILibrary(long handle) {
         this.handle = handle;
@@ -57,9 +58,9 @@ final class LibFFILibrary implements TruffleObject {
         return LibFFILibraryMessageResolutionForeign.ACCESS;
     }
 
-    LibFFILibrary register(Map<String, ? extends TruffleObject> functions) {
+    LibFFILibrary register(Map<String, TruffleObject> symbols) {
         assert this.symbols == null;
-        this.symbols = functions;
+        this.symbols = symbols;
         return this;
     }
 
