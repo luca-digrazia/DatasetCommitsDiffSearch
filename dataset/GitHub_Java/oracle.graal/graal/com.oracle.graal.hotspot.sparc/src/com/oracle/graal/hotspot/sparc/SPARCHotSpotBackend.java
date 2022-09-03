@@ -48,7 +48,7 @@ import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.HotSpotCodeCacheProvider.MarkId;
+import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
@@ -79,18 +79,13 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
     }
 
     @Override
-    public LIRGenerator newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
-        return new SPARCHotSpotLIRGenerator(getProviders(), getRuntime().getConfig(), cc, lirGenRes);
-    }
-
-    @Override
-    public NodeLIRBuilder newNodeLIRGenerator(StructuredGraph graph, LIRGenerator lirGen) {
-        return new SPARCHotSpotNodeLIRBuilder(graph, lirGen);
+    public LIRGenerator newLIRGenerator(StructuredGraph graph, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        return new SPARCHotSpotLIRGenerator(graph, getProviders(), getRuntime().getConfig(), cc, lirGenRes);
     }
 
     /**
      * Emits code to do stack overflow checking.
-     *
+     * 
      * @param afterFrameInit specifies if the stack pointer has already been adjusted to allocate
      *            the current frame
      */
@@ -206,7 +201,7 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         // Emit the prefix
 
         if (unverifiedStub != null) {
-            MarkId.recordMark(crb, MarkId.UNVERIFIED_ENTRY);
+            crb.recordMark(Marks.MARK_UNVERIFIED_ENTRY);
             // We need to use JavaCall here because we haven't entered the frame yet.
             CallingConvention cc = regConfig.getCallingConvention(JavaCall, null, new JavaType[]{getProviders().getMetaAccess().lookupJavaType(Object.class)}, getTarget(), false);
             Register inlineCacheKlass = g5; // see MacroAssembler::ic_call
@@ -221,8 +216,8 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         }
 
         masm.align(config.codeEntryAlignment);
-        MarkId.recordMark(crb, MarkId.OSR_ENTRY);
-        MarkId.recordMark(crb, MarkId.VERIFIED_ENTRY);
+        crb.recordMark(Marks.MARK_OSR_ENTRY);
+        crb.recordMark(Marks.MARK_VERIFIED_ENTRY);
 
         // Emit code for the LIR
         crb.emit(lir);
@@ -230,9 +225,9 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend {
         HotSpotFrameContext frameContext = (HotSpotFrameContext) crb.frameContext;
         HotSpotForeignCallsProvider foreignCalls = getProviders().getForeignCalls();
         if (!frameContext.isStub) {
-            MarkId.recordMark(crb, MarkId.EXCEPTION_HANDLER_ENTRY);
+            crb.recordMark(Marks.MARK_EXCEPTION_HANDLER_ENTRY);
             SPARCCall.directCall(crb, masm, foreignCalls.lookupForeignCall(EXCEPTION_HANDLER), null, false, null);
-            MarkId.recordMark(crb, MarkId.DEOPT_HANDLER_ENTRY);
+            crb.recordMark(Marks.MARK_DEOPT_HANDLER_ENTRY);
             SPARCCall.directCall(crb, masm, foreignCalls.lookupForeignCall(DEOPT_HANDLER), null, false, null);
         } else {
             // No need to emit the stubs for entries back into the method since

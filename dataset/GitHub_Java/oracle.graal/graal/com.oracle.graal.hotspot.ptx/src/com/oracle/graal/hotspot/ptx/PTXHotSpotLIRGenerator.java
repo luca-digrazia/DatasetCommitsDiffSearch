@@ -29,17 +29,22 @@ import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.ptx.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.nodes.*;
 
 /**
  * LIR generator specialized for PTX HotSpot.
  */
 public class PTXHotSpotLIRGenerator extends PTXLIRGenerator implements HotSpotLIRGenerator {
 
-    protected PTXHotSpotLIRGenerator(HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(providers, cc, lirGenRes);
+    protected PTXHotSpotLIRGenerator(StructuredGraph graph, HotSpotProviders providers, HotSpotVMConfig config, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        super(graph, providers, cc, lirGenRes);
         assert config.basicLockSize == 8;
+    }
+
+    public void emitPrefetchAllocate(ValueNode address, ValueNode distance) {
+        // nop
     }
 
     public void emitTailcall(Value[] args, Value address) {
@@ -50,22 +55,24 @@ public class PTXHotSpotLIRGenerator extends PTXLIRGenerator implements HotSpotLI
         throw GraalInternalError.unimplemented();
     }
 
+    public void emitPatchReturnAddress(ValueNode address) {
+        throw GraalInternalError.unimplemented();
+    }
+
+    public void emitJumpToExceptionHandlerInCaller(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
+        throw GraalInternalError.unimplemented();
+    }
+
+    public void visitDirectCompareAndSwap(DirectCompareAndSwapNode x) {
+        throw GraalInternalError.unimplemented();
+    }
+
     public StackSlot getLockSlot(int lockDepth) {
         throw GraalInternalError.unimplemented();
     }
 
     @Override
     public HotSpotProviders getProviders() {
-        throw GraalInternalError.unimplemented();
-    }
-
-    public Value emitCompress(Value pointer, CompressEncoding encoding) {
-        // TODO
-        throw GraalInternalError.unimplemented();
-    }
-
-    public Value emitUncompress(Value pointer, CompressEncoding encoding) {
-        // TODO
         throw GraalInternalError.unimplemented();
     }
 }

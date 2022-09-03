@@ -76,9 +76,9 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
         }
     }
 
-    public HSAILLIRGenerator(StructuredGraph graph, Providers providers, FrameMap frameMap, CallingConvention cc, LIR lir) {
-        super(graph, providers, frameMap, cc, lir);
-        lir.setSpillMoveFactory(new HSAILSpillMoveFactory());
+    public HSAILLIRGenerator(StructuredGraph graph, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        super(graph, providers, cc, lirGenRes);
+        lirGenRes.getLIR().setSpillMoveFactory(new HSAILSpillMoveFactory());
     }
 
     @Override
@@ -113,10 +113,6 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
         } else {
             append(new MoveToRegOp(dst, src));
         }
-    }
-
-    public void emitData(AllocatableValue dst, byte[] data) {
-        throw GraalInternalError.unimplemented();
     }
 
     protected HSAILAddressValue asAddressValue(Value address) {
@@ -868,12 +864,12 @@ public abstract class HSAILLIRGenerator extends LIRGenerator {
      */
     @Override
     protected void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
-        if ((key.getKind() == Kind.Int) || (key.getKind() == Kind.Long)) {
+        if (key.getKind() == Kind.Int) {
             // Append the LIR instruction for generating compare and branch instructions.
             append(new StrategySwitchOp(strategy, keyTargets, defaultTarget, key));
         } else {
             // Throw an exception if the keys aren't ints.
-            throw GraalInternalError.unimplemented("Switch statements are only supported for keys of type int or long, not " + key.getKind());
+            throw GraalInternalError.unimplemented("Switch statements are only supported for keys of type int");
         }
     }
 

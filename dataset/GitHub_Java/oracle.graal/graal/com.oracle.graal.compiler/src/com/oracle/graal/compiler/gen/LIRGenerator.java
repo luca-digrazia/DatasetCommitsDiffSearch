@@ -500,8 +500,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool {
         }
         if (node instanceof LIRGenLowerable) {
             ((LIRGenLowerable) node).generate(this);
-        } else if (node instanceof LIRGenResLowerable) {
-            ((LIRGenResLowerable) node).generate(this, res);
         } else if (node instanceof LIRLowerable) {
             ((LIRLowerable) node).generate(this);
         } else if (node instanceof ArithmeticLIRLowerable) {
@@ -1006,4 +1004,9 @@ public abstract class LIRGenerator implements LIRGeneratorTool, LIRTypeTool {
     public abstract void emitByteSwap(Variable result, Value operand);
 
     public abstract void emitArrayEquals(Kind kind, Variable result, Value array1, Value array2, Value length);
+
+    @Deprecated
+    public FrameMap getFrameMap() {
+        return res.getFrameMap();
+    }
 }

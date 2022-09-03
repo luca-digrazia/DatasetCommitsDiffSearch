@@ -28,4 +28,8 @@ public interface LIRGenerationResult {
     FrameMap getFrameMap();
 
     LIR getLIR();
+
+    boolean hasForeignCall();
+
+    void setForeignCall(boolean b);
 }

@@ -39,7 +39,6 @@ import com.oracle.graal.asm.ptx.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.gpu.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
@@ -67,7 +66,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
 
     /**
      * Descriptor for the PTX runtime method for calling a kernel. The C++ signature is:
-     *
+     * 
      * <pre>
      *     jlong (JavaThread* thread,
      *            jlong kernel,
@@ -95,7 +94,6 @@ public class PTXHotSpotBackend extends HotSpotBackend {
                     long.class, // objectParameterOffsets
                     long.class, // pinnedObjects
                     int.class); // encodedReturnTypeSize
-
     // @formatter:on
 
     public PTXHotSpotBackend(HotSpotGraalRuntime runtime, HotSpotProviders providers) {
@@ -114,7 +112,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
 
     /**
      * Initializes the GPU device.
-     *
+     * 
      * @return whether or not initialization was successful
      */
     private static native boolean initialize();
@@ -155,8 +153,8 @@ public class PTXHotSpotBackend extends HotSpotBackend {
     private static native long getLaunchKernelAddress();
 
     @Override
-    public FrameMap newFrameMap(RegisterConfig registerConfig) {
-        return new PTXFrameMap(getCodeCache(), registerConfig);
+    public FrameMap newFrameMap() {
+        return new PTXFrameMap(getCodeCache());
     }
 
     /**
@@ -168,7 +166,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
 
     /**
      * Compiles a given method to PTX code.
-     *
+     * 
      * @param makeBinary specifies whether a GPU binary should also be generated for the PTX code.
      *            If true, the returned value is guaranteed to have a non-zero
      *            {@linkplain ExternalCompilationResult#getEntryPoint() entry point}.
@@ -354,13 +352,8 @@ public class PTXHotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    public LIRGenerator newLIRGenerator(CallingConvention cc, LIRGenerationResult lirGenRes) {
-        return new PTXHotSpotLIRGenerator(getProviders(), getRuntime().getConfig(), cc, lirGenRes);
-    }
-
-    @Override
-    public NodeLIRBuilder newNodeLIRGenerator(StructuredGraph graph, LIRGenerator lirGen) {
-        return new PTXHotSpotNodeLIRBuilder(graph, lirGen);
+    public LIRGenerator newLIRGenerator(StructuredGraph graph, CallingConvention cc, LIRGenerationResult lirGenRes) {
+        return new PTXHotSpotLIRGenerator(graph, getProviders(), getRuntime().getConfig(), cc, lirGenRes);
     }
 
     private static void emitKernelEntry(CompilationResultBuilder crb, LIR lir, ResolvedJavaMethod codeCacheOwner) {
