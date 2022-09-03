@@ -116,7 +116,7 @@ final class PolyglotLanguageContext implements VMObject {
         if (localEnv != null) {
             for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
                 assert threadInfo.thread != null;
-                if (threadInfo.isPolyglotThread(context)) {
+                if (threadInfo.isPolyglotThread()) {
                     // polyglot threads need to be cleaned up by the language
                     continue;
                 }
