@@ -31,6 +31,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerOptions;
 import com.oracle.truffle.api.impl.DefaultCompilerOptions;
 import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ValueProfile;
@@ -52,15 +53,16 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
     public OptimizedDirectCallNode(OptimizedCallTarget target) {
         super(target);
         assert target.getSourceCallTarget() == null;
+        RuntimeOptionsCache.reinitialize();
     }
 
     @Override
-    public Object call(Object... arguments) {
+    public Object call(Object[] arguments) {
         if (CompilerDirectives.inInterpreter()) {
             onInterpreterCall();
         }
         try {
-            return getCurrentCallTarget().callDirect(this, arguments);
+            return callProxy(this, getCurrentCallTarget(), arguments, true);
         } catch (Throwable t) {
             if (exceptionProfile == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -69,6 +71,20 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
             Throwable profiledT = exceptionProfile.profile(t);
             OptimizedCallTarget.runtime().getTvmci().onThrowable(this, null, profiledT, null);
             throw OptimizedCallTarget.rethrow(profiledT);
+        }
+    }
+
+    // Note: {@code PartialEvaluator} looks up this method by name and signature.
+    public static Object callProxy(Node callNode, CallTarget callTarget, Object[] arguments, boolean direct) {
+        try {
+            if (direct) {
+                return ((OptimizedCallTarget) callTarget).callDirect(arguments);
+            } else {
+                return callTarget.call(arguments);
+            }
+        } finally {
+            // this assertion is needed to keep the values from being cleared as non-live locals
+            assert callNode != null & callTarget != null;
         }
     }
 
@@ -147,12 +163,12 @@ public final class OptimizedDirectCallNode extends DirectCallNode {
 
             if (callCount >= 1) {
                 currentTarget.decrementKnownCallSites();
-                if (!TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleLegacySplitting)) {
+                if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting)) {
                     currentTarget.removeKnownCallSite(this);
                 }
                 splitTarget.incrementKnownCallSites();
             }
-            if (!TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleLegacySplitting)) {
+            if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting)) {
                 splitTarget.addKnownCallNode(this);
             }
 
