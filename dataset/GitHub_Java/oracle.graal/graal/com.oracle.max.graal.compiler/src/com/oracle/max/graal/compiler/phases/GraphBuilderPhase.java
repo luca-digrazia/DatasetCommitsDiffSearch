@@ -118,7 +118,7 @@ public final class GraphBuilderPhase extends Phase {
      * @param graph
      */
     public GraphBuilderPhase(GraalCompilation compilation, RiMethod method, boolean createUnwind, boolean inline) {
-        super(inline ? "BuildInlineGraph " + method.holder().name() + "." + method.name() + method.signature().asString() : "BuildGraph");
+        super(inline ? "BuildInlineGraph" : "BuildGraph");
         this.compilation = compilation;
 
         this.runtime = compilation.runtime;
@@ -732,7 +732,9 @@ public final class GraphBuilderPhase extends Phase {
         if (entry != null) {
             append(entry);
         } else {
-            appendGoto(createTarget(unwindBlock(bci), frameState.duplicateWithException(bci, exception)));
+            frameState.clearStack();
+            frameState.apush(exception);
+            appendGoto(createTarget(unwindBlock(bci), frameState));
         }
     }
 

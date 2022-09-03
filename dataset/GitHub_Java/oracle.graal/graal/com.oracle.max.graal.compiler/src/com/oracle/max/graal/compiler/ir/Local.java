@@ -35,23 +35,37 @@ import com.sun.cri.ri.*;
  */
 public final class Local extends FloatingNode {
 
-    @NodeInput
-    private StartNode start;
+    private static final int INPUT_COUNT = 1;
+    private static final int INPUT_START = 0;
 
-    public StartNode start() {
-        return start;
+    private static final int SUCCESSOR_COUNT = 0;
+
+    @Override
+    protected int inputCount() {
+        return super.inputCount() + INPUT_COUNT;
     }
 
-    public void setStart(StartNode x) {
-        updateUsages(start, x);
-        start = x;
+    @Override
+    protected int successorCount() {
+        return super.successorCount() + SUCCESSOR_COUNT;
     }
+
+    /**
+     * The start node of the graph that this local belongs to. This is used for correctly scheduling the locals.
+     */
+     private StartNode start() {
+        return (StartNode) inputs().get(super.inputCount() + INPUT_START);
+    }
+
+     private void setStart(StartNode n) {
+         inputs().set(super.inputCount() + INPUT_START, n);
+     }
 
     private final int index;
     private RiType declaredType;
 
     public Local(CiKind kind, int javaIndex, Graph graph) {
-        super(kind, graph);
+        super(kind, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.index = javaIndex;
         setStart(graph.start());
     }

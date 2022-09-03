@@ -42,7 +42,6 @@ public class FrameStateBuilder implements FrameStateAccess {
     private final ArrayList<Value> locks;
 
     private int stackIndex;
-    private boolean rethrowException;
 
     private final RiMethod method;
 
@@ -102,11 +101,10 @@ public class FrameStateBuilder implements FrameStateAccess {
         for (int i = 0; i < other.locksSize(); i++) {
             locks.add(other.lockAt(i));
         }
-        this.rethrowException = other.rethrowException();
     }
 
     public FrameState create(int bci) {
-        return new FrameState(method, bci, locals, stack, stackIndex, locks, rethrowException, graph);
+        return new FrameState(method, bci, locals, stack, stackIndex, locks, false, graph);
     }
 
     public FrameState duplicateWithException(int bci, Value exceptionObject) {

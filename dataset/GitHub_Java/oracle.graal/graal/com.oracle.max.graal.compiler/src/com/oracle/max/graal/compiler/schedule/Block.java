@@ -38,8 +38,6 @@ public class Block {
     private Block javaBlock;
     private final List<Block> dominators = new ArrayList<Block>();
     private Anchor anchor;
-    private int loopDepth = 0;
-    private int loopIndex = -1;
 
     private Node firstNode;
     private Node lastNode;
@@ -63,22 +61,6 @@ public class Block {
 
     public Node lastNode() {
         return lastNode;
-    }
-
-    public int loopDepth() {
-        return loopDepth;
-    }
-
-    public void setLoopDepth(int i) {
-        loopDepth = i;
-    }
-
-    public int loopIndex() {
-        return loopIndex;
-    }
-
-    public void setLoopIndex(int i) {
-        loopIndex = i;
     }
 
     public Anchor createAnchor() {
@@ -193,10 +175,6 @@ public class Block {
         return firstNode instanceof LoopBegin;
     }
 
-    public boolean isLoopEnd() {
-        return lastNode instanceof LoopEnd;
-    }
-
     public Block dominator() {
         return dominator;
     }
@@ -245,9 +223,5 @@ public class Block {
                 }
             }
         }
-    }
-
-    public String name() {
-        return "B" + blockID;
     }
 }
