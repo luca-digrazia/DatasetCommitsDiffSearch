@@ -37,19 +37,22 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Test;
-
 import org.graalvm.compiler.core.CompilerThreadFactory;
 import org.graalvm.compiler.core.common.util.ModuleAPI;
 import org.graalvm.compiler.core.common.util.Util;
+import org.graalvm.compiler.debug.Assertions;
+import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.options.OptionValuesAccess;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.test.SubprocessUtil;
+import org.graalvm.util.CollectionsUtil;
+import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.Test;
 
 import jdk.vm.ci.runtime.JVMCICompilerFactory;
 import jdk.vm.ci.services.JVMCIServiceLocator;
@@ -62,6 +65,7 @@ public class LazyInitializationTest {
 
     private final Class<?> hotSpotVMEventListener;
     private final Class<?> hotSpotGraalCompilerFactoryOptions;
+    private final Class<?> hotSpotGraalJVMCIServiceLocatorShared;
     private final Class<?> jvmciVersionCheck;
 
     private static boolean Java8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
@@ -69,6 +73,7 @@ public class LazyInitializationTest {
     public LazyInitializationTest() {
         hotSpotVMEventListener = forNameOrNull("jdk.vm.ci.hotspot.services.HotSpotVMEventListener");
         hotSpotGraalCompilerFactoryOptions = forNameOrNull("org.graalvm.compiler.hotspot.HotSpotGraalCompilerFactory$Options");
+        hotSpotGraalJVMCIServiceLocatorShared = forNameOrNull("org.graalvm.compiler.hotspot.HotSpotGraalJVMCIServiceLocator$Shared");
         jvmciVersionCheck = forNameOrNull("org.graalvm.compiler.hotspot.JVMCIVersionCheck");
     }
 
@@ -143,7 +148,7 @@ public class LazyInitializationTest {
 
         if (VERBOSE) {
             System.out.println("\n=============================================================================");
-            System.out.println(Util.join(args, " "));
+            System.out.println(CollectionsUtil.mapAndJoin(args, e -> String.valueOf(e), " "));
             System.out.println("-----------------------------------------------------------------------------");
         }
         Process process = processBuilder.start();
@@ -216,6 +221,8 @@ public class LazyInitializationTest {
             }
         }
 
+        whitelist.add(Cancellable.class);
+
         List<String> forbiddenClasses = new ArrayList<>();
         for (Class<?> cls : loadedGraalClasses) {
             if (whitelist.contains(cls)) {
@@ -262,7 +269,7 @@ public class LazyInitializationTest {
             return true;
         }
 
-        if (JVMCIServiceLocator.class.isAssignableFrom(cls)) {
+        if (JVMCIServiceLocator.class.isAssignableFrom(cls) || cls == hotSpotGraalJVMCIServiceLocatorShared) {
             return true;
         }
 
@@ -271,7 +278,7 @@ public class LazyInitializationTest {
             return true;
         }
 
-        if (cls == OptionsParser.class || cls == OptionValues.class) {
+        if (cls == Assertions.class || cls == OptionsParser.class || cls == OptionValues.class || OptionValuesAccess.class.isAssignableFrom(cls)) {
             // Classes implementing Graal option loading
             return true;
         }
