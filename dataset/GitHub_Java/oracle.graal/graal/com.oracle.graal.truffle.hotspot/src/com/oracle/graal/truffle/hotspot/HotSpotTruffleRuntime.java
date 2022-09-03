@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CallingConvention.Type;
 import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.CompilationResult;
 import jdk.vm.ci.code.stack.StackIntrospection;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
@@ -57,7 +57,6 @@ import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.services.Services;
 
 import com.oracle.graal.api.runtime.GraalRuntime;
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -65,7 +64,6 @@ import com.oracle.graal.debug.DebugEnvironment;
 import com.oracle.graal.debug.GraalDebugConfig;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.hotspot.HotSpotBackend;
-import com.oracle.graal.hotspot.HotSpotCompiledCodeBuilder;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.java.GraphBuilderPhase;
 import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
@@ -110,7 +108,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
     static class Lazy extends BackgroundCompileQueue {
         private StackIntrospection stackIntrospection;
 
-        Lazy(HotSpotTruffleRuntime runtime) {
+        public Lazy(HotSpotTruffleRuntime runtime) {
             runtime.installDefaultListeners();
         }
 
@@ -219,8 +217,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
                 CompilationResult compResult = compileMethod(method);
                 CodeCacheProvider codeCache = providers.getCodeCache();
                 try (Scope s = Debug.scope("CodeInstall", codeCache, method)) {
-                    CompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(method, null, compResult);
-                    codeCache.setDefaultCode(method, compiledCode);
+                    codeCache.setDefaultCode(method, compResult);
                 } catch (Throwable e) {
                     throw Debug.handle(e);
                 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,15 +25,17 @@ package com.oracle.graal.compiler.test.tutorial;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.CallingConvention.Type;
 import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompiledCode;
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.code.CompilationResult;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.code.CompilationResult;
 import com.oracle.graal.compiler.GraalCompiler;
 import com.oracle.graal.compiler.target.Backend;
 import com.oracle.graal.debug.Debug;
@@ -111,6 +113,13 @@ public class InvokeGraal {
             LIRSuites lirSuites = backend.getSuites().getDefaultLIRSuites();
 
             /*
+             * The calling convention for the machine code. You should have a very good reason
+             * before you switch to a different calling convention than the one that the VM provides
+             * by default.
+             */
+            CallingConvention callingConvention = CodeUtil.getCallingConvention(codeCache, Type.JavaCallee, method, false);
+
+            /*
              * We want Graal to perform all speculative optimistic optimizations, using the
              * profiling information that comes with the method (collected by the interpreter) for
              * speculation.
@@ -123,14 +132,13 @@ public class InvokeGraal {
             CompilationResultBuilderFactory factory = CompilationResultBuilderFactory.Default;
 
             /* Invoke the whole Graal compilation pipeline. */
-            GraalCompiler.compileGraph(graph, method, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory);
+            GraalCompiler.compileGraph(graph, callingConvention, method, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory);
 
             /*
              * Install the compilation result into the VM, i.e., copy the byte[] array that contains
              * the machine code into an actual executable memory location.
              */
-            CompiledCode compiledCode = backend.createCompiledCode(method, compilationResult);
-            InstalledCode installedCode = codeCache.addCode(method, compiledCode, null, null);
+            InstalledCode installedCode = codeCache.addCode(method, compilationResult, null, null);
 
             return installedCode;
         } catch (Throwable ex) {

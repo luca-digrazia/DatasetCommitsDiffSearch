@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,11 +28,11 @@ import java.util.List;
 import java.util.Map;
 
 import jdk.vm.ci.hotspot.HotSpotVMConfig;
+import jdk.vm.ci.meta.LocationIdentity;
 
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugConfig;
@@ -726,8 +726,7 @@ public class WriteBarrierVerificationTest extends HotSpotGraalCompilerTest {
             };
 
             DebugConfig debugConfig = DebugScope.getConfig();
-            DebugConfig fixedConfig = debugConfig == null ? null
-                            : Debug.fixedConfig(0, 0, false, false, false, false, false, debugConfig.dumpHandlers(), debugConfig.verifyHandlers(), debugConfig.output());
+            DebugConfig fixedConfig = debugConfig == null ? null : Debug.fixedConfig(0, 0, false, false, false, false, debugConfig.dumpHandlers(), debugConfig.verifyHandlers(), debugConfig.output());
             try (DebugConfigScope s = Debug.setConfig(fixedConfig)) {
                 ReentrantNodeIterator.apply(closure, graph.start(), false);
                 new WriteBarrierVerificationPhase(config).apply(graph);

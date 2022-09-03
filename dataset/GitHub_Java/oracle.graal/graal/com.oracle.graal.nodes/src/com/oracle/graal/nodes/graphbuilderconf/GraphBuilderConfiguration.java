@@ -148,7 +148,7 @@ public class GraphBuilderConfiguration {
     private final boolean clearNonLiveLocals;
     private final Plugins plugins;
 
-    public enum DebugInfoMode {
+    public static enum DebugInfoMode {
         SafePointsOnly,
         /**
          * This mode inserts {@link SimpleInfopointNode}s in places where no safepoints would be

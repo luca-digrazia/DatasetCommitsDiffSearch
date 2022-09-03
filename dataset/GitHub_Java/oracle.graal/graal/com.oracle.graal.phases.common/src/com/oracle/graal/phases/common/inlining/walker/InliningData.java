@@ -386,7 +386,7 @@ public class InliningData {
                 Collection<Node> parameterUsages = calleeInfo.inline(new Providers(context));
                 canonicalizedNodes.addAll(parameterUsages);
                 metricInliningRuns.increment();
-                Debug.dump(Debug.INFO_LOG_LEVEL, callerGraph, "after %s", calleeInfo);
+                Debug.dump(callerGraph, "after %s", calleeInfo);
 
                 if (OptCanonicalizer.getValue()) {
                     Graph.Mark markBeforeCanonicalization = callerGraph.getMark();
@@ -560,7 +560,7 @@ public class InliningData {
      * Gets the call hierarchy of this inlining from outer most call to inner most callee.
      */
     private Object[] inliningContext() {
-        if (!Debug.isDumpEnabled(Debug.INFO_LOG_LEVEL)) {
+        if (!Debug.isDumpEnabled()) {
             return NO_CONTEXT;
         }
         Object[] result = new Object[graphQueue.size()];

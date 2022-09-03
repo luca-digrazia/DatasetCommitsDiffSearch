@@ -38,8 +38,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
 
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.java.FrameStateBuilder;
 import com.oracle.graal.java.GraphBuilderPhase;
@@ -185,7 +183,7 @@ public class GraphKit {
         Signature signature = method.getSignature();
         JavaType returnType = signature.getReturnType(null);
         assert checkArgs(method, args);
-        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, method, args, StampFactory.forDeclaredType(graph.getAssumptions(), returnType, false), bci));
+        MethodCallTargetNode callTarget = graph.add(createMethodCallTarget(invokeKind, method, args, returnType, bci));
         InvokeNode invoke = append(new InvokeNode(callTarget, bci));
 
         if (frameStateBuilder != null) {
@@ -200,8 +198,8 @@ public class GraphKit {
         return invoke;
     }
 
-    protected MethodCallTargetNode createMethodCallTarget(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, StampPair returnStamp, @SuppressWarnings("unused") int bci) {
-        return new MethodCallTargetNode(invokeKind, targetMethod, args, returnStamp, null);
+    protected MethodCallTargetNode createMethodCallTarget(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, JavaType returnType, @SuppressWarnings("unused") int bci) {
+        return new MethodCallTargetNode(invokeKind, targetMethod, args, returnType, null);
     }
 
     /**
