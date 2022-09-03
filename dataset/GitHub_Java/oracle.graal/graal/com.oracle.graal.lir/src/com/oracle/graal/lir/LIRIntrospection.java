@@ -35,8 +35,6 @@ import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.LIRInstruction.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.LIRInstruction.ValuePositionProcedure;
-import com.oracle.graal.lir.LIRInstructionClass.ValuePosition;
 
 abstract class LIRIntrospection extends FieldIntrospection {
 
@@ -143,21 +141,6 @@ abstract class LIRIntrospection extends FieldIntrospection {
                     } else {
                         values[j] = proc.doValue(inst, value, mode, flags[i]);
                     }
-                }
-            }
-        }
-    }
-
-    protected static void forEach(LIRInstruction inst, Object obj, int directCount, long[] offsets, OperandMode mode, EnumSet<OperandFlag>[] flags, ValuePositionProcedure proc) {
-        for (int i = 0; i < offsets.length; i++) {
-            assert LIRInstruction.ALLOWED_FLAGS.get(mode).containsAll(flags[i]);
-
-            if (i < directCount) {
-                proc.doValue(inst, new ValuePosition(mode, i, 0));
-            } else {
-                Value[] values = getValueArray(obj, offsets[i]);
-                for (int j = 0; j < values.length; j++) {
-                    proc.doValue(inst, new ValuePosition(mode, i, j));
                 }
             }
         }

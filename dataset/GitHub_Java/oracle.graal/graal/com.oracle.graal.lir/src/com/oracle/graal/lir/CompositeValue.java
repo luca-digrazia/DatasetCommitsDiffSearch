@@ -25,17 +25,15 @@ package com.oracle.graal.lir;
 import java.lang.annotation.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.LIRInstruction.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.LIRInstruction.ValuePositionProcedure;
 
 /**
  * Base class to represent values that need to be stored in more than one register.
  */
-public abstract class CompositeValue extends Value implements Cloneable {
+public abstract class CompositeValue extends Value {
 
     private static final long serialVersionUID = -169180052684126180L;
 
@@ -60,10 +58,6 @@ public abstract class CompositeValue extends Value implements Cloneable {
         valueClass.forEachComponent(inst, this, mode, proc);
     }
 
-    public final void forEachComponent(LIRInstruction inst, OperandMode mode, ValuePositionProcedure proc, ValuePosition outerPosition) {
-        valueClass.forEachComponent(inst, this, mode, proc, outerPosition);
-    }
-
     @Override
     public String toString() {
         return valueClass.toString(this);
@@ -82,18 +76,4 @@ public abstract class CompositeValue extends Value implements Cloneable {
         }
         return false;
     }
-
-    CompositeValueClass getValueClass() {
-        return valueClass;
-    }
-
-    @Override
-    public final CompositeValue clone() {
-        try {
-            return (CompositeValue) super.clone();
-        } catch (CloneNotSupportedException e) {
-            throw new GraalInternalError(e);
-        }
-    }
-
 }
