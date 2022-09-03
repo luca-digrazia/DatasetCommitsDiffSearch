@@ -109,7 +109,7 @@ public class Graph {
     /**
      * Creates a copy of this graph.
      *
-     * @param newName the name of the copy, used for debugging purposes (can be null)
+     * @param name the name of the copy, used for debugging purposes (can be null)
      */
     public Graph copy(String newName) {
         Graph copy = new Graph(newName);
@@ -235,7 +235,7 @@ public class Graph {
     }
 
     /**
-     * Gets a mark that can be used with {@link #getNewNodes(int)}.
+     * Gets a mark that can be used with {@link #getNewNodes()}.
      */
     public int getMark() {
         return nodeIdCount();
@@ -295,7 +295,7 @@ public class Graph {
      */
     public NodeIterable<Node> getNewNodes(int mark) {
         final int index = mark;
-        return new AbstractNodeIterable<Node>() {
+        return new NodeIterable<Node>() {
             @Override
             public Iterator<Node> iterator() {
                 return new NodeIterator(index);
@@ -308,19 +308,10 @@ public class Graph {
      * @return an {@link Iterable} providing all the live nodes.
      */
     public NodeIterable<Node> getNodes() {
-        return new AbstractNodeIterable<Node>() {
+        return new NodeIterable<Node>() {
             @Override
             public Iterator<Node> iterator() {
                 return new NodeIterator();
-            }
-
-            @SuppressWarnings("unchecked")
-            @Override
-            public <F extends Node> NodeIterable<F> filter(Class<F> clazz) {
-                if (IterableNodeType.class.isAssignableFrom(clazz)) {
-                    return getNodes((Class) clazz);
-                }
-                return super.filter(clazz);
             }
         };
     }
@@ -385,7 +376,7 @@ public class Graph {
      */
     public <T extends Node & IterableNodeType> NodeIterable<T> getNodes(final Class<T> type) {
         final Node start = getStartNode(type);
-        return new AbstractNodeIterable<T>() {
+        return new NodeIterable<T>() {
             @Override
             public Iterator<T> iterator() {
                 return new TypedNodeIterator<>(start);
@@ -526,7 +517,7 @@ public class Graph {
      * regarding the matching of node types in the replacement map.
      *
      * @param newNodes the nodes to be duplicated
-     * @param replacementsMap the replacement map (can be null if no replacement is to be performed)
+     * @param replacements the replacement map (can be null if no replacement is to be performed)
      * @return a map which associates the original nodes from {@code nodes} to their duplicates
      */
     public Map<Node, Node> addDuplicates(Iterable<Node> newNodes, Map<Node, Node> replacementsMap) {
