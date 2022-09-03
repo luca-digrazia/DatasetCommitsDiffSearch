@@ -28,32 +28,31 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 
 @NodeInfo(shortName = "/")
-public final class FloatDivNode extends FloatArithmeticNode implements Canonicalizable {
+public final class FloatDivNode extends FloatArithmeticNode implements Canonicalizable, LIRLowerable {
 
     public FloatDivNode(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
         super(kind, x, y, isStrictFP);
     }
 
-    public Constant evalConst(Constant... inputs) {
-        assert inputs.length == 2;
-        if (kind() == Kind.Float) {
-            return Constant.forFloat(x().asConstant().asFloat() / y().asConstant().asFloat());
-        } else {
-            assert kind() == Kind.Double;
-            return Constant.forDouble(x().asConstant().asDouble() / y().asConstant().asDouble());
-        }
-    }
-
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant()) {
-            return ConstantNode.forPrimitive(evalConst(x().asConstant(), y().asConstant()), graph());
+            if (kind() == Kind.Float) {
+                if (y().asConstant().asFloat() != 0) {
+                    return ConstantNode.forFloat(x().asConstant().asFloat() / y().asConstant().asFloat(), graph());
+                }
+            } else {
+                assert kind() == Kind.Double;
+                if (y().asConstant().asDouble() != 0) {
+                    return ConstantNode.forDouble(x().asConstant().asDouble() / y().asConstant().asDouble(), graph());
+                }
+            }
         }
         return this;
     }
 
     @Override
-    public void generate(ArithmeticLIRGenerator gen) {
+    public void generate(LIRGeneratorTool gen) {
         gen.setResult(this, gen.emitDiv(gen.operand(x()), gen.operand(y()), null));
     }
 }

@@ -38,7 +38,6 @@ import com.oracle.graal.nodes.util.*;
 public final class InvokeNode extends AbstractStateSplit implements StateSplit, Node.IterableNodeType, Invoke, LIRLowerable, MemoryCheckpoint {
 
     @Input private final CallTargetNode callTarget;
-    @Input private FrameState deoptState;
     private final int bci;
     private boolean polymorphic;
     private boolean useForInlining;
@@ -189,12 +188,7 @@ public final class InvokeNode extends AbstractStateSplit implements StateSplit, 
 
     @Override
     public FrameState getDeoptimizationState() {
-        if (deoptState == null) {
-            FrameState stateDuring = stateDuring();
-            updateUsages(deoptState, stateDuring);
-            deoptState = stateDuring;
-        }
-        return deoptState;
+        return stateDuring();
     }
 
     @Override

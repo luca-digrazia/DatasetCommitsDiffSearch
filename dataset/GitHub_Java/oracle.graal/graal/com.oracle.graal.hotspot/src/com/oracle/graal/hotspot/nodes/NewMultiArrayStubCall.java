@@ -28,14 +28,13 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
- * Node implementing a call to {@link NewMultiArrayStub}.
+ * Node implementing a call to HotSpot's {@code new_multi_array} stub.
  */
 public class NewMultiArrayStubCall extends DeoptimizingStubCall implements LIRGenLowerable {
 

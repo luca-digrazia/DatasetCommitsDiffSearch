@@ -97,7 +97,6 @@ public abstract class FloatingAccessNode extends FloatingNode implements Access 
 
     @Override
     public void setDeoptimizationState(FrameState f) {
-        updateUsages(deoptState, f);
         deoptState = f;
     }
 

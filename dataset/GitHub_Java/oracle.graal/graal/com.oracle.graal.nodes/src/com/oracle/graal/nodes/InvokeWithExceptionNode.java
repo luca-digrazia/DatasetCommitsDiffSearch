@@ -37,7 +37,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     @Successor private BeginNode next;
     @Successor private DispatchBeginNode exceptionEdge;
     @Input private final CallTargetNode callTarget;
-    @Input private FrameState deoptState;
     @Input private FrameState stateAfter;
     private final int bci;
     private boolean polymorphic;
@@ -235,12 +234,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     @Override
     public FrameState getDeoptimizationState() {
-        if (deoptState == null) {
-            FrameState stateDuring = stateDuring();
-            updateUsages(deoptState, stateDuring);
-            deoptState = stateDuring;
-        }
-        return deoptState;
+        return stateDuring();
     }
 
     @Override

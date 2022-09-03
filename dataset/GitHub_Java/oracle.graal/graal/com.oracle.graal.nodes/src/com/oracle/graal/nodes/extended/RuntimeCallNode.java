@@ -81,8 +81,7 @@ public final class RuntimeCallNode extends AbstractCallNode implements LIRLowera
             if ((stateDuring.stackSize() > 0 && stateDuring.stackAt(stateDuring.stackSize() - 1) == this) || (stateDuring.stackSize() > 1 && stateDuring.stackAt(stateDuring.stackSize() - 2) == this)) {
                 stateDuring = stateDuring.duplicateModified(stateDuring.bci, stateDuring.rethrowException(), this.kind());
             }
-            updateUsages(deoptState, stateDuring);
-            return deoptState = stateDuring;
+            return stateDuring;
         }
         return null;
     }
@@ -92,7 +91,6 @@ public final class RuntimeCallNode extends AbstractCallNode implements LIRLowera
         if (deoptState != null) {
             throw new IllegalStateException();
         }
-        updateUsages(deoptState, f);
         deoptState = f;
     }
 

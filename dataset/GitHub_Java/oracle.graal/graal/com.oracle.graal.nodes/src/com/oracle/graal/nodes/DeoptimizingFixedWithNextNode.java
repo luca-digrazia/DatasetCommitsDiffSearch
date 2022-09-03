@@ -49,7 +49,6 @@ public abstract class DeoptimizingFixedWithNextNode extends FixedWithNextNode im
 
     @Override
     public void setDeoptimizationState(FrameState f) {
-        updateUsages(deoptState, f);
         deoptState = f;
     }
 

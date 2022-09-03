@@ -27,9 +27,9 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
-public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRLowerable, GuardingNode {
+public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRLowerable {
 
-    @Input private ValueNode object;
+    @Input public ValueNode object;
 
     public NullCheckNode(ValueNode object) {
         super(StampFactory.dependency());
@@ -53,10 +53,5 @@ public class NullCheckNode extends DeoptimizingFixedWithNextNode implements LIRL
     @Override
     public DeoptimizationReason getDeoptimizationReason() {
         return DeoptimizationReason.NullCheckException;
-    }
-
-    @Override
-    public ValueNode asNode() {
-        return this;
     }
 }

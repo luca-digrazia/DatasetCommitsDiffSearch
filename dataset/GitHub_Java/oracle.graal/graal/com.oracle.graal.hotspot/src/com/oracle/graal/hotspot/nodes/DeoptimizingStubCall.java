@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -34,5 +35,10 @@ public class DeoptimizingStubCall extends DeoptimizingFixedWithNextNode {
     @Override
     public boolean canDeoptimize() {
         return true;
+    }
+
+    @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return null;
     }
 }

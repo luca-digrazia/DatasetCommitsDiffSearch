@@ -926,9 +926,4 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         Value[] parameters = visitInvokeArguments(cc, node.arguments);
         append(new AMD64BreakpointOp(parameters));
     }
-
-    @Override
-    public void visitInfopointNode(InfopointNode i) {
-        append(new InfopointOp(stateFor(i.stateAfter(), DeoptimizationReason.None), i.reason));
-    }
 }

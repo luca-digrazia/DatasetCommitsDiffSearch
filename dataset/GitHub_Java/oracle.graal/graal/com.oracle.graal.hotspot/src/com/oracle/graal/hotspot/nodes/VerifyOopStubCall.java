@@ -26,17 +26,16 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.compiler.gen.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.stubs.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.type.*;
 
 /**
- * Call to {@link VerifyOopStub}.
+ * Node implementing a call to HotSpot's object pointer verification stub.
  */
 public class VerifyOopStubCall extends DeoptimizingStubCall implements LIRGenLowerable {
 
     @Input private final ValueNode object;
-    public static final Descriptor VERIFY_OOP = new Descriptor("verify_oop", false, Object.class, Object.class);
+    public static final Descriptor VERIFY_OOP = new Descriptor("verify_oop", false, void.class, Object.class);
 
     public VerifyOopStubCall(ValueNode object) {
         super(StampFactory.objectNonNull());

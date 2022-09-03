@@ -44,4 +44,9 @@ public abstract class FixedBinaryNode extends DeoptimizingFixedWithNextNode {
         this.x = x;
         this.y = y;
     }
+
+    @Override
+    public DeoptimizationReason getDeoptimizationReason() {
+        return DeoptimizationReason.ArithmeticException;
+    }
 }

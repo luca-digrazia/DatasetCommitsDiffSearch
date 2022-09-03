@@ -97,7 +97,6 @@ public final class RegisterFinalizerNode extends AbstractStateSplit implements S
 
     @Override
     public void setDeoptimizationState(FrameState f) {
-        updateUsages(deoptState, f);
         deoptState = f;
     }
 

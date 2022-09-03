@@ -22,9 +22,10 @@
  */
 package com.oracle.graal.nodes.extended;
 
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
-public interface Access extends DeoptimizingNode, GuardedNode, HeapAccess {
+public interface Access extends DeoptimizingNode {
 
     ValueNode object();
 
@@ -32,4 +33,5 @@ public interface Access extends DeoptimizingNode, GuardedNode, HeapAccess {
 
     void setNullCheck(boolean check);
 
+    Node node();
 }
