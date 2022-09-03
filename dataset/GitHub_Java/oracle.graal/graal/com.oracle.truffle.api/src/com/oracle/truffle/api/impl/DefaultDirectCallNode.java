@@ -79,23 +79,28 @@ public final class DefaultDirectCallNode extends DirectCallNode {
     }
 
     @Override
-    public CallTarget getClonedCallTarget() {
+    public CallTarget getSplitCallTarget() {
         return null;
     }
 
     @Override
-    public boolean cloneCallTarget() {
+    public boolean split() {
         return false;
     }
 
     @Override
-    public boolean isCallTargetCloningAllowed() {
+    public boolean isSplittable() {
         return false;
     }
 
     @Override
     public boolean isInlinable() {
         return false;
+    }
+
+    @Override
+    public String toString() {
+        return (getParent() != null ? getParent().toString() : super.toString()) + " call " + getCurrentCallTarget().toString();
     }
 
     private static DefaultTruffleRuntime defaultTruffleRuntime() {
