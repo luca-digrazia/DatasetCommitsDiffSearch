@@ -28,6 +28,7 @@ import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
 import com.sun.cri.ci.*;
+import com.sun.jmx.remote.util.*;
 
 
 public class Schedule {
@@ -67,7 +68,9 @@ public class Schedule {
     private Block assignBlock(Node n, Block b) {
         assert nodeToBlock.get(n) == null;
         nodeToBlock.set(n, b);
-        b.getInstructions().add(n);
+        if (n != n.graph().start()) {
+            b.getInstructions().add((Instruction) n);
+        }
         return b;
     }
 
@@ -154,25 +157,18 @@ public class Schedule {
     }
 
     private void sortNodesWithinBlocks() {
-        NodeBitMap map = graph.createNodeBitMap();
         for (Block b : blocks) {
-            sortNodesWithinBlocks(b, map);
+            sortNodesWithinBlocks(b);
         }
     }
 
-    private void sortNodesWithinBlocks(Block b, NodeBitMap map) {
-        List<Node> instructions = b.getInstructions();
+    private void sortNodesWithinBlocks(Block b) {
+        List<Instruction> instructions = b.getInstructions();
         Collections.shuffle(instructions);
 
-        List<Node> sortedInstructions = new ArrayList<Node>();
+        List<Instruction> sortedInstructions = new ArrayList<Instruction>();
         sortedInstructions.addAll(instructions);
         b.setInstructions(sortedInstructions);
-
-        for (Node i : instructions) {
-            if (!map.isMarked(i)) {
-
-            }
-        }
     }
 
     private void computeDominators() {
