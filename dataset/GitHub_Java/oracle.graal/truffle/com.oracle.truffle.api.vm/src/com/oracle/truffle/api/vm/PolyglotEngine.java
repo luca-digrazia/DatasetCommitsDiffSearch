@@ -209,7 +209,8 @@ public class PolyglotEngine {
     private final List<Object[]> config;
     private final Object[] debugger = {null};
     private final ContextStore context;
-    private final PolyglotCache cachedTargets;
+    private final Map<Class<?>, CallTarget> asJavaObjectTargets = new HashMap<>();
+    private final Map<Class<?>, CallTarget> executeTargets = new HashMap<>();
 
     private volatile boolean disposed;
 
@@ -242,7 +243,6 @@ public class PolyglotEngine {
         this.instruments = null;
         this.config = null;
         this.context = null;
-        this.cachedTargets = null;
     }
 
     /**
@@ -273,7 +273,6 @@ public class PolyglotEngine {
         this.langs = map;
         this.instruments = createAndAutostartDescriptors(InstrumentCache.load());
         this.context = ExecutionImpl.createStore(this);
-        this.cachedTargets = new PolyglotCache(this);
     }
 
     Info executor() {
@@ -951,6 +950,24 @@ public class PolyglotEngine {
         }
     }
 
+    CallTarget lookupGlobalAsJavaObject(Class<?> type) {
+        CallTarget target = asJavaObjectTargets.get(type);
+        if (target == null) {
+            target = PolyglotRootNode.createAsJava(this, type);
+            asJavaObjectTargets.put(type, target);
+        }
+        return target;
+    }
+
+    CallTarget lookupGlobalExecute(Class<?> type) {
+        CallTarget target = executeTargets.get(type);
+        if (target == null) {
+            target = PolyglotRootNode.createExecuteSymbol(this, type);
+            executeTargets.put(type, target);
+        }
+        return target;
+    }
+
     /**
      * A future value wrapper. A user level wrapper around values returned by evaluation of various
      * {@link PolyglotEngine} functions like {@link PolyglotEngine#findGlobalSymbol(String)} and
@@ -979,7 +996,7 @@ public class PolyglotEngine {
         @SuppressWarnings("unchecked")
         private <T> T unwrapJava(Object value) {
             if (unwrapTarget == null) {
-                unwrapTarget = cachedTargets.lookupAsJava(value.getClass());
+                unwrapTarget = lookupGlobalAsJavaObject(value.getClass());
             }
             return (T) unwrapTarget.call(Object.class, value);
         }
@@ -987,7 +1004,7 @@ public class PolyglotEngine {
         @SuppressWarnings("unchecked")
         private <T> T asJavaObject(Class<T> type, Object value) {
             if (asJavaObjectTarget == null) {
-                asJavaObjectTarget = cachedTargets.lookupAsJava(value == null ? void.class : value.getClass());
+                asJavaObjectTarget = lookupGlobalAsJavaObject(value == null ? void.class : value.getClass());
             }
             return (T) asJavaObjectTarget.call(type, value);
         }
@@ -996,7 +1013,7 @@ public class PolyglotEngine {
         private Object executeDirect(Object[] args) {
             Object value = value();
             if (executeTarget == null) {
-                executeTarget = cachedTargets.lookupExecute(value.getClass());
+                executeTarget = lookupGlobalExecute(value.getClass());
             }
             return executeTarget.call(value, args);
         }

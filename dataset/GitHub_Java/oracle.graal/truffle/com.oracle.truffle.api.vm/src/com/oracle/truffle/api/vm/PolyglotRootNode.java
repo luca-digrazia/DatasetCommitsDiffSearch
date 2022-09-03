@@ -53,7 +53,7 @@ abstract class PolyglotRootNode extends RootNode {
         }
     };
 
-    final PolyglotEngine engine;
+    protected final PolyglotEngine engine;
 
     PolyglotRootNode(PolyglotEngine engine) {
         super(TruffleLanguage.class, null, null);
