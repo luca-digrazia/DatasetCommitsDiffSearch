@@ -30,7 +30,7 @@
 package com.oracle.truffle.llvm.parser;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import org.eclipse.emf.ecore.EObject;
 
@@ -40,11 +40,9 @@ import com.intel.llvm.ireditor.lLVM_IR.Type;
 import com.intel.llvm.ireditor.types.ResolvedType;
 import com.intel.llvm.ireditor.types.ResolvedVectorType;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.dsl.NodeFactory;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
@@ -54,13 +52,12 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMFloatComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMIntegerComparisonType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionType;
-import com.oracle.truffle.llvm.runtime.LLVMOptimizationConfiguration;
 import com.oracle.truffle.llvm.types.LLVMAddress;
 import com.oracle.truffle.llvm.types.LLVMFunction.LLVMRuntimeType;
 
 /**
- * This class implements an abstract adapter that returns a default value (mostly <code>null</code>)
- * for each implemented method.
+ * This class implements an abstract adapter that returns <code>null</code> for each implemented
+ * method.
  */
 public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
 
@@ -296,27 +293,12 @@ public abstract class NodeFactoryFacadeAdapter implements NodeFactoryFacade {
     }
 
     @Override
-    public int getArgStartIndex() {
-        return 0;
+    public Optional<Integer> getArgStartIndex() {
+        return Optional.empty();
     }
 
     @Override
     public LLVMNode createInlineAssemblerExpression(String asmExpression, String asmFlags, LLVMExpressionNode[] finalArgs, LLVMBaseType retType) {
-        return null;
-    }
-
-    @Override
-    public Map<String, NodeFactory<? extends LLVMNode>> getFunctionSubstitutionFactories(LLVMOptimizationConfiguration optimizationConfig) {
-        return null;
-    }
-
-    @Override
-    public LLVMNode createFunctionArgNode(int argIndex, Class<? extends Node> clazz) {
-        return null;
-    }
-
-    @Override
-    public RootNode createFunctionSubstitutionRootNode(LLVMNode intrinsicNode) {
         return null;
     }
 
