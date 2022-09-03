@@ -166,10 +166,7 @@ final class NativeImageServer extends NativeImage {
                     } catch (IOException e) {
                         showError("Could not read/write into build-request log file", e);
                     }
-                    int requestStatus = sendRequest(System.out::print, System.err::print, "build", command.toArray(new String[command.size()]));
-                    if (requestStatus != NativeImageBuildClient.EXIT_SUCCESS) {
-                        showError("Processing image build request failed");
-                    }
+                    sendRequest(System.out::print, System.err::print, "build", command.toArray(new String[command.size()]));
                 } catch (IOException e) {
                     showError("Error while trying to lock ServerDir " + serverDir, e);
                 }
