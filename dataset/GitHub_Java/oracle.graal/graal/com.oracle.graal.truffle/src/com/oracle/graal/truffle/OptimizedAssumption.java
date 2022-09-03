@@ -30,7 +30,6 @@ import java.util.stream.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.debug.*;
-import com.oracle.truffle.api.CompilerDirectives.*;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.nodes.*;
 
@@ -58,31 +57,27 @@ public final class OptimizedAssumption extends AbstractAssumption {
     @Override
     public synchronized void invalidate() {
         if (isValid) {
-            invalidateImpl();
-        }
-    }
+            boolean invalidatedInstalledCode = false;
+            Entry e = first;
+            while (e != null) {
+                InstalledCode installedCode = e.installedCode.get();
+                if (installedCode != null && installedCode.getVersion() == e.version) {
+                    installedCode.invalidate();
 
-    @TruffleBoundary
-    private void invalidateImpl() {
-        boolean invalidatedInstalledCode = false;
-        Entry e = first;
-        while (e != null) {
-            InstalledCode installedCode = e.installedCode.get();
-            if (installedCode != null && installedCode.getVersion() == e.version) {
-                invalidateWithReason(installedCode, "assumption invalidated");
-                invalidatedInstalledCode = true;
-                if (TraceTruffleAssumptions.getValue()) {
-                    logInvalidatedInstalledCode(installedCode);
+                    invalidatedInstalledCode = true;
+                    if (TraceTruffleAssumptions.getValue()) {
+                        logInvalidatedInstalledCode(installedCode);
+                    }
                 }
+                e = e.next;
             }
-            e = e.next;
-        }
-        first = null;
-        isValid = false;
+            first = null;
+            isValid = false;
 
-        if (TraceTruffleAssumptions.getValue()) {
-            if (invalidatedInstalledCode) {
-                logStackTrace();
+            if (TraceTruffleAssumptions.getValue()) {
+                if (invalidatedInstalledCode) {
+                    logStackTrace();
+                }
             }
         }
     }
@@ -94,18 +89,6 @@ public final class OptimizedAssumption extends AbstractAssumption {
             e.version = installedCode.getVersion();
             e.next = first;
             first = e;
-        } else {
-            invalidateWithReason(installedCode, "assumption already invalidated when installing code");
-            if (TraceTruffleAssumptions.getValue()) {
-                logInvalidatedInstalledCode(installedCode);
-                logStackTrace();
-            }
-        }
-    }
-
-    private void invalidateWithReason(InstalledCode installedCode, String reason) {
-        if (installedCode instanceof OptimizedCallTarget) {
-            ((OptimizedCallTarget) installedCode).invalidate(this, reason);
         } else {
             installedCode.invalidate();
         }
