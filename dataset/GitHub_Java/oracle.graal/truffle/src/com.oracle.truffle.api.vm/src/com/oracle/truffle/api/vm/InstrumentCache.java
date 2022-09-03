@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.api.vm;
 
+import static com.oracle.truffle.api.vm.PolyglotEngine.LOG;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -37,10 +39,10 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Level;
 
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import java.io.PrintStream;
 
 //TODO (chumer): maybe this class should share some code with LanguageCache?
 final class InstrumentCache {
@@ -55,7 +57,6 @@ final class InstrumentCache {
     private final String id;
     private final String name;
     private final String version;
-    private final boolean internal;
     private final ClassLoader loader;
     private final Set<String> services;
 
@@ -86,7 +87,6 @@ final class InstrumentCache {
         this.className = info.getProperty(prefix + "className");
         this.name = info.getProperty(prefix + "name");
         this.version = info.getProperty(prefix + "version");
-        this.internal = Boolean.valueOf(info.getProperty(prefix + "internal"));
         String loadedId = info.getProperty(prefix + "id");
         if (loadedId.equals("")) {
             /* use class name default id */
@@ -111,10 +111,6 @@ final class InstrumentCache {
         if (TruffleOptions.AOT) {
             loadClass();
         }
-    }
-
-    public boolean isInternal() {
-        return internal;
     }
 
     static List<InstrumentCache> load(Collection<ClassLoader> loaders) {
@@ -158,9 +154,7 @@ final class InstrumentCache {
                     p.load(is);
                 }
             } catch (IOException ex) {
-                PrintStream out = System.err;
-                out.println("Cannot process " + u + " as language definition");
-                ex.printStackTrace();
+                LOG.log(Level.CONFIG, "Cannot process " + u + " as language definition", ex);
                 continue;
             }
             for (int cnt = 1;; cnt++) {
@@ -215,9 +209,10 @@ final class InstrumentCache {
         return services.toArray(new String[0]);
     }
 
+    @SuppressWarnings("unchecked")
     private void loadClass() {
         try {
-            instrumentClass = Class.forName(className, true, loader).asSubclass(TruffleInstrument.class);
+            instrumentClass = (Class<? extends TruffleInstrument>) Class.forName(className, true, loader);
         } catch (Exception ex) {
             throw new IllegalStateException("Cannot initialize " + getName() + " instrument with implementation " + className, ex);
         }
