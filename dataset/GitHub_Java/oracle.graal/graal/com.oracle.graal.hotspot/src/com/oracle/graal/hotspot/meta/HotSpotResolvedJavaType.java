@@ -74,10 +74,8 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
 
     @Override
     public ResolvedJavaType componentType() {
-        if (isArrayClass) {
-            return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().getCompilerToVM().JavaType_componentType(this);
-        }
-        return null;
+        assert isArrayClass();
+        return (ResolvedJavaType) HotSpotGraalRuntime.getInstance().getCompilerToVM().JavaType_componentType(this);
     }
 
     @Override
@@ -124,8 +122,7 @@ public final class HotSpotResolvedJavaType extends HotSpotJavaType implements Re
                 return Constant.forObject(javaMirror);
             case ObjectHub:
                 return Constant.forObject(klassOop());
-            case StaticPrimitiveFields:
-            case StaticObjectFields:
+            case StaticFields:
                 return Constant.forObject(javaMirror);
             default:
                 assert false : "Should not reach here.";

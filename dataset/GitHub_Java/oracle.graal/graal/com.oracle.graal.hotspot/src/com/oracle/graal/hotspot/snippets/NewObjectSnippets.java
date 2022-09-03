@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot.snippets;
 
 import static com.oracle.graal.hotspot.nodes.CastFromHub.*;
+import static com.oracle.graal.hotspot.nodes.RegisterNode.*;
 import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
 import static com.oracle.graal.snippets.SnippetTemplate.Arguments.*;
 import static com.oracle.graal.snippets.nodes.DirectObjectStoreNode.*;
@@ -42,12 +43,9 @@ import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.Snippet.ConstantParameter;
 import com.oracle.graal.snippets.Snippet.Parameter;
-import com.oracle.graal.snippets.Snippet.Varargs;
-import com.oracle.graal.snippets.Snippet.VarargsParameter;
 import com.oracle.graal.snippets.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.snippets.SnippetTemplate.Arguments;
 import com.oracle.graal.snippets.SnippetTemplate.Key;
-import com.oracle.graal.snippets.nodes.*;
 
 /**
  * Snippets used for implementing NEW, ANEWARRAY and NEWARRAY.
@@ -56,9 +54,9 @@ public class NewObjectSnippets implements SnippetsInterface {
 
     @Snippet
     public static Word allocate(@Parameter("size") int size) {
-        Word thread = thread();
-        Word top = loadWordFromWord(thread, threadTlabTopOffset());
-        Word end = loadWordFromWord(thread, threadTlabEndOffset());
+        Word thread = asWord(register(threadReg(), wordKind()));
+        Word top = loadWord(thread, threadTlabTopOffset());
+        Word end = loadWord(thread, threadTlabEndOffset());
         Word newTop = top.plus(size);
         if (newTop.belowOrEqual(end)) {
             storeObject(thread, 0, threadTlabTopOffset(), newTop);
@@ -156,22 +154,6 @@ public class NewObjectSnippets implements SnippetsInterface {
     }
 
     /**
-     * Calls the runtime stub for implementing MULTIANEWARRAY.
-     */
-    @Snippet
-    public static Object newmultiarray(
-                    @Parameter("hub") Object hub,
-                    @ConstantParameter("rank") int rank,
-                    @VarargsParameter("dimensions") int[] dimensions) {
-        Word dims = DimensionsNode.allocaDimsArray(rank, wordKind());
-        ExplodeLoopNode.explodeLoop();
-        for (int i = 0; i < rank; i++) {
-            DirectObjectStoreNode.storeInt(dims, 0, i * 4, dimensions[i]);
-        }
-        return NewMultiArrayStubCall.call(hub, rank, dims);
-    }
-
-    /**
      * Maximum size of an object whose body is initialized by a sequence of
      * zero-stores to its fields. Larger objects have their bodies initialized
      * in a loop.
@@ -179,10 +161,15 @@ public class NewObjectSnippets implements SnippetsInterface {
     private static final int MAX_UNROLLED_OBJECT_ZEROING_SIZE = 10 * wordSize();
 
     /**
+     * Setting this to false causes (as yet inexplicable) crashes on lusearch.
+     */
+    private static final boolean USE_COMPILE_TIME_PROTOTYPE_MARK_WORD = true;
+
+    /**
      * Formats some allocated memory with an object header zeroes out the rest.
      */
     private static void formatObject(Object hub, int size, Word memory, Word compileTimePrototypeMarkWord, boolean fillContents) {
-        Word prototypeMarkWord = useBiasedLocking() ? loadWordFromObject(hub, prototypeMarkWordOffset()) : compileTimePrototypeMarkWord;
+        Word prototypeMarkWord = USE_COMPILE_TIME_PROTOTYPE_MARK_WORD ? compileTimePrototypeMarkWord : loadWord(asWord(hub), prototypeMarkWordOffset());
         storeObject(memory, 0, markOffset(), prototypeMarkWord);
         storeObject(memory, 0, hubOffset(), hub);
         if (fillContents) {
@@ -222,7 +209,6 @@ public class NewObjectSnippets implements SnippetsInterface {
         private final ResolvedJavaMethod initializeObjectArray;
         private final ResolvedJavaMethod initializePrimitiveArray;
         private final ResolvedJavaMethod allocateArrayAndInitialize;
-        private final ResolvedJavaMethod newmultiarray;
         private final TargetDescription target;
         private final boolean useTLAB;
 
@@ -235,7 +221,6 @@ public class NewObjectSnippets implements SnippetsInterface {
             initializeObjectArray = snippet("initializeObjectArray", Word.class, Object.class, int.class, int.class, Word.class, int.class, boolean.class);
             initializePrimitiveArray = snippet("initializePrimitiveArray", Word.class, Object.class, int.class, int.class, Word.class, int.class, boolean.class);
             allocateArrayAndInitialize = snippet("allocateArrayAndInitialize", int.class, int.class, int.class, int.class, ResolvedJavaType.class, Kind.class);
-            newmultiarray = snippet("newmultiarray", Object.class, int.class, int[].class);
         }
 
         /**
@@ -350,22 +335,6 @@ public class NewObjectSnippets implements SnippetsInterface {
             SnippetTemplate template = cache.get(key);
             Debug.log("Lowering initializeObjectArray in %s: node=%s, template=%s, arguments=%s", graph, initializeNode, template, arguments);
             template.instantiate(runtime, initializeNode, arguments);
-        }
-
-        @SuppressWarnings("unused")
-        public void lower(NewMultiArrayNode newmultiarrayNode, LoweringTool tool) {
-            StructuredGraph graph = (StructuredGraph) newmultiarrayNode.graph();
-            int rank = newmultiarrayNode.dimensionCount();
-            ValueNode[] dims = new ValueNode[rank];
-            for (int i = 0; i < newmultiarrayNode.dimensionCount(); i++) {
-                dims[i] = newmultiarrayNode.dimension(i);
-            }
-            HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) newmultiarrayNode.type();
-            HotSpotKlassOop hub = type.klassOop();
-            Key key = new Key(newmultiarray).add("dimensions", Varargs.vargargs(int.class, rank)).add("rank", rank);
-            Arguments arguments = arguments("dimensions", dims).add("hub", hub);
-            SnippetTemplate template = cache.get(key);
-            template.instantiate(runtime, newmultiarrayNode, arguments);
         }
     }
 
