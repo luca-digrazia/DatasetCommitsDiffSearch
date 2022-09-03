@@ -41,12 +41,9 @@ import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import sun.misc.Launcher;
 
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.api.replacements.MethodSubstitutionRegistry;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.NodeIterable;
 import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 
 /**
  * Manages a set of {@link InvocationPlugin}s.
@@ -128,15 +125,11 @@ public class InvocationPlugins {
      * {@linkplain InvocationPlugins#register(InvocationPlugin, Class, String, Class...)
      * registration} of invocation plugins.
      */
-    public static class Registration implements MethodSubstitutionRegistry {
+    public static class Registration {
 
         private final InvocationPlugins plugins;
         private final Type declaringType;
         private boolean allowOverwrite;
-
-        public Class<?> getReceiverType() {
-            return Receiver.class;
-        }
 
         /**
          * Creates an object for registering {@link InvocationPlugin}s for methods declared by a
@@ -743,8 +736,7 @@ public class InvocationPlugins {
             }
             if (plugin instanceof MethodSubstitutionPlugin) {
                 MethodSubstitutionPlugin msplugin = (MethodSubstitutionPlugin) plugin;
-                Method substitute = msplugin.getJavaSubstitute();
-                assert substitute.getAnnotation(MethodSubstitution.class) != null : format("Substitute method must be annotated with @%s: %s", MethodSubstitution.class.getSimpleName(), substitute);
+                msplugin.getJavaSubstitute();
                 return true;
             }
             int arguments = method.getDeclaredParameterCount();
