@@ -32,7 +32,7 @@ import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 
-public final class AMD64AddressValue extends CompositeValue {
+public class AMD64AddressValue extends CompositeValue {
 
     private static final long serialVersionUID = -4444600052487578694L;
 
@@ -54,7 +54,7 @@ public final class AMD64AddressValue extends CompositeValue {
     }
 
     private static Register toRegister(AllocatableValue value) {
-        if (value.equals(Value.ILLEGAL)) {
+        if (value == Value.ILLEGAL) {
             return Register.None;
         } else {
             RegisterValue reg = (RegisterValue) value;

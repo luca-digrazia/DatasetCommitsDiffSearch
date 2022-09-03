@@ -22,10 +22,6 @@
  */
 package com.oracle.graal.compiler.alloc;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.compiler.GraalDebugConfig.*;
-import static com.oracle.graal.lir.LIRValueUtil.*;
-
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
@@ -33,7 +29,11 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.util.*;
+
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
 
 /**
  * Represents an interval in the {@linkplain LinearScan linear scan register allocator}.
@@ -713,12 +713,12 @@ public final class Interval {
 
                 assert i1.splitParent() == this : "not a split child of this interval";
                 assert i1.kind() == kind() : "must be equal for all split children";
-                assert (i1.spillSlot() == null && spillSlot == null) || i1.spillSlot().equals(spillSlot()) : "must be equal for all split children";
+                assert i1.spillSlot() == spillSlot() : "must be equal for all split children";
 
                 for (int j = i + 1; j < splitChildren.size(); j++) {
                     Interval i2 = splitChildren.get(j);
 
-                    assert !i1.operand.equals(i2.operand) : "same register number";
+                    assert i1.operand != i2.operand : "same register number";
 
                     if (i1.from() < i2.from()) {
                         assert i1.to() <= i2.from() && i1.to() < i2.to() : "intervals overlapping";
@@ -922,7 +922,7 @@ public final class Interval {
 
         // do not add use positions for precolored intervals because they are never used
         if (registerPriority != RegisterPriority.None && isVariable(operand)) {
-            if (DetailedAsserts.getValue()) {
+            if (GraalOptions.DetailedAsserts) {
                 for (int i = 0; i < usePosList.size(); i++) {
                     assert pos <= usePosList.usePos(i) : "already added a use-position with lower position";
                     if (i > 0) {
@@ -1026,7 +1026,7 @@ public final class Interval {
         // split list of use positions
         result.usePosList = usePosList.splitAt(splitPos);
 
-        if (DetailedAsserts.getValue()) {
+        if (GraalOptions.DetailedAsserts) {
             for (int i = 0; i < usePosList.size(); i++) {
                 assert usePosList.usePos(i) < splitPos;
             }

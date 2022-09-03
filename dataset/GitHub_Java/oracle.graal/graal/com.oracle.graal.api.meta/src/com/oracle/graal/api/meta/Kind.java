@@ -117,24 +117,6 @@ public enum Kind implements PlatformKind {
     }
 
     /**
-     * Checks whether this type is a Java primitive type representing an integer number.
-     * 
-     * @return {@code true} if the stack kind is {@link #Int} or {@link #Long}.
-     */
-    public boolean isNumericInteger() {
-        return isStackInt || this == Kind.Long;
-    }
-
-    /**
-     * Checks whether this type is a Java primitive type representing a floating point number.
-     * 
-     * @return {@code true} if this is {@link #Float} or {@link #Double}.
-     */
-    public boolean isNumericFloat() {
-        return this == Kind.Float || this == Kind.Double;
-    }
-
-    /**
      * Returns the kind corresponding to the Java type string.
      * 
      * @param typeString the Java type string
@@ -380,12 +362,8 @@ public enum Kind implements PlatformKind {
             case Char:
             case Short:
                 return 16;
-            case Float:
-                return 32;
             case Int:
                 return 32;
-            case Double:
-                return 64;
             case Long:
                 return 64;
             default:

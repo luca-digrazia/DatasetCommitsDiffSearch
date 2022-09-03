@@ -23,7 +23,6 @@
 package com.oracle.graal.compiler.alloc;
 
 import static com.oracle.graal.api.code.ValueUtil.*;
-import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
@@ -31,6 +30,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.phases.*;
 
 /**
  */
@@ -134,7 +134,7 @@ final class MoveResolver {
         }
         for (i = 0; i < mappingTo.size(); i++) {
             Interval interval = mappingTo.get(i);
-            assert !usedRegs.contains(interval.location()) || interval.location().equals(mappingFrom.get(i).location()) : "stack slots used in mappingFrom must be disjoint to mappingTo";
+            assert !usedRegs.contains(interval.location()) || interval.location() == mappingFrom.get(i).location() : "stack slots used in mappingFrom must be disjoint to mappingTo";
         }
 
         return true;
@@ -169,7 +169,7 @@ final class MoveResolver {
 
         Value reg = to.location();
         if (isRegister(reg)) {
-            if (registerBlocked(asRegister(reg).number) > 1 || (registerBlocked(asRegister(reg).number) == 1 && !reg.equals(fromReg))) {
+            if (registerBlocked(asRegister(reg).number) > 1 || (registerBlocked(asRegister(reg).number) == 1 && reg != fromReg)) {
                 return false;
             }
         }
@@ -192,7 +192,7 @@ final class MoveResolver {
     }
 
     private void insertMove(Interval fromInterval, Interval toInterval) {
-        assert !fromInterval.operand.equals(toInterval.operand) : "from and to interval equal: " + fromInterval;
+        assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
         assert fromInterval.kind() == toInterval.kind() : "move between different types";
         assert insertIdx != -1 : "must setup insert position first";
 
@@ -201,7 +201,7 @@ final class MoveResolver {
 
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        if (TraceLinearScanLevel.getValue() >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: inserted move from %d (%s) to %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
         }
     }
@@ -213,7 +213,7 @@ final class MoveResolver {
         AllocatableValue toOpr = toInterval.operand;
         insertionBuffer.append(insertIdx, allocator.ir.spillMoveFactory.createMove(toOpr, fromOpr));
 
-        if (TraceLinearScanLevel.getValue() >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.print("MoveResolver: inserted move from constant %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
         }
     }
@@ -285,7 +285,7 @@ final class MoveResolver {
                 }
                 spillInterval.assignLocation(spillSlot);
 
-                if (TraceLinearScanLevel.getValue() >= 4) {
+                if (GraalOptions.TraceLinearScanLevel >= 4) {
                     TTY.println("created new Interval %s for spilling", spillInterval.operand);
                 }
 
@@ -327,11 +327,11 @@ final class MoveResolver {
     }
 
     void addMapping(Interval fromInterval, Interval toInterval) {
-        if (TraceLinearScanLevel.getValue() >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: adding mapping from interval %d (%s) to interval %d (%s)", fromInterval.operandNumber, fromInterval.location(), toInterval.operandNumber, toInterval.location());
         }
 
-        assert !fromInterval.operand.equals(toInterval.operand) : "from and to interval equal: " + fromInterval;
+        assert fromInterval.operand != toInterval.operand : "from and to interval equal: " + fromInterval;
         assert fromInterval.kind() == toInterval.kind();
         mappingFrom.add(fromInterval);
         mappingFromOpr.add(Value.ILLEGAL);
@@ -339,7 +339,7 @@ final class MoveResolver {
     }
 
     void addMapping(Value fromOpr, Interval toInterval) {
-        if (TraceLinearScanLevel.getValue() >= 4) {
+        if (GraalOptions.TraceLinearScanLevel >= 4) {
             TTY.println("MoveResolver: adding mapping from %s to %d (%s)", fromOpr, toInterval.operandNumber, toInterval.location());
         }
         assert isConstant(fromOpr) : "only for constants";

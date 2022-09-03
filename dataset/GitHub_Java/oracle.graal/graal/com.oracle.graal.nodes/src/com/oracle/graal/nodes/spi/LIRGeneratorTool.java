@@ -101,7 +101,7 @@ public interface LIRGeneratorTool {
 
     void emitNullCheck(ValueNode v, DeoptimizingNode deopting);
 
-    Value emitForeignCall(ForeignCallLinkage linkage, DeoptimizingNode info, Value... args);
+    Value emitCall(RuntimeCallTarget callTarget, CallingConvention cc, DeoptimizingNode info, Value... args);
 
     void emitIf(IfNode i);
 
@@ -111,14 +111,16 @@ public interface LIRGeneratorTool {
 
     void emitInvoke(Invoke i);
 
+    void visitRuntimeCall(RuntimeCallNode i);
+
     // Handling of block-end nodes still needs to be unified in the LIRGenerator.
     void visitMerge(MergeNode i);
 
-    void visitEndNode(AbstractEndNode i);
+    void visitEndNode(EndNode i);
 
     void visitLoopEnd(LoopEndNode i);
 
-    void visitCompareAndSwap(LoweredCompareAndSwapNode i, Value address);
+    void visitCompareAndSwap(CompareAndSwapNode i);
 
     // These methods define the contract a runtime specific backend must provide.
 

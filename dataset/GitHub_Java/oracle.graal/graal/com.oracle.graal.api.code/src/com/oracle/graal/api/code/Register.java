@@ -34,20 +34,18 @@ public final class Register implements Comparable<Register>, Serializable {
 
     private static final long serialVersionUID = -7213269157816016300L;
 
-    public static final RegisterCategory SPECIAL = new RegisterCategory("SPECIAL");
-
     /**
      * Invalid register.
      */
-    public static final Register None = new Register(-1, -1, 0, "noreg", SPECIAL);
+    public static final Register None = new Register(-1, -1, 0, "noreg");
 
     /**
      * Frame pointer of the current method. All spill slots and outgoing stack-based arguments are
      * addressed relative to this register.
      */
-    public static final Register Frame = new Register(-2, -2, 0, "framereg", SPECIAL);
+    public static final Register Frame = new Register(-2, -2, 0, "framereg", RegisterFlag.CPU);
 
-    public static final Register CallerFrame = new Register(-3, -3, 0, "callerframereg", SPECIAL);
+    public static final Register CallerFrame = new Register(-3, -3, 0, "callerframereg", RegisterFlag.CPU);
 
     /**
      * The identifier for this register that is unique across all the registers in a
@@ -79,10 +77,9 @@ public final class Register implements Comparable<Register>, Serializable {
     public final int spillSlotSize;
 
     /**
-     * A platform specific register category that describes which values can be stored in a
-     * register.
+     * The set of {@link RegisterFlag} values associated with this register.
      */
-    private final RegisterCategory registerCategory;
+    private final int flags;
 
     /**
      * An array of {@link RegisterValue} objects, for this register, with one entry per {@link Kind}
@@ -91,20 +88,26 @@ public final class Register implements Comparable<Register>, Serializable {
     private final HashMap<PlatformKind, RegisterValue> values;
 
     /**
-     * A platform specific register type that describes which values can be stored in a register.
+     * Attributes that characterize a register in a useful way.
+     * 
      */
-    public static class RegisterCategory {
+    public enum RegisterFlag {
+        /**
+         * Denotes an integral (i.e. non floating point) register.
+         */
+        CPU,
 
-        private String name;
+        /**
+         * Denotes a register whose lowest order byte can be addressed separately.
+         */
+        Byte,
 
-        public RegisterCategory(String name) {
-            this.name = name;
-        }
+        /**
+         * Denotes a floating point register.
+         */
+        FPU;
 
-        @Override
-        public String toString() {
-            return name;
-        }
+        public final int mask = 1 << (ordinal() + 1);
     }
 
     /**
@@ -114,19 +117,27 @@ public final class Register implements Comparable<Register>, Serializable {
      * @param encoding the target machine encoding for the register
      * @param spillSlotSize the size of the stack slot used to spill the value of the register
      * @param name the mnemonic name for the register
-     * @param registerCategory the register category
+     * @param flags the set of {@link RegisterFlag} values for the register
      */
-    public Register(int number, int encoding, int spillSlotSize, String name, RegisterCategory registerCategory) {
+    public Register(int number, int encoding, int spillSlotSize, String name, RegisterFlag... flags) {
         this.number = number;
         this.name = name;
         this.spillSlotSize = spillSlotSize;
-        this.registerCategory = registerCategory;
+        this.flags = createMask(flags);
         this.encoding = encoding;
         this.values = new HashMap<>();
     }
 
-    public RegisterCategory getRegisterCategory() {
-        return registerCategory;
+    private static int createMask(RegisterFlag... flags) {
+        int result = 0;
+        for (RegisterFlag f : flags) {
+            result |= f.mask;
+        }
+        return result;
+    }
+
+    public boolean isSet(RegisterFlag f) {
+        return (flags & f.mask) != 0;
     }
 
     /**
@@ -164,6 +175,29 @@ public final class Register implements Comparable<Register>, Serializable {
     }
 
     /**
+     * Determines if this a floating point register.
+     */
+    public boolean isFpu() {
+        return isSet(RegisterFlag.FPU);
+    }
+
+    /**
+     * Determines if this a general purpose register.
+     */
+    public boolean isCpu() {
+        return isSet(RegisterFlag.CPU);
+    }
+
+    /**
+     * Determines if this register has the {@link RegisterFlag#Byte} attribute set.
+     * 
+     * @return {@code true} iff this register has the {@link RegisterFlag#Byte} attribute set.
+     */
+    public boolean isByte() {
+        return isSet(RegisterFlag.Byte);
+    }
+
+    /**
      * Gets a hash code for this register.
      * 
      * @return the value of {@link #number}
@@ -171,6 +205,27 @@ public final class Register implements Comparable<Register>, Serializable {
     @Override
     public int hashCode() {
         return number;
+    }
+
+    /**
+     * Categorizes a set of registers by {@link RegisterFlag}.
+     * 
+     * @param registers a list of registers to be categorized
+     * @return a map from each {@link RegisterFlag} constant to the list of registers for which the
+     *         flag is {@linkplain #isSet(RegisterFlag) set}
+     */
+    public static EnumMap<RegisterFlag, Register[]> categorize(Register[] registers) {
+        EnumMap<RegisterFlag, Register[]> result = new EnumMap<>(RegisterFlag.class);
+        for (RegisterFlag flag : RegisterFlag.values()) {
+            ArrayList<Register> list = new ArrayList<>();
+            for (Register r : registers) {
+                if (r.isSet(flag)) {
+                    list.add(r);
+                }
+            }
+            result.put(flag, list.toArray(new Register[list.size()]));
+        }
+        return result;
     }
 
     /**

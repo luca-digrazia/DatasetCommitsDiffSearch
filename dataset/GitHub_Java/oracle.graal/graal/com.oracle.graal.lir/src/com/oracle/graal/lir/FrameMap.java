@@ -197,7 +197,7 @@ public final class FrameMap {
             // Without this, frameNeedsAllocating() would never return true.
             int total = 0;
             for (StackSlot s : freedSlots) {
-                total += target.arch.getSizeInBytes(s.getKind());
+                total += target.sizeInBytes(s.getKind());
             }
             int initialSpillSize = returnAddressSize() + calleeSaveAreaSize();
             if (total == spillSize - initialSpillSize) {
@@ -291,7 +291,7 @@ public final class FrameMap {
                 }
             }
         }
-        int size = target.arch.getSizeInBytes(kind);
+        int size = target.sizeInBytes(kind);
         spillSize = NumUtil.roundUp(spillSize + size, size);
         return getSlot(kind, 0);
     }

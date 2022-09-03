@@ -25,6 +25,7 @@ package com.oracle.graal.lir.ptx;
 import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.ptx.*;
 import com.oracle.graal.lir.*;
@@ -68,8 +69,8 @@ public final class PTXAddressValue extends CompositeValue {
     }
 
     public PTXAddress toAddress() {
-        // Register baseReg = base.equals( == Value.ILLEGAL) ? Register.None : asRegister(base);
-        return new PTXAddress((Variable) base, displacement);
+        Register baseReg = base == Value.ILLEGAL ? Register.None : asRegister(base);
+        return new PTXAddress(baseReg, displacement);
     }
 
     @Override

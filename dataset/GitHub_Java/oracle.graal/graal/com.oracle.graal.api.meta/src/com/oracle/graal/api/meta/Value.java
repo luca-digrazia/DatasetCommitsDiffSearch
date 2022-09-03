@@ -78,18 +78,4 @@ public abstract class Value implements Serializable {
     public final PlatformKind getPlatformKind() {
         return platformKind;
     }
-
-    @Override
-    public int hashCode() {
-        return 41 + platformKind.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof Value) {
-            Value that = (Value) obj;
-            return kind.equals(that.kind) && platformKind.equals(that.platformKind);
-        }
-        return false;
-    }
 }

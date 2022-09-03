@@ -87,11 +87,11 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     private static final RegisterValue RDX_L = AMD64.rdx.asValue(Kind.Long);
     private static final RegisterValue RCX_I = AMD64.rcx.asValue(Kind.Int);
 
-    private class AMD64SpillMoveFactory implements LIR.SpillMoveFactory {
+    public static class AMD64SpillMoveFactory implements LIR.SpillMoveFactory {
 
         @Override
         public LIRInstruction createMove(AllocatableValue result, Value input) {
-            return AMD64LIRGenerator.this.createMove(result, input);
+            return AMD64LIRGenerator.createMove(result, input);
         }
     }
 
@@ -143,7 +143,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return result;
     }
 
-    protected AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
+    private static AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof AMD64AddressValue) {
             return new LeaOp(dst, (AMD64AddressValue) src);
         } else if (isRegister(src) || isStackSlot(dst)) {

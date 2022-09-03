@@ -87,7 +87,7 @@ public final class VirtualObject extends Value {
                         }
                     } else {
                         ResolvedJavaField[] fields = vo.type.getInstanceFields(true);
-                        assert fields.length == vo.values.length : vo.type + ", fields=" + Arrays.toString(fields) + ", values=" + Arrays.toString(vo.values);
+                        assert fields.length == vo.values.length : vo.type + ", fields=" + Arrays.toString(fields) + ", values=" + vo.values;
                         for (int i = 0; i < vo.values.length; i++) {
                             if (i != 0) {
                                 buf.append(',');
@@ -138,23 +138,16 @@ public final class VirtualObject extends Value {
         if (values != null) {
             if (!type.isArray()) {
                 ResolvedJavaField[] fields = type.getInstanceFields(true);
-                int fieldIndex = 0;
+                assert fields.length == values.length : type + ": fields=" + Arrays.toString(fields) + ", field values=" + Arrays.toString(values);
                 for (int i = 0; i < values.length; i++) {
-                    ResolvedJavaField field = fields[fieldIndex++];
+                    ResolvedJavaField field = fields[i];
                     Kind valKind = values[i].getKind().getStackKind();
-                    if ((valKind == Kind.Double || valKind == Kind.Long) && field.getKind() == Kind.Int) {
-                        assert fields[fieldIndex].getKind() == Kind.Int;
-                        fieldIndex++;
-                    } else {
-                        assert valKind == field.getKind().getStackKind() : field + ": " + valKind + " != " + field.getKind().getStackKind();
-                    }
+                    assert valKind == field.getKind().getStackKind() : field + ": " + valKind + " != " + field.getKind().getStackKind();
                 }
-                assert fields.length == fieldIndex : type + ": fields=" + Arrays.toString(fields) + ", field values=" + Arrays.toString(values);
             } else {
                 Kind componentKind = type.getComponentType().getKind().getStackKind();
                 for (int i = 0; i < values.length; i++) {
-                    assert values[i].getKind().getStackKind() == componentKind || componentKind.getBitCount() >= values[i].getKind().getStackKind().getBitCount() : values[i].getKind() + " != " +
-                                    componentKind;
+                    assert values[i].getKind().getStackKind() == componentKind : values[i].getKind() + " != " + componentKind;
                 }
             }
 
@@ -185,11 +178,11 @@ public final class VirtualObject extends Value {
         }
         if (o instanceof VirtualObject) {
             VirtualObject l = (VirtualObject) o;
-            if (!l.type.equals(type) || l.values.length != values.length) {
+            if (l.type != type || l.values.length != values.length) {
                 return false;
             }
             for (int i = 0; i < values.length; i++) {
-                if (!Objects.equals(values[i], l.values[i])) {
+                if (values[i] != l.values[i]) {
                     return false;
                 }
             }
