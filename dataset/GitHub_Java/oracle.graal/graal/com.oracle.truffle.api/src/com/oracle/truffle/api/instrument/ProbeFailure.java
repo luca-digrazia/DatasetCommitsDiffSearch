@@ -26,6 +26,7 @@ package com.oracle.truffle.api.instrument;
 
 import com.oracle.truffle.api.instrument.ProbeNode.WrapperNode;
 import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.nodes.NodeUtil.NodeField;
 
 /**
  * Description of a failed attempt to instrument an AST node.
@@ -124,7 +125,7 @@ public final class ProbeFailure {
             sb.append("parent=" + parent.getClass().getSimpleName() + " ");
             if (child != null) {
                 sb.append("child=" + child.getClass().getSimpleName() + " ");
-                final NodeFieldAccessor field = NodeUtil.findChildField(parent, child);
+                final NodeField field = NodeUtil.findChildField(parent, child);
                 if (field != null) {
                     sb.append("field=" + field.getName() + " ");
                 }

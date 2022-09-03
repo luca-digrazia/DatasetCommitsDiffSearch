@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,6 +51,11 @@ public final class SLStatementWrapperNode extends SLStatementNode implements Wra
     }
 
     @Override
+    public boolean isInstrumentable() {
+        return false;
+    }
+
+    @Override
     public SLStatementNode getNonWrapperNode() {
         return child;
     }
@@ -60,11 +65,7 @@ public final class SLStatementWrapperNode extends SLStatementNode implements Wra
     }
 
     public Probe getProbe() {
-        try {
-            return probeNode.getProbe();
-        } catch (IllegalStateException e) {
-            throw new IllegalStateException("A lite-Probed wrapper has no explicit Probe");
-        }
+        return probeNode.getProbe();
     }
 
     @Override
@@ -73,27 +74,18 @@ public final class SLStatementWrapperNode extends SLStatementNode implements Wra
     }
 
     @Override
-    public void executeVoid(VirtualFrame frame) {
-        probeNode.enter(child, frame);
+    public void executeVoid(VirtualFrame vFrame) {
+        probeNode.enter(child, vFrame);
 
         try {
-            child.executeVoid(frame);
-            probeNode.returnVoid(child, frame);
+            child.executeVoid(vFrame);
+            probeNode.returnVoid(child, vFrame);
         } catch (KillException e) {
             throw (e);
         } catch (Exception e) {
-            probeNode.returnExceptional(child, frame, e);
+            probeNode.returnExceptional(child, vFrame, e);
             throw (e);
         }
     }
 
-    @Override
-    public Probe probe() {
-        throw new IllegalStateException("Cannot call probe() on a wrapper.");
-    }
-
-    @Override
-    public void probeLite(TruffleEventReceiver eventReceiver) {
-        throw new IllegalStateException("Cannot call probeLite() on a wrapper.");
-    }
 }

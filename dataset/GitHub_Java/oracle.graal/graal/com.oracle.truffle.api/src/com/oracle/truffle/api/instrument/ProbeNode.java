@@ -129,7 +129,7 @@ public final class ProbeNode extends Node implements TruffleEvents, Instrumentat
     /**
      * First {@link AbstractInstrumentNode} node in chain; {@code null} of no instruments in chain.
      */
-    @Child protected AbstractInstrumentNode firstInstrumentNode;
+    @Child protected AbstractInstrumentNode firstInstrument;
 
     @Override
     public boolean isInstrumentable() {
@@ -156,29 +156,29 @@ public final class ProbeNode extends Node implements TruffleEvents, Instrumentat
         if (trap != null) {
             trap.tagTrappedAt(((WrapperNode) this.getParent()).getChild(), vFrame.materialize());
         }
-        if (firstInstrumentNode != null) {
-            firstInstrumentNode.enter(node, vFrame);
+        if (firstInstrument != null) {
+            firstInstrument.enter(node, vFrame);
         }
     }
 
     public void returnVoid(Node node, VirtualFrame vFrame) {
         this.probe.checkProbeUnchanged();
-        if (firstInstrumentNode != null) {
-            firstInstrumentNode.returnVoid(node, vFrame);
+        if (firstInstrument != null) {
+            firstInstrument.returnVoid(node, vFrame);
         }
     }
 
     public void returnValue(Node node, VirtualFrame vFrame, Object result) {
         this.probe.checkProbeUnchanged();
-        if (firstInstrumentNode != null) {
-            firstInstrumentNode.returnValue(node, vFrame, result);
+        if (firstInstrument != null) {
+            firstInstrument.returnValue(node, vFrame, result);
         }
     }
 
     public void returnExceptional(Node node, VirtualFrame vFrame, Exception exception) {
         this.probe.checkProbeUnchanged();
-        if (firstInstrumentNode != null) {
-            firstInstrumentNode.returnExceptional(node, vFrame, exception);
+        if (firstInstrument != null) {
+            firstInstrument.returnExceptional(node, vFrame, exception);
         }
     }
 
@@ -194,7 +194,7 @@ public final class ProbeNode extends Node implements TruffleEvents, Instrumentat
         assert instrument.getProbe() == probe;
         // The existing chain of nodes may be empty
         // Attach the modified chain.
-        firstInstrumentNode = insert(instrument.addToChain(firstInstrumentNode));
+        firstInstrument = insert(instrument.addToChain(firstInstrument));
     }
 
     /**
@@ -205,11 +205,11 @@ public final class ProbeNode extends Node implements TruffleEvents, Instrumentat
     @TruffleBoundary
     void removeInstrument(Instrument instrument) {
         assert instrument.getProbe() == probe;
-        final AbstractInstrumentNode modifiedChain = instrument.removeFromChain(firstInstrumentNode);
+        final AbstractInstrumentNode modifiedChain = instrument.removeFromChain(firstInstrument);
         if (modifiedChain == null) {
-            firstInstrumentNode = null;
+            firstInstrument = null;
         } else {
-            firstInstrumentNode = insert(modifiedChain);
+            firstInstrument = insert(modifiedChain);
         }
     }
 

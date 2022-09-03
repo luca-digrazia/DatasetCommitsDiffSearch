@@ -176,11 +176,15 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
         }
+        boolean isInserted = newChild.parent == null;
         newChild.parent = this;
         if (TruffleOptions.TraceASTJSON) {
             JSONHelper.dumpNewChild(this, newChild);
         }
         newChild.adoptHelper();
+        if (isInserted) {
+            newChild.onAdopt();
+        }
     }
 
     private void adoptHelper() {
@@ -197,8 +201,12 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
         }
+        boolean isInserted = newChild.parent == null;
         newChild.parent = this;
         newChild.adoptUnadoptedHelper();
+        if (isInserted) {
+            newChild.onAdopt();
+        }
     }
 
     private void adoptUnadoptedHelper() {
@@ -317,6 +325,16 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @param reason the reason the replace supplied
      */
     protected void onReplace(Node newNode, CharSequence reason) {
+        // empty default
+    }
+
+    /**
+     * Subclasses of {@link Node} can implement this method to execute extra functionality when a
+     * node is effectively inserted into the AST. The {@code onAdopt} callback is called after the
+     * node has been effectively inserted, and it is guaranteed to be called only once for any given
+     * node.
+     */
+    protected void onAdopt() {
         // empty default
     }
 
@@ -557,19 +575,22 @@ public abstract class Node implements NodeInterface, Cloneable {
 
     private static final Object GIL = new Object();
 
-    private static final ThreadLocal<Integer> IN_ATOMIC_BLOCK = new ThreadLocal<Integer>() {
-        @Override
-        protected Integer initialValue() {
-            return 0;
-        }
-    };
+    private static final ThreadLocal<Integer> IN_ATOMIC_BLOCK = new ThreadLocal<>();
 
     private static boolean inAtomicBlock() {
-        return IN_ATOMIC_BLOCK.get() > 0;
+        Integer value = IN_ATOMIC_BLOCK.get();
+        if (value == null) {
+            return false;
+        }
+        return value > 0;
     }
 
     private static boolean enterAtomic() {
-        IN_ATOMIC_BLOCK.set(IN_ATOMIC_BLOCK.get() + 1);
+        Integer currentValue = IN_ATOMIC_BLOCK.get();
+        if (currentValue == null) {
+            currentValue = 0;
+        }
+        IN_ATOMIC_BLOCK.set(currentValue + 1);
         return true;
     }
 
