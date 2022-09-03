@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.compiler.test;
 
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
 import com.oracle.graal.api.directives.*;
@@ -36,6 +34,7 @@ import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.jvmci.meta.*;
 
 public class CountedLoopTest extends GraalCompilerTest {
 
@@ -187,22 +186,6 @@ public class CountedLoopTest extends GraalCompilerTest {
     @Test
     public void decrementEq3() {
         test("decrementEqSnippet", 256, 0, 3);
-    }
-
-    public static Result twoVariablesSnippet() {
-        Result ret = new Result();
-        int j = 0;
-        for (int i = 0; i < 1024; i++) {
-            j += 5;
-            ret.extremum = get(InductionVariable::extremumNode, j);
-        }
-        ret.exitValue = get(InductionVariable::exitValueNode, j);
-        return ret;
-    }
-
-    @Test
-    public void testTwoVariables() {
-        test("twoVariablesSnippet");
     }
 
     @NodeInfo
