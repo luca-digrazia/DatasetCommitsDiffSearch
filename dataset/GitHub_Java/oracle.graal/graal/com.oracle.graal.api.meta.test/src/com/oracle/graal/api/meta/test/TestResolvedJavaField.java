@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,7 @@
  */
 package com.oracle.graal.api.meta.test;
 
+import static java.lang.reflect.Modifier.*;
 import static org.junit.Assert.*;
 
 import java.lang.annotation.*;
@@ -72,19 +73,66 @@ public class TestResolvedJavaField extends FieldUniverse {
 
     @Test
     public void readConstantValueTest() throws NoSuchFieldException {
+        for (Map.Entry<Field, ResolvedJavaField> e : fields.entrySet()) {
+            Field field = e.getKey();
+            if (isStatic(field.getModifiers())) {
+                try {
+                    Object expected = field.get(null);
+                    Object actual = snippetReflection.asBoxedValue(e.getValue().readConstantValue(null));
+                    assertEquals(expected, actual);
+                } catch (IllegalArgumentException | IllegalAccessException e1) {
+                }
+            } else {
+                try {
+                    Object receiver = field.getDeclaringClass().newInstance();
+                    Object expected = field.get(receiver);
+                    Object actual = snippetReflection.asBoxedValue(e.getValue().readConstantValue(snippetReflection.forObject(receiver)));
+                    assertEquals(expected, actual);
+                } catch (InstantiationException | IllegalArgumentException | IllegalAccessException e1) {
+                }
+            }
+        }
+
         ResolvedJavaField field = metaAccess.lookupJavaField(getClass().getDeclaredField("stringField"));
         for (Object receiver : new Object[]{this, null, new String()}) {
-            JavaConstant value = constantReflection.readConstantFieldValue(field, snippetReflection.forObject(receiver));
+            Constant value = field.readConstantValue(snippetReflection.forObject(receiver));
             assertNull(value);
         }
 
         ResolvedJavaField constField = metaAccess.lookupJavaField(getClass().getDeclaredField("constantStringField"));
         for (Object receiver : new Object[]{this, null, new String()}) {
-            JavaConstant value = constantReflection.readConstantFieldValue(constField, snippetReflection.forObject(receiver));
+            Constant value = constField.readConstantValue(snippetReflection.forObject(receiver));
             if (value != null) {
                 Object expected = "constantField";
-                assertTrue(snippetReflection.asObject(Object.class, value) == expected);
+                assertTrue(snippetReflection.asObject(value) == expected);
             }
+        }
+    }
+
+    @Test
+    public void readValueTest() throws IllegalArgumentException, IllegalAccessException {
+        for (Map.Entry<Field, ResolvedJavaField> e : fields.entrySet()) {
+            Field field = e.getKey();
+            field.setAccessible(true);
+            if (isStatic(field.getModifiers())) {
+                try {
+                    Object expected = field.get(null);
+                    Object actual = snippetReflection.asBoxedValue(e.getValue().readValue(null));
+                    assertEquals(expected, actual);
+                } catch (IllegalArgumentException | IllegalAccessException e1) {
+                }
+            }
+        }
+
+        String testString = "a test string";
+        testString.hashCode(); // create hash
+        for (Field f : String.class.getDeclaredFields()) {
+            f.setAccessible(true);
+            ResolvedJavaField rf = metaAccess.lookupJavaField(f);
+            Object receiver = isStatic(f.getModifiers()) ? null : testString;
+            Object expected = f.get(receiver);
+            Object actual = snippetReflection.asBoxedValue(rf.readValue(receiver == null ? null : snippetReflection.forObject(receiver)));
+            assertEquals(expected, actual);
         }
     }
 
