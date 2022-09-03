@@ -22,30 +22,20 @@
  */
 package com.oracle.graal.hotspot.debug;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.util.Iterator;
-import java.util.Locale;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.inittimer.SuppressFBWarnings;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionType;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.inittimer.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.hotspot.replacements.NewObjectSnippets;
-import com.oracle.graal.nodes.debug.DynamicCounterNode;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodes.debug.*;
 
 //JaCoCo Exclude
 
@@ -87,20 +77,20 @@ public class BenchmarkCounters {
 
         //@formatter:off
         @Option(help = "Turn on the benchmark counters, and displays the results on VM shutdown", type = OptionType.Debug)
-        public static final OptionValue<Boolean> GenericDynamicCounters = new OptionValue<>(false);
+        private static final OptionValue<Boolean> GenericDynamicCounters = new OptionValue<>(false);
         @Option(help = "Turn on the benchmark counters, and displays the results every n milliseconds", type = OptionType.Debug)
-        public static final OptionValue<Integer> TimedDynamicCounters = new OptionValue<>(-1);
+        private static final OptionValue<Integer> TimedDynamicCounters = new OptionValue<>(-1);
 
         @Option(help = "Turn on the benchmark counters, and listen for specific patterns on System.out/System.err:%n" +
                        "Format: (err|out),start pattern,end pattern (~ matches multiple digits)%n" +
                        "Examples:%n" +
                        "  dacapo = 'err, starting =====, PASSED in'%n" +
                        "  specjvm2008 = 'out,Iteration ~ (~s) begins:,Iteration ~ (~s) ends:'", type = OptionType.Debug)
-        public static final OptionValue<String> BenchmarkDynamicCounters = new OptionValue<>(null);
+        private static final OptionValue<String> BenchmarkDynamicCounters = new OptionValue<>(null);
         @Option(help = "Use grouping separators for number printing", type = OptionType.Debug)
-        public static final OptionValue<Boolean> DynamicCountersPrintGroupSeparator = new OptionValue<>(true);
+        private static final OptionValue<Boolean> DynamicCountersPrintGroupSeparator = new OptionValue<>(true);
         @Option(help = "Print in human readable format", type = OptionType.Debug)
-        public static final OptionValue<Boolean> DynamicCountersHumanReadable = new OptionValue<>(true);
+        private static final OptionValue<Boolean> DynamicCountersHumanReadable = new OptionValue<>(true);
         //@formatter:on
     }
 
@@ -331,7 +321,7 @@ public class BenchmarkCounters {
         }
     }
 
-    public static void initialize(final HotSpotJVMCIRuntime jvmciRuntime) {
+    public static void initialize(final CompilerToVM compilerToVM) {
         final class BenchmarkCountersOutputStream extends CallbackOutputStream {
 
             private long startTime;
@@ -347,7 +337,7 @@ public class BenchmarkCounters {
                 switch (index) {
                     case 2:
                         startTime = System.nanoTime();
-                        BenchmarkCounters.clear(jvmciRuntime.collectCounters());
+                        BenchmarkCounters.clear(compilerToVM.collectCounters());
                         running = true;
                         break;
                     case 1:
@@ -359,7 +349,7 @@ public class BenchmarkCounters {
                         if (waitingForEnd) {
                             waitingForEnd = false;
                             running = false;
-                            BenchmarkCounters.dump(delegate, (System.nanoTime() - startTime) / 1000000000d, jvmciRuntime.collectCounters(), 100);
+                            BenchmarkCounters.dump(delegate, (System.nanoTime() - startTime) / 1000000000d, compilerToVM.collectCounters(), 100);
                         }
                         break;
                 }
@@ -398,7 +388,7 @@ public class BenchmarkCounters {
                         } catch (InterruptedException e) {
                         }
                         long time = System.nanoTime();
-                        dump(out, (time - lastTime) / 1000000000d, jvmciRuntime.collectCounters(), 10);
+                        dump(out, (time - lastTime) / 1000000000d, compilerToVM.collectCounters(), 10);
                         lastTime = time;
                     }
                 }
@@ -409,13 +399,13 @@ public class BenchmarkCounters {
             enabled = true;
         }
         if (enabled) {
-            clear(jvmciRuntime.collectCounters());
+            clear(compilerToVM.collectCounters());
         }
     }
 
-    public static void shutdown(HotSpotJVMCIRuntime jvmciRuntime, long compilerStartTime) {
+    public static void shutdown(CompilerToVM compilerToVM, long compilerStartTime) {
         if (Options.GenericDynamicCounters.getValue()) {
-            dump(TTY.out, (System.nanoTime() - compilerStartTime) / 1000000000d, jvmciRuntime.collectCounters(), 100);
+            dump(TTY.out, (System.nanoTime() - compilerStartTime) / 1000000000d, compilerToVM.collectCounters(), 100);
         }
     }
 }
