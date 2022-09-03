@@ -22,12 +22,17 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CompilationResult.*;
-import com.oracle.graal.hotspot.logging.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.code.CompilationResult.ExceptionHandler;
 import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Augments a {@link CompilationResult} with HotSpot-specific information.
@@ -37,15 +42,27 @@ public final class HotSpotCompilationResult extends CompilerObject {
     private static final long serialVersionUID = 7807321392203253218L;
     public final CompilationResult comp;
     public final HotSpotResolvedJavaMethod method; // used only for methods
-    public final String name; // used only for stubs
+    public final int entryBCI; // used only for methods
+
+    /**
+     * Name of the RuntimeStub to be installed for this compilation result. If null, then the
+     * compilation result will be installed as an nmethod.
+     */
+    public final String stubName;
 
     public final Site[] sites;
     public final ExceptionHandler[] exceptionHandlers;
 
-    public HotSpotCompilationResult(HotSpotResolvedJavaMethod method, CompilationResult comp) {
+    public HotSpotCompilationResult(HotSpotResolvedJavaMethod method, int entryBCI, CompilationResult comp) {
         this.method = method;
         this.comp = comp;
-        this.name = null;
+        this.entryBCI = entryBCI;
+
+        if (graalRuntime().getRuntime().lookupJavaType(Stub.class).isAssignableFrom(method.getDeclaringClass()) && method.getAnnotation(Snippet.class) != null) {
+            this.stubName = MetaUtil.format("%h.%n", method);
+        } else {
+            this.stubName = null;
+        }
 
         sites = getSortedSites(comp);
         if (comp.getExceptionHandlers() == null) {
@@ -55,8 +72,18 @@ public final class HotSpotCompilationResult extends CompilerObject {
         }
     }
 
+    static class SiteComparator implements Comparator<Site> {
+
+        public int compare(Site s1, Site s2) {
+            if (s1.pcOffset == s2.pcOffset && (s1 instanceof Mark ^ s2 instanceof Mark)) {
+                return s1 instanceof Mark ? -1 : 1;
+            }
+            return s1.pcOffset - s2.pcOffset;
+        }
+    }
+
     private static Site[] getSortedSites(CompilationResult target) {
-        List<?>[] lists = new List<?>[] {target.getSafepoints(), target.getDataReferences(), target.getMarks()};
+        List<?>[] lists = new List<?>[]{target.getInfopoints(), target.getDataReferences(), target.getMarks()};
         int count = 0;
         for (List<?> list : lists) {
             count += list.size();
@@ -68,20 +95,7 @@ public final class HotSpotCompilationResult extends CompilerObject {
                 result[pos++] = (Site) elem;
             }
         }
-        Arrays.sort(result, new Comparator<Site>() {
-
-            public int compare(Site s1, Site s2) {
-                if (s1.pcOffset == s2.pcOffset && (s1 instanceof Mark ^ s2 instanceof Mark)) {
-                    return s1 instanceof Mark ? -1 : 1;
-                }
-                return s1.pcOffset - s2.pcOffset;
-            }
-        });
-        if (Logger.ENABLED) {
-            for (Site site : result) {
-                Logger.log(site.pcOffset + ": " + site);
-            }
-        }
+        Arrays.sort(result, new SiteComparator());
         return result;
     }
 }

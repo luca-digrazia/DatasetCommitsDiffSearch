@@ -26,7 +26,7 @@ import java.util.*;
 
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
-import javax.tools.Diagnostic.Kind;
+import javax.tools.Diagnostic.*;
 
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
@@ -47,8 +47,6 @@ public final class TruffleTypes {
     private final TypeMirror invalidAssumption;
     private final DeclaredType childAnnotation;
     private final DeclaredType childrenAnnotation;
-    private final DeclaredType nodeInfoAnnotation;
-    private final DeclaredType nodeInfoKind;
     private final TypeMirror compilerDirectives;
     private final TypeMirror compilerAsserts;
 
@@ -65,12 +63,6 @@ public final class TruffleTypes {
         compilerAsserts = getRequired(context, CompilerAsserts.class);
         assumption = getRequired(context, Assumption.class);
         invalidAssumption = getRequired(context, InvalidAssumptionException.class);
-        nodeInfoAnnotation = getRequired(context, NodeInfo.class);
-        nodeInfoKind = getRequired(context, NodeInfo.Kind.class);
-    }
-
-    public DeclaredType getNodeInfoAnnotation() {
-        return nodeInfoAnnotation;
     }
 
     public boolean verify(ProcessorContext context, Element element, AnnotationMirror mirror) {
@@ -83,10 +75,6 @@ public final class TruffleTypes {
         }
 
         return false;
-    }
-
-    public DeclaredType getNodeInfoKind() {
-        return nodeInfoKind;
     }
 
     private DeclaredType getRequired(ProcessorContext context, Class clazz) {
