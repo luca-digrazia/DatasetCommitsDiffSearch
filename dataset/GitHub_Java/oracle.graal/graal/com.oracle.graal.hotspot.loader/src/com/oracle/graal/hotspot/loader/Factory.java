@@ -24,33 +24,64 @@ package com.oracle.graal.hotspot.loader;
 
 import java.io.*;
 import java.net.*;
+import java.util.*;
 
 /**
- * Utility to create a separate class loader for loading classes in {@code graal.jar}.
+ * Utility to create and register a separate class loader for loading Graal classes (i.e., those in
+ * found in jars in lib/graal).
  */
 public class Factory {
 
     /**
-     * Creates a new class loader for loading classes in {@code graal.jar}.
+     * Copy of the {@code UseGraalClassLoader} VM option. Set by the VM before the static
+     * initializer is called.
      */
-    public static ClassLoader newClassLoader() throws MalformedURLException {
-        URL[] urls = {getGraalJarUrl()};
-        return URLClassLoader.newInstance(urls);
+    private static boolean useGraalClassLoader;
+
+    /**
+     * Registers the Graal class loader in the VM.
+     */
+    private static native void init(ClassLoader loader);
+
+    static {
+        init(useGraalClassLoader ? newClassLoader() : null);
     }
 
     /**
-     * Gets the URL for {@code graal.jar}.
+     * Creates a new class loader for loading graal classes.
      */
-    private static URL getGraalJarUrl() throws MalformedURLException {
-        File file = new File(System.getProperty("java.home"));
-        for (String name : new String[]{"lib", "graal.jar"}) {
-            file = new File(file, name);
+    private static ClassLoader newClassLoader() {
+        URL[] urls = getGraalJarsUrls();
+        ClassLoader parent = null;
+        return URLClassLoader.newInstance(urls, parent);
+    }
+
+    /**
+     * Gets the URLs for lib/graal/graal*.jar.
+     */
+    private static URL[] getGraalJarsUrls() {
+        File javaHome = new File(System.getProperty("java.home"));
+        File lib = new File(javaHome, "lib");
+        File graal = new File(lib, "graal");
+        if (!graal.exists()) {
+            throw new InternalError(graal + " does not exist");
         }
 
-        if (!file.exists()) {
-            throw new InternalError(file + " does not exist");
+        List<URL> urls = new ArrayList<>();
+        for (String fileName : graal.list()) {
+            if (fileName.endsWith(".jar")) {
+                File file = new File(graal, fileName);
+                if (file.isDirectory()) {
+                    continue;
+                }
+                try {
+                    urls.add(file.toURI().toURL());
+                } catch (MalformedURLException e) {
+                    throw new InternalError(e);
+                }
+            }
         }
 
-        return file.toURI().toURL();
+        return urls.toArray(new URL[urls.size()]);
     }
 }
