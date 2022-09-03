@@ -27,8 +27,6 @@ import static com.oracle.graal.nodes.calc.CompareNode.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
@@ -55,8 +53,8 @@ import com.oracle.graal.replacements.SnippetTemplate.UsageReplacer;
  */
 public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
 
-    public InstanceOfSnippetsTemplates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
-        super(providers, snippetReflection, target);
+    public InstanceOfSnippetsTemplates(Providers providers, TargetDescription target) {
+        super(providers, target);
     }
 
     /**
@@ -95,7 +93,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
      */
     protected InstanceOfUsageReplacer createReplacer(FloatingNode instanceOf, Instantiation instantiation, Node usage, final StructuredGraph graph) {
         InstanceOfUsageReplacer replacer;
-        if (usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof ShortCircuitOrNode || usage instanceof GuardingPiNode || usage instanceof ConditionAnchorNode) {
+        if (usage instanceof IfNode || usage instanceof FixedGuardNode || usage instanceof ShortCircuitOrNode || usage instanceof GuardingPiNode) {
             replacer = new NonMaterializationUsageReplacer(instantiation, ConstantNode.forInt(1, graph), ConstantNode.forInt(0, graph), instanceOf, usage);
         } else {
             assert usage instanceof ConditionalNode : "unexpected usage of " + instanceOf + ": " + usage;
@@ -132,7 +130,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
 
         /**
          * Gets the result of this instantiation as a condition.
-         *
+         * 
          * @param testValue the returned condition is true if the result is equal to this value
          */
         LogicNode asCondition(ValueNode testValue) {
@@ -150,7 +148,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
 
         /**
          * Gets the result of the instantiation as a materialized value.
-         *
+         * 
          * @param t the true value for the materialization
          * @param f the false value for the materialization
          */
@@ -234,6 +232,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
         public void replaceUsingInstantiation() {
             ValueNode newValue = instantiation.asMaterialization(usage.graph(), trueValue, falseValue);
             usage.replaceAtUsages(newValue);
+            usage.clearInputs();
             assert usage.usages().isEmpty();
             GraphUtil.killWithUnusedFloatingInputs(usage);
         }
@@ -245,6 +244,7 @@ public abstract class InstanceOfSnippetsTemplates extends AbstractTemplates {
             newNode.inferStamp();
             instantiation.initialize(newNode, trueValue, falseValue);
             usage.replaceAtUsages(newNode);
+            usage.clearInputs();
             assert usage.usages().isEmpty();
             GraphUtil.killWithUnusedFloatingInputs(usage);
         }

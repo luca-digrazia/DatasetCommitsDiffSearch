@@ -49,8 +49,8 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
     }
 
     public ConditionalNode(LogicNode condition, ValueNode trueValue, ValueNode falseValue) {
-        super(trueValue.stamp().meet(falseValue.stamp()), trueValue, falseValue);
-        assert trueValue.stamp().isCompatible(falseValue.stamp());
+        super(trueValue.kind(), trueValue, falseValue);
+        assert trueValue.kind() == falseValue.kind();
         this.condition = condition;
     }
 
@@ -109,7 +109,7 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool generator) {
+    public void generate(LIRGeneratorTool generator) {
         generator.emitConditional(this);
     }
 

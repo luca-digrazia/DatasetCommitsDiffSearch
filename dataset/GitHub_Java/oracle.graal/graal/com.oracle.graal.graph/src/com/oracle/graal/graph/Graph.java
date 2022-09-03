@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -394,55 +394,15 @@ public class Graph {
         }
     }
 
-    public boolean isNew(Mark mark, Node node) {
-        return node.id >= mark.getValue();
+    public boolean isNew(int mark, Node node) {
+        return node.id >= mark;
     }
 
     /**
-     * A snapshot of the {@linkplain Graph#getNodeCount() live node count} in a graph.
+     * Gets a mark that can be used with {@link #getNewNodes(int)}.
      */
-    public static class Mark {
-        private final int value;
-
-        Mark(Graph graph) {
-            this.value = graph.nodeIdCount();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof Mark) {
-                Mark other = (Mark) obj;
-                return other.getValue() == getValue();
-            }
-            return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return value;
-        }
-
-        /**
-         * Determines if this mark is positioned at the first live node in the graph.
-         */
-        public boolean isStart() {
-            return value == 0;
-        }
-
-        /**
-         * Gets the {@linkplain Graph#getNodeCount() live node count} of the associated graph when
-         * this object was created.
-         */
-        int getValue() {
-            return value;
-        }
-    }
-
-    /**
-     * Gets a mark that can be used with {@link #getNewNodes}.
-     */
-    public Mark getMark() {
-        return new Mark(this);
+    public int getMark() {
+        return nodeIdCount();
     }
 
     private class NodeIterator implements Iterator<Node> {
@@ -499,8 +459,8 @@ public class Graph {
      * Returns an {@link Iterable} providing all nodes added since the last {@link Graph#getMark()
      * mark}.
      */
-    public NodeIterable<Node> getNewNodes(Mark mark) {
-        final int index = mark.getValue();
+    public NodeIterable<Node> getNewNodes(int mark) {
+        final int index = mark;
         return new AbstractNodeIterable<Node>() {
 
             @Override

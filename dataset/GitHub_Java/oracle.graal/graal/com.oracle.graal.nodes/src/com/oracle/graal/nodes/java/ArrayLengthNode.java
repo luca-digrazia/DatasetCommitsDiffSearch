@@ -28,7 +28,6 @@ import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.nodes.util.*;
 
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
@@ -57,30 +56,23 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
 
     /**
      * Gets the length of an array if possible.
-     *
+     * 
+     * @param graph TODO
+     * @param array an array
+     * 
      * @return a node representing the length of {@code array} or null if it is not available
      */
-    public static ValueNode readArrayLength(StructuredGraph graph, ValueNode originalArray, ConstantReflectionProvider constantReflection) {
-        ArrayLengthProvider foundArrayLengthProvider = null;
-        ValueNode result = originalArray;
-        while (result instanceof ValueProxy) {
-            if (result instanceof ArrayLengthProvider) {
-                foundArrayLengthProvider = (ArrayLengthProvider) result;
-            }
-            result = ((ValueProxy) result).getOriginalNode();
-        }
-
-        if (foundArrayLengthProvider != null) {
-            ValueNode length = foundArrayLengthProvider.length();
+    public static ValueNode readArrayLength(StructuredGraph graph, ValueNode array, ConstantReflectionProvider constantReflection) {
+        if (array instanceof ArrayLengthProvider) {
+            ValueNode length = ((ArrayLengthProvider) array).length();
             if (length != null) {
                 return length;
             }
         }
-        ValueNode array = GraphUtil.unproxify(originalArray);
         if (constantReflection != null && array.isConstant() && !array.isNullConstant()) {
             Constant constantValue = array.asConstant();
             if (constantValue != null && constantValue.isNonNull()) {
-                Integer constantLength = constantReflection.readArrayLength(constantValue);
+                Integer constantLength = constantReflection.lookupArrayLength(constantValue);
                 if (constantLength != null) {
                     return ConstantNode.forInt(constantLength, graph);
                 }

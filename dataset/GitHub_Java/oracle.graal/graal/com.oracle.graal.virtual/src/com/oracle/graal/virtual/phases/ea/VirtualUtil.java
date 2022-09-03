@@ -91,23 +91,17 @@ public final class VirtualUtil {
         boolean success = true;
         for (Node node : obsoleteNodes) {
             if (flood.isMarked(node)) {
-                TTY.println("offending node path:");
+                TTY.print("offending node path:");
                 Node current = node;
-                TTY.print(current.toString());
-                while (true) {
+                while (current != null) {
+                    TTY.println(current.toString());
                     current = path.get(current);
-                    if (current != null) {
-                        TTY.print(" -> " + current.toString());
-                        if (current instanceof FixedNode && !obsoleteNodes.contains(current)) {
-                            break;
-                        }
+                    if (current != null && current instanceof FixedNode && !obsoleteNodes.contains(current)) {
+                        break;
                     }
                 }
                 success = false;
             }
-        }
-        if (!success) {
-            TTY.println();
         }
         return success;
     }

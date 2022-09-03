@@ -29,7 +29,6 @@ import java.util.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.extended.*;
@@ -233,7 +232,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         private void duplicate(PhaseContext phaseContext) {
             Debug.log("tail duplication at merge %s in %s", merge, graph.method());
 
-            Mark startMark = graph.getMark();
+            int startMark = graph.getMark();
 
             ValueAnchorNode anchor = addValueAnchor();
 

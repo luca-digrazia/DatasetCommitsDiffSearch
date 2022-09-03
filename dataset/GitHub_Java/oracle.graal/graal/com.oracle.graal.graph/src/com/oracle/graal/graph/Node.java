@@ -152,7 +152,7 @@ public abstract class Node implements Cloneable, Formattable {
         this.id = INITIAL_ID;
     }
 
-    int id() {
+    protected int id() {
         return id;
     }
 

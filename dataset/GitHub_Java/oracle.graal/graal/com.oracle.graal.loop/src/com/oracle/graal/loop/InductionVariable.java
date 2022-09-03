@@ -22,9 +22,9 @@
  */
 package com.oracle.graal.loop;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * This class describes a value node that is an induction variable in a counted loop.
@@ -32,8 +32,7 @@ import com.oracle.graal.nodes.type.*;
 public abstract class InductionVariable {
 
     public enum Direction {
-        Up,
-        Down;
+        Up, Down;
 
         public Direction opposite() {
             switch (this) {
@@ -90,10 +89,10 @@ public abstract class InductionVariable {
      * induction variable in the loop body of the last iteration.
      */
     public ValueNode extremumNode() {
-        return extremumNode(false, valueNode().stamp());
+        return extremumNode(false, valueNode().kind());
     }
 
-    public abstract ValueNode extremumNode(boolean assumePositiveTripCount, Stamp stamp);
+    public abstract ValueNode extremumNode(boolean assumePositiveTripCount, Kind kind);
 
     public abstract boolean isConstantExtremum();
 

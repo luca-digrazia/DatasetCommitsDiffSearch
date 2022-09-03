@@ -155,8 +155,7 @@ public class CountedLoopInfo {
             }
             cond = graph.unique(new IntegerLessThanNode(end, v1));
         }
-        overflowGuard = graph.unique(new GuardNode(cond, BeginNode.prevBegin(loop.entryPoint()), DeoptimizationReason.LoopLimitCheck, DeoptimizationAction.InvalidateRecompile, true,
-                        Constant.NULL_OBJECT)); // TODO gd: use speculation
+        overflowGuard = graph.unique(new GuardNode(cond, BeginNode.prevBegin(loop.entryPoint()), DeoptimizationReason.LoopLimitCheck, DeoptimizationAction.InvalidateRecompile, true));
         loop.loopBegin().setOverflowGuard(overflowGuard);
         return overflowGuard;
     }

@@ -700,9 +700,7 @@ public final class NodeClass extends FieldIntrospection {
                     }
                 } else {
                     Object o = unsafe.getObject(n, dataOffsets[i]);
-                    if (o instanceof Object[]) {
-                        number += Arrays.deepHashCode((Object[]) o);
-                    } else if (o != null) {
+                    if (o != null) {
                         number += o.hashCode();
                     }
                 }
@@ -782,14 +780,8 @@ public final class NodeClass extends FieldIntrospection {
                 Object objectB = unsafe.getObject(b, dataOffsets[i]);
                 if (objectA != objectB) {
                     if (objectA != null && objectB != null) {
-                        if (objectA instanceof Object[] && objectB instanceof Object[]) {
-                            if (!Arrays.deepEquals((Object[]) objectA, (Object[]) objectB)) {
-                                return false;
-                            }
-                        } else {
-                            if (!(objectA.equals(objectB))) {
-                                return false;
-                            }
+                        if (!(objectA.equals(objectB))) {
+                            return false;
                         }
                     } else {
                         return false;

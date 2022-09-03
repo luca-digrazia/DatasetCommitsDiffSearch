@@ -26,8 +26,9 @@ import java.util.AbstractMap.SimpleEntry;
 import java.util.*;
 import java.util.Map.Entry;
 
-public class NodeMap<T> extends NodeIdAccessor {
+public class NodeMap<T> {
 
+    private final Graph graph;
     private final boolean autogrow;
     protected Object[] values;
 
@@ -36,13 +37,13 @@ public class NodeMap<T> extends NodeIdAccessor {
     }
 
     public NodeMap(Graph graph, boolean autogrow) {
-        super(graph);
+        this.graph = graph;
         this.values = new Object[graph.nodeIdCount()];
         this.autogrow = autogrow;
     }
 
     public NodeMap(NodeMap<T> copyFrom) {
-        super(copyFrom.graph);
+        this.graph = copyFrom.graph;
         this.values = Arrays.copyOf(copyFrom.values, copyFrom.values.length);
         this.autogrow = copyFrom.autogrow;
     }
@@ -50,7 +51,7 @@ public class NodeMap<T> extends NodeIdAccessor {
     @SuppressWarnings("unchecked")
     public T get(Node node) {
         check(node);
-        return (T) values[getNodeId(node)];
+        return (T) values[node.id()];
     }
 
     public boolean isEmpty() {
@@ -82,7 +83,7 @@ public class NodeMap<T> extends NodeIdAccessor {
 
     public void set(Node node, T value) {
         check(node);
-        values[getNodeId(node)] = value;
+        values[node.id()] = value;
     }
 
     public int size() {
@@ -90,7 +91,7 @@ public class NodeMap<T> extends NodeIdAccessor {
     }
 
     public boolean isNew(Node node) {
-        return getNodeId(node) >= size();
+        return node.id() >= size();
     }
 
     public void grow() {

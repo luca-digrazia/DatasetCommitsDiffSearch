@@ -33,15 +33,14 @@ import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.truffle.api.*;
 
 /**
- * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean, boolean)}.
+ * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean)}.
  */
 public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
 
+    private static final int ARGUMENT_COUNT = 3;
     private static final int OBJECT_ARGUMENT_INDEX = 0;
     private static final int CLASS_ARGUMENT_INDEX = 1;
     private static final int CONDITION_ARGUMENT_INDEX = 2;
-    private static final int NONNULL_ARGUMENT_INDEX = 3;
-    private static final int ARGUMENT_COUNT = 4;
 
     public UnsafeTypeCastMacroNode(Invoke invoke) {
         super(invoke, "The class of the unsafe cast could not be reduced to a compile time constant.");
@@ -51,8 +50,7 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
     @Override
     public Node canonical(CanonicalizerTool tool) {
         ValueNode classArgument = arguments.get(CLASS_ARGUMENT_INDEX);
-        ValueNode nonNullArgument = arguments.get(NONNULL_ARGUMENT_INDEX);
-        if (classArgument.isConstant() && nonNullArgument.isConstant()) {
+        if (classArgument.isConstant()) {
             ValueNode objectArgument = arguments.get(OBJECT_ARGUMENT_INDEX);
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
             Class c = (Class) classArgument.asConstant().asObject();
@@ -60,9 +58,8 @@ public class UnsafeTypeCastMacroNode extends NeverPartOfCompilationNode implemen
                 return objectArgument;
             }
             ResolvedJavaType lookupJavaType = tool.getMetaAccess().lookupJavaType(c);
-            Stamp stamp = StampFactory.declared(lookupJavaType, nonNullArgument.asConstant().asInt() != 0);
             ConditionAnchorNode valueAnchorNode = graph().add(new ConditionAnchorNode(CompareNode.createCompareNode(graph(), Condition.EQ, conditionArgument, ConstantNode.forBoolean(true, graph()))));
-            UnsafeCastNode piCast = graph().unique(new UnsafeCastNode(objectArgument, stamp, valueAnchorNode));
+            UnsafeCastNode piCast = graph().unique(new UnsafeCastNode(objectArgument, StampFactory.declaredNonNull(lookupJavaType), valueAnchorNode));
             this.replaceAtUsages(piCast);
             return valueAnchorNode;
         }

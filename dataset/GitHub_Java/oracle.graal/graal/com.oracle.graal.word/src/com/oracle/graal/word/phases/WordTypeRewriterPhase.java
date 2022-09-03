@@ -312,33 +312,31 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     protected ValueNode fromUnsigned(StructuredGraph graph, ValueNode value) {
-        return convert(graph, value, wordKind, true);
+        return convert(graph, value, wordKind, ConvertNode.Op.L2I, ConvertNode.Op.UNSIGNED_I2L);
     }
 
     private ValueNode fromSigned(StructuredGraph graph, ValueNode value) {
-        return convert(graph, value, wordKind, false);
+        return convert(graph, value, wordKind, ConvertNode.Op.L2I, ConvertNode.Op.I2L);
     }
 
     protected ValueNode toUnsigned(StructuredGraph graph, ValueNode value, Kind toKind) {
-        return convert(graph, value, toKind, true);
+        return convert(graph, value, toKind, ConvertNode.Op.L2I, ConvertNode.Op.UNSIGNED_I2L);
     }
 
-    private static ValueNode convert(StructuredGraph graph, ValueNode value, Kind toKind, boolean unsigned) {
+    private static ValueNode convert(StructuredGraph graph, ValueNode value, Kind toKind, ConvertNode.Op longToIntOp, ConvertNode.Op intToLongOp) {
+        assert longToIntOp.from == Kind.Long && longToIntOp.to == Kind.Int;
+        assert intToLongOp.from == Kind.Int && intToLongOp.to == Kind.Long;
         if (value.kind() == toKind) {
             return value;
         }
 
         if (toKind == Kind.Int) {
             assert value.kind() == Kind.Long;
-            return graph.unique(new ConvertNode(Kind.Long, Kind.Int, value));
+            return graph.unique(new ConvertNode(longToIntOp, value));
         } else {
             assert toKind == Kind.Long;
             assert value.kind().getStackKind() == Kind.Int;
-            if (unsigned) {
-                return graph.unique(new ReinterpretNode(Kind.Long, value));
-            } else {
-                return graph.unique(new ConvertNode(Kind.Int, Kind.Long, value));
-            }
+            return graph.unique(new ConvertNode(intToLongOp, value));
         }
     }
 

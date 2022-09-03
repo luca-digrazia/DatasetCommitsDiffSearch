@@ -49,22 +49,12 @@ import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.util.*;
 
 /**
  * This class traverses the HIR instructions and generates LIR instructions from them.
  */
 public abstract class LIRGenerator implements LIRGeneratorTool {
-
-    public static class Options {
-        // @formatter:off
-        @Option(help = "Print HIR along side LIR as the latter is generated")
-        public static final OptionValue<Boolean> PrintIRWithLIR = new OptionValue<>(false);
-        @Option(help = "The trace level for the LIR generator")
-        public static final OptionValue<Integer> TraceLIRGeneratorLevel = new OptionValue<>(0);
-        // @formatter:on
-    }
 
     public final FrameMap frameMap;
     public final NodeMap<Value> nodeOperands;
@@ -77,8 +67,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     protected final DebugInfoBuilder debugInfoBuilder;
 
     protected Block currentBlock;
-    private final int traceLevel;
-    private final boolean printIRWithLIR;
 
     /**
      * Maps constants the variables within the scope of a single block to avoid loading a constant
@@ -118,8 +106,6 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         this.nodeOperands = graph.createNodeMap();
         this.lir = lir;
         this.debugInfoBuilder = createDebugInfoBuilder(nodeOperands);
-        this.traceLevel = Options.TraceLIRGeneratorLevel.getValue();
-        this.printIRWithLIR = Options.PrintIRWithLIR.getValue();
     }
 
     @SuppressWarnings("hiding")
@@ -330,7 +316,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     public void append(LIRInstruction op) {
-        if (printIRWithLIR && !TTY.isSuppressed()) {
+        if (PrintIRWithLIR.getValue() && !TTY.isSuppressed()) {
             if (currentInstruction != null && lastInstructionPrinted != currentInstruction) {
                 lastInstructionPrinted = currentInstruction;
                 InstructionPrinter ip = new InstructionPrinter(TTY.out());
@@ -344,7 +330,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     public void doBlock(Block block) {
-        if (printIRWithLIR) {
+        if (PrintIRWithLIR.getValue()) {
             TTY.print(block.toString());
         }
 
@@ -357,7 +343,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
         append(new LabelOp(new Label(block.getId()), block.isAligned()));
 
-        if (traceLevel >= 1) {
+        if (TraceLIRGeneratorLevel.getValue() >= 1) {
             TTY.println("BEGIN Generating LIR for block B" + block.getId());
         }
 
@@ -371,7 +357,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         List<ScheduledNode> nodes = lir.nodesFor(block);
         for (int i = 0; i < nodes.size(); i++) {
             Node instr = nodes.get(i);
-            if (traceLevel >= 3) {
+            if (TraceLIRGeneratorLevel.getValue() >= 3) {
                 TTY.println("LIRGen for " + instr);
             }
             if (!ConstantNodeRecordsUsages && instr instanceof ConstantNode) {
@@ -401,13 +387,13 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
             emitJump(getLIRBlock((FixedNode) successors.first()));
         }
 
-        if (traceLevel >= 1) {
+        if (TraceLIRGeneratorLevel.getValue() >= 1) {
             TTY.println("END Generating LIR for block B" + block.getId());
         }
 
         currentBlock = null;
 
-        if (printIRWithLIR) {
+        if (PrintIRWithLIR.getValue()) {
             TTY.println();
         }
     }
@@ -430,7 +416,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     private void doRoot(ValueNode instr) {
-        if (traceLevel >= 2) {
+        if (TraceLIRGeneratorLevel.getValue() >= 2) {
             TTY.println("Emitting LIR for instruction " + instr);
         }
         currentInstruction = instr;
@@ -511,7 +497,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
     }
 
     private void moveToPhi(MergeNode merge, AbstractEndNode pred) {
-        if (traceLevel >= 1) {
+        if (TraceLIRGeneratorLevel.getValue() >= 1) {
             TTY.println("MOVE TO PHI from " + pred + " to " + merge);
         }
         PhiResolver resolver = new PhiResolver(this);

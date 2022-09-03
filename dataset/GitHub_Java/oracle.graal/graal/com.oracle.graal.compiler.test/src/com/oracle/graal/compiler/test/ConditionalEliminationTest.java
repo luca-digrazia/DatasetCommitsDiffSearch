@@ -32,7 +32,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -260,7 +259,7 @@ public class ConditionalEliminationTest extends GraalCompilerTest {
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
         PhaseContext context = new PhaseContext(getProviders(), null);
 
-        new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        new LoweringPhase(canonicalizer).apply(graph, context);
         canonicalizer.apply(graph, context);
         new ConditionalEliminationPhase(getMetaAccess()).apply(graph);
         canonicalizer.apply(graph, context);

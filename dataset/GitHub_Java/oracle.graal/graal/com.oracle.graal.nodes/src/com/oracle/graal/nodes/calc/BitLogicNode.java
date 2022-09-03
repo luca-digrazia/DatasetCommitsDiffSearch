@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code LogicNode} class definition.
  */
-public abstract class BitLogicNode extends BinaryNode implements ArithmeticLIRLowerable, NarrowableArithmeticNode {
+public abstract class BitLogicNode extends BinaryNode implements ArithmeticLIRLowerable {
 
     /**
      * Constructs a new logic operation node.
@@ -37,23 +37,44 @@ public abstract class BitLogicNode extends BinaryNode implements ArithmeticLIRLo
      * @param x the first input into this node
      * @param y the second input into this node
      */
-    public BitLogicNode(Stamp stamp, ValueNode x, ValueNode y) {
-        super(stamp, x, y);
-        assert stamp instanceof IntegerStamp;
+    public BitLogicNode(Kind kind, ValueNode x, ValueNode y) {
+        super(kind, x, y);
+        assert kind == Kind.Int || kind == Kind.Long;
     }
 
     public static BitLogicNode and(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        assert v1.stamp().isCompatible(v2.stamp());
-        return graph.unique(new AndNode(StampTool.and(v1.stamp(), v2.stamp()), v1, v2));
+        assert v1.kind() == v2.kind();
+        switch (v1.kind()) {
+            case Int:
+                return graph.unique(new AndNode(Kind.Int, v1, v2));
+            case Long:
+                return graph.unique(new AndNode(Kind.Long, v1, v2));
+            default:
+                throw ValueNodeUtil.shouldNotReachHere();
+        }
     }
 
     public static BitLogicNode or(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        assert v1.stamp().isCompatible(v2.stamp());
-        return graph.unique(new OrNode(StampTool.or(v1.stamp(), v2.stamp()), v1, v2));
+        assert v1.kind() == v2.kind();
+        switch (v1.kind()) {
+            case Int:
+                return graph.unique(new OrNode(Kind.Int, v1, v2));
+            case Long:
+                return graph.unique(new OrNode(Kind.Long, v1, v2));
+            default:
+                throw ValueNodeUtil.shouldNotReachHere();
+        }
     }
 
     public static BitLogicNode xor(StructuredGraph graph, ValueNode v1, ValueNode v2) {
-        assert v1.stamp().isCompatible(v2.stamp());
-        return graph.unique(new XorNode(StampTool.xor(v1.stamp(), v2.stamp()), v1, v2));
+        assert v1.kind() == v2.kind();
+        switch (v1.kind()) {
+            case Int:
+                return graph.unique(new XorNode(Kind.Int, v1, v2));
+            case Long:
+                return graph.unique(new XorNode(Kind.Long, v1, v2));
+            default:
+                throw ValueNodeUtil.shouldNotReachHere();
+        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,20 +23,17 @@
 package com.oracle.graal.truffle.nodes.typesystem;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.truffle.nodes.*;
 import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.truffle.api.*;
 
 /**
  * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean)}.
  */
-@NodeInfo
 public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
 
     private static final int ARGUMENT_COUNT = 4;
@@ -57,15 +54,17 @@ public class CustomizedUnsafeLoadMacroNode extends NeverPartOfCompilationNode im
             ValueNode objectArgument = arguments.get(OBJECT_ARGUMENT_INDEX);
             ValueNode offsetArgument = arguments.get(OFFSET_ARGUMENT_INDEX);
             ValueNode conditionArgument = arguments.get(CONDITION_ARGUMENT_INDEX);
+            Object locationIdentityObject = locationArgument.asConstant().asObject();
             LocationIdentity locationIdentity;
-            if (locationArgument.asConstant().isNull()) {
+            if (locationIdentityObject == null) {
                 locationIdentity = LocationIdentity.ANY_LOCATION;
             } else {
-                locationIdentity = ObjectLocationIdentity.create(locationArgument.asConstant());
+                locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
             }
-            CompareNode compare = CompareNode.createCompareNode(Condition.EQ, conditionArgument, ConstantNode.forBoolean(true));
+            CompareNode compare = CompareNode.createCompareNode(graph(), Condition.EQ, conditionArgument, ConstantNode.forBoolean(true, graph()));
             Kind returnKind = this.getTargetMethod().getSignature().getReturnKind();
-            return new UnsafeLoadNode(objectArgument, offsetArgument, returnKind, locationIdentity, compare);
+            Node result = graph().add(new UnsafeLoadNode(objectArgument, offsetArgument, returnKind, locationIdentity, compare));
+            return result;
         }
         return this;
     }

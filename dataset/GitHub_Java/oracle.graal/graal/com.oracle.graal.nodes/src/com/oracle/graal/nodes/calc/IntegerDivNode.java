@@ -23,6 +23,7 @@
 package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
@@ -32,8 +33,8 @@ import com.oracle.graal.nodes.type.*;
 @NodeInfo(shortName = "/")
 public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, Lowerable, LIRLowerable {
 
-    public IntegerDivNode(Stamp stamp, ValueNode x, ValueNode y) {
-        super(stamp, x, y);
+    public IntegerDivNode(Kind kind, ValueNode x, ValueNode y) {
+        super(kind, x, y);
     }
 
     @Override
@@ -44,11 +45,16 @@ public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, 
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (x().isConstant() && y().isConstant()) {
-            long y = y().asConstant().asLong();
-            if (y == 0) {
+            long yConst = y().asConstant().asLong();
+            if (yConst == 0) {
                 return this; // this will trap, can not canonicalize
             }
-            return ConstantNode.forIntegerStamp(stamp(), x().asConstant().asLong() / y, graph());
+            if (kind() == Kind.Int) {
+                return ConstantNode.forInt(x().asConstant().asInt() / (int) yConst, graph());
+            } else {
+                assert kind() == Kind.Long;
+                return ConstantNode.forLong(x().asConstant().asLong() / yConst, graph());
+            }
         } else if (y().isConstant()) {
             long c = y().asConstant().asLong();
             if (c == 1) {
@@ -59,18 +65,23 @@ public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, 
             }
             long abs = Math.abs(c);
             if (CodeUtil.isPowerOf2(abs) && x().stamp() instanceof IntegerStamp) {
-                Stamp unrestricted = stamp().unrestricted();
                 ValueNode dividend = x();
                 IntegerStamp stampX = (IntegerStamp) x().stamp();
                 int log2 = CodeUtil.log2(abs);
                 // no rounding if dividend is positive or if its low bits are always 0
                 if (stampX.canBeNegative() || (stampX.upMask() & (abs - 1)) != 0) {
-                    int bits = PrimitiveStamp.getBits(stamp());
-                    RightShiftNode sign = graph().unique(new RightShiftNode(unrestricted, x(), ConstantNode.forInt(bits - 1, graph())));
-                    UnsignedRightShiftNode round = graph().unique(new UnsignedRightShiftNode(unrestricted, sign, ConstantNode.forInt(bits - log2, graph())));
+                    int bits;
+                    if (kind().getStackKind() == Kind.Int) {
+                        bits = 32;
+                    } else {
+                        assert kind() == Kind.Long;
+                        bits = 64;
+                    }
+                    RightShiftNode sign = graph().unique(new RightShiftNode(kind(), x(), ConstantNode.forInt(bits - 1, graph())));
+                    UnsignedRightShiftNode round = graph().unique(new UnsignedRightShiftNode(kind(), sign, ConstantNode.forInt(bits - log2, graph())));
                     dividend = IntegerArithmeticNode.add(graph(), dividend, round);
                 }
-                RightShiftNode shift = graph().unique(new RightShiftNode(unrestricted, dividend, ConstantNode.forInt(log2, graph())));
+                RightShiftNode shift = graph().unique(new RightShiftNode(kind(), dividend, ConstantNode.forInt(log2, graph())));
                 if (c < 0) {
                     return graph().unique(new NegateNode(shift));
                 }
@@ -83,9 +94,8 @@ public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, 
             IntegerSubNode integerSubNode = (IntegerSubNode) x();
             if (integerSubNode.y() instanceof IntegerRemNode) {
                 IntegerRemNode integerRemNode = (IntegerRemNode) integerSubNode.y();
-                if (integerSubNode.stamp().isCompatible(this.stamp()) && integerRemNode.stamp().isCompatible(this.stamp()) && integerSubNode.x() == integerRemNode.x() &&
-                                this.y() == integerRemNode.y()) {
-                    return graph().add(new IntegerDivNode(stamp(), integerSubNode.x(), this.y()));
+                if (integerSubNode.kind() == this.kind() && integerRemNode.kind() == this.kind() && integerSubNode.x() == integerRemNode.x() && this.y() == integerRemNode.y()) {
+                    return graph().add(new IntegerDivNode(kind(), integerSubNode.x(), this.y()));
                 }
             }
         }
@@ -106,8 +116,8 @@ public class IntegerDivNode extends FixedBinaryNode implements Canonicalizable, 
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitDiv(gen.operand(x()), gen.operand(y()), this));
+    public void generate(LIRGeneratorTool gen) {
+        gen.setResult(this, gen.emitDiv(gen.operand(x()), gen.operand(y()), this));
     }
 
     @Override

@@ -29,7 +29,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
@@ -170,10 +169,10 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
      * @throws AssertionError if the check fails
      */
     private boolean checkPostLowering(StructuredGraph graph, PhaseContext context) {
-        Mark expectedMark = graph.getMark();
+        int expectedMark = graph.getMark();
         lower(graph, context, 1);
-        Mark mark = graph.getMark();
-        assert mark.equals(expectedMark) : graph + ": a second round in the current lowering phase introduced these new nodes: " + graph.getNewNodes(mark).snapshot();
+        int mark = graph.getMark();
+        assert mark == expectedMark : graph + ": a second round in the current lowering phase introduced these new nodes: " + graph.getNewNodes(mark).snapshot();
         return true;
     }
 
@@ -199,15 +198,15 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
      * @param preLoweringMark the graph mark before {@code node} was lowered
      * @throws AssertionError if the check fails
      */
-    private static boolean checkPostNodeLowering(Node node, LoweringToolImpl loweringTool, Mark preLoweringMark) {
+    private static boolean checkPostNodeLowering(Node node, LoweringToolImpl loweringTool, int preLoweringMark) {
         StructuredGraph graph = (StructuredGraph) node.graph();
-        Mark postLoweringMark = graph.getMark();
+        int postLoweringMark = graph.getMark();
         NodeIterable<Node> newNodesAfterLowering = graph.getNewNodes(preLoweringMark);
         for (Node n : newNodesAfterLowering) {
             if (n instanceof Lowerable) {
                 ((Lowerable) n).lower(loweringTool);
-                Mark mark = graph.getMark();
-                assert postLoweringMark.equals(mark) : graph + ": lowering of " + node + " produced lowerable " + n + " that should have been recursively lowered as it introduces these new nodes: " +
+                int mark = graph.getMark();
+                assert postLoweringMark == mark : graph + ": lowering of " + node + " produced lowerable " + n + " that should have been recursively lowered as it introduces these new nodes: " +
                                 graph.getNewNodes(postLoweringMark).snapshot();
             }
         }
@@ -286,7 +285,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
 
                 if (node instanceof Lowerable) {
                     assert checkUsagesAreScheduled(node);
-                    Mark preLoweringMark = node.graph().getMark();
+                    int preLoweringMark = node.graph().getMark();
                     ((Lowerable) node).lower(loweringTool);
                     assert checkPostNodeLowering(node, loweringTool, preLoweringMark);
                 }
