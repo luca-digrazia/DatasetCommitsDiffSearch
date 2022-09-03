@@ -27,7 +27,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 
-import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.core.common.PermanentBailoutException;
 
 public abstract class NodeWorkList implements Iterable<Node> {
 
@@ -72,19 +72,26 @@ public abstract class NodeWorkList implements Iterable<Node> {
     }
 
     public static final class IterativeNodeWorkList extends NodeWorkList {
+        private static final int HARD_ITERATION_LIMIT = 1_000_000;
         private static final int EXPLICIT_BITMAP_THRESHOLD = 10;
         protected NodeBitMap inQueue;
 
         private int iterationLimit;
+        private boolean hardLimit;
         private Node firstNoChange;
         private Node lastPull;
         private Node lastChain;
 
         public IterativeNodeWorkList(Graph graph, boolean fill, int iterationLimitPerNode) {
             super(graph, fill);
-            assert iterationLimitPerNode > 0;
-            long limit = (long) iterationLimitPerNode * graph.getNodeCount();
-            iterationLimit = (int) Long.min(Integer.MAX_VALUE, limit);
+            if (iterationLimitPerNode > 0) {
+                long limit = (long) iterationLimitPerNode * graph.getNodeCount();
+                iterationLimit = (int) Long.min(Integer.MAX_VALUE, limit);
+                hardLimit = false;
+            } else {
+                iterationLimit = HARD_ITERATION_LIMIT;
+                hardLimit = true;
+            }
         }
 
         @Override
@@ -94,8 +101,11 @@ public abstract class NodeWorkList implements Iterable<Node> {
                 public boolean hasNext() {
                     dropDeleted();
                     if (iterationLimit <= 0) {
-                        Debug.log(Debug.INFO_LOG_LEVEL, "Exceeded iteration limit in IterativeNodeWorkList");
-                        return false;
+                        if (hardLimit) {
+                            throw new PermanentBailoutException("Iteration limit reached");
+                        } else {
+                            return false;
+                        }
                     }
                     return !worklist.isEmpty();
                 }
@@ -142,7 +152,7 @@ public abstract class NodeWorkList implements Iterable<Node> {
                         }
                     }
                 }
-                assert checkInfiniteWork(node) : "Re-added " + node;
+                assert checkInfiniteWork(node) : "Readded " + node;
                 if (inQueue != null) {
                     inQueue.markAndGrow(node);
                 }
