@@ -38,21 +38,20 @@ abstract class LookupFieldNode extends Node {
         return LookupFieldNodeGen.create();
     }
 
-    public abstract JavaFieldDesc execute(Class<?> clazz, String name, boolean onlyStatic);
+    public abstract JavaFieldDesc execute(JavaObject object, String name);
 
     @SuppressWarnings("unused")
-    @Specialization(guards = {"onlyStatic == cachedStatic", "clazz == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
-    static JavaFieldDesc doCached(Class<?> clazz, String name, boolean onlyStatic,
-                    @Cached("onlyStatic") boolean cachedStatic,
-                    @Cached("clazz") Class<?> cachedClazz,
+    @Specialization(guards = {"cachedField != null", "object.getClazz() == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
+    static JavaFieldDesc doCached(JavaObject object, String name,
+                    @Cached("object.getClazz()") Class<?> cachedClazz,
                     @Cached("name") String cachedName,
-                    @Cached("doUncached(clazz, name, onlyStatic)") JavaFieldDesc cachedField) {
-        assert cachedField == JavaInteropReflect.findField(clazz, name, onlyStatic);
+                    @Cached("doUncached(object, name)") JavaFieldDesc cachedField) {
+        assert cachedField == JavaInteropReflect.findField(object, name);
         return cachedField;
     }
 
     @Specialization(replaces = "doCached")
-    static JavaFieldDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
-        return JavaInteropReflect.findField(clazz, name, onlyStatic);
+    static JavaFieldDesc doUncached(JavaObject object, String name) {
+        return JavaInteropReflect.findField(object, name);
     }
 }

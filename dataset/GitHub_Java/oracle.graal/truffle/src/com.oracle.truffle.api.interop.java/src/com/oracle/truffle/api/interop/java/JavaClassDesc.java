@@ -297,12 +297,10 @@ final class JavaClassDesc {
         private static Map<String, JavaMethodDesc> collectJNINamedMethods(Map<String, JavaMethodDesc> methods) {
             Map<String, JavaMethodDesc> jniMethods = new LinkedHashMap<>();
             for (JavaMethodDesc method : methods.values()) {
-                if (method.isConstructor()) {
-                    continue;
-                }
                 for (JavaMethodDesc m : method.getOverloads()) {
-                    assert m.isMethod();
-                    jniMethods.put(JavaInteropReflect.jniName((Method) ((SingleMethodDesc) m).getReflectionMethod()), m);
+                    if (m instanceof SingleMethodDesc.ConcreteMethod) {
+                        jniMethods.put(JavaInteropReflect.jniName(((SingleMethodDesc.ConcreteMethod) m).getReflectionMethod()), m);
+                    }
                 }
             }
             return jniMethods;
