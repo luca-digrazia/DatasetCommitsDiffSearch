@@ -24,7 +24,10 @@
  */
 package com.oracle.truffle.api.dsl.internal;
 
-import java.lang.annotation.*;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
  * Internal DSL options to tune the generated code. These are expert options and not intended to be
@@ -34,9 +37,26 @@ import java.lang.annotation.*;
 @Target({ElementType.TYPE})
 public @interface DSLOptions {
 
-    /** Flag has no effect anymore. Is going to be removed soon. */
-    @Deprecated
-    boolean useNewLayout() default true;
+    enum DSLGenerator {
+        DEFAULT,
+        FLAT
+    }
+
+    /**
+     * Switches the default generator mode.
+     */
+    DSLGenerator defaultGenerator() default DSLGenerator.DEFAULT;
+
+    /**
+     * Whether the flat generator layout will perform boxing elimination or not. This flag has no
+     * effect with the default generator layout.
+     */
+    boolean flatLayoutBoxingElimination() default true;
+
+    /*
+     * Warning: all internal flags below this are going do not have any effect with the flat
+     * generator layout.
+     */
 
     /**
      * Lazy class loading ensures that all generated specialization classes are loaded lazily.
@@ -53,7 +73,7 @@ public @interface DSLOptions {
     /** Not yet implemented. */
     boolean useDisjunctiveMethodGuardOptimization() default true;
 
-    public enum ImplicitCastOptimization {
+    enum ImplicitCastOptimization {
 
         /** Perform no informed optimization for implicit casts. */
         NONE,
@@ -80,7 +100,7 @@ public @interface DSLOptions {
         }
     }
 
-    public enum TypeBoxingOptimization {
+    enum TypeBoxingOptimization {
         /** Perform the optimization for all types. */
         ALWAYS,
         /** Perform the optimization just for primitive types. */
@@ -119,7 +139,7 @@ public @interface DSLOptions {
      */
     TypeBoxingOptimization voidBoxingOptimization() default TypeBoxingOptimization.PRIMITIVE;
 
-    public enum FallbackOptimization {
+    enum FallbackOptimization {
         /** Always generate an optimized fallback specialization. */
         ALWAYS,
 
@@ -130,8 +150,8 @@ public @interface DSLOptions {
         DECLARED,
 
         /**
-         * Never generate an optimized fallback specialization. Please be aware that triggering a @Fallback
-         * case without optimization will also invalidate your compiled code.
+         * Never generate an optimized fallback specialization. Please be aware that triggering
+         * a @Fallback case without optimization will also invalidate your compiled code.
          */
         NEVER;
     }
