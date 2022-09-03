@@ -22,38 +22,30 @@
  */
 package com.oracle.truffle.sl.nodes;
 
-import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.utilities.*;
+import com.oracle.truffle.sl.runtime.*;
 
-@NodeChild(value = "conditionNode", type = ConditionNode.class)
-public abstract class IfNode extends StatementNode {
+public class ReadArgumentNode extends TypedNode {
 
-    @Child private StatementNode thenPartNode;
-    @Child private StatementNode elsePartNode;
+    private final int index;
 
-    private final BranchProfile ifBranch = new BranchProfile();
-    private final BranchProfile elseBranch = new BranchProfile();
+    private final BranchProfile outOfBounds = new BranchProfile();
+    private final BranchProfile inBounds = new BranchProfile();
 
-    public IfNode(StatementNode thenPart, StatementNode elsePart) {
-        this.thenPartNode = adoptChild(thenPart);
-        this.elsePartNode = adoptChild(elsePart);
+    public ReadArgumentNode(int index) {
+        this.index = index;
     }
 
-    protected IfNode(IfNode node) {
-        this(node.thenPartNode, node.elsePartNode);
-    }
-
-    @Specialization
-    public void doVoid(VirtualFrame frame, boolean condition) {
-        if (condition) {
-            ifBranch.enter();
-            thenPartNode.executeVoid(frame);
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
+        Object[] args = SLArguments.get(frame).arguments;
+        if (index < args.length) {
+            inBounds.enter();
+            return args[index];
         } else {
-            if (elsePartNode != null) {
-                elseBranch.enter();
-                elsePartNode.executeVoid(frame);
-            }
+            outOfBounds.enter();
+            return SLNull.INSTANCE;
         }
     }
 

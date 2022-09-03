@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,39 +22,35 @@
  */
 package com.oracle.truffle.sl.nodes;
 
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.frame.*;
 import com.oracle.truffle.api.utilities.*;
+import com.oracle.truffle.sl.runtime.*;
 
-@NodeChild(value = "conditionNode", type = ConditionNode.class)
-public abstract class IfNode extends StatementNode {
+public final class ReadFunctionNode extends TypedNode {
 
-    @Child private StatementNode thenPartNode;
-    @Child private StatementNode elsePartNode;
+    private final SLFunctionRegistry registry;
+    private final String name;
+    private final BranchProfile invalidFunction = new BranchProfile();
 
-    private final BranchProfile ifBranch = new BranchProfile();
-    private final BranchProfile elseBranch = new BranchProfile();
-
-    public IfNode(StatementNode thenPart, StatementNode elsePart) {
-        this.thenPartNode = adoptChild(thenPart);
-        this.elsePartNode = adoptChild(elsePart);
+    public ReadFunctionNode(SLFunctionRegistry registry, String name) {
+        this.registry = registry;
+        this.name = name;
     }
 
-    protected IfNode(IfNode node) {
-        this(node.thenPartNode, node.elsePartNode);
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
+        return executeCallTarget(frame);
     }
 
-    @Specialization
-    public void doVoid(VirtualFrame frame, boolean condition) {
-        if (condition) {
-            ifBranch.enter();
-            thenPartNode.executeVoid(frame);
-        } else {
-            if (elsePartNode != null) {
-                elseBranch.enter();
-                elsePartNode.executeVoid(frame);
-            }
+    @Override
+    public CallTarget executeCallTarget(VirtualFrame frame) {
+        CallTarget target = registry.lookup(name);
+        if (target != null) {
+            return target;
         }
+        invalidFunction.enter();
+        throw new RuntimeException("Function with name '" + name + "' not found.");
     }
 
 }
