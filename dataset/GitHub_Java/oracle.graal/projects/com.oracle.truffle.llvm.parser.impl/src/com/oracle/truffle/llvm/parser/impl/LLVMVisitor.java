@@ -354,8 +354,6 @@ public class LLVMVisitor implements LLVMParserRuntime {
     }
 
     private List<LLVMNode> addGlobalVars(LLVMVisitor visitor, List<GlobalVariable> globalVariables) {
-        frameDescriptor = globalFrameDescriptor = new FrameDescriptor();
-        stackPointerSlot = frameDescriptor.addFrameSlot(STACK_ADDRESS_FRAME_SLOT_ID, FrameSlotKind.Object);
         List<LLVMNode> globalVarNodes = new ArrayList<>();
         for (GlobalVariable globalVar : globalVariables) {
             LLVMNode globalVarWrite = visitor.visitGlobalVariable(globalVar);
@@ -387,6 +385,7 @@ public class LLVMVisitor implements LLVMParserRuntime {
                 throw new AssertionError("destructors not yet supported!");
             }
         }
+        globalFrameDescriptor = frameDescriptor;
         return globalVarNodes;
     }
 
