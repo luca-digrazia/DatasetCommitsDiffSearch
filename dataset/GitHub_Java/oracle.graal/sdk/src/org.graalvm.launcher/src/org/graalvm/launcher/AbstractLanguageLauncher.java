@@ -99,7 +99,6 @@ public abstract class AbstractLanguageLauncher extends Launcher {
         if (!isAOT()) {
             builder.allowHostAccess(true);
         }
-        builder.allowCreateThread(true);
 
         launch(builder);
     }
