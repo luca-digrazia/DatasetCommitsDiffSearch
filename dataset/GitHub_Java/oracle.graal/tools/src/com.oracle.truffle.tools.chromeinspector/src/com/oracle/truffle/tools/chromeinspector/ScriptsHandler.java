@@ -32,7 +32,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.instrumentation.LoadSourceEvent;
 import com.oracle.truffle.api.instrumentation.LoadSourceListener;
 import com.oracle.truffle.api.source.Source;
@@ -45,14 +44,9 @@ public final class ScriptsHandler implements LoadSourceListener {
     private final List<Script> scripts = new ArrayList<>(100);
     private final List<LoadScriptListener> listeners = new ArrayList<>();
     private final boolean reportInternal;
-    private volatile DebuggerSession debuggerSession;
 
     public ScriptsHandler(boolean reportInternal) {
         this.reportInternal = reportInternal;
-    }
-
-    void setDebuggerSession(DebuggerSession debuggerSession) {
-        this.debuggerSession = debuggerSession;
     }
 
     public int getScriptId(Source source) {
@@ -94,13 +88,7 @@ public final class ScriptsHandler implements LoadSourceListener {
         }
     }
 
-    public int assureLoaded(Source sourceLoaded) {
-        DebuggerSession ds = debuggerSession;
-        Source sourceResolved = sourceLoaded;
-        if (ds != null) {
-            sourceResolved = ds.resolveSource(sourceLoaded);
-        }
-        Source source = (sourceResolved != null) ? sourceResolved : sourceLoaded;
+    public int assureLoaded(Source source) {
         Script scr;
         URI uri = source.getURI();
         int id;
@@ -312,11 +300,7 @@ public final class ScriptsHandler implements LoadSourceListener {
     }
 
     static boolean compareURLs(String url1, String url2) {
-        String surl1 = stripScheme(url1);
-        String surl2 = stripScheme(url2);
-        // Either equals,
-        // or equals while ignoring the initial slash (workaround for Chromium bug #851853)
-        return surl1.equals(surl2) || surl1.startsWith("/") && surl1.substring(1).equals(surl2);
+        return stripScheme(url1).equals(stripScheme(url2));
     }
 
     private static String stripScheme(String url) {

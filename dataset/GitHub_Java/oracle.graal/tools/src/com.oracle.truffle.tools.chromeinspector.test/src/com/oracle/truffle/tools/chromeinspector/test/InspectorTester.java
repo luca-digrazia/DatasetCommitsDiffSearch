@@ -73,10 +73,10 @@ public final class InspectorTester {
     }
 
     private Throwable finish(boolean expectError) throws InterruptedException {
-        synchronized (exec.lock) {
+        synchronized (exec) {
             exec.done = true;
             exec.catchError = expectError;
-            exec.lock.notifyAll();
+            exec.notifyAll();
         }
         exec.join();
         RemoteObject.resetIDs();
@@ -209,7 +209,6 @@ public final class InspectorTester {
         private final Semaphore initialized = new Semaphore(0);
         private boolean catchError;
         private Throwable error;
-        final Object lock = new Object();
 
         InspectExecThread(boolean suspend, final boolean inspectInternal, final boolean inspectInitialization) {
             super("Inspector Executor");
@@ -234,7 +233,7 @@ public final class InspectorTester {
                 Source source = null;
                 CompletableFuture<Value> valueFuture = null;
                 do {
-                    synchronized (lock) {
+                    synchronized (this) {
                         if (evalSource != null) {
                             source = evalSource;
                             valueFuture = evalValue;
@@ -243,11 +242,9 @@ public final class InspectorTester {
                         } else {
                             source = null;
                             valueFuture = null;
-                            if (!done) {
-                                try {
-                                    lock.wait();
-                                } catch (InterruptedException ex) {
-                                }
+                            try {
+                                wait();
+                            } catch (InterruptedException ex) {
                             }
                         }
                     }
@@ -271,10 +268,10 @@ public final class InspectorTester {
 
         private Future<Value> eval(Source source) {
             Future<Value> valueFuture;
-            synchronized (lock) {
+            synchronized (this) {
                 evalSource = source;
                 valueFuture = evalValue = new CompletableFuture<>();
-                lock.notifyAll();
+                notifyAll();
             }
             return valueFuture;
         }

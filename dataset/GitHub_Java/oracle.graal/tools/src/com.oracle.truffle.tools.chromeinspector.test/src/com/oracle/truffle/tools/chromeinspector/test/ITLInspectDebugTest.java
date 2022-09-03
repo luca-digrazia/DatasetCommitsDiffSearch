@@ -51,11 +51,11 @@ public class ITLInspectDebugTest {
     // CheckStyle: stop line length check
     @Test
     public void testSuspendInInitialization() throws Exception {
-        Source initSource = Source.newBuilder(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION)", "<init>").build();
+        Source initSource = Source.newBuilder(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION)", "<init>").buildLiteral();
         InstrumentationTestLanguage.envConfig = Collections.singletonMap("initSource", initSource);
         Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "ROOT(\n" +
                         "  STATEMENT(CONSTANT(42))\n" +
-                        ")\n", "code").build();
+                        ")\n", "code").buildLiteral();
         String initURI = ScriptsHandler.getNiceStringFromURI(initSource.getURI());
         String sourceURI = ScriptsHandler.getNiceStringFromURI(source.getURI());
 
@@ -67,8 +67,8 @@ public class ITLInspectDebugTest {
         assertEquals("{\"result\":{},\"id\":2}", tester.getMessages(true).trim());
         tester.sendMessage("{\"id\":3,\"method\":\"Runtime.runIfWaitingForDebugger\"}");
         assertTrue(tester.compareReceivedMessages(
-                        "{\"result\":{},\"id\":3}\n" +
-                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n"));
+                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n" +
+                        "{\"result\":{},\"id\":3}\n"));
         tester.eval(source);
         long id = tester.getContextId();
         assertTrue(tester.compareReceivedMessages(
@@ -96,8 +96,8 @@ public class ITLInspectDebugTest {
         assertEquals("{\"result\":{},\"id\":2}", tester.getMessages(true).trim());
         tester.sendMessage("{\"id\":3,\"method\":\"Runtime.runIfWaitingForDebugger\"}");
         assertTrue(tester.compareReceivedMessages(
-                        "{\"result\":{},\"id\":3}\n" +
-                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n"));
+                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n" +
+                        "{\"result\":{},\"id\":3}\n"));
         tester.eval(source);
         id = tester.getContextId();
         assertTrue(tester.compareReceivedMessages(
@@ -120,10 +120,10 @@ public class ITLInspectDebugTest {
 
     @Test
     public void testSuspendInInternal() throws Exception {
-        Source internSource = Source.newBuilder(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION)", "<intern>").internal(true).build();
+        Source internSource = Source.newBuilder(InstrumentationTestLanguage.ID, "STATEMENT(EXPRESSION)", "<intern>").internal(true).buildLiteral();
         Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "ROOT(\n" +
                         "  STATEMENT(CONSTANT(42))\n" +
-                        ")\n", "code").build();
+                        ")\n", "code").buildLiteral();
         String internURI = ScriptsHandler.getNiceStringFromURI(internSource.getURI());
         String sourceURI = ScriptsHandler.getNiceStringFromURI(source.getURI());
 
@@ -135,8 +135,8 @@ public class ITLInspectDebugTest {
         assertEquals("{\"result\":{},\"id\":2}", tester.getMessages(true).trim());
         tester.sendMessage("{\"id\":3,\"method\":\"Runtime.runIfWaitingForDebugger\"}");
         assertTrue(tester.compareReceivedMessages(
-                        "{\"result\":{},\"id\":3}\n" +
-                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n"));
+                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n" +
+                        "{\"result\":{},\"id\":3}\n"));
         tester.eval(internSource);
         long id = tester.getContextId();
         tester.eval(source);
@@ -163,8 +163,8 @@ public class ITLInspectDebugTest {
         assertEquals("{\"result\":{},\"id\":2}", tester.getMessages(true).trim());
         tester.sendMessage("{\"id\":3,\"method\":\"Runtime.runIfWaitingForDebugger\"}");
         assertTrue(tester.compareReceivedMessages(
-                        "{\"result\":{},\"id\":3}\n" +
-                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n"));
+                        "{\"method\":\"Runtime.executionContextCreated\",\"params\":{\"context\":{\"origin\":\"\",\"name\":\"test\",\"id\":1}}}\n" +
+                        "{\"result\":{},\"id\":3}\n"));
         tester.eval(internSource);
         id = tester.getContextId();
         assertTrue(tester.compareReceivedMessages(

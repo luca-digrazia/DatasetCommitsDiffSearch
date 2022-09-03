@@ -24,10 +24,6 @@
  */
 package com.oracle.truffle.tools.chromeinspector;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,7 +40,6 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 
 import com.oracle.truffle.tools.chromeinspector.instrument.SourceLoadInstrument;
 import com.oracle.truffle.tools.chromeinspector.server.CommandProcessException;
-import com.oracle.truffle.tools.chromeinspector.types.CallArgument;
 import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
 
 /**
@@ -57,7 +52,6 @@ public final class TruffleExecutionContext {
     private final String name;
     private final TruffleInstrument.Env env;
     private final PrintWriter err;
-    private final PrintStream traceLogger;
     private final List<Listener> listeners = Collections.synchronizedList(new ArrayList<>(3));
     private final long id = LAST_ID.incrementAndGet();
     private final boolean[] runPermission = new boolean[]{false};
@@ -68,35 +62,16 @@ public final class TruffleExecutionContext {
     private volatile SuspendedThreadExecutor suspendThreadExecutor;
     private RemoteObjectsHandler roh;
     private ScriptsHandler sch;
-    private SourceLoadInstrument sourceLoadInstrument;
     private AtomicInteger schCounter;
     private volatile String lastMimeType = "text/javascript";   // Default JS
     private volatile String lastLanguage = "js";
 
-    public TruffleExecutionContext(String name, boolean inspectInternal, boolean inspectInitialization, TruffleInstrument.Env env, PrintWriter err) throws IOException {
+    public TruffleExecutionContext(String name, boolean inspectInternal, boolean inspectInitialization, TruffleInstrument.Env env, PrintWriter err) {
         this.name = name;
         this.inspectInternal = inspectInternal;
         this.inspectInitialization = inspectInitialization;
         this.env = env;
         this.err = err;
-        this.traceLogger = createTraceLogger();
-    }
-
-    private static PrintStream createTraceLogger() throws IOException {
-        PrintStream traceLog = null;
-        String traceLogFile = System.getProperty("chromeinspector.traceMessages");
-        if (traceLogFile != null) {
-            if (Boolean.parseBoolean(traceLogFile)) {
-                traceLog = System.err;
-            } else if (!"false".equalsIgnoreCase(traceLogFile)) {
-                if ("tmp".equalsIgnoreCase(traceLogFile)) {
-                    traceLog = new PrintStream(new FileOutputStream(File.createTempFile("ChromeInspectorProtocol", ".txt")));
-                } else {
-                    traceLog = new PrintStream(new FileOutputStream(traceLogFile));
-                }
-            }
-        }
-        return traceLog;
     }
 
     public boolean isInspectInternal() {
@@ -119,21 +94,11 @@ public final class TruffleExecutionContext {
         return err;
     }
 
-    public PrintStream getLogger() {
-        return traceLogger;
-    }
-
     public void doRunIfWaitingForDebugger() {
         fireContextCreated();
         synchronized (runPermission) {
             runPermission[0] = true;
             runPermission.notifyAll();
-        }
-    }
-
-    public boolean canRun() {
-        synchronized (runPermission) {
-            return runPermission[0];
         }
     }
 
@@ -143,7 +108,6 @@ public final class TruffleExecutionContext {
             SourceLoadInstrument sli = getEnv().lookup(instrumentInfo, SourceLoadInstrument.class);
             sli.enable(inspectInternal);
             sch = sli.getScriptsHandler();
-            sourceLoadInstrument = sli;
             schCounter = new AtomicInteger(0);
         }
         schCounter.incrementAndGet();
@@ -152,8 +116,8 @@ public final class TruffleExecutionContext {
 
     public void releaseScriptsHandler() {
         if (schCounter.decrementAndGet() == 0) {
-            sourceLoadInstrument.disable();
-            sourceLoadInstrument = null;
+            InstrumentInfo instrumentInfo = getEnv().getInstruments().get(SourceLoadInstrument.ID);
+            getEnv().lookup(instrumentInfo, SourceLoadInstrument.class).disable();
             sch = null;
             schCounter = null;
         }
@@ -196,16 +160,6 @@ public final class TruffleExecutionContext {
         return ro;
     }
 
-    void setValue(DebugValue debugValue, CallArgument newValue) {
-        String objectId = newValue.getObjectId();
-        if (objectId != null) {
-            RemoteObject obj = getRemoteObjectsHandler().getRemote(objectId);
-            debugValue.set(obj.getDebugValue());
-        } else {
-            debugValue.set(newValue.getPrimitiveValue());
-        }
-    }
-
     void setSuspendThreadExecutor(SuspendedThreadExecutor suspendThreadExecutor) {
         this.suspendThreadExecutor = suspendThreadExecutor;
     }
@@ -223,7 +177,11 @@ public final class TruffleExecutionContext {
                     cf.completeExceptionally(td);
                     throw td;
                 } catch (DebugException dex) {
-                    cf.complete(executable.processException(dex));
+                    if (!dex.isInternalError()) {
+                        cf.complete(executable.processException(dex));
+                    } else {
+                        cf.completeExceptionally(dex);
+                    }
                 } catch (Throwable t) {
                     cf.completeExceptionally(t);
                 }
