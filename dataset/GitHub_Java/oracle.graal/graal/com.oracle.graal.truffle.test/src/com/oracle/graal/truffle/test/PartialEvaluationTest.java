@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,36 +22,28 @@
  */
 package com.oracle.graal.truffle.test;
 
-import org.junit.Assert;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.DebugEnvironment;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.StructuredGraph;
+import org.junit.*;
+
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
-import com.oracle.graal.truffle.DefaultInliningPolicy;
-import com.oracle.graal.truffle.DefaultTruffleCompiler;
-import com.oracle.graal.truffle.GraalTruffleRuntime;
-import com.oracle.graal.truffle.OptimizedCallTarget;
-import com.oracle.graal.truffle.TruffleCompiler;
-import com.oracle.graal.truffle.TruffleDebugJavaMethod;
-import com.oracle.graal.truffle.TruffleInlining;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.truffle.*;
+import com.oracle.truffle.api.*;
+import com.oracle.truffle.api.nodes.*;
 
 public class PartialEvaluationTest extends GraalCompilerTest {
     private final TruffleCompiler truffleCompiler;
 
     public PartialEvaluationTest() {
-        GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
-        this.truffleCompiler = DefaultTruffleCompiler.create(runtime);
+        // Make sure Truffle runtime is initialized.
+        Assert.assertTrue(Truffle.getRuntime() != null);
+        this.truffleCompiler = DefaultTruffleCompiler.create();
 
         DebugEnvironment.initialize(System.out);
     }
@@ -98,7 +90,7 @@ public class PartialEvaluationTest extends GraalCompilerTest {
         compilable.call(arguments);
 
         try (Scope s = Debug.scope("TruffleCompilation", new TruffleDebugJavaMethod(compilable))) {
-            return truffleCompiler.getPartialEvaluator().createGraph(compilable, new TruffleInlining(compilable, new DefaultInliningPolicy()), allowAssumptions);
+            return truffleCompiler.getPartialEvaluator().createGraph(compilable, allowAssumptions);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

@@ -22,29 +22,39 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
+import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.CanonicalizerPhase.CustomCanonicalizer;
+import com.oracle.graal.phases.common.util.*;
 import com.oracle.graal.phases.tiers.*;
 
+/**
+ * A phase suite that applies {@linkplain CanonicalizerPhase canonicalization} to a graph after all
+ * phases in the suite have been applied if any of the phases changed the graph.
+ */
 public class IncrementalCanonicalizerPhase<C extends PhaseContext> extends PhaseSuite<C> {
 
-    private final CustomCanonicalizer customCanonicalizer;
+    private final CanonicalizerPhase canonicalizer;
 
-    public IncrementalCanonicalizerPhase() {
-        this(null);
+    public IncrementalCanonicalizerPhase(CanonicalizerPhase canonicalizer) {
+        this.canonicalizer = canonicalizer;
     }
 
-    public IncrementalCanonicalizerPhase(CustomCanonicalizer customCanonicalizer) {
-        this.customCanonicalizer = customCanonicalizer;
+    public IncrementalCanonicalizerPhase(CanonicalizerPhase canonicalizer, BasePhase<? super C> phase) {
+        this.canonicalizer = canonicalizer;
+        appendPhase(phase);
     }
 
     @Override
+    @SuppressWarnings("try")
     protected void run(StructuredGraph graph, C context) {
-        int mark = graph.getMark();
-        super.run(graph, context);
-        new CanonicalizerPhase.Instance(context.getRuntime(), context.getAssumptions(), !AOTCompilation.getValue(), mark, customCanonicalizer).apply(graph);
+        HashSetNodeEventListener listener = new HashSetNodeEventListener();
+        try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
+            super.run(graph, context);
+        }
+
+        if (!listener.getNodes().isEmpty()) {
+            canonicalizer.applyIncremental(graph, context, listener.getNodes(), null, false);
+        }
     }
 }

@@ -22,39 +22,27 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import static jdk.vm.ci.code.BytecodeFrame.isPlaceholderBci;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import static jdk.internal.jvmci.code.BytecodeFrame.*;
+import jdk.internal.jvmci.common.*;
 
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.FrameStateAssignmentPhase;
-import com.oracle.graal.phases.common.GuardLoweringPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.common.RemoveValueProxyPhase;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.tiers.PhaseContext;
-import com.oracle.graal.replacements.Snippet;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.replacements.*;
 
 /**
  * Macro nodes can be used to temporarily replace an invoke. They can, for example, be used to
@@ -93,8 +81,8 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
     }
 
     private static Stamp returnStamp(JavaType returnType) {
-        JavaKind kind = returnType.getJavaKind();
-        if (kind == JavaKind.Object) {
+        Kind kind = returnType.getKind();
+        if (kind == Kind.Object) {
             return StampFactory.declared((ResolvedJavaType) returnType);
         } else {
             return StampFactory.forKind(kind);
@@ -127,6 +115,21 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
     }
 
     /**
+     * Gets a normal method substitution to be used for lowering this macro node. This is only
+     * called if {@link #getLoweredSnippetGraph(LoweringTool)} returns null. The returned graph (if
+     * non-null) must have been {@linkplain #lowerReplacement(StructuredGraph, LoweringTool)
+     * lowered}.
+     */
+    protected StructuredGraph getLoweredSubstitutionGraph(LoweringTool tool) {
+        StructuredGraph methodSubstitution = tool.getReplacements().getSubstitution(getTargetMethod(), true, bci);
+        if (methodSubstitution != null) {
+            methodSubstitution = (StructuredGraph) methodSubstitution.copy();
+            return lowerReplacement(methodSubstitution, tool);
+        }
+        return null;
+    }
+
+    /**
      * Applies {@linkplain LoweringPhase lowering} to a replacement graph.
      *
      * @param replacementGraph a replacement (i.e., snippet or method substitution) graph
@@ -155,6 +158,9 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
     @Override
     public void lower(LoweringTool tool) {
         StructuredGraph replacementGraph = getLoweredSnippetGraph(tool);
+        if (replacementGraph == null) {
+            replacementGraph = getLoweredSubstitutionGraph(tool);
+        }
 
         InvokeNode invoke = replaceWithInvoke();
         assert invoke.verify();
@@ -202,7 +208,7 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable {
         InvokeNode invoke = graph().add(new InvokeNode(callTarget, bci));
         if (stateAfter() != null) {
             invoke.setStateAfter(stateAfter().duplicate());
-            if (getStackKind() != JavaKind.Void) {
+            if (getStackKind() != Kind.Void) {
                 invoke.stateAfter().replaceFirstInput(this, invoke);
             }
         }

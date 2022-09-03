@@ -22,54 +22,22 @@
  */
 package com.oracle.graal.phases.schedule;
 
-import static com.oracle.graal.compiler.common.GraalOptions.OptScheduleOutOfLoops;
-import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.dominates;
-import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.strictlyDominates;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.*;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Formatter;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.SuppressFBWarnings;
-import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Graph.NodeEvent;
-import com.oracle.graal.graph.Graph.NodeEventListener;
-import com.oracle.graal.graph.Graph.NodeEventScope;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeBitMap;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graph.NodeStack;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ControlSinkNode;
-import com.oracle.graal.nodes.ControlSplitNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.GuardNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.VirtualState;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.cfg.HIRLoop;
-import com.oracle.graal.nodes.cfg.LocationSet;
-import com.oracle.graal.nodes.memory.FloatingReadNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.memory.MemoryPhiNode;
-import com.oracle.graal.phases.Phase;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.Graph.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.phases.*;
 
 public final class SchedulePhase extends Phase {
 
@@ -158,7 +126,7 @@ public final class SchedulePhase extends Phase {
                 this.nodeToBlockMap = graph.createNodeMap();
                 this.blockToNodesMap = new BlockMap<>(cfg);
                 NodeBitMap visited = graph.createNodeBitMap();
-                scheduleEarliestIterative(blockToNodesMap, nodeToBlockMap, visited, graph, null);
+                scheduleEarliestIterative(blockToNodesMap, nodeToBlockMap, visited, graph);
                 return;
             } else {
                 boolean isOutOfLoops = selectedStrategy == SchedulingStrategy.LATEST_OUT_OF_LOOPS;
@@ -166,20 +134,19 @@ public final class SchedulePhase extends Phase {
                     NodeMap<Block> currentNodeMap = graph.createNodeMap();
                     BlockMap<List<Node>> earliestBlockToNodesMap = new BlockMap<>(cfg);
                     NodeBitMap visited = graph.createNodeBitMap();
-                    NodeBitMap unreachableNodes = immutableGraph ? graph.createNodeBitMap() : null;
 
                     // Assign early so we are getting a context in case of an exception.
                     this.blockToNodesMap = earliestBlockToNodesMap;
                     this.nodeToBlockMap = currentNodeMap;
 
-                    scheduleEarliestIterative(earliestBlockToNodesMap, currentNodeMap, visited, graph, unreachableNodes);
+                    scheduleEarliestIterative(earliestBlockToNodesMap, currentNodeMap, visited, graph);
                     BlockMap<List<Node>> latestBlockToNodesMap = new BlockMap<>(cfg);
 
                     for (Block b : cfg.getBlocks()) {
                         latestBlockToNodesMap.put(b, new ArrayList<Node>());
                     }
 
-                    BlockMap<ArrayList<FloatingReadNode>> watchListMap = calcLatestBlocks(isOutOfLoops, currentNodeMap, earliestBlockToNodesMap, visited, latestBlockToNodesMap, unreachableNodes);
+                    BlockMap<ArrayList<FloatingReadNode>> watchListMap = calcLatestBlocks(isOutOfLoops, currentNodeMap, earliestBlockToNodesMap, visited, latestBlockToNodesMap);
                     sortNodesLatestWithinBlock(cfg, earliestBlockToNodesMap, latestBlockToNodesMap, currentNodeMap, watchListMap, visited);
 
                     assert verifySchedule(cfg, latestBlockToNodesMap, currentNodeMap);
@@ -196,7 +163,7 @@ public final class SchedulePhase extends Phase {
 
     @SuppressFBWarnings(value = "RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE", justification = "false positive found by findbugs")
     private BlockMap<ArrayList<FloatingReadNode>> calcLatestBlocks(boolean isOutOfLoops, NodeMap<Block> currentNodeMap, BlockMap<List<Node>> earliestBlockToNodesMap, NodeBitMap visited,
-                    BlockMap<List<Node>> latestBlockToNodesMap, NodeBitMap unreachableNodes) {
+                    BlockMap<List<Node>> latestBlockToNodesMap) {
         BlockMap<ArrayList<FloatingReadNode>> watchListMap = null;
         for (Block b : cfg.postOrder()) {
             List<Node> blockToNodes = earliestBlockToNodesMap.get(b);
@@ -213,7 +180,7 @@ public final class SchedulePhase extends Phase {
                     Block currentBlock = b;
                     assert currentBlock != null;
 
-                    Block latestBlock = calcLatestBlock(b, isOutOfLoops, currentNode, currentNodeMap, unreachableNodes);
+                    Block latestBlock = calcLatestBlock(b, isOutOfLoops, currentNode, currentNodeMap);
                     assert checkLatestEarliestRelation(currentNode, currentBlock, latestBlock);
                     if (latestBlock != currentBlock) {
                         if (currentNode instanceof FloatingReadNode) {
@@ -481,19 +448,10 @@ public final class SchedulePhase extends Phase {
 
     }
 
-    private Block calcLatestBlock(Block earliestBlock, boolean scheduleOutOfLoops, Node currentNode, NodeMap<Block> currentNodeMap, NodeBitMap unreachableNodes) {
+    private static Block calcLatestBlock(Block earliestBlock, boolean scheduleOutOfLoops, Node currentNode, NodeMap<Block> currentNodeMap) {
         Block block = null;
         assert currentNode.hasUsages();
         for (Node usage : currentNode.usages()) {
-            if (unreachableNodes != null && unreachableNodes.contains(usage)) {
-                /*
-                 * Normally, dead nodes are deleted by the scheduler before we reach this point.
-                 * Only when the scheduler is asked to not modify a graph, we can see dead nodes
-                 * here.
-                 */
-                assert immutableGraph;
-                continue;
-            }
             block = calcBlockForUsage(currentNode, usage, block, currentNodeMap);
             assert checkLatestEarliestRelation(currentNode, earliestBlock, block);
             if (scheduleOutOfLoops) {
@@ -535,7 +493,7 @@ public final class SchedulePhase extends Phase {
         return currentBlock;
     }
 
-    private void scheduleEarliestIterative(BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, StructuredGraph graph, NodeBitMap unreachableNodes) {
+    private void scheduleEarliestIterative(BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, NodeBitMap visited, StructuredGraph graph) {
 
         BitSet floatingReads = new BitSet(cfg.getBlocks().size());
 
@@ -603,16 +561,11 @@ public final class SchedulePhase extends Phase {
         } while (unmarkedPhi && changed);
 
         // Check for dead nodes.
-        if (visited.getCounter() < graph.getNodeCount()) {
+        if (!immutableGraph && visited.getCounter() < graph.getNodeCount()) {
             for (Node n : graph.getNodes()) {
                 if (!visited.isMarked(n)) {
-                    if (!immutableGraph) {
-                        n.clearInputs();
-                        n.markDeleted();
-                    } else if (unreachableNodes != null) {
-                        /* We are not allowed to modify the graph, so remember that node is dead. */
-                        unreachableNodes.mark(n);
-                    }
+                    n.clearInputs();
+                    n.markDeleted();
                 }
             }
         }

@@ -22,37 +22,29 @@
  */
 package com.oracle.graal.lir.stackslotalloc;
 
-import static com.oracle.graal.lir.LIRValueUtil.asVirtualStackSlot;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
-import static com.oracle.graal.lir.stackslotalloc.StackSlotAllocatorUtil.allocatedFramesize;
-import static com.oracle.graal.lir.stackslotalloc.StackSlotAllocatorUtil.allocatedSlots;
-import static com.oracle.graal.lir.stackslotalloc.StackSlotAllocatorUtil.virtualFramesize;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.ValueProcedure;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.framemap.FrameMapBuilderTool;
-import com.oracle.graal.lir.framemap.SimpleVirtualStackSlot;
-import com.oracle.graal.lir.framemap.VirtualStackSlotRange;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.AllocationPhase;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 
-public class SimpleStackSlotAllocator extends AllocationPhase {
+public class SimpleStackSlotAllocator extends AllocationPhase implements StackSlotAllocator {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
-        allocateStackSlots((FrameMapBuilderTool) lirGenRes.getFrameMapBuilder(), lirGenRes);
-        lirGenRes.buildFrameMap();
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
+        lirGenRes.buildFrameMap(this);
     }
 
     public void allocateStackSlots(FrameMapBuilderTool builder, LIRGenerationResult res) {

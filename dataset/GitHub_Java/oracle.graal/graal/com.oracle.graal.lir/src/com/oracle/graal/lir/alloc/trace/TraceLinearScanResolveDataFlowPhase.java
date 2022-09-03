@@ -32,7 +32,6 @@ import jdk.internal.jvmci.code.*;
 import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.alloc.*;
-import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
@@ -49,21 +48,45 @@ import com.oracle.graal.lir.ssi.*;
  */
 final class TraceLinearScanResolveDataFlowPhase extends AllocationPhase {
 
-    private final TraceLinearScan allocator;
-    private final TraceBuilderResult<?> traceBuilderResult;
+    protected final TraceLinearScan allocator;
 
-    protected TraceLinearScanResolveDataFlowPhase(TraceLinearScan allocator, TraceBuilderResult<?> traceBuilderResult) {
+    protected TraceLinearScanResolveDataFlowPhase(TraceLinearScan allocator) {
         this.allocator = allocator;
-        this.traceBuilderResult = traceBuilderResult;
     }
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
                     RegisterAllocationConfig registerAllocationConfig) {
-        resolveDataFlow(allocator.sortedBlocks());
+        resolveDataFlow();
     }
 
-    private void resolveFindInsertPos(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, TraceLocalMoveResolver moveResolver) {
+    protected void resolveCollectMappings0(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> midBlock, TraceLocalMoveResolver moveResolver) {
+        assert moveResolver.checkEmpty();
+        assert midBlock == null ||
+                        (midBlock.getPredecessorCount() == 1 && midBlock.getSuccessorCount() == 1 && midBlock.getPredecessors().get(0).equals(fromBlock) && midBlock.getSuccessors().get(0).equals(
+                                        toBlock));
+
+        int toBlockFirstInstructionId = allocator.getFirstLirInstructionId(toBlock);
+        int fromBlockLastInstructionId = allocator.getLastLirInstructionId(fromBlock) + 1;
+        int numOperands = allocator.operandSize();
+        BitSet liveAtEdge = allocator.getBlockData(toBlock).liveIn;
+
+        // visit all variables for which the liveAtEdge bit is set
+        for (int operandNum = liveAtEdge.nextSetBit(0); operandNum >= 0; operandNum = liveAtEdge.nextSetBit(operandNum + 1)) {
+            assert operandNum < numOperands : "live information set for not exisiting interval";
+            assert allocator.getBlockData(fromBlock).liveOut.get(operandNum) && allocator.getBlockData(toBlock).liveIn.get(operandNum) : "interval not live at this edge";
+
+            TraceInterval fromInterval = allocator.splitChildAtOpId(allocator.intervalFor(operandNum), fromBlockLastInstructionId, LIRInstruction.OperandMode.DEF);
+            TraceInterval toInterval = allocator.splitChildAtOpId(allocator.intervalFor(operandNum), toBlockFirstInstructionId, LIRInstruction.OperandMode.DEF);
+
+            if (fromInterval != toInterval && !fromInterval.location().equals(toInterval.location())) {
+                // need to insert move instruction
+                moveResolver.addMapping(fromInterval, toInterval);
+            }
+        }
+    }
+
+    void resolveFindInsertPos(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, TraceLocalMoveResolver moveResolver) {
         if (fromBlock.getSuccessorCount() <= 1) {
             if (Debug.isLogEnabled()) {
                 Debug.log("inserting moves at end of fromBlock B%d", fromBlock.getId());
@@ -105,52 +128,79 @@ final class TraceLinearScanResolveDataFlowPhase extends AllocationPhase {
      * have been split.
      */
     @SuppressWarnings("try")
-    private void resolveDataFlow(List<? extends AbstractBlockBase<?>> blocks) {
-        if (blocks.size() < 2) {
-            // no resolution necessary
-            return;
-        }
+    protected void resolveDataFlow() {
         try (Indent indent = Debug.logAndIndent("resolve data flow")) {
 
             TraceLocalMoveResolver moveResolver = allocator.createMoveResolver();
-            ListIterator<? extends AbstractBlockBase<?>> it = blocks.listIterator();
-            AbstractBlockBase<?> toBlock = null;
-            for (AbstractBlockBase<?> fromBlock = it.next(); it.hasNext(); fromBlock = toBlock) {
-                toBlock = it.next();
-                assert containedInTrace(fromBlock) : "Not in Trace: " + fromBlock;
-                assert containedInTrace(toBlock) : "Not in Trace: " + toBlock;
-                resolveCollectMappings(fromBlock, toBlock, moveResolver);
-            }
-            assert blocks.get(blocks.size() - 1).equals(toBlock);
-            if (toBlock.isLoopEnd()) {
-                assert toBlock.getSuccessorCount() == 1;
-                AbstractBlockBase<?> loopHeader = toBlock.getSuccessors().get(0);
-                if (containedInTrace(loopHeader)) {
-                    resolveCollectMappings(toBlock, loopHeader, moveResolver);
+            BitSet blockCompleted = new BitSet(allocator.blockCount());
+
+            BitSet alreadyResolved = new BitSet(allocator.blockCount());
+            for (AbstractBlockBase<?> fromBlock : allocator.sortedBlocks()) {
+                if (!blockCompleted.get(fromBlock.getLinearScanNumber())) {
+                    alreadyResolved.clear();
+                    alreadyResolved.or(blockCompleted);
+
+                    for (AbstractBlockBase<?> toBlock : fromBlock.getSuccessors()) {
+
+                        /*
+                         * Check for duplicate edges between the same blocks (can happen with switch
+                         * blocks).
+                         */
+                        if (!alreadyResolved.get(toBlock.getLinearScanNumber())) {
+                            if (Debug.isLogEnabled()) {
+                                Debug.log("processing edge between B%d and B%d", fromBlock.getId(), toBlock.getId());
+                            }
+
+                            alreadyResolved.set(toBlock.getLinearScanNumber());
+
+                            // collect all intervals that have been split between
+                            // fromBlock and toBlock
+                            resolveCollectMappings(fromBlock, toBlock, null, moveResolver);
+                            if (moveResolver.hasMappings()) {
+                                resolveFindInsertPos(fromBlock, toBlock, moveResolver);
+                                moveResolver.resolveAndAppendMoves();
+                            }
+                        }
+                    }
                 }
             }
 
         }
     }
 
-    private void resolveCollectMappings(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, TraceLocalMoveResolver moveResolver) {
-        try (Indent indent0 = Debug.logAndIndent("Edge %s -> %s", fromBlock, toBlock)) {
-            // collect all intervals that have been split between
-            // fromBlock and toBlock
-            SSIUtil.forEachValuePair(allocator.getLIR(), toBlock, fromBlock, new MyPhiValueVisitor(moveResolver, toBlock, fromBlock));
-            if (moveResolver.hasMappings()) {
-                resolveFindInsertPos(fromBlock, toBlock, moveResolver);
-                moveResolver.resolveAndAppendMoves();
+    protected void resolveCollectMappings(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> midBlock, TraceLocalMoveResolver moveResolver) {
+        assert midBlock == null;
+        if (containedInTrace(fromBlock) && containedInTrace(toBlock)) {
+            assert moveResolver.checkEmpty();
+            assert midBlock == null ||
+                            (midBlock.getPredecessorCount() == 1 && midBlock.getSuccessorCount() == 1 && midBlock.getPredecessors().get(0).equals(fromBlock) && midBlock.getSuccessors().get(0).equals(
+                                            toBlock));
+
+            int toBlockFirstInstructionId = allocator.getFirstLirInstructionId(toBlock);
+            int fromBlockLastInstructionId = allocator.getLastLirInstructionId(fromBlock) + 1;
+            int numOperands = allocator.operandSize();
+            BitSet liveAtEdge = allocator.getBlockData(toBlock).liveIn;
+
+            // visit all variables for which the liveAtEdge bit is set
+            for (int operandNum = liveAtEdge.nextSetBit(0); operandNum >= 0; operandNum = liveAtEdge.nextSetBit(operandNum + 1)) {
+                assert operandNum < numOperands : "live information set for not exisiting interval";
+                assert allocator.getBlockData(fromBlock).liveOut.get(operandNum) && allocator.getBlockData(toBlock).liveIn.get(operandNum) : "interval not live at this edge";
+
+                TraceInterval fromInterval = allocator.splitChildAtOpId(allocator.intervalFor(operandNum), fromBlockLastInstructionId, LIRInstruction.OperandMode.DEF);
+                TraceInterval toInterval = allocator.splitChildAtOpId(allocator.intervalFor(operandNum), toBlockFirstInstructionId, LIRInstruction.OperandMode.DEF);
+
+                if (fromInterval != toInterval && !fromInterval.location().equals(toInterval.location())) {
+                    // need to insert move instruction
+                    moveResolver.addMapping(fromInterval, toInterval);
+                }
             }
+            SSIUtil.forEachValuePair(allocator.getLIR(), toBlock, fromBlock, new MyPhiValueVisitor(moveResolver, toBlock, fromBlock));
         }
+
     }
 
     private boolean containedInTrace(AbstractBlockBase<?> block) {
-        return currentTrace() == traceBuilderResult.getTraceForBlock(block);
-    }
-
-    private int currentTrace() {
-        return traceBuilderResult.getTraceForBlock(allocator.sortedBlocks().get(0));
+        return allocator.sortedBlocks().contains(block);
     }
 
     private static final DebugMetric numSSIResolutionMoves = Debug.metric("SSI LSRA[numSSIResolutionMoves]");

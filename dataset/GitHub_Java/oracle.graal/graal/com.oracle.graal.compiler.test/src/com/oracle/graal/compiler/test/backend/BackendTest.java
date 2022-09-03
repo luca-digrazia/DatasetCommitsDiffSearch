@@ -22,18 +22,20 @@
  */
 package com.oracle.graal.compiler.test.backend;
 
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.*;
 
-import com.oracle.graal.compiler.GraalCompiler;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.OptimisticOptimizations;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import static jdk.internal.jvmci.code.CodeUtil.*;
+
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.schedule.*;
 
 public abstract class BackendTest extends GraalCompilerTest {
 
@@ -47,14 +49,15 @@ public abstract class BackendTest extends GraalCompilerTest {
 
     @SuppressWarnings("try")
     protected LIRGenerationResult getLIRGenerationResult(final StructuredGraph graph) {
+        SchedulePhase schedule = null;
         try (Scope s = Debug.scope("FrontEnd")) {
-            GraalCompiler.emitFrontEnd(getProviders(), getBackend(), graph, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE, graph.method().getProfilingInfo(), getSuites());
+            schedule = GraalCompiler.emitFrontEnd(getProviders(), getBackend(), graph, getDefaultGraphBuilderSuite(), OptimisticOptimizations.NONE, graph.method().getProfilingInfo(), getSuites());
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
 
         CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
-        LIRGenerationResult lirGen = GraalCompiler.emitLIR(getBackend(), graph, null, cc, null, getLIRSuites());
+        LIRGenerationResult lirGen = GraalCompiler.emitLIR(getBackend(), schedule, graph, null, cc, null, getLIRSuites());
         return lirGen;
     }
 

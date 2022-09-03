@@ -99,8 +99,6 @@ public abstract class TruffleCompiler {
         if (Debug.isEnabled()) {
             DebugEnvironment.initialize(System.out);
         }
-
-        graalTruffleRuntime.reinstallStubs();
     }
 
     public GraphBuilderConfiguration getGraphBuilderConfiguration() {

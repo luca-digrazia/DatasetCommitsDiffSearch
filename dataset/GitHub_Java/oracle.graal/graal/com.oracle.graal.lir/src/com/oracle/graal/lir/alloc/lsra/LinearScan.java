@@ -22,52 +22,29 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
-import static jdk.vm.ci.code.CodeUtil.isEven;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isLegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterAttributes;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlotValue;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.code.VirtualStackSlot;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.options.NestedBooleanOptionValue;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionType;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.compiler.common.BackendOptions;
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.ValueConsumer;
-import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBinding;
-import com.oracle.graal.lir.framemap.FrameMapBuilder;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.AllocationPhase.AllocationContext;
 
@@ -172,7 +149,6 @@ public class LinearScan {
      * The {@linkplain #operandNumber(Value) number} of the first variable operand allocated.
      */
     private final int firstVariableNumber;
-    private final boolean neverSpillConstants;
 
     protected LinearScan(TargetDescription target, LIRGenerationResult res, SpillMoveFactory spillMoveFactory, RegisterAllocationConfig regAllocConfig,
                     List<? extends AbstractBlockBase<?>> sortedBlocks) {
@@ -186,7 +162,6 @@ public class LinearScan {
         this.registers = target.arch.getRegisters();
         this.firstVariableNumber = getRegisters().length;
         this.blockData = new BlockMap<>(ir.getControlFlowGraph());
-        this.neverSpillConstants = BackendOptions.UserOptions.NeverSpillConstants.getValue();
     }
 
     public int getFirstLirInstructionId(AbstractBlockBase<?> block) {
@@ -916,10 +891,6 @@ public class LinearScan {
 
     public boolean callKillsRegisters() {
         return regAllocConfig.getRegisterConfig().areAllAllocatableRegistersCallerSaved();
-    }
-
-    boolean neverSpillConstants() {
-        return neverSpillConstants;
     }
 
 }

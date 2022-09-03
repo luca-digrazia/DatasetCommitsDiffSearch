@@ -22,29 +22,21 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
-import jdk.vm.ci.code.CompilationResult.Call;
-import jdk.vm.ci.code.CompilationResult.Mark;
-import jdk.vm.ci.code.CompilationResult.Site;
-import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.internal.jvmci.code.CompilationResult.*;
 
-import org.junit.Test;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.java.TypeCheckNode;
-import com.oracle.graal.phases.common.AbstractInliningPhase;
+import jdk.internal.jvmci.meta.*;
+
+import org.junit.*;
+
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth12;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth13;
 import com.oracle.graal.replacements.test.CheckCastTest.Depth14;
@@ -63,7 +55,7 @@ public class InstanceOfTest extends TypeCheckTest {
         InstanceOfNode ion = graph.getNodes().filter(InstanceOfNode.class).first();
         if (ion != null) {
             LogicNode ionNew = graph.unique(InstanceOfNode.create(ion.type(), ion.getValue(), profile));
-            ion.replaceAtUsagesAndDelete(ionNew);
+            graph.replaceFloating(ion, ionNew);
         }
     }
 

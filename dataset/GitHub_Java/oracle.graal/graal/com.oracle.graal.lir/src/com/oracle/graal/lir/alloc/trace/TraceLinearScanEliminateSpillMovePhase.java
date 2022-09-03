@@ -22,31 +22,28 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
-import static jdk.internal.jvmci.code.ValueUtil.isRegister;
-import static jdk.internal.jvmci.code.ValueUtil.isStackSlotValue;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.meta.AllocatableValue;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
-import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.alloc.trace.TraceInterval.SpillState;
 import com.oracle.graal.lir.alloc.trace.TraceLinearScan.IntervalPredicate;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 
-final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAllocationPhase {
+final class TraceLinearScanEliminateSpillMovePhase extends AllocationPhase {
 
     private static final IntervalPredicate mustStoreAtDefinition = new TraceLinearScan.IntervalPredicate() {
 
@@ -56,22 +53,38 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
         }
     };
 
+    protected final TraceLinearScan allocator;
+
+    protected TraceLinearScanEliminateSpillMovePhase(TraceLinearScan allocator) {
+        this.allocator = allocator;
+    }
+
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
-        eliminateSpillMoves(allocator);
+                    RegisterAllocationConfig registerAllocationConfig) {
+        eliminateSpillMoves();
+    }
+
+    /**
+     * @return the index of the first instruction that is of interest for
+     *         {@link #eliminateSpillMoves()}
+     */
+    protected static int firstInstructionOfInterest() {
+        // also look at Labels as they define PHI values
+        return 0;
     }
 
     // called once before assignment of register numbers
     @SuppressWarnings("try")
-    private static void eliminateSpillMoves(TraceLinearScan allocator) {
+    void eliminateSpillMoves() {
         try (Indent indent = Debug.logAndIndent("Eliminating unnecessary spill moves")) {
 
             /*
              * collect all intervals that must be stored after their definition. The list is sorted
              * by Interval.spillDefinitionPos.
              */
-            TraceInterval interval = allocator.createUnhandledList(mustStoreAtDefinition);
+            TraceInterval interval;
+            interval = allocator.createUnhandledLists(mustStoreAtDefinition, null).first;
             if (DetailedAsserts.getValue()) {
                 checkIntervals(interval);
             }
@@ -83,7 +96,7 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
                     int numInst = instructions.size();
 
                     // iterate all instructions of the block.
-                    for (int j = 0; j < numInst; j++) {
+                    for (int j = firstInstructionOfInterest(); j < numInst; j++) {
                         LIRInstruction op = instructions.get(j);
                         int opId = op.id();
 
@@ -167,9 +180,19 @@ final class TraceLinearScanEliminateSpillMovePhase extends TraceLinearScanAlloca
      * @param block The block {@code move} is located in.
      * @param move Spill move.
      */
-    private static boolean canEliminateSpillMove(AbstractBlockBase<?> block, MoveOp move) {
+    protected static boolean canEliminateSpillMove(AbstractBlockBase<?> block, MoveOp move) {
         // TODO (je) do not eliminate spill moves yet!
         return false;
+        /*
+         * assert isVariable(move.getResult()) : "LinearScan inserts only moves to variables: " +
+         * move;
+         *
+         * Interval curInterval = allocator.intervalFor(move.getResult());
+         *
+         * if (!isRegister(curInterval.location()) && curInterval.alwaysInMemory()) { assert
+         * isStackSlotValue(curInterval.location()) : "Not a stack slot: " + curInterval.location();
+         * return true; } return false;
+         */
     }
 
     private static void checkIntervals(TraceInterval interval) {

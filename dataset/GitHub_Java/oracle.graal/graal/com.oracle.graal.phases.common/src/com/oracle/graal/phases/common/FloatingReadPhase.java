@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,57 +22,26 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.compiler.common.LocationIdentity.any;
-import static com.oracle.graal.graph.Graph.NodeEvent.NODE_ADDED;
-import static com.oracle.graal.graph.Graph.NodeEvent.ZERO_USAGES;
+import static com.oracle.graal.graph.Graph.NodeEvent.*;
+import static jdk.internal.jvmci.meta.LocationIdentity.*;
 
-import java.util.Collection;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.LocationIdentity;
-import com.oracle.graal.compiler.common.cfg.Loop;
-import com.oracle.graal.debug.DebugCloseable;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.graph.Graph.NodeEventScope;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.InvokeWithExceptionNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopEndNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNodeUtil;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.cfg.ControlFlowGraph;
-import com.oracle.graal.nodes.cfg.HIRLoop;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.nodes.memory.FloatableAccessNode;
-import com.oracle.graal.nodes.memory.FloatingAccessNode;
-import com.oracle.graal.nodes.memory.FloatingReadNode;
-import com.oracle.graal.nodes.memory.MemoryAccess;
-import com.oracle.graal.nodes.memory.MemoryAnchorNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryMap;
-import com.oracle.graal.nodes.memory.MemoryMapNode;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.memory.MemoryPhiNode;
-import com.oracle.graal.nodes.memory.ReadNode;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.common.util.HashSetNodeEventListener;
-import com.oracle.graal.phases.graph.ReentrantNodeIterator;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.util.*;
+import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantNodeIterator.LoopInfo;
 import com.oracle.graal.phases.graph.ReentrantNodeIterator.NodeIteratorClosure;
 
@@ -359,23 +328,20 @@ public class FloatingReadPhase extends Phase {
             state.lastMemorySnapshot.put(identity, checkpoint);
         }
 
-        @SuppressWarnings("try")
         private static void processFloatable(FloatableAccessNode accessNode, MemoryMapImpl state) {
             StructuredGraph graph = accessNode.graph();
             LocationIdentity locationIdentity = accessNode.getLocationIdentity();
             if (accessNode.canFloat()) {
                 assert accessNode.getNullCheck() == false;
                 MemoryNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
-                try (DebugCloseable position = accessNode.withNodeSourcePosition()) {
-                    FloatingAccessNode floatingNode = accessNode.asFloatingNode(lastLocationAccess);
-                    ValueAnchorNode anchor = null;
-                    GuardingNode guard = accessNode.getGuard();
-                    if (guard != null) {
-                        anchor = graph.add(new ValueAnchorNode(guard.asNode()));
-                        graph.addAfterFixed(accessNode, anchor);
-                    }
-                    graph.replaceFixedWithFloating(accessNode, floatingNode);
+                FloatingAccessNode floatingNode = accessNode.asFloatingNode(lastLocationAccess);
+                ValueAnchorNode anchor = null;
+                GuardingNode guard = accessNode.getGuard();
+                if (guard != null) {
+                    anchor = graph.add(new ValueAnchorNode(guard.asNode()));
+                    graph.addAfterFixed(accessNode, anchor);
                 }
+                graph.replaceFixedWithFloating(accessNode, floatingNode);
             }
         }
 

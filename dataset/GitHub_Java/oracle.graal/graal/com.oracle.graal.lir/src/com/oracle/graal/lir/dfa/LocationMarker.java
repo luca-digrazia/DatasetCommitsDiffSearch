@@ -22,29 +22,22 @@
  */
 package com.oracle.graal.lir.dfa;
 
-import static jdk.internal.jvmci.code.ValueUtil.isIllegal;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.meta.LIRKind;
-import jdk.internal.jvmci.meta.PlatformKind;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.InstructionStateProcedure;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRFrameState;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.ValueConsumer;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.util.ValueSet;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.util.*;
 
 public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends ValueSet<S>> {
 
@@ -117,6 +110,7 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends V
     }
 
     private static final EnumSet<OperandFlag> REGISTER_FLAG_SET = EnumSet.of(OperandFlag.REG);
+    private static final LIRKind REFERENCE_KIND = LIRKind.reference(Kind.Object);
 
     private S currentSet;
 
@@ -133,8 +127,7 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends V
             op.visitEachOutput(defConsumer);
             if (frameMap != null && op.destroysCallerSavedRegisters()) {
                 for (Register reg : frameMap.getRegisterConfig().getCallerSaveRegisters()) {
-                    PlatformKind kind = frameMap.getTarget().arch.getLargestStorableKind(reg.getRegisterCategory());
-                    defConsumer.visitValue(reg.asValue(LIRKind.value(kind)), OperandMode.TEMP, REGISTER_FLAG_SET);
+                    defConsumer.visitValue(reg.asValue(REFERENCE_KIND), OperandMode.TEMP, REGISTER_FLAG_SET);
                 }
             }
 
@@ -174,7 +167,7 @@ public abstract class LocationMarker<T extends AbstractBlockBase<T>, S extends V
                 }
                 currentSet.remove(operand);
             } else {
-                assert isIllegal(operand) || !operand.getLIRKind().equals(LIRKind.Illegal) || mode == OperandMode.TEMP : String.format("Illegal PlatformKind is only allowed for TEMP mode: %s, %s",
+                assert isIllegal(operand) || operand.getPlatformKind() != Kind.Illegal || mode == OperandMode.TEMP : String.format("Illegal PlatformKind is only allowed for TEMP mode: %s, %s",
                                 operand, mode);
             }
         }

@@ -22,26 +22,23 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.commonDominator;
-import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.dominates;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.AllocationPhase;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 
 public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase {
 
@@ -55,7 +52,8 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
         optimizeSpillPosition();
         allocator.printIntervals("After optimize spill position");
     }
@@ -122,7 +120,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
             /*
              * The spill block is the begin of the first split child (aka the value is on the
              * stack).
-             *
+             * 
              * The problem is that if spill block has more than one predecessor, the values at the
              * end of the predecessors might differ. Therefore, we would need a spill move in all
              * predecessors. To avoid this we spill in the dominator.
@@ -185,7 +183,7 @@ public final class LinearScanOptimizeSpillPositionPhase extends AllocationPhase 
         Range range;
         AbstractBlockBase<?> block;
 
-        IntervalBlockIterator(Interval interval) {
+        public IntervalBlockIterator(Interval interval) {
             range = interval.first();
             block = allocator.blockForId(range.from);
         }

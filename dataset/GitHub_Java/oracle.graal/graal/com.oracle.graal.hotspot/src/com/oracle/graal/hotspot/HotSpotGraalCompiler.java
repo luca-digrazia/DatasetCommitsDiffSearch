@@ -22,82 +22,62 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.compiler.common.GraalOptions.OptAssumptions;
-import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
-import static jdk.internal.jvmci.code.CallingConvention.Type.JavaCallee;
-import static jdk.internal.jvmci.code.CodeUtil.getCallingConvention;
-import jdk.internal.jvmci.code.CallingConvention;
-import jdk.internal.jvmci.code.CallingConvention.Type;
-import jdk.internal.jvmci.code.CompilationRequest;
-import jdk.internal.jvmci.code.CompilationResult;
-import jdk.internal.jvmci.compiler.Compiler;
-import jdk.internal.jvmci.hotspot.HotSpotCodeCacheProvider;
-import jdk.internal.jvmci.hotspot.HotSpotCompilationRequest;
-import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.internal.jvmci.meta.JavaType;
-import jdk.internal.jvmci.meta.ProfilingInfo;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
-import jdk.internal.jvmci.meta.SpeculationLog;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
+import static jdk.internal.jvmci.code.CallingConvention.Type.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
 
-import com.oracle.graal.compiler.GraalCompiler;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugConfigScope;
-import com.oracle.graal.debug.DebugEnvironment;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.debug.TopLevelDebugConfig;
-import com.oracle.graal.debug.internal.DebugScope;
-import com.oracle.graal.debug.query.SpecialIntrinsicGuard;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.IntrinsicContext;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.hotspot.meta.HotSpotSuitesProvider;
-import com.oracle.graal.hotspot.phases.OnStackReplacementPhase;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.OptimisticOptimizations.Optimization;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.Suites;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.internal.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.phases.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.OptimisticOptimizations.*;
+import com.oracle.graal.phases.tiers.*;
+
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.*;
+import jdk.internal.jvmci.compiler.Compiler;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
 public class HotSpotGraalCompiler implements Compiler {
 
     private final HotSpotJVMCIRuntimeProvider jvmciRuntime;
-    private final HotSpotGraalRuntimeProvider graalRuntime;
 
-    HotSpotGraalCompiler(HotSpotJVMCIRuntimeProvider jvmciRuntime, HotSpotGraalRuntimeProvider graalRuntime) {
+    HotSpotGraalCompiler(HotSpotJVMCIRuntimeProvider jvmciRuntime) {
         this.jvmciRuntime = jvmciRuntime;
-        this.graalRuntime = graalRuntime;
-    }
-
-    HotSpotGraalRuntimeProvider getGraalRuntime() {
-        return graalRuntime;
     }
 
     @Override
     @SuppressWarnings("try")
-    public void compileMethod(CompilationRequest request) {
+    public void compileMethod(ResolvedJavaMethod method, int entryBCI, long jvmciEnv, int id) {
         // Ensure a debug configuration for this thread is initialized
         if (Debug.isEnabled() && DebugScope.getConfig() == null) {
             DebugEnvironment.initialize(TTY.out);
         }
 
-        CompilationTask task = new CompilationTask(jvmciRuntime, this, (HotSpotCompilationRequest) request, true);
+        CompilationTask task = new CompilationTask(jvmciRuntime, this, (HotSpotResolvedJavaMethod) method, entryBCI, jvmciEnv, id, true);
         try (DebugConfigScope dcs = Debug.setConfig(new TopLevelDebugConfig())) {
             task.runCompilation();
         }
     }
 
+    @Override
     public void compileTheWorld() throws Throwable {
-        HotSpotCodeCacheProvider codeCache = (HotSpotCodeCacheProvider) jvmciRuntime.getHostJVMCIBackend().getCodeCache();
-        int iterations = CompileTheWorldOptions.CompileTheWorldIterations.getValue();
+        CompilerToVM compilerToVM = jvmciRuntime.getCompilerToVM();
+        int iterations = CompileTheWorld.Options.CompileTheWorldIterations.getValue();
         for (int i = 0; i < iterations; i++) {
-            codeCache.resetCompilationStatistics();
+            compilerToVM.resetCompilationStatistics();
             TTY.println("CompileTheWorld : iteration " + i);
             CompileTheWorld ctw = new CompileTheWorld(jvmciRuntime, this);
             ctw.compile();
@@ -106,13 +86,11 @@ public class HotSpotGraalCompiler implements Compiler {
     }
 
     public CompilationResult compile(ResolvedJavaMethod method, int entryBCI, boolean mustRecordMethodInlining) {
-        HotSpotBackend backend = graalRuntime.getHostBackend();
-        HotSpotProviders providers = backend.getProviders();
+        HotSpotBackend backend = HotSpotGraalRuntime.runtime().getHostBackend();
+        HotSpotProviders providers = HotSpotGraalRuntime.runtime().getHostProviders();
         final boolean isOSR = entryBCI != Compiler.INVOCATION_ENTRY_BCI;
-        // avoid compiling the intrinsic graphs for GraalQueryAPI methods
-        boolean bypassIntrinsic = method.isNative() || isOSR || SpecialIntrinsicGuard.isQueryIntrinsic(method);
-        StructuredGraph graph = bypassIntrinsic ? null : getIntrinsicGraph(method, providers);
 
+        StructuredGraph graph = method.isNative() || isOSR ? null : getIntrinsicGraph(method, providers);
         if (graph == null) {
             SpeculationLog speculationLog = method.getSpeculationLog();
             if (speculationLog != null) {
@@ -190,10 +168,7 @@ public class HotSpotGraalCompiler implements Compiler {
     }
 
     protected PhaseSuite<HighTierContext> getGraphBuilderSuite(HotSpotProviders providers, boolean isOSR) {
-        PhaseSuite<HighTierContext> suite = providers.getSuites().getDefaultGraphBuilderSuite();
-        if (providers.getCodeCache().shouldDebugNonSafepoints()) {
-            suite = HotSpotSuitesProvider.withSimpleDebugInfo(suite);
-        }
+        PhaseSuite<HighTierContext> suite = HotSpotSuitesProvider.withSimpleDebugInfoIfRequested(providers.getSuites().getDefaultGraphBuilderSuite());
         if (isOSR) {
             suite = suite.copy();
             suite.appendPhase(new OnStackReplacementPhase());

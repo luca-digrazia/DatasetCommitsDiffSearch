@@ -22,28 +22,18 @@
  */
 package com.oracle.graal.graph;
 
-import static com.oracle.graal.graph.Edges.Type.Successors;
+import static com.oracle.graal.graph.Edges.Type.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.function.Consumer;
+import java.util.*;
+import java.util.function.*;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionType;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.common.*;
+import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.debug.Fingerprint;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.ValueNumberable;
-import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.graph.iterators.*;
 
 /**
  * This class is a graph container, it contains the set of nodes that belong to this graph.
@@ -63,16 +53,6 @@ public class Graph {
      * The set of nodes in the graph, ordered by {@linkplain #register(Node) registration} time.
      */
     Node[] nodes;
-
-    /**
-     * Extra context information to be added to newly created nodes.
-     */
-    Object currentNodeContext;
-
-    /**
-     * Records if context information exists (or existed) for any nodes in this graph.
-     */
-    boolean seenNodeContext;
 
     /**
      * The number of valid entries in {@link #nodes}.
@@ -152,59 +132,6 @@ public class Graph {
         public String toString() {
             return node.toString();
         }
-    }
-
-    private class NodeContextScope implements DebugCloseable {
-        private final Object previous;
-
-        NodeContextScope(Object context) {
-            previous = currentNodeContext;
-            currentNodeContext = context;
-            seenNodeContext = true;
-        }
-
-        public void close() {
-            currentNodeContext = previous;
-        }
-    }
-
-    /**
-     * Opens a scope in which the context information from {@code node} is copied into nodes created
-     * within the scope. If {@code node} has no context information, no scope is opened and
-     * {@code null} is returned.
-     *
-     * @return a {@link DebugCloseable} for managing the opened scope or {@code null} if no scope
-     *         was opened
-     */
-    public DebugCloseable withNodeContext(Node node) {
-        return node.nodeContext != null ? new NodeContextScope(node.nodeContext) : null;
-    }
-
-    /**
-     * Opens a scope in which {@code context} is copied into nodes created within the scope. If
-     * {@code context == null}, no scope is opened and {@code null} is returned.
-     *
-     * @return a {@link DebugCloseable} for managing the opened scope or {@code null} if no scope
-     *         was opened
-     */
-    public DebugCloseable withNodeContext(Object context) {
-        return context != null ? new NodeContextScope(context) : null;
-    }
-
-    /**
-     * Opens a scope in which newly created nodes do not get any context information added.
-     *
-     * @return a {@link DebugCloseable} for managing the opened scope
-     */
-    public DebugCloseable withoutNodeContext() {
-        return new NodeContextScope(null);
-    }
-
-    /**
-     * Determines if this graph might contain nodes with extra context.
-     */
-    public boolean mayHaveNodeContext() {
-        return seenNodeContext;
     }
 
     /**
@@ -591,10 +518,6 @@ public class Graph {
         return result;
     }
 
-    /**
-     * Returns a possible duplicate for the given node in the graph or {@code null} if no such
-     * duplicate exists.
-     */
     @SuppressWarnings("unchecked")
     public <T extends Node> T findDuplicate(T node) {
         NodeClass<?> nodeClass = node.getNodeClass();
@@ -602,7 +525,7 @@ public class Graph {
         if (nodeClass.isLeafNode()) {
             // Leaf node: look up in cache
             Node cachedNode = findNodeInCache(node);
-            if (cachedNode != null && cachedNode != node) {
+            if (cachedNode != null) {
                 return (T) cachedNode;
             } else {
                 return null;
@@ -922,9 +845,6 @@ public class Graph {
         }
         int id = nodesSize;
         nodes[id] = node;
-        if (currentNodeContext != null) {
-            node.setNodeContext(currentNodeContext);
-        }
         nodesSize++;
 
         updateNodeCaches(node);

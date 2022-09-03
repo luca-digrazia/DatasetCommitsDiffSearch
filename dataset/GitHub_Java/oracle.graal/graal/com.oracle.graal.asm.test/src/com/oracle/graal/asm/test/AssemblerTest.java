@@ -22,28 +22,19 @@
  */
 package com.oracle.graal.asm.test;
 
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.InvalidInstalledCodeException;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.runtime.JVMCI;
-import jdk.vm.ci.runtime.JVMCIBackend;
-import jdk.vm.ci.service.Services;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.runtime.*;
+import jdk.internal.jvmci.service.*;
 
-import org.junit.Assert;
+import org.junit.*;
 
-import com.oracle.graal.code.DisassemblerProvider;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.test.GraalTest;
+import com.oracle.graal.code.*;
+import com.oracle.graal.test.*;
 
 public abstract class AssemblerTest extends GraalTest {
 
@@ -75,9 +66,8 @@ public abstract class AssemblerTest extends GraalTest {
             byte[] targetCode = test.generateCode(compResult, codeCache.getTarget(), registerConfig, cc);
             compResult.setTargetCode(targetCode, targetCode.length);
             compResult.setTotalFrameSize(0);
-            compResult.close();
 
-            InstalledCode code = codeCache.addCode(method, compResult, null, null);
+            InstalledCode code = codeCache.addMethod(method, compResult, null, null);
 
             for (DisassemblerProvider dis : Services.load(DisassemblerProvider.class)) {
                 String disasm1 = dis.disassembleCompiledCode(codeCache, compResult);

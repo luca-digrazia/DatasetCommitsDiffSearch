@@ -22,16 +22,18 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
+import jdk.internal.jvmci.meta.*;
+
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.util.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -41,7 +43,7 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
 final class RegisterVerifier {
 
     LinearScan allocator;
-    List<AbstractBlock<?>> workList; // all blocks that must be processed
+    List<AbstractBlockBase<?>> workList; // all blocks that must be processed
     ArrayMap<Interval[]> savedStates; // saved information of previous check
 
     // simplified access to methods of LinearScan
@@ -55,15 +57,15 @@ final class RegisterVerifier {
     }
 
     // accessors
-    Interval[] stateForBlock(AbstractBlock<?> block) {
+    Interval[] stateForBlock(AbstractBlockBase<?> block) {
         return savedStates.get(block.getId());
     }
 
-    void setStateForBlock(AbstractBlock<?> block, Interval[] savedState) {
+    void setStateForBlock(AbstractBlockBase<?> block, Interval[] savedState) {
         savedStates.put(block.getId(), savedState);
     }
 
-    void addToWorkList(AbstractBlock<?> block) {
+    void addToWorkList(AbstractBlockBase<?> block) {
         if (!workList.contains(block)) {
             workList.add(block);
         }
@@ -76,47 +78,61 @@ final class RegisterVerifier {
 
     }
 
-    void verify(AbstractBlock<?> start) {
-        // setup input registers (method arguments) for first block
-        Interval[] inputState = new Interval[stateSize()];
-        setStateForBlock(start, inputState);
-        addToWorkList(start);
+    @SuppressWarnings("try")
+    void verify(AbstractBlockBase<?> start) {
+        try (Scope s = Debug.scope("RegisterVerifier")) {
+            // setup input registers (method arguments) for first block
+            Interval[] inputState = new Interval[stateSize()];
+            setStateForBlock(start, inputState);
+            addToWorkList(start);
 
-        // main loop for verification
-        do {
-            AbstractBlock<?> block = workList.get(0);
-            workList.remove(0);
+            // main loop for verification
+            do {
+                AbstractBlockBase<?> block = workList.get(0);
+                workList.remove(0);
 
-            processBlock(block);
-        } while (!workList.isEmpty());
+                processBlock(block);
+            } while (!workList.isEmpty());
+        }
     }
 
-    private void processBlock(AbstractBlock<?> block) {
+    @SuppressWarnings("try")
+    private void processBlock(AbstractBlockBase<?> block) {
         try (Indent indent = Debug.logAndIndent("processBlock B%d", block.getId())) {
             // must copy state because it is modified
             Interval[] inputState = copy(stateForBlock(block));
 
             try (Indent indent2 = Debug.logAndIndent("Input-State of intervals:")) {
-                for (int i = 0; i < stateSize(); i++) {
-                    if (inputState[i] != null) {
-                        Debug.log(" %4d", inputState[i].operandNumber);
-                    } else {
-                        Debug.log("   __");
-                    }
-                }
+                printState(inputState);
             }
 
             // process all operations of the block
-            processOperations(allocator.ir.getLIRforBlock(block), inputState);
+            processOperations(block, inputState);
+
+            try (Indent indent2 = Debug.logAndIndent("Output-State of intervals:")) {
+                printState(inputState);
+            }
 
             // iterate all successors
-            for (AbstractBlock<?> succ : block.getSuccessors()) {
+            for (AbstractBlockBase<?> succ : block.getSuccessors()) {
                 processSuccessor(succ, inputState);
             }
         }
     }
 
-    private void processSuccessor(AbstractBlock<?> block, Interval[] inputState) {
+    protected void printState(Interval[] inputState) {
+        for (int i = 0; i < stateSize(); i++) {
+            Register reg = allocator.getRegisters()[i];
+            assert reg.number == i;
+            if (inputState[i] != null) {
+                Debug.log(" %6s %4d  --  %s", reg, inputState[i].operandNumber, inputState[i]);
+            } else {
+                Debug.log(" %6s   __", reg);
+            }
+        }
+    }
+
+    private void processSuccessor(AbstractBlockBase<?> block, Interval[] inputState) {
         Interval[] savedState = stateForBlock(block);
 
         if (savedState != null) {
@@ -176,16 +192,19 @@ final class RegisterVerifier {
         }
     }
 
-    static boolean checkState(Interval[] inputState, Value reg, Interval interval) {
+    static boolean checkState(AbstractBlockBase<?> block, LIRInstruction op, Interval[] inputState, Value operand, Value reg, Interval interval) {
         if (reg != null && isRegister(reg)) {
             if (inputState[asRegister(reg).number] != interval) {
-                throw new GraalInternalError("!! Error in register allocation: register %s does not contain interval %s but interval %s", reg, interval.operand, inputState[asRegister(reg).number]);
+                throw new JVMCIError(
+                                "Error in register allocation: operation (%s) in block %s expected register %s (operand %s) to contain the value of interval %s but data-flow says it contains interval %s",
+                                op, block, reg, operand, interval, inputState[asRegister(reg).number]);
             }
         }
         return true;
     }
 
-    void processOperations(List<LIRInstruction> ops, final Interval[] inputState) {
+    void processOperations(AbstractBlockBase<?> block, final Interval[] inputState) {
+        List<LIRInstruction> ops = allocator.getLIR().getLIRforBlock(block);
         InstructionValueConsumer useConsumer = new InstructionValueConsumer() {
 
             @Override
@@ -197,7 +216,7 @@ final class RegisterVerifier {
                         interval = interval.getSplitChildAtOpId(op.id(), mode, allocator);
                     }
 
-                    assert checkState(inputState, interval.location(), interval.splitParent());
+                    assert checkState(block, op, inputState, interval.operand, interval.location(), interval.splitParent());
                 }
             }
         };
@@ -225,7 +244,7 @@ final class RegisterVerifier {
             op.visitEachInput(useConsumer);
             // invalidate all caller save registers at calls
             if (op.destroysCallerSavedRegisters()) {
-                for (Register r : allocator.frameMapBuilder.getRegisterConfig().getCallerSaveRegisters()) {
+                for (Register r : allocator.getRegisterAllocationConfig().getRegisterConfig().getCallerSaveRegisters()) {
                     statePut(inputState, r.asValue(), null);
                 }
             }

@@ -22,43 +22,36 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.config;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.referentOffset;
+import static jdk.internal.jvmci.common.UnsafeAccess.*;
 
-import java.lang.ref.WeakReference;
+import java.lang.ref.*;
 
-import jdk.vm.ci.hotspot.HotSpotInstalledCode;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import org.junit.Assert;
-import org.junit.Test;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
 
-import sun.misc.Unsafe;
+import org.junit.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.hotspot.nodes.G1PostWriteBarrier;
-import com.oracle.graal.hotspot.nodes.G1PreWriteBarrier;
-import com.oracle.graal.hotspot.nodes.G1ReferentFieldReadBarrier;
-import com.oracle.graal.hotspot.nodes.SerialWriteBarrier;
-import com.oracle.graal.hotspot.phases.WriteBarrierAdditionPhase;
-import com.oracle.graal.nodes.StructuredGraph;
+import sun.misc.*;
+
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.phases.*;
+import com.oracle.graal.hotspot.replacements.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
-import com.oracle.graal.nodes.memory.ReadNode;
-import com.oracle.graal.nodes.memory.WriteNode;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.GuardLoweringPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.common.inlining.InliningPhase;
-import com.oracle.graal.phases.common.inlining.policy.InlineEverythingPolicy;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.MidTierContext;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.common.inlining.policy.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * The following unit tests assert the presence of write barriers for both Serial and G1 GCs.
@@ -69,10 +62,10 @@ import com.oracle.graal.phases.tiers.MidTierContext;
  * offsets) passed as input parameters can be checked against printed output from the G1 write
  * barrier snippets. The runtime checks have been validated offline.
  */
-public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
+public class WriteBarrierAdditionTest extends GraalCompilerTest {
 
-    private final HotSpotVMConfig config = config();
-    private static final long referentOffset = referentOffset();
+    private static final HotSpotVMConfig config = HotSpotGraalRuntime.runtime().getConfig();
+    private static final long referentOffset = HotSpotReplacementsUtil.referentOffset();
 
     public static class Container {
 
@@ -169,7 +162,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
     }
 
     public static Object test5Snippet() throws Exception {
-        return UNSAFE.getObject(wr, config().useCompressedOops ? 12L : 16L);
+        return unsafe.getObject(wr, config.useCompressedOops ? 12L : 16L);
     }
 
     /**
@@ -178,7 +171,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
      */
     @Test
     public void test6() throws Exception {
-        test2("testUnsafeLoad", UNSAFE, wr, new Long(referentOffset), null);
+        test2("testUnsafeLoad", unsafe, wr, new Long(referentOffset), null);
     }
 
     /**
@@ -187,7 +180,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
      */
     @Test
     public void test7() throws Exception {
-        test2("testUnsafeLoad", UNSAFE, con, new Long(referentOffset), null);
+        test2("testUnsafeLoad", unsafe, con, new Long(referentOffset), null);
     }
 
     /**
@@ -197,7 +190,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
      */
     @Test
     public void test8() throws Exception {
-        test2("testUnsafeLoad", UNSAFE, wr, new Long(config.useCompressedOops ? 20 : 32), null);
+        test2("testUnsafeLoad", unsafe, wr, new Long(config.useCompressedOops ? 20 : 32), null);
     }
 
     /**
@@ -207,7 +200,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
      */
     @Test
     public void test10() throws Exception {
-        test2("testUnsafeLoad", UNSAFE, wr, new Long(config.useCompressedOops ? 6 : 8), new Integer(config.useCompressedOops ? 6 : 8));
+        test2("testUnsafeLoad", unsafe, wr, new Long(config.useCompressedOops ? 6 : 8), new Integer(config.useCompressedOops ? 6 : 8));
     }
 
     /**
@@ -217,7 +210,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
      */
     @Test
     public void test9() throws Exception {
-        test2("testUnsafeLoad", UNSAFE, wr, new Long(config.useCompressedOops ? 10 : 16), new Integer(config.useCompressedOops ? 10 : 16));
+        test2("testUnsafeLoad", unsafe, wr, new Long(config.useCompressedOops ? 10 : 16), new Integer(config.useCompressedOops ? 10 : 16));
     }
 
     static Object[] src = new Object[1];
@@ -260,7 +253,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
         try (Scope s = Debug.scope("WriteBarrierAdditionTest", snippet)) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
             HighTierContext highContext = getDefaultHighTierContext();
-            MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.getProfilingInfo());
+            MidTierContext midContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.method().getProfilingInfo());
             new InliningPhase(new InlineEverythingPolicy(), new CanonicalizerPhase()).apply(graph, highContext);
             new CanonicalizerPhase().apply(graph, highContext);
             new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, highContext);

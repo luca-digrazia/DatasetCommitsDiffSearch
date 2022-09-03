@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,64 +22,25 @@
  */
 package com.oracle.graal.phases.common;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ConditionAnchorNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.GuardNode;
-import com.oracle.graal.nodes.IfNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.LoopExitNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.ShortCircuitOrNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.calc.ConditionalNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.calc.IntegerBelowNode;
-import com.oracle.graal.nodes.calc.IntegerEqualsNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.calc.ObjectEqualsNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.LoadHubNode;
-import com.oracle.graal.nodes.extended.ValueAnchorNode;
-import com.oracle.graal.nodes.java.CheckCastNode;
-import com.oracle.graal.nodes.java.InstanceOfNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.java.TypeSwitchNode;
-import com.oracle.graal.nodes.spi.ValueProxy;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.graph.MergeableState;
-import com.oracle.graal.phases.graph.SinglePassNodeIterator;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.graph.*;
 
 public class ConditionalEliminationPhase extends Phase {
 
@@ -235,7 +196,7 @@ public class ConditionalEliminationPhase extends Phase {
             // this piece of code handles phis
             if (!(merge instanceof LoopBeginNode)) {
                 for (PhiNode phi : merge.phis()) {
-                    if (phi instanceof ValuePhiNode && phi.getStackKind() == JavaKind.Object) {
+                    if (phi instanceof ValuePhiNode && phi.getStackKind() == Kind.Object) {
                         ValueNode firstValue = phi.valueAt(0);
                         ResolvedJavaType type = getNodeType(firstValue);
                         boolean nonNull = knownNonNull.contains(firstValue);
@@ -487,19 +448,19 @@ public class ConditionalEliminationPhase extends Phase {
         }
 
         private GuardedStamp computeGuardedStamp(GuardNode guard) {
-            if (guard.getCondition() instanceof IntegerBelowNode) {
+            if (guard.condition() instanceof IntegerBelowNode) {
                 if (guard.isNegated()) {
                     // Not sure how to reason about negated guards
                     return null;
                 }
-                IntegerBelowNode below = (IntegerBelowNode) guard.getCondition();
-                if (below.getX().getStackKind() == JavaKind.Int && below.getX().isConstant() && !below.getY().isConstant()) {
+                IntegerBelowNode below = (IntegerBelowNode) guard.condition();
+                if (below.getX().getStackKind() == Kind.Int && below.getX().isConstant() && !below.getY().isConstant()) {
                     Stamp stamp = StampTool.unsignedCompare(below.getX().stamp(), below.getY().stamp());
                     if (stamp != null) {
                         return new GuardedStamp(below.getY(), stamp, guard);
                     }
                 }
-                if (below.getY().getStackKind() == JavaKind.Int && below.getY().isConstant() && !below.getX().isConstant()) {
+                if (below.getY().getStackKind() == Kind.Int && below.getY().isConstant() && !below.getX().isConstant()) {
                     Stamp stamp = StampTool.unsignedCompare(below.getX().stamp(), below.getY().stamp());
                     if (stamp != null) {
                         return new GuardedStamp(below.getX(), stamp, guard);
@@ -543,8 +504,8 @@ public class ConditionalEliminationPhase extends Phase {
             }
 
             GuardNode existingGuard = null;
-            if (guard.getCondition() instanceof IntegerBelowNode) {
-                IntegerBelowNode below = (IntegerBelowNode) guard.getCondition();
+            if (guard.condition() instanceof IntegerBelowNode) {
+                IntegerBelowNode below = (IntegerBelowNode) guard.condition();
                 IntegerStamp xStamp = (IntegerStamp) below.getX().stamp();
                 IntegerStamp yStamp = (IntegerStamp) below.getY().stamp();
                 GuardedStamp cstamp = state.valueConstraints.get(below.getX());
@@ -566,22 +527,22 @@ public class ConditionalEliminationPhase extends Phase {
                         if (xStamp.isPositive() && xStamp.upperBound() < yStamp.lowerBound()) {
                             // Proven true
                             existingGuard = cstamp.getGuard();
-                            Debug.log("existing guard %s %1s proves %1s", existingGuard, existingGuard.getCondition(), guard.getCondition());
+                            Debug.log("existing guard %s %1s proves %1s", existingGuard, existingGuard.condition(), guard.condition());
                         } else if (xStamp.isStrictlyNegative() || xStamp.lowerBound() >= yStamp.upperBound()) {
                             // An earlier guard proves that this will always fail but it's probably
                             // not worth trying to use it.
                         }
                     }
                 }
-            } else if (guard.getCondition() instanceof IntegerEqualsNode && guard.isNegated()) {
-                IntegerEqualsNode equals = (IntegerEqualsNode) guard.getCondition();
+            } else if (guard.condition() instanceof IntegerEqualsNode && guard.isNegated()) {
+                IntegerEqualsNode equals = (IntegerEqualsNode) guard.condition();
                 GuardedStamp cstamp = state.valueConstraints.get(equals.getY());
                 if (cstamp != null && equals.getX().isConstant()) {
                     IntegerStamp stamp = (IntegerStamp) cstamp.getStamp();
                     if (!stamp.contains(equals.getX().asJavaConstant().asLong())) {
                         // x != n is true if n is outside the range of the stamp
                         existingGuard = cstamp.getGuard();
-                        Debug.log("existing guard %s %1s proves !%1s", existingGuard, existingGuard.getCondition(), guard.getCondition());
+                        Debug.log("existing guard %s %1s proves !%1s", existingGuard, existingGuard.condition(), guard.condition());
                     }
                 }
             }
@@ -595,7 +556,7 @@ public class ConditionalEliminationPhase extends Phase {
         }
 
         private boolean tryReplaceWithExistingGuard(GuardNode guard) {
-            GuardingNode existingGuard = guard.isNegated() ? state.falseConditions.get(guard.getCondition()) : state.trueConditions.get(guard.getCondition());
+            GuardingNode existingGuard = guard.isNegated() ? state.falseConditions.get(guard.condition()) : state.trueConditions.get(guard.condition());
             if (existingGuard != null && existingGuard != guard) {
                 eliminateGuard(guard, existingGuard);
                 return true;
@@ -617,7 +578,7 @@ public class ConditionalEliminationPhase extends Phase {
                     // information
                     Stamp result = conditional.getStamp().join(other.getStamp());
                     if (result == conditional.getStamp()) {
-                        Debug.log("%1s overrides existing value %1s", guard.getCondition(), other.getGuard().getCondition());
+                        Debug.log("%1s overrides existing value %1s", guard.condition(), other.getGuard().condition());
                         state.valueConstraints.put(conditional.getValue(), conditional);
                     } else if (result == other.getStamp()) {
                         // existing type constraint is best
@@ -832,7 +793,7 @@ public class ConditionalEliminationPhase extends Phase {
                 assert !(replacementAnchor instanceof FloatingNode) : "unsafe to mix unlowered Checkcast with floating guards";
                 PiNode piNode;
                 if (isNull) {
-                    ConstantNode nullObject = ConstantNode.defaultForKind(JavaKind.Object, graph);
+                    ConstantNode nullObject = ConstantNode.defaultForKind(Kind.Object, graph);
                     piNode = graph.unique(new PiNode(nullObject, nullObject.stamp(), replacementAnchor.asNode()));
                 } else {
                     piNode = graph.unique(new PiNode(object, StampFactory.declaredTrusted(type, nonNull), replacementAnchor.asNode()));
@@ -879,7 +840,7 @@ public class ConditionalEliminationPhase extends Phase {
             // to see if they can be deleted using type constraints.
             for (GuardNode guard : begin.guards().snapshot()) {
                 if (provers.contains(guard) || !(tryReplaceWithExistingGuard(guard) || testImpliedGuard(guard))) {
-                    registerCondition(!guard.isNegated(), guard.getCondition(), guard);
+                    registerCondition(!guard.isNegated(), guard.condition(), guard);
                 }
             }
             assert assertImpliedGuard(provers);

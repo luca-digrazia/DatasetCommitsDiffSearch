@@ -22,20 +22,18 @@
  */
 package com.oracle.graal.compiler.phases;
 
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.*;
+import java.util.stream.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 import com.oracle.graal.graph.Graph.NodeEvent;
 import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.util.HashSetNodeEventListener;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.util.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * A utility phase for detecting when a phase would change the graph and reporting extra information
@@ -81,7 +79,7 @@ public class GraphChangeMonitoringPhase<C extends PhaseContext> extends PhaseSui
          * Ignore LogicConstantNode since those are sometimes created and deleted as part of running
          * a phase.
          */
-        if (listener.getNodes().stream().filter(e -> !(e instanceof LogicConstantNode)).findFirst().isPresent()) {
+        if (listener.getNodes().stream().filter(e -> !(e instanceof LogicConstantNode)).findFirst().get() != null) {
             /* rerun it on the real graph in a new Debug scope so Dump and Log can find it. */
             listener = new HashSetNodeEventListener();
             try (NodeEventScope s = graph.trackNodeEvents(listener)) {

@@ -22,37 +22,17 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.asStackSlotValue;
-import static jdk.vm.ci.code.ValueUtil.asVirtualStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isStackSlotValue;
-import static jdk.vm.ci.code.ValueUtil.isVirtualStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.StackSlotValue;
-import jdk.vm.ci.code.VirtualStackSlot;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.framemap.FrameMapBuilderTool;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.framemap.*;
 
 /**
  */
@@ -494,8 +474,6 @@ public class TraceLocalMoveResolver {
             // insert position changed . resolve current mappings
             resolveMappings();
         }
-
-        assert insertionBuffer.lirList() != newInsertList || newInsertIdx >= insertIdx : String.format("Decreasing insert index: old=%d new=%d", insertIdx, newInsertIdx);
 
         if (insertionBuffer.lirList() != newInsertList) {
             // block changed . append insertionBuffer because it is

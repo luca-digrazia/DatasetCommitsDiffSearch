@@ -35,12 +35,12 @@ import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.alloc.trace.Interval.SpillState;
+import com.oracle.graal.lir.alloc.trace.TraceInterval.SpillState;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.*;
 
-public final class TraceLinearScanOptimizeSpillPositionPhase extends AllocationPhase {
+final class TraceLinearScanOptimizeSpillPositionPhase extends AllocationPhase {
 
     private static final DebugMetric betterSpillPos = Debug.metric("BetterSpillPosition");
     private static final DebugMetric betterSpillPosWithLowerProbability = Debug.metric("BetterSpillPositionWithLowerProbability");
@@ -58,10 +58,11 @@ public final class TraceLinearScanOptimizeSpillPositionPhase extends AllocationP
         allocator.printIntervals("After optimize spill position");
     }
 
+    @SuppressWarnings("try")
     private void optimizeSpillPosition() {
         try (Indent indent0 = Debug.logAndIndent("OptimizeSpillPositions")) {
             LIRInsertionBuffer[] insertionBuffers = new LIRInsertionBuffer[allocator.getLIR().linearScanOrder().size()];
-            for (Interval interval : allocator.intervals()) {
+            for (TraceInterval interval : allocator.intervals()) {
                 optimizeInterval(insertionBuffers, interval);
             }
             for (LIRInsertionBuffer insertionBuffer : insertionBuffers) {
@@ -73,15 +74,16 @@ public final class TraceLinearScanOptimizeSpillPositionPhase extends AllocationP
         }
     }
 
-    private void optimizeInterval(LIRInsertionBuffer[] insertionBuffers, Interval interval) {
+    @SuppressWarnings("try")
+    private void optimizeInterval(LIRInsertionBuffer[] insertionBuffers, TraceInterval interval) {
         if (interval == null || !interval.isSplitParent() || interval.spillState() != SpillState.SpillInDominator) {
             return;
         }
         AbstractBlockBase<?> defBlock = allocator.blockForId(interval.spillDefinitionPos());
         AbstractBlockBase<?> spillBlock = null;
-        Interval firstSpillChild = null;
+        TraceInterval firstSpillChild = null;
         try (Indent indent = Debug.logAndIndent("interval %s (%s)", interval, defBlock)) {
-            for (Interval splitChild : interval.getSplitChildren()) {
+            for (TraceInterval splitChild : interval.getSplitChildren()) {
                 if (isStackSlotValue(splitChild.location())) {
                     if (firstSpillChild == null || splitChild.from() < firstSpillChild.from()) {
                         firstSpillChild = splitChild;
@@ -181,7 +183,7 @@ public final class TraceLinearScanOptimizeSpillPositionPhase extends AllocationP
         Range range;
         AbstractBlockBase<?> block;
 
-        public IntervalBlockIterator(Interval interval) {
+        public IntervalBlockIterator(TraceInterval interval) {
             range = interval.first();
             block = allocator.blockForId(range.from);
         }
@@ -210,7 +212,7 @@ public final class TraceLinearScanOptimizeSpillPositionPhase extends AllocationP
         }
     }
 
-    private Iterable<AbstractBlockBase<?>> blocksForInterval(Interval interval) {
+    private Iterable<AbstractBlockBase<?>> blocksForInterval(TraceInterval interval) {
         return new Iterable<AbstractBlockBase<?>>() {
             public Iterator<AbstractBlockBase<?>> iterator() {
                 return new IntervalBlockIterator(interval);

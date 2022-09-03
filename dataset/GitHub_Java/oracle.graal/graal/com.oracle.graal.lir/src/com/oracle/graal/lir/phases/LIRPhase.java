@@ -85,13 +85,17 @@ public abstract class LIRPhase<C> {
         }
     };
 
-    /** Lazy initialization to create pattern only when assertions are enabled. */
-    static class NamePatternHolder {
-        static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean enabled = false;
+        assert enabled = true;
+        return enabled;
     }
 
+    private static final Pattern NAME_PATTERN = assertionsEnabled() ? Pattern.compile("[A-Z][A-Za-z0-9]+") : null;
+
     private static boolean checkName(String name) {
-        assert name == null || NamePatternHolder.NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
+        assert name == null || NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
         return true;
     }
 
@@ -113,6 +117,7 @@ public abstract class LIRPhase<C> {
         apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, true);
     }
 
+    @SuppressWarnings("try")
     public final <B extends AbstractBlockBase<B>> void apply(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, C context, boolean dumpLIR) {
         try (Scope s = Debug.scope(getName(), this)) {
             try (DebugCloseable a = timer.start(); DebugCloseable c = memUseTracker.start()) {

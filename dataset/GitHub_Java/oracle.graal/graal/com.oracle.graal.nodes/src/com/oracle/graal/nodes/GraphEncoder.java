@@ -22,29 +22,17 @@
  */
 package com.oracle.graal.nodes;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
-import jdk.vm.ci.code.Architecture;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
 
-import com.oracle.graal.compiler.common.Fields;
-import com.oracle.graal.compiler.common.util.FrequencyEncoder;
-import com.oracle.graal.compiler.common.util.TypeConversion;
-import com.oracle.graal.compiler.common.util.TypeReader;
-import com.oracle.graal.compiler.common.util.TypeWriter;
-import com.oracle.graal.compiler.common.util.UnsafeArrayTypeWriter;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.graph.Edges;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeList;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.java.ExceptionObjectNode;
+import com.oracle.graal.nodes.java.*;
 
 /**
  * Encodes a {@link StructuredGraph} to a compact byte[] array. All nodes of the graph and edges
@@ -112,9 +100,7 @@ public class GraphEncoder {
     public static final int NULL_ORDER_ID = 0;
     /** The orderId of the {@link StructuredGraph#start() start node} of the encoded graph. */
     public static final int START_NODE_ORDER_ID = 1;
-    /**
-     * The orderId of the first actual node after the {@link StructuredGraph#start() start node}.
-     */
+    /** The orderId of the first actual node after the {@link StructuredGraph#start() start node}. */
     public static final int FIRST_NODE_ORDER_ID = 2;
 
     /**
@@ -170,7 +156,6 @@ public class GraphEncoder {
             nodeClasses.addObject(node.getNodeClass());
 
             NodeClass<?> nodeClass = node.getNodeClass();
-            objects.addObject(node.getRawNodeContext());
             for (int i = 0; i < nodeClass.getData().getCount(); i++) {
                 if (!nodeClass.getData().getType(i).isPrimitive()) {
                     objects.addObject(nodeClass.getData().get(node, i));
@@ -296,7 +281,7 @@ public class GraphEncoder {
         protected final NodeMap<Integer> orderIds;
         protected int nextOrderId;
 
-        NodeOrder(StructuredGraph graph) {
+        public NodeOrder(StructuredGraph graph) {
             this.orderIds = new NodeMap<>(graph);
             this.nextOrderId = START_NODE_ORDER_ID;
 
@@ -350,7 +335,6 @@ public class GraphEncoder {
     }
 
     protected void writeProperties(Node node, Fields fields) {
-        writeObjectId(node.getRawNodeContext());
         for (int idx = 0; idx < fields.getCount(); idx++) {
             if (fields.getType(idx).isPrimitive()) {
                 long primitive = fields.getRawPrimitive(node, idx);
@@ -539,7 +523,7 @@ class Pair<F, S> {
     public final F first;
     public final S second;
 
-    Pair(F first, S second) {
+    public Pair(F first, S second) {
         this.first = first;
         this.second = second;
     }

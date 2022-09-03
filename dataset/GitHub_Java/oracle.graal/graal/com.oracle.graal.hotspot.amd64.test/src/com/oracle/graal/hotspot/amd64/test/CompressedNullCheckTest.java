@@ -22,24 +22,23 @@
  */
 package com.oracle.graal.hotspot.amd64.test;
 
-import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Test;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+import jdk.internal.jvmci.options.OptionValue.*;
 
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.hotspot.nodes.CompressionNode;
-import com.oracle.graal.hotspot.test.HotSpotGraalCompilerTest;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.options.OptionValues.OverrideScope;
+import org.junit.*;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
 
 /**
  * Ensures that frame omission works in cases where it is expected to.
  */
-public class CompressedNullCheckTest extends HotSpotGraalCompilerTest {
+public class CompressedNullCheckTest extends GraalCompilerTest {
 
     private static final class Container {
         Integer i;
@@ -51,12 +50,12 @@ public class CompressedNullCheckTest extends HotSpotGraalCompilerTest {
 
     @SuppressWarnings("try")
     private void testImplicit(Integer i) {
-        Assume.assumeTrue(runtime().getVMConfig().useCompressedOops);
+        Assume.assumeTrue(HotSpotGraalRuntime.runtime().getConfig().useCompressedOops);
 
         Container c = new Container();
         c.i = i;
 
-        try (OverrideScope s = overrideOptions(GraalOptions.OptImplicitNullChecks, true)) {
+        try (OverrideScope s = OptionValue.override(GraalOptions.OptImplicitNullChecks, true)) {
             ResolvedJavaMethod method = getResolvedJavaMethod("testSnippet");
             Result expect = executeExpected(method, null, c);
 
@@ -70,12 +69,12 @@ public class CompressedNullCheckTest extends HotSpotGraalCompilerTest {
 
     @SuppressWarnings("try")
     private void testExplicit(Integer i) {
-        Assume.assumeTrue(runtime().getVMConfig().useCompressedOops);
+        Assume.assumeTrue(HotSpotGraalRuntime.runtime().getConfig().useCompressedOops);
 
         Container c = new Container();
         c.i = i;
 
-        try (OverrideScope s = overrideOptions(GraalOptions.OptImplicitNullChecks, false)) {
+        try (OverrideScope s = OptionValue.override(GraalOptions.OptImplicitNullChecks, false)) {
             test("testSnippet", c);
         }
     }

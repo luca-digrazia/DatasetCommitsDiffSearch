@@ -22,18 +22,16 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.graph.Graph.NodeEvent.NODE_ADDED;
-import static com.oracle.graal.graph.Graph.NodeEvent.ZERO_USAGES;
+import jdk.internal.jvmci.code.*;
+import static com.oracle.graal.graph.Graph.NodeEvent.*;
 
 import com.oracle.graal.graph.Graph.NodeEventScope;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.spi.Simplifiable;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.common.util.HashSetNodeEventListener;
-import com.oracle.graal.phases.tiers.PhaseContext;
-
-import jdk.vm.ci.code.BailoutException;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.util.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext> {
 
@@ -54,7 +52,7 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
         int count = 0;
         while (true) {
             try (NodeEventScope nes = graph.trackNodeEvents(listener)) {
-                new DominatorConditionalEliminationPhase(fullSchedule).apply(graph, context);
+                new DominatorConditionalEliminationPhase(fullSchedule).apply(graph);
             }
             if (listener.getNodes().isEmpty()) {
                 break;
@@ -70,10 +68,5 @@ public class IterativeConditionalEliminationPhase extends BasePhase<PhaseContext
                 throw new BailoutException("Number of iterations in ConditionalEliminationPhase phase exceeds %d", MAX_ITERATIONS);
             }
         }
-    }
-
-    @Override
-    public float codeSizeIncrease() {
-        return 2.0f;
     }
 }

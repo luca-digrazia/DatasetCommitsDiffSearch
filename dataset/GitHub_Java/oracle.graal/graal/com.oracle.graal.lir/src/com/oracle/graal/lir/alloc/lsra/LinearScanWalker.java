@@ -22,28 +22,21 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static jdk.vm.ci.code.CodeUtil.isOdd;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
 import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig.AllocatableRegisters;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.util.Util;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.compiler.common.util.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.alloc.OutOfRegistersException;
 import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBinding;
 import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
@@ -87,11 +80,12 @@ class LinearScanWalker extends IntervalWalker {
         return allocator.blockForId(opId);
     }
 
+    @SuppressWarnings("rawtypes")
     LinearScanWalker(LinearScan allocator, Interval unhandledFixedFirst, Interval unhandledAnyFirst) {
         super(allocator, unhandledFixedFirst, unhandledAnyFirst);
 
         moveResolver = allocator.createMoveResolver();
-        spillIntervals = Util.uncheckedCast(new List<?>[allocator.getRegisters().length]);
+        spillIntervals = Util.uncheckedCast(new List[allocator.getRegisters().length]);
         for (int i = 0; i < allocator.getRegisters().length; i++) {
             spillIntervals[i] = EMPTY_LIST;
         }
@@ -849,7 +843,8 @@ class LinearScanWalker extends IntervalWalker {
                             Debug.log("retry with register priority must have register");
                             continue;
                         }
-                        String description = generateOutOfRegErrorMsg(interval, firstUsage, availableRegs);
+                        String description = "cannot spill interval (" + interval + ") that is used in first instruction (possible reason: no register found) firstUsage=" + firstUsage +
+                                        ", interval.from()=" + interval.from() + "; already used candidates: " + Arrays.toString(availableRegs);
                         /*
                          * assign a reasonable register and do a bailout in product mode to avoid
                          * errors
@@ -886,11 +881,6 @@ class LinearScanWalker extends IntervalWalker {
             splitAndSpillIntersectingIntervals(reg);
             return;
         }
-    }
-
-    private static String generateOutOfRegErrorMsg(Interval interval, int firstUsage, Register[] availableRegs) {
-        return "Cannot spill interval (" + interval + ") that is used in first instruction (possible reason: no register found) firstUsage=" + firstUsage +
-                        ", interval.from()=" + interval.from() + "; already used candidates: " + Arrays.toString(availableRegs);
     }
 
     @SuppressWarnings("try")

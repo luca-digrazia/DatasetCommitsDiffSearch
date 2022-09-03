@@ -22,100 +22,54 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static com.oracle.graal.compiler.GraalCompiler.getProfilingInfo;
-import static com.oracle.graal.nodes.ConstantNode.getConstantNodes;
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
-import static jdk.vm.ci.compiler.Compiler.PrintCompilation;
+import static com.oracle.graal.compiler.GraalCompiler.*;
+import static com.oracle.graal.nodes.ConstantNode.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
+import static jdk.internal.jvmci.compiler.Compiler.*;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.concurrent.atomic.*;
+import java.util.function.*;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ProfilingInfo;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.options.DerivedOptionValue;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 import org.junit.internal.AssumptionViolatedException;
 
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.api.runtime.Graal;
-import com.oracle.graal.compiler.GraalCompiler;
-import com.oracle.graal.compiler.GraalCompiler.Request;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.DebugEnvironment;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.java.ComputeLoopFrequenciesClosure;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.BreakpointNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.InfopointNode;
-import com.oracle.graal.nodes.ProxyNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.spi.LoweringProvider;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.nodes.virtual.VirtualObjectNode;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
-import com.oracle.graal.phases.schedule.SchedulePhase;
-import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.Suites;
-import com.oracle.graal.phases.tiers.TargetProvider;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.runtime.RuntimeProvider;
-import com.oracle.graal.test.GraalTest;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.*;
+import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.schedule.*;
+import com.oracle.graal.phases.schedule.SchedulePhase.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.runtime.*;
+import com.oracle.graal.test.*;
+
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.Type;
+import jdk.internal.jvmci.common.*;
+
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
 /**
  * Base class for Graal compiler unit tests.
@@ -341,7 +295,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         Assert.assertEquals("unexpected number of ReturnNodes: " + graphString, graph.getNodes(ReturnNode.TYPE).count(), 1);
         ValueNode result = graph.getNodes(ReturnNode.TYPE).first().result();
         Assert.assertTrue("unexpected ReturnNode result node: " + graphString, result.isConstant());
-        Assert.assertEquals("unexpected ReturnNode result kind: " + graphString, result.asJavaConstant().getJavaKind(), JavaKind.Int);
+        Assert.assertEquals("unexpected ReturnNode result kind: " + graphString, result.asJavaConstant().getKind(), Kind.Int);
         Assert.assertEquals("unexpected ReturnNode result: " + graphString, result.asJavaConstant().asInt(), value);
     }
 
@@ -548,9 +502,9 @@ public abstract class GraalCompilerTest extends GraalTest {
         Assert.assertEquals(sig.length, args.length);
         for (int i = 0; i < args.length; i++) {
             JavaType javaType = sig[i];
-            JavaKind kind = javaType.getJavaKind();
+            Kind kind = javaType.getKind();
             Object arg = args[i];
-            if (kind == JavaKind.Object) {
+            if (kind == Kind.Object) {
                 if (arg != null && javaType instanceof ResolvedJavaType) {
                     ResolvedJavaType resolvedJavaType = (ResolvedJavaType) javaType;
                     Assert.assertTrue(resolvedJavaType + " from " + getMetaAccess().lookupJavaType(arg.getClass()), resolvedJavaType.isAssignableFrom(getMetaAccess().lookupJavaType(arg.getClass())));
@@ -763,18 +717,13 @@ public abstract class GraalCompilerTest extends GraalTest {
      *            be obtained from {@code installedCodeOwner} via
      *            {@link #parseForCompile(ResolvedJavaMethod)}.
      */
-    @SuppressWarnings("try")
     protected CompilationResult compile(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph) {
         StructuredGraph graphToCompile = graph == null ? parseForCompile(installedCodeOwner) : graph;
         lastCompiledGraph = graphToCompile;
-        try (Scope s = Debug.scope("Compile", graphToCompile)) {
-            CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
-            Request<CompilationResult> request = new Request<>(graphToCompile, cc, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
-                            getProfilingInfo(graphToCompile), getSuites(), getLIRSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
-            return GraalCompiler.compile(request);
-        } catch (Throwable e) {
-            throw Debug.handle(e);
-        }
+        CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graphToCompile.method(), false);
+        Request<CompilationResult> request = new Request<>(graphToCompile, cc, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
+                        getProfilingInfo(graphToCompile), getSuites(), getLIRSuites(), new CompilationResult(), CompilationResultBuilderFactory.Default);
+        return GraalCompiler.compile(request);
     }
 
     protected StructuredGraph lastCompiledGraph;
@@ -784,7 +733,7 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     protected InstalledCode addMethod(final ResolvedJavaMethod method, final CompilationResult compResult) {
-        return getCodeCache().addCode(method, compResult, null, null);
+        return getCodeCache().addMethod(method, compResult, null, null);
     }
 
     private final Map<ResolvedJavaMethod, Method> methodMap = new HashMap<>();
@@ -874,8 +823,8 @@ public abstract class GraalCompilerTest extends GraalTest {
     @SuppressWarnings("try")
     private StructuredGraph parse1(ResolvedJavaMethod javaMethod, PhaseSuite<HighTierContext> graphBuilderSuite, AllowAssumptions allowAssumptions) {
         assert javaMethod.getAnnotation(Test.class) == null : "shouldn't parse method with @Test annotation: " + javaMethod;
-        StructuredGraph graph = new StructuredGraph(javaMethod, allowAssumptions, getSpeculationLog());
-        try (Scope ds = Debug.scope("Parsing", javaMethod, graph)) {
+        try (Scope ds = Debug.scope("Parsing", javaMethod)) {
+            StructuredGraph graph = new StructuredGraph(javaMethod, allowAssumptions, getSpeculationLog());
             graphBuilderSuite.apply(graph, getDefaultHighTierContext());
             return graph;
         } catch (Throwable e) {

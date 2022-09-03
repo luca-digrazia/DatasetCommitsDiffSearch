@@ -22,33 +22,16 @@
  */
 package com.oracle.graal.jtt.backend;
 
-import static jdk.internal.org.objectweb.asm.Opcodes.ACC_PUBLIC;
-import static jdk.internal.org.objectweb.asm.Opcodes.ACC_SUPER;
-import static jdk.internal.org.objectweb.asm.Opcodes.ALOAD;
-import static jdk.internal.org.objectweb.asm.Opcodes.IFNE;
-import static jdk.internal.org.objectweb.asm.Opcodes.INVOKESPECIAL;
-import static jdk.internal.org.objectweb.asm.Opcodes.INVOKESTATIC;
-import static jdk.internal.org.objectweb.asm.Opcodes.LADD;
-import static jdk.internal.org.objectweb.asm.Opcodes.LCMP;
-import static jdk.internal.org.objectweb.asm.Opcodes.LCONST_0;
-import static jdk.internal.org.objectweb.asm.Opcodes.LLOAD;
-import static jdk.internal.org.objectweb.asm.Opcodes.LRETURN;
-import static jdk.internal.org.objectweb.asm.Opcodes.RETURN;
+import static jdk.internal.org.objectweb.asm.Opcodes.*;
+import jdk.internal.jvmci.options.*;
+import jdk.internal.jvmci.options.OptionValue.OverrideScope;
+import jdk.internal.org.objectweb.asm.*;
 
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.jtt.JTTTest;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
-
-import jdk.internal.org.objectweb.asm.ClassWriter;
-import jdk.internal.org.objectweb.asm.Label;
-import jdk.internal.org.objectweb.asm.MethodVisitor;
-import jdk.internal.org.objectweb.asm.Opcodes;
-import jdk.internal.org.objectweb.asm.Type;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.jtt.*;
 
 public class LargeConstantSectionTest extends JTTTest {
     private static final String NAME = "LargeConstantSection";
@@ -68,7 +51,7 @@ public class LargeConstantSectionTest extends JTTTest {
         return a.run(GraalDirectives.opaque(i));
     }
 
-    public static class LargeConstantClassLoader extends ExportingClassLoader {
+    public static class LargeConstantClassLoader extends ClassLoader {
         public LargeConstantClassLoader(ClassLoader parent) {
             super(parent);
         }

@@ -22,15 +22,11 @@
  */
 package com.oracle.graal.compiler.common.alloc;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.List;
-import java.util.PriorityQueue;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.Indent;
 
 public final class TraceBuilder<T extends AbstractBlockBase<T>> {
 
@@ -50,12 +46,6 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
         public List<List<T>> getTraces() {
             return traces;
         }
-
-        public boolean incomingEdges(int traceNr) {
-            /* TODO (je): not efficient. find better solution. */
-            return getTraces().get(traceNr).stream().flatMap(b -> b.getPredecessors().stream()).anyMatch(s -> getTraceForBlock(s) != traceNr);
-        }
-
     }
 
     /**
@@ -77,8 +67,6 @@ public final class TraceBuilder<T extends AbstractBlockBase<T>> {
     private TraceBuilder(List<T> blocks) {
         processed = new BitSet(blocks.size());
         worklist = new PriorityQueue<T>(TraceBuilder::compare);
-        assert (worklist != null);
-
         blocked = new int[blocks.size()];
         blockToTrace = new int[blocks.size()];
         for (T block : blocks) {

@@ -22,33 +22,42 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.code.TargetDescription;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
 
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
-import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 
-final class TraceLinearScanRegisterAllocationPhase extends TraceLinearScanAllocationPhase {
+final class TraceLinearScanRegisterAllocationPhase extends AllocationPhase {
+
+    private final TraceLinearScan allocator;
+
+    TraceLinearScanRegisterAllocationPhase(TraceLinearScan allocator) {
+        this.allocator = allocator;
+    }
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
-                    RegisterAllocationConfig registerAllocationConfig, TraceBuilderResult<?> traceBuilderResult, TraceLinearScan allocator) {
+                    RegisterAllocationConfig registerAllocationConfig) {
         allocator.printIntervals("Before register allocation");
-        allocateRegisters(allocator);
+        allocateRegisters();
         allocator.printIntervals("After register allocation");
     }
 
     @SuppressWarnings("try")
-    private static void allocateRegisters(TraceLinearScan allocator) {
+    void allocateRegisters() {
         try (Indent indent = Debug.logAndIndent("allocate registers")) {
-            FixedInterval precoloredIntervals = allocator.createFixedUnhandledList();
-            TraceInterval notPrecoloredIntervals = allocator.createUnhandledList(TraceLinearScan.IS_VARIABLE_INTERVAL);
+            TraceInterval precoloredIntervals;
+            TraceInterval notPrecoloredIntervals;
+
+            TraceInterval.Pair result = allocator.createUnhandledLists(TraceLinearScan.IS_PRECOLORED_INTERVAL, TraceLinearScan.IS_VARIABLE_INTERVAL);
+            precoloredIntervals = result.first;
+            notPrecoloredIntervals = result.second;
 
             // allocate cpu registers
             TraceLinearScanWalker lsw = new TraceLinearScanWalker(allocator, precoloredIntervals, notPrecoloredIntervals);

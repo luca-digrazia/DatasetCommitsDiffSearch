@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,17 @@
  */
 package com.oracle.graal.truffle.hotspot.nfi;
 
-import java.util.Arrays;
+import java.util.*;
 
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.InvalidInstalledCodeException;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaKind;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.nfi.api.NativeFunctionHandle;
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.nfi.api.*;
 
 public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
 
@@ -73,7 +73,6 @@ public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
             traceResult(res);
             return res;
         } catch (InvalidInstalledCodeException e) {
-            CompilerDirectives.transferToInterpreter();
             throw JVMCIError.shouldNotReachHere("Execution of GNFI Callstub failed: " + name);
         }
     }
@@ -85,7 +84,7 @@ public class HotSpotNativeFunctionHandle implements NativeFunctionHandle {
             assert arg != null;
             Class<?> expectedType = argumentTypes[i];
             if (expectedType.isPrimitive()) {
-                JavaKind kind = JavaKind.fromJavaClass(expectedType);
+                Kind kind = Kind.fromJavaClass(expectedType);
                 expectedType = kind.toBoxedJavaClass();
             }
             assert expectedType == arg.getClass() : this + " expected arg " + i + " to be " + expectedType.getName() + ", not " + arg.getClass().getName();

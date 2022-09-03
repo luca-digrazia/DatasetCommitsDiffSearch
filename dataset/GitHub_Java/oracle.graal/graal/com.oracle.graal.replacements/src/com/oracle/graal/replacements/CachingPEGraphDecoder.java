@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,24 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
+import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.java.GraphBuilderPhase;
-import com.oracle.graal.nodes.EncodedGraph;
-import com.oracle.graal.nodes.GraphEncoder;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.java.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
-import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
 
 /**
  * A graph decoder that provides all necessary encoded graphs on-the-fly (by parsing the methods and
@@ -65,19 +63,13 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
         this.graphCache = new HashMap<>();
     }
 
-    protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initialIntrinsicContext) {
-        return new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(),
-                providers.getConstantReflection(), graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
-    }
-
     @SuppressWarnings("try")
     private EncodedGraph createGraph(ResolvedJavaMethod method, boolean isIntrinsic) {
         StructuredGraph graph = new StructuredGraph(method, allowAssumptions);
         try (Debug.Scope scope = Debug.scope("createGraph", graph)) {
 
             IntrinsicContext initialIntrinsicContext = isIntrinsic ? new IntrinsicContext(method, method, INLINE_AFTER_PARSING) : null;
-            GraphBuilderPhase.Instance graphBuilderPhaseInstance = createGraphBuilderPhaseInstance(initialIntrinsicContext);
-            graphBuilderPhaseInstance.apply(graph);
+            new GraphBuilderPhase.Instance(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), graphBuilderConfig, optimisticOpts, initialIntrinsicContext).apply(graph);
 
             PhaseContext context = new PhaseContext(providers);
             new CanonicalizerPhase().apply(graph, context);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,27 @@
  */
 package com.oracle.graal.lir.framemap;
 
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.lir.InstructionValueConsumer;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.stackslotalloc.*;
 
 /**
  * A FrameMapBuilder that records allocation.
  */
-public class FrameMapBuilderImpl extends FrameMapBuilderTool {
+public class FrameMapBuilderImpl implements FrameMapBuilderTool {
 
     private final RegisterConfig registerConfig;
     private final CodeCacheProvider codeCache;
@@ -69,14 +61,12 @@ public class FrameMapBuilderImpl extends FrameMapBuilderTool {
         this.numStackSlots = 0;
     }
 
-    @Override
     public VirtualStackSlot allocateSpillSlot(LIRKind kind) {
         SimpleVirtualStackSlot slot = new SimpleVirtualStackSlot(numStackSlots++, kind);
         stackSlots.add(slot);
         return slot;
     }
 
-    @Override
     public VirtualStackSlot allocateStackSlots(int slots, BitSet objects, List<VirtualStackSlot> outObjectStackSlots) {
         if (slots == 0) {
             return null;
@@ -84,41 +74,38 @@ public class FrameMapBuilderImpl extends FrameMapBuilderTool {
         if (outObjectStackSlots != null) {
             throw JVMCIError.unimplemented();
         }
-        VirtualStackSlotRange slot = new VirtualStackSlotRange(numStackSlots++, slots, objects, frameMap.getTarget().getLIRKind(JavaKind.Object));
+        VirtualStackSlotRange slot = new VirtualStackSlotRange(numStackSlots++, slots, objects);
         stackSlots.add(slot);
         return slot;
     }
 
-    @Override
     public RegisterConfig getRegisterConfig() {
         return registerConfig;
     }
 
-    @Override
     public CodeCacheProvider getCodeCache() {
         return codeCache;
     }
 
-    @Override
     public FrameMap getFrameMap() {
         return frameMap;
     }
 
-    @Override
     public int getNumberOfStackSlots() {
         return numStackSlots;
     }
 
-    @Override
     public void callsMethod(CallingConvention cc) {
         calls.add(cc);
     }
 
-    @Override
     @SuppressWarnings("try")
-    public FrameMap buildFrameMap(LIRGenerationResult res) {
-        if (Debug.isEnabled()) {
-            verifyStackSlotAllocation(res);
+    public FrameMap buildFrameMap(LIRGenerationResult res, StackSlotAllocator allocator) {
+        try (Scope s = Debug.scope("StackSlotAllocation")) {
+            allocator.allocateStackSlots(this, res);
+            if (Debug.isEnabled()) {
+                verifyStackSlotAllocation(res);
+            }
         }
         for (CallingConvention cc : calls) {
             frameMap.callsMethod(cc);
@@ -144,7 +131,6 @@ public class FrameMapBuilderImpl extends FrameMapBuilderTool {
         }
     }
 
-    @Override
     public List<VirtualStackSlot> getStackSlots() {
         return stackSlots;
     }

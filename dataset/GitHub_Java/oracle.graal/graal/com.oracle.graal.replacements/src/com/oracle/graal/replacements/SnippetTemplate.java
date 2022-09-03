@@ -22,108 +22,49 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.debug.Debug.applyFormattingFlagsAndWidth;
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
-import static com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates.UseSnippetTemplateCache;
-import static java.util.FormattableFlags.ALTERNATE;
-import static jdk.internal.jvmci.meta.LocationIdentity.any;
+import static com.oracle.graal.debug.Debug.*;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
+import static com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates.*;
+import static java.util.FormattableFlags.*;
+import static jdk.internal.jvmci.meta.LocationIdentity.*;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Formattable;
-import java.util.Formatter;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+import java.util.function.*;
+import java.util.stream.*;
 
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.Constant;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.Local;
-import jdk.internal.jvmci.meta.LocationIdentity;
-import jdk.internal.jvmci.meta.MetaAccessProvider;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
-import jdk.internal.jvmci.meta.ResolvedJavaType;
-import jdk.internal.jvmci.meta.Signature;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.debug.TTY;
 import com.oracle.graal.graph.Graph.Mark;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodePosIterator;
-import com.oracle.graal.graph.Position;
-import com.oracle.graal.loop.LoopEx;
-import com.oracle.graal.loop.LoopTransformations;
-import com.oracle.graal.loop.LoopsData;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ControlSinkNode;
-import com.oracle.graal.nodes.DeoptimizingNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.LoopBeginNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.loop.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValueNodeUtil;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.java.LoadIndexedNode;
-import com.oracle.graal.nodes.java.StoreIndexedNode;
-import com.oracle.graal.nodes.memory.MemoryAccess;
-import com.oracle.graal.nodes.memory.MemoryAnchorNode;
-import com.oracle.graal.nodes.memory.MemoryCheckpoint;
-import com.oracle.graal.nodes.memory.MemoryMap;
-import com.oracle.graal.nodes.memory.MemoryMapNode;
-import com.oracle.graal.nodes.memory.MemoryNode;
-import com.oracle.graal.nodes.memory.MemoryPhiNode;
-import com.oracle.graal.nodes.spi.ArrayLengthProvider;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.MemoryProxy;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-import com.oracle.graal.phases.common.FloatingReadPhase;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.common.FloatingReadPhase.MemoryMapImpl;
-import com.oracle.graal.phases.common.GuardLoweringPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.common.inlining.InliningUtil;
-import com.oracle.graal.phases.tiers.PhaseContext;
-import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
 import com.oracle.graal.replacements.Snippet.VarargsParameter;
-import com.oracle.graal.replacements.nodes.ExplodeLoopNode;
-import com.oracle.graal.replacements.nodes.LoadSnippetVarargParameterNode;
-import com.oracle.graal.word.WordBase;
+import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.word.*;
 
 /**
  * A snippet template is a graph created by parsing a snippet method and then specialized by binding
@@ -133,8 +74,10 @@ import com.oracle.graal.word.WordBase;
  */
 public class SnippetTemplate {
 
-    private static final boolean EAGER_SNIPPETS = Boolean.getBoolean("graal.snippets.eager");
-    private boolean mayRemoveLocation = false;
+    // Checkstyle: stop
+    public static boolean LAZY_SNIPPETS = true;
+
+    // Checkstyle: resume
 
     /**
      * Holds the {@link ResolvedJavaMethod} of the snippet, together with some information about the
@@ -182,7 +125,7 @@ public class SnippetTemplate {
                 for (int i = 0; i < names.length; i++) {
                     names[i] = method.getLocalVariableTable().getLocal(slotIdx, 0).getName();
 
-                    JavaKind kind = method.getSignature().getParameterKind(i);
+                    Kind kind = method.getSignature().getParameterKind(i);
                     slotIdx += kind.getSlotCount();
                 }
                 return true;
@@ -585,10 +528,10 @@ public class SnippetTemplate {
             assert findMethod(declaringClass, methodName, method) == null : "found more than one method named " + methodName + " in " + declaringClass;
             ResolvedJavaMethod javaMethod = providers.getMetaAccess().lookupJavaMethod(method);
             providers.getReplacements().registerSnippet(javaMethod);
-            if (EAGER_SNIPPETS) {
-                return new EagerSnippetInfo(javaMethod, privateLocations);
-            } else {
+            if (LAZY_SNIPPETS) {
                 return new LazySnippetInfo(javaMethod, privateLocations);
+            } else {
+                return new EagerSnippetInfo(javaMethod, privateLocations);
             }
         }
 
@@ -672,7 +615,7 @@ public class SnippetTemplate {
             for (int i = 0; i < parameterCount; i++) {
                 if (args.info.isConstantParameter(i)) {
                     Object arg = args.values[i];
-                    JavaKind kind = signature.getParameterKind(i);
+                    Kind kind = signature.getParameterKind(i);
                     ConstantNode constantNode;
                     if (arg instanceof Constant) {
                         Stamp stamp = args.constStamps[i];
@@ -890,13 +833,13 @@ public class SnippetTemplate {
         return true;
     }
 
-    private static boolean checkConstantArgument(MetaAccessProvider metaAccess, final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, JavaKind kind) {
+    private static boolean checkConstantArgument(MetaAccessProvider metaAccess, final ResolvedJavaMethod method, Signature signature, int i, String name, Object arg, Kind kind) {
         ResolvedJavaType type = signature.getParameterType(i, method.getDeclaringClass()).resolve(method.getDeclaringClass());
         if (metaAccess.lookupJavaType(WordBase.class).isAssignableFrom(type)) {
             assert arg instanceof JavaConstant : method + ": word constant parameters must be passed boxed in a Constant value: " + arg;
             return true;
         }
-        if (kind != JavaKind.Object) {
+        if (kind != Kind.Object) {
             assert arg != null && kind.toBoxedJavaClass() == arg.getClass() : method + ": wrong value kind for " + name + ": expected " + kind + ", got " +
                             (arg == null ? "null" : arg.getClass().getSimpleName());
         }
@@ -988,8 +931,8 @@ public class SnippetTemplate {
                 if (argument instanceof ValueNode) {
                     replacements.put((ParameterNode) parameter, (ValueNode) argument);
                 } else {
-                    JavaKind kind = ((ParameterNode) parameter).getStackKind();
-                    assert argument != null || kind == JavaKind.Object : this + " cannot accept null for non-object parameter named " + args.info.getParameterName(i);
+                    Kind kind = ((ParameterNode) parameter).getStackKind();
+                    assert argument != null || kind == Kind.Object : this + " cannot accept null for non-object parameter named " + args.info.getParameterName(i);
                     JavaConstant constant = forBoxed(argument, kind);
                     replacements.put((ParameterNode) parameter, ConstantNode.forConstant(constant, metaAccess, replaceeGraph));
                 }
@@ -1029,15 +972,15 @@ public class SnippetTemplate {
 
     /**
      * Converts a Java boxed value to a {@link JavaConstant} of the right kind. This adjusts for the
-     * limitation that a {@link Local}'s kind is a {@linkplain JavaKind#getStackKind() stack kind}
-     * and so cannot be used for re-boxing primitives smaller than an int.
+     * limitation that a {@link Local}'s kind is a {@linkplain Kind#getStackKind() stack kind} and
+     * so cannot be used for re-boxing primitives smaller than an int.
      *
      * @param argument a Java boxed value
      * @param localKind the kind of the {@link Local} to which {@code argument} will be bound
      */
-    protected JavaConstant forBoxed(Object argument, JavaKind localKind) {
+    protected JavaConstant forBoxed(Object argument, Kind localKind) {
         assert localKind == localKind.getStackKind();
-        if (localKind == JavaKind.Int) {
+        if (localKind == Kind.Int) {
             return JavaConstant.forBoxedPrimitive(argument);
         }
         return snippetReflection.forBoxed(localKind, argument);
@@ -1237,9 +1180,8 @@ public class SnippetTemplate {
                     if (pos.getInputType() == InputType.Memory && pos.get(usage) == node) {
                         MemoryNode replacement = map.getLastLocationAccess(location);
                         if (replacement == null) {
-                            assert mayRemoveLocation || LocationIdentity.any().equals(location) || Arrays.stream(info.privateLocations).anyMatch(Predicate.isEqual(location)) : "Snippet " +
-                                            info.method.format("%h.%n") + " contains access to the non-private location " + location + ", but replacee doesn't access this location." +
-                                            map.getLocations();
+                            assert LocationIdentity.any().equals(location) || Arrays.stream(info.privateLocations).anyMatch(Predicate.isEqual(location)) : "Snippet " + info.method.format("%h.%n") +
+                                            " contains access to the non-private location " + location + ", but replacee doesn't access this location." + map.getLocations();
                         } else {
                             pos.set(usage, replacement.asNode());
                         }
@@ -1487,7 +1429,7 @@ public class SnippetTemplate {
     private static boolean checkTemplate(MetaAccessProvider metaAccess, Arguments args, ResolvedJavaMethod method, Signature signature) {
         for (int i = 0; i < args.info.getParameterCount(); i++) {
             if (args.info.isConstantParameter(i)) {
-                JavaKind kind = signature.getParameterKind(i);
+                Kind kind = signature.getParameterKind(i);
                 assert checkConstantArgument(metaAccess, method, signature, i, args.info.getParameterName(i), args.values[i], kind);
 
             } else if (args.info.isVarargsParameter(i)) {
@@ -1497,9 +1439,5 @@ public class SnippetTemplate {
             }
         }
         return true;
-    }
-
-    public void setMayRemoveLocation(boolean mayRemoveLocation) {
-        this.mayRemoveLocation = mayRemoveLocation;
     }
 }

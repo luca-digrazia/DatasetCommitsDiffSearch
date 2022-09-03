@@ -22,19 +22,19 @@
  */
 package com.oracle.graal.jtt.lang;
 
-import java.util.EnumSet;
-import java.util.function.IntBinaryOperator;
+import java.util.*;
+import java.util.function.*;
 
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+import jdk.internal.jvmci.options.OptionValue.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.options.OptionValues.OverrideScope;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.nodes.*;
 
 public class LambdaEagerTest extends GraalCompilerTest {
 
@@ -81,7 +81,7 @@ public class LambdaEagerTest extends GraalCompilerTest {
     @Override
     @SuppressWarnings("try")
     protected InstalledCode getCode(ResolvedJavaMethod installedCodeOwner, StructuredGraph graph, boolean forceCompile) {
-        try (OverrideScope scope = overrideOptions(GraalOptions.InlineEverything, true)) {
+        try (OverrideScope scope = OptionValue.override(GraalOptions.InlineEverything, true)) {
             return super.getCode(installedCodeOwner, graph, forceCompile);
         }
     }

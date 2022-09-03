@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,83 +22,46 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DeoptALot;
-import static com.oracle.graal.compiler.common.GraalOptions.OptCanonicalizer;
-import static com.oracle.graal.java.BytecodeParserOptions.InlineDuringParsing;
-import static com.oracle.graal.java.BytecodeParserOptions.InlineIntrinsicsDuringParsing;
-import static com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
-import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.Required;
-import static java.lang.String.format;
-import static jdk.vm.ci.meta.MetaUtil.toInternalName;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.graphbuilderconf.IntrinsicContext.CompilationContext.*;
+import static com.oracle.graal.java.BytecodeParser.Options.*;
+import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
+import static java.lang.String.*;
+import static jdk.internal.jvmci.meta.MetaUtil.*;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Executable;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicReference;
+import java.lang.reflect.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
-import jdk.vm.ci.options.OptionValue;
-import jdk.vm.ci.options.OptionValue.OverrideScope;
-import sun.misc.Launcher;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
 
-import com.oracle.graal.api.replacements.ClassSubstitution;
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.api.replacements.SnippetTemplateCache;
-import com.oracle.graal.api.replacements.SubstitutionGuard;
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.graph.Node;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+import jdk.internal.jvmci.options.OptionValue.*;
+import sun.misc.*;
+
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.java.*;
 import com.oracle.graal.java.GraphBuilderPhase.Instance;
-import com.oracle.graal.nodes.CallTargetNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.GeneratedInvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InlineInvokePlugin;
-import com.oracle.graal.nodes.graphbuilderconf.IntrinsicContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.MethodSubstitutionPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.nodes.spi.StampProvider;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.ConvertDeoptimizeToGuardPhase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.word.*;
 
 public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
@@ -121,12 +84,8 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         return graphBuilderPlugins;
     }
 
-    protected boolean hasGeneratedInvocationPluginAnnotation(ResolvedJavaMethod method) {
-        return method.getAnnotation(Node.NodeIntrinsic.class) != null || method.getAnnotation(Fold.class) != null;
-    }
-
     protected boolean hasGenericInvocationPluginAnnotation(ResolvedJavaMethod method) {
-        return method.getAnnotation(Word.Operation.class) != null;
+        return method.getAnnotation(Node.NodeIntrinsic.class) != null || method.getAnnotation(Word.Operation.class) != null || method.getAnnotation(Fold.class) != null;
     }
 
     private static final int MAX_GRAPH_INLINING_DEPTH = 100; // more than enough
@@ -149,12 +108,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             return null;
         }
         if (b.parsingIntrinsic()) {
-            if (hasGeneratedInvocationPluginAnnotation(method)) {
-                throw new JVMCIError("%s should have been handled by a %s", method.format("%H.%n(%p)"), GeneratedInvocationPlugin.class.getSimpleName());
-            }
-            if (hasGenericInvocationPluginAnnotation(method)) {
-                throw new JVMCIError("%s should have been handled by %s", method.format("%H.%n(%p)"), WordOperationPlugin.class.getSimpleName());
-            }
+            assert !hasGenericInvocationPluginAnnotation(method) : format("%s should have been handled by %s", method.format("%H.%n(%p)"), NodeIntrinsificationPlugin.class.getName());
 
             assert b.getDepth() < MAX_GRAPH_INLINING_DEPTH : "inlining limit exceeded";
 
@@ -608,6 +562,8 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             // to be valid for the entire run of the VM.
             final StructuredGraph graph = new StructuredGraph(methodToParse, AllowAssumptions.NO);
 
+            // They will also never evolve or have breakpoints set in them
+            graph.disableInlinedMethodRecording();
             // They are not user code so they do not participate in unsafe access tracking
             graph.disableUnsafeAccessTracking();
 
@@ -685,7 +641,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             dimensions++;
         }
 
-        Class<?> baseClass = base.getJavaKind() != JavaKind.Object ? base.getJavaKind().toJavaClass() : resolveClass(base.toJavaName(), false);
+        Class<?> baseClass = base.getKind() != Kind.Object ? base.getKind().toJavaClass() : resolveClass(base.toJavaName(), false);
         return dimensions == 0 ? baseClass : Array.newInstance(baseClass, new int[dimensions]).getClass();
     }
 

@@ -22,16 +22,20 @@
  */
 package com.oracle.graal.compiler.test;
 
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
 import org.junit.*;
 
-import com.oracle.graal.compiler.phases.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.loop.phases.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class LoopUnswitchTest extends GraalCompilerTest {
 
-    @SuppressWarnings("all")
     public static int referenceSnippet1(int a) {
         int sum = 0;
         if (a > 2) {
@@ -46,7 +50,6 @@ public class LoopUnswitchTest extends GraalCompilerTest {
         return sum;
     }
 
-    @SuppressWarnings("all")
     public static int test1Snippet(int a) {
         int sum = 0;
         for (int i = 0; i < 1000; i++) {
@@ -59,16 +62,72 @@ public class LoopUnswitchTest extends GraalCompilerTest {
         return sum;
     }
 
+    public static int referenceSnippet2(int a) {
+        int sum = 0;
+        switch (a) {
+            case 0:
+                for (int i = 0; i < 1000; i++) {
+                    sum += System.currentTimeMillis();
+                }
+                break;
+            case 1:
+                for (int i = 0; i < 1000; i++) {
+                    sum += 1;
+                    sum += 5;
+                }
+                break;
+            case 55:
+                for (int i = 0; i < 1000; i++) {
+                    sum += 5;
+                }
+                break;
+            default:
+                for (int i = 0; i < 1000; i++) {
+                    // nothing
+                }
+                break;
+        }
+        return sum;
+    }
+
+    @SuppressWarnings("fallthrough")
+    public static int test2Snippet(int a) {
+        int sum = 0;
+        for (int i = 0; i < 1000; i++) {
+            switch (a) {
+                case 0:
+                    sum += System.currentTimeMillis();
+                    break;
+                case 1:
+                    sum += 1;
+                    // fall through
+                case 55:
+                    sum += 5;
+                    break;
+                default:
+                    // nothing
+                    break;
+            }
+        }
+        return sum;
+    }
+
     @Test
     public void test1() {
         test("test1Snippet", "referenceSnippet1");
     }
 
-    private void test(String snippet, String referenceSnippet) {
-        final StructuredGraph graph = parse(snippet);
-        final StructuredGraph referenceGraph = parse(referenceSnippet);
+    @Test
+    public void test2() {
+        test("test2Snippet", "referenceSnippet2");
+    }
 
-        new LoopTransformLowPhase().apply(graph);
+    @SuppressWarnings("try")
+    private void test(String snippet, String referenceSnippet) {
+        final StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
+        final StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.NO);
+
+        new LoopUnswitchingPhase().apply(graph);
 
         // Framestates create comparison problems
         for (Node stateSplit : graph.getNodes().filterInterface(StateSplit.class)) {
@@ -78,13 +137,12 @@ public class LoopUnswitchTest extends GraalCompilerTest {
             ((StateSplit) stateSplit).setStateAfter(null);
         }
 
-        new CanonicalizerPhase(null, runtime(), null).apply(graph);
-        new CanonicalizerPhase(null, runtime(), null).apply(referenceGraph);
-        Debug.scope("Test", new DebugDumpScope("Test:" + snippet), new Runnable() {
-            @Override
-            public void run() {
-                assertEquals(referenceGraph, graph);
-            }
-        });
+        new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+        new CanonicalizerPhase().apply(referenceGraph, new PhaseContext(getProviders()));
+        try (Scope s = Debug.scope("Test", new DebugDumpScope("Test:" + snippet))) {
+            assertEquals(referenceGraph, graph);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 }

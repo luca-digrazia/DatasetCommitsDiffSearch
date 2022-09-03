@@ -22,15 +22,18 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.lir.alloc.lsra.Interval.*;
-import com.oracle.graal.options.*;
+import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBinding;
+import com.oracle.graal.lir.alloc.lsra.Interval.RegisterBindingLists;
+import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
+import com.oracle.graal.lir.alloc.lsra.Interval.State;
 
 public class OptimizingLinearScanWalker extends LinearScanWalker {
 
@@ -47,6 +50,7 @@ public class OptimizingLinearScanWalker extends LinearScanWalker {
         super(allocator, unhandledFixedFirst, unhandledAnyFirst);
     }
 
+    @SuppressWarnings("try")
     @Override
     protected void handleSpillSlot(Interval interval) {
         assert interval.location() != null : "interval  not assigned " + interval;
@@ -68,17 +72,19 @@ public class OptimizingLinearScanWalker extends LinearScanWalker {
         }
     }
 
+    @SuppressWarnings("try")
     @Override
     void walk() {
         try (Scope s = Debug.scope("OptimizingLinearScanWalker")) {
-            for (AbstractBlock<?> block : allocator.sortedBlocks) {
+            for (AbstractBlockBase<?> block : allocator.sortedBlocks()) {
                 optimizeBlock(block);
             }
         }
         super.walk();
     }
 
-    private void optimizeBlock(AbstractBlock<?> block) {
+    @SuppressWarnings("try")
+    private void optimizeBlock(AbstractBlockBase<?> block) {
         if (block.getPredecessorCount() == 1) {
             int nextBlock = allocator.getFirstLirInstructionId(block);
             try (Scope s1 = Debug.scope("LSRAOptimization")) {
@@ -114,7 +120,8 @@ public class OptimizingLinearScanWalker extends LinearScanWalker {
         }
     }
 
-    private boolean optimize(int currentPos, AbstractBlock<?> currentBlock, Interval currentInterval, RegisterBinding binding) {
+    @SuppressWarnings("try")
+    private boolean optimize(int currentPos, AbstractBlockBase<?> currentBlock, Interval currentInterval, RegisterBinding binding) {
         // BEGIN initialize and sanity checks
         assert currentBlock != null : "block must not be null";
         assert currentInterval != null : "interval must not be null";
@@ -136,7 +143,7 @@ public class OptimizingLinearScanWalker extends LinearScanWalker {
         assert currentLocation != null : "active intervals must have a location assigned!";
 
         // get predecessor stuff
-        AbstractBlock<?> predecessorBlock = currentBlock.getPredecessors().get(0);
+        AbstractBlockBase<?> predecessorBlock = currentBlock.getPredecessors().get(0);
         int predEndId = allocator.getLastLirInstructionId(predecessorBlock);
         Interval predecessorInterval = currentInterval.getIntervalCoveringOpId(predEndId);
         assert predecessorInterval != null : "variable not live at the end of the only predecessor! " + predecessorBlock + " -> " + currentBlock + " interval: " + currentInterval;
@@ -199,6 +206,7 @@ public class OptimizingLinearScanWalker extends LinearScanWalker {
         return true;
     }
 
+    @SuppressWarnings("try")
     private void splitRegisterInterval(Interval interval, Register reg) {
         // collect current usage of registers
         initVarsForAlloc(interval);
@@ -207,7 +215,7 @@ public class OptimizingLinearScanWalker extends LinearScanWalker {
         // spillBlockUnhandledFixed(cur);
         assert unhandledLists.get(RegisterBinding.Fixed) == Interval.EndMarker : "must not have unhandled fixed intervals because all fixed intervals have a use at position 0";
         spillBlockInactiveFixed(interval);
-        spillCollectActiveAny();
+        spillCollectActiveAny(RegisterPriority.LiveAtLoopEnd);
         spillCollectInactiveAny(interval);
 
         if (Debug.isLogEnabled()) {

@@ -22,24 +22,23 @@
  */
 package com.oracle.graal.replacements.test;
 
-import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.*;
 
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.code.InvalidInstalledCodeException;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.*;
 
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
-import com.oracle.graal.phases.common.inlining.InliningPhase;
-import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
+import com.oracle.graal.phases.tiers.*;
 
 /**
  * Tests if {@link MethodSubstitution}s are inlined correctly. Most test cases only assert that
@@ -53,9 +52,9 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
         try (Scope s = Debug.scope("MethodSubstitutionTest", getResolvedJavaMethod(snippet))) {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
             HighTierContext context = getDefaultHighTierContext();
-            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+            Debug.dump(graph, "Graph");
             new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
-            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "Graph");
+            Debug.dump(graph, "Graph");
             new CanonicalizerPhase().apply(graph, context);
             new DeadCodeEliminationPhase().apply(graph);
 

@@ -22,30 +22,26 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.alloc.trace.TraceUtil.asShadowedRegisterValue;
-import static com.oracle.graal.lir.alloc.trace.TraceUtil.isShadowedRegisterValue;
-import static jdk.internal.jvmci.code.ValueUtil.isIllegal;
+import static com.oracle.graal.lir.alloc.trace.TraceUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Architecture;
-import jdk.internal.jvmci.code.TargetDescription;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
+import com.oracle.graal.compiler.common.alloc.*;
 import com.oracle.graal.compiler.common.alloc.TraceBuilder.TraceBuilderResult;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 import com.oracle.graal.lir.ssa.SSAUtil.PhiValueVisitor;
-import com.oracle.graal.lir.ssi.SSIUtil;
+import com.oracle.graal.lir.ssi.*;
 
-final class TraceGlobalMoveResolutionPhase extends TraceAllocationPhase {
+final class TraceGlobalMoveResolutionPhase extends AllocationPhase {
 
     private final TraceBuilderResult<?> resultTraces;
 

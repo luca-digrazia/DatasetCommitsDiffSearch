@@ -22,30 +22,21 @@
  */
 package com.oracle.graal.lir.ssi;
 
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.AbstractControlFlowGraph;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.CompositeValue;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.BlockEndOp;
 import com.oracle.graal.lir.StandardOp.LabelOp;
-import com.oracle.graal.lir.gen.BlockValueMap;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.util.ValueMap;
-import com.oracle.graal.lir.util.VariableVirtualStackValueMap;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.util.*;
 
 public final class SSIBlockValueMapImpl implements BlockValueMap {
 
@@ -237,36 +228,36 @@ public final class SSIBlockValueMapImpl implements BlockValueMap {
 
     // finish
 
-    public void finish(LIRGenerationResult lirGenRes) {
-        Debug.dump(lirGenRes.getLIR(), "Before SSI operands");
-        AbstractControlFlowGraph<?> cfg = lirGenRes.getLIR().getControlFlowGraph();
+    public void finish(LIRGeneratorTool gen) {
+        Debug.dump(gen.getResult().getLIR(), "Before SSI operands");
+        AbstractControlFlowGraph<?> cfg = gen.getResult().getLIR().getControlFlowGraph();
         for (AbstractBlockBase<?> block : cfg.getBlocks()) {
             // set label
             BlockData data = blockData.get(block);
             if (data != null) {
                 if (data.incoming != null && data.incoming.size() > 0) {
-                    LabelOp label = getLabel(lirGenRes, block);
+                    LabelOp label = getLabel(gen, block);
                     label.addIncomingValues(data.incoming.toArray(new Value[data.incoming.size()]));
                 }
                 // set block end
                 if (data.outgoing != null && data.outgoing.size() > 0) {
-                    BlockEndOp blockEndOp = getBlockEnd(lirGenRes, block);
+                    BlockEndOp blockEndOp = getBlockEnd(gen, block);
                     blockEndOp.addOutgoingValues(data.outgoing.toArray(new Value[data.outgoing.size()]));
                 }
             }
         }
     }
 
-    private static List<LIRInstruction> getLIRforBlock(LIRGenerationResult lirGenRes, AbstractBlockBase<?> block) {
-        return lirGenRes.getLIR().getLIRforBlock(block);
+    private static List<LIRInstruction> getLIRforBlock(LIRGeneratorTool gen, AbstractBlockBase<?> block) {
+        return gen.getResult().getLIR().getLIRforBlock(block);
     }
 
-    private static LabelOp getLabel(LIRGenerationResult lirGenRes, AbstractBlockBase<?> block) {
-        return (LabelOp) getLIRforBlock(lirGenRes, block).get(0);
+    private static LabelOp getLabel(LIRGeneratorTool gen, AbstractBlockBase<?> block) {
+        return (LabelOp) getLIRforBlock(gen, block).get(0);
     }
 
-    private static BlockEndOp getBlockEnd(LIRGenerationResult lirGenRes, AbstractBlockBase<?> block) {
-        List<LIRInstruction> instructions = getLIRforBlock(lirGenRes, block);
+    private static BlockEndOp getBlockEnd(LIRGeneratorTool gen, AbstractBlockBase<?> block) {
+        List<LIRInstruction> instructions = getLIRforBlock(gen, block);
         return (BlockEndOp) instructions.get(instructions.size() - 1);
     }
 }

@@ -22,17 +22,16 @@
  */
 package com.oracle.graal.compiler.test;
 
-import java.util.concurrent.*;
-
-import junit.framework.Assert;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
 import org.junit.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class EliminateNestedCheckCastsTest extends GraalCompilerTest {
 
@@ -62,22 +61,64 @@ public class EliminateNestedCheckCastsTest extends GraalCompilerTest {
 
     @Test
     public void test2() {
-        compileSnippet("test2Snippet", 5, 2);
+        compileSnippet("test2Snippet", 5, 1);
     }
 
+    public static long test3Snippet(A1 a1) {
+        long result = a1.x1;
+        A2 a2 = (A2) a1;
+        if (a1.x1 == 42) {
+            A3 a3 = (A3) a2;
+            result = a3.x3;
+        }
+        return result;
+    }
+
+    @Test
+    public void test3() {
+        compileSnippet("test3Snippet", 2, 2);
+    }
+
+    public static long test4Snippet(A1 a1, A1 b1) {
+        A2 a2 = (A2) a1;
+        A3 b3 = (A3) b1;
+        return a2.x2 + b3.x3;
+    }
+
+    @Test
+    public void test4() {
+        compileSnippet("test4Snippet", 2, 2);
+    }
+
+    public static long test5Snippet(A1 a1) {
+        long sum = 0;
+        A2 a2 = (A2) a1;
+        A3 a3 = (A3) a2;
+        sum += a2.x2;
+        return sum + a3.x3;
+    }
+
+    @Test
+    public void test5() {
+        StructuredGraph graph = compileSnippet("test5Snippet", 2, 1);
+        for (LoadFieldNode lfn : graph.getNodes().filter(LoadFieldNode.class)) {
+            Assert.assertTrue(lfn.object() instanceof CheckCastNode);
+        }
+    }
+
+    @SuppressWarnings("try")
     private StructuredGraph compileSnippet(final String snippet, final int checkcasts, final int afterCanon) {
-        return Debug.scope(snippet, new Callable<StructuredGraph>() {
+        final StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        try (Scope s = Debug.scope("NestedCheckCastsTest", graph)) {
+            Debug.dump(graph, "After parsing: " + snippet);
+            Assert.assertEquals(checkcasts, graph.getNodes().filter(CheckCastNode.class).count());
+            new CanonicalizerPhase().apply(graph, new PhaseContext(getProviders()));
+            Assert.assertEquals(afterCanon, graph.getNodes().filter(CheckCastNode.class).count());
+            return graph;
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
 
-            @Override
-            public StructuredGraph call() throws Exception {
-                StructuredGraph graph = parse(snippet);
-                Assert.assertEquals(checkcasts, graph.getNodes().filter(CheckCastNode.class).count());
-                new CanonicalizerPhase.Instance(runtime(), new Assumptions(false)).apply(graph);
-                Assert.assertEquals(afterCanon, graph.getNodes(CheckCastNode.class).count());
-                return graph;
-            }
-
-        });
     }
 
     public static class A1 {

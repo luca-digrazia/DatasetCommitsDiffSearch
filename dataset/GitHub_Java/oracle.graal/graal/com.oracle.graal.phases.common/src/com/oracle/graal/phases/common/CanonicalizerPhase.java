@@ -22,37 +22,22 @@
  */
 package com.oracle.graal.phases.common;
 
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import com.oracle.graal.debug.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.graph.Graph;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.Mark;
 import com.oracle.graal.graph.Graph.NodeEventListener;
 import com.oracle.graal.graph.Graph.NodeEventScope;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.Node.IndirectCanonicalization;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.NodeWorkList;
-import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
-import com.oracle.graal.graph.spi.SimplifierTool;
-import com.oracle.graal.nodeinfo.InputType;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.ControlSinkNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.calc.FloatingNode;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.BasePhase;
-import com.oracle.graal.phases.Phase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class CanonicalizerPhase extends BasePhase<PhaseContext> {
 
@@ -187,11 +172,6 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
 
                 public void inputChanged(Node node) {
                     workList.add(node);
-                    if (node instanceof IndirectCanonicalization) {
-                        for (Node usage : node.usages()) {
-                            workList.add(usage);
-                        }
-                    }
                 }
 
                 public void usagesDroppedToZero(Node node) {
@@ -248,21 +228,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
                     return true;
                 }
             }
-            assert assertLeafGVN(node, nodeClass);
             return false;
-        }
-
-        /**
-         * Ensure that leaf nodes have already been GVN'ed. This is normally handled automatically
-         * but it's possible to add nodes to the graph with looking for duplicates and it's the
-         * responsibility of code that does that to clean it up.
-         */
-        private boolean assertLeafGVN(Node node, NodeClass<?> nodeClass) {
-            if (node.isAlive() && nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
-                Node newNode = node.graph().findDuplicate(node);
-                return (newNode == null || newNode == node);
-            }
-            return true;
         }
 
         private AutoCloseable getCanonicalizeableContractAssertion(Node node) {

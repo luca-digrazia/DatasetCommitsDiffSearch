@@ -23,23 +23,17 @@
 
 package com.oracle.graal.lir.ssa;
 
-import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.BitSet;
-import java.util.EnumSet;
-import java.util.HashMap;
+import java.util.*;
 
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.InstructionValueConsumer;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
@@ -61,7 +55,7 @@ final class SSAVerifier {
 
     SSAVerifier(LIR lir) {
         this.lir = lir;
-        this.visited = new BitSet(lir.getControlFlowGraph().getBlocks().length);
+        this.visited = new BitSet(lir.getControlFlowGraph().getBlocks().size());
         this.defined = new HashMap<>();
     }
 

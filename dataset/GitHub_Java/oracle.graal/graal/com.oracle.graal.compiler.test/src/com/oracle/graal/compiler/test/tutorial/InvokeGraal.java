@@ -22,35 +22,28 @@
  */
 package com.oracle.graal.compiler.test.tutorial;
 
-import java.lang.reflect.Method;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.lang.reflect.*;
+import java.util.concurrent.atomic.*;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ProfilingInfo;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.Type;
 
-import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.compiler.GraalCompiler;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.StructuredGraph;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.Suites;
-import com.oracle.graal.phases.util.Providers;
-import com.oracle.graal.runtime.RuntimeProvider;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.phases.util.*;
+import com.oracle.graal.runtime.*;
 
 /**
  * Sample code that shows how to invoke Graal from an application.
@@ -105,12 +98,12 @@ public class InvokeGraal {
              * The optimization phases that are applied to the graph. This is the main configuration
              * point for Graal. Add or remove phases to customize your compilation.
              */
-            Suites suites = backend.getSuites().getDefaultSuites();
+            Suites suites = backend.getSuites().createSuites();
 
             /*
              * The low-level phases that are applied to the low-level representation.
              */
-            LIRSuites lirSuites = backend.getSuites().getDefaultLIRSuites();
+            LIRSuites lirSuites = backend.getSuites().createLIRSuites();
 
             /*
              * The calling convention for the machine code. You should have a very good reason
@@ -138,7 +131,7 @@ public class InvokeGraal {
              * Install the compilation result into the VM, i.e., copy the byte[] array that contains
              * the machine code into an actual executable memory location.
              */
-            InstalledCode installedCode = codeCache.addCode(method, compilationResult, null, null);
+            InstalledCode installedCode = codeCache.addMethod(method, compilationResult, null, null);
 
             return installedCode;
         } catch (Throwable ex) {

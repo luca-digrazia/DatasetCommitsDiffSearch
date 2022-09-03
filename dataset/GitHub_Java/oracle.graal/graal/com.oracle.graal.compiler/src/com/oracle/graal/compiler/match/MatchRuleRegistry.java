@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,24 +22,20 @@
  */
 package com.oracle.graal.compiler.match;
 
-import static com.oracle.graal.debug.GraalDebugConfig.Options.LogVerbose;
+import static com.oracle.graal.debug.GraalDebugConfig.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.service.Services;
+import jdk.internal.jvmci.common.*;
 
-import com.oracle.graal.compiler.gen.NodeLIRBuilder;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.Edges;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.Position;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.service.*;
+
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.graph.*;
 
 public class MatchRuleRegistry {
 

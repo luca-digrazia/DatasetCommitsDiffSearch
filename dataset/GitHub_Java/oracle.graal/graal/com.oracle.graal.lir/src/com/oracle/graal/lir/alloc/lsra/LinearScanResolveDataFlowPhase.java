@@ -22,20 +22,19 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 
-import java.util.BitSet;
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.StandardOp;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.AllocationPhase;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
 
-import jdk.vm.ci.code.TargetDescription;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 
 /**
  * Phase 6: resolve data flow
@@ -51,15 +50,15 @@ public class LinearScanResolveDataFlowPhase extends AllocationPhase {
     }
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
-                    AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
         resolveDataFlow();
     }
 
     protected void resolveCollectMappings(AbstractBlockBase<?> fromBlock, AbstractBlockBase<?> toBlock, AbstractBlockBase<?> midBlock, MoveResolver moveResolver) {
         assert moveResolver.checkEmpty();
         assert midBlock == null ||
-                        (midBlock.getPredecessorCount() == 1 && midBlock.getSuccessorCount() == 1 && midBlock.getPredecessors()[0].equals(fromBlock) && midBlock.getSuccessors()[0].equals(
+                        (midBlock.getPredecessorCount() == 1 && midBlock.getSuccessorCount() == 1 && midBlock.getPredecessors().get(0).equals(fromBlock) && midBlock.getSuccessors().get(0).equals(
                                         toBlock));
 
         int toBlockFirstInstructionId = allocator.getFirstLirInstructionId(toBlock);
@@ -148,8 +147,8 @@ public class LinearScanResolveDataFlowPhase extends AllocationPhase {
 
                 // check if block is empty (only label and branch)
                 if (instructions.size() == 2) {
-                    AbstractBlockBase<?> pred = block.getPredecessors()[0];
-                    AbstractBlockBase<?> sux = block.getSuccessors()[0];
+                    AbstractBlockBase<?> pred = block.getPredecessors().iterator().next();
+                    AbstractBlockBase<?> sux = block.getSuccessors().iterator().next();
 
                     // prevent optimization of two consecutive blocks
                     if (!blockCompleted.get(pred.getLinearScanNumber()) && !blockCompleted.get(sux.getLinearScanNumber())) {

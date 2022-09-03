@@ -22,37 +22,27 @@
  */
 package com.oracle.graal.truffle.hotspot.nfi;
 
-import static com.oracle.graal.truffle.hotspot.nfi.NativeCallStubGraphBuilder.getGraph;
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
-import static jdk.vm.ci.common.UnsafeUtil.createCString;
-import static jdk.vm.ci.common.UnsafeUtil.writeCString;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.*;
 
-import java.lang.reflect.Field;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.code.InstalledCode;
-import jdk.vm.ci.hotspot.HotSpotVMConfig;
-import jdk.vm.ci.meta.DefaultProfilingInfo;
-import jdk.vm.ci.meta.TriState;
-import sun.misc.Unsafe;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import static com.oracle.graal.truffle.hotspot.nfi.NativeCallStubGraphBuilder.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
+import static jdk.internal.jvmci.common.UnsafeAccess.*;
 
-import com.oracle.graal.compiler.GraalCompiler;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.PhaseSuite;
-import com.oracle.graal.phases.tiers.HighTierContext;
-import com.oracle.graal.phases.tiers.Suites;
-import com.oracle.nfi.api.NativeFunctionInterface;
-import com.oracle.nfi.api.NativeFunctionPointer;
-import com.oracle.nfi.api.NativeLibraryHandle;
+import com.oracle.graal.compiler.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.nfi.api.*;
 
 public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
 
@@ -85,9 +75,9 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
         int ebufLen = 1024;
         // Allocating a single chunk for both the error message buffer and the
         // file name simplifies deallocation below.
-        long buffer = UNSAFE.allocateMemory(ebufLen + libPath.length() + 1);
+        long buffer = unsafe.allocateMemory(ebufLen + libPath.length() + 1);
         long ebuf = buffer;
-        long libPathCString = writeCString(UNSAFE, libPath, buffer + ebufLen);
+        long libPathCString = writeCString(libPath, buffer + ebufLen);
         try {
             long handle = (long) libraryLookupFunctionHandle.call(libPathCString, ebuf, ebufLen);
             if (handle == 0) {
@@ -95,7 +85,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
             }
             return new HotSpotNativeLibraryHandle(libPath, handle);
         } finally {
-            UNSAFE.freeMemory(buffer);
+            unsafe.freeMemory(buffer);
         }
     }
 
@@ -134,8 +124,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
         if (dllLookupFunctionHandle == null) {
             dllLookupFunctionHandle = createHandle(functionLookupFunctionPointer, long.class, long.class, long.class);
         }
-
-        long nameCString = createCString(UNSAFE, name);
+        long nameCString = createCString(name);
         try {
             long functionPointer = (long) dllLookupFunctionHandle.call(((HotSpotNativeLibraryHandle) library).value, nameCString);
             if (functionPointer == 0L) {
@@ -146,7 +135,7 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
             }
             return new HotSpotNativeFunctionPointer(functionPointer, name);
         } finally {
-            UNSAFE.freeMemory(nameCString);
+            unsafe.freeMemory(nameCString);
         }
     }
 
@@ -174,15 +163,15 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     @SuppressWarnings("try")
     private InstalledCode installNativeFunctionStub(long functionPointer, Class<?> returnType, Class<?>... argumentTypes) {
         StructuredGraph g = getGraph(providers, factory, functionPointer, returnType, argumentTypes);
-        Suites suites = providers.getSuites().getDefaultSuites();
-        LIRSuites lirSuites = providers.getSuites().getDefaultLIRSuites();
+        Suites suites = providers.getSuites().createSuites();
+        LIRSuites lirSuites = providers.getSuites().createLIRSuites();
         PhaseSuite<HighTierContext> phaseSuite = backend.getSuites().getDefaultGraphBuilderSuite().copy();
         CallingConvention cc = getCallingConvention(providers.getCodeCache(), Type.JavaCallee, g.method(), false);
         CompilationResult compResult = GraalCompiler.compileGraph(g, cc, g.method(), providers, backend, phaseSuite, OptimisticOptimizations.ALL, DefaultProfilingInfo.get(TriState.UNKNOWN), suites,
                         lirSuites, new CompilationResult(), CompilationResultBuilderFactory.Default);
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache(), g.method())) {
-            installedCode = providers.getCodeCache().addCode(g.method(), compResult, null, null);
+            installedCode = providers.getCodeCache().addMethod(g.method(), compResult, null, null);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
@@ -211,21 +200,5 @@ public class HotSpotNativeFunctionInterface implements NativeFunctionInterface {
     @Override
     public NativeFunctionPointer getNativeFunctionPointerFromRawValue(long rawValue) {
         return new HotSpotNativeFunctionPointer(rawValue, null);
-    }
-
-    private static final Unsafe UNSAFE = initUnsafe();
-
-    private static Unsafe initUnsafe() {
-        try {
-            return Unsafe.getUnsafe();
-        } catch (SecurityException se) {
-            try {
-                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-                theUnsafe.setAccessible(true);
-                return (Unsafe) theUnsafe.get(Unsafe.class);
-            } catch (Exception e) {
-                throw new RuntimeException("exception while trying to get Unsafe", e);
-            }
-        }
     }
 }

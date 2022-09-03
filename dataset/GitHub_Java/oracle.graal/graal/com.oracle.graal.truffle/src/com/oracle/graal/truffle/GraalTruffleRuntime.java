@@ -22,65 +22,41 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompileOnly;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleEnableInfopoints;
+import static com.oracle.graal.truffle.TruffleCompilerOptions.*;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
+import java.util.*;
+import java.util.concurrent.*;
 
-import jdk.internal.jvmci.code.CompilationResult;
-import jdk.internal.jvmci.code.stack.InspectedFrame;
-import jdk.internal.jvmci.code.stack.InspectedFrameVisitor;
-import jdk.internal.jvmci.code.stack.StackIntrospection;
-import jdk.internal.jvmci.meta.MetaAccessProvider;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
-import jdk.internal.jvmci.service.Services;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.stack.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.service.*;
 
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.truffle.debug.CompilationStatisticsListener;
-import com.oracle.graal.truffle.debug.PrintCallTargetProfiling;
-import com.oracle.graal.truffle.debug.TraceCompilationCallTreeListener;
-import com.oracle.graal.truffle.debug.TraceCompilationFailureListener;
-import com.oracle.graal.truffle.debug.TraceCompilationListener;
-import com.oracle.graal.truffle.debug.TraceCompilationPolymorphismListener;
-import com.oracle.graal.truffle.debug.TraceInliningListener;
-import com.oracle.graal.truffle.debug.TracePerformanceWarningsListener;
-import com.oracle.graal.truffle.debug.TraceSplittingListener;
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CallTarget;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.truffle.debug.*;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.CompilerOptions;
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameInstance;
-import com.oracle.truffle.api.frame.FrameInstanceVisitor;
-import com.oracle.truffle.api.frame.MaterializedFrame;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.IndirectCallNode;
-import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RepeatingNode;
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
 public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     private ArrayList<String> includes;
     private ArrayList<String> excludes;
 
+    private StackIntrospection stackIntrospection;
+    protected ResolvedJavaMethod[] callNodeMethod;
+    protected ResolvedJavaMethod[] callTargetMethod;
+    protected ResolvedJavaMethod[] anyFrameMethod;
+
     private final List<GraalTruffleCompilationListener> compilationListeners = new ArrayList<>();
     private final GraalTruffleCompilationListener compilationNotify = new DispatchTruffleCompilationListener();
 
     protected TruffleCompiler truffleCompiler;
     protected LoopNodeFactory loopNodeFactory;
-    protected CallMethods callMethods;
 
     public GraalTruffleRuntime() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
@@ -122,7 +98,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     }
 
     protected void lookupCallMethods(MetaAccessProvider metaAccess) {
-        callMethods = CallMethods.lookup(metaAccess);
+        callNodeMethod = new ResolvedJavaMethod[]{metaAccess.lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD)};
+        callTargetMethod = new ResolvedJavaMethod[]{metaAccess.lookupJavaMethod(GraalFrameInstance.CallTargetFrame.METHOD)};
+        anyFrameMethod = new ResolvedJavaMethod[]{callNodeMethod[0], callTargetMethod[0]};
     }
 
     @Override
@@ -195,32 +173,36 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     @TruffleBoundary
     @Override
     public <T> T iterateFrames(FrameInstanceVisitor<T> visitor) {
-        StackIntrospection stackIntrospection = getStackIntrospection();
+        initStackIntrospection();
 
         InspectedFrameVisitor<T> inspectedFrameVisitor = new InspectedFrameVisitor<T>() {
             private boolean skipNext = false;
 
             public T visitFrame(InspectedFrame frame) {
                 if (skipNext) {
-                    assert frame.isMethod(getCallMethods().callTargetMethod[0]);
+                    assert frame.isMethod(callTargetMethod[0]);
                     skipNext = false;
                     return null;
                 }
 
-                if (frame.isMethod(getCallMethods().callNodeMethod[0])) {
+                if (frame.isMethod(callNodeMethod[0])) {
                     skipNext = true;
                     return visitor.visitFrame(new GraalFrameInstance.CallNodeFrame(frame));
                 } else {
-                    assert frame.isMethod(getCallMethods().callTargetMethod[0]);
+                    assert frame.isMethod(callTargetMethod[0]);
                     return visitor.visitFrame(new GraalFrameInstance.CallTargetFrame(frame, false));
                 }
 
             }
         };
-        return stackIntrospection.iterateFrames(getCallMethods().anyFrameMethod, getCallMethods().anyFrameMethod, 1, inspectedFrameVisitor);
+        return stackIntrospection.iterateFrames(anyFrameMethod, anyFrameMethod, 1, inspectedFrameVisitor);
     }
 
-    protected abstract StackIntrospection getStackIntrospection();
+    private void initStackIntrospection() {
+        if (stackIntrospection == null) {
+            stackIntrospection = Graal.getRequiredCapability(StackIntrospection.class);
+        }
+    }
 
     @Override
     public FrameInstance getCallerFrame() {
@@ -230,7 +212,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
     @TruffleBoundary
     @Override
     public FrameInstance getCurrentFrame() {
-        return getStackIntrospection().iterateFrames(getCallMethods().callTargetMethod, getCallMethods().callTargetMethod, 0, frame -> new GraalFrameInstance.CallTargetFrame(frame, true));
+        initStackIntrospection();
+
+        return stackIntrospection.iterateFrames(callTargetMethod, callTargetMethod, 0, frame -> new GraalFrameInstance.CallTargetFrame(frame, true));
     }
 
     public <T> T getCapability(Class<T> capability) {
@@ -324,10 +308,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
 
     protected abstract boolean platformEnableInfopoints();
 
-    protected CallMethods getCallMethods() {
-        return callMethods;
-    }
-
     private final class DispatchTruffleCompilationListener implements GraalTruffleCompilationListener {
 
         public void notifyCompilationQueued(OptimizedCallTarget target) {
@@ -374,21 +354,5 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime {
             compilationListeners.forEach(l -> l.notifyStartup(runtime));
         }
 
-    }
-
-    protected static final class CallMethods {
-        protected final ResolvedJavaMethod[] callNodeMethod;
-        protected final ResolvedJavaMethod[] callTargetMethod;
-        protected final ResolvedJavaMethod[] anyFrameMethod;
-
-        private CallMethods(MetaAccessProvider metaAccess) {
-            this.callNodeMethod = new ResolvedJavaMethod[]{metaAccess.lookupJavaMethod(GraalFrameInstance.CallNodeFrame.METHOD)};
-            this.callTargetMethod = new ResolvedJavaMethod[]{metaAccess.lookupJavaMethod(GraalFrameInstance.CallTargetFrame.METHOD)};
-            this.anyFrameMethod = new ResolvedJavaMethod[]{callNodeMethod[0], callTargetMethod[0]};
-        }
-
-        public static CallMethods lookup(MetaAccessProvider metaAccess) {
-            return new CallMethods(metaAccess);
-        }
     }
 }

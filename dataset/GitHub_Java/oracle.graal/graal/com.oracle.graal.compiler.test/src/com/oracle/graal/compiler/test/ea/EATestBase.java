@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,22 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
+import java.util.*;
+
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
 import org.junit.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.common.inlining.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
@@ -50,6 +53,7 @@ public class EATestBase extends GraalCompilerTest {
     public static class TestClassInt {
         public int x;
         public int y;
+        public int z;
 
         public TestClassInt() {
             this(0, 0);
@@ -67,7 +71,7 @@ public class EATestBase extends GraalCompilerTest {
         @Override
         public boolean equals(Object obj) {
             TestClassInt other = (TestClassInt) obj;
-            return x == other.x && y == other.y;
+            return x == other.x && y == other.y && z == other.z;
         }
 
         @Override
@@ -119,42 +123,42 @@ public class EATestBase extends GraalCompilerTest {
 
     protected StructuredGraph graph;
     protected HighTierContext context;
-    protected ReturnNode returnNode;
+    protected List<ReturnNode> returnNodes;
 
     /**
      * Runs Escape Analysis on the given snippet and makes sure that no allocations remain in the
      * graph.
-     * 
+     *
      * @param snippet the name of the method whose graph should be processed
      * @param expectedConstantResult if this is non-null, the resulting graph needs to have the
      *            given constant return value
      * @param iterativeEscapeAnalysis true if escape analysis should be run for more than one
      *            iteration
      */
-    protected void testEscapeAnalysis(String snippet, final Constant expectedConstantResult, final boolean iterativeEscapeAnalysis) {
+    protected void testEscapeAnalysis(String snippet, JavaConstant expectedConstantResult, boolean iterativeEscapeAnalysis) {
         prepareGraph(snippet, iterativeEscapeAnalysis);
         if (expectedConstantResult != null) {
-            Assert.assertTrue(returnNode.result().toString(), returnNode.result().isConstant());
-            Assert.assertEquals(expectedConstantResult, returnNode.result().asConstant());
+            for (ReturnNode returnNode : returnNodes) {
+                Assert.assertTrue(returnNode.result().toString(), returnNode.result().isConstant());
+                Assert.assertEquals(expectedConstantResult, returnNode.result().asConstant());
+            }
         }
         int newInstanceCount = graph.getNodes().filter(NewInstanceNode.class).count() + graph.getNodes().filter(NewArrayNode.class).count() +
                         graph.getNodes().filter(CommitAllocationNode.class).count();
         Assert.assertEquals(0, newInstanceCount);
     }
 
-    protected void prepareGraph(String snippet, final boolean iterativeEscapeAnalysis) {
-        ResolvedJavaMethod method = getMetaAccess().lookupJavaMethod(getMethod(snippet));
-        graph = new StructuredGraph(method);
-        try (Scope s = Debug.scope(getClass().getSimpleName(), graph, method, getCodeCache())) {
-            new GraphBuilderPhase.Instance(getMetaAccess(), GraphBuilderConfiguration.getEagerDefault(), OptimisticOptimizations.ALL).apply(graph);
-            Assumptions assumptions = new Assumptions(false);
-            context = new HighTierContext(getProviders(), assumptions, null, getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL);
-            new InliningPhase(new CanonicalizerPhase(true)).apply(graph, context);
+    @SuppressWarnings("try")
+    protected void prepareGraph(String snippet, boolean iterativeEscapeAnalysis) {
+        ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
+        try (Scope s = Debug.scope(getClass(), method, getCodeCache())) {
+            graph = parseEager(method, AllowAssumptions.YES);
+            context = getDefaultHighTierContext();
+            new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
             new DeadCodeEliminationPhase().apply(graph);
-            new CanonicalizerPhase(true).apply(graph, context);
-            new PartialEscapePhase(iterativeEscapeAnalysis, false, new CanonicalizerPhase(true)).apply(graph, context);
-            Assert.assertEquals(1, graph.getNodes().filter(ReturnNode.class).count());
-            returnNode = graph.getNodes().filter(ReturnNode.class).first();
+            new CanonicalizerPhase().apply(graph, context);
+            new PartialEscapePhase(iterativeEscapeAnalysis, false, new CanonicalizerPhase(), null).apply(graph, context);
+            returnNodes = graph.getNodes(ReturnNode.TYPE).snapshot();
         } catch (Throwable e) {
             throw Debug.handle(e);
         }

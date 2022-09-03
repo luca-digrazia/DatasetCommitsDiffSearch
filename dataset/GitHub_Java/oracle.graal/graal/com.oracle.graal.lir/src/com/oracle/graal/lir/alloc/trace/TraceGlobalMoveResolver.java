@@ -22,41 +22,20 @@
  */
 package com.oracle.graal.lir.alloc.trace;
 
-import static com.oracle.graal.lir.LIRValueUtil.asVirtualStackSlot;
-import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
-import static com.oracle.graal.lir.alloc.trace.TraceUtil.asShadowedRegisterValue;
-import static com.oracle.graal.lir.alloc.trace.TraceUtil.isShadowedRegisterValue;
-import static jdk.vm.ci.code.ValueUtil.asAllocatableValue;
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static com.oracle.graal.lir.alloc.trace.TraceUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.framemap.FrameMapBuilder;
-import com.oracle.graal.lir.framemap.FrameMapBuilderTool;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool.MoveFactory;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 
 /**
  */
@@ -71,13 +50,13 @@ final class TraceGlobalMoveResolver {
     private static final int STACK_SLOT_IN_CALLER_FRAME_IDX = -1;
     private int[] stackBlocked;
     private final int firstVirtualStackIndex;
-    private final MoveFactory spillMoveFactory;
+    private final SpillMoveFactory spillMoveFactory;
     private final FrameMapBuilder frameMapBuilder;
 
     private void setValueBlocked(Value location, int direction) {
         assert direction == 1 || direction == -1 : "out of bounds";
         if (isStackSlotValue(location)) {
-            int stackIdx = getStackArrayIndex(location);
+            int stackIdx = getStackArrayIndex(asStackSlotValue(location));
             if (stackIdx == STACK_SLOT_IN_CALLER_FRAME_IDX) {
                 // incoming stack arguments can be ignored
                 return;
@@ -98,7 +77,7 @@ final class TraceGlobalMoveResolver {
 
     private int valueBlocked(Value location) {
         if (isStackSlotValue(location)) {
-            int stackIdx = getStackArrayIndex(location);
+            int stackIdx = getStackArrayIndex(asStackSlotValue(location));
             if (stackIdx == STACK_SLOT_IN_CALLER_FRAME_IDX) {
                 // incoming stack arguments are always blocked (aka they can not be written)
                 return 1;
@@ -122,7 +101,7 @@ final class TraceGlobalMoveResolver {
         return mappingFrom.size() > 0;
     }
 
-    private MoveFactory getSpillMoveFactory() {
+    private SpillMoveFactory getSpillMoveFactory() {
         return spillMoveFactory;
     }
 
@@ -130,7 +109,7 @@ final class TraceGlobalMoveResolver {
         return frameMapBuilder.getRegisterConfig().getAllocatableRegisters();
     }
 
-    public TraceGlobalMoveResolver(LIRGenerationResult res, MoveFactory spillMoveFactory, Architecture arch) {
+    public TraceGlobalMoveResolver(LIRGenerationResult res, SpillMoveFactory spillMoveFactory, Architecture arch) {
 
         this.mappingFrom = new ArrayList<>(8);
         this.mappingTo = new ArrayList<>(8);
@@ -181,7 +160,7 @@ final class TraceGlobalMoveResolver {
 
         for (i = 0; i < mappingTo.size(); i++) {
             Value to = mappingTo.get(i);
-            assert !isStackSlotValue(to) || getStackArrayIndex(to) != STACK_SLOT_IN_CALLER_FRAME_IDX : "Cannot move to in argument: " + to;
+            assert !isStackSlotValue(to) || getStackArrayIndex(asStackSlotValue(to)) != STACK_SLOT_IN_CALLER_FRAME_IDX : "Cannot move to in argument: " + to;
         }
 
         HashSet<Value> usedRegs = new HashSet<>();
@@ -251,36 +230,14 @@ final class TraceGlobalMoveResolver {
             return false;
         }
         if (isShadowedRegisterValue(from)) {
-            /* From is a shadowed register. */
-            if (isShadowedRegisterValue(to)) {
-                // both shadowed but not equal
-                return false;
-            }
             ShadowedRegisterValue shadowed = asShadowedRegisterValue(from);
-            if (isRegisterToRegisterMoveToSelf(shadowed.getRegister(), to)) {
-                return true;
+            // TODO(jeisl)if (isStackSlotValue(to)) {
+            // return to.equals(shadowed.getStackSlot());
+            // }
+            if (isRegister(to)) {
+                return asRegister(to).equals(asRegister(shadowed.getRegister()));
             }
-            if (isStackSlotValue(to)) {
-                return to.equals(shadowed.getStackSlot());
-            }
-        } else {
-            /*
-             * A shadowed destination value is never a self move it both values are not equal. Fall
-             * through.
-             */
-            // if (isShadowedRegisterValue(to)) return false;
-
-            return isRegisterToRegisterMoveToSelf(from, to);
-        }
-        return false;
-    }
-
-    private static boolean isRegisterToRegisterMoveToSelf(Value from, Value to) {
-        if (to.equals(from)) {
-            return true;
-        }
-        if (isRegister(from) && isRegister(to) && asRegister(from).equals(asRegister(to))) {
-            // Values differ but Registers are the same
+        } else if (isRegister(from) && isRegister(to) && asRegister(from).equals(asRegister(to))) {
             assert LIRKind.verifyMoveKinds(to.getLIRKind(), from.getLIRKind()) : String.format("Same register but Kind mismatch %s <- %s", to, from);
             return true;
         }
@@ -323,7 +280,7 @@ final class TraceGlobalMoveResolver {
      */
     private LIRInstruction createMove(Value fromOpr, AllocatableValue toOpr) {
         if (isStackSlotValue(toOpr) && isStackSlotValue(fromOpr)) {
-            return getSpillMoveFactory().createStackMove(toOpr, asAllocatableValue(fromOpr));
+            return getSpillMoveFactory().createStackMove(toOpr, asStackSlotValue(fromOpr));
         }
         return getSpillMoveFactory().createMove(toOpr, fromOpr);
     }
@@ -388,7 +345,7 @@ final class TraceGlobalMoveResolver {
         // create a new spill interval and assign a stack slot to it
         Value from = mappingFrom.get(spillCandidate);
         try (Indent indent = Debug.logAndIndent("BreakCycle: %s", from)) {
-            VirtualStackSlot spillSlot = frameMapBuilder.allocateSpillSlot(from.getLIRKind());
+            StackSlotValue spillSlot = frameMapBuilder.allocateSpillSlot(from.getLIRKind());
             if (Debug.isLogEnabled()) {
                 Debug.log("created new slot for spilling: %s", spillSlot);
             }
@@ -434,14 +391,14 @@ final class TraceGlobalMoveResolver {
         appendInsertionBuffer();
     }
 
-    private int getStackArrayIndex(Value stackSlotValue) {
+    private int getStackArrayIndex(StackSlotValue stackSlotValue) {
         if (isStackSlot(stackSlotValue)) {
             return getStackArrayIndex(asStackSlot(stackSlotValue));
         }
         if (isVirtualStackSlot(stackSlotValue)) {
             return getStackArrayIndex(asVirtualStackSlot(stackSlotValue));
         }
-        throw JVMCIError.shouldNotReachHere("value is not a stack slot: " + stackSlotValue);
+        throw JVMCIError.shouldNotReachHere("Unhandled StackSlotValue: " + stackSlotValue);
     }
 
     private int getStackArrayIndex(StackSlot stackSlot) {

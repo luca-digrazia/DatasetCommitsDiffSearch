@@ -22,23 +22,19 @@
  */
 package com.oracle.graal.compiler.test.backend;
 
-import java.util.HashSet;
+import java.util.*;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.ValueUtil;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import org.junit.Assert;
+import org.junit.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
-import com.oracle.graal.lir.LIRValueUtil;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.ValueProcedure;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
 public class AllocatorTest extends BackendTest {
@@ -67,7 +63,7 @@ public class AllocatorTest extends BackendTest {
         public int regRegMoves;
         public int spillMoves;
 
-        RegisterStats(LIR lir) {
+        public RegisterStats(LIR lir) {
             this.lir = lir;
 
             for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
@@ -96,7 +92,7 @@ public class AllocatorTest extends BackendTest {
                     if (ValueUtil.isRegister(use)) {
                         regRegMoves++;
                     }
-                } else if (LIRValueUtil.isStackSlotValue(def)) {
+                } else if (ValueUtil.isStackSlotValue(def)) {
                     spillMoves++;
                 }
             }

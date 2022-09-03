@@ -22,29 +22,24 @@
  */
 package com.oracle.graal.compiler.test;
 
-import org.junit.Assert;
-import org.junit.Test;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import org.junit.*;
+
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.memory.FloatingReadNode;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.phases.common.CanonicalizerPhase;
-import com.oracle.graal.phases.common.FloatingReadPhase;
-import com.oracle.graal.phases.common.LoweringPhase;
-import com.oracle.graal.phases.common.OptimizeGuardAnchorsPhase;
-import com.oracle.graal.phases.tiers.PhaseContext;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 /* consider
  *     B b = (B) a;
  *     return b.x10;
  *
- * With snippets a typecheck is performed and if it was successful, a PiNode is created.
- * For the read node, however, there is only a dependency to the PiNode, but not to the
+ * With snippets a typecheck is performed and if it was successful, a UnsafeCastNode is created.
+ * For the read node, however, there is only a dependency to the UnsafeCastNode, but not to the
  * typecheck itself. With special crafting, it's possible to get the scheduler moving the
  * FloatingReadNode before the typecheck. Assuming the object is of the wrong type (here for
  * example A), an invalid field read is done.
@@ -96,7 +91,7 @@ public class ReadAfterCheckCastTest extends GraphScheduleTest {
             new OptimizeGuardAnchorsPhase().apply(graph);
             canonicalizer.apply(graph, context);
 
-            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, "After lowering");
+            Debug.dump(graph, "After lowering");
 
             for (FloatingReadNode node : graph.getNodes(ParameterNode.TYPE).first().usages().filter(FloatingReadNode.class)) {
                 // Checking that the parameter a is not directly used for the access to field

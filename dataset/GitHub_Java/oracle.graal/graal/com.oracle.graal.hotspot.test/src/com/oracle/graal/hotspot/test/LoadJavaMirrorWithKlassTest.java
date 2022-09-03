@@ -22,18 +22,18 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import java.util.Objects;
+import java.util.*;
 
-import org.junit.Test;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+import jdk.internal.jvmci.options.OptionValue.*;
 
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.options.OptionValues.OverrideScope;
-import com.oracle.graal.phases.tiers.Suites;
+import org.junit.*;
 
-import jdk.vm.ci.meta.JavaKind;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class LoadJavaMirrorWithKlassTest extends GraalCompilerTest {
 
@@ -58,7 +58,7 @@ public class LoadJavaMirrorWithKlassTest extends GraalCompilerTest {
     @Override
     @SuppressWarnings("try")
     protected Suites createSuites() {
-        try (OverrideScope mark = overrideOptions(GraalOptions.ImmutableCode, true)) {
+        try (OverrideScope s = OptionValue.override(GraalOptions.ImmutableCode, true)) {
             return super.createSuites();
         }
     }
@@ -66,9 +66,8 @@ public class LoadJavaMirrorWithKlassTest extends GraalCompilerTest {
     @Override
     protected boolean checkLowTierGraph(StructuredGraph graph) {
         for (ConstantNode constantNode : graph.getNodes().filter(ConstantNode.class)) {
-            assert constantNode.asJavaConstant() == null || constantNode.asJavaConstant().getJavaKind() != JavaKind.Object ||
-                            constantNode.asJavaConstant().isDefaultForKind() : "Found unexpected object constant " +
-                                            constantNode + ", this should have been removed by the LoadJavaMirrorWithKlassPhase.";
+            assert constantNode.asJavaConstant() == null || constantNode.asJavaConstant().getKind() != Kind.Object || constantNode.asJavaConstant().isDefaultForKind() : "Found unexpected object constant " +
+                            constantNode + ", this should have been removed by the LoadJavaMirrorWithKlassPhase.";
         }
         return true;
     }

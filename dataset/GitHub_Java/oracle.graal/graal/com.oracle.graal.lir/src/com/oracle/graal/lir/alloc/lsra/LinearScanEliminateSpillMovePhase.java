@@ -22,44 +22,29 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlotValue;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.options.NestedBooleanOptionValue;
-import jdk.vm.ci.options.Option;
-import jdk.vm.ci.options.OptionType;
-import jdk.vm.ci.options.OptionValue;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
 import com.oracle.graal.lir.alloc.lsra.LinearScan.IntervalPredicate;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
-import com.oracle.graal.lir.phases.AllocationPhase;
+import com.oracle.graal.lir.phases.*;
 
 public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
-
-    public static class Options {
-        // @formatter:off
-        @Option(help = "Enable spill move elimination.", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LIROptLSRAEliminateSpillMoves = new NestedBooleanOptionValue(LIROptimization, true);
-        // @formatter:on
-    }
 
     private static final IntervalPredicate mustStoreAtDefinition = new LinearScan.IntervalPredicate() {
 
@@ -123,7 +108,7 @@ public class LinearScanEliminateSpillMovePhase extends AllocationPhase {
                              * be correct. Only moves that have been inserted by LinearScan can be
                              * removed.
                              */
-                            if (Options.LIROptLSRAEliminateSpillMoves.getValue() && canEliminateSpillMove(block, move)) {
+                            if (canEliminateSpillMove(block, move)) {
                                 /*
                                  * Move target is a stack slot that is always correct, so eliminate
                                  * instruction.

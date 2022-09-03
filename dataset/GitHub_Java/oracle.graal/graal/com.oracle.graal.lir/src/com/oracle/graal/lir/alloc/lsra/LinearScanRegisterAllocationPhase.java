@@ -22,15 +22,16 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.AllocationPhase;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
 
-import jdk.vm.ci.code.TargetDescription;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 
 public final class LinearScanRegisterAllocationPhase extends AllocationPhase {
 
@@ -41,8 +42,8 @@ public final class LinearScanRegisterAllocationPhase extends AllocationPhase {
     }
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
-                    AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
         allocator.printIntervals("Before register allocation");
         allocateRegisters();
         allocator.printIntervals("After register allocation");

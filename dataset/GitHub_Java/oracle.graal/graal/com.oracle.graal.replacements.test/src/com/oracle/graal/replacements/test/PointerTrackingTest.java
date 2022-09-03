@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,20 @@
  */
 package com.oracle.graal.replacements.test;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.directives.GraalDirectives;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugConfigScope;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderContext;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugin;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins.Registration;
-import com.oracle.graal.replacements.Snippets;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.api.directives.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.InvocationPlugins.Registration;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.word.*;
 
 public class PointerTrackingTest extends GraalCompilerTest implements Snippets {
 
@@ -121,7 +119,8 @@ public class PointerTrackingTest extends GraalCompilerTest implements Snippets {
         ResolvedJavaMethod intrinsic = getResolvedJavaMethod(fnName + "Intrinsic");
         r.register1(fnName, Object.class, new InvocationPlugin() {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
-                return b.intrinsify(targetMethod, intrinsic, new ValueNode[]{arg});
+                b.intrinsify(targetMethod, intrinsic, new ValueNode[]{arg});
+                return true;
             }
         });
     }

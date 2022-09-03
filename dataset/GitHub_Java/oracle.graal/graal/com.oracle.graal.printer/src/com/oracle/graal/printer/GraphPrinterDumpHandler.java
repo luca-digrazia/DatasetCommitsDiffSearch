@@ -22,41 +22,23 @@
  */
 package com.oracle.graal.printer;
 
-import static com.oracle.graal.compiler.common.GraalOptions.DumpPath;
-import static com.oracle.graal.compiler.common.GraalOptions.PrintBinaryGraphPort;
-import static com.oracle.graal.compiler.common.GraalOptions.PrintBinaryGraphs;
-import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraph;
-import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraphAddress;
-import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraphFile;
-import static com.oracle.graal.compiler.common.GraalOptions.PrintIdealGraphPort;
-import static com.oracle.graal.debug.GraalDebugConfig.asJavaMethod;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.debug.GraalDebugConfig.*;
 
-import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.nio.channels.ClosedByInterruptException;
-import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.io.*;
+import java.net.*;
+import java.nio.channels.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.atomic.*;
 
-import jdk.vm.ci.meta.JavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugDumpHandler;
-import com.oracle.graal.debug.DebugDumpScope;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.Graph;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.graph.*;
+import com.oracle.graal.phases.schedule.*;
 
 //JaCoCo Exclude
 
@@ -201,9 +183,10 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
                 // Save inline context for next dump.
                 previousInlineContext = inlineContext;
 
+                final SchedulePhase predefinedSchedule = getPredefinedSchedule();
                 try (Scope s = Debug.sandbox("PrintingGraph", null)) {
                     // Finally, output the graph.
-                    printer.print(graph, nextDumpId() + ":" + message);
+                    printer.print(graph, nextDumpId() + ":" + message, predefinedSchedule);
                 } catch (IOException e) {
                     failuresCount++;
                     printer = null;
@@ -242,6 +225,16 @@ public class GraphPrinterDumpHandler implements DebugDumpHandler {
         }
         if (result.isEmpty()) {
             result.add("Top Scope");
+        }
+        return result;
+    }
+
+    private static SchedulePhase getPredefinedSchedule() {
+        SchedulePhase result = null;
+        for (Object o : Debug.context()) {
+            if (o instanceof SchedulePhase) {
+                result = (SchedulePhase) o;
+            }
         }
         return result;
     }

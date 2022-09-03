@@ -22,50 +22,33 @@
  */
 package com.oracle.graal.hotspot;
 
-import static com.oracle.graal.compiler.common.GraalOptions.HotSpotPrintInlining;
-import static com.oracle.graal.debug.GraalDebugConfig.DebugValueSummary;
-import static com.oracle.graal.debug.GraalDebugConfig.Dump;
-import static com.oracle.graal.debug.GraalDebugConfig.Log;
-import static com.oracle.graal.debug.GraalDebugConfig.MethodFilter;
-import static com.oracle.graal.debug.GraalDebugConfig.Verify;
-import static com.oracle.graal.debug.GraalDebugConfig.areScopedMetricsOrTimersEnabled;
-import static jdk.internal.jvmci.inittimer.InitTimer.timer;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.debug.GraalDebugConfig.*;
+import static jdk.internal.jvmci.inittimer.InitTimer.*;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Architecture;
-import jdk.internal.jvmci.code.stack.InspectedFrameVisitor;
-import jdk.internal.jvmci.code.stack.StackIntrospection;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.hotspot.CompilerToVM;
-import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntime;
-import jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider;
-import jdk.internal.jvmci.hotspot.HotSpotProxified;
-import jdk.internal.jvmci.hotspot.HotSpotResolvedJavaMethodImpl;
-import jdk.internal.jvmci.hotspot.HotSpotStackFrameReference;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
-import jdk.internal.jvmci.inittimer.InitTimer;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
-import jdk.internal.jvmci.runtime.JVMCI;
-import jdk.internal.jvmci.runtime.JVMCIBackend;
+import com.oracle.graal.api.collections.*;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.hotspot.debug.*;
+import com.oracle.graal.hotspot.logging.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.runtime.*;
 
-import com.oracle.graal.api.collections.CollectionsProvider;
-import com.oracle.graal.api.replacements.SnippetReflectionProvider;
-import com.oracle.graal.api.runtime.GraalRuntime;
-import com.oracle.graal.compiler.target.Backend;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugEnvironment;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.DefaultNodeCollectionsProvider;
-import com.oracle.graal.graph.NodeCollectionsProvider;
-import com.oracle.graal.hotspot.debug.BenchmarkCounters;
-import com.oracle.graal.hotspot.meta.HotSpotProviders;
-import com.oracle.graal.phases.tiers.CompilerConfiguration;
-import com.oracle.graal.replacements.SnippetCounter;
-import com.oracle.graal.runtime.RuntimeProvider;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.stack.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.inittimer.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.runtime.*;
 
 //JaCoCo Exclude
 
@@ -122,21 +105,21 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
     }
 
     private boolean checkArrayIndexScaleInvariants() {
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Byte) == 1;
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Boolean) == 1;
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Char) == 2;
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Short) == 2;
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Int) == 4;
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Long) == 8;
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Float) == 4;
-        assert getJVMCIRuntime().getArrayIndexScale(JavaKind.Double) == 8;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Byte) == 1;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Boolean) == 1;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Char) == 2;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Short) == 2;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Int) == 4;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Long) == 8;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Float) == 4;
+        assert getJVMCIRuntime().getArrayIndexScale(Kind.Double) == 8;
         return true;
     }
 
     /**
      * Gets the kind of a word value on the {@linkplain #getHostBackend() host} backend.
      */
-    public static JavaKind getHostWordKind() {
+    public static Kind getHostWordKind() {
         return runtime().getHostBackend().getTarget().wordKind;
     }
 
@@ -158,6 +141,10 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
         // Only set HotSpotPrintInlining if it still has its default value (false).
         if (HotSpotPrintInlining.getValue() == false) {
             HotSpotPrintInlining.setValue(config.printInlining);
+        }
+
+        if (Boolean.valueOf(System.getProperty("graal.printconfig"))) {
+            printConfig(config);
         }
 
         CompilerConfiguration compilerConfiguration = compilerFactory.createCompilerConfiguration();
@@ -247,6 +234,21 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider, H
         HotSpotBackend oldValue = backends.put(arch, backend);
         assert oldValue == null : "cannot overwrite existing backend for architecture " + arch.getSimpleName();
         return backend;
+    }
+
+    private static void printConfig(HotSpotVMConfig config) {
+        Field[] fields = config.getClass().getDeclaredFields();
+        Map<String, Field> sortedFields = new TreeMap<>();
+        for (Field f : fields) {
+            f.setAccessible(true);
+            sortedFields.put(f.getName(), f);
+        }
+        for (Field f : sortedFields.values()) {
+            try {
+                Logger.info(String.format("%9s %-40s = %s", f.getType().getSimpleName(), f.getName(), Logger.pretty(f.get(config))));
+            } catch (Exception e) {
+            }
+        }
     }
 
     public HotSpotProviders getHostProviders() {

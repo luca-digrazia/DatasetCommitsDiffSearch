@@ -22,45 +22,26 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import static com.oracle.graal.lir.LIRValueUtil.isVariable;
-import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.compiler.common.cfg.BlockMap;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.InstructionValueConsumer;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.LoadConstantOp;
-import com.oracle.graal.lir.ValueConsumer;
-import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.constopt.ConstantTree.Flags;
 import com.oracle.graal.lir.constopt.ConstantTree.NodeCost;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.gen.LIRGeneratorTool;
-import com.oracle.graal.lir.phases.PreAllocationOptimizationPhase;
-import com.oracle.graal.options.NestedBooleanOptionValue;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
 
 /**
  * This optimization tries to improve the handling of constants by replacing a single definition of
@@ -77,9 +58,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    PreAllocationOptimizationContext context) {
-        LIRGeneratorTool lirGen = context.lirGen;
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, LIRGeneratorTool lirGen) {
         new Optimization(lirGenRes.getLIR(), lirGen).apply();
     }
 
@@ -288,7 +267,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
                 // no better solution found
                 materializeAtDefinitionSkipped.increment();
             }
-            Debug.dump(constTree, "ConstantTree for %s", tree.getVariable());
+            Debug.dump(constTree, "ConstantTree for " + tree.getVariable());
         }
 
         private void createLoads(DefUseTree tree, ConstantTree constTree, AbstractBlockBase<?> startBlock) {

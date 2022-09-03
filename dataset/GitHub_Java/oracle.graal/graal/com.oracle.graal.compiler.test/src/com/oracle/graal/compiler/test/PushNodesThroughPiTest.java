@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,22 @@
  */
 package com.oracle.graal.compiler.test;
 
-import junit.framework.Assert;
-
-import org.junit.Test;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import org.junit.*;
+
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.phases.common.*;
+import com.oracle.graal.phases.tiers.*;
 
 public class PushNodesThroughPiTest extends GraalCompilerTest {
 
@@ -46,46 +51,56 @@ public class PushNodesThroughPiTest extends GraalCompilerTest {
         public long y = 10;
     }
 
+    public static class C extends B {
+
+        public long z = 5;
+    }
+
     public static long test1Snippet(A a) {
-        B b = (B) a;
-        long ret = b.x; // this can be moved before the checkcast
-        ret += b.y;
+        C c = (C) a;
+        long ret = c.x; // this can be pushed before the checkcast
+        ret += c.y; // not allowed to push
+        ret += c.z; // not allowed to push
         // the null-check should be canonicalized with the null-check of the checkcast
-        ret += b != null ? 100 : 200;
+        ret += c != null ? 100 : 200;
         return ret;
     }
 
     @Test
+    @SuppressWarnings("try")
     public void test1() {
         final String snippet = "test1Snippet";
-        Debug.scope("PushThroughPi", new DebugDumpScope(snippet), new Runnable() {
+        try (Scope s = Debug.scope("PushThroughPi", new DebugDumpScope(snippet))) {
+            StructuredGraph graph = compileTestSnippet(snippet);
+            for (ReadNode rn : graph.getNodes().filter(ReadNode.class)) {
+                OffsetAddressNode address = (OffsetAddressNode) rn.getAddress();
+                long disp = address.getOffset().asJavaConstant().asLong();
 
-            public void run() {
-                StructuredGraph graph = compileTestSnippet(snippet);
+                ResolvedJavaType receiverType = StampTool.typeOrNull(address.getBase());
+                ResolvedJavaField field = receiverType.findInstanceFieldWithOffset(disp, rn.getStackKind());
 
-                for (ReadNode rn : graph.getNodes().filter(ReadNode.class)) {
-                    Object locId = rn.location().locationIdentity();
-                    if (locId instanceof ResolvedJavaField) {
-                        ResolvedJavaField field = (ResolvedJavaField) locId;
-                        if (field.getName().equals("x")) {
-                            Assert.assertTrue(rn.object() instanceof LocalNode);
-                        } else {
-                            Assert.assertTrue(rn.object() instanceof UnsafeCastNode);
-                        }
-                    }
+                assert field != null : "Node " + rn + " tries to access a field which doesn't exists for this type";
+                if (field.getName().equals("x")) {
+                    Assert.assertTrue(address.getBase() instanceof ParameterNode);
+                } else {
+                    Assert.assertTrue(address.getBase().toString(), address.getBase() instanceof PiNode);
                 }
-
-                Assert.assertTrue(graph.getNodes().filter(IsNullNode.class).count() == 1);
             }
-        });
+
+            Assert.assertTrue(graph.getNodes().filter(IsNullNode.class).count() == 1);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
     }
 
     private StructuredGraph compileTestSnippet(final String snippet) {
-        StructuredGraph graph = parse(snippet);
-        new LoweringPhase(null, runtime(), replacements, new Assumptions(false)).apply(graph);
-        new CanonicalizerPhase(runtime(), null).apply(graph);
-        new PushNodesThroughPi().apply(graph);
-        new CanonicalizerPhase(runtime(), null).apply(graph);
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
+        PhaseContext context = new PhaseContext(getProviders());
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
+        new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+        canonicalizer.apply(graph, context);
+        new PushThroughPiPhase().apply(graph);
+        canonicalizer.apply(graph, context);
 
         return graph;
     }

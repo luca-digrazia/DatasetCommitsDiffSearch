@@ -22,45 +22,27 @@
  */
 package com.oracle.graal.lir.stackslotalloc;
 
-import static com.oracle.graal.lir.LIRValueUtil.asVirtualStackSlot;
-import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
-import static com.oracle.graal.lir.phases.LIRPhase.Options.LIROptimization;
+import static com.oracle.graal.lir.phases.LIRPhase.Options.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.PriorityQueue;
-import java.util.Set;
-import java.util.function.Consumer;
+import java.util.*;
+import java.util.function.*;
 
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.DebugCloseable;
-import com.oracle.graal.debug.DebugTimer;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIR;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.compiler.common.alloc.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.graal.lir.ValueProcedure;
-import com.oracle.graal.lir.VirtualStackSlot;
-import com.oracle.graal.lir.framemap.FrameMapBuilderTool;
-import com.oracle.graal.lir.framemap.SimpleVirtualStackSlot;
-import com.oracle.graal.lir.framemap.VirtualStackSlotRange;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.AllocationPhase;
-import com.oracle.graal.options.NestedBooleanOptionValue;
-import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionType;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
+import com.oracle.graal.lir.phases.*;
 
 /**
  * Linear Scan {@link StackSlotAllocator}.
@@ -89,7 +71,8 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
     private static final DebugTimer AssignSlotsTimer = Debug.timer("LSStackSlotAllocator[AssignSlots]");
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
         lirGenRes.buildFrameMap(this);
     }
 
@@ -262,7 +245,7 @@ public final class LSStackSlotAllocator extends AllocationPhase implements Stack
             current.setLocation(location);
         }
 
-        private enum SlotSize {
+        private static enum SlotSize {
             Size1,
             Size2,
             Size4,

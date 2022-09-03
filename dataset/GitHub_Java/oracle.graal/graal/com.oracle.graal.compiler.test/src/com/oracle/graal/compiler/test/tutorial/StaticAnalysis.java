@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,50 +22,27 @@
  */
 package com.oracle.graal.compiler.test.tutorial;
 
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.common.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeMap;
-import com.oracle.graal.java.GraphBuilderPhase;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graphbuilderconf.*;
+import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import com.oracle.graal.nodes.graphbuilderconf.InvocationPlugins;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
-import com.oracle.graal.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.nodes.java.LoadFieldNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.java.NewArrayNode;
-import com.oracle.graal.nodes.java.NewInstanceNode;
-import com.oracle.graal.nodes.java.StoreFieldNode;
-import com.oracle.graal.nodes.spi.StampProvider;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.graph.StatelessPostOrderNodeIterator;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.graph.*;
 
 /**
  * A simple context-insensitive static analysis based on the Graal API. It is intended for
@@ -78,7 +55,7 @@ import com.oracle.graal.phases.graph.StatelessPostOrderNodeIterator;
  * types need to be added to any type state.
  * <p>
  * The type flows are constructed from a high-level Graal graph by the {@link TypeFlowBuilder}. All
- * nodes that operate on {@link JavaKind#Object object} values are converted to the appropriate type
+ * nodes that operate on {@link Kind#Object object} values are converted to the appropriate type
  * flows. The analysis is context insensitive: every Java field has {@link Results#lookupField one
  * list} of types assigned to the field; every Java method has {@link Results#lookupMethod one
  * state} for each {@link MethodState#formalParameters parameter} as well as the
@@ -257,7 +234,7 @@ public class StaticAnalysis {
                      * This is a constraint of this example code, a real static analysis needs to
                      * handle the Graal nodes for throwing and handling exceptions.
                      */
-                    graphBuilderConfig = graphBuilderConfig.withBytecodeExceptionMode(BytecodeExceptionMode.OmitAll);
+                    graphBuilderConfig = graphBuilderConfig.withOmitAllExceptionEdges(true);
                     /*
                      * We do not want Graal to perform any speculative optimistic optimizations,
                      * i.e., we do not want to use profiling information. Since we do not run the
@@ -468,7 +445,7 @@ public class StaticAnalysis {
         }
 
         private boolean isObject(ValueNode node) {
-            return node.getStackKind() == JavaKind.Object;
+            return node.getStackKind() == Kind.Object;
         }
 
         @Override

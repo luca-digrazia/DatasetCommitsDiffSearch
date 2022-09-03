@@ -23,37 +23,38 @@
 package com.oracle.graal.loop;
 
 import java.util.*;
-import java.util.concurrent.*;
 
 import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.lir.cfg.*;
-import com.oracle.graal.loop.InductionVariable.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.cfg.*;
 
 public class LoopsData {
-    private Map<Loop, LoopEx> lirLoopToEx = new IdentityHashMap<>();
-    private Map<LoopBeginNode, LoopEx> loopBeginToEx = new IdentityHashMap<>();
+
+    private Map<Loop<Block>, LoopEx> loopToEx = CollectionsFactory.newIdentityMap();
+    private Map<LoopBeginNode, LoopEx> loopBeginToEx = Node.newIdentityMap();
     private ControlFlowGraph cfg;
 
+    @SuppressWarnings("try")
     public LoopsData(final StructuredGraph graph) {
+        try (Scope s = Debug.scope("ControlFlowGraph")) {
+            cfg = ControlFlowGraph.compute(graph, true, true, true, true);
+        } catch (Throwable e) {
+            throw Debug.handle(e);
+        }
 
-        cfg = Debug.scope("ControlFlowGraph", new Callable<ControlFlowGraph>() {
-            @Override
-            public ControlFlowGraph call() throws Exception {
-                return ControlFlowGraph.compute(graph, true, true, true, true);
-            }
-        });
-        for (Loop lirLoop : cfg.getLoops()) {
-            LoopEx ex = new LoopEx(lirLoop, this);
-            lirLoopToEx.put(lirLoop, ex);
+        for (Loop<Block> loop : cfg.getLoops()) {
+            LoopEx ex = new LoopEx(loop, this);
+            loopToEx.put(loop, ex);
             loopBeginToEx.put(ex.loopBegin(), ex);
         }
     }
 
-    public LoopEx loop(Loop lirLoop) {
-        return lirLoopToEx.get(lirLoop);
+    public LoopEx loop(Loop<?> loop) {
+        return loopToEx.get(loop);
     }
 
     public LoopEx loop(LoopBeginNode loopBegin) {
@@ -61,15 +62,28 @@ public class LoopsData {
     }
 
     public Collection<LoopEx> loops() {
-        return lirLoopToEx.values();
+        return loopToEx.values();
     }
 
-    public List<LoopEx> outterFirst() {
+    public List<LoopEx> outerFirst() {
         ArrayList<LoopEx> loops = new ArrayList<>(loops());
         Collections.sort(loops, new Comparator<LoopEx>() {
+
             @Override
             public int compare(LoopEx o1, LoopEx o2) {
-                return o1.lirLoop().depth - o2.lirLoop().depth;
+                return o1.loop().getDepth() - o2.loop().getDepth();
+            }
+        });
+        return loops;
+    }
+
+    public List<LoopEx> innerFirst() {
+        ArrayList<LoopEx> loops = new ArrayList<>(loops());
+        Collections.sort(loops, new Comparator<LoopEx>() {
+
+            @Override
+            public int compare(LoopEx o1, LoopEx o2) {
+                return o2.loop().getDepth() - o1.loop().getDepth();
             }
         });
         return loops;
@@ -87,72 +101,34 @@ public class LoopsData {
 
     public void detectedCountedLoops() {
         for (LoopEx loop : loops()) {
-            InductionVariables ivs = new InductionVariables(loop);
-            LoopBeginNode loopBegin = loop.loopBegin();
-            FixedNode next = loopBegin.next();
-            if (next instanceof IfNode) {
-                IfNode ifNode = (IfNode) next;
-                boolean negated = false;
-                if (!loopBegin.isLoopExit(ifNode.falseSuccessor())) {
-                    if (!loopBegin.isLoopExit(ifNode.trueSuccessor())) {
-                        continue;
-                    }
-                    negated = true;
-                }
-                BooleanNode ifTest = ifNode.compare();
-                if (!(ifTest instanceof IntegerLessThanNode)) {
-                    if (ifTest instanceof IntegerBelowThanNode) {
-                        Debug.log("Ignored potential Counted loop at %s with |<|", loopBegin);
-                    }
-                    continue;
-                }
-                IntegerLessThanNode lessThan = (IntegerLessThanNode) ifTest;
-                Condition condition = null;
-                InductionVariable iv = null;
-                ValueNode limit = null;
-                if (loop.isOutsideLoop(lessThan.x())) {
-                    iv = ivs.get(lessThan.y());
-                    if (iv != null) {
-                        condition = lessThan.condition().mirror();
-                        limit = lessThan.x();
-                    }
-                } else if (loop.isOutsideLoop(lessThan.y())) {
-                    iv = ivs.get(lessThan.x());
-                    if (iv != null) {
-                        condition = lessThan.condition();
-                        limit = lessThan.y();
-                    }
-                }
-                if (condition == null) {
-                    continue;
-                }
-                if (negated) {
-                    condition = condition.negate();
-                }
-                boolean oneOff = false;
-                switch (condition) {
-                    case LE:
-                        oneOff = true; // fall through
-                    case LT:
-                        if (iv.direction() != Direction.Up) {
-                            continue;
-                        }
-                        break;
-                    case GE:
-                        oneOff = true; // fall through
-                    case GT:
-                        if (iv.direction() != Direction.Down) {
-                            continue;
-                        }
-                        break;
-                    default: throw GraalInternalError.shouldNotReachHere();
-                }
-                loop.setCounted(new CountedLoopInfo(loop, iv, limit, oneOff));
-            }
+            loop.detectCounted();
         }
     }
 
-    public ControlFlowGraph controlFlowGraph() {
+    public ControlFlowGraph getCFG() {
         return cfg;
+    }
+
+    public InductionVariable getInductionVariable(ValueNode value) {
+        InductionVariable match = null;
+        for (LoopEx loop : loops()) {
+            InductionVariable iv = loop.getInductionVariables().get(value);
+            if (iv != null) {
+                if (match != null) {
+                    return null;
+                }
+                match = iv;
+            }
+        }
+        return match;
+    }
+
+    /**
+     * Deletes any nodes created within the scope of this object that have no usages.
+     */
+    public void deleteUnusedNodes() {
+        for (LoopEx loop : loops()) {
+            loop.deleteUnusedNodes();
+        }
     }
 }

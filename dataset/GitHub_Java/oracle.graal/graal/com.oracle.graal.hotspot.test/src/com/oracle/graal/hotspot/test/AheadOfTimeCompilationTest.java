@@ -22,42 +22,32 @@
  */
 package com.oracle.graal.hotspot.test;
 
-import static com.oracle.graal.compiler.GraalCompiler.compileGraph;
-import static com.oracle.graal.compiler.GraalCompiler.getProfilingInfo;
-import static com.oracle.graal.compiler.common.GraalOptions.ImmutableCode;
-import static com.oracle.graal.nodes.ConstantNode.getConstantNodes;
-import static jdk.vm.ci.code.CodeUtil.getCallingConvention;
-import jdk.vm.ci.code.CallingConvention;
-import jdk.vm.ci.code.CallingConvention.Type;
-import jdk.vm.ci.code.CompilationResult;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
+import static com.oracle.graal.compiler.GraalCompiler.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.nodes.ConstantNode.*;
+import static jdk.internal.jvmci.code.CodeUtil.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.code.CallingConvention.*;
+import jdk.internal.jvmci.hotspot.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.options.*;
+import jdk.internal.jvmci.options.OptionValue.*;
 
-import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.*;
 
-import com.oracle.graal.api.test.Graal;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.graph.iterators.NodeIterable;
-import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
-import com.oracle.graal.lir.asm.CompilationResultBuilderFactory;
-import com.oracle.graal.lir.phases.LIRSuites;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.api.runtime.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.hotspot.nodes.type.*;
+import com.oracle.graal.lir.asm.*;
+import com.oracle.graal.lir.phases.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.memory.FloatingReadNode;
-import com.oracle.graal.nodes.memory.ReadNode;
-import com.oracle.graal.options.OptionValue;
-import com.oracle.graal.options.OptionValue.OverrideScope;
-import com.oracle.graal.phases.OptimisticOptimizations;
-import com.oracle.graal.phases.tiers.Suites;
-import com.oracle.graal.phases.tiers.SuitesProvider;
-import com.oracle.graal.runtime.RuntimeProvider;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.phases.*;
+import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.runtime.*;
 
 /**
  * use
@@ -91,7 +81,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
     public void testStaticFinalObject() {
         StructuredGraph result = compile("getStaticFinalObject", false);
         assertDeepEquals(1, getConstantNodes(result).count());
-        assertDeepEquals(JavaKind.Object, getConstantNodes(result).first().getStackKind());
+        assertDeepEquals(Kind.Object, getConstantNodes(result).first().getStackKind());
         assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
         assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
     }
@@ -119,8 +109,9 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
 
         NodeIterable<ConstantNode> filter = getConstantNodes(result);
         assertDeepEquals(1, filter.count());
-        JavaConstant c = filter.first().asJavaConstant();
-        Assert.assertEquals(getSnippetReflection().asObject(Class.class, c), AheadOfTimeCompilationTest.class);
+        HotSpotObjectConstantImpl c = (HotSpotObjectConstantImpl) filter.first().asConstant();
+        Assert.assertEquals(Class.class, c.getObjectClass());
+        Assert.assertTrue(c.isEqualTo(AheadOfTimeCompilationTest.class));
 
         assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
         assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
@@ -147,8 +138,9 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         StructuredGraph result = compile("getPrimitiveClassObject", false);
         NodeIterable<ConstantNode> filter = getConstantNodes(result);
         assertDeepEquals(1, filter.count());
-        JavaConstant c = filter.first().asJavaConstant();
-        Assert.assertEquals(getSnippetReflection().asObject(Class.class, c), Integer.TYPE);
+        HotSpotObjectConstantImpl c = (HotSpotObjectConstantImpl) filter.first().asConstant();
+        Assert.assertEquals(Class.class, c.getObjectClass());
+        Assert.assertTrue(c.isEqualTo(Integer.TYPE));
 
         assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
         assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
@@ -174,8 +166,9 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
 
         NodeIterable<ConstantNode> filter = getConstantNodes(result);
         assertDeepEquals(1, filter.count());
-        JavaConstant c = filter.first().asJavaConstant();
-        Assert.assertEquals(getSnippetReflection().asObject(String.class, c), "test string");
+        HotSpotObjectConstantImpl c = (HotSpotObjectConstantImpl) filter.first().asConstant();
+        Assert.assertEquals(String.class, c.getObjectClass());
+        Assert.assertTrue(c.isEqualTo("test string"));
 
         assertDeepEquals(0, result.getNodes().filter(FloatingReadNode.class).count());
         assertDeepEquals(0, result.getNodes().filter(ReadNode.class).count());
@@ -194,7 +187,7 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         assertDeepEquals(1, result.getNodes(PiNode.TYPE).count());
         assertDeepEquals(1, getConstantNodes(result).count());
         ConstantNode constant = getConstantNodes(result).first();
-        assertDeepEquals(JavaKind.Long, constant.getStackKind());
+        assertDeepEquals(Kind.Long, constant.getStackKind());
         assertDeepEquals(((HotSpotResolvedObjectType) getMetaAccess().lookupJavaType(Boolean.class)).klass(), constant.asConstant());
     }
 
@@ -205,10 +198,10 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
         assertDeepEquals(0, result.getNodes(PiNode.TYPE).count());
         assertDeepEquals(1, getConstantNodes(result).count());
         ConstantNode constant = getConstantNodes(result).first();
-        assertDeepEquals(JavaKind.Object, constant.getStackKind());
+        assertDeepEquals(Kind.Object, constant.getStackKind());
 
-        JavaConstant c = constant.asJavaConstant();
-        Assert.assertEquals(getSnippetReflection().asObject(Boolean.class, c), Boolean.TRUE);
+        HotSpotObjectConstantImpl c = (HotSpotObjectConstantImpl) constant.asConstant();
+        Assert.assertTrue(c.isEqualTo(Boolean.TRUE));
     }
 
     @SuppressWarnings("try")
@@ -219,8 +212,8 @@ public class AheadOfTimeCompilationTest extends GraalCompilerTest {
             CallingConvention cc = getCallingConvention(getCodeCache(), Type.JavaCallee, graph.method(), false);
             // create suites everytime, as we modify options for the compiler
             SuitesProvider suitesProvider = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites();
-            final Suites suitesLocal = suitesProvider.getDefaultSuites();
-            final LIRSuites lirSuitesLocal = suitesProvider.getDefaultLIRSuites();
+            final Suites suitesLocal = suitesProvider.createSuites();
+            final LIRSuites lirSuitesLocal = suitesProvider.createLIRSuites();
             final CompilationResult compResult = compileGraph(graph, cc, method, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL, getProfilingInfo(graph),
                             suitesLocal, lirSuitesLocal, new CompilationResult(), CompilationResultBuilderFactory.Default);
             addMethod(method, compResult);

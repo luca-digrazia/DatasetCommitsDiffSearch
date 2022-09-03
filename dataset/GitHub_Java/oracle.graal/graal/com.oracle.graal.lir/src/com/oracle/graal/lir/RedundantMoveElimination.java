@@ -22,32 +22,23 @@
  */
 package com.oracle.graal.lir;
 
-import static jdk.vm.ci.code.ValueUtil.isRegister;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.compiler.common.CollectionsFactory;
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Indent;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 import com.oracle.graal.lir.StandardOp.MoveOp;
 import com.oracle.graal.lir.StandardOp.ValueMoveOp;
-import com.oracle.graal.lir.framemap.FrameMap;
-import com.oracle.graal.lir.gen.LIRGenerationResult;
-import com.oracle.graal.lir.phases.PostAllocationOptimizationPhase;
+import com.oracle.graal.lir.framemap.*;
+import com.oracle.graal.lir.gen.*;
+import com.oracle.graal.lir.phases.*;
 
 /**
  * Removes move instructions, where the destination value is already in place.
@@ -56,7 +47,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
 
     @Override
     protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
-                    PostAllocationOptimizationContext context) {
+                    BenchmarkCounterFactory counterFactory) {
         Optimization redundantMoveElimination = new Optimization(lirGenRes.getFrameMap());
         redundantMoveElimination.doOptimize(lirGenRes.getLIR());
     }
@@ -123,7 +114,7 @@ public final class RedundantMoveElimination extends PostAllocationOptimizationPh
          */
         static final int INIT_VALUE = 0;
 
-        Optimization(FrameMap frameMap) {
+        public Optimization(FrameMap frameMap) {
             this.frameMap = frameMap;
         }
 

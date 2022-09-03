@@ -22,16 +22,17 @@
  */
 package com.oracle.graal.jtt.backend;
 
-import static com.oracle.graal.api.directives.GraalDirectives.LIKELY_PROBABILITY;
-import static com.oracle.graal.api.directives.GraalDirectives.injectBranchProbability;
+import static com.oracle.graal.api.directives.GraalDirectives.*;
 
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 
-import org.junit.Test;
+import jdk.internal.jvmci.options.*;
+import jdk.internal.jvmci.options.OptionValue.OverrideScope;
 
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.jtt.JTTTest;
-import com.oracle.graal.options.OptionValues.OverrideScope;
+import org.junit.*;
+
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.jtt.*;
 
 public class ConstantPhiTest extends JTTTest {
 
@@ -58,7 +59,7 @@ public class ConstantPhiTest extends JTTTest {
     @Test
     @SuppressWarnings("try")
     public void run0() {
-        try (OverrideScope scope = overrideOptions(GraalOptions.MaximumInliningSize, -1)) {
+        try (OverrideScope os = OptionValue.override(GraalOptions.MaximumInliningSize, -1)) {
             runTest("test", 0, 0xDEADDEAD);
         }
     }
@@ -66,7 +67,7 @@ public class ConstantPhiTest extends JTTTest {
     @Test
     @SuppressWarnings("try")
     public void run1() {
-        try (OverrideScope scope = overrideOptions(GraalOptions.MaximumInliningSize, -1)) {
+        try (OverrideScope os = OptionValue.override(GraalOptions.MaximumInliningSize, -1)) {
             runTest("test", -1, 0xDEADDEAD);
         }
     }
@@ -74,7 +75,7 @@ public class ConstantPhiTest extends JTTTest {
     @Test
     @SuppressWarnings("try")
     public void run2() {
-        try (OverrideScope scope = overrideOptions(GraalOptions.MaximumInliningSize, -1)) {
+        try (OverrideScope os = OptionValue.override(GraalOptions.MaximumInliningSize, -1)) {
             runTest("test", 1, 0xDEADDEAD);
         }
     }

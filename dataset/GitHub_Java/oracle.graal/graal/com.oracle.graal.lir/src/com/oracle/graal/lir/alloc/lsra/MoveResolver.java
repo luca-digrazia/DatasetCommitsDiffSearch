@@ -22,32 +22,20 @@
  */
 package com.oracle.graal.lir.alloc.lsra;
 
-import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.code.ValueUtil.isIllegal;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
+import static jdk.internal.jvmci.code.ValueUtil.*;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.LIRKind;
-import jdk.vm.ci.meta.Value;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugMetric;
-import com.oracle.graal.debug.Indent;
-import com.oracle.graal.lir.LIRInsertionBuffer;
-import com.oracle.graal.lir.LIRInstruction;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.lir.*;
 
 /**
  */
 public class MoveResolver {
-
-    private static final DebugMetric cycleBreakingSlotsAllocated = Debug.metric("LSRA[cycleBreakingSlotsAllocated]");
 
     private final LinearScan allocator;
 
@@ -368,16 +356,15 @@ public class MoveResolver {
         // do not allocate a new spill slot for temporary interval, but
         // use spill slot assigned to fromInterval. Otherwise moves from
         // one stack slot to another can happen (not allowed by LIRAssembler
-        AllocatableValue spillSlot = fromInterval.spillSlot();
+        StackSlotValue spillSlot = fromInterval.spillSlot();
         if (spillSlot == null) {
             spillSlot = getAllocator().getFrameMapBuilder().allocateSpillSlot(fromInterval.kind());
             fromInterval.setSpillSlot(spillSlot);
-            cycleBreakingSlotsAllocated.increment();
         }
         spillInterval(spillCandidate, fromInterval, spillSlot);
     }
 
-    protected void spillInterval(int spillCandidate, Interval fromInterval, AllocatableValue spillSlot) {
+    protected void spillInterval(int spillCandidate, Interval fromInterval, StackSlotValue spillSlot) {
         assert mappingFrom.get(spillCandidate).equals(fromInterval);
         Interval spillInterval = getAllocator().createDerivedInterval(fromInterval);
         spillInterval.setKind(fromInterval.kind());

@@ -26,7 +26,6 @@ import java.util.regex.*;
 
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.*;
-
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
@@ -63,13 +62,17 @@ public abstract class BasePhase<C> {
      */
     private final DebugMemUseTracker memUseTracker;
 
-    /** Lazy initialization to create pattern only when assertions are enabled. */
-    static class NamePatternHolder {
-        static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
+    @SuppressWarnings("all")
+    private static boolean assertionsEnabled() {
+        boolean enabled = false;
+        assert enabled = true;
+        return enabled;
     }
 
+    private static final Pattern NAME_PATTERN = assertionsEnabled() ? Pattern.compile("[A-Z][A-Za-z0-9]+") : null;
+
     private static boolean checkName(String name) {
-        assert NamePatternHolder.NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
+        assert NAME_PATTERN.matcher(name).matches() : "illegal phase name: " + name;
         return true;
     }
 
@@ -132,6 +135,7 @@ public abstract class BasePhase<C> {
         apply(graph, context, true);
     }
 
+    @SuppressWarnings("try")
     protected final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
         try (DebugCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); DebugCloseable c = memUseTracker.start()) {
             if (dumpGraph && Debug.isDumpEnabled(BEFORE_PHASE_DUMP_LEVEL)) {

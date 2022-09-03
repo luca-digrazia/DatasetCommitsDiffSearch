@@ -22,17 +22,12 @@
  */
 package com.oracle.graal.lir.constopt;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
-import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.Indent;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
+
+import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.constopt.ConstantTree.Flags;
 import com.oracle.graal.lir.constopt.ConstantTree.NodeCost;
 
@@ -73,25 +68,25 @@ public final class ConstantTreeAnalyzer {
         worklist.offerLast(startBlock);
         while (!worklist.isEmpty()) {
             AbstractBlockBase<?> block = worklist.pollLast();
-            try (Indent i = Debug.logAndIndent(Debug.VERBOSE_LOG_LEVEL, "analyze: %s", block)) {
+            try (Indent i = Debug.logAndIndent(3, "analyze: %s", block)) {
                 assert block != null : "worklist is empty!";
                 assert isMarked(block) : "Block not part of the dominator tree: " + block;
 
                 if (isLeafBlock(block)) {
-                    Debug.log(Debug.VERBOSE_LOG_LEVEL, "leaf block");
+                    Debug.log(3, "leaf block");
                     leafCost(block);
                     continue;
                 }
 
                 if (!visited.get(block.getId())) {
                     // if not yet visited (and not a leaf block) process all children first!
-                    Debug.log(Debug.VERBOSE_LOG_LEVEL, "not marked");
+                    Debug.log(3, "not marked");
                     worklist.offerLast(block);
                     List<? extends AbstractBlockBase<?>> children = block.getDominated();
                     children.forEach(child -> filteredPush(worklist, child));
                     visited.set(block.getId());
                 } else {
-                    Debug.log(Debug.VERBOSE_LOG_LEVEL, "marked");
+                    Debug.log(3, "marked");
                     // otherwise, process block
                     process(block);
                 }
@@ -161,7 +156,7 @@ public final class ConstantTreeAnalyzer {
 
     private void filteredPush(Deque<AbstractBlockBase<?>> worklist, AbstractBlockBase<?> block) {
         if (isMarked(block)) {
-            Debug.log(Debug.VERBOSE_LOG_LEVEL, "adding %s to the worklist", block);
+            Debug.log(3, "adding %s to the worklist", block);
             worklist.offerLast(block);
         }
     }

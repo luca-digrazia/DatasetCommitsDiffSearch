@@ -23,15 +23,14 @@
 
 package com.oracle.graal.hotspot.test;
 
-import org.junit.Test;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.compiler.test.GraalCompilerTest;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import org.junit.*;
+
+import com.oracle.graal.compiler.test.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 
 public class ClassSubstitutionsTests extends GraalCompilerTest {
@@ -48,7 +47,7 @@ public class ClassSubstitutionsTests extends GraalCompilerTest {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES);
             compile(graph.method(), graph);
             assertNotInGraph(graph, Invoke.class);
-            Debug.dump(Debug.BASIC_LOG_LEVEL, graph, snippet);
+            Debug.dump(graph, snippet);
             return graph;
         } catch (Throwable e) {
             throw Debug.handle(e);

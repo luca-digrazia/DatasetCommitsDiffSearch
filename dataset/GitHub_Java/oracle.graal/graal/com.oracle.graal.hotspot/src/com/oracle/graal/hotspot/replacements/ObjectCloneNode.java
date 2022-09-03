@@ -22,41 +22,30 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 
-import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.*;
 
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.graph.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.java.LoadFieldNode;
-import com.oracle.graal.nodes.java.NewInstanceNode;
-import com.oracle.graal.nodes.java.StoreFieldNode;
-import com.oracle.graal.nodes.spi.ArrayLengthProvider;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.nodes.spi.VirtualizableAllocation;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.replacements.nodes.BasicObjectCloneNode;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.replacements.nodes.*;
 
 @NodeInfo
 public final class ObjectCloneNode extends BasicObjectCloneNode implements VirtualizableAllocation, ArrayLengthProvider {
 
     public static final NodeClass<ObjectCloneNode> TYPE = NodeClass.create(ObjectCloneNode.class);
 
-    public ObjectCloneNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode receiver) {
-        super(TYPE, invokeKind, targetMethod, bci, returnStamp, receiver);
+    public ObjectCloneNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode receiver) {
+        super(TYPE, invokeKind, targetMethod, bci, returnType, receiver);
     }
 
     @Override
@@ -65,7 +54,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
         ResolvedJavaType type = StampTool.typeOrNull(getObject());
         if (type != null) {
             if (type.isArray()) {
-                Method method = ObjectCloneSnippets.arrayCloneMethods.get(type.getComponentType().getJavaKind());
+                Method method = ObjectCloneSnippets.arrayCloneMethods.get(type.getComponentType().getKind());
                 if (method != null) {
                     final ResolvedJavaMethod snippetMethod = tool.getMetaAccess().lookupJavaMethod(method);
                     final Replacements replacements = tool.getReplacements();
@@ -79,20 +68,20 @@ public final class ObjectCloneNode extends BasicObjectCloneNode implements Virtu
                     assert snippetGraph != null : "ObjectCloneSnippets should be installed";
                     return lowerReplacement((StructuredGraph) snippetGraph.copy(), tool);
                 }
-                assert false : "unhandled array type " + type.getComponentType().getJavaKind();
+                assert false : "unhandled array type " + type.getComponentType().getKind();
             } else {
                 Assumptions assumptions = graph().getAssumptions();
-                type = getConcreteType(getObject().stamp(), tool.getMetaAccess());
+                type = getConcreteType(getObject().stamp(), assumptions, tool.getMetaAccess());
                 if (type != null) {
                     StructuredGraph newGraph = new StructuredGraph(AllowAssumptions.from(assumptions != null));
-                    ParameterNode param = newGraph.unique(new ParameterNode(0, StampPair.createSingle(getObject().stamp())));
+                    ParameterNode param = newGraph.unique(new ParameterNode(0, getObject().stamp()));
                     NewInstanceNode newInstance = newGraph.add(new NewInstanceNode(type, true));
                     newGraph.addAfterFixed(newGraph.start(), newInstance);
                     ReturnNode returnNode = newGraph.add(new ReturnNode(newInstance));
                     newGraph.addAfterFixed(newInstance, returnNode);
 
                     for (ResolvedJavaField field : type.getInstanceFields(true)) {
-                        LoadFieldNode load = newGraph.add(LoadFieldNode.create(newGraph.getAssumptions(), param, field));
+                        LoadFieldNode load = newGraph.add(new LoadFieldNode(param, field));
                         newGraph.addBeforeFixed(returnNode, load);
                         newGraph.addBeforeFixed(returnNode, newGraph.add(new StoreFieldNode(newInstance, field, load)));
                     }

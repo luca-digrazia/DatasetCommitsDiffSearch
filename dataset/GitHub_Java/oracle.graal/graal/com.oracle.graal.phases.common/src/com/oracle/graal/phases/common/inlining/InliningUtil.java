@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,80 +22,35 @@
  */
 package com.oracle.graal.phases.common.inlining;
 
-import static com.oracle.graal.compiler.common.GraalOptions.HotSpotPrintInlining;
-import static com.oracle.graal.compiler.common.GraalOptions.UseGraalQueries;
-import static jdk.internal.jvmci.meta.DeoptimizationAction.InvalidateReprofile;
-import static jdk.internal.jvmci.meta.DeoptimizationReason.NullCheckException;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static jdk.internal.jvmci.meta.DeoptimizationAction.*;
+import static jdk.internal.jvmci.meta.DeoptimizationReason.*;
 
-import java.lang.reflect.Constructor;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.*;
+import java.util.*;
 
-import jdk.internal.jvmci.code.BytecodeFrame;
-import jdk.internal.jvmci.code.BytecodePosition;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.Assumptions;
-import jdk.internal.jvmci.meta.DeoptimizationAction;
-import jdk.internal.jvmci.meta.DeoptimizationReason;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.ResolvedJavaMethod;
-import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
 
-import com.oracle.graal.api.replacements.MethodSubstitution;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.debug.Debug;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.Fingerprint;
-import com.oracle.graal.debug.TTY;
-import com.oracle.graal.graph.GraalGraphJVMCIError;
-import com.oracle.graal.graph.Graph;
+
+import jdk.internal.jvmci.meta.*;
+
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Graph.DuplicationReplacement;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeInputList;
-import com.oracle.graal.graph.NodeWorkList;
-import com.oracle.graal.nodeinfo.Verbosity;
-import com.oracle.graal.nodes.AbstractBeginNode;
-import com.oracle.graal.nodes.AbstractEndNode;
-import com.oracle.graal.nodes.AbstractMergeNode;
-import com.oracle.graal.nodes.BeginNode;
-import com.oracle.graal.nodes.CallTargetNode;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.DeoptimizeNode;
-import com.oracle.graal.nodes.EndNode;
-import com.oracle.graal.nodes.FixedGuardNode;
-import com.oracle.graal.nodes.FixedNode;
-import com.oracle.graal.nodes.FixedWithNextNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.GuardedValueNode;
-import com.oracle.graal.nodes.Invoke;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.InvokeWithExceptionNode;
-import com.oracle.graal.nodes.KillingBeginNode;
-import com.oracle.graal.nodes.MergeNode;
-import com.oracle.graal.nodes.ParameterNode;
-import com.oracle.graal.nodes.PhiNode;
-import com.oracle.graal.nodes.PiNode;
-import com.oracle.graal.nodes.ReturnNode;
-import com.oracle.graal.nodes.SimpleInfopointNode;
-import com.oracle.graal.nodes.StartNode;
-import com.oracle.graal.nodes.StateSplit;
-import com.oracle.graal.nodes.StructuredGraph;
-import com.oracle.graal.nodes.UnwindNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.ValuePhiNode;
-import com.oracle.graal.nodes.calc.IsNullNode;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.java.ExceptionObjectNode;
-import com.oracle.graal.nodes.java.MethodCallTargetNode;
-import com.oracle.graal.nodes.java.MonitorIdNode;
-import com.oracle.graal.nodes.spi.Replacements;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.nodes.util.GraphUtil;
-import com.oracle.graal.phases.common.inlining.info.InlineInfo;
-import com.oracle.graal.phases.common.query.nodes.InstrumentationNode;
+import com.oracle.graal.nodes.calc.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.common.inlining.info.*;
 
 public class InliningUtil {
 
@@ -365,9 +320,6 @@ public class InliningUtil {
             unwindNode = (UnwindNode) duplicates.get(unwindNode);
         }
 
-        if (UseGraalQueries.getValue()) {
-            removeAttachedInstrumentation(invoke);
-        }
         finishInlining(invoke, graph, firstCFGNode, returnNodes, unwindNode, inlineGraph.getAssumptions(), inlineGraph, canonicalizedNodes);
 
         GraphUtil.killCFG(invokeNode);
@@ -494,7 +446,7 @@ public class InliningUtil {
     protected static void processFrameStates(Invoke invoke, StructuredGraph inlineGraph, Map<Node, Node> duplicates, FrameState stateAtExceptionEdge, boolean alwaysDuplicateStateAfter) {
         FrameState stateAtReturn = invoke.stateAfter();
         FrameState outerFrameState = null;
-        JavaKind invokeReturnKind = invoke.asNode().getStackKind();
+        Kind invokeReturnKind = invoke.asNode().getStackKind();
         for (FrameState original : inlineGraph.getNodes(FrameState.TYPE)) {
             FrameState frameState = (FrameState) duplicates.get(original);
             if (frameState != null && frameState.isAlive()) {
@@ -510,7 +462,7 @@ public class InliningUtil {
                     boolean alwaysDuplicateStateAfter) {
 
         FrameState stateAtReturn = invoke.stateAfter();
-        JavaKind invokeReturnKind = invoke.asNode().getStackKind();
+        Kind invokeReturnKind = invoke.asNode().getStackKind();
 
         if (frameState.bci == BytecodeFrame.AFTER_BCI) {
             FrameState stateAfterReturn = stateAtReturn;
@@ -544,7 +496,7 @@ public class InliningUtil {
              */
             FrameState stateAfterException = stateAtExceptionEdge;
             if (frameState.stackSize() > 0 && stateAtExceptionEdge.stackAt(0) != frameState.stackAt(0)) {
-                stateAfterException = stateAtExceptionEdge.duplicateModified(JavaKind.Object, JavaKind.Object, frameState.stackAt(0));
+                stateAfterException = stateAtExceptionEdge.duplicateModified(Kind.Object, Kind.Object, frameState.stackAt(0));
             }
             frameState.replaceAndDelete(stateAfterException);
             return stateAfterException;
@@ -701,7 +653,7 @@ public class InliningUtil {
         assert !callTarget.isStatic() : callTarget.targetMethod();
         StructuredGraph graph = callTarget.graph();
         ValueNode firstParam = callTarget.arguments().get(0);
-        if (firstParam.getStackKind() == JavaKind.Object) {
+        if (firstParam.getStackKind() == Kind.Object) {
             Stamp paramStamp = firstParam.stamp();
             Stamp stamp = paramStamp.join(StampFactory.declaredNonNull(callTarget.targetMethod().getDeclaringClass()));
             if (!StampTool.isPointerNonNull(firstParam)) {
@@ -758,24 +710,4 @@ public class InliningUtil {
             throw new GraalGraphJVMCIError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
         }
     }
-
-    // exclude InstrumentationNode for inlining heuristics
-    public static int getNodeCount(StructuredGraph graph) {
-        if (UseGraalQueries.getValue()) {
-            return graph.getNodeCount() - graph.getNodes().filter(InstrumentationNode.class).count();
-        } else {
-            return graph.getNodeCount();
-        }
-    }
-
-    public static void removeAttachedInstrumentation(Invoke invoke) {
-        FixedNode invokeNode = invoke.asNode();
-        for (InstrumentationNode instrumentation : invokeNode.usages().filter(InstrumentationNode.class)) {
-            if (instrumentation.target() == invoke) {
-                GraphUtil.unlinkFixedNode(instrumentation);
-                instrumentation.safeDelete();
-            }
-        }
-    }
-
 }
