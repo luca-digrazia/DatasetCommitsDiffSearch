@@ -46,7 +46,9 @@ import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.inlining.info.*;
+import com.oracle.graal.phases.common.inlining.walker.InliningData;
 
 public class InliningUtil {
 
@@ -57,6 +59,59 @@ public class InliningUtil {
      * parsed (which may be none for methods whose IR is retrieved from a cache).
      */
     public static final DebugMetric InlinedBytecodes = Debug.metric("InlinedBytecodes");
+
+    public interface Inlineable {
+
+        int getNodeCount();
+
+        Iterable<Invoke> getInvokes();
+    }
+
+    public static class InlineableGraph implements Inlineable {
+
+        private final StructuredGraph graph;
+
+        public InlineableGraph(StructuredGraph graph) {
+            this.graph = graph;
+        }
+
+        @Override
+        public int getNodeCount() {
+            return graph.getNodeCount();
+        }
+
+        @Override
+        public Iterable<Invoke> getInvokes() {
+            return graph.getInvokes();
+        }
+
+        public StructuredGraph getGraph() {
+            return graph;
+        }
+    }
+
+    public static class InlineableMacroNode implements Inlineable {
+
+        private final Class<? extends FixedWithNextNode> macroNodeClass;
+
+        public InlineableMacroNode(Class<? extends FixedWithNextNode> macroNodeClass) {
+            this.macroNodeClass = macroNodeClass;
+        }
+
+        @Override
+        public int getNodeCount() {
+            return 1;
+        }
+
+        @Override
+        public Iterable<Invoke> getInvokes() {
+            return Collections.emptyList();
+        }
+
+        public Class<? extends FixedWithNextNode> getMacroNodeClass() {
+            return macroNodeClass;
+        }
+    }
 
     /**
      * Print a HotSpot-style inlining message to the console.
@@ -216,6 +271,31 @@ public class InliningUtil {
         return null;
     }
 
+    public static boolean checkTargetConditions(InliningData data, Replacements replacements, Invoke invoke, ResolvedJavaMethod method, OptimisticOptimizations optimisticOpts) {
+        String failureMessage = null;
+        if (method == null) {
+            failureMessage = "the method is not resolved";
+        } else if (method.isNative() && (!Intrinsify.getValue() || !InliningUtil.canIntrinsify(replacements, method))) {
+            failureMessage = "it is a non-intrinsic native method";
+        } else if (method.isAbstract()) {
+            failureMessage = "it is an abstract method";
+        } else if (!method.getDeclaringClass().isInitialized()) {
+            failureMessage = "the method's class is not initialized";
+        } else if (!method.canBeInlined()) {
+            failureMessage = "it is marked non-inlinable";
+        } else if (data.countRecursiveInlining(method) > MaximumRecursiveInlining.getValue()) {
+            failureMessage = "it exceeds the maximum recursive inlining depth";
+        } else if (new OptimisticOptimizations(method.getProfilingInfo()).lessOptimisticThan(optimisticOpts)) {
+            failureMessage = "the callee uses less optimistic optimizations than caller";
+        }
+        if (failureMessage == null) {
+            return true;
+        } else {
+            logNotInlined(invoke, data.inliningDepth(), method, failureMessage);
+            return false;
+        }
+    }
+
     /**
      * Performs an actual inlining, thereby replacing the given invoke with the given inlineGraph.
      *
@@ -289,6 +369,7 @@ public class InliningUtil {
                 stateAtExceptionEdge = obj.stateAfter();
                 UnwindNode unwindDuplicate = (UnwindNode) duplicates.get(unwindNode);
                 obj.replaceAtUsages(unwindDuplicate.exception());
+                unwindDuplicate.clearInputs();
                 Node n = obj.next();
                 obj.setNext(null);
                 unwindDuplicate.replaceAndDelete(n);
@@ -331,6 +412,7 @@ public class InliningUtil {
                 ReturnNode returnNode = (ReturnNode) duplicates.get(returnNodes.get(0));
                 Node returnValue = returnNode.result();
                 invokeNode.replaceAtUsages(returnValue);
+                returnNode.clearInputs();
                 returnNode.replaceAndDelete(n);
             } else {
                 ArrayList<ReturnNode> returnDuplicates = new ArrayList<>(returnNodes.size());
@@ -452,6 +534,7 @@ public class InliningUtil {
                 }
                 returnValuePhi.addInput(returnNode.result());
             }
+            returnNode.clearInputs();
             returnNode.replaceAndDelete(endNode);
 
         }
