@@ -29,7 +29,7 @@ import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.*;
 
 /**
- * This phase tries to find {@link AbstractDeoptimizeNode DeoptimizeNodes} which use the same
+ * This phase tries to find {@link DeoptimizeNode DeoptimizeNodes} which use the same
  * {@link FrameState} and merges them together.
  */
 public class DeoptimizationGroupingPhase extends Phase {
@@ -39,8 +39,8 @@ public class DeoptimizationGroupingPhase extends Phase {
         ControlFlowGraph cfg = null;
         for (FrameState fs : graph.getNodes(FrameState.class)) {
             FixedNode target = null;
-            List<AbstractDeoptimizeNode> obsoletes = null;
-            for (AbstractDeoptimizeNode deopt : fs.usages().filter(AbstractDeoptimizeNode.class)) {
+            List<DeoptimizeNode> obsoletes = null;
+            for (DeoptimizeNode deopt : fs.usages().filter(DeoptimizeNode.class)) {
                 if (target == null) {
                     target = deopt;
                 } else {
@@ -48,12 +48,12 @@ public class DeoptimizationGroupingPhase extends Phase {
                         cfg = ControlFlowGraph.compute(graph, true, true, false, false);
                     }
                     MergeNode merge;
-                    if (target instanceof AbstractDeoptimizeNode) {
+                    if (target instanceof DeoptimizeNode) {
                         merge = graph.add(new MergeNode());
                         EndNode firstEnd = graph.add(new EndNode());
                         merge.addForwardEnd(firstEnd);
                         target.predecessor().replaceFirstSuccessor(target, firstEnd);
-                        exitLoops((AbstractDeoptimizeNode) target, firstEnd, cfg);
+                        exitLoops((DeoptimizeNode) target, firstEnd, cfg);
                         merge.setNext(target);
                         obsoletes = new LinkedList<>();
                         target = merge;
@@ -68,14 +68,14 @@ public class DeoptimizationGroupingPhase extends Phase {
                 }
             }
             if (obsoletes != null) {
-                for (AbstractDeoptimizeNode obsolete : obsoletes) {
+                for (DeoptimizeNode obsolete : obsoletes) {
                     obsolete.safeDelete();
                 }
             }
         }
     }
 
-    private static void exitLoops(AbstractDeoptimizeNode deopt, EndNode end, ControlFlowGraph cfg) {
+    private static void exitLoops(DeoptimizeNode deopt, EndNode end, ControlFlowGraph cfg) {
         Block block = cfg.blockFor(deopt);
         Loop loop = block.getLoop();
         while (loop != null) {
