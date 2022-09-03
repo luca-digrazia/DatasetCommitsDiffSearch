@@ -60,6 +60,8 @@ import com.oracle.truffle.tck.common.inline.InlineVerifier;
 @TruffleInstrument.Registration(name = VerifierInstrument.ID, id = VerifierInstrument.ID, services = InlineVerifier.class)
 public class VerifierInstrument extends TruffleInstrument implements InlineVerifier {
 
+    static final String ID = "TckVerifierInstrument";
+
     private Env env;
     private InlineScriptFactory inlineScriptFactory;
     private EventBinding<InlineScriptFactory> inlineBinding;
@@ -105,7 +107,7 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
             if (predicate == null || canRunAt(context.getInstrumentedSourceSection())) {
                 return new InlineScriptNode(context);
             } else {
-                return new DummyNode();
+                return null;
             }
         }
 
@@ -176,10 +178,6 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
                 resultVerifier.verify(result);
             }
         }
-
-        private class DummyNode extends ExecutionEventNode {
-            // dummy node placed where we can not run the inline script
-        }
     }
 
     private static class RootFrameChecker implements ExecutionEventListener {
@@ -191,9 +189,7 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
 
         @TruffleBoundary
         private void checkFrameIsEmpty(EventContext context, MaterializedFrame frame) {
-            Node node = context.getInstrumentedNode();
-            if (!hasParentRootTag(node) &&
-                            node.getRootNode().getFrameDescriptor() == frame.getFrameDescriptor()) {
+            if (!hasParentRootTag(context.getInstrumentedNode())) {
                 // Top-most nodes tagged with RootTag should have clean frames.
                 Object defaultValue = frame.getFrameDescriptor().getDefaultValue();
                 for (FrameSlot slot : frame.getFrameDescriptor().getSlots()) {
