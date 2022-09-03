@@ -22,17 +22,105 @@
  */
 package com.oracle.graal.lir.sparc;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+
+import java.util.*;
+
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.lir.*;
-import com.oracle.jvmci.meta.*;
+import com.oracle.graal.lir.LIRInstruction.OperandFlag;
+import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
-public abstract class SPARCAddressValue extends CompositeValue {
+public final class SPARCAddressValue extends CompositeValue {
+    private static final long serialVersionUID = -3583286416638228207L;
 
-    public SPARCAddressValue(LIRKind kind) {
-        super(kind);
+    @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue base;
+    @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue index;
+    protected final int displacement;
+
+    private static final EnumSet<OperandFlag> flags = EnumSet.of(OperandFlag.REG, OperandFlag.ILLEGAL);
+
+    public SPARCAddressValue(LIRKind kind, AllocatableValue base, int displacement) {
+        this(kind, base, Value.ILLEGAL, displacement);
     }
 
-    public abstract SPARCAddress toAddress();
+    public SPARCAddressValue(LIRKind kind, AllocatableValue base, AllocatableValue index, int displacement) {
+        super(kind);
+        assert isIllegal(index) || displacement == 0;
+        this.base = base;
+        this.index = index;
+        this.displacement = displacement;
+    }
 
-    public abstract boolean isValidImplicitNullCheckFor(Value value, int implicitNullCheckLimit);
+    @Override
+    public CompositeValue forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
+        AllocatableValue newBase = (AllocatableValue) proc.doValue(inst, base, mode, flags);
+        AllocatableValue newIndex = (AllocatableValue) proc.doValue(inst, index, mode, flags);
+        if (!base.identityEquals(newBase) || !index.identityEquals(newIndex)) {
+            return new SPARCAddressValue(getLIRKind(), newBase, newIndex, displacement);
+        }
+        return this;
+    }
+
+    @Override
+    protected void forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
+        proc.visitValue(inst, base, mode, flags);
+        proc.visitValue(inst, index, mode, flags);
+    }
+
+    private static Register toRegister(AllocatableValue value) {
+        if (isIllegal(value)) {
+            return Register.None;
+        } else {
+            RegisterValue reg = (RegisterValue) value;
+            return reg.getRegister();
+        }
+    }
+
+    public SPARCAddress toAddress() {
+        if (isLegal(index)) {
+            return new SPARCAddress(toRegister(base), toRegister(index));
+        } else {
+            return new SPARCAddress(toRegister(base), displacement);
+        }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder s = new StringBuilder("[");
+        String sep = "";
+        if (isLegal(base)) {
+            s.append(base);
+            sep = " + ";
+        }
+        if (isLegal(index)) {
+            s.append(sep).append(index);
+            sep = " + ";
+        } else {
+            if (displacement < 0) {
+                s.append(" - ").append(-displacement);
+            } else if (displacement > 0) {
+                s.append(sep).append(displacement);
+            }
+        }
+        s.append("]");
+        return s.toString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof SPARCAddressValue) {
+            SPARCAddressValue addr = (SPARCAddressValue) obj;
+            return getLIRKind().equals(addr.getLIRKind()) && displacement == addr.displacement && base.equals(addr.base) && index.equals(addr.index);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return base.hashCode() ^ index.hashCode() ^ (displacement << 4) ^ getLIRKind().hashCode();
+    }
 }

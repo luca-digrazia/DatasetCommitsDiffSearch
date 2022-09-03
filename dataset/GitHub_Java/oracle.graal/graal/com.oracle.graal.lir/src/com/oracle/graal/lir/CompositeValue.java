@@ -25,9 +25,8 @@ package com.oracle.graal.lir;
 import java.lang.annotation.*;
 import java.util.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
 
@@ -37,6 +36,8 @@ import com.oracle.graal.lir.LIRInstruction.OperandMode;
  * the possibility of sharing of CompositeValues they should be immutable.
  */
 public abstract class CompositeValue extends AbstractValue {
+
+    private static final long serialVersionUID = -169180052684126180L;
 
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
@@ -90,7 +91,7 @@ public abstract class CompositeValue extends AbstractValue {
         return newValues != null ? newValues : values;
     }
 
-    protected abstract void visitEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc);
+    protected abstract void forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc);
 
     @Override
     public String toString() {

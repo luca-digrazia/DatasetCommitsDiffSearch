@@ -27,10 +27,9 @@ import static org.junit.Assert.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
 import org.junit.*;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -44,6 +43,7 @@ public class CompositeValueReplacementTest1 {
 
     private static class TestCompositeValue extends CompositeValue {
 
+        private static final long serialVersionUID = -8804214200173503527L;
         @Component({REG, OperandFlag.ILLEGAL}) protected Value value;
 
         public TestCompositeValue(Value value) {
@@ -63,13 +63,14 @@ public class CompositeValueReplacementTest1 {
         }
 
         @Override
-        protected void visitEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
+        protected void forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
             proc.visitValue(inst, value, mode, flags);
         }
     }
 
     private static class DummyValue extends AbstractValue {
 
+        private static final long serialVersionUID = -645435039553382737L;
         private final int id;
         private static int counter = 1;
 

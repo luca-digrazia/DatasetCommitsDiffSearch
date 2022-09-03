@@ -22,21 +22,20 @@
  */
 package com.oracle.graal.lir.amd64;
 
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Address.*;
+import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.lir.*;
-import com.oracle.graal.lir.LIRInstruction.OperandFlag;
-import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.LIRInstruction.*;
 
 public final class AMD64AddressValue extends CompositeValue {
+    private static final long serialVersionUID = -4444600052487578694L;
 
     @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue base;
     @Component({REG, OperandFlag.ILLEGAL}) protected AllocatableValue index;
@@ -70,7 +69,7 @@ public final class AMD64AddressValue extends CompositeValue {
     }
 
     @Override
-    protected void visitEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
+    protected void forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueConsumer proc) {
         proc.visitValue(inst, base, mode, flags);
         proc.visitValue(inst, index, mode, flags);
     }

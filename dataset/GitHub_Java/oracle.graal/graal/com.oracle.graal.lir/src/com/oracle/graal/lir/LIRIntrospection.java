@@ -29,11 +29,11 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.Map.Entry;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.meta.*;
 
 abstract class LIRIntrospection<T> extends FieldIntrospection<T> {
 
@@ -100,8 +100,8 @@ abstract class LIRIntrospection<T> extends FieldIntrospection<T> {
 
         final EnumSet<OperandFlag> flags;
 
-        public ValueFieldInfo(long offset, String name, Class<?> type, Class<?> declaringClass, EnumSet<OperandFlag> flags) {
-            super(offset, name, type, declaringClass);
+        public ValueFieldInfo(long offset, String name, Class<?> type, EnumSet<OperandFlag> flags) {
+            super(offset, name, type);
             assert VALUE_ARRAY_CLASS.isAssignableFrom(type) || VALUE_CLASS.isAssignableFrom(type);
             this.flags = flags;
         }
@@ -165,20 +165,20 @@ abstract class LIRIntrospection<T> extends FieldIntrospection<T> {
         @Override
         protected void scanField(Field field, long offset) {
             Class<?> type = field.getType();
-            if (VALUE_CLASS.isAssignableFrom(type) && !CONSTANT_CLASS.isAssignableFrom(type)) {
+            if (VALUE_CLASS.isAssignableFrom(type) && type != CONSTANT_CLASS) {
                 assert !Modifier.isFinal(field.getModifiers()) : "Value field must not be declared final because it is modified by register allocator: " + field;
                 OperandModeAnnotation annotation = getOperandModeAnnotation(field);
                 assert annotation != null : "Field must have operand mode annotation: " + field;
                 EnumSet<OperandFlag> flags = getFlags(field);
                 assert verifyFlags(field, type, flags);
-                annotation.values.add(new ValueFieldInfo(offset, field.getName(), type, field.getDeclaringClass(), flags));
+                annotation.values.add(new ValueFieldInfo(offset, field.getName(), type, flags));
                 annotation.directCount++;
             } else if (VALUE_ARRAY_CLASS.isAssignableFrom(type)) {
                 OperandModeAnnotation annotation = getOperandModeAnnotation(field);
                 assert annotation != null : "Field must have operand mode annotation: " + field;
                 EnumSet<OperandFlag> flags = getFlags(field);
                 assert verifyFlags(field, type.getComponentType(), flags);
-                annotation.values.add(new ValueFieldInfo(offset, field.getName(), type, field.getDeclaringClass(), flags));
+                annotation.values.add(new ValueFieldInfo(offset, field.getName(), type, flags));
             } else {
                 assert getOperandModeAnnotation(field) == null : "Field must not have operand mode annotation: " + field;
                 assert field.getAnnotation(LIRInstruction.State.class) == null : "Field must not have state annotation: " + field;

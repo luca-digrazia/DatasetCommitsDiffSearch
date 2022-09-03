@@ -25,10 +25,8 @@ package com.oracle.graal.lir;
 import java.lang.reflect.*;
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
@@ -78,17 +76,6 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> LIRInstructionClass<T> get(Class<T> clazz) {
-        try {
-            Field field = clazz.getDeclaredField("TYPE");
-            field.setAccessible(true);
-            return (LIRInstructionClass<T>) field.get(null);
-        } catch (IllegalArgumentException | IllegalAccessException | NoSuchFieldException | SecurityException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private static class LIRInstructionFieldsScanner extends LIRFieldsScanner {
 
         private String opcodeConstant;
@@ -123,7 +110,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
             } else if (field.isAnnotationPresent(LIRInstruction.Def.class)) {
                 result.addAll(Arrays.asList(field.getAnnotation(LIRInstruction.Def.class).value()));
             } else {
-                JVMCIError.shouldNotReachHere();
+                GraalInternalError.shouldNotReachHere();
             }
             return result;
         }
@@ -150,7 +137,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
             if (STATE_CLASS.isAssignableFrom(type)) {
                 assert getOperandModeAnnotation(field) == null : "Field must not have operand mode annotation: " + field;
                 assert field.getAnnotation(LIRInstruction.State.class) != null : "Field must have state annotation: " + field;
-                states.add(new FieldsScanner.FieldInfo(offset, field.getName(), type, field.getDeclaringClass()));
+                states.add(new FieldsScanner.FieldInfo(offset, field.getName(), type));
             } else {
                 super.scanField(field, offset);
             }
@@ -161,12 +148,6 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
                 opcodeField = data.get(data.size() - 1);
             }
         }
-    }
-
-    @Override
-    public Fields[] getAllFields() {
-        assert values == null;
-        return new Fields[]{data, uses, alives, temps, defs, states};
     }
 
     @Override
@@ -199,7 +180,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
             case DEF:
                 return defs;
             default:
-                throw JVMCIError.shouldNotReachHere("unknown OperandMode: " + mode);
+                throw GraalInternalError.shouldNotReachHere("unknown OperandMode: " + mode);
         }
     }
 
@@ -240,20 +221,20 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
         forEach(obj, defs, OperandMode.DEF, proc);
     }
 
-    final void visitEachUse(LIRInstruction obj, InstructionValueConsumer proc) {
-        visitEach(obj, uses, OperandMode.USE, proc);
+    final void forEachUse(LIRInstruction obj, InstructionValueConsumer proc) {
+        forEach(obj, uses, OperandMode.USE, proc);
     }
 
-    final void visitEachAlive(LIRInstruction obj, InstructionValueConsumer proc) {
-        visitEach(obj, alives, OperandMode.ALIVE, proc);
+    final void forEachAlive(LIRInstruction obj, InstructionValueConsumer proc) {
+        forEach(obj, alives, OperandMode.ALIVE, proc);
     }
 
-    final void visitEachTemp(LIRInstruction obj, InstructionValueConsumer proc) {
-        visitEach(obj, temps, OperandMode.TEMP, proc);
+    final void forEachTemp(LIRInstruction obj, InstructionValueConsumer proc) {
+        forEach(obj, temps, OperandMode.TEMP, proc);
     }
 
-    final void visitEachDef(LIRInstruction obj, InstructionValueConsumer proc) {
-        visitEach(obj, defs, OperandMode.DEF, proc);
+    final void forEachDef(LIRInstruction obj, InstructionValueConsumer proc) {
+        forEach(obj, defs, OperandMode.DEF, proc);
     }
 
     final void forEachState(LIRInstruction obj, InstructionValueProcedure proc) {
@@ -265,7 +246,7 @@ public class LIRInstructionClass<T> extends LIRIntrospection<T> {
         }
     }
 
-    final void visitEachState(LIRInstruction obj, InstructionValueConsumer proc) {
+    final void forEachState(LIRInstruction obj, InstructionValueConsumer proc) {
         for (int i = 0; i < states.getCount(); i++) {
             LIRFrameState state = (LIRFrameState) states.getObject(obj, i);
             if (state != null) {
