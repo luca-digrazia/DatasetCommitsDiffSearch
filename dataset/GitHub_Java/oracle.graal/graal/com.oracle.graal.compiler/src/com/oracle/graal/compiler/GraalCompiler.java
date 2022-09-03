@@ -140,10 +140,6 @@ public class GraalCompiler {
                 new PropagateTypeCachePhase(target, runtime, assumptions).apply(graph);
             }
 
-            if (GraalOptions.OptCanonicalizer) {
-                new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-            }
-
             if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
                 new IterativeCheckCastEliminationPhase(target, runtime, assumptions).apply(graph);
             }
@@ -198,10 +194,6 @@ public class GraalCompiler {
             new LoopTransformLowPhase().apply(graph);
         }
         new RemoveValueProxyPhase().apply(graph);
-
-        if (GraalOptions.OptCanonicalizer) {
-            new CanonicalizerPhase(target, runtime, assumptions).apply(graph);
-        }
 
         if (GraalOptions.CheckCastElimination && GraalOptions.OptCanonicalizer) {
             new IterativeCheckCastEliminationPhase(target, runtime, assumptions).apply(graph);
