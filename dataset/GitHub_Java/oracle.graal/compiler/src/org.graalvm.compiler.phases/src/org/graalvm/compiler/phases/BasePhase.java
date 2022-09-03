@@ -86,23 +86,23 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
 
     public static class BasePhaseStatistics {
         /**
-         * Records time spent in {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
+         * Records time spent in {@link #apply(StructuredGraph, Object, boolean)}.
          */
         private final TimerKey timer;
 
         /**
-         * Counts calls to {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
+         * Counts calls to {@link #apply(StructuredGraph, Object, boolean)}.
          */
         private final CounterKey executionCount;
 
         /**
          * Accumulates the {@linkplain Graph#getNodeCount() live node count} of all graphs sent to
-         * {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
+         * {@link #apply(StructuredGraph, Object, boolean)}.
          */
         private final CounterKey inputNodesCount;
 
         /**
-         * Records memory usage within {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
+         * Records memory usage within {@link #apply(StructuredGraph, Object, boolean)}.
          */
         private final MemUseTrackerKey memUseTracker;
 
@@ -258,7 +258,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         return false;
     }
 
-    private final class GraphChangeListener extends NodeEventListener {
+    private final class GraphChangeListener implements NodeEventListener {
         boolean changed;
         private StructuredGraph graph;
         private Mark mark;
@@ -269,7 +269,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         }
 
         @Override
-        public void changed(NodeEvent e, Node node) {
+        public void event(NodeEvent e, Node node) {
             if (!graph.isNew(mark, node) && node.isAlive()) {
                 if (e == NodeEvent.INPUT_CHANGED || e == NodeEvent.ZERO_USAGES) {
                     changed = true;

@@ -22,9 +22,7 @@
  */
 package org.graalvm.compiler.loop;
 
-import java.util.ArrayDeque;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.Iterator;
 
 import org.graalvm.compiler.debug.GraalError;
@@ -56,8 +54,6 @@ import org.graalvm.compiler.nodes.spi.NodeWithState;
 import org.graalvm.compiler.nodes.virtual.CommitAllocationNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.util.EconomicMap;
-
-import jdk.vm.ci.meta.TriState;
 
 public abstract class LoopFragment {
 
@@ -225,7 +221,6 @@ public abstract class LoopFragment {
         }
 
         final NodeBitMap nonLoopNodes = graph.createNodeBitMap();
-        Deque<WorkListEntry> worklist = new ArrayDeque<>();
         for (AbstractBeginNode b : blocks) {
             if (b.isDeleted()) {
                 continue;
@@ -234,98 +229,56 @@ public abstract class LoopFragment {
             for (Node n : b.getBlockNodes()) {
                 if (n instanceof CommitAllocationNode) {
                     for (VirtualObjectNode obj : ((CommitAllocationNode) n).getVirtualObjects()) {
-                        markFloating(worklist, obj, nodes, nonLoopNodes);
+                        markFloating(obj, nodes, nonLoopNodes);
                     }
                 }
                 if (n instanceof MonitorEnterNode) {
-                    markFloating(worklist, ((MonitorEnterNode) n).getMonitorId(), nodes, nonLoopNodes);
+                    markFloating(((MonitorEnterNode) n).getMonitorId(), nodes, nonLoopNodes);
                 }
                 for (Node usage : n.usages()) {
-                    markFloating(worklist, usage, nodes, nonLoopNodes);
+                    markFloating(usage, nodes, nonLoopNodes);
                 }
             }
         }
     }
 
-    static class WorkListEntry {
-        final Iterator<Node> usages;
-        final Node n;
-        boolean isLoopNode;
-
-        WorkListEntry(Node n, NodeBitMap loopNodes) {
-            this.n = n;
-            this.usages = n.usages().iterator();
-            this.isLoopNode = loopNodes.isMarked(n);
-        }
-    }
-
-    static TriState isLoopNode(Node n, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
+    private static boolean markFloating(Node n, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
         if (loopNodes.isMarked(n)) {
-            return TriState.TRUE;
+            return true;
         }
         if (nonLoopNodes.isMarked(n)) {
-            return TriState.FALSE;
+            return false;
         }
         if (n instanceof FixedNode) {
-            return TriState.FALSE;
+            return false;
         }
         boolean mark = false;
         if (n instanceof PhiNode) {
             PhiNode phi = (PhiNode) n;
             mark = loopNodes.isMarked(phi.merge());
             if (mark) {
-                /*
-                 * This Phi is a loop node but the inputs might not be so they must be processed by
-                 * the caller.
-                 */
                 loopNodes.mark(n);
             } else {
                 nonLoopNodes.mark(n);
-                return TriState.FALSE;
+                return false;
             }
         }
-        return TriState.UNKNOWN;
-    }
-
-    private static void markFloating(Deque<WorkListEntry> workList, Node start, NodeBitMap loopNodes, NodeBitMap nonLoopNodes) {
-        if (isLoopNode(start, loopNodes, nonLoopNodes).isKnown()) {
-            return;
-        }
-        workList.push(new WorkListEntry(start, loopNodes));
-        while (!workList.isEmpty()) {
-            WorkListEntry currentEntry = workList.peek();
-            if (currentEntry.usages.hasNext()) {
-                Node current = currentEntry.usages.next();
-                TriState result = isLoopNode(current, loopNodes, nonLoopNodes);
-                if (result.isKnown()) {
-                    if (result.toBoolean()) {
-                        currentEntry.isLoopNode = true;
-                    }
-                } else {
-                    workList.push(new WorkListEntry(current, loopNodes));
-                }
-            } else {
-                workList.pop();
-                boolean isLoopNode = currentEntry.isLoopNode;
-                Node current = currentEntry.n;
-                if (!isLoopNode && current instanceof GuardNode) {
-                    /*
-                     * (gd) this is only OK if we are not going to make loop transforms based on
-                     * this
-                     */
-                    assert !((GuardNode) current).graph().hasValueProxies();
-                    isLoopNode = true;
-                }
-                if (isLoopNode) {
-                    loopNodes.mark(current);
-                    for (WorkListEntry e : workList) {
-                        e.isLoopNode = true;
-                    }
-                } else {
-                    nonLoopNodes.mark(current);
-                }
+        for (Node usage : n.usages()) {
+            if (markFloating(usage, loopNodes, nonLoopNodes)) {
+                mark = true;
             }
         }
+        if (!mark && n instanceof GuardNode) {
+            // (gd) this is only OK if we are not going to make loop transforms based on this
+            assert !((GuardNode) n).graph().hasValueProxies();
+            mark = true;
+        }
+        if (mark) {
+            loopNodes.mark(n);
+            return true;
+        }
+        nonLoopNodes.mark(n);
+        return false;
     }
 
     public static NodeIterable<AbstractBeginNode> toHirBlocks(final Iterable<Block> blocks) {
