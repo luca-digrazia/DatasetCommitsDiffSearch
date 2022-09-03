@@ -82,11 +82,6 @@ public final class UnsafeArrayCopyNode extends ArrayRangeWriteNode implements Lo
         return elementKind == Kind.Object;
     }
 
-    @Override
-    public boolean isInitialized() {
-        return true;
-    }
-
     public Kind getElementKind() {
         return elementKind;
     }
