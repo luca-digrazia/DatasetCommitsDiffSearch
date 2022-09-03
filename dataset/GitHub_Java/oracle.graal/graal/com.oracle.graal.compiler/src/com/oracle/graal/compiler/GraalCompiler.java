@@ -198,11 +198,6 @@ public class GraalCompiler {
         suites.getLowTier().apply(graph, lowTierContext);
         graph.maybeCompress();
 
-        // we do not want to store statistics about OSR compilations because it may prevent inlining
-        if (!graph.isOSR()) {
-            InliningPhase.storeStatisticsAfterLowTier(graph);
-        }
-
         SchedulePhase schedule = new SchedulePhase();
         schedule.apply(graph);
         Debug.dump(schedule, "final schedule");
@@ -211,7 +206,7 @@ public class GraalCompiler {
     }
 
     private static void emitBlock(LIRGenerator lirGen, Block b, StructuredGraph graph, BlockMap<List<ScheduledNode>> blockMap) {
-        if (lirGen.getLIR().getLIRforBlock(b) == null) {
+        if (lirGen.lir.lir(b) == null) {
             for (Block pred : b.getPredecessors()) {
                 if (!b.isLoopHeader() || !pred.isLoopEnd()) {
                     emitBlock(lirGen, pred, graph, blockMap);
@@ -228,14 +223,11 @@ public class GraalCompiler {
         assert startBlock.getPredecessorCount() == 0;
 
         LIR lir = null;
-        List<Block> codeEmittingOrder = null;
-        List<Block> linearScanOrder = null;
         try (Scope ds = Debug.scope("MidEnd")) {
             try (Scope s = Debug.scope("ComputeLinearScanOrder")) {
                 NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(graph).apply();
-                BlocksToDoubles blockProbabilities = BlocksToDoubles.createFromNodeProbability(nodeProbabilities, schedule.getCFG());
-                codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock, blockProbabilities);
-                linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock, blockProbabilities);
+                List<Block> codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock, nodeProbabilities);
+                List<Block> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock, nodeProbabilities);
 
                 lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder);
                 Debug.dump(lir, "After linear scan order");
@@ -250,7 +242,7 @@ public class GraalCompiler {
             LIRGenerator lirGen = backend.newLIRGenerator(graph, stub, frameMap, cc, lir);
 
             try (Scope s = Debug.scope("LIRGen", lirGen)) {
-                for (Block b : linearScanOrder) {
+                for (Block b : lir.linearScanOrder()) {
                     emitBlock(lirGen, b, graph, schedule.getBlockToNodesMap());
                 }
                 lirGen.beforeRegisterAllocation();
@@ -270,7 +262,7 @@ public class GraalCompiler {
 
             try (Scope s = Debug.scope("ControlFlowOptimizations")) {
                 EdgeMoveOptimizer.optimize(lir);
-                ControlFlowOptimizer.optimize(lir, codeEmittingOrder);
+                ControlFlowOptimizer.optimize(lir);
                 if (lirGen.canEliminateRedundantMoves()) {
                     RedundantMoveElimination.optimize(lir, frameMap);
                 }
@@ -289,7 +281,7 @@ public class GraalCompiler {
     public static void emitCode(Backend backend, Assumptions assumptions, LIRGenerator lirGen, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner,
                     CompilationResultBuilderFactory factory) {
         CompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGen, compilationResult, factory);
-        backend.emitCode(crb, lirGen.getLIR(), installedCodeOwner);
+        backend.emitCode(crb, lirGen.lir, installedCodeOwner);
         crb.finish();
         if (!assumptions.isEmpty()) {
             compilationResult.setAssumptions(assumptions);
@@ -301,14 +293,9 @@ public class GraalCompiler {
             for (int i = 0; i < dms.length; i++) {
                 dms[i] = Debug.metric("DataPatches-" + Kind.values()[i].toString());
             }
-            DebugMetric dmRaw = Debug.metric("DataPatches-raw");
 
             for (DataPatch dp : ldp) {
-                if (dp.getConstant() != null) {
-                    dms[dp.getConstant().getKind().ordinal()].add(1);
-                } else {
-                    dmRaw.add(1);
-                }
+                dms[dp.data.getKind().ordinal()].add(1);
             }
 
             Debug.metric("CompilationResults").increment();

@@ -28,7 +28,6 @@ import java.io.*;
 import java.nio.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.CodeUtil.*;
 import com.oracle.graal.api.meta.*;
 
 /**
@@ -696,15 +695,14 @@ public class CompilationResult implements Serializable {
         if (info != null) {
             ReferenceMap refMap = info.getReferenceMap();
             if (refMap != null) {
-                RefMapFormatter formatter = new CodeUtil.NumberedRefMapFormatter();
                 if (refMap.hasFrameRefMap()) {
                     sb.append(" stackMap[");
-                    refMap.appendFrameMap(sb, formatter);
+                    refMap.appendFrameMap(sb, null);
                     sb.append(']');
                 }
                 if (refMap.hasRegisterRefMap()) {
                     sb.append(" registerMap[");
-                    refMap.appendRegisterMap(sb, formatter);
+                    refMap.appendRegisterMap(sb, null);
                     sb.append(']');
                 }
             }

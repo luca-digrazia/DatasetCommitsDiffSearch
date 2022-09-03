@@ -27,52 +27,54 @@ import java.nio.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.nodes.type.*;
 
 /**
- * A data item that represents an oop value.
+ * A data item that represents a metaspace pointer.
  */
-public class OopData extends PatchedData {
+public class MetaspaceData extends PatchedData {
 
-    public final Object object;
+    public final long value;
+    public final Object annotation;
     public final boolean compressed;
 
-    public OopData(int alignment, Object object, boolean compressed) {
+    public MetaspaceData(int alignment, long value, Object annotation, boolean compressed) {
         super(alignment);
-        this.object = object;
+        assert annotation != null;
+        this.value = value;
+        this.annotation = annotation;
         this.compressed = compressed;
     }
 
     @Override
     public int getSize(TargetDescription target) {
         if (compressed) {
-            return target.getSizeInBytes(NarrowOopStamp.NarrowOop);
+            return target.getSizeInBytes(Kind.Int);
         } else {
-            return target.getSizeInBytes(Kind.Object);
+            return target.getSizeInBytes(target.wordKind);
         }
     }
 
     @Override
     public Kind getKind() {
-        return Kind.Object;
+        return Kind.Long;
     }
 
     @Override
     public void emit(TargetDescription target, ByteBuffer buffer) {
         switch (getSize(target)) {
             case 4:
-                buffer.putInt(0xDEADDEAD);
+                buffer.putInt((int) value);
                 break;
             case 8:
-                buffer.putLong(0xDEADDEADDEADDEADL);
+                buffer.putLong(value);
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere("unexpected oop size");
+                throw GraalInternalError.shouldNotReachHere("unexpected metaspace pointer size");
         }
     }
 
     @Override
     public String toString() {
-        return (compressed ? "NarrowOop[" : "Oop[") + Kind.Object.format(object) + "]";
+        return (compressed ? "NarrowPointer[0x" + Integer.toHexString((int) value) : "Pointer[0x" + Long.toHexString(value)) + "]{" + annotation + "}";
     }
 }

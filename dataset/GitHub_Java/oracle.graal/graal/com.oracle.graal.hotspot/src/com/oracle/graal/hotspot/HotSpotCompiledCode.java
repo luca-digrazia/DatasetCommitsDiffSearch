@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,20 +22,17 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.nio.*;
 import java.util.*;
-import java.util.stream.*;
-import java.util.stream.Stream.Builder;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CompilationResult.CodeAnnotation;
 import com.oracle.graal.api.code.CompilationResult.CodeComment;
-import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.CompilationResult.ExceptionHandler;
 import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.code.CompilationResult.JumpTable;
 import com.oracle.graal.api.code.CompilationResult.Mark;
 import com.oracle.graal.api.code.CompilationResult.Site;
+import com.oracle.graal.hotspot.data.*;
 
 /**
  * A {@link CompilationResult} with additional HotSpot-specific information required for installing
@@ -50,9 +47,7 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
     public final ExceptionHandler[] exceptionHandlers;
     public final Comment[] comments;
 
-    public final byte[] dataSection;
-    public final int dataSectionAlignment;
-    public final DataPatch[] dataSectionPatches;
+    public final DataSection dataSection;
 
     public static class Comment {
 
@@ -65,9 +60,10 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
         }
     }
 
-    public HotSpotCompiledCode(CompilationResult compResult) {
+    public HotSpotCompiledCode(TargetDescription target, CompilationResult compResult) {
         this.comp = compResult;
         sites = getSortedSites(compResult);
+        dataSection = new DataSection(target, sites);
         if (compResult.getExceptionHandlers().isEmpty()) {
             exceptionHandlers = null;
         } else {
@@ -92,17 +88,6 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
             }
         }
         assert validateFrames();
-
-        DataSection data = compResult.getDataSection();
-        data.finalizeLayout();
-        dataSection = new byte[data.getSectionSize()];
-
-        ByteBuffer buffer = ByteBuffer.wrap(dataSection).order(ByteOrder.nativeOrder());
-        Builder<DataPatch> patchBuilder = Stream.builder();
-        data.buildDataSection(buffer, patchBuilder);
-
-        dataSectionAlignment = data.getSectionAlignment();
-        dataSectionPatches = patchBuilder.build().toArray(len -> new DataPatch[len]);
     }
 
     /**
@@ -115,7 +100,7 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
                 Infopoint info = (Infopoint) site;
                 if (info.debugInfo != null) {
                     BytecodeFrame frame = info.debugInfo.frame();
-                    assert frame == null || frame.validateFormat(false);
+                    assert frame == null || frame.validateFormat();
                 }
             }
         }
@@ -133,7 +118,7 @@ public abstract class HotSpotCompiledCode extends CompilerObject {
     }
 
     private static Site[] getSortedSites(CompilationResult target) {
-        List<?>[] lists = new List<?>[]{target.getInfopoints(), target.getDataPatches(), target.getMarks()};
+        List<?>[] lists = new List<?>[]{target.getInfopoints(), target.getDataReferences(), target.getMarks()};
         int count = 0;
         for (List<?> list : lists) {
             count += list.size();

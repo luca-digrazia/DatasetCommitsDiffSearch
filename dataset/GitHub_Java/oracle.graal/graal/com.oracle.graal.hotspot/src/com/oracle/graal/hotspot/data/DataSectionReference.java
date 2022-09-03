@@ -24,55 +24,37 @@ package com.oracle.graal.hotspot.data;
 
 import java.nio.*;
 
+import com.oracle.graal.api.code.CompilationResult.Data;
+import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.hotspot.nodes.type.*;
 
 /**
- * A data item that represents an oop value.
+ * Represents a reference to the data section. Before the code is installed, all {@link Data} items
+ * referenced by a {@link DataPatch} are put into the data section of the method, and replaced by
+ * {@link DataSectionReference}.
  */
-public class OopData extends PatchedData {
+public class DataSectionReference extends Data {
 
-    public final Object object;
-    public final boolean compressed;
+    public final int offset;
 
-    public OopData(int alignment, Object object, boolean compressed) {
-        super(alignment);
-        this.object = object;
-        this.compressed = compressed;
+    protected DataSectionReference(int offset) {
+        super(0);
+        this.offset = offset;
     }
 
     @Override
     public int getSize(TargetDescription target) {
-        if (compressed) {
-            return target.getSizeInBytes(NarrowOopStamp.NarrowOop);
-        } else {
-            return target.getSizeInBytes(Kind.Object);
-        }
+        return 0;
     }
 
     @Override
     public Kind getKind() {
-        return Kind.Object;
+        return Kind.Illegal;
     }
 
     @Override
     public void emit(TargetDescription target, ByteBuffer buffer) {
-        switch (getSize(target)) {
-            case 4:
-                buffer.putInt(0xDEADDEAD);
-                break;
-            case 8:
-                buffer.putLong(0xDEADDEADDEADDEADL);
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere("unexpected oop size");
-        }
     }
 
-    @Override
-    public String toString() {
-        return (compressed ? "NarrowOop[" : "Oop[") + Kind.Object.format(object) + "]";
-    }
 }

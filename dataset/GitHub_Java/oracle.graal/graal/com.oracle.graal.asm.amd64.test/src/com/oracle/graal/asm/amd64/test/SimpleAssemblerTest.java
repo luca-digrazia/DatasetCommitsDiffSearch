@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.asm.amd64.test;
 
-import static org.junit.Assume.*;
-
 import java.nio.*;
 
 import org.junit.*;
@@ -36,11 +34,6 @@ import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.asm.test.*;
 
 public class SimpleAssemblerTest extends AssemblerTest {
-
-    @Before
-    public void assumeNotSparc() {
-        assumeFalse(System.getProperty("os.arch").toLowerCase().contains("sparc"));
-    }
 
     @Test
     public void intTest() {
