@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -56,11 +56,9 @@ public final class LLVMCallNode extends LLVMExpressionNode {
         @CompilationFinal private LLVMFunctionDescriptor descriptor;
         @Child private LLVMExpressionNode intrinsic;
 
-        IntrinsicDispatch(LLVMFunctionDescriptor descriptor, LLVMExpressionNode[] argumentNodes, FunctionType functionType) {
+        IntrinsicDispatch(LLVMFunctionDescriptor descriptor, LLVMExpressionNode[] argumentNodes) {
             this.descriptor = descriptor;
-            // Note that functionType is not the same as descriptor.getType() in case of varargs!
-            // functionType contains the types of the actual arguments of this particular call site.
-            this.intrinsic = descriptor.getIntrinsic().generateNode(functionType, argumentNodes);
+            this.intrinsic = descriptor.getIntrinsic().generateNode(argumentNodes);
         }
 
         public boolean matches(Object function) {
@@ -74,8 +72,6 @@ public final class LLVMCallNode extends LLVMExpressionNode {
 
     public static final int USER_ARGUMENT_OFFSET = 1;
 
-    private final FunctionType functionType;
-
     @Children private final LLVMExpressionNode[] argumentNodes;
     @Children private ArgumentNode[] prepareArgumentNodes;
     @Child private LLVMLookupDispatchTargetNode dispatchTargetNode;
@@ -87,7 +83,6 @@ public final class LLVMCallNode extends LLVMExpressionNode {
     private final LLVMSourceLocation source;
 
     public LLVMCallNode(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, LLVMSourceLocation source) {
-        this.functionType = functionType;
         this.argumentNodes = argumentNodes;
         this.dispatchTargetNode = LLVMLookupDispatchTargetNodeGen.create(functionNode);
         this.dispatchNode = LLVMDispatchNodeGen.create(functionType);
@@ -105,7 +100,7 @@ public final class LLVMCallNode extends LLVMExpressionNode {
                 LLVMFunctionDescriptor descriptor = (LLVMFunctionDescriptor) function;
                 if (descriptor.isIntrinsicFunction()) {
                     try {
-                        intrinsicDispatch = insert(new IntrinsicDispatch(descriptor, argumentNodes, functionType));
+                        intrinsicDispatch = insert(new IntrinsicDispatch(descriptor, argumentNodes));
                     } catch (LLVMPolyglotException e) {
                         // re-throw with this node to generate correct stack trace
                         throw new LLVMPolyglotException(this, e.getMessage(), e);
