@@ -34,8 +34,10 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
@@ -45,9 +47,6 @@ import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLL
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMDirectLoadNode {
 
@@ -57,25 +56,30 @@ public abstract class LLVMDirectLoadNode {
         public abstract int getBitWidth();
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMIVarBit doIVarBitNative(LLVMNativePointer addr) {
+        protected LLVMIVarBit doI64(LLVMAddress addr) {
             return getLLVMMemoryCached().getIVarBit(addr, getBitWidth());
         }
 
         @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doIVarBitDerefHandle(LLVMNativePointer addr) {
+        protected Object doI64DerefHandle(LLVMAddress addr) {
             return doForeign(getDerefHandleGetReceiverNode().execute(addr));
         }
 
         @Specialization
-        protected LLVMIVarBit doIVarBit(LLVMGlobal addr,
+        protected LLVMIVarBit doI64(LLVMGlobal addr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
             return getLLVMMemoryCached().getIVarBit(globalAccess.executeWithTarget(addr), getBitWidth());
         }
 
-        @Specialization
-        protected Object doForeign(LLVMManagedPointer addr) {
+        @Specialization(guards = "addr.isNative()")
+        protected Object doI64(LLVMTruffleObject addr) {
+            return doI64(addr.asNative());
+        }
+
+        @Specialization(guards = "addr.isManaged()")
+        protected Object doForeign(LLVMTruffleObject addr) {
             byte[] result = new byte[getByteSize()];
-            LLVMManagedPointer currentPtr = addr;
+            LLVMTruffleObject currentPtr = addr;
             for (int i = result.length - 1; i >= 0; i--) {
                 result[i] = (Byte) getForeignReadNode().execute(currentPtr);
                 currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
@@ -97,25 +101,30 @@ public abstract class LLVMDirectLoadNode {
     public abstract static class LLVM80BitFloatDirectLoadNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVM80BitFloat do80BitFloatNative(LLVMNativePointer addr) {
+        protected LLVM80BitFloat doDouble(LLVMAddress addr) {
             return getLLVMMemoryCached().get80BitFloat(addr);
         }
 
         @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object do80BitFloatDerefHandle(LLVMNativePointer addr) {
+        protected Object doDoubleDerefHandle(LLVMAddress addr) {
             return doForeign(getDerefHandleGetReceiverNode().execute(addr));
         }
 
         @Specialization
-        protected LLVM80BitFloat do80BitFloat(LLVMGlobal addr,
+        protected LLVM80BitFloat doDouble(LLVMGlobal addr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
             return getLLVMMemoryCached().get80BitFloat(globalAccess.executeWithTarget(addr));
         }
 
-        @Specialization
-        protected LLVM80BitFloat doForeign(LLVMManagedPointer addr) {
+        @Specialization(guards = "addr.isNative()")
+        protected LLVM80BitFloat doDouble(LLVMTruffleObject addr) {
+            return doDouble(addr.asNative());
+        }
+
+        @Specialization(guards = "addr.isManaged()")
+        protected LLVM80BitFloat doForeign(LLVMTruffleObject addr) {
             byte[] result = new byte[LLVM80BitFloat.BYTE_WIDTH];
-            LLVMManagedPointer currentPtr = addr;
+            LLVMTruffleObject currentPtr = addr;
             for (int i = 0; i < result.length; i++) {
                 result[i] = (Byte) getForeignReadNode().execute(currentPtr);
                 currentPtr = currentPtr.increment(I8_SIZE_IN_BYTES);
@@ -132,19 +141,19 @@ public abstract class LLVMDirectLoadNode {
     public abstract static class LLVMFunctionDirectLoadNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMNativePointer doNativePointer(LLVMNativePointer addr) {
-            return LLVMNativePointer.create(getLLVMMemoryCached().getFunctionPointer(addr));
+        protected LLVMAddress doAddress(LLVMAddress addr) {
+            return LLVMAddress.fromLong(getLLVMMemoryCached().getFunctionPointer(addr));
         }
 
         @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doDerefHandle(LLVMNativePointer addr) {
+        protected Object doAddressDerefHandle(LLVMAddress addr) {
             return doForeign(getDerefHandleGetReceiverNode().execute(addr));
         }
 
         @Specialization
-        protected LLVMNativePointer doGlobal(LLVMGlobal addr,
+        protected LLVMAddress doAddress(LLVMGlobal addr,
                         @Cached("createToNativeWithTarget()") LLVMToNativeNode globalAccess) {
-            return LLVMNativePointer.create(getLLVMMemoryCached().getFunctionPointer(globalAccess.executeWithTarget(addr)));
+            return LLVMAddress.fromLong(getLLVMMemoryCached().getFunctionPointer(globalAccess.executeWithTarget(addr)));
         }
 
         @Override
@@ -152,34 +161,39 @@ public abstract class LLVMDirectLoadNode {
             return new LLVMForeignReadNode(ForeignToLLVMType.POINTER);
         }
 
-        @Specialization
-        protected Object doForeign(LLVMManagedPointer addr) {
+        @Specialization(guards = "addr.isNative()")
+        protected Object doAddress(LLVMTruffleObject addr) {
+            return doAddress(addr.asNative());
+        }
+
+        @Specialization(guards = "addr.isManaged()")
+        protected Object doForeign(LLVMTruffleObject addr) {
             return getForeignReadNode().execute(addr);
         }
     }
 
-    public abstract static class LLVMPointerDirectLoadNode extends LLVMAbstractLoadNode {
+    public abstract static class LLVMAddressDirectLoadNode extends LLVMAbstractLoadNode {
 
         @Child protected ForeignToLLVM toLLVM = ForeignToLLVM.create(ForeignToLLVMType.POINTER);
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMNativePointer doNativePointer(LLVMNativePointer addr) {
-            return getLLVMMemoryCached().getPointer(addr);
+        protected LLVMAddress doAddress(LLVMAddress addr) {
+            return getLLVMMemoryCached().getAddress(addr);
         }
 
         @Specialization(guards = "isAutoDerefHandle(addr)")
-        protected Object doDerefHandle(LLVMNativePointer addr) {
+        protected Object doAddressDerefHandle(LLVMAddress addr) {
             return doIndirectedForeign(getDerefHandleGetReceiverNode().execute(addr));
         }
 
         @Specialization
-        protected LLVMNativePointer doLLVMByteArrayAddress(LLVMVirtualAllocationAddress address,
+        protected LLVMAddress doLLVMByteArrayAddress(LLVMVirtualAllocationAddress address,
                         @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
-            return LLVMNativePointer.create(address.getI64(memory));
+            return LLVMAddress.fromLong(address.getI64(memory));
         }
 
         @Specialization
-        protected Object doGlobal(LLVMGlobal addr,
+        protected Object doAddress(LLVMGlobal addr,
                         @Cached("create()") ReadObjectNode globalAccess) {
             return globalAccess.execute(addr);
         }
@@ -187,15 +201,25 @@ public abstract class LLVMDirectLoadNode {
         @Specialization
         protected Object doLLVMBoxedPrimitive(LLVMBoxedPrimitive addr) {
             if (addr.getValue() instanceof Long) {
-                return getLLVMMemoryCached().getPointer((long) addr.getValue());
+                return getLLVMMemoryCached().getAddress((long) addr.getValue());
             } else {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalAccessError("Cannot access memory with address: " + addr.getValue());
             }
         }
 
-        @Specialization
-        protected Object doIndirectedForeign(LLVMManagedPointer addr) {
+        @Specialization(guards = {"addr.isNative()", "!isAutoDerefHandle(addr.asNative())"})
+        protected Object doAddress(LLVMTruffleObject addr) {
+            return doAddress(addr.asNative());
+        }
+
+        @Specialization(guards = {"addr.isNative()", "isAutoDerefHandle(addr.asNative())"})
+        protected Object doAddressDerefHandle(LLVMTruffleObject addr) {
+            return doAddressDerefHandle(addr.asNative());
+        }
+
+        @Specialization(guards = "addr.isManaged()")
+        protected Object doIndirectedForeign(LLVMTruffleObject addr) {
             return getForeignReadNode().execute(addr);
         }
 
@@ -223,7 +247,12 @@ public abstract class LLVMDirectLoadNode {
     public abstract static class LLVMStructDirectLoadNode extends LLVMAbstractLoadNode {
 
         @Specialization
-        protected LLVMPointer doPointer(LLVMPointer addr) {
+        protected LLVMAddress doAddress(LLVMAddress addr) {
+            return addr; // we do not actually load the struct into a virtual register
+        }
+
+        @Specialization
+        protected LLVMTruffleObject doTruffleObject(LLVMTruffleObject addr) {
             return addr; // we do not actually load the struct into a virtual register
         }
 
