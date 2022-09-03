@@ -170,7 +170,6 @@ public class SubstrateGraphBuilderPlugins {
     private static void registerImageInfoPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
         Registration proxyRegistration = new Registration(plugins, ImageInfo.class);
         proxyRegistration.register0("inImageCode", new InvocationPlugin() {
-            /** See {@link ImageInfo#inImageCode()}. */
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.push(JavaKind.Boolean, ConstantNode.forConstant(JavaConstant.TRUE, metaAccess, b.getGraph()));
@@ -178,7 +177,6 @@ public class SubstrateGraphBuilderPlugins {
             }
         });
         proxyRegistration.register0("inImageBuildtimeCode", new InvocationPlugin() {
-            /** See {@link ImageInfo#inImageBuildtimeCode()}. */
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.push(JavaKind.Boolean, ConstantNode.forConstant(JavaConstant.FALSE, metaAccess, b.getGraph()));
@@ -186,7 +184,6 @@ public class SubstrateGraphBuilderPlugins {
             }
         });
         proxyRegistration.register0("inImageRuntimeCode", new InvocationPlugin() {
-            /** See {@link ImageInfo#inImageRuntimeCode()}. */
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.push(JavaKind.Boolean, ConstantNode.forConstant(JavaConstant.TRUE, metaAccess, b.getGraph()));
