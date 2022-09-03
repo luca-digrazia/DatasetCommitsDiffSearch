@@ -66,23 +66,15 @@ public class PTXHotSpotBackend extends HotSpotBackend {
     }
 
     static final class RegisterAnalysis extends ValueProcedure {
-        private final SortedSet<Integer> signed32 = new TreeSet<>();
-        private final SortedSet<Integer> signed64 = new TreeSet<>();
-
-        // unsigned8 is only for ld, st and cbt
-        private final SortedSet<Integer> unsigned8 = new TreeSet<>();
         private final SortedSet<Integer> unsigned64 = new TreeSet<>();
-
-        // private final SortedSet<Integer> float16 = new TreeSet<>();
+        private final SortedSet<Integer> signed64 = new TreeSet<>();
         private final SortedSet<Integer> float32 = new TreeSet<>();
+        private final SortedSet<Integer> signed32 = new TreeSet<>();
         private final SortedSet<Integer> float64 = new TreeSet<>();
 
         LIRInstruction op;
 
         void emitDeclarations(Buffer codeBuffer) {
-            for (Integer i : unsigned8) {
-                codeBuffer.emitString(".reg .u8 %r" + i.intValue() + ";");
-            }
             for (Integer i : signed32) {
                 codeBuffer.emitString(".reg .s32 %r" + i.intValue() + ";");
             }
@@ -142,9 +134,6 @@ public class PTXHotSpotBackend extends HotSpotBackend {
                         case Object:
                             unsigned64.add(regVal.index);
                             break;
-                        case Byte:
-                            unsigned8.add(regVal.index);
-                            break;
                         default:
                             throw GraalInternalError.shouldNotReachHere("unhandled register type " + value.toString());
                     }
@@ -157,21 +146,17 @@ public class PTXHotSpotBackend extends HotSpotBackend {
     class PTXFrameContext implements FrameContext {
 
         @Override
-        public void enter(CompilationResultBuilder crb) {
+        public void enter(TargetMethodAssembler tasm) {
             // codeBuffer.emitString(".address_size 32"); // PTX ISA version 2.3
         }
 
         @Override
-        public void leave(CompilationResultBuilder crb) {
-        }
-
-        public boolean hasFrame() {
-            return true;
+        public void leave(TargetMethodAssembler tasm) {
         }
     }
 
     @Override
-    public CompilationResultBuilder newCompilationResultBuilder(LIRGenerator lirGen, CompilationResult compilationResult, CompilationResultBuilderFactory factory) {
+    public TargetMethodAssembler newAssembler(LIRGenerator lirGen, CompilationResult compilationResult) {
         // Omit the frame of the method:
         // - has no spill slots or other slots allocated during register allocation
         // - has no callee-saved registers
@@ -180,14 +165,14 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         FrameMap frameMap = lirGen.frameMap;
         AbstractAssembler masm = createAssembler(frameMap);
         PTXFrameContext frameContext = new PTXFrameContext();
-        CompilationResultBuilder crb = factory.createBuilder(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
-        crb.setFrameSize(0);
-        return crb;
+        TargetMethodAssembler tasm = new PTXTargetMethodAssembler(getCodeCache(), getForeignCalls(), frameMap, masm, frameContext, compilationResult);
+        tasm.setFrameSize(0);
+        return tasm;
     }
 
     @Override
     protected AbstractAssembler createAssembler(FrameMap frameMap) {
-        return new PTXMacroAssembler(getTarget(), frameMap.registerConfig);
+        return new PTXAssembler(getTarget(), frameMap.registerConfig);
     }
 
     @Override
@@ -195,14 +180,14 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         return new PTXLIRGenerator(graph, getProviders(), frameMap, cc, lir);
     }
 
-    private static void emitKernelEntry(CompilationResultBuilder crb, LIRGenerator lirGen, ResolvedJavaMethod codeCacheOwner) {
+    private static void emitKernelEntry(TargetMethodAssembler tasm, LIRGenerator lirGen, ResolvedJavaMethod codeCacheOwner) {
         // Emit PTX kernel entry text based on PTXParameterOp
         // instructions in the start block. Remove the instructions
         // once kernel entry text and directives are emitted to
         // facilitate seemless PTX code generation subsequently.
         assert codeCacheOwner != null : lirGen.getGraph() + " is not associated with a method";
         final String name = codeCacheOwner.getName();
-        Buffer codeBuffer = crb.asm.codeBuffer;
+        Buffer codeBuffer = tasm.asm.codeBuffer;
 
         // Emit initial boiler-plate directives.
         codeBuffer.emitString(".version 3.0");
@@ -220,7 +205,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         // instruction.
         for (LIRInstruction op : lirGen.lir.lir(startBlock)) {
             if (op instanceof PTXParameterOp) {
-                op.emitCode(crb);
+                op.emitCode(tasm);
                 deleteOps.add(op);
             }
         }
@@ -236,11 +221,11 @@ public class PTXHotSpotBackend extends HotSpotBackend {
     }
 
     // Emit .reg space declarations
-    private static void emitRegisterDecl(CompilationResultBuilder crb, LIRGenerator lirGen, ResolvedJavaMethod codeCacheOwner) {
+    private static void emitRegisterDecl(TargetMethodAssembler tasm, LIRGenerator lirGen, ResolvedJavaMethod codeCacheOwner) {
 
         assert codeCacheOwner != null : lirGen.getGraph() + " is not associated with a method";
 
-        Buffer codeBuffer = crb.asm.codeBuffer;
+        Buffer codeBuffer = tasm.asm.codeBuffer;
         RegisterAnalysis registerAnalysis = new RegisterAnalysis();
 
         for (Block b : lirGen.lir.codeEmittingOrder()) {
@@ -265,15 +250,15 @@ public class PTXHotSpotBackend extends HotSpotBackend {
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, LIRGenerator lirGen, ResolvedJavaMethod codeCacheOwner) {
+    public void emitCode(TargetMethodAssembler tasm, LIRGenerator lirGen, ResolvedJavaMethod codeCacheOwner) {
         assert codeCacheOwner != null : lirGen.getGraph() + " is not associated with a method";
-        Buffer codeBuffer = crb.asm.codeBuffer;
+        Buffer codeBuffer = tasm.asm.codeBuffer;
         // Emit the prologue
-        emitKernelEntry(crb, lirGen, codeCacheOwner);
+        emitKernelEntry(tasm, lirGen, codeCacheOwner);
 
         // Emit register declarations
         try {
-            emitRegisterDecl(crb, lirGen, codeCacheOwner);
+            emitRegisterDecl(tasm, lirGen, codeCacheOwner);
         } catch (GraalInternalError e) {
             e.printStackTrace();
             // TODO : Better error handling needs to be done once
@@ -284,7 +269,7 @@ public class PTXHotSpotBackend extends HotSpotBackend {
         }
         // Emit code for the LIR
         try {
-            lirGen.lir.emitCode(crb);
+            lirGen.lir.emitCode(tasm);
         } catch (GraalInternalError e) {
             e.printStackTrace();
             // TODO : Better error handling needs to be done once

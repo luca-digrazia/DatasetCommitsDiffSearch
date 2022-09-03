@@ -344,18 +344,13 @@ public class PTXAssembler extends AbstractPTXAssembler {
 
     public static class ConversionFormat extends SingleOperandFormat {
 
-        private final Kind dstKind;
-        private final Kind srcKind;
-
-        public ConversionFormat(Variable dst, Value src, Kind dstKind, Kind srcKind) {
+        public ConversionFormat(Variable dst, Value src) {
             super(dst, src);
-            this.dstKind = dstKind;
-            this.srcKind = srcKind;
         }
 
         @Override
         public String emit() {
-            return (typeForKind(dstKind) + "." + typeForKind(srcKind) + " " + emitVariable(dest) + ", " + emitValue(source) + ";");
+            return (typeForKind(dest.getKind()) + "." + typeForKind(source.getKind()) + " " + emitVariable(dest) + ", " + emitValue(source) + ";");
         }
     }
 
@@ -543,8 +538,8 @@ public class PTXAssembler extends AbstractPTXAssembler {
 
     public static class Cvt extends ConversionFormat {
 
-        public Cvt(Variable dst, Variable src, Kind dstKind, Kind srcKind) {
-            super(dst, src, dstKind, srcKind);
+        public Cvt(Variable dst, Variable src) {
+            super(dst, src);
         }
 
         public void emit(PTXAssembler asm) {
