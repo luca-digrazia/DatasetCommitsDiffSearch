@@ -82,8 +82,6 @@ public class CompilationWrapperTest extends GraalCompilerTest {
                         "test");
     }
 
-    private static final boolean VERBOSE = Boolean.getBoolean(CompilationWrapperTest.class.getSimpleName() + ".verbose");
-
     private static void testHelper(List<String> extraVmArgs, String... mainClassAndArgs) throws IOException, InterruptedException {
         final File dumpPath = new File(CompilationWrapperTest.class.getSimpleName() + "_" + System.currentTimeMillis()).getAbsoluteFile();
         List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
@@ -94,9 +92,7 @@ public class CompilationWrapperTest extends GraalCompilerTest {
         vmArgs.addAll(extraVmArgs);
 
         Subprocess proc = SubprocessUtil.java(vmArgs, mainClassAndArgs);
-        if (VERBOSE) {
-            System.out.println(proc);
-        }
+        System.out.println(proc);
 
         String forcedCrashString = "Forced crash after compiling";
         String diagnosticOutputFilePrefix = "Graal diagnostic output saved in ";
