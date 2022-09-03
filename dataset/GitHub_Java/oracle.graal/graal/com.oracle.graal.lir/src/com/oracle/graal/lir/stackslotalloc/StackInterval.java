@@ -24,31 +24,52 @@ package com.oracle.graal.lir.stackslotalloc;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 
-public final class StackInterval {
+public class StackInterval {
 
     private static final int INVALID_START = Integer.MAX_VALUE;
     private static final int INVALID_END = Integer.MIN_VALUE;
     private final VirtualStackSlot operand;
-    private StackInterval hint;
     private final LIRKind kind;
     private int from = INVALID_START;
     private int to = INVALID_END;
+    private final StackUsePosList usePos;
     private StackSlot location;
+
+    public enum UseType {
+        // Prefixes for c1viz
+        M_USE,
+        S_DEF
+    }
 
     public StackInterval(VirtualStackSlot operand, LIRKind kind) {
         this.operand = operand;
         this.kind = kind;
+        this.usePos = new StackUsePosList();
     }
 
-    public boolean verify(int maxOpId) {
-        // maxOpId + 1 is the last position in the last block (i.e. the "write position")
-        assert 0 <= from && from <= to && to <= maxOpId + 1 : String.format("from %d, to %d, maxOpId %d", from, to, maxOpId);
+    public boolean verify(LSStackSlotAllocator.Allocator allocator) {
+        assert usePosList().verify();
+        // maxOpId + 1 it the last position in the last block (i.e. the "write position")
+        assert from >= 0 && to <= allocator.maxOpId() + 1 : String.format("from %d, to %d, maxOpId %d", from, to, allocator.maxOpId());
         return true;
     }
 
     public VirtualStackSlot getOperand() {
         return operand;
+    }
+
+    public void addUse(int opId) {
+        addTo(opId);
+        Debug.log("Adding use pos: %d", opId);
+        usePos.add(opId, UseType.M_USE);
+    }
+
+    public void addDef(int opId) {
+        addFrom(opId);
+        Debug.log("Adding def pos: %d", opId);
+        usePos.add(opId, UseType.S_DEF);
     }
 
     public void addTo(int opId) {
@@ -79,12 +100,20 @@ public final class StackInterval {
         this.location = location;
     }
 
+    public StackInterval locationHint() {
+        return null;
+    }
+
     public int from() {
         return from;
     }
 
     public int to() {
         return to;
+    }
+
+    public StackUsePosList usePosList() {
+        return usePos;
     }
 
     public void fixFrom() {
@@ -99,15 +128,7 @@ public final class StackInterval {
 
     @Override
     public String toString() {
-        return String.format("SI[%d-%d] k=%s o=%s l=%s h=%s", from, to, kind, operand, location, hint.getOperand());
-    }
-
-    public void setLocationHint(StackInterval locationHint) {
-        hint = locationHint;
-    }
-
-    public StackInterval locationHint() {
-        return hint;
+        return String.format("SI[%d-%d] k=%s o=%s l=%s", from, to, kind, operand, location);
     }
 
 }
