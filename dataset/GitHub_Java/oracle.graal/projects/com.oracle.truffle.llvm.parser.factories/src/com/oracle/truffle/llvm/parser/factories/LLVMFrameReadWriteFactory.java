@@ -34,6 +34,7 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMNode;
+import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
 import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
 import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
@@ -105,14 +106,6 @@ public final class LLVMFrameReadWriteFactory {
                 return LLVMDoubleReadNodeGen.create(frameSlot);
             case X86_FP80:
                 return LLVM80BitFloatReadNodeGen.create(frameSlot);
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
                 return LLVMAddressReadNodeGen.create(frameSlot);
             case FUNCTION_ADDRESS:
@@ -164,21 +157,13 @@ public final class LLVMFrameReadWriteFactory {
                 return LLVMWriteDoubleNodeGen.create((LLVMDoubleNode) result, slot);
             case X86_FP80:
                 return LLVMWrite80BitFloatingNodeGen.create((LLVM80BitFloatNode) result, slot);
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
-                return LLVMWriteAddressNodeGen.create(result, slot);
+                return LLVMWriteAddressNodeGen.create((LLVMAddressNode) result, slot);
             case FUNCTION_ADDRESS:
                 return LLVMWriteFunctionNodeGen.create((LLVMFunctionNode) result, slot);
             case STRUCT:
             case ARRAY:
-                return LLVMWriteAddressNodeGen.create(result, slot);
+                return LLVMWriteAddressNodeGen.create((LLVMAddressNode) result, slot);
             default:
                 throw new AssertionError(llvmType);
         }
@@ -216,14 +201,6 @@ public final class LLVMFrameReadWriteFactory {
             case DOUBLE_VECTOR:
             case STRUCT:
             case FUNCTION_ADDRESS:
-            case I1_POINTER:
-            case I8_POINTER:
-            case I16_POINTER:
-            case I32_POINTER:
-            case I64_POINTER:
-            case HALF_POINTER:
-            case FLOAT_POINTER:
-            case DOUBLE_POINTER:
             case ADDRESS:
             case ARRAY:
                 return FrameSlotKind.Object;

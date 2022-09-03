@@ -61,6 +61,8 @@ import com.oracle.truffle.llvm.nodes.impl.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.nodes.impl.intrinsics.llvm.LLVMMemCopyFactory.LLVMMemI32CopyFactory;
 import com.oracle.truffle.llvm.nodes.impl.literals.LLVMAggregateLiteralNode.LLVMEmptyStructLiteralNode;
 import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAddressZeroNode;
+import com.oracle.truffle.llvm.nodes.impl.memory.LLVMAllocInstruction.LLVMAllocaInstruction;
+import com.oracle.truffle.llvm.nodes.impl.others.LLVMPhiNode;
 import com.oracle.truffle.llvm.nodes.impl.others.LLVMUnreachableNode;
 import com.oracle.truffle.llvm.parser.LLVMBaseType;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
@@ -260,13 +262,13 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createAlloc(ResolvedType type, int byteSize, int alignment, LLVMBaseType llvmType, LLVMExpressionNode numElements) {
-        if (numElements == null) {
-            assert llvmType == null;
-            return LLVMAllocFactory.createAlloc(runtime, byteSize, alignment);
-        } else {
-            return LLVMAllocFactory.createAlloc(runtime, llvmType, numElements, byteSize, alignment);
-        }
+    public LLVMExpressionNode createAlloc(LLVMBaseType llvmType, LLVMExpressionNode numElements, int byteSize, int alignment) {
+        return LLVMAllocFactory.createAlloc(runtime, llvmType, numElements, byteSize, alignment);
+    }
+
+    @Override
+    public LLVMAllocaInstruction createAlloc(int size, int alignment) {
+        return LLVMAllocFactory.createAlloc(runtime, size, alignment);
     }
 
     @Override
@@ -304,8 +306,8 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
     }
 
     @Override
-    public LLVMExpressionNode createStructureConstantNode(ResolvedType structType, boolean packed, ResolvedType[] types, LLVMExpressionNode[] constants) {
-        return LLVMAggregateFactory.createStructConstantNode(runtime, structType, packed, types, constants);
+    public LLVMExpressionNode createStructureConstantNode(boolean packed, int structureSize, ResolvedType[] types, LLVMExpressionNode[] constants) {
+        return LLVMAggregateFactory.createStructConstantNode(runtime, packed, structureSize, types, constants);
     }
 
     @Override
@@ -313,6 +315,11 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
                     LLVMExpressionNode isVolatileNode) {
         return LLVMMemI32CopyFactory.create((LLVMAddressNode) globalVarAddress, (LLVMAddressNode) constant, (LLVMI32Node) lengthNode, (LLVMI32Node) alignNode,
                         (LLVMI1Node) isVolatileNode);
+    }
+
+    @Override
+    public LLVMNode createPhiNode() {
+        return new LLVMPhiNode();
     }
 
     @Override
