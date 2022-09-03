@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.compiler.sparc.test;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static org.junit.Assume.*;
 
 import org.junit.*;
@@ -35,7 +34,6 @@ public class SPARCAllocatorTest extends AllocatorTest {
     @Before
     public void checkSPARC() {
         assumeTrue("skipping SPARC specific test", getTarget().arch instanceof SPARC);
-        assumeTrue("RegisterPressure is set -> skip", RegisterPressure.getValue() == null);
     }
 
     @Test
@@ -58,7 +56,7 @@ public class SPARCAllocatorTest extends AllocatorTest {
 
     @Test
     public void test3() {
-        testAllocation("test3snippet", 3, 0, 0);
+        testAllocation("test3snippet", 3, 1, 0);
     }
 
     public static long test3snippet(long x) {
