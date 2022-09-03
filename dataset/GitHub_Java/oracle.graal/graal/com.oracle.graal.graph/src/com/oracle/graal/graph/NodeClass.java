@@ -630,9 +630,6 @@ public class NodeClass {
     }
 
     public boolean isValid(Position pos, NodeClass from) {
-        if (this == from) {
-            return true;
-        }
         long[] offsets = pos.input ? inputOffsets : successorOffsets;
         if (pos.index >= offsets.length) {
             return false;
@@ -924,8 +921,7 @@ public class NodeClass {
                 assert !node.isDeleted() : "trying to duplicate deleted node";
                 Node replacement = replacements.replacement(node);
                 if (replacement != node) {
-                    assert replacement != null;
-                    newNodes.put(node, replacement);
+                    replacementsMap.put(node, replacement);
                 } else {
                     Node newNode = node.clone(graph);
                     assert newNode.getClass() == node.getClass();
@@ -939,25 +935,36 @@ public class NodeClass {
             Node node = entry.getValue();
             for (NodeClassIterator iter = oldNode.inputs().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
-                if (!pos.isValidFor(node, oldNode)) {
-                    continue;
-                }
                 Node input = oldNode.getNodeClass().get(oldNode, pos);
-                Node target = newNodes.get(input);
+                Node target = replacementsMap.get(input);
                 if (target == null) {
-                    target = replacementsMap.get(input);
-                    if (target == null) {
-                        Node replacement = replacements.replacement(input);
-                        if (replacement != input) {
-                            replacementsMap.put(input, replacement);
-                            assert replacement == null || node.getNodeClass().inputTypes[pos.index] == null || node.getNodeClass().inputTypes[pos.index].isAssignableFrom(replacement.getClass());
+                    Node replacement = replacements.replacement(input);
+                    if (replacement != input) {
+                        replacementsMap.put(input, replacement);
+                        Class< ? > edgeType = node.getNodeClass().inputTypes[pos.index];
+                        if (edgeType != null && !edgeType.isAssignableFrom(replacement.getClass())) {
+                            target = null;
+                        } else {
                             target = replacement;
-                        } else { // patch to the outer world
-                            target = input;
                         }
+                    } else {
+                        target = newNodes.get(input);
                     }
                 }
                 node.getNodeClass().set(node, pos, target);
+            }
+        }
+        for (Entry<Node, Node> entry : replacementsMap.entrySet()) {
+            Node oldNode = entry.getKey();
+            Node node = entry.getValue();
+            for (NodeClassIterator iter = oldNode.inputs().iterator(); iter.hasNext();) {
+                Position pos = iter.nextPosition();
+                if (pos.isValidFor(node, oldNode)) {
+                    Node input = oldNode.getNodeClass().get(oldNode, pos);
+                    if (newNodes.containsKey(input)) {
+                        node.getNodeClass().set(node, pos, newNodes.get(input));
+                    }
+                }
             }
         }
 
@@ -967,23 +974,34 @@ public class NodeClass {
             Node node = entry.getValue();
             for (NodeClassIterator iter = oldNode.successors().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
-                if (!pos.isValidFor(node, oldNode)) {
-                    continue;
-                }
                 Node succ = oldNode.getNodeClass().get(oldNode, pos);
-                Node target = newNodes.get(succ);
-                if (target == null) {
-                    target = replacementsMap.get(succ);
-                    if (target == null) {
-                        Node replacement = replacements.replacement(succ);
-                        if (replacement != succ) {
-                            replacementsMap.put(succ, replacement);
-                            assert replacement == null || node.getNodeClass().successorTypes[pos.index] == null || node.getNodeClass().successorTypes[pos.index].isAssignableFrom(replacement.getClass());
-                            target = replacement;
-                        }
+                Node target = replacementsMap.get(succ);
+                Node replacement = replacements.replacement(succ);
+                if (replacement != succ) {
+                    replacementsMap.put(succ, replacement);
+                    Class< ? > edgeType = node.getNodeClass().successorTypes[pos.index];
+                    if (edgeType != null && !edgeType.isAssignableFrom(replacement.getClass())) {
+                        target = null;
+                    } else {
+                        target = replacement;
                     }
+                } else {
+                    target = newNodes.get(succ);
                 }
                 node.getNodeClass().set(node, pos, target);
+            }
+        }
+        for (Entry<Node, Node> entry : replacementsMap.entrySet()) {
+            Node oldNode = entry.getKey();
+            Node node = entry.getValue();
+            for (NodeClassIterator iter = oldNode.successors().iterator(); iter.hasNext();) {
+                Position pos = iter.nextPosition();
+                if (pos.isValidFor(node, oldNode)) {
+                    Node succ = oldNode.getNodeClass().get(oldNode, pos);
+                    if (newNodes.containsKey(succ)) {
+                        node.getNodeClass().set(node, pos, newNodes.get(succ));
+                    }
+                }
             }
         }
         return newNodes;

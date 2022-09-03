@@ -25,8 +25,6 @@ package com.oracle.graal.compiler.phases;
 import java.lang.reflect.*;
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.Fold;
@@ -35,13 +33,15 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.util.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 
 public class SnippetIntrinsificationPhase extends Phase {
 
-    private final CodeCacheProvider runtime;
+    private final RiRuntime runtime;
     private final BoxingMethodPool pool;
 
-    public SnippetIntrinsificationPhase(CodeCacheProvider runtime, BoxingMethodPool pool) {
+    public SnippetIntrinsificationPhase(RiRuntime runtime, BoxingMethodPool pool) {
         this.runtime = runtime;
         this.pool = pool;
     }
@@ -54,12 +54,12 @@ public class SnippetIntrinsificationPhase extends Phase {
     }
 
     private void tryIntrinsify(Invoke invoke) {
-        ResolvedJavaMethod target = invoke.callTarget().targetMethod();
+        RiResolvedMethod target = invoke.callTarget().targetMethod();
         NodeIntrinsic intrinsic = target.getAnnotation(Node.NodeIntrinsic.class);
         if (intrinsic != null) {
             assert target.getAnnotation(Node.Fold.class) == null;
 
-            Class< ? >[] parameterTypes = CodeUtil.signatureToTypes(target.signature(), target.holder());
+            Class< ? >[] parameterTypes = CiUtil.signatureToTypes(target.signature(), target.holder());
 
             // Prepare the arguments for the reflective constructor call on the node class.
             Object[] nodeConstructorArguments = prepareArguments(invoke, parameterTypes, target, false);
@@ -75,7 +75,7 @@ public class SnippetIntrinsificationPhase extends Phase {
             // Clean up checkcast instructions inserted by javac if the return type is generic.
             cleanUpReturnCheckCast(newInstance);
         } else if (target.getAnnotation(Node.Fold.class) != null) {
-            Class< ? >[] parameterTypes = CodeUtil.signatureToTypes(target.signature(), target.holder());
+            Class< ? >[] parameterTypes = CiUtil.signatureToTypes(target.signature(), target.holder());
 
             // Prepare the arguments for the reflective method call
             Object[] arguments = prepareArguments(invoke, parameterTypes, target, true);
@@ -86,7 +86,7 @@ public class SnippetIntrinsificationPhase extends Phase {
             }
 
             // Call the method
-            Constant constant = callMethod(target.signature().returnKind(), target.holder().toJava(), target.name(), parameterTypes, receiver, arguments);
+            CiConstant constant = callMethod(target.signature().returnKind(false), target.holder().toJava(), target.name(), parameterTypes, receiver, arguments);
 
             if (constant != null) {
                 // Replace the invoke with the result of the call
@@ -108,7 +108,7 @@ public class SnippetIntrinsificationPhase extends Phase {
      *
      * @param folding specifies if the invocation is for handling a {@link Fold} annotation
      */
-    private Object[] prepareArguments(Invoke invoke, Class< ? >[] parameterTypes, ResolvedJavaMethod target, boolean folding) {
+    private Object[] prepareArguments(Invoke invoke, Class< ? >[] parameterTypes, RiResolvedMethod target, boolean folding) {
         NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
         Object[] reflectionCallArguments = new Object[arguments.size()];
         for (int i = 0; i < reflectionCallArguments.length; ++i) {
@@ -117,14 +117,14 @@ public class SnippetIntrinsificationPhase extends Phase {
                 parameterIndex--;
             }
             ValueNode argument = tryBoxingElimination(parameterIndex, target, arguments.get(i));
-            if (folding || CodeUtil.getParameterAnnotation(ConstantNodeParameter.class, parameterIndex, target) != null) {
+            if (folding || CiUtil.getParameterAnnotation(ConstantNodeParameter.class, parameterIndex, target) != null) {
                 assert argument instanceof ConstantNode : "parameter " + parameterIndex + " must be a compile time constant for calling " + invoke.callTarget().targetMethod() + ": " + argument;
                 ConstantNode constantNode = (ConstantNode) argument;
-                Constant constant = constantNode.asConstant();
+                CiConstant constant = constantNode.asConstant();
                 Object o = constant.boxedValue();
                 if (o instanceof Class< ? >) {
-                    reflectionCallArguments[i] = runtime.getResolvedJavaType((Class< ? >) o);
-                    parameterTypes[i] = ResolvedJavaType.class;
+                    reflectionCallArguments[i] = runtime.getType((Class< ? >) o);
+                    parameterTypes[i] = RiResolvedType.class;
                 } else {
                     if (parameterTypes[i] == boolean.class) {
                         reflectionCallArguments[i] = Boolean.valueOf(constant.asInt() != 0);
@@ -146,7 +146,7 @@ public class SnippetIntrinsificationPhase extends Phase {
         return reflectionCallArguments;
     }
 
-    private static Class< ? > getNodeClass(ResolvedJavaMethod target, NodeIntrinsic intrinsic) {
+    private static Class< ? > getNodeClass(RiResolvedMethod target, NodeIntrinsic intrinsic) {
         Class< ? > result = intrinsic.value();
         if (result == NodeIntrinsic.class) {
             result = target.holder().toJava();
@@ -155,7 +155,7 @@ public class SnippetIntrinsificationPhase extends Phase {
         return result;
     }
 
-    private ValueNode tryBoxingElimination(int parameterIndex, ResolvedJavaMethod target, ValueNode node) {
+    private ValueNode tryBoxingElimination(int parameterIndex, RiResolvedMethod target, ValueNode node) {
         if (parameterIndex >= 0) {
             Type type = target.getGenericParameterTypes()[parameterIndex];
             if (type instanceof TypeVariable) {
@@ -214,7 +214,7 @@ public class SnippetIntrinsificationPhase extends Phase {
     /**
      * Calls a Java method via reflection.
      */
-    private static Constant callMethod(Kind returnKind, Class< ? > holder, String name, Class< ? >[] parameterTypes, Object receiver, Object[] arguments) {
+    private static CiConstant callMethod(CiKind returnKind, Class< ? > holder, String name, Class< ? >[] parameterTypes, Object receiver, Object[] arguments) {
         Method method;
         try {
             method = holder.getDeclaredMethod(name, parameterTypes);
@@ -227,19 +227,14 @@ public class SnippetIntrinsificationPhase extends Phase {
             if (result == null) {
                 return null;
             }
-            return Constant.forBoxed(returnKind, result);
+            return CiConstant.forBoxed(returnKind, result);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    private static String sourceLocation(Node n) {
-        String loc = GraphUtil.approxSourceLocation(n);
-        return loc == null ? "<unknown>" : loc;
-    }
-
     public void cleanUpReturnCheckCast(Node newInstance) {
-        if (newInstance instanceof ValueNode && ((ValueNode) newInstance).kind() != Kind.Object) {
+        if (newInstance instanceof ValueNode && ((ValueNode) newInstance).kind() != CiKind.Object) {
             StructuredGraph graph = (StructuredGraph) newInstance.graph();
             for (CheckCastNode checkCastNode : newInstance.usages().filter(CheckCastNode.class).snapshot()) {
                 for (ValueProxyNode vpn : checkCastNode.usages().filter(ValueProxyNode.class).snapshot()) {
@@ -251,9 +246,7 @@ public class SnippetIntrinsificationPhase extends Phase {
                         graph.removeFixed(valueAnchorNode);
                     } else if (checkCastUsage instanceof MethodCallTargetNode) {
                         MethodCallTargetNode checkCastCallTarget = (MethodCallTargetNode) checkCastUsage;
-                        assert pool.isUnboxingMethod(checkCastCallTarget.targetMethod()) :
-                            "checkcast at " + sourceLocation(checkCastNode) + " not used by an unboxing method but by a call at " +
-                            sourceLocation(checkCastCallTarget.usages().first()) + " to " + checkCastCallTarget.targetMethod();
+                        assert pool.isUnboxingMethod(checkCastCallTarget.targetMethod());
                         Invoke invokeNode = checkCastCallTarget.invoke();
                         invokeNode.node().replaceAtUsages(newInstance);
                         if (invokeNode instanceof InvokeWithExceptionNode) {
@@ -269,7 +262,7 @@ public class SnippetIntrinsificationPhase extends Phase {
                     } else if (checkCastUsage instanceof FrameState) {
                         checkCastUsage.replaceFirstInput(checkCastNode, null);
                     } else {
-                        assert false : sourceLocation(checkCastUsage) + " has unexpected usage " + checkCastUsage + " of checkcast at " + sourceLocation(checkCastNode);
+                        assert false : "unexpected checkcast usage: " + checkCastUsage;
                     }
                 }
                 FixedNode next = checkCastNode.next();

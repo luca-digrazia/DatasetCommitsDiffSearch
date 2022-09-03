@@ -24,8 +24,7 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -44,6 +43,11 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
     private boolean useForInlining;
     private final long leafGraphId;
 
+    /**
+     * @param kind
+     * @param blockSuccessors
+     * @param branchProbability
+     */
     public InvokeWithExceptionNode(MethodCallTargetNode callTarget, DispatchBeginNode exceptionEdge, int bci, long leafGraphId) {
         super(callTarget.returnStamp(), new BeginNode[]{null, exceptionEdge}, new double[]{1.0, 0.0});
         this.bci = bci;
@@ -147,7 +151,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     public FrameState stateDuring() {
         FrameState tempStateAfter = stateAfter();
-        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind());
+        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), this.callTarget.targetMethod().signature().returnKind(false));
         stateDuring.setDuringCall(true);
         return stateDuring;
     }
@@ -157,7 +161,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
         Map<Object, Object> debugProperties = super.getDebugProperties();
         debugProperties.put("memoryCheckpoint", "true");
         if (callTarget != null && callTarget.targetMethod() != null) {
-            debugProperties.put("targetMethod", CodeUtil.format("%h.%n(%p)", callTarget.targetMethod()));
+            debugProperties.put("targetMethod", CiUtil.format("%h.%n(%p)", callTarget.targetMethod()));
         }
         return debugProperties;
     }
@@ -170,7 +174,6 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
 
     @Override
     public void intrinsify(Node node) {
-        assert !(node instanceof ValueNode) || ((ValueNode) node).kind().isVoid() == kind().isVoid();
         MethodCallTargetNode call = callTarget;
         FrameState state = stateAfter();
         killExceptionEdge();
@@ -179,7 +182,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Node.It
             stateSplit.setStateAfter(state);
         }
         if (node == null) {
-            assert kind() == Kind.Void && usages().isEmpty();
+            assert kind() == CiKind.Void && usages().isEmpty();
             ((StructuredGraph) graph()).removeSplit(this, NORMAL_EDGE);
         } else if (node instanceof DeoptimizeNode) {
             this.replaceAtPredecessor(node);

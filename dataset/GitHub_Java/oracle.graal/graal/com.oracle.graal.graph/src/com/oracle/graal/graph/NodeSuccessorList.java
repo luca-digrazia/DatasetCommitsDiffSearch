@@ -37,7 +37,7 @@ public final class NodeSuccessorList<T extends Node> extends NodeList<T> {
 
     public NodeSuccessorList(Node self, T[] elements) {
         super(elements);
-        assert self.usages().isEmpty();
+        assert self.usages() == null;
         this.self = self;
     }
 

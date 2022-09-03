@@ -29,23 +29,22 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
 
 public class SuperBlock {
     protected BeginNode entry;
     protected BeginNode exit;
     protected List<BeginNode> blocks;
     protected List<BeginNode> earlyExits;
-    protected LoopBeginNode loop;
     protected Map<Node, Node> duplicationMapping;
     protected SuperBlock original;
+    protected NodeBitMap allNodes;
+    protected NodeBitMap allNodesExcludeLoopPhi;
 
-    public SuperBlock(BeginNode entry, BeginNode exit, List<BeginNode> blocks, List<BeginNode> earlyExits, LoopBeginNode loop) {
+    public SuperBlock(BeginNode entry, BeginNode exit, List<BeginNode> blocks, List<BeginNode> earlyExits) {
         this.entry = entry;
         this.exit = exit;
         this.blocks = blocks;
         this.earlyExits = earlyExits;
-        this.loop = loop;
         assert blocks.contains(entry);
         assert !blocks.contains(exit) || exit == entry;
     }
@@ -58,33 +57,60 @@ public class SuperBlock {
         return entry;
     }
 
+    public NodeBitMap nodes() {
+        if (allNodes == null) {
+            allNodes = computeNodes();
+        }
+        return allNodes;
+    }
+
+    private NodeBitMap nodesExcludeLoopPhi() {
+        if (allNodesExcludeLoopPhi == null) {
+            allNodesExcludeLoopPhi = nodes().copy();
+            if (entry instanceof LoopBeginNode) {
+                for (PhiNode phi : ((LoopBeginNode) entry).phis()) {
+                    allNodesExcludeLoopPhi.clear(phi);
+                }
+            }
+        }
+        return allNodesExcludeLoopPhi;
+    }
+
     public SuperBlock duplicate() {
-        NodeBitMap nodes = computeNodes();
+        return duplicate(false);
+    }
+
+    public SuperBlock duplicate(boolean excludeLoop) {
+        NodeBitMap nodes = nodes();
         Map<Node, Node> replacements = new HashMap<>();
         StructuredGraph graph = (StructuredGraph) entry.graph();
-        BeginNode newEntry = graph.add(new BeginNode());
-        BeginNode newExit = null;
-        List<BeginNode> newEarlyExits = new ArrayList<>(earlyExits.size());
-        if (!(exit instanceof MergeNode)) {
-            newExit = graph.add(new BeginNode());
-            replacements.put(exit, newExit);
+        if (excludeLoop || (entry instanceof MergeNode && !(entry instanceof LoopBeginNode))) {
+            replacements.put(entry, graph.add(new BeginNode())); // no merge/loop begin
         }
-        replacements.put(entry, newEntry); // no merge/loop begin
+        List<BeginNode> newEarlyExits = new ArrayList<>(earlyExits.size());
         for (BeginNode earlyExit : earlyExits) {
             BeginNode newEarlyExit = graph.add(new BeginNode());
             newEarlyExits.add(newEarlyExit);
             replacements.put(earlyExit, newEarlyExit);
         }
-        if (loop != null) {
-            for (LoopEndNode end : loop.loopEnds()) {
+        if (exit instanceof LoopBeginNode && excludeLoop) {
+            assert entry == exit;
+            nodes = nodesExcludeLoopPhi();
+            for (LoopEndNode end : ((LoopBeginNode) exit).loopEnds()) {
                 if (nodes.isMarked(end)) {
                     replacements.put(end, graph.add(new EndNode()));
                 }
             }
         }
         Map<Node, Node> duplicates = graph.addDuplicates(nodes, replacements);
-        if (exit instanceof MergeNode) {
-            newExit = mergeExits(replacements, graph, duplicates, (MergeNode) exit);
+        BeginNode newExit;
+        if (excludeLoop || (exit instanceof MergeNode && !(exit instanceof LoopBeginNode))) {
+            newExit = mergeExits(replacements, duplicates);
+        } else if (exit != entry) {
+            newExit = graph.add(new BeginNode());
+            replacements.put(exit, newExit);
+        } else {
+            newExit = (BeginNode) duplicates.get(exit);
         }
 
         List<BeginNode> newBlocks = new ArrayList<>(blocks.size());
@@ -99,16 +125,20 @@ public class SuperBlock {
         for (Entry<Node, Node> e : replacements.entrySet()) {
             duplicates.put(e.getKey(), e.getValue());
         }
-        SuperBlock superBlock = new SuperBlock(newEntry, newExit, newBlocks, newEarlyExits, loop);
+        SuperBlock superBlock = new SuperBlock((BeginNode) duplicates.get(entry), newExit, newBlocks, newEarlyExits);
         superBlock.duplicationMapping = duplicates;
         superBlock.original = this;
         return superBlock;
     }
 
-    private BeginNode mergeExits(Map<Node, Node> replacements, StructuredGraph graph, Map<Node, Node> duplicates, MergeNode mergeExit) {
-        BeginNode newExit;
+    protected StructuredGraph graph() {
+        return (StructuredGraph) entry.graph();
+    }
+
+    private BeginNode mergeExits(Map<Node, Node> replacements, Map<Node, Node> duplicates) {
         List<EndNode> endsToMerge = new LinkedList<>();
-        if (mergeExit == loop) {
+        MergeNode mergeExit = (MergeNode) exit;
+        if (mergeExit instanceof LoopBeginNode) {
             LoopBeginNode loopBegin = (LoopBeginNode) mergeExit;
             for (LoopEndNode le : loopBegin.loopEnds()) {
                 Node duplicate = replacements.get(le);
@@ -124,19 +154,28 @@ public class SuperBlock {
                 }
             }
         }
+        return mergeEnds(mergeExit, endsToMerge);
+    }
 
+    private BeginNode mergeEnds(MergeNode mergeExit, List<EndNode> endsToMerge) {
+        BeginNode newExit;
+        StructuredGraph graph = graph();
         if (endsToMerge.size() == 1) {
             EndNode end = endsToMerge.get(0);
             assert end.usages().count() == 0;
             newExit = graph.add(new BeginNode());
-            end.replaceAtPredecessors(newExit);
+            end.replaceAtPredecessor(newExit);
             end.safeDelete();
         } else {
             assert endsToMerge.size() > 1;
             MergeNode newExitMerge = graph.add(new MergeNode());
             newExit = newExitMerge;
-            FrameState state = mergeExit.stateAfter().duplicate();
-            newExitMerge.setStateAfter(state); // this state is wrong (incudes phis from the loop begin) needs to be fixed while resolving data
+            FrameState state = mergeExit.stateAfter();
+            if (state != null) {
+                FrameState duplicateState = state.duplicate();
+                // this state is wrong (incudes phis from the loop begin) needs to be fixed while resolving data
+                newExitMerge.setStateAfter(duplicateState);
+            }
             for (EndNode end : endsToMerge) {
                 newExitMerge.addForwardEnd(end);
             }
@@ -144,7 +183,7 @@ public class SuperBlock {
         return newExit;
     }
 
-    public void finish() {
+    public void finishDuplication() {
         if (original != null) {
             mergeEarlyExits((StructuredGraph) entry.graph(), original.earlyExits, duplicationMapping);
         }
@@ -166,20 +205,25 @@ public class SuperBlock {
             FrameState exitState = earlyExit.stateAfter();
             FrameState state = exitState.duplicate();
             merge.setStateAfter(state);
+
+            for (Node anchored : earlyExit.anchored().snapshot()) {
+                anchored.replaceFirstInput(earlyExit, merge);
+            }
+
             for (ValueProxyNode vpn : earlyExit.proxies().snapshot()) {
                 ValueNode replaceWith;
                 ValueProxyNode newVpn = (ValueProxyNode) duplicates.get(vpn);
                 if (newVpn != null) {
-                    PhiNode phi = graph.add(new PhiNode(vpn.kind(), merge, vpn.type()));
+                    PhiNode phi = graph.add(vpn.type() == PhiType.Value ? new PhiNode(vpn.kind(), merge) : new PhiNode(vpn.type(), merge));
                     phi.addInput(vpn);
                     phi.addInput(newVpn);
                     if (vpn.type() == PhiType.Value) {
                         replaceWith = phi;
                     } else {
                         assert vpn.type() == PhiType.Virtual;
-                        VirtualObjectFieldNode vof = (VirtualObjectFieldNode) GraphUtil.unProxify(vpn);
-                        VirtualObjectFieldNode newVof = (VirtualObjectFieldNode) GraphUtil.unProxify(newVpn);
-                        replaceWith = mergeVirtualChain(graph, vof, newVof, phi, earlyExit, newEarlyExit, merge);
+                        ValueNode vof = GraphUtil.unProxify(vpn);
+                        ValueNode newVof = GraphUtil.unProxify(newVpn);
+                        replaceWith = GraphUtil.mergeVirtualChain(graph, vof, newVof, phi, earlyExit, newEarlyExit, merge);
                     }
                 } else {
                     replaceWith = vpn.value();
@@ -194,120 +238,44 @@ public class SuperBlock {
         }
     }
 
-    private static ValueProxyNode findProxy(ValueNode value, BeginNode proxyPoint) {
-        for (ValueProxyNode vpn : proxyPoint.proxies()) {
-            if (GraphUtil.unProxify(vpn) == value) {
-                return vpn;
-            }
-        }
-        return null;
-    }
-
-    private static ValueNode mergeVirtualChain(
-                    StructuredGraph graph,
-                    VirtualObjectFieldNode vof,
-                    VirtualObjectFieldNode newVof,
-                    PhiNode vPhi,
-                    BeginNode earlyExit,
-                    BeginNode newEarlyExit,
-                    MergeNode merge) {
-        VirtualObjectNode vObject = vof.object();
-        assert newVof.object() == vObject;
-        ValueNode[] virtualState = virtualState(vof);
-        ValueNode[] newVirtualState = virtualState(newVof);
-        ValueNode chain = vPhi;
-        for (int i = 0; i < virtualState.length; i++) {
-            ValueNode value = virtualState[i];
-            ValueNode newValue = newVirtualState[i];
-            assert value.kind() == newValue.kind();
-            if (value != newValue) {
-                PhiNode valuePhi = graph.add(new PhiNode(value.kind(), merge, PhiType.Value));
-                ValueProxyNode inputProxy = findProxy(value, earlyExit);
-                if (inputProxy != null) {
-                    ValueProxyNode newInputProxy = findProxy(newValue, newEarlyExit);
-                    assert newInputProxy != null;
-                    valuePhi.addInput(inputProxy);
-                    valuePhi.addInput(newInputProxy);
-                } else {
-                    valuePhi.addInput(graph.unique(new ValueProxyNode(value, earlyExit, PhiType.Value)));
-                    valuePhi.addInput(newValue);
-                }
-                chain = graph.add(new VirtualObjectFieldNode(vObject, chain, valuePhi, i));
-            }
-        }
-        return chain;
-    }
-
-    private static ValueNode[] virtualState(VirtualObjectFieldNode vof) {
-        VirtualObjectNode vObj = vof.object();
-        int fieldsCount = vObj.fieldsCount();
-        int dicovered = 0;
-        ValueNode[] state = new ValueNode[fieldsCount];
-        ValueNode currentField = vof;
-        do {
-            if (currentField instanceof VirtualObjectFieldNode) {
-                int index = ((VirtualObjectFieldNode) currentField).index();
-                if (state[index] == null) {
-                    dicovered++;
-                    state[index] = ((VirtualObjectFieldNode) currentField).input();
-                    if (dicovered >= fieldsCount) {
-                        break;
-                    }
-                }
-                currentField = ((VirtualObjectFieldNode) currentField).lastState();
-            } else {
-                assert currentField instanceof PhiNode && ((PhiNode) currentField).type() == PhiType.Virtual : currentField;
-                currentField = ((PhiNode) currentField).valueAt(0);
-            }
-        } while (currentField != null);
-        return state;
-    }
-
     private NodeBitMap computeNodes() {
-        NodeBitMap loopNodes = entry.graph().createNodeBitMap();
+        NodeBitMap nodes = entry.graph().createNodeBitMap();
         for (BeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
                 if (n instanceof Invoke) {
-                    loopNodes.mark(((Invoke) n).callTarget());
+                    nodes.mark(((Invoke) n).callTarget());
                 }
                 if (n instanceof StateSplit) {
                     FrameState stateAfter = ((StateSplit) n).stateAfter();
                     if (stateAfter != null) {
-                        loopNodes.mark(stateAfter);
+                        nodes.mark(stateAfter);
                     }
                 }
-                loopNodes.mark(n);
+                nodes.mark(n);
             }
         }
         for (BeginNode earlyExit : earlyExits) {
             FrameState stateAfter = earlyExit.stateAfter();
             assert stateAfter != null;
-            loopNodes.mark(stateAfter);
-            loopNodes.mark(earlyExit);
+            nodes.mark(stateAfter);
+            nodes.mark(earlyExit);
             for (ValueProxyNode proxy : earlyExit.proxies()) {
-                loopNodes.mark(proxy);
+                nodes.mark(proxy);
             }
         }
 
         for (BeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
                 for (Node usage : n.usages()) {
-                    markFloating(usage, loopNodes, "");
+                    markFloating(usage, nodes);
                 }
             }
         }
 
-        if (entry instanceof LoopBeginNode) {
-            for (PhiNode phi : ((LoopBeginNode) entry).phis()) {
-                loopNodes.clear(phi);
-            }
-        }
-
-        return loopNodes;
+        return nodes;
     }
 
-    private static boolean markFloating(Node n, NodeBitMap loopNodes, String ind) {
-        //System.out.println(ind + "markFloating(" + n + ")");
+    private static boolean markFloating(Node n, NodeBitMap loopNodes) {
         if (loopNodes.isMarked(n)) {
             return true;
         }
@@ -316,7 +284,8 @@ public class SuperBlock {
         }
         boolean mark = false;
         if (n instanceof PhiNode) {
-            mark = loopNodes.isMarked(((PhiNode) n).merge());
+            PhiNode phi = (PhiNode) n;
+            mark = loopNodes.isMarked(phi.merge());
             if (mark) {
                 loopNodes.mark(n);
             } else {
@@ -324,7 +293,7 @@ public class SuperBlock {
             }
         }
         for (Node usage : n.usages()) {
-            if (markFloating(usage, loopNodes, " " + ind)) {
+            if (markFloating(usage, loopNodes)) {
                 mark = true;
             }
         }
@@ -338,7 +307,7 @@ public class SuperBlock {
     public void insertBefore(FixedNode fixed) {
         assert entry.predecessor() == null;
         assert exit.next() == null;
-        fixed.replaceAtPredecessors(entry);
+        fixed.replaceAtPredecessor(entry);
         exit.setNext(fixed);
     }
 }

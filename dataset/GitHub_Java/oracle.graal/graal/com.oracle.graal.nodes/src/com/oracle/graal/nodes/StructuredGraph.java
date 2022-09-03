@@ -25,7 +25,7 @@ package com.oracle.graal.nodes;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
@@ -41,7 +41,7 @@ public class StructuredGraph extends Graph {
     public static final long INVALID_GRAPH_ID = -1;
     private static final AtomicLong uniqueGraphIds = new AtomicLong();
     private final StartNode start;
-    private final ResolvedJavaMethod method;
+    private final RiResolvedMethod method;
     private final long graphId;
 
     /**
@@ -58,18 +58,18 @@ public class StructuredGraph extends Graph {
         this(name, null);
     }
 
-    public StructuredGraph(String name, ResolvedJavaMethod method) {
+    public StructuredGraph(String name, RiResolvedMethod method) {
         this(name, method, uniqueGraphIds.incrementAndGet());
     }
 
-    private StructuredGraph(String name, ResolvedJavaMethod method, long graphId) {
+    private StructuredGraph(String name, RiResolvedMethod method, long graphId) {
         super(name);
         this.start = add(new StartNode());
         this.method = method;
         this.graphId = graphId;
     }
 
-    public StructuredGraph(ResolvedJavaMethod method) {
+    public StructuredGraph(RiResolvedMethod method) {
         this(null, method);
     }
 
@@ -98,7 +98,7 @@ public class StructuredGraph extends Graph {
         return start;
     }
 
-    public ResolvedJavaMethod method() {
+    public RiResolvedMethod method() {
         return method;
     }
 
@@ -323,7 +323,6 @@ public class StructuredGraph extends Graph {
             reduceTrivialMerge(begin);
         } else { // convert to merge
             MergeNode merge = this.add(new MergeNode());
-            merge.setProbability(begin.probability());
             this.replaceFixedWithFixed(begin, merge);
         }
     }
