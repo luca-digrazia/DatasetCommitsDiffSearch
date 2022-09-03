@@ -189,13 +189,11 @@ public final class JavaInterop {
 
     /**
      * Takes executable object from a {@link TruffleLanguage} and converts it into an instance of a
-     * <b>Java</b> <em>functional interface</em>. If the <code>functionalType</code> method is using
-     * {@link Method#isVarArgs() variable arguments}, then the arguments are unwrapped and passed
-     * into the <code>function</code> as indivual arguments.
+     * <b>Java</b> <em>functional interface</em>.
      *
      * @param <T> requested and returned type
-     * @param functionalType interface with a single defined method - so called <em>functional
-     *            interface</em>
+     * @param functionalType interface with a single defined method - so called
+     *            <em>functional interface</em>
      * @param function <em>Truffle</em> that responds to {@link Message#IS_EXECUTABLE} and can be
      *            invoked
      * @return instance of interface that wraps the provided <code>function</code>
@@ -219,8 +217,8 @@ public final class JavaInterop {
      * </pre>
      *
      * @param <T> requested interface and implementation
-     * @param functionalType interface with a single defined method - so called <em>functional
-     *            interface</em>
+     * @param functionalType interface with a single defined method - so called
+     *            <em>functional interface</em>
      * @param implementation implementation of the interface, or directly a lambda expression
      *            defining the required behavior
      * @return an {@link Message#IS_EXECUTABLE executable} {@link TruffleObject} ready to be used in
