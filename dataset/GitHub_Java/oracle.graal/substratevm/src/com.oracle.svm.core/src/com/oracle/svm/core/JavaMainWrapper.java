@@ -169,6 +169,7 @@ public class JavaMainWrapper {
                 }
                 rs.executeStartupHooks();
                 ImageSingletons.lookup(JavaMainSupport.class).getJavaMainMethod().invoke(null, (Object) mainArgs);
+                rs.executeShutdownHooks();
             } catch (Throwable ex) {
                 JavaThreads.dispatchUncaughtException(Thread.currentThread(), ex);
             }

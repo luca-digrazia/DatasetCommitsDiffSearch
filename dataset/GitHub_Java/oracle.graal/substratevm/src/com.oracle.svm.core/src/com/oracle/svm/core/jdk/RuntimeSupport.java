@@ -91,12 +91,8 @@ public final class RuntimeSupport {
         shutdownHooks.add(hook);
     }
 
-    /**
-     * Called only internally as part of the JDK shutdown process, use {@link #shutdown()} to
-     * trigger the whoke JDK shutdown process.
-     */
-    static void executeShutdownHooks() {
-        executeHooks(getRuntimeSupport().shutdownHooks);
+    public void executeShutdownHooks() {
+        executeHooks(shutdownHooks);
     }
 
     private static void executeHooks(CopyOnWriteArrayList<Runnable> hooks) {

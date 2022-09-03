@@ -61,6 +61,7 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.NoAllocationVerifier;
+import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.posix.headers.Dirent;
 import com.oracle.svm.core.posix.headers.Dirent.DIR;
 import com.oracle.svm.core.posix.headers.Dirent.dirent;
@@ -711,13 +712,10 @@ final class Target_java_lang_System {
         gettimeofday(timeval, timezone);
         return timeval.tv_sec() * 1_000L + timeval.tv_usec() / 1_000L;
     }
-}
-
-@TargetClass(className = "java.lang.Shutdown")
-final class Target_java_lang_Shutdown {
 
     @Substitute
-    static void halt0(int status) {
+    private static void exit(int status) {
+        RuntimeSupport.getRuntimeSupport().executeShutdownHooks();
         LibC.exit(status);
     }
 }

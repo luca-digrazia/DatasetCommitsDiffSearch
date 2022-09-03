@@ -271,7 +271,7 @@ final class Target_java_lang_Throwable {
         Pointer sp = KnownIntrinsics.readCallerStackPointer();
         CodePointer ip = KnownIntrinsics.readReturnAddress();
 
-        StackTraceBuilder stackTraceBuilder = new StackTraceBuilder(true);
+        StackTraceBuilder stackTraceBuilder = new StackTraceBuilder();
         JavaStackWalker.walkCurrentThread(sp, ip, stackTraceBuilder);
         this.stackTrace = stackTraceBuilder.getTrace();
 
