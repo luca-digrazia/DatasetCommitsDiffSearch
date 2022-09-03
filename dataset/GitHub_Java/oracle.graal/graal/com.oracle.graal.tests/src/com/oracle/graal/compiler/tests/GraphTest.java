@@ -23,22 +23,16 @@
 package com.oracle.graal.compiler.tests;
 
 import java.lang.reflect.*;
-import java.util.concurrent.*;
 
 import junit.framework.*;
 
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.phases.*;
 import com.oracle.graal.compiler.phases.PhasePlan.PhasePosition;
-import com.oracle.graal.compiler.schedule.*;
 import com.oracle.graal.cri.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.Node.Verbosity;
 import com.oracle.graal.java.*;
-import com.oracle.graal.lir.cfg.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.max.cri.ci.*;
 import com.oracle.max.cri.ri.*;
 
 /**
@@ -46,7 +40,7 @@ import com.oracle.max.cri.ri.*;
  * for Graal compiler transformations. The general pattern for a test is:
  * <ol>
  * <li>Create a graph by {@linkplain #parse(String) parsing} a method.</li>
- * <li>Manually modify the graph (e.g. replace a parameter node with a constant).</li>
+ * <li>Manually modify the graph (e.g. replace a paramter node with a constant).</li>
  * <li>Apply a transformation to the graph.</li>
  * <li>Assert that the transformed graph is equal to an expected graph.</li>
  * </ol>
@@ -59,63 +53,19 @@ import com.oracle.max.cri.ri.*;
  */
 public abstract class GraphTest {
 
-    protected final GraalCompiler graalCompiler;
     protected final GraalRuntime runtime;
 
     public GraphTest() {
         Debug.enable();
-        this.graalCompiler = GraalAccess.getGraalCompiler();
-        this.runtime = graalCompiler.runtime;
+        this.runtime = GraalRuntimeAccess.getGraalRuntime();
     }
 
     protected void assertEquals(StructuredGraph expected, StructuredGraph graph) {
-        String expectedString = getCanonicalGraphString(expected);
-        String actualString = getCanonicalGraphString(graph);
-        String mismatchString = "mismatch in graphs:\n========= expected =========\n" + expectedString + "\n\n========= actual =========\n" + actualString;
-
         if (expected.getNodeCount() != graph.getNodeCount()) {
             Debug.dump(expected, "Node count not matching - expected");
             Debug.dump(graph, "Node count not matching - actual");
-            Assert.fail("Graphs do not have the same number of nodes: " + expected.getNodeCount() + " vs. " + graph.getNodeCount() + "\n" + mismatchString);
+            Assert.fail("Graphs do not have the same number of nodes: " + expected.getNodeCount() + " vs. " + graph.getNodeCount());
         }
-        if (!expectedString.equals(actualString)) {
-            Debug.dump(expected, "mismatching graphs - expected");
-            Debug.dump(graph, "mismatching graphs - actual");
-            Assert.fail(mismatchString);
-        }
-    }
-
-    private static String getCanonicalGraphString(StructuredGraph graph) {
-        SchedulePhase schedule = new SchedulePhase();
-        schedule.apply(graph);
-
-        NodeMap<Integer> canonicalId = graph.createNodeMap();
-        int nextId = 0;
-
-        StringBuilder result = new StringBuilder();
-        for (Block block : schedule.getCFG().getBlocks()) {
-            result.append("Block " + block + " ");
-            if (block == schedule.getCFG().getStartBlock()) {
-                result.append("* ");
-            }
-            result.append("-> ");
-            for (Block succ : block.getSuccessors()) {
-                result.append(succ + " ");
-            }
-            result.append("\n");
-            for (Node node : schedule.getBlockToNodesMap().get(block)) {
-                int id;
-                if (canonicalId.get(node) != null) {
-                    id = canonicalId.get(node);
-                } else {
-                    id = nextId++;
-                    canonicalId.set(node, id);
-                }
-                String name = node instanceof ConstantNode ? node.toString(Verbosity.Name) : node.getClass().getSimpleName();
-                result.append("  " + id + "|" + name + "    (" + node.usages().size() + ")\n");
-            }
-        }
-        return result.toString();
     }
 
     protected GraalRuntime runtime() {
@@ -144,31 +94,6 @@ public abstract class GraphTest {
         } else {
             throw new RuntimeException("method not found: " + methodName);
         }
-    }
-
-    private static int compilationId = 0;
-
-    protected RiCompiledMethod compile(final RiResolvedMethod method, final StructuredGraph graph) {
-        return Debug.scope("Compiling", new DebugDumpScope(String.valueOf(compilationId++), true), new Callable<RiCompiledMethod>() {
-            public RiCompiledMethod call() throws Exception {
-                CiTargetMethod targetMethod = runtime.compile(method, graph);
-                return addMethod(method, targetMethod);
-            }
-        });
-    }
-
-    protected RiCompiledMethod addMethod(final RiResolvedMethod method, final CiTargetMethod tm) {
-        return Debug.scope("CodeInstall", new Object[] {graalCompiler, method}, new Callable<RiCompiledMethod>() {
-            @Override
-            public RiCompiledMethod call() throws Exception {
-                final RiCodeInfo[] info = Debug.isDumpEnabled() ? new RiCodeInfo[1] : null;
-                RiCompiledMethod installedMethod = runtime.addMethod(method, tm, info);
-                if (info != null) {
-                    Debug.dump(info[0], "After code installation");
-                }
-                return installedMethod;
-            }
-        });
     }
 
     /**
