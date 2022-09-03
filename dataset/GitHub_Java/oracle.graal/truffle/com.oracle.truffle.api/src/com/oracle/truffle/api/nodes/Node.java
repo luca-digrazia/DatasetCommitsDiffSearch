@@ -41,6 +41,7 @@ import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.instrument.WrapperNode;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.JSONHelper;
 
@@ -491,9 +492,8 @@ public abstract class Node implements NodeInterface, Cloneable {
         return "";
     }
 
-    @SuppressWarnings("static-method")
-    protected final void probeAST(RootNode rootNode) {
-        ACCESSOR.probeAST(rootNode);
+    protected final void applyInstrumentation(Node node) {
+        ACCESSOR.applyInstrumentation(node);
     }
 
     private static final Object GIL = new Object();
@@ -527,8 +527,8 @@ public abstract class Node implements NodeInterface, Cloneable {
         }
 
         @Override
-        protected void probeAST(RootNode rootNode) {
-            super.probeAST(rootNode);
+        protected void applyInstrumentation(Node node) {
+            super.applyInstrumentation(node);
         }
     }
 
