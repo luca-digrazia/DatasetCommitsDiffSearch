@@ -27,7 +27,7 @@ import com.oracle.max.graal.graph.*;
 import com.sun.cri.ci.*;
 
 
-public abstract class MemoryAccess extends StateSplit {
+public abstract class MemoryAccess extends Instruction {
     private static final int INPUT_COUNT = 2;
     private static final int INPUT_NODE = 0;
     private static final int INPUT_GUARD = 1;

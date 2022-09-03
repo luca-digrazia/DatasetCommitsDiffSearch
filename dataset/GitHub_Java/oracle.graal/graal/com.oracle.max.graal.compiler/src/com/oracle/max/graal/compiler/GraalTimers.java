@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2009, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,177 +23,68 @@
 package com.oracle.max.graal.compiler;
 
 import java.util.*;
+import java.util.Map.*;
 
-import com.oracle.max.criutils.*;
+import com.oracle.max.graal.compiler.debug.*;
 
 /**
- * This class contains timers that record the amount of time spent in various parts of the compiler. It builds a
- * hierarchical and a flat representation of the timing. In order to reliably create the hierarchy the following code
- * pattern should be used:
- *
- * <pre>
- * GraalTimers.startScope("name");
- * try {
- *      ...
- * } finally {
- *      GraalTimers.endScope();
- * }
- * </pre>
+ * This class contains timers that record the amount of time spent in various
+ * parts of the compiler.
  */
 public final class GraalTimers {
+    private static LinkedHashMap<String, GraalTimers> map = new LinkedHashMap<String, GraalTimers>();
 
-    private static class TimingScope {
 
-        public final TimingScope parent;
-        public final int level;
-        public long time;
-        public long count;
-        public long subTime;
-        public long startTime;
+    public static final GraalTimers TOTAL = get("Total compilation time");
+    public static final GraalTimers COMPUTE_LINEAR_SCAN_ORDER = get("Compute Linear Scan Order");
+    public static final GraalTimers LIR_CREATE = get("Create LIR");
+    public static final GraalTimers LIFETIME_ANALYSIS = get("Lifetime Analysis");
+    public static final GraalTimers LINEAR_SCAN = get("Linear Scan");
+    public static final GraalTimers RESOLUTION = get("Resolution");
+    public static final GraalTimers DEBUG_INFO = get("Create Debug Info");
+    public static final GraalTimers CODE_CREATE = get("Create Code");
 
-        public final ArrayList<String> subNames = new ArrayList<String>();
-        public final ArrayList<TimingScope> subScopes = new ArrayList<TimingScope>();
+    private final String name;
+    private long start;
+    private long total;
 
-        public TimingScope(TimingScope parent) {
-            this.parent = parent;
-            this.level = parent == null ? 0 : parent.level + 1;
+    private GraalTimers(String name) {
+        this.name = name;
+    }
+
+
+    public static GraalTimers get(String name) {
+        if (!map.containsKey(name)) {
+            map.put(name, new GraalTimers(name));
         }
+        return map.get(name);
+    }
 
-        private static final String PREFIX = "       |       |       |       |       |       |       |       |       |       +";
+    public void start() {
+        start = System.nanoTime();
+    }
 
-        public static void treeIndent(int i) {
-            assert i < PREFIX.length() / 8;
-            TTY.print(PREFIX.substring(PREFIX.length() - i * 8));
-        }
+    public void stop() {
+        total += System.nanoTime() - start;
+    }
 
-        private void printScope(int level) {
-            TTY.println("%3.0f%% %6.2fs %5d", time * 100.0 / parent.time, time / 1000000000.0, count);
-            if (!subNames.isEmpty() && (time - subTime) > 0) {
-                treeIndent(level + 1);
-                TTY.print("%-40s", "self:");
-                TTY.println("%3.0f%% %6.2fs %5d", (time - subTime) * 100.0 / time, (time - subTime) / 1000000000.0, count);
-            }
-            printSub(level + 1);
-        }
-
-        public void printSub(int level) {
-            for (int i = 0; i < subNames.size(); i++) {
-                String name = subNames.get(i);
-                TimingScope scope = subScopes.get(i);
-                treeIndent(level);
-                TTY.print("%-40s", name + ":");
-                scope.printScope(level);
-            }
-        }
-
-        public long accumulateSub(Map<String, Long> times, Map<String, Long> counts) {
-            long result = 0;
-            for (int i = 0; i < subNames.size(); i++) {
-                String name = subNames.get(i);
-                TimingScope scope = subScopes.get(i);
-                long totalTime = times.containsKey(name) ? times.get(name) : 0;
-                long totalCount = counts.containsKey(name) ? counts.get(name) : 0;
-                long myTime = scope.time - scope.subTime;
-                times.put(name, totalTime + myTime);
-                counts.put(name, totalCount + scope.count);
-                result += myTime + scope.accumulateSub(times, counts);
-            }
-            return result;
+    public static void reset() {
+        for (Entry<String, GraalTimers> e : map.entrySet()) {
+            e.getValue().total = 0;
         }
     }
 
-    private final TimingScope rootScope = new TimingScope(null);
+    public static void print() {
 
-    private ThreadLocal<TimingScope> currentScope = new ThreadLocal<TimingScope>() {
-
-        @Override
-        protected TimingScope initialValue() {
-            TimingScope scope = new TimingScope(rootScope);
-            rootScope.subNames.add(Thread.currentThread().getName());
-            rootScope.subScopes.add(scope);
-            return scope;
-        }
-    };
-
-    private ThreadLocal<Integer> currentLevel = new ThreadLocal<Integer>() {
-        @Override
-        protected Integer initialValue() {
-            return 0;
-        }
-    };
-
-    public void startScope(Class< ? > clazz) {
-        if (GraalOptions.Time) {
-            startScope(clazz.getSimpleName());
-        } else {
-            currentLevel.set(currentLevel.get() + 1);
-        }
-    }
-
-    public int currentLevel() {
-        if (GraalOptions.Time) {
-            return currentScope.get().level;
-        } else {
-            return currentLevel.get();
-        }
-    }
-
-    public void startScope(String name) {
-        if (GraalOptions.Time) {
-            TimingScope current = currentScope.get();
-            int index = current.subNames.indexOf(name);
-            TimingScope sub;
-            if (index == -1) {
-                sub = new TimingScope(current);
-                current.subNames.add(name);
-                current.subScopes.add(sub);
-            } else {
-                sub = current.subScopes.get(index);
-            }
-            currentScope.set(sub);
-            sub.startTime = System.nanoTime();
-            sub.count++;
-        } else {
-            currentLevel.set(currentLevel.get() + 1);
-        }
-    }
-
-    public void endScope() {
-        if (GraalOptions.Time) {
-            TimingScope current = currentScope.get();
-            long time = System.nanoTime() - current.startTime;
-            current.time += time;
-            current.parent.subTime += time;
-            currentScope.set(current.parent);
-        } else {
-            currentLevel.set(currentLevel.get() - 1);
-        }
-    }
-
-    public void print() {
-        if (GraalOptions.Time) {
-            rootScope.time = 0;
-            for (TimingScope scope : rootScope.subScopes) {
-                scope.time = scope.subTime;
-                rootScope.time += scope.subTime;
-            }
-
-            TTY.println("===============================");
-            TTY.println("Total Compilation Time: %6.2fs", rootScope.time / 1000000000.0);
-            TTY.println();
-
-            rootScope.printSub(0);
-
-            TreeMap<String, Long> times = new TreeMap<String, Long>();
-            TreeMap<String, Long> counts = new TreeMap<String, Long>();
-            long total = rootScope.accumulateSub(times, counts);
-
-            TTY.println();
-            for (String name : times.keySet()) {
-                if (times.get(name) > 0) {
-                    TTY.println("%-30s: %7.4f s (%5.2f%%) %5d", name, times.get(name) / 1000000000.0, times.get(name) * 100.0 / total, counts.get(name));
-                }
+        TTY.println();
+        TTY.println("%-30s: %7.4f s", TOTAL.name, TOTAL.total / 1000000000.0);
+        for (Entry<String, GraalTimers> e : map.entrySet()) {
+            GraalTimers timer = e.getValue();
+            if (timer != TOTAL) {
+                TTY.println("%-30s: %7.4f s (%5.2f%%)", timer.name, timer.total / 1000000000.0, timer.total * 100.0 / TOTAL.total);
+                timer.total = 0;
             }
         }
+        TTY.println();
     }
 }

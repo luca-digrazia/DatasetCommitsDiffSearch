@@ -23,7 +23,6 @@
 package com.oracle.max.graal.runtime;
 
 import java.io.*;
-import java.lang.management.*;
 import java.net.*;
 
 import com.oracle.max.asm.target.amd64.*;
@@ -35,12 +34,11 @@ import com.sun.cri.ri.*;
 import com.sun.cri.xir.*;
 
 /**
- * Singleton class holding the instance of the C1XCompiler.
+ * Singleton class holding the instance of the GraalCompiler.
  */
 public final class CompilerImpl implements Compiler, Remote {
 
     private static Compiler theInstance;
-    private static boolean PrintGCStats = false;
 
     public static Compiler getInstance() {
         return theInstance;
@@ -51,11 +49,11 @@ public final class CompilerImpl implements Compiler, Remote {
             throw new IllegalStateException("Compiler already initialized");
         }
 
-        String remote = System.getProperty("c1x.remote");
+        String remote = System.getProperty("graal.remote");
         if (remote != null) {
             // remote compilation (will not create a local Compiler)
             try {
-                System.out.println("C1X compiler started in client/server mode, server: " + remote);
+                System.out.println("Graal compiler started in client/server mode, server: " + remote);
                 Socket socket = new Socket(remote, 1199);
                 ReplacingStreams streams = new ReplacingStreams(socket.getOutputStream(), socket.getInputStream());
                 streams.getInvocation().sendResult(new VMEntriesNative());
@@ -71,62 +69,28 @@ public final class CompilerImpl implements Compiler, Remote {
         } else {
             // ordinary local compilation
             theInstance = new CompilerImpl(null);
-            Runtime.getRuntime().addShutdownHook(new ShutdownThread());
         }
     }
 
     public static Compiler initializeServer(VMEntries entries) {
         assert theInstance == null;
         theInstance = new CompilerImpl(entries);
-        Runtime.getRuntime().addShutdownHook(new ShutdownThread());
         return theInstance;
-    }
-
-    public static class ShutdownThread extends Thread {
-
-        @Override
-        public void run() {
-            VMExitsNative.compileMethods = false;
-            if (C1XOptions.PrintMetrics) {
-                C1XMetrics.print();
-            }
-            if (C1XOptions.PrintTimers) {
-                C1XTimers.print();
-            }
-            if (PrintGCStats) {
-                printGCStats();
-            }
-        }
-    }
-
-    public static void printGCStats() {
-        long totalGarbageCollections = 0;
-        long garbageCollectionTime = 0;
-
-        for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
-            long count = gc.getCollectionCount();
-            if (count >= 0) {
-                totalGarbageCollections += count;
-            }
-
-            long time = gc.getCollectionTime();
-            if (time >= 0) {
-                garbageCollectionTime += time;
-            }
-        }
-
-        System.out.println("Total Garbage Collections: " + totalGarbageCollections);
-        System.out.println("Total Garbage Collection Time (ms): " + garbageCollectionTime);
     }
 
     private final VMEntries vmEntries;
     private final VMExits vmExits;
-    private C1XCompiler compiler;
+    private GraalCompiler compiler;
 
     private final HotSpotRuntime runtime;
     private final CiTarget target;
     private final RiXirGenerator generator;
     private final RiRegisterConfig registerConfig;
+    private final HotSpotVMConfig config;
+
+    public HotSpotVMConfig getConfig() {
+        return config;
+    }
 
     private CompilerImpl(VMEntries entries) {
 
@@ -152,15 +116,15 @@ public final class CompilerImpl implements Compiler, Remote {
         vmEntries = entries;
         vmExits = exits;
 
-        // initialize compiler and C1XOptions
-        HotSpotVMConfig config = vmEntries.getConfiguration();
+        // initialize compiler and GraalOptions
+        config = vmEntries.getConfiguration();
         config.check();
 
-        // these options are important - c1x4hotspot will not generate correct code without them
-        C1XOptions.GenSpecialDivChecks = true;
-        C1XOptions.NullCheckUniquePc = true;
-        C1XOptions.InvokeSnippetAfterArguments = true;
-        C1XOptions.StackShadowPages = config.stackShadowPages;
+        // these options are important - graal will not generate correct code without them
+        GraalOptions.GenSpecialDivChecks = true;
+        GraalOptions.NullCheckUniquePc = true;
+        GraalOptions.InvokeSnippetAfterArguments = true;
+        GraalOptions.StackShadowPages = config.stackShadowPages;
 
         runtime = new HotSpotRuntime(config, this);
         registerConfig = runtime.globalStubRegConfig;
@@ -179,9 +143,9 @@ public final class CompilerImpl implements Compiler, Remote {
     }
 
     @Override
-    public C1XCompiler getCompiler() {
+    public GraalCompiler getCompiler() {
         if (compiler == null) {
-            compiler = new C1XCompiler(runtime, target, generator, registerConfig);
+            compiler = new GraalCompiler(runtime, target, generator, registerConfig);
         }
         return compiler;
     }
@@ -194,6 +158,44 @@ public final class CompilerImpl implements Compiler, Remote {
     @Override
     public VMExits getVMExits() {
         return vmExits;
+    }
+
+    @Override
+    public RiType lookupType(String returnType, HotSpotTypeResolved accessingClass) {
+        if (returnType.length() == 1 && vmExits instanceof VMExitsNative) {
+            VMExitsNative exitsNative = (VMExitsNative) vmExits;
+            CiKind kind = CiKind.fromPrimitiveOrVoidTypeChar(returnType.charAt(0));
+            switch(kind) {
+                case Boolean:
+                    return exitsNative.typeBoolean;
+                case Byte:
+                    return exitsNative.typeByte;
+                case Char:
+                    return exitsNative.typeChar;
+                case Double:
+                    return exitsNative.typeDouble;
+                case Float:
+                    return exitsNative.typeFloat;
+                case Illegal:
+                    break;
+                case Int:
+                    return exitsNative.typeInt;
+                case Jsr:
+                    break;
+                case Long:
+                    return exitsNative.typeLong;
+                case Object:
+                    break;
+                case Short:
+                    return exitsNative.typeShort;
+                case Void:
+                    return exitsNative.typeVoid;
+                case Word:
+                    break;
+
+            }
+        }
+        return vmEntries.RiSignature_lookupType(returnType, accessingClass);
     }
 
 }

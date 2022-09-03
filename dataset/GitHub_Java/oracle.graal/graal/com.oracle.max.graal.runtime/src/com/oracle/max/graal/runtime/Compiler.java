@@ -23,11 +23,14 @@
 package com.oracle.max.graal.runtime;
 
 import com.oracle.max.graal.compiler.*;
+import com.sun.cri.ri.*;
 
 public interface Compiler {
 
     VMEntries getVMEntries();
     VMExits getVMExits();
-    C1XCompiler getCompiler();
+    GraalCompiler getCompiler();
+    RiType lookupType(String returnType, HotSpotTypeResolved accessingClass);
+    HotSpotVMConfig getConfig();
 
 }

@@ -72,7 +72,7 @@ public class GraalCompiler extends ObservableCompiler {
         Graph.verificationListeners.add(new VerificationListener() {
             @Override
             public void verificationFailed(Node n, String message) {
-                GraalCompiler.this.fireCompilationEvent(new CompilationEvent(currentCompilation, "Verification Error on Node " + n.id(), currentCompilation.graph, true, false, true));
+                GraalCompiler.this.fireCompilationEvent(new CompilationEvent(currentCompilation, "Verification Error on Node " + n.id(), currentCompilation.graph, true, false));
                 for (Node p : n.predecessors()) {
                     TTY.println("predecessor: " + p);
                 }
@@ -142,7 +142,7 @@ public class GraalCompiler extends ObservableCompiler {
         if (GraalOptions.PrintDOTGraphToPdf) {
             addCompilationObserver(new GraphvizPrinterObserver(true));
         }
-        if (GraalOptions.PrintIdealGraphLevel != 0 || GraalOptions.Plot || GraalOptions.PlotOnError) {
+        if (GraalOptions.PrintIdealGraphLevel != 0) {
             CompilationObserver observer;
             if (GraalOptions.PrintIdealGraphFile) {
                 observer = new IdealGraphPrinterObserver();

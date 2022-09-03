@@ -157,9 +157,7 @@ public abstract class Value extends Node {
         throw new IllegalStateException("No visit method for this node");
     }
 
-    public void print(LogStream out) {
-        out.print(this.getClass().toString());
-    }
+    public abstract void print(LogStream out);
 
     @SuppressWarnings("unchecked")
     @Override
@@ -179,7 +177,7 @@ public abstract class Value extends Node {
         return properties;
     }
 
-    /*@Override
+    @Override
     public Iterable<? extends Node> dataUsages() {
         final Iterator<? extends Node> dataUsages = super.dataUsages().iterator();
         return new Iterable<Node>() {
@@ -188,5 +186,5 @@ public abstract class Value extends Node {
                 return new StateSplit.FilteringIterator(dataUsages, FrameState.class);
             }
         };
-    }*/
+    }
 }

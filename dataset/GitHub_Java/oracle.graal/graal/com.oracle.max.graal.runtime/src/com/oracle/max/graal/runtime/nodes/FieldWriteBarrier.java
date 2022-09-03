@@ -25,11 +25,13 @@ package com.oracle.max.graal.runtime.nodes;
 import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.gen.*;
 import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.runtime.*;
 import com.sun.cri.ci.*;
 
 
-public final class FieldWriteBarrier extends WriteBarrier {
+public final class FieldWriteBarrier extends Instruction {
     private static final int INPUT_COUNT = 1;
     private static final int INPUT_OBJECT = 0;
 
@@ -52,7 +54,7 @@ public final class FieldWriteBarrier extends WriteBarrier {
     }
 
     public FieldWriteBarrier(Value object, Graph graph) {
-        super(INPUT_COUNT, SUCCESSOR_COUNT, graph);
+        super(CiKind.Illegal, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         this.setObject(object);
     }
 
@@ -66,8 +68,18 @@ public final class FieldWriteBarrier extends WriteBarrier {
                 public void generate(Node n, LIRGenerator generator) {
                     assert n == FieldWriteBarrier.this;
                     CiVariable temp = generator.newVariable(CiKind.Word);
+                    HotSpotVMConfig config = CompilerImpl.getInstance().getConfig();
                     generator.lir().move(generator.makeOperand(object()), temp);
-                    FieldWriteBarrier.this.generateBarrier(temp, generator);
+                    generator.lir().unsignedShiftRight(temp, CiConstant.forInt(config.cardtableShift), temp, CiValue.IllegalValue);
+
+                    long startAddress = config.cardtableStartAddress;
+                    int displacement = 0;
+                    if (((int) startAddress) == startAddress) {
+                        displacement = (int) startAddress;
+                    } else {
+                        generator.lir().add(temp, CiConstant.forLong(config.cardtableStartAddress), temp);
+                    }
+                    generator.lir().move(CiConstant.FALSE, new CiAddress(CiKind.Boolean, temp, displacement), (LIRDebugInfo) null);
                 }
             };
         }
