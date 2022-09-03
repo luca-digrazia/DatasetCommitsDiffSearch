@@ -40,7 +40,6 @@ public class RegexProperties implements JsonConvertible {
     private boolean complexLookAheadAssertions = false;
     private boolean negativeLookAheadAssertions = false;
     private boolean lookBehindAssertions = false;
-    private boolean nonLiteralLookBehindAssertions = false;
     private boolean complexLookBehindAssertions = false;
     private boolean negativeLookBehindAssertions = false;
     private boolean loops = false;
@@ -114,14 +113,6 @@ public class RegexProperties implements JsonConvertible {
         lookBehindAssertions = true;
     }
 
-    public boolean hasNonLiteralLookBehindAssertions() {
-        return nonLiteralLookBehindAssertions;
-    }
-
-    public void setNonLiteralLookBehindAssertions() {
-        nonLiteralLookBehindAssertions = true;
-    }
-
     public boolean hasComplexLookBehindAssertions() {
         return complexLookBehindAssertions;
     }
@@ -165,7 +156,6 @@ public class RegexProperties implements JsonConvertible {
                         Json.prop("complexLookAheadAssertions", complexLookAheadAssertions),
                         Json.prop("negativeLookAheadAssertions", negativeLookAheadAssertions),
                         Json.prop("lookBehindAssertions", lookBehindAssertions),
-                        Json.prop("nonLiteralLookBehindAssertions", nonLiteralLookBehindAssertions),
                         Json.prop("complexLookBehindAssertions", complexLookBehindAssertions),
                         Json.prop("negativeLookBehindAssertions", negativeLookBehindAssertions),
                         Json.prop("loops", loops),

@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.regex.tregex.parser.ast;
 
-import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.UnsupportedRegexException;
@@ -38,8 +37,6 @@ import com.oracle.truffle.regex.tregex.parser.ast.visitors.ASTDebugDumpVisitor;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
-import com.oracle.truffle.regex.util.CompilationFinalBitSet;
-import org.graalvm.collections.EconomicMap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,7 +49,6 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
      * Original pattern as seen by the parser.
      */
     private final RegexSource source;
-    private final RegexFlags flags;
     private final RegexOptions options;
     private final Counter.ThresholdCounter nodeCount = new Counter.ThresholdCounter(TRegexOptions.TRegexMaxParseTreeSize, "parse tree explosion");
     private final Counter.ThresholdCounter groupCount = new Counter.ThresholdCounter(TRegexOptions.TRegexMaxNumberOfCaptureGroups, "too many capture groups");
@@ -73,20 +69,14 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
     private final List<PositionAssertion> reachableDollars = new ArrayList<>();
     private ASTNodeSet<PositionAssertion> nfaAnchoredInitialStates;
     private ASTNodeSet<RegexASTNode> hardPrefixNodes;
-    private final EconomicMap<GroupBoundaries, GroupBoundaries> groupBoundariesDeduplicationMap = EconomicMap.create();
 
-    public RegexAST(RegexSource source, RegexFlags flags, RegexOptions options) {
+    public RegexAST(RegexSource source, RegexOptions options) {
         this.source = source;
-        this.flags = flags;
         this.options = options;
     }
 
     public RegexSource getSource() {
         return source;
-    }
-
-    public RegexFlags getFlags() {
-        return flags;
     }
 
     public RegexOptions getOptions() {
@@ -370,8 +360,8 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
      * regex: /(?<=ab)/
      *  -> prefix length: 2
      *  -> result: /(?:[_any_][_any_](?:|[_any_](?:|[_any_])))(?<=ab)/
-     *      -> the non-optional [_any_] - matchers will be used if fromIndex > 0,
-     *                                    the optional matchers will always be used
+     *      -> the non-optional [_any_] - matchers will be used if fromIndex > 0, the optional matchers
+     *         will always be used
      * }
      */
     public void createPrefix() {
@@ -426,20 +416,6 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
         wrapRootSeq.add(root);
         wrapRootSeq.add(matchFound);
         wrappedRoot = wrapRoot;
-    }
-
-    public GroupBoundaries createGroupBoundaries(CompilationFinalBitSet updateIndices, CompilationFinalBitSet clearIndices) {
-        if (updateIndices.isEmpty() && clearIndices.isEmpty()) {
-            return GroupBoundaries.getEmptyInstance();
-        }
-        GroupBoundaries lookup = new GroupBoundaries(updateIndices, clearIndices);
-        if (groupBoundariesDeduplicationMap.containsKey(lookup)) {
-            return groupBoundariesDeduplicationMap.get(lookup);
-        } else {
-            GroupBoundaries gb = new GroupBoundaries(updateIndices.copy(), clearIndices.copy());
-            groupBoundariesDeduplicationMap.put(gb, gb);
-            return gb;
-        }
     }
 
     /**

@@ -97,8 +97,6 @@ final class TRegexCompilationRequest {
             if (DebugUtil.LOG_AUTOMATON_SIZES) {
                 logAutomatonSizes(null);
             }
-            e.setReason("TRegex: " + e.getReason());
-            e.setRegex(source);
             throw e;
         }
     }
@@ -110,7 +108,10 @@ final class TRegexCompilationRequest {
         // System.out.println(new RegexUnifier(pattern, flags).getUnifiedPattern());
         createAST();
         RegexProperties properties = ast.getProperties();
-        checkFeatureSupport(properties);
+        if (!isSupported(properties)) {
+            // features not supported by DFA
+            throw new UnsupportedRegexException("unsupported feature: " + source);
+        }
         if (ast.getRoot().isDead()) {
             return new DeadRegexExecRootNode(tRegexCompiler.getLanguage(), source);
         }
@@ -170,31 +171,12 @@ final class TRegexCompilationRequest {
         return createDFAExecutor(nfa, true, true, true);
     }
 
-    private static void checkFeatureSupport(RegexProperties properties) throws UnsupportedRegexException {
-        if (properties.hasBackReferences()) {
-            throw new UnsupportedRegexException("backreferences not supported");
-        }
-        if (properties.hasLargeCountedRepetitions()) {
-            throw new UnsupportedRegexException("bounds of range quantifier too high");
-        }
-        if (properties.hasNegativeLookAheadAssertions()) {
-            throw new UnsupportedRegexException("negative lookahead assertions not supported");
-        }
-        if (properties.hasComplexLookBehindAssertions()) {
-            throw new UnsupportedRegexException("body of lookbehind assertion too complex");
-        }
-        if (properties.hasNegativeLookBehindAssertions()) {
-            throw new UnsupportedRegexException("negative lookbehind assertions not supported");
-        }
-    }
-
     private static boolean isSupported(RegexProperties properties) {
-        try {
-            checkFeatureSupport(properties);
-            return true;
-        } catch (UnsupportedRegexException e) {
-            return false;
-        }
+        return !(properties.hasBackReferences() ||
+                        properties.hasLargeCountedRepetitions() ||
+                        properties.hasNegativeLookAheadAssertions() ||
+                        properties.hasComplexLookBehindAssertions() ||
+                        properties.hasNegativeLookBehindAssertions());
     }
 
     private void createAST() throws RegexSyntaxException {

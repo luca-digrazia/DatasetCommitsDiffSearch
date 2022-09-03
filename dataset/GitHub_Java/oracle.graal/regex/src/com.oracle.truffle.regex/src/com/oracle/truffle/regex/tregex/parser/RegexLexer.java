@@ -28,12 +28,9 @@ import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
-import com.oracle.truffle.regex.chardata.CodePointRange;
-import com.oracle.truffle.regex.chardata.CodePointSet;
-import com.oracle.truffle.regex.chardata.Constants;
-import com.oracle.truffle.regex.chardata.UnicodeCharacterProperties;
 import com.oracle.truffle.regex.tregex.util.DebugUtil;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
+import com.oracle.truffle.regex.util.Constants;
 
 import java.math.BigInteger;
 import java.util.EnumSet;
@@ -59,10 +56,10 @@ public final class RegexLexer {
     private boolean identifiedAllGroups = false;
     private Map<String, Integer> namedCaptureGroups = null;
 
-    public RegexLexer(RegexSource source, RegexFlags flags, RegexOptions options) {
+    public RegexLexer(RegexSource source, RegexOptions options) {
         this.source = source;
         this.pattern = source.getPattern();
-        this.flags = flags;
+        this.flags = source.getFlags();
         this.options = options;
     }
 
@@ -804,6 +801,6 @@ public final class RegexLexer {
     }
 
     private RegexSyntaxException syntaxError(String msg) {
-        return new RegexSyntaxException(pattern, source.getGeneralFlags(), msg);
+        return new RegexSyntaxException(pattern, flags, msg);
     }
 }

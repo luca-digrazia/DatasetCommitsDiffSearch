@@ -506,10 +506,8 @@ public final class RegexParser {
                     parseQuantifier((Token.Quantifier) token);
                     break;
                 case alternation:
-                    if (!tryMergeSingleCharClassAlternations()) {
-                        addSequence(token);
-                        properties.setAlternations();
-                    }
+                    addSequence(token);
+                    properties.setAlternations();
                     break;
                 case captureGroupBegin:
                     properties.setCaptureGroups();
@@ -525,9 +523,6 @@ public final class RegexParser {
                     addLookBehindAssertion(token, ((Token.LookBehindAssertionBegin) token).isNegated());
                     break;
                 case groupEnd:
-                    if (tryMergeSingleCharClassAlternations()) {
-                        curGroup.removeLastSequence();
-                    }
                     popGroup(token);
                     break;
                 case charClass:
@@ -553,14 +548,14 @@ public final class RegexParser {
         assert curTerm == curSequence.getLastTerm();
         if (quantifier.getMin() == -1) {
             deleteVisitor.run(curSequence.getLastTerm());
-            curSequence.removeLastTerm();
+            curSequence.removeLast();
             addTerm(createCharClass(MatcherBuilder.createEmpty(), null));
             curSequence.markAsDead();
             return;
         }
         if (quantifier.getMin() == 0) {
             deleteVisitor.run(curSequence.getLastTerm());
-            curSequence.removeLastTerm();
+            curSequence.removeLast();
         }
         Term t = curTerm;
         if (!onAssertion) {
@@ -582,37 +577,6 @@ public final class RegexParser {
                 createOptional(t, quantifier.isGreedy(), (quantifier.getMax() - quantifier.getMin()) - 1);
             }
         }
-    }
-
-    /**
-     * This method should be called when {@code curSequence} is about to be closed. If the current
-     * {@link Sequence} <em>and</em> the last {@link Sequence} consist of a single
-     * {@link CharacterClass} each, the {@link CharacterClass} contained in the current
-     * {@link Sequence} will be removed and merged into the last {@link Sequence}'s
-     * {@link CharacterClass}, resulting in a smaller NFA.
-     * 
-     * @return {@code true} if the {@link CharacterClass} in the current sequence was merged with
-     *         the {@link CharacterClass} in the last Sequence.
-     */
-    private boolean tryMergeSingleCharClassAlternations() {
-        if (curGroup.size() > 1 && curSequence.isSingleCharClass()) {
-            assert curSequence == curGroup.getAlternatives().get(curGroup.size() - 1);
-            Sequence prevSequence = curGroup.getAlternatives().get(curGroup.size() - 2);
-            if (prevSequence.isSingleCharClass()) {
-                CharacterClass prevCC = (CharacterClass) prevSequence.getFirstTerm();
-                CharacterClass curCC = (CharacterClass) curSequence.getFirstTerm();
-                prevCC.setMatcherBuilder(prevCC.getMatcherBuilder().union(curCC.getMatcherBuilder()));
-                curSequence.removeLastTerm();
-                if (DebugUtil.DEBUG) {
-                    // set source section to cover both char classes and the "|" in between
-                    SourceSection prevCCSrc = prevCC.getSourceSection();
-                    prevCC.setSourceSection(prevCCSrc.getSource().createSection(
-                                    prevCCSrc.getCharIndex(), prevCCSrc.getCharLength() + curCC.getSourceSection().getCharLength() + 1));
-                }
-                return true;
-            }
-        }
-        return false;
     }
 
     private RegexSyntaxException syntaxError(String msg) {
