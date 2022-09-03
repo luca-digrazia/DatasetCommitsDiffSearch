@@ -32,21 +32,23 @@ package com.oracle.truffle.llvm.runtime;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMRuntimeType;
 
-public final class LLVMTruffleAddress implements TruffleObject {
+public class LLVMTruffleAddress implements TruffleObject {
     private final LLVMAddress address;
+    private final LLVMRuntimeType type;
 
-    public LLVMTruffleAddress(LLVMAddress address) {
+    public LLVMTruffleAddress(LLVMAddress address, LLVMRuntimeType type) {
         this.address = address;
+        this.type = type;
     }
 
     public LLVMAddress getAddress() {
         return address;
     }
 
-    public Type getType() {
-        return address.getType();
+    public LLVMRuntimeType getType() {
+        return type;
     }
 
     public static boolean isInstance(TruffleObject object) {
@@ -72,10 +74,4 @@ public final class LLVMTruffleAddress implements TruffleObject {
     private static Class<?> getLLVMAddressMessageResolutionAccessorClass() throws ClassNotFoundException {
         return Class.forName("com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMAddressMessageResolutionAccessor");
     }
-
-    @Override
-    public String toString() {
-        return address.toString();
-    }
-
 }
