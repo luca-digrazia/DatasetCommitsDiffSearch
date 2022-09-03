@@ -29,31 +29,69 @@
  */
 package com.oracle.truffle.llvm.parser.text;
 
+import com.oracle.truffle.api.TruffleFile;
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 final class LLScanner {
 
-    static LLSourceMap findAndScanLLFile(String bcPath) {
+    private static TruffleFile findMapping(Path canonicalBCPath, String pathMappings, LLVMContext context) {
+        if (pathMappings.isEmpty()) {
+            return null;
+        }
+
+        final String[] mappings = pathMappings.split(":");
+        for (String mapping : mappings) {
+            final String[] splittedMapping = mapping.split("=");
+            if (splittedMapping.length != 2) {
+                throw new LLVMParserException("Malformed path mapping for *.ll files: " + pathMappings);
+            }
+            final Path mappedBCFile = Paths.get(splittedMapping[0]).normalize().toAbsolutePath();
+            if (mappedBCFile.equals(canonicalBCPath)) {
+                final Path mappedLLFile = Paths.get(splittedMapping[1]).normalize().toAbsolutePath();
+                return context.getEnv().getTruffleFile(mappedLLFile.toUri());
+            }
+        }
+
+        return null;
+    }
+
+    private static TruffleFile findLLPathMapping(String bcPath, String pathMappings, LLVMContext context) {
         if (bcPath == null || !bcPath.endsWith(".bc")) {
             return null;
         }
 
-        final String llPath = bcPath.substring(0, bcPath.length() - ".bc".length()) + ".ll";
-        final File llFile = new File(llPath);
-        if (!llFile.exists() || !llFile.canRead()) {
+        final Path canonicalBCPath = Paths.get(bcPath).normalize().toAbsolutePath();
+        final TruffleFile mappedFile = findMapping(canonicalBCPath, pathMappings, context);
+        if (mappedFile != null) {
+            return mappedFile;
+        }
+
+        final String defaultPath = canonicalBCPath.toString().substring(0, bcPath.length() - ".bc".length()) + ".ll";
+        return context.getEnv().getTruffleFile(defaultPath);
+    }
+
+    static LLSourceMap findAndScanLLFile(String bcPath, String pathMappings, LLVMContext context) {
+        if (bcPath == null || !bcPath.endsWith(".bc")) {
             return null;
         }
 
-        try (BufferedReader llReader = new BufferedReader(new FileReader(llFile))) {
-            final Source llSource = Source.newBuilder(llFile).mimeType("text/plain").build();
+        final TruffleFile llFile = findLLPathMapping(bcPath, pathMappings, context);
+        if (llFile == null || !llFile.exists() || !llFile.isReadable()) {
+            return null;
+        }
+
+        try (BufferedReader llReader = llFile.newBufferedReader()) {
+            final Source llSource = Source.newBuilder("llvm", llFile).mimeType("text/plain").build();
             final LLSourceMap sourceMap = new LLSourceMap(llSource);
 
             final LLScanner scanner = new LLScanner(sourceMap);
@@ -62,7 +100,8 @@ final class LLScanner {
                     return sourceMap;
                 }
             }
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            throw new LLVMParserException("Error while reading from file: " + llFile.getPath());
         }
 
         return null;
@@ -98,6 +137,9 @@ final class LLScanner {
             // function body may contain only statements, comments and empty lines between blocks
             parseInstruction(line);
 
+        } else if (line.startsWith("@")) {
+            parseGlobal(line);
+
         } else if (line.startsWith("!0")) {
             // this is the first entry of the metadata list in the *.ll file
             // after it, no more functions will be defined, so we stop scanning here
@@ -119,7 +161,7 @@ final class LLScanner {
             String functionName = matcher.group("functionName");
             functionName = LLVMIdentifier.toGlobalIdentifier(functionName);
             function = new LLSourceMap.Function(functionName, currentLine);
-            map.register(functionName, function);
+            map.registerFunction(functionName, function);
 
         } else {
             throw new AssertionError(getErrorMessage("function", line));
@@ -155,6 +197,19 @@ final class LLScanner {
         assert function != null;
         function.setEndLine(currentLine);
         function = null;
+    }
+
+    private static final Pattern GLOBAL_NAME_REGEX = Pattern.compile("@\"?(?<globalName>\\S+)\"? =.*");
+
+    private void parseGlobal(String line) {
+        final Matcher matcher = GLOBAL_NAME_REGEX.matcher(line);
+        if (matcher.matches()) {
+            String globalName = matcher.group("globalName");
+            globalName = LLVMIdentifier.toGlobalIdentifier(globalName);
+            map.registerGlobal(globalName);
+        } else {
+            throw new AssertionError(getErrorMessage("global", line));
+        }
     }
 
     private String getErrorMessage(String parsing, String line) {

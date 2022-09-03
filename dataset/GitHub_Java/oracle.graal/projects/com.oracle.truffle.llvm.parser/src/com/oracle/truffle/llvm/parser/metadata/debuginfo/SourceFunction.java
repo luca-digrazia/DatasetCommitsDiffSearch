@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,41 +29,44 @@
  */
 package com.oracle.truffle.llvm.parser.metadata.debuginfo;
 
-import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
-import com.oracle.truffle.llvm.runtime.debug.LLVMSourceSymbol;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
+
 public final class SourceFunction {
 
-    private final Map<Instruction, LLVMSourceLocation> instructions = new HashMap<>();
+    public static final String DEFAULT_SOURCE_NAME = LLVMIdentifier.UNKNOWN;
+    public static final SourceFunction DEFAULT = new SourceFunction(LLVMSourceLocation.createBitcodeFunction(DEFAULT_SOURCE_NAME, null), null);
 
-    private final Map<LLVMSourceSymbol, SourceVariable> locals = new HashMap<>();
+    private Map<LLVMSourceSymbol, SourceVariable> locals;
 
     private final LLVMSourceLocation lexicalScope;
 
-    SourceFunction(LLVMSourceLocation lexicalScope) {
+    private final LLVMSourceFunctionType sourceType;
+
+    public SourceFunction(LLVMSourceLocation lexicalScope, LLVMSourceFunctionType sourceType) {
         this.lexicalScope = lexicalScope;
-    }
-
-    public SourceSection getSourceSection() {
-        return lexicalScope.getSourceSection();
-    }
-
-    public LLVMSourceLocation getSourceSection(Instruction instruction) {
-        return instructions.get(instruction);
+        this.sourceType = sourceType;
     }
 
     public LLVMSourceLocation getLexicalScope() {
         return lexicalScope;
     }
 
+    public LLVMSourceFunctionType getSourceType() {
+        return sourceType;
+    }
+
     SourceVariable getLocal(LLVMSourceSymbol symbol) {
-        if (locals.containsKey(symbol)) {
+        if (locals == null) {
+            locals = new HashMap<>();
+        } else if (locals.containsKey(symbol)) {
             return locals.get(symbol);
         }
 
@@ -72,11 +75,17 @@ public final class SourceFunction {
         return variable;
     }
 
-    void addInstruction(Instruction instruction, LLVMSourceLocation scope) {
-        instructions.put(instruction, scope);
+    public Collection<SourceVariable> getVariables() {
+        return locals == null ? Collections.emptySet() : locals.values();
     }
 
-    public Collection<SourceVariable> getVariables() {
-        return locals.values();
+    public String getName() {
+        return lexicalScope.getName();
+    }
+
+    public void clearLocals() {
+        if (locals != null) {
+            locals.clear();
+        }
     }
 }
