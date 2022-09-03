@@ -144,7 +144,7 @@ public class GraalCompiler {
         }
 
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase(!AOTCompilation.getValue());
-        HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements, cache, plan, optimisticOpts);
+        HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements);
 
         if (OptCanonicalizer.getValue()) {
             canonicalizer.apply(graph, highTierContext);
