@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -41,6 +39,7 @@ import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
+import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -61,17 +60,18 @@ import org.graalvm.compiler.graph.NodeWorkList;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractEndNode;
+import org.graalvm.compiler.nodes.AbstractFixedGuardNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
-import org.graalvm.compiler.nodes.DeoptimizingGuard;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.FrameState;
+import org.graalvm.compiler.nodes.GuardNode;
 import org.graalvm.compiler.nodes.InliningLog;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeNode;
@@ -673,12 +673,12 @@ public class InliningUtil extends ValueMergeUtil {
     @SuppressWarnings("try")
     private static void updateSourcePositions(Invoke invoke, StructuredGraph inlineGraph, UnmodifiableEconomicMap<Node, Node> duplicates, boolean isSub, Mark mark) {
         FixedNode invokeNode = invoke.asNode();
+        boolean isSubstitution = isSub || inlineGraph.method().getAnnotation(MethodSubstitution.class) != null || inlineGraph.method().getAnnotation(Snippet.class) != null;
         StructuredGraph invokeGraph = invokeNode.graph();
+        assert !invokeGraph.trackNodeSourcePosition() || inlineGraph.trackNodeSourcePosition() ||
+                        isSubstitution : String.format("trackNodeSourcePosition mismatch %s %s != %s %s", invokeGraph, invokeGraph.trackNodeSourcePosition(), inlineGraph,
+                                        inlineGraph.trackNodeSourcePosition());
         if (invokeGraph.trackNodeSourcePosition() && invoke.stateAfter() != null) {
-            boolean isSubstitution = isSub || inlineGraph.isSubstitution();
-            assert !invokeGraph.trackNodeSourcePosition() || inlineGraph.trackNodeSourcePosition() ||
-                            isSubstitution : String.format("trackNodeSourcePosition mismatch %s %s != %s %s", invokeGraph, invokeGraph.trackNodeSourcePosition(), inlineGraph,
-                                            inlineGraph.trackNodeSourcePosition());
             final NodeSourcePosition invokePos = invoke.asNode().getNodeSourcePosition();
             updateSourcePosition(invokeGraph, duplicates, mark, invokePos, isSubstitution);
         }
@@ -703,6 +703,7 @@ public class InliningUtil extends ValueMergeUtil {
                 // There's no caller information so the source position for this node will be
                 // invalid, so it should be cleared.
                 value.clearNodeSourcePosition();
+                assert false : "clearNodeSourcePosition";
             } else {
                 NodeSourcePosition pos = cursor.getKey().getNodeSourcePosition();
                 if (pos != null) {
@@ -717,9 +718,11 @@ public class InliningUtil extends ValueMergeUtil {
                         posMap.put(pos, callerPos);
                     }
                     value.setNodeSourcePosition(callerPos);
-
-                    if (value instanceof DeoptimizingGuard) {
-                        ((DeoptimizingGuard) value).addCallerToNoDeoptSuccessorPosition(callerPos.getCaller());
+                    if (value instanceof AbstractFixedGuardNode) {
+                        ((AbstractFixedGuardNode) value).addCallerToNoDeoptSuccessorPosition(invokePos);
+                    }
+                    if (value instanceof GuardNode) {
+                        ((GuardNode) value).addCallerToNoDeoptSuccessorPosition(invokePos);
                     }
                 } else {
                     if (isSubstitution) {
@@ -732,7 +735,7 @@ public class InliningUtil extends ValueMergeUtil {
                 }
             }
         }
-        assert invokeGraph.verifySourcePositions(false);
+        assert invokeGraph.verifySourcePositions();
     }
 
     public static void processMonitorId(FrameState stateAfter, MonitorIdNode monitorIdNode) {

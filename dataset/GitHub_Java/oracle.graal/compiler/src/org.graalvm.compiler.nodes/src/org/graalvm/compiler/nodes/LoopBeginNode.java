@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -53,7 +51,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     protected int inversionCount;
     protected LoopType loopType;
     protected int unrollFactor;
-    protected boolean osrLoop;
 
     public enum LoopType {
         SIMPLE_LOOP,
@@ -317,7 +314,7 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     @SuppressWarnings("try")
     public void removeExits() {
         for (LoopExitNode loopexit : loopExits().snapshot()) {
-            try (DebugCloseable position = graph().withNodeSourcePosition(loopexit)) {
+            try (DebugCloseable position = loopexit.withNodeSourcePosition()) {
                 loopexit.removeProxies();
                 FrameState loopStateAfter = loopexit.stateAfter();
                 graph().replaceFixedWithFixed(loopexit, graph().add(new BeginNode()));
@@ -415,13 +412,5 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
                 }
             }
         }
-    }
-
-    public void markOsrLoop() {
-        osrLoop = true;
-    }
-
-    public boolean isOsrLoop() {
-        return osrLoop;
     }
 }

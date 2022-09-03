@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -115,18 +113,22 @@ public abstract class PartialEscapeClosure<BlockT extends PartialEscapeBlockStat
         /*
          * If there is a mismatch between the number of materializations and the number of
          * virtualizations, we need to apply effects, even if there were no other significant
-         * changes to the graph. This applies to each block, since moving from one block to the
-         * other can also be important (if the probabilities of the block differ).
+         * changes to the graph.
          */
+        int delta = 0;
         for (Block block : cfg.getBlocks()) {
             GraphEffectList effects = blockEffects.get(block);
             if (effects != null) {
-                if (effects.getVirtualizationDelta() != 0) {
-                    return true;
-                }
+                delta += effects.getVirtualizationDelta();
             }
         }
-        return false;
+        for (Loop<Block> loop : cfg.getLoops()) {
+            GraphEffectList effects = loopMergeEffects.get(loop);
+            if (effects != null) {
+                delta += effects.getVirtualizationDelta();
+            }
+        }
+        return delta != 0;
     }
 
     private final class CollectVirtualObjectsClosure extends NodeClosure<ValueNode> {
