@@ -970,8 +970,6 @@ public final class LinearScan {
                     }
                 }
             }
-        } catch (Throwable e) {
-            throw Debug.handle(e);
         }
     }
 
