@@ -51,7 +51,7 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.MonitorSupport;
+import com.oracle.svm.core.MonitorUtils;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.Alias;
@@ -93,7 +93,6 @@ import com.oracle.svm.jni.nativeapi.JNIMethodId;
 import com.oracle.svm.jni.nativeapi.JNINativeMethod;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 import com.oracle.svm.jni.nativeapi.JNIObjectRefType;
-import com.oracle.svm.jni.nativeapi.JNIVersion;
 
 import jdk.vm.ci.meta.MetaUtil;
 
@@ -116,7 +115,7 @@ final class JNIFunctions {
     @CEntryPoint
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static int GetVersion(JNIEnvironment env) {
-        return JNIVersion.JNI_VERSION_1_8();
+        return 0x00010008;
     }
 
     /*
@@ -912,7 +911,10 @@ final class JNIFunctions {
         if (obj == null) {
             throw new NullPointerException();
         }
-        MonitorSupport.monitorEnter(obj);
+        if (obj instanceof Class) {
+            throw VMError.unsupportedFeature("Using JNI MonitorEnter and MonitorExit on java.lang.Class objects is currently not supported");
+        }
+        MonitorUtils.monitorEnter(obj);
         assert Thread.holdsLock(obj);
         JNIThreadOwnedMonitors.entered(obj);
         return JNIErrors.JNI_OK();
@@ -928,10 +930,13 @@ final class JNIFunctions {
         if (obj == null) {
             throw new NullPointerException();
         }
+        if (obj instanceof Class) {
+            throw VMError.unsupportedFeature("Using JNI MonitorEnter and MonitorExit on java.lang.Class objects is currently not supported");
+        }
         if (!Thread.holdsLock(obj)) {
             throw new IllegalMonitorStateException();
         }
-        MonitorSupport.monitorExit(obj);
+        MonitorUtils.monitorExit(obj);
         JNIThreadOwnedMonitors.exited(obj);
         return JNIErrors.JNI_OK();
     }
