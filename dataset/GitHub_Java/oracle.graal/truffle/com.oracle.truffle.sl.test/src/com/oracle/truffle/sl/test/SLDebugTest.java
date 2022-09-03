@@ -71,7 +71,6 @@ import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.tck.DebuggerTester;
 import java.util.Collection;
 import java.util.Iterator;
-import static org.junit.Assert.fail;
 
 public class SLDebugTest {
 
@@ -570,17 +569,9 @@ public class SLDebugTest {
         })) {
             Assert.assertNotNull(session);
             PolyglotEngine.Value ret = fac.execute(new Object[]{10, multiply});
-            assertNumber(ret.get(), 3628800L);
+            assertEquals(ret.get(), 3628800L);
         }
         assertTrue(done[0]);
-    }
-
-    private void assertNumber(Object real, double expected) {
-        if (real instanceof Number) {
-            assertEquals(expected, ((Number) real).doubleValue(), 0.1);
-        } else {
-            fail("Expecting a number " + real);
-        }
     }
 
     public static class Multiply {
