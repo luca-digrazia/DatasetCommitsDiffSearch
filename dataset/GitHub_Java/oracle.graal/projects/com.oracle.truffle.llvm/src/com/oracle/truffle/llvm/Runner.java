@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
@@ -73,9 +74,11 @@ import com.oracle.truffle.llvm.RunnerFactory.SulongLibraryMessageResolutionFacto
 import com.oracle.truffle.llvm.RunnerFactory.SulongLibraryMessageResolutionFactory.LookupNodeGen;
 import com.oracle.truffle.llvm.nodes.func.LLVMGlobalRootNode;
 import com.oracle.truffle.llvm.nodes.others.LLVMStaticInitsBlockNode;
+import com.oracle.truffle.llvm.parser.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.parser.LLVMParser;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
+import com.oracle.truffle.llvm.parser.NodeFactory;
 import com.oracle.truffle.llvm.parser.StackManager;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
@@ -86,7 +89,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
 import com.oracle.truffle.llvm.parser.util.Pair;
-import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMAlias;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
@@ -125,7 +127,6 @@ import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.nfi.types.NativeLibraryDescriptor;
 import com.oracle.truffle.nfi.types.Parser;
-import org.graalvm.polyglot.io.ByteSequence;
 
 public final class Runner {
 
@@ -154,7 +155,7 @@ public final class Runner {
             this.main = main;
         }
 
-        private LLVMFunctionDescriptor lookupFunctionDescriptor(String symbolName) {
+        private LLVMFunctionDescriptor lookup(String symbolName) {
             LLVMSymbol symbol = scope.get(symbolName);
             if (symbol != null && symbol.isFunction()) {
                 return symbol.asFunction();
@@ -184,17 +185,13 @@ public final class Runner {
             LLVMFunctionDescriptor doCached(SulongLibrary library, String name,
                             @Cached("library") SulongLibrary cachedLibrary,
                             @Cached("name") String cachedName,
-                            @Cached("lookupFunctionDescriptor(cachedLibrary, cachedName)") LLVMFunctionDescriptor cachedDescriptor) {
-                return cachedDescriptor;
+                            @Cached("doGeneric(cachedLibrary, cachedName)") LLVMFunctionDescriptor cachedResult) {
+                return cachedResult;
             }
 
             @Specialization(replaces = "doCached")
             @TruffleBoundary
             LLVMFunctionDescriptor doGeneric(SulongLibrary library, String name) {
-                return lookupFunctionDescriptor(library, name);
-            }
-
-            protected static LLVMFunctionDescriptor lookupFunctionDescriptor(SulongLibrary library, String name) {
                 if (name.startsWith("@")) {
                     // safeguard: external users are never supposed to see the "@"
                     // TODO remove after getting rid of the @
@@ -202,11 +199,11 @@ public final class Runner {
                 }
 
                 String atname = "@" + name;
-                LLVMFunctionDescriptor d = library.lookupFunctionDescriptor(atname);
+                LLVMFunctionDescriptor d = library.lookup(atname);
                 if (d != null) {
                     return d;
                 }
-                return library.lookupFunctionDescriptor(name);
+                return library.lookup(name);
             }
         }
 
@@ -237,7 +234,6 @@ public final class Runner {
                     CompilerDirectives.transferToInterpreter();
                     throw UnknownIdentifierException.raise(name);
                 }
-
                 return call.executeCall(fn, arguments);
             }
         }
@@ -316,9 +312,11 @@ public final class Runner {
     }
 
     private final LLVMContext context;
+    private final NodeFactory nodeFactory;
 
-    public Runner(LLVMContext context) {
+    public Runner(LLVMContext context, NodeFactory nodeFactory) {
         this.context = context;
+        this.nodeFactory = nodeFactory;
     }
 
     /**
@@ -333,37 +331,26 @@ public final class Runner {
     }
 
     private ParserInput getParserData(Source source) {
-        ByteSequence bytes;
+        ByteBuffer bytes;
         ExternalLibrary library;
-        if (source.hasBytes()) {
-            bytes = source.getBytes();
-            if (source.getPath() != null) {
-                library = new ExternalLibrary(Paths.get(source.getPath()), false);
-            } else {
-                library = new ExternalLibrary("<STREAM-" + UUID.randomUUID().toString() + ">", false);
-            }
-        } else if (source.hasCharacters()) {
-            switch (source.getMimeType()) {
-                case LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE:
-                    bytes = ByteSequence.create(decodeBase64(source.getCharacters()));
-                    library = new ExternalLibrary("<STREAM-" + UUID.randomUUID().toString() + ">", false);
-                    break;
-                case LLVMLanguage.LLVM_SULONG_TYPE:
-                    NativeLibraryDescriptor descriptor = Parser.parseLibraryDescriptor(source.getCharacters());
-                    String filename = descriptor.getFilename();
-                    bytes = read(filename);
-                    library = new ExternalLibrary(Paths.get(filename), false);
-                    break;
-                default:
-                    throw new LLVMParserException("Character-based source with unexpected mime type: " + source.getMimeType());
-            }
+        if (source.getMimeType().equals(LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE)) {
+            bytes = ByteBuffer.wrap(decodeBase64(source.getCharacters()));
+            library = new ExternalLibrary("<STREAM-" + UUID.randomUUID().toString() + ">", false);
+        } else if (source.getMimeType().equals(LLVMLanguage.LLVM_SULONG_TYPE)) {
+            NativeLibraryDescriptor descriptor = Parser.parseLibraryDescriptor(source.getCharacters());
+            String filename = descriptor.getFilename();
+            bytes = read(filename);
+            library = new ExternalLibrary(Paths.get(filename), false);
+        } else if (source.getPath() != null) {
+            bytes = read(source.getPath());
+            library = new ExternalLibrary(Paths.get(source.getPath()), false);
         } else {
-            throw new LLVMParserException("Should not reach here: Source is neither char-based nor byte-based!");
+            throw new LLVMParserException("Neither a valid path nor a valid mime-type were specified.");
         }
         return new ParserInput(bytes, library);
     }
 
-    private CallTarget parse(Source source, ByteSequence bytes, ExternalLibrary library) {
+    private CallTarget parse(Source source, ByteBuffer bytes, ExternalLibrary library) {
         // process the bitcode file and its dependencies in the dynamic linking order
         // (breadth-first)
         List<LLVMParserResult> parserResults = new ArrayList<>();
@@ -400,7 +387,7 @@ public final class Runner {
         // allocate all non-pointer types as one struct
         ArrayList<Type> nonPointerTypes = getNonPointerTypes(res, dataLayout);
         StructureType structType = new StructureType("globals_struct", true, nonPointerTypes.toArray(new Type[0]));
-        LLVMAllocateStructNode allocationNode = context.getNodeFactory().createAllocateStruct(structType);
+        LLVMAllocateStructNode allocationNode = nodeFactory.createAllocateStruct(context, structType);
         LLVMPointer nonPointerStore = allocationNode.executeWithTarget();
         LLVMScope fileScope = res.getRuntime().getFileScope();
 
@@ -627,19 +614,20 @@ public final class Runner {
         }
 
         Path path = lib.getPath();
-        TruffleFile file = context.getEnv().getTruffleFile(path.toUri());
-        Source source;
+        byte[] bytes;
         try {
-            source = Source.newBuilder("llvm", file).build();
+            bytes = context.getEnv().getTruffleFile(path.toString()).readAllBytes();
         } catch (IOException | SecurityException | OutOfMemoryError ex) {
             throw new LLVMParserException("Error reading file " + path + ".");
         }
-        return parse(parserResults, dependencyQueue, source, lib, source.getBytes());
+        // at the moment, we don't need the bitcode as the content of the source
+        Source source = Source.newBuilder(path.toString()).mimeType(LLVMLanguage.LLVM_BITCODE_MIME_TYPE).name(path.getFileName().toString()).build();
+        return parse(parserResults, dependencyQueue, source, lib, ByteBuffer.wrap(bytes));
     }
 
     private LLVMParserResult parse(List<LLVMParserResult> parserResults, ArrayDeque<ExternalLibrary> dependencyQueue, Source source,
-                    ExternalLibrary library, ByteSequence bytes) {
-        ModelModule module = LLVMScanner.parse(bytes, source, context);
+                    ExternalLibrary library, ByteBuffer bytes) {
+        ModelModule module = LLVMScanner.parse(bytes, context);
         if (module != null) {
             library.setIsNative(false);
             context.addLibraryPaths(module.getLibraryPaths());
@@ -651,7 +639,7 @@ public final class Runner {
                 }
             }
             LLVMScope fileScope = new LLVMScope();
-            LLVMParserRuntime runtime = new LLVMParserRuntime(context, library, fileScope);
+            LLVMParserRuntime runtime = new LLVMParserRuntime(context, nodeFactory, library, fileScope);
             LLVMParser parser = new LLVMParser(source, runtime);
             LLVMParserResult parserResult = parser.parse(module);
             parserResults.add(parserResult);
@@ -909,13 +897,13 @@ public final class Runner {
             // for fetching the address of the global that we want to initialize, we must use the
             // file scope because we are initializing the globals of the current file
             LLVMGlobal globalDescriptor = runtime.getFileScope().getGlobalVariable(global.getName());
-            final LLVMExpressionNode globalVarAddress = context.getNodeFactory().createLiteral(globalDescriptor, new PointerType(global.getType()));
+            final LLVMExpressionNode globalVarAddress = nodeFactory.createLiteral(globalDescriptor, new PointerType(global.getType()));
             if (size != 0) {
                 if (type instanceof ArrayType || type instanceof StructureType) {
-                    return context.getNodeFactory().createStore(globalVarAddress, constant, type, null);
+                    return nodeFactory.createStore(context, globalVarAddress, constant, type, null);
                 } else {
                     Type t = global.getValue().getType();
-                    return context.getNodeFactory().createStore(globalVarAddress, constant, t, null);
+                    return nodeFactory.createStore(context, globalVarAddress, constant, t, null);
                 }
             }
         }
@@ -964,17 +952,17 @@ public final class Runner {
         final ArrayList<Pair<Integer, LLVMStatementNode>> structors = new ArrayList<>(elemCount);
         FrameDescriptor rootFrame = StackManager.createRootFrame();
         for (int i = 0; i < elemCount; i++) {
-            final LLVMExpressionNode globalVarAddress = context.getNodeFactory().createLiteral(global, new PointerType(globalSymbol.getType()));
-            final LLVMExpressionNode iNode = context.getNodeFactory().createLiteral(i, PrimitiveType.I32);
-            final LLVMExpressionNode structPointer = context.getNodeFactory().createTypedElementPointer(globalVarAddress, iNode, elementSize, elementType);
-            final LLVMExpressionNode loadedStruct = context.getNodeFactory().createLoad(elementType, structPointer);
+            final LLVMExpressionNode globalVarAddress = nodeFactory.createLiteral(global, new PointerType(globalSymbol.getType()));
+            final LLVMExpressionNode iNode = nodeFactory.createLiteral(i, PrimitiveType.I32);
+            final LLVMExpressionNode structPointer = nodeFactory.createTypedElementPointer(globalVarAddress, iNode, elementSize, elementType);
+            final LLVMExpressionNode loadedStruct = nodeFactory.createLoad(elementType, structPointer);
 
-            final LLVMExpressionNode oneLiteralNode = context.getNodeFactory().createLiteral(1, PrimitiveType.I32);
-            final LLVMExpressionNode functionLoadTarget = context.getNodeFactory().createTypedElementPointer(loadedStruct, oneLiteralNode, indexedTypeLength, functionType);
-            final LLVMExpressionNode loadedFunction = context.getNodeFactory().createLoad(functionType, functionLoadTarget);
+            final LLVMExpressionNode oneLiteralNode = nodeFactory.createLiteral(1, PrimitiveType.I32);
+            final LLVMExpressionNode functionLoadTarget = nodeFactory.createTypedElementPointer(loadedStruct, oneLiteralNode, indexedTypeLength, functionType);
+            final LLVMExpressionNode loadedFunction = nodeFactory.createLoad(functionType, functionLoadTarget);
             final LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{
-                            context.getNodeFactory().createFrameRead(PointerType.VOID, rootFrame.findFrameSlot(LLVMStack.FRAME_ID))};
-            final LLVMStatementNode functionCall = LLVMVoidStatementNodeGen.create(context.getNodeFactory().createFunctionCall(loadedFunction, argNodes, functionType, null));
+                            nodeFactory.createFrameRead(PointerType.VOID, rootFrame.findFrameSlot(LLVMStack.FRAME_ID))};
+            final LLVMStatementNode functionCall = LLVMVoidStatementNodeGen.create(nodeFactory.createFunctionCall(loadedFunction, argNodes, functionType, null));
 
             final StructureConstant structorDefinition = (StructureConstant) arrayConstant.getElement(i);
             final SymbolImpl prioritySymbol = structorDefinition.getElement(0);
@@ -995,12 +983,12 @@ public final class Runner {
         return Base64.getDecoder().decode(result);
     }
 
-    private ByteSequence read(String filename) {
+    private ByteBuffer read(String filename) {
         try {
             TruffleFile truffleFile = context.getEnv().getTruffleFile(filename);
-            return ByteSequence.create(truffleFile.readAllBytes());
+            return ByteBuffer.wrap(truffleFile.readAllBytes());
         } catch (IOException | SecurityException | OutOfMemoryError ignore) {
-            return ByteSequence.create(new byte[0]);
+            return ByteBuffer.allocate(0);
         }
     }
 
@@ -1105,10 +1093,10 @@ public final class Runner {
     }
 
     private static final class ParserInput {
-        private final ByteSequence bytes;
+        private final ByteBuffer bytes;
         private final ExternalLibrary library;
 
-        private ParserInput(ByteSequence bytes, ExternalLibrary library) {
+        private ParserInput(ByteBuffer bytes, ExternalLibrary library) {
             this.bytes = bytes;
             this.library = library;
         }

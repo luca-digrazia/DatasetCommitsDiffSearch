@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,23 +29,23 @@
  */
 package com.oracle.truffle.llvm.parser.metadata;
 
+import com.oracle.truffle.llvm.parser.ValueList;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class MetadataValueList extends ValueList<MDBaseNode> {
+public final class MetadataValueList extends ValueList<MDBaseNode, MetadataVisitor> {
 
-    private static final ValueList.PlaceholderFactory<MDBaseNode> PLACEHOLDER_FACTORY = () -> new MDBaseNode() {
+    private static final ValueList.PlaceholderFactory<MDBaseNode, MetadataVisitor> PLACEHOLDER_FACTORY = () -> new MDBaseNode() {
         @Override
         public void accept(MetadataVisitor visitor) {
-            // TODO fail silently
             throw new IllegalStateException("Unresolved Forward Reference!");
         }
 
         @Override
         public void replace(MDBaseNode oldValue, MDBaseNode newValue) {
-            // TODO fail silently
             throw new IllegalStateException("Unresolved Forward Reference!");
         }
 
@@ -55,20 +55,18 @@ public final class MetadataValueList extends ValueList<MDBaseNode> {
         }
     };
 
-    private final MetadataValueList parent;
-
     private final Map<String, MDNamedNode> namedNodes;
+    private final Map<String, MDCompositeType> mdTypeRegistry = new HashMap<>();
     private final List<MDKind> kinds;
+    private final List<MDLocalVariable> locals;
+    private final List<MDBaseNode> exportedScopes;
 
     public MetadataValueList() {
-        this(null);
-    }
-
-    public MetadataValueList(MetadataValueList parent) {
-        super(parent, PLACEHOLDER_FACTORY);
-        this.parent = parent;
+        super(PLACEHOLDER_FACTORY);
         this.namedNodes = new HashMap<>();
         this.kinds = new ArrayList<>();
+        this.locals = new ArrayList<>();
+        this.exportedScopes = new ArrayList<>();
     }
 
     public void addKind(MDKind newKind) {
@@ -80,12 +78,6 @@ public final class MetadataValueList extends ValueList<MDBaseNode> {
     }
 
     public MDNamedNode getNamedNode(String name) {
-        if (parent != null) {
-            final MDNamedNode parentResult = parent.getNamedNode(name);
-            if (parentResult != null) {
-                return parentResult;
-            }
-        }
         return namedNodes.get(name);
     }
 
@@ -110,13 +102,6 @@ public final class MetadataValueList extends ValueList<MDBaseNode> {
     }
 
     public MDKind getKind(long id) {
-        if (parent != null) {
-            final MDKind kind = parent.getKind(id);
-            if (kind != null) {
-                return kind;
-            }
-        }
-
         for (MDKind kind : kinds) {
             if (kind.getId() == id) {
                 return kind;
@@ -135,21 +120,34 @@ public final class MetadataValueList extends ValueList<MDBaseNode> {
             }
         }
 
-        if (parent != null) {
-            return parent.findKind(name);
-        }
-
         final MDKind newKind = MDKind.create(nextArtificialKindId--, name);
         kinds.add(newKind);
         return newKind;
     }
 
-    public void accept(MetadataVisitor visitor) {
-        for (int i = 0; i < size(); i++) {
-            final MDBaseNode value = getOrNull(i);
-            if (value != null) {
-                value.accept(visitor);
-            }
-        }
+    public MDCompositeType identifyType(String name) {
+        return mdTypeRegistry.get(name);
+    }
+
+    public void registerType(String identifier, MDCompositeType type) {
+        mdTypeRegistry.put(identifier, type);
+    }
+
+    public void registerLocal(MDLocalVariable mdLocal) {
+        locals.add(mdLocal);
+    }
+
+    public void consumeLocals(MetadataVisitor visitor) {
+        locals.forEach(l -> l.accept(visitor));
+        locals.clear();
+    }
+
+    public void registerExportedScope(MDBaseNode scope) {
+        exportedScopes.add(scope);
+    }
+
+    public void consumeExportedScopes(MetadataVisitor visitor) {
+        exportedScopes.forEach(l -> l.accept(visitor));
+        exportedScopes.clear();
     }
 }

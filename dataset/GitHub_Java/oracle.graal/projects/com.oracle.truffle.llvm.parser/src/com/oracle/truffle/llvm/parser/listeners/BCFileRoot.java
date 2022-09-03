@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,20 +29,24 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
-import com.oracle.truffle.api.source.Source;
+import java.util.List;
+
+import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoModuleProcessor;
 import com.oracle.truffle.llvm.parser.model.IRScope;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
+import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalValueSymbol;
 import com.oracle.truffle.llvm.parser.scanner.Block;
+import com.oracle.truffle.llvm.parser.util.SymbolNameMangling;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 public final class BCFileRoot implements ParserListener {
 
-    private final Source source;
     private final ModelModule module;
     private final StringTable stringTable;
     private final IRScope scope;
 
-    public BCFileRoot(Source source, ModelModule module) {
-        this.source = source;
+    public BCFileRoot(ModelModule module) {
         this.module = module;
         this.stringTable = new StringTable();
         this.scope = new IRScope();
@@ -62,9 +66,21 @@ public final class BCFileRoot implements ParserListener {
         }
     }
 
-    @Override
-    public void exit() {
-        module.exitModule(scope, source);
+    public void exit(LLVMContext context) {
+        int globalIndex = setMissingNames(module.getGlobalVariables(), 0);
+        setMissingNames(module.getAliases(), globalIndex);
+        SymbolNameMangling.demangleGlobals(module);
+        DebugInfoModuleProcessor.processModule(module, scope.getMetadata(), context);
+    }
+
+    private static int setMissingNames(List<? extends GlobalValueSymbol> globals, int startIndex) {
+        int globalIndex = startIndex;
+        for (GlobalValueSymbol variable : globals) {
+            if (variable.getName().equals(LLVMIdentifier.UNKNOWN)) {
+                variable.setName(String.valueOf(globalIndex++));
+            }
+        }
+        return globalIndex;
     }
 
     @Override
