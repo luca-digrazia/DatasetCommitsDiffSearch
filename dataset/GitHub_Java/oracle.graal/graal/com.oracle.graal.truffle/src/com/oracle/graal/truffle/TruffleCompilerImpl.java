@@ -46,6 +46,7 @@ import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.printer.*;
 import com.oracle.graal.truffle.nodes.*;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
 /**
@@ -55,7 +56,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
     private final GraalCodeCacheProvider runtime;
     private final Suites suites;
-    private final PartialEvaluator nodeCompiler;
+    private final PartialEvaluator partialEvaluator;
     private final MetaAccessProvider metaAccessProvider;
     private final Replacements replacements;
     private final Backend backend;
@@ -65,17 +66,17 @@ public class TruffleCompilerImpl implements TruffleCompiler {
     private static final Class[] SKIPPED_EXCEPTION_CLASSES = new Class[]{SlowPathException.class, UnexpectedResultException.class, ArithmeticException.class};
 
     public static final OptimisticOptimizations Optimizations = OptimisticOptimizations.ALL.remove(OptimisticOptimizations.Optimization.UseExceptionProbability,
-                    OptimisticOptimizations.Optimization.RemoveNeverExecutedCode, OptimisticOptimizations.Optimization.UseTypeCheckedInlining, OptimisticOptimizations.Optimization.UseTypeCheckHints);
+                    OptimisticOptimizations.Optimization.RemoveNeverExecutedCode);
 
     public TruffleCompilerImpl() {
         this.runtime = Graal.getRequiredCapability(GraalCodeCacheProvider.class);
         this.suites = Graal.getRequiredCapability(SuitesProvider.class).createSuites();
         this.metaAccessProvider = Graal.getRequiredCapability(MetaAccessProvider.class);
         this.backend = Graal.getRequiredCapability(Backend.class);
-        this.replacements = Graal.getRequiredCapability(Replacements.class);
+        this.replacements = ((GraalTruffleRuntime) Truffle.getRuntime()).getReplacements();
         this.graalRuntime = HotSpotGraalRuntime.graalRuntime();
 
-        this.nodeCompiler = new PartialEvaluator(runtime, metaAccessProvider);
+        this.partialEvaluator = new PartialEvaluator(metaAccessProvider, replacements);
         this.skippedExceptionTypes = getSkippedExceptionTypes(metaAccessProvider);
 
         if (DebugEnabled.getValue()) {
@@ -110,7 +111,7 @@ public class TruffleCompilerImpl implements TruffleCompiler {
 
         compilable.timeCompilationStarted = System.nanoTime();
         Assumptions assumptions = new Assumptions(true);
-        graph = nodeCompiler.createGraph(compilable, assumptions);
+        graph = partialEvaluator.createGraph(compilable, assumptions);
         compilable.timePartialEvaluationFinished = System.nanoTime();
         compilable.nodeCountPartialEval = graph.getNodeCount();
         InstalledCode compiledMethod = compileMethodHelper(graph, config, compilable, assumptions);

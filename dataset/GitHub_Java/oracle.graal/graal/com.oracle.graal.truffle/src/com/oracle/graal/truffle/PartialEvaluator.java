@@ -70,16 +70,14 @@ public class PartialEvaluator {
     private final Replacements replacements;
     private Set<Constant> constantReceivers;
     private final HotSpotGraphCache cache;
-    private final TruffleCache truffleCache;
 
-    public PartialEvaluator(MetaAccessProvider metaAccessProvider, Replacements replacements, TruffleCache truffleCache) {
+    public PartialEvaluator(MetaAccessProvider metaAccessProvider, Replacements replacements) {
         this.metaAccessProvider = metaAccessProvider;
         this.nodeClass = metaAccessProvider.lookupJavaType(com.oracle.truffle.api.nodes.Node.class);
         this.customCanonicalizer = new PartialEvaluatorCanonicalizer(metaAccessProvider, nodeClass);
         this.skippedExceptionTypes = TruffleCompilerImpl.getSkippedExceptionTypes(metaAccessProvider);
         this.replacements = replacements;
         this.cache = HotSpotGraalRuntime.graalRuntime().getCache();
-        this.truffleCache = truffleCache;
 
         try {
             executeHelperMethod = metaAccessProvider.lookupJavaMethod(OptimizedCallTarget.class.getDeclaredMethod("executeHelper", PackedFrame.class, Arguments.class));
@@ -217,7 +215,7 @@ public class PartialEvaluator {
                         StructuredGraph inlineGraph = replacements.getMethodSubstitution(methodCallTargetNode.targetMethod());
                         NewFrameNode otherNewFrame = null;
                         if (inlineGraph == null) {
-                            inlineGraph = parseGraph(methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, !AOTCompilation.getValue());
+                            inlineGraph = parseGraph(config, methodCallTargetNode.targetMethod(), methodCallTargetNode.arguments(), assumptions, !AOTCompilation.getValue());
                             otherNewFrame = inlineGraph.getNodes(NewFrameNode.class).first();
                         }
 
@@ -227,6 +225,7 @@ public class PartialEvaluator {
                             int nodeCountAfter = graph.getNodeCount();
                             Debug.dump(graph, "After inlining %s %+d (%d)", methodCallTargetNode.targetMethod().toString(), nodeCountAfter - nodeCountBefore, nodeCountAfter);
                         }
+
                         changed = true;
 
                         if (otherNewFrame != null) {
@@ -241,17 +240,21 @@ public class PartialEvaluator {
         } while (changed && newFrameNode.isAlive() && newFrameNode.usages().isNotEmpty());
     }
 
-    private StructuredGraph parseGraph(final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions, final boolean canonicalizeReads) {
+    private StructuredGraph parseGraph(final GraphBuilderConfiguration config, final ResolvedJavaMethod targetMethod, final NodeInputList<ValueNode> arguments, final Assumptions assumptions,
+                    final boolean canonicalizeReads) {
 
-        final StructuredGraph graph = truffleCache.lookup(targetMethod, arguments).copy();
+        final StructuredGraph graph = new StructuredGraph(targetMethod);
         Debug.scope("parseGraph", targetMethod, new Runnable() {
 
             @Override
             public void run() {
+                new GraphBuilderPhase(metaAccessProvider, config, TruffleCompilerImpl.Optimizations).apply(graph);
                 // Pass on constant arguments.
                 for (LocalNode local : graph.getNodes(LocalNode.class)) {
                     ValueNode arg = arguments.get(local.index());
-                    if (arg.isConstant()) {
+                    if (arg instanceof NewFrameNode) {
+                        local.setStamp(arg.stamp());
+                    } else if (arg.isConstant()) {
                         Constant constant = arg.asConstant();
                         local.replaceAndDelete(ConstantNode.forConstant(constant, metaAccessProvider, graph));
                     }

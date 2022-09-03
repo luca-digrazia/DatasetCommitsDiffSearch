@@ -65,7 +65,8 @@ public final class GraalTruffleRuntime implements TruffleRuntime {
         if (truffleCompiler == null) {
             truffleCompiler = new TruffleCompilerImpl();
         }
-        return new OptimizedCallTarget(rootNode, frameDescriptor, truffleCompiler, TruffleCompilationThreshold.getValue());
+        return new OptimizedCallTarget(rootNode, frameDescriptor, truffleCompiler, TruffleCompilationThreshold.getValue(), TruffleInliningReprofileCount.getValue(),
+                        TruffleInvalidationReprofileCount.getValue());
     }
 
     @Override
