@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,15 +29,15 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
+import com.oracle.truffle.api.dsl.TypeCast;
+import com.oracle.truffle.api.dsl.TypeCheck;
 import com.oracle.truffle.api.dsl.TypeSystem;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -45,14 +45,42 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
-@TypeSystem({boolean.class, byte.class, short.class, int.class, char.class, long.class, double.class, float.class, byte[].class, LLVMI8Vector.class, LLVMI64Vector.class, LLVMI32Vector.class,
-                LLVMI1Vector.class, LLVMI16Vector.class, LLVMFloatVector.class, LLVMDoubleVector.class, LLVMIVarBit.class,
-                LLVMTruffleAddress.class,
-                LLVMTruffleObject.class,
-                LLVM80BitFloat.class,
-                LLVMFunctionDescriptor.class,
-                LLVMAddress.class, LLVMFunction.class, TruffleObject.class})
+@TypeSystem({boolean.class, byte.class, short.class, int.class, char.class, long.class, double.class, float.class, byte[].class,
+                LLVMI1Vector.class, LLVMI8Vector.class, LLVMI16Vector.class, LLVMI32Vector.class, LLVMI64Vector.class,
+                LLVMPointerVector.class, LLVMFloatVector.class, LLVMDoubleVector.class,
+                LLVMNativePointer.class, LLVMManagedPointer.class, LLVMPointer.class,
+                LLVMIVarBit.class, LLVM80BitFloat.class, TruffleObject.class})
 public class LLVMTypes {
 
+    @TypeCheck(LLVMPointer.class)
+    public static boolean isPointer(Object object) {
+        return LLVMPointer.isInstance(object);
+    }
+
+    @TypeCast(LLVMPointer.class)
+    public static LLVMPointer asPointer(Object object) {
+        return LLVMPointer.cast(object);
+    }
+
+    @TypeCheck(LLVMNativePointer.class)
+    public static boolean isNativePointer(Object object) {
+        return LLVMNativePointer.isInstance(object);
+    }
+
+    @TypeCast(LLVMNativePointer.class)
+    public static LLVMNativePointer asNativePointer(Object object) {
+        return LLVMNativePointer.cast(object);
+    }
+
+    @TypeCheck(LLVMManagedPointer.class)
+    public static boolean isManagedPointer(Object object) {
+        return LLVMManagedPointer.isInstance(object);
+    }
+
+    @TypeCast(LLVMManagedPointer.class)
+    public static LLVMManagedPointer asManagedPointer(Object object) {
+        return LLVMManagedPointer.cast(object);
+    }
 }

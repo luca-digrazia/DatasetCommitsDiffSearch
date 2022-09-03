@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,543 +29,224 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import com.intel.llvm.ireditor.types.ResolvedType;
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVM80BitFloatNode;
-import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMDoubleNode;
-import com.oracle.truffle.llvm.nodes.impl.base.floating.LLVMFloatNode;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI16Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMIVarBitNode;
-import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI32VectorNode;
-import com.oracle.truffle.llvm.nodes.impl.base.vector.LLVMI8VectorNode;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMDoubleToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI32ToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI32ToLLVM80BitFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI64ToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI64ToLLVM80BitFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMTo80BitFloatingNodeFactory.LLVMI8ToLLVM80BitFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToAddressNodeFactory.LLVMFunctionToAddressNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToAddressNodeFactory.LLVMI64ToAddressNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVM80BitFloatToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMFloatToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI16ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI16ToDoubleZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI32ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI32ToDoubleUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI64ToDoubleUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI8ToDoubleNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToDoubleNodeFactory.LLVMI8ToDoubleZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVM80BitFloatToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMDoubleToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI16ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI32ToFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI64ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI64ToFloatUnsignedNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI8ToFloatNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToFloatNodeFactory.LLVMI8ToFloatZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMDoubleToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMFloatToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI1ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI1ToI16ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI32ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI64ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI8ToI16NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI16NodeFactory.LLVMI8ToI16ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI16ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI32ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI64ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI1NodeFactory.LLVMI8ToI1NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVM80BitFloatToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMAddressToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMDoubleToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMFloatToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMFunctionToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI16ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI16ToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI1ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI1ToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI64ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI8ToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMI8ToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI32NodeFactory.LLVMIVarBitToI32ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVM80BitFloatToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMAddressToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMDoubleToI64BitCastNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMDoubleToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFloatToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMFunctionToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI16ToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI16ToI64ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI1ToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI1ToI64ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI32ToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI32ToI64ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI8ToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMI8ToI64ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMIVarToI64NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI64NodeFactory.LLVMIVarToI64ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVM80BitFloatToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMDoubleToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMFloatToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI16ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI1ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI1ToI8ZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI32ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMI64ToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToI8NodeFactory.LLVMIVarToI8NodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI16ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI32ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI32ToIVarZeroExtNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI64ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMI8ToIVarNodeGen;
-import com.oracle.truffle.llvm.nodes.impl.cast.LLVMToVarINodeFactory.LLVMIVarToIVarNodeGen;
-import com.oracle.truffle.llvm.parser.LLVMBaseType;
-import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
-import com.oracle.truffle.llvm.parser.util.LLVMTypeHelper;
-import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
-import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
+import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMBitcastToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMSignedCastToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMTo80BitFloatingNodeFactory.LLVMUnsignedCastToLLVM80BitFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToAddressNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeGen.LLVMBitcastToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeGen.LLVMSignedCastToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToDoubleNodeGen.LLVMUnsignedCastToDoubleNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeGen.LLVMBitcastToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeGen.LLVMSignedCastToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToFloatNodeGen.LLVMUnsignedCastToFloatNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeGen.LLVMBitcastToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeGen.LLVMSignedCastToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI16NodeGen.LLVMUnsignedCastToI16NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI1NodeGen.LLVMBitcastToI1NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI1NodeGen.LLVMSignedCastToI1NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeGen.LLVMBitcastToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeGen.LLVMSignedCastToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI32NodeGen.LLVMUnsignedCastToI32NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeGen.LLVMBitcastToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeGen.LLVMSignedCastToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToI8NodeGen.LLVMUnsignedCastToI8NodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMBitcastToIVarNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMSignedCastToIVarNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeFactory.LLVMUnsignedCastToIVarNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMBitcastToDoubleVectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMBitcastToFloatVectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMBitcastToI16VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMBitcastToI1VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMBitcastToI32VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMBitcastToI64VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMBitcastToI8VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMSignedCastToDoubleVectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMSignedCastToFloatVectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMSignedCastToI16VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMSignedCastToI1VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMSignedCastToI32VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMSignedCastToI64VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorNodeFactory.LLVMSignedCastToI8VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorZeroExtNodeFactory.LLVMUnsignedCastToI16VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorZeroExtNodeFactory.LLVMUnsignedCastToI1VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorZeroExtNodeFactory.LLVMUnsignedCastToI32VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorZeroExtNodeFactory.LLVMUnsignedCastToI64VectorNodeGen;
+import com.oracle.truffle.llvm.nodes.cast.LLVMToVectorZeroExtNodeFactory.LLVMUnsignedCastToI8VectorNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
+import com.oracle.truffle.llvm.runtime.types.VectorType;
 
-public final class LLVMCastsFactory {
-
-    private LLVMCastsFactory() {
-    }
-
-    private LLVMBaseType targetType;
-    // TODO: we need these types later
-    private ResolvedType resolvedType;
-    @SuppressWarnings("unused") private ResolvedType fromType;
-    private LLVMConversionType conv;
-
-    private LLVMCastsFactory(ResolvedType targetType, ResolvedType fromType, LLVMConversionType conv) {
-        this.fromType = fromType;
-        this.targetType = LLVMTypeHelper.getLLVMType(targetType);
-        this.resolvedType = targetType;
-        this.conv = conv;
-    }
-
-    public static LLVMExpressionNode cast(LLVMExpressionNode fromNode, ResolvedType targetType, ResolvedType fromType, LLVMConversionType conv) {
-        if (fromNode == null || targetType == null || fromType == null || conv == null) {
-            throw new AssertionError();
-        }
-        LLVMCastsFactory nodeCasts = new LLVMCastsFactory(targetType, fromType, conv);
-        switch (LLVMTypeHelper.getLLVMType(fromType)) {
-            case I1:
-                return nodeCasts.castFromI1((LLVMI1Node) fromNode);
-            case I8:
-                return nodeCasts.castFromI8((LLVMI8Node) fromNode);
-            case I16:
-                return nodeCasts.castFromI16((LLVMI16Node) fromNode);
-            case I32:
-                return nodeCasts.castFromI32((LLVMI32Node) fromNode);
-            case I_VAR_BITWIDTH:
-                return nodeCasts.castFromIVar((LLVMIVarBitNode) fromNode);
-            case I64:
-                return nodeCasts.castFromI64((LLVMI64Node) fromNode);
-            case FLOAT:
-                return nodeCasts.castFromFloat((LLVMFloatNode) fromNode);
-            case DOUBLE:
-                return nodeCasts.castFromDouble((LLVMDoubleNode) fromNode);
-            case X86_FP80:
-                return nodeCasts.castFrom80BitFloat((LLVM80BitFloatNode) fromNode);
-            case ADDRESS:
-                return nodeCasts.castFromPointer((LLVMAddressNode) fromNode);
-            case FUNCTION_ADDRESS:
-                return nodeCasts.castFromFunctionPointer((LLVMFunctionNode) fromNode);
-            case I8_VECTOR:
-                return nodeCasts.castFromI8Vector((LLVMI8VectorNode) fromNode);
-            case I32_VECTOR:
-                return nodeCasts.castFromI32Vector((LLVMI32VectorNode) fromNode);
-            case I1_VECTOR:
-            case I16_VECTOR:
-            case I64_VECTOR:
-            case FLOAT_VECTOR:
-            case DOUBLE_VECTOR:
-                throw new LLVMUnsupportedException(UnsupportedReason.VECTOR_CAST);
-            default:
-                throw new AssertionError(fromType);
-        }
-    }
-
-    private LLVMExpressionNode castFromIVar(LLVMIVarBitNode fromNode) {
-        if (hasJavaCastSemantics()) {
-            switch (targetType) {
-                case I8:
-                    return LLVMIVarToI8NodeGen.create(fromNode);
-                case I32:
-                    return LLVMIVarBitToI32NodeGen.create(fromNode);
-                case I64:
-                    return LLVMIVarToI64NodeGen.create(fromNode);
-                case I_VAR_BITWIDTH:
-                    return LLVMIVarToIVarNodeGen.create(fromNode, resolvedType.getBits().intValue());
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        } else {
-            switch (targetType) {
-                case I32:
-                    return LLVMIVarBitToI32ZeroExtNodeGen.create(fromNode);
-                case I64:
-                    return LLVMIVarToI64ZeroExtNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        }
-    }
-
-    private LLVMExpressionNode castFrom80BitFloat(LLVM80BitFloatNode fromNode) {
-        if (targetType == LLVMBaseType.X86_FP80) {
-            return fromNode;
-        }
-        switch (targetType) {
-            case I8:
-                return LLVM80BitFloatToI8NodeGen.create(fromNode);
-            case I32:
-                return LLVM80BitFloatToI32NodeGen.create(fromNode);
-            case I64:
-                return LLVM80BitFloatToI64NodeGen.create(fromNode);
-            case DOUBLE:
-                return LLVM80BitFloatToDoubleNodeGen.create(fromNode);
-            case FLOAT:
-                return LLVM80BitFloatToFloatNodeGen.create(fromNode);
-            default:
-                throw new AssertionError(targetType);
-        }
-    }
-
-    private LLVMExpressionNode castFromI8Vector(LLVMI8VectorNode fromNode) {
-        if (targetType == LLVMBaseType.I8_VECTOR) {
-            return fromNode;
-        }
-        switch (targetType) {
-            default:
-                throw new LLVMUnsupportedException(UnsupportedReason.VECTOR_CAST);
-        }
-    }
-
-    private LLVMExpressionNode castFromI32Vector(LLVMI32VectorNode fromNode) {
-        if (targetType == LLVMBaseType.I32_VECTOR) {
-            return fromNode;
-        }
-        switch (targetType) {
-            default:
-                throw new LLVMUnsupportedException(UnsupportedReason.VECTOR_CAST);
-        }
-    }
-
-    private LLVMExpressionNode castFromFunctionPointer(LLVMFunctionNode fromNode) {
-        if (targetType == LLVMBaseType.FUNCTION_ADDRESS) {
-            return fromNode;
-        }
-        switch (targetType) {
-            case FUNCTION_ADDRESS:
-                return fromNode;
-            case I32:
-                return LLVMFunctionToI32NodeGen.create(fromNode);
-            case I64:
-                return LLVMFunctionToI64NodeGen.create(fromNode);
-            case ADDRESS:
-                return LLVMFunctionToAddressNodeGen.create(fromNode);
-            default:
-                throw new AssertionError(targetType);
-        }
-    }
-
-    private LLVMExpressionNode castFromFloat(LLVMFloatNode fromNode) {
-        if (targetType == LLVMBaseType.FLOAT) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics() || conv == LLVMConversionType.ZERO_EXTENSION) {
-            switch (targetType) {
-                case I8:
-                    return LLVMFloatToI8NodeGen.create(fromNode);
-                case I16:
-                    return LLVMFloatToI16NodeGen.create(fromNode);
-                case I32:
-                    return LLVMFloatToI32NodeGen.create(fromNode);
-                case I64:
-                    return LLVMFloatToI64NodeGen.create(fromNode);
-                case DOUBLE:
-                    return LLVMFloatToDoubleNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        } else {
-            throw new AssertionError(targetType + " " + conv);
-        }
-    }
-
-    private LLVMExpressionNode castFromI16(LLVMI16Node fromNode) {
-        if (targetType == LLVMBaseType.I16) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics()) {
-            switch (targetType) {
+final class LLVMCastsFactory {
+    public static LLVMExpressionNode signedCast(BasicNodeFactory nodeFactory, LLVMExpressionNode fromNode, Type targetType) {
+        // does a signed cast (either sign extend or truncate) from (int or FP) to (int or FP). for
+        // vectors, the number of elements in source and target must match.
+        //
+        // @formatter:off
+        // source: ([vector] int, | ([vector] FP,   | ([vector] sint, | ([vector] FP, | (ptr,
+        // target:  [vector] int) |  [vector] sint) |  [vector] FP)   |  [vector] FP) |  int)
+        // @formatter:on
+        if (targetType instanceof PrimitiveType) {
+            switch (((PrimitiveType) targetType).getPrimitiveKind()) {
                 case I1:
-                    return LLVMI16ToI1NodeGen.create(fromNode);
+                    return LLVMSignedCastToI1NodeGen.create(fromNode);
                 case I8:
-                    return LLVMI16ToI8NodeGen.create(fromNode);
+                    return LLVMSignedCastToI8NodeGen.create(fromNode);
                 case I16:
-                    return LLVMI16ToI1NodeGen.create(fromNode);
+                    return LLVMSignedCastToI16NodeGen.create(fromNode);
                 case I32:
-                    return LLVMI16ToI32NodeGen.create(fromNode);
+                    return LLVMSignedCastToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMI16ToI64NodeGen.create(fromNode);
-                case I_VAR_BITWIDTH:
-                    return LLVMI16ToIVarNodeGen.create(fromNode, resolvedType.getBits().intValue());
+                    return nodeFactory.createSignedCastToI64(fromNode);
                 case FLOAT:
-                    return LLVMI16ToFloatNodeGen.create(fromNode);
+                    return LLVMSignedCastToFloatNodeGen.create(fromNode);
                 case DOUBLE:
-                    return LLVMI16ToDoubleNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
+                    return LLVMSignedCastToDoubleNodeGen.create(fromNode);
+                case X86_FP80:
+                    return LLVMSignedCastToLLVM80BitFloatNodeGen.create(fromNode);
             }
-        } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            switch (targetType) {
+        } else if (targetType instanceof VariableBitWidthType) {
+            return LLVMSignedCastToIVarNodeGen.create(fromNode, getBits(targetType));
+        } else if (targetType instanceof VectorType) {
+            VectorType vectorType = (VectorType) targetType;
+            Type elemType = vectorType.getElementType();
+            int vectorLength = vectorType.getNumberOfElements();
+            if (elemType instanceof PrimitiveType) {
+                switch (((PrimitiveType) ((VectorType) targetType).getElementType()).getPrimitiveKind()) {
+                    case I1:
+                        return LLVMSignedCastToI1VectorNodeGen.create(fromNode, vectorLength);
+                    case I8:
+                        return LLVMSignedCastToI8VectorNodeGen.create(fromNode, vectorLength);
+                    case I16:
+                        return LLVMSignedCastToI16VectorNodeGen.create(fromNode, vectorLength);
+                    case I32:
+                        return LLVMSignedCastToI32VectorNodeGen.create(fromNode, vectorLength);
+                    case I64:
+                        return LLVMSignedCastToI64VectorNodeGen.create(fromNode, vectorLength);
+                    case FLOAT:
+                        return LLVMSignedCastToFloatVectorNodeGen.create(fromNode, vectorLength);
+                    case DOUBLE:
+                        return LLVMSignedCastToDoubleVectorNodeGen.create(fromNode, vectorLength);
+                }
+            }
+        }
+
+        throw unsupportedCast(targetType);
+    }
+
+    public static LLVMExpressionNode unsignedCast(BasicNodeFactory nodeFactory, LLVMExpressionNode fromNode, Type targetType) {
+        // does an unsigned cast (zero extension or FP to uint). for vectors, the number of elements
+        // in source and target must match.
+        //
+        // @formatter:off
+        // source: ([vector] int, | ([vector] uint, | ([vector] FP,  | (int,
+        // target:  [vector] int) |  [vector] FP)   |  [vector] uint |  ptr)
+        // @formatter:on
+        if (targetType instanceof PrimitiveType) {
+            switch (((PrimitiveType) targetType).getPrimitiveKind()) {
+                case I8:
+                    return LLVMUnsignedCastToI8NodeGen.create(fromNode);
+                case I16:
+                    return LLVMUnsignedCastToI16NodeGen.create(fromNode);
                 case I32:
-                    return LLVMI16ToI32ZeroExtNodeGen.create(fromNode);
+                    return LLVMUnsignedCastToI32NodeGen.create(fromNode);
                 case I64:
-                    return LLVMI16ToI64ZeroExtNodeGen.create(fromNode);
+                    return nodeFactory.createUnsignedCastToI64(fromNode);
                 case FLOAT:
-                    return LLVMI16ToFloatNodeGen.create(fromNode);
+                    return LLVMUnsignedCastToFloatNodeGen.create(fromNode);
                 case DOUBLE:
-                    return LLVMI16ToDoubleZeroExtNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
+                    return LLVMUnsignedCastToDoubleNodeGen.create(fromNode);
+                case X86_FP80:
+                    return LLVMUnsignedCastToLLVM80BitFloatNodeGen.create(fromNode);
+            }
+        } else if (targetType instanceof PointerType || targetType instanceof FunctionType) {
+            return LLVMToAddressNodeGen.create(fromNode);
+        } else if (targetType instanceof VariableBitWidthType) {
+            return LLVMUnsignedCastToIVarNodeGen.create(fromNode, getBits(targetType));
+        } else if (targetType instanceof VectorType) {
+            VectorType vectorType = (VectorType) targetType;
+            Type elemType = vectorType.getElementType();
+            int vectorLength = vectorType.getNumberOfElements();
+            if (elemType instanceof PrimitiveType) {
+                switch (((PrimitiveType) elemType).getPrimitiveKind()) {
+                    case I1:
+                        return LLVMUnsignedCastToI1VectorNodeGen.create(fromNode, vectorLength);
+                    case I8:
+                        return LLVMUnsignedCastToI8VectorNodeGen.create(fromNode, vectorLength);
+                    case I16:
+                        return LLVMUnsignedCastToI16VectorNodeGen.create(fromNode, vectorLength);
+                    case I32:
+                        return LLVMUnsignedCastToI32VectorNodeGen.create(fromNode, vectorLength);
+                    case I64:
+                        return LLVMUnsignedCastToI64VectorNodeGen.create(fromNode, vectorLength);
+                }
             }
         }
-        throw new AssertionError(targetType + " " + conv);
+
+        throw unsupportedCast(targetType);
     }
 
-    private boolean hasJavaCastSemantics() {
-        return conv == LLVMConversionType.SIGN_EXTENSION || conv == LLVMConversionType.TRUNC;
-    }
-
-    private LLVMExpressionNode castFromPointer(LLVMAddressNode fromNode) {
-        if (targetType == LLVMBaseType.ADDRESS) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics() || conv == LLVMConversionType.BITCAST) {
-            switch (targetType) {
-                case I32:
-                    return LLVMAddressToI32NodeGen.create(fromNode);
-                case I64:
-                    return LLVMAddressToI64NodeGen.create(fromNode);
-                case ADDRESS:
-                    // at the moment we still can directly cast from pointer to pointer (e.g. from
-                    // I32* to I32Vector*)
-                    return fromNode;
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        }
-        throw new AssertionError(targetType + " " + conv);
-    }
-
-    private LLVMExpressionNode castFromI64(LLVMI64Node fromNode) {
-        if (targetType == LLVMBaseType.I64) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics()) {
-            switch (targetType) {
+    public static LLVMExpressionNode bitCast(BasicNodeFactory nodeFactory, LLVMExpressionNode fromNode, Type targetType) {
+        // does a reinterpreting cast between pretty much anything as long as source and target have
+        // the same bit width.
+        if (targetType instanceof PrimitiveType) {
+            switch (((PrimitiveType) targetType).getPrimitiveKind()) {
                 case I1:
-                    return LLVMI64ToI1NodeGen.create(fromNode);
+                    return LLVMBitcastToI1NodeGen.create(fromNode);
                 case I8:
-                    return LLVMI64ToI8NodeGen.create(fromNode);
+                    return LLVMBitcastToI8NodeGen.create(fromNode);
                 case I16:
-                    return LLVMI64ToI16NodeGen.create(fromNode);
+                    return LLVMBitcastToI16NodeGen.create(fromNode);
                 case I32:
-                    return LLVMI64ToI32NodeGen.create(fromNode);
+                    return LLVMBitcastToI32NodeGen.create(fromNode);
+                case I64:
+                    return nodeFactory.createBitcastToI64(fromNode);
                 case FLOAT:
-                    return LLVMI64ToFloatNodeGen.create(fromNode);
+                    return LLVMBitcastToFloatNodeGen.create(fromNode);
                 case DOUBLE:
-                    return LLVMI64ToDoubleNodeGen.create(fromNode);
+                    return LLVMBitcastToDoubleNodeGen.create(fromNode);
                 case X86_FP80:
-                    return LLVMI64ToLLVM80BitFloatNodeGen.create(fromNode);
-                case ADDRESS:
-                    return LLVMI64ToAddressNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
+                    return LLVMBitcastToLLVM80BitFloatNodeGen.create(fromNode);
             }
-        } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            switch (targetType) {
-                case I_VAR_BITWIDTH:
-                    return LLVMI64ToIVarNodeGen.create(fromNode, resolvedType.getBits().intValue());
-                case FLOAT:
-                    return LLVMI64ToFloatUnsignedNodeGen.create(fromNode);
-                case DOUBLE:
-                    return LLVMI64ToDoubleUnsignedNodeGen.create(fromNode);
-                case X86_FP80:
-                    return LLVMI64ToLLVM80BitFloatUnsignedNodeGen.create(fromNode);
-                case ADDRESS:
-                    return LLVMI64ToAddressNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
+        } else if (targetType instanceof PointerType || targetType instanceof FunctionType) {
+            return LLVMToAddressNodeGen.create(fromNode);
+        } else if (targetType instanceof VariableBitWidthType) {
+            return LLVMBitcastToIVarNodeGen.create(fromNode, targetType.getBitSize());
+        } else if (targetType instanceof VectorType) {
+            VectorType vectorType = (VectorType) targetType;
+            Type elemType = vectorType.getElementType();
+            int vectorLength = vectorType.getNumberOfElements();
+            if (elemType instanceof PrimitiveType) {
+                switch (((PrimitiveType) elemType).getPrimitiveKind()) {
+                    case I1:
+                        return LLVMBitcastToI1VectorNodeGen.create(fromNode, vectorLength);
+                    case I8:
+                        return LLVMBitcastToI8VectorNodeGen.create(fromNode, vectorLength);
+                    case I16:
+                        return LLVMBitcastToI16VectorNodeGen.create(fromNode, vectorLength);
+                    case I32:
+                        return LLVMBitcastToI32VectorNodeGen.create(fromNode, vectorLength);
+                    case I64:
+                        return LLVMBitcastToI64VectorNodeGen.create(fromNode, vectorLength);
+                    case FLOAT:
+                        return LLVMBitcastToFloatVectorNodeGen.create(fromNode, vectorLength);
+                    case DOUBLE:
+                        return LLVMBitcastToDoubleVectorNodeGen.create(fromNode, vectorLength);
+                }
             }
         }
-        throw new AssertionError(targetType + " " + conv);
+
+        throw unsupportedCast(targetType);
     }
 
-    private LLVMExpressionNode castFromI8(LLVMI8Node fromNode) {
-        if (targetType == LLVMBaseType.I8) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics()) {
-            switch (targetType) {
-                case I1:
-                    return LLVMI8ToI1NodeGen.create(fromNode);
-                case I16:
-                    return LLVMI8ToI16NodeGen.create(fromNode);
-                case I32:
-                    return LLVMI8ToI32NodeGen.create(fromNode);
-                case I64:
-                    return LLVMI8ToI64NodeGen.create(fromNode);
-                case I_VAR_BITWIDTH:
-                    return LLVMI8ToIVarNodeGen.create(fromNode, resolvedType.getBits().intValue());
-                case FLOAT:
-                    return LLVMI8ToFloatNodeGen.create(fromNode);
-                case DOUBLE:
-                    return LLVMI8ToDoubleNodeGen.create(fromNode);
-                case X86_FP80:
-                    return LLVMI8ToLLVM80BitFloatNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            switch (targetType) {
-                case I16:
-                    return LLVMI8ToI16ZeroExtNodeGen.create(fromNode);
-                case I32:
-                    return LLVMI8ToI32ZeroExtNodeGen.create(fromNode);
-                case I64:
-                    return LLVMI8ToI64ZeroExtNodeGen.create(fromNode);
-                case FLOAT:
-                    return LLVMI8ToFloatZeroExtNodeGen.create(fromNode);
-                case DOUBLE:
-                    return LLVMI8ToDoubleZeroExtNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        }
-        throw new AssertionError(targetType + " " + conv);
+    private static AssertionError unsupportedCast(Type targetType) {
+        throw new IllegalStateException("Parser Error: Cannot do convert to " + targetType);
     }
 
-    private LLVMExpressionNode castFromDouble(LLVMDoubleNode fromNode) {
-        if (targetType == LLVMBaseType.DOUBLE) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics() || conv == LLVMConversionType.ZERO_EXTENSION) {
-            switch (targetType) {
-                case I8:
-                    return LLVMDoubleToI8NodeGen.create(fromNode);
-                case I16:
-                    return LLVMDoubleToI16NodeGen.create(fromNode);
-                case I32:
-                    return LLVMDoubleToI32NodeGen.create(fromNode);
-                case I64:
-                    return LLVMDoubleToI64NodeGen.create(fromNode);
-                case FLOAT:
-                    return LLVMDoubleToFloatNodeGen.create(fromNode);
-                case X86_FP80:
-                    return LLVMDoubleToLLVM80BitFloatNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        } else if (conv == LLVMConversionType.BITCAST) {
-            switch (targetType) {
-                case I64:
-                    return LLVMDoubleToI64BitCastNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        }
-        throw new AssertionError(targetType + " " + conv);
+    private static int getBits(Type targetType) {
+        return targetType.getBitSize();
     }
-
-    private LLVMExpressionNode castFromI32(LLVMI32Node fromNode) {
-        if (targetType == LLVMBaseType.I32) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics()) {
-            switch (targetType) {
-                case I1:
-                    return LLVMI32ToI1NodeGen.create(fromNode);
-                case I8:
-                    return LLVMI32ToI8NodeGen.create(fromNode);
-                case I16:
-                    return LLVMI32ToI16NodeGen.create(fromNode);
-                case I64:
-                    return LLVMI32ToI64NodeGen.create(fromNode);
-                case I_VAR_BITWIDTH:
-                    return LLVMI32ToIVarNodeGen.create(fromNode, resolvedType.getBits().intValue());
-                case FLOAT:
-                    return LLVMI32ToFloatNodeGen.create(fromNode);
-                case DOUBLE:
-                    return LLVMI32ToDoubleNodeGen.create(fromNode);
-                case X86_FP80:
-                    return LLVMI32ToLLVM80BitFloatNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        } else if (conv == LLVMConversionType.ZERO_EXTENSION || conv == LLVMConversionType.BITCAST) {
-            switch (targetType) {
-                case I_VAR_BITWIDTH:
-                    return LLVMI32ToIVarZeroExtNodeGen.create(fromNode, resolvedType.getBits().intValue());
-                case I64:
-                    return LLVMI32ToI64ZeroExtNodeGen.create(fromNode);
-                case FLOAT:
-                    return LLVMI32ToFloatUnsignedNodeGen.create(fromNode);
-                case DOUBLE:
-                    return LLVMI32ToDoubleUnsignedNodeGen.create(fromNode);
-                case X86_FP80:
-                    return LLVMI32ToLLVM80BitFloatUnsignedNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        }
-        throw new AssertionError(targetType + " " + conv);
-    }
-
-    private LLVMExpressionNode castFromI1(LLVMI1Node fromNode) {
-        if (targetType == LLVMBaseType.I1) {
-            return fromNode;
-        }
-        if (hasJavaCastSemantics()) {
-            switch (targetType) {
-                case I8:
-                    return LLVMI1ToI8NodeGen.create(fromNode);
-                case I16:
-                    return LLVMI1ToI16NodeGen.create(fromNode);
-                case I32:
-                    return LLVMI1ToI32NodeGen.create(fromNode);
-                case I64:
-                    return LLVMI1ToI64NodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        } else if (conv == LLVMConversionType.ZERO_EXTENSION) {
-            switch (targetType) {
-                case I8:
-                    return LLVMI1ToI8ZeroExtNodeGen.create(fromNode);
-                case I16:
-                    return LLVMI1ToI16ZeroExtNodeGen.create(fromNode);
-                case I32:
-                    return LLVMI1ToI32ZeroExtNodeGen.create(fromNode);
-                case I64:
-                    return LLVMI1ToI64ZeroExtNodeGen.create(fromNode);
-                default:
-                    throw new AssertionError(targetType + " " + conv);
-            }
-        }
-        throw new AssertionError(targetType + " " + conv);
-    }
-
 }
