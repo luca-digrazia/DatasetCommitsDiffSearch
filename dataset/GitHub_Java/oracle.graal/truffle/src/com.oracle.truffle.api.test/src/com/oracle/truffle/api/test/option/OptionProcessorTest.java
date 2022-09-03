@@ -210,6 +210,11 @@ public class OptionProcessorTest {
         }
 
         @Override
+        protected Object getLanguageGlobal(Object context) {
+            return null;
+        }
+
+        @Override
         protected boolean isObjectOfLanguage(Object object) {
             return false;
         }

@@ -115,20 +115,7 @@ class OptionValuesImpl implements OptionValues {
     }
 
     RuntimeException failNotFound(String key) {
-        OptionDescriptors allOptions;
-        Exception errorOptions = null;
-        try {
-            allOptions = engine == null ? this.descriptors : this.engine.getAllOptions();
-        } catch (Exception e) {
-            errorOptions = e;
-            allOptions = this.descriptors;
-        }
-        RuntimeException error = failNotFound(allOptions, key);
-        if (errorOptions != null) {
-            error.addSuppressed(errorOptions);
-        }
-
-        throw error;
+        throw failNotFound(engine == null ? descriptors : engine.getAllOptions(), key);
     }
 
     static RuntimeException failNotFound(OptionDescriptors allOptions, String key) {
