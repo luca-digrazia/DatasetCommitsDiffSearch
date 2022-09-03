@@ -24,8 +24,8 @@ package com.oracle.graal.phases.common;
 
 import static com.oracle.graal.api.meta.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.type.StampFactory.*;
+import static com.oracle.graal.nodes.type.StampFactory.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 import static java.lang.reflect.Modifier.*;
 
 import java.lang.reflect.*;
@@ -36,9 +36,6 @@ import com.oracle.graal.api.code.Assumptions.Assumption;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.JavaTypeProfile.ProfiledType;
 import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.calc.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
@@ -649,7 +646,7 @@ public class InliningUtil {
             }
 
             // create one separate block for each invoked method
-            BeginNode[] successors = new BeginNode[numberOfMethods + 1];
+            AbstractBeginNode[] successors = new AbstractBeginNode[numberOfMethods + 1];
             for (int i = 0; i < numberOfMethods; i++) {
                 successors[i] = createInvocationBlock(graph, invoke, returnMerge, returnValuePhi, exceptionMerge, exceptionObjectPhi, true);
             }
@@ -661,7 +658,7 @@ public class InliningUtil {
             } else {
                 unknownTypeSux = graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TypeCheckedInliningViolated));
             }
-            successors[successors.length - 1] = BeginNode.begin(unknownTypeSux);
+            successors[successors.length - 1] = AbstractBeginNode.begin(unknownTypeSux);
 
             // replace the invoke exception edge
             if (invoke instanceof InvokeWithExceptionNode) {
@@ -687,7 +684,7 @@ public class InliningUtil {
 
             // do the actual inlining for every invoke
             for (int i = 0; i < numberOfMethods; i++) {
-                BeginNode node = successors[i];
+                AbstractBeginNode node = successors[i];
                 Invoke invokeForInlining = (Invoke) node.next();
 
                 ResolvedJavaType commonType;
@@ -773,10 +770,10 @@ public class InliningUtil {
         private void inlineSingleMethod(StructuredGraph graph, MetaAccessProvider metaAccess, Assumptions assumptions) {
             assert concretes.size() == 1 && inlineableElements.length == 1 && ptypes.size() > 1 && !shouldFallbackToInvoke() && notRecordedTypeProbability == 0;
 
-            BeginNode calleeEntryNode = graph.add(new BeginNode());
+            AbstractBeginNode calleeEntryNode = graph.add(new BeginNode());
 
-            BeginNode unknownTypeSux = createUnknownTypeSuccessor(graph);
-            BeginNode[] successors = new BeginNode[]{calleeEntryNode, unknownTypeSux};
+            AbstractBeginNode unknownTypeSux = createUnknownTypeSuccessor(graph);
+            AbstractBeginNode[] successors = new AbstractBeginNode[]{calleeEntryNode, unknownTypeSux};
             createDispatchOnTypeBeforeInvoke(graph, successors, false, metaAccess);
 
             calleeEntryNode.setNext(invoke.asNode());
@@ -784,7 +781,7 @@ public class InliningUtil {
             inline(invoke, methodAt(0), inlineableElementAt(0), assumptions, false);
         }
 
-        private boolean createDispatchOnTypeBeforeInvoke(StructuredGraph graph, BeginNode[] successors, boolean invokeIsOnlySuccessor, MetaAccessProvider metaAccess) {
+        private boolean createDispatchOnTypeBeforeInvoke(StructuredGraph graph, AbstractBeginNode[] successors, boolean invokeIsOnlySuccessor, MetaAccessProvider metaAccess) {
             assert ptypes.size() >= 1;
             ValueNode nonNullReceiver = nonNullReceiver(invoke);
             Kind hubKind = ((MethodCallTargetNode) invoke.callTarget()).targetMethod().getDeclaringClass().getEncoding(Representation.ObjectHub).getKind();
@@ -894,10 +891,10 @@ public class InliningUtil {
             return costEstimateMethodDispatch < costEstimateTypeDispatch;
         }
 
-        private static BeginNode createInvocationBlock(StructuredGraph graph, Invoke invoke, MergeNode returnMerge, PhiNode returnValuePhi, MergeNode exceptionMerge, PhiNode exceptionObjectPhi,
-                        boolean useForInlining) {
+        private static AbstractBeginNode createInvocationBlock(StructuredGraph graph, Invoke invoke, MergeNode returnMerge, PhiNode returnValuePhi, MergeNode exceptionMerge,
+                        PhiNode exceptionObjectPhi, boolean useForInlining) {
             Invoke duplicatedInvoke = duplicateInvokeForInlining(graph, invoke, exceptionMerge, exceptionObjectPhi, useForInlining);
-            BeginNode calleeEntryNode = graph.add(new BeginNode());
+            AbstractBeginNode calleeEntryNode = graph.add(new BeginNode());
             calleeEntryNode.setNext(duplicatedInvoke.asNode());
 
             AbstractEndNode endNode = graph.add(new EndNode());
@@ -972,9 +969,9 @@ public class InliningUtil {
         }
 
         private void devirtualizeWithTypeSwitch(StructuredGraph graph, InvokeKind kind, ResolvedJavaMethod target, MetaAccessProvider metaAccess) {
-            BeginNode invocationEntry = graph.add(new BeginNode());
-            BeginNode unknownTypeSux = createUnknownTypeSuccessor(graph);
-            BeginNode[] successors = new BeginNode[]{invocationEntry, unknownTypeSux};
+            AbstractBeginNode invocationEntry = graph.add(new BeginNode());
+            AbstractBeginNode unknownTypeSux = createUnknownTypeSuccessor(graph);
+            AbstractBeginNode[] successors = new AbstractBeginNode[]{invocationEntry, unknownTypeSux};
             createDispatchOnTypeBeforeInvoke(graph, successors, true, metaAccess);
 
             invocationEntry.setNext(invoke.asNode());
@@ -984,8 +981,8 @@ public class InliningUtil {
             replaceInvokeCallTarget(invoke, graph, kind, target);
         }
 
-        private static BeginNode createUnknownTypeSuccessor(StructuredGraph graph) {
-            return BeginNode.begin(graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TypeCheckedInliningViolated)));
+        private static AbstractBeginNode createUnknownTypeSuccessor(StructuredGraph graph) {
+            return AbstractBeginNode.begin(graph.add(new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.TypeCheckedInliningViolated)));
         }
 
         @Override
@@ -1350,7 +1347,7 @@ public class InliningUtil {
             }
         }
 
-        final BeginNode prevBegin = BeginNode.prevBegin(invokeNode);
+        final AbstractBeginNode prevBegin = AbstractBeginNode.prevBegin(invokeNode);
         DuplicationReplacement localReplacement = new DuplicationReplacement() {
 
             public Node replacement(Node node) {
@@ -1389,7 +1386,7 @@ public class InliningUtil {
             }
 
             // get rid of memory kill
-            BeginNode begin = invokeWithException.next();
+            AbstractBeginNode begin = invokeWithException.next();
             if (begin instanceof KillingBeginNode) {
                 BeginNode newBegin = new BeginNode();
                 graph.addAfterFixed(begin, graph.add(newBegin));
@@ -1406,7 +1403,7 @@ public class InliningUtil {
                 // "after exception" frame state
                 // (because there is no "after exception" frame state!)
                 if (monitorExit != null) {
-                    if (monitorExit.stateAfter() != null && monitorExit.stateAfter().bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
+                    if (monitorExit.stateAfter() != null && monitorExit.stateAfter().bci == FrameState.AFTER_EXCEPTION_BCI) {
                         FrameState monitorFrameState = monitorExit.stateAfter();
                         graph.removeFixed(monitorExit);
                         monitorFrameState.safeDelete();
@@ -1421,11 +1418,11 @@ public class InliningUtil {
             for (FrameState original : inlineGraph.getNodes(FrameState.class)) {
                 FrameState frameState = (FrameState) duplicates.get(original);
                 if (frameState != null) {
-                    assert frameState.bci != BytecodeFrame.BEFORE_BCI : frameState;
-                    if (frameState.bci == BytecodeFrame.AFTER_BCI) {
+                    assert frameState.bci != FrameState.BEFORE_BCI : frameState;
+                    if (frameState.bci == FrameState.AFTER_BCI) {
                         frameState.replaceAndDelete(returnKind == Kind.Void ? stateAfter : stateAfter.duplicateModified(stateAfter.bci, stateAfter.rethrowException(), returnKind,
                                         frameState.stackAt(0)));
-                    } else if (frameState.bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
+                    } else if (frameState.bci == FrameState.AFTER_EXCEPTION_BCI) {
                         if (frameState.isAlive()) {
                             assert stateAtExceptionEdge != null;
                             frameState.replaceAndDelete(stateAtExceptionEdge);
@@ -1435,7 +1432,7 @@ public class InliningUtil {
                     } else {
                         // only handle the outermost frame states
                         if (frameState.outerFrameState() == null) {
-                            assert frameState.bci == BytecodeFrame.INVALID_FRAMESTATE_BCI || frameState.method().equals(inlineGraph.method());
+                            assert frameState.bci == FrameState.INVALID_FRAMESTATE_BCI || frameState.method().equals(inlineGraph.method());
                             if (outerFrameState == null) {
                                 outerFrameState = stateAfter.duplicateModified(invoke.bci(), stateAfter.rethrowException(), invokeNode.getKind());
                                 outerFrameState.setDuringCall(true);
@@ -1507,7 +1504,7 @@ public class InliningUtil {
         for (Node node : duplicates.values()) {
             if (node instanceof FrameState) {
                 FrameState frameState = (FrameState) node;
-                assert frameState.bci == BytecodeFrame.AFTER_BCI || frameState.bci == BytecodeFrame.INVALID_FRAMESTATE_BCI : node.toString(Verbosity.Debugger);
+                assert frameState.bci == FrameState.AFTER_BCI || frameState.bci == FrameState.INVALID_FRAMESTATE_BCI : node.toString(Verbosity.Debugger);
             }
         }
         return true;
@@ -1521,7 +1518,7 @@ public class InliningUtil {
         assert !callTarget.isStatic() : callTarget.targetMethod();
         StructuredGraph graph = callTarget.graph();
         ValueNode firstParam = callTarget.arguments().get(0);
-        if (firstParam.getKind() == Kind.Object && !StampTool.isObjectNonNull(firstParam)) {
+        if (firstParam.getKind() == Kind.Object && !ObjectStamp.isObjectNonNull(firstParam)) {
             IsNullNode condition = graph.unique(new IsNullNode(firstParam));
             Stamp stamp = firstParam.stamp().join(objectNonNull());
             GuardingPiNode nonNullReceiver = graph.add(new GuardingPiNode(firstParam, condition, true, NullCheckException, InvalidateReprofile, stamp));
@@ -1569,7 +1566,7 @@ public class InliningUtil {
         try {
             return macroNodeClass.getConstructor(Invoke.class).newInstance(invoke);
         } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
-            throw new GraalGraphInternalError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
+            throw new GraalInternalError(e).addContext(invoke.asNode()).addContext("macroSubstitution", macroNodeClass);
         }
     }
 }

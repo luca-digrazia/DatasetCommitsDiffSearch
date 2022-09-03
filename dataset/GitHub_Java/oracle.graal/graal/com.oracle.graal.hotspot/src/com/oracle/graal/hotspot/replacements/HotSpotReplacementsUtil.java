@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
@@ -30,12 +30,11 @@ import sun.misc.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
@@ -81,20 +80,6 @@ public class HotSpotReplacementsUtil {
         return config().threadExceptionPcOffset;
     }
 
-    public static final LocationIdentity LAST_JAVA_PC_LOCATION = new NamedLocationIdentity("LastJavaPc");
-
-    @Fold
-    public static int threadLastJavaPcOffset() {
-        return config().threadLastJavaPcOffset();
-    }
-
-    public static final LocationIdentity LAST_JAVA_FP_LOCATION = new NamedLocationIdentity("LastJavaFp");
-
-    @Fold
-    public static int threadLastJavaFpOffset() {
-        return config().threadLastJavaFpOffset();
-    }
-
     public static final LocationIdentity TLAB_TOP_LOCATION = new NamedLocationIdentity("TlabTop");
 
     @Fold
@@ -126,16 +111,6 @@ public class HotSpotReplacementsUtil {
         return config().pendingExceptionOffset;
     }
 
-    public static final LocationIdentity PENDING_DEOPTIMIZATION_LOCATION = new NamedLocationIdentity("PendingDeoptimization");
-
-    /**
-     * @see HotSpotVMConfig#pendingDeoptimizationOffset
-     */
-    @Fold
-    private static int threadPendingDeoptimizationOffset() {
-        return config().pendingDeoptimizationOffset;
-    }
-
     public static final LocationIdentity OBJECT_RESULT_LOCATION = new NamedLocationIdentity("ObjectResult");
 
     @Fold
@@ -163,14 +138,6 @@ public class HotSpotReplacementsUtil {
 
     public static void writeExceptionPc(Word thread, Word value) {
         thread.writeWord(threadExceptionPcOffset(), value, EXCEPTION_PC_LOCATION);
-    }
-
-    public static void writeLastJavaPc(Word thread, Word value) {
-        thread.writeWord(threadLastJavaPcOffset(), value, LAST_JAVA_PC_LOCATION);
-    }
-
-    public static void writeLastJavaFp(Word thread, Word value) {
-        thread.writeWord(threadLastJavaFpOffset(), value, LAST_JAVA_FP_LOCATION);
     }
 
     public static Word readTlabTop(Word thread) {
@@ -204,22 +171,6 @@ public class HotSpotReplacementsUtil {
         boolean result = thread.readObject(threadPendingExceptionOffset(), PENDING_EXCEPTION_LOCATION) != null;
         thread.writeObject(threadPendingExceptionOffset(), null, PENDING_EXCEPTION_LOCATION);
         return result;
-    }
-
-    /**
-     * Reads the pending deoptimization value for the given thread.
-     *
-     * @return {@code true} if there was a pending deoptimization
-     */
-    public static int readPendingDeoptimization(Word thread) {
-        return thread.readInt(threadPendingDeoptimizationOffset(), PENDING_DEOPTIMIZATION_LOCATION);
-    }
-
-    /**
-     * Writes the pending deoptimization value for the given thread.
-     */
-    public static void writePendingDeoptimization(Word thread, int value) {
-        thread.writeInt(threadPendingDeoptimizationOffset(), value, PENDING_DEOPTIMIZATION_LOCATION);
     }
 
     /**
@@ -417,16 +368,6 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
-    public static byte dirtyCardValue() {
-        return config().dirtyCardValue;
-    }
-
-    @Fold
-    public static byte g1YoungCardValue() {
-        return config().g1YoungCardValue;
-    }
-
-    @Fold
     public static int cardTableShift() {
         return config().cardtableShift();
     }
@@ -540,7 +481,7 @@ public class HotSpotReplacementsUtil {
     private static native Object verifyOopStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object);
 
     public static Word loadWordFromObject(Object object, int offset) {
-        ReplacementsUtil.staticAssert(offset != hubOffset(), "Use loadHubIntrinsic instead of loadWordFromObject");
+        assert offset != hubOffset() : "Use loadHubIntrinsic instead";
         return loadWordFromObjectIntrinsic(object, offset, getWordKind(), LocationIdentity.ANY_LOCATION);
     }
 
@@ -556,9 +497,6 @@ public class HotSpotReplacementsUtil {
 
     @NodeIntrinsic(value = ReadRegisterNode.class, setStampFromReturnType = true)
     public static native Word registerAsWord(@ConstantNodeParameter Register register, @ConstantNodeParameter boolean directUse, @ConstantNodeParameter boolean incoming);
-
-    @NodeIntrinsic(value = WriteRegisterNode.class, setStampFromReturnType = true)
-    public static native void writeRegisterAsWord(@ConstantNodeParameter Register register, Word value);
 
     @SuppressWarnings("unused")
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
@@ -616,13 +554,6 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static int arrayKlassOffset() {
         return config().arrayKlassOffset;
-    }
-
-    public static final LocationIdentity KLASS_NODE_CLASS = new NamedLocationIdentity("KlassNodeClass");
-
-    @Fold
-    public static int klassNodeClassOffset() {
-        return config().klassNodeClassOffset;
     }
 
     @Fold
