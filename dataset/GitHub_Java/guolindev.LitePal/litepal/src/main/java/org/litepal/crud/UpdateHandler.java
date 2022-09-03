@@ -123,7 +123,6 @@ class UpdateHandler extends DataHandler {
 	 * @throws IllegalArgumentException
 	 * @throws SecurityException
 	 */
-    @SuppressWarnings("unchecked")
 	int onUpdateAll(DataSupport baseObj, String... conditions) throws SecurityException,
 			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
 			InvocationTargetException {

@@ -95,11 +95,11 @@ public class LitePalParser {
 	 * DomParse to parse the configuration file as default. SAXParser and
 	 * XmlPullParser is also optional, but not visible to developers.
 	 */
-	public static LitePalConfig parseLitePalConfiguration() {
+	public static void parseLitePalConfiguration() {
 		if (parser == null) {
 			parser = new LitePalParser();
 		}
-		return parser.usePullParse();
+		parser.useSAXParser();
 	}
 
 	/**
@@ -111,7 +111,7 @@ public class LitePalParser {
 	 * could be thrown. Be careful of writing litepal.xml file, or developer's
 	 * application may be crash.
 	 */
-    private void useSAXParser() {
+	void useSAXParser() {
 		LitePalContentHandler handler;
 		try {
 			SAXParserFactory factory = SAXParserFactory.newInstance();
@@ -141,9 +141,9 @@ public class LitePalParser {
 	 * could be thrown. Be careful of writing litepal.xml file, or developer's
 	 * application may be crash.
 	 */
-    private LitePalConfig usePullParse() {
+	void usePullParse() {
 		try {
-			LitePalConfig litePalConfig = new LitePalConfig();
+			LitePalAttr litePalAttr = LitePalAttr.getInstance();
 			XmlPullParserFactory factory = XmlPullParserFactory.newInstance();
 			XmlPullParser xmlPullParser = factory.newPullParser();
 			xmlPullParser.setInput(getConfigInputStream(), "UTF-8");
@@ -154,28 +154,24 @@ public class LitePalParser {
 				case XmlPullParser.START_TAG: {
 					if (NODE_DB_NAME.equals(nodeName)) {
 						String dbName = xmlPullParser.getAttributeValue("", ATTR_VALUE);
-                        litePalConfig.setDbName(dbName);
+						litePalAttr.setDbName(dbName);
 					} else if (NODE_VERSION.equals(nodeName)) {
 						String version = xmlPullParser.getAttributeValue("", ATTR_VALUE);
-                        litePalConfig.setVersion(Integer.parseInt(version));
+						litePalAttr.setVersion(Integer.parseInt(version));
 					} else if (NODE_MAPPING.equals(nodeName)) {
 						String className = xmlPullParser.getAttributeValue("", ATTR_CLASS);
-                        litePalConfig.addClassName(className);
+						litePalAttr.addClassName(className);
 					} else if (NODE_CASES.equals(nodeName)) {
 						String cases = xmlPullParser.getAttributeValue("", ATTR_VALUE);
-                        litePalConfig.setCases(cases);
-					} else if (NODE_STORAGE.equals(nodeName)) {
-                        String storage = xmlPullParser.getAttributeValue("", ATTR_VALUE);
-                        litePalConfig.setStorage(storage);
-                    }
-                    break;
+						litePalAttr.setCases(cases);
+					}
+					break;
 				}
 				default:
 					break;
 				}
 				eventType = xmlPullParser.next();
 			}
-            return litePalConfig;
 		} catch (XmlPullParserException e) {
 			throw new ParseConfigurationFileException(
 					ParseConfigurationFileException.FILE_FORMAT_IS_NOT_CORRECT);
