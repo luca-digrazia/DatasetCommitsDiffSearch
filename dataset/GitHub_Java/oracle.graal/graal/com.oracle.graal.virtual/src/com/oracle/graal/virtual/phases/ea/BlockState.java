@@ -30,7 +30,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.MergeableBlockState;
 import com.oracle.graal.virtual.nodes.*;
@@ -89,80 +88,47 @@ class BlockState extends MergeableBlockState<BlockState> {
             throw new BailoutException("array materialized with lock");
         }
 
+        MaterializeObjectNode materialize = new MaterializeObjectNode(virtual, obj.getLockCount());
+        ValueNode[] values = new ValueNode[obj.getEntries().length];
+        materialize.setProbability(fixed.probability());
         ValueNode[] fieldState = obj.getEntries();
-
-        // determine if all entries are default constants
-        boolean allDefault = true;
+        obj.setMaterializedValue(materialize);
+        deferred.add(virtual);
         for (int i = 0; i < fieldState.length; i++) {
-            if (!fieldState[i].isConstant() || !fieldState[i].asConstant().isDefaultForKind()) {
-                allDefault = false;
-                break;
-            }
-        }
-
-        if (allDefault && obj.getLockCount() == 0) {
-            // create an ordinary NewInstance/NewArray node if all entries are default constants
-            FixedWithNextNode newObject;
-            if (virtual instanceof VirtualInstanceNode) {
-                newObject = new NewInstanceNode(virtual.type(), true, false);
-            } else {
-                assert virtual instanceof VirtualArrayNode;
-                ResolvedJavaType element = ((VirtualArrayNode) virtual).componentType();
-                if (element.getKind() == Kind.Object) {
-                    newObject = new NewObjectArrayNode(element, ConstantNode.forInt(virtual.entryCount(), fixed.graph()), true, false);
-                } else {
-                    newObject = new NewPrimitiveArrayNode(element, ConstantNode.forInt(virtual.entryCount(), fixed.graph()), true, false);
+            ObjectState valueObj = getObjectState(fieldState[i]);
+            if (valueObj != null) {
+                if (valueObj.isVirtual()) {
+                    materializeChangedBefore(fixed, valueObj.virtual, deferred, deferredStores, materializeEffects);
                 }
-            }
-            newObject.setProbability(fixed.probability());
-            obj.setMaterializedValue(newObject);
-            materializeEffects.addFixedNodeBefore(newObject, fixed);
-        } else {
-            // some entries are not default constants - do the materialization
-            virtual.materializeAt(fixed);
-            MaterializeObjectNode materialize = new MaterializeObjectNode(virtual, obj.getLockCount());
-            ValueNode[] values = new ValueNode[obj.getEntries().length];
-            materialize.setProbability(fixed.probability());
-            obj.setMaterializedValue(materialize);
-            deferred.add(virtual);
-            for (int i = 0; i < fieldState.length; i++) {
-                ObjectState valueObj = getObjectState(fieldState[i]);
-                if (valueObj != null) {
-                    if (valueObj.isVirtual()) {
-                        materializeChangedBefore(fixed, valueObj.virtual, deferred, deferredStores, materializeEffects);
-                    }
-                    if (deferred.contains(valueObj.virtual)) {
-                        Kind fieldKind;
-                        CyclicMaterializeStoreNode store;
-                        if (virtual instanceof VirtualArrayNode) {
-                            store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), i);
-                            fieldKind = ((VirtualArrayNode) virtual).componentType().getKind();
-                        } else {
-                            VirtualInstanceNode instanceObject = (VirtualInstanceNode) virtual;
-                            store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), instanceObject.field(i));
-                            fieldKind = instanceObject.field(i).getType().getKind();
-                        }
-                        deferredStores.addFixedNodeBefore(store, fixed);
-                        values[i] = ConstantNode.defaultForKind(fieldKind, fixed.graph());
+                if (deferred.contains(valueObj.virtual)) {
+                    Kind fieldKind;
+                    CyclicMaterializeStoreNode store;
+                    if (virtual instanceof VirtualArrayNode) {
+                        store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), i);
+                        fieldKind = ((VirtualArrayNode) virtual).componentType().getKind();
                     } else {
-                        values[i] = valueObj.getMaterializedValue();
+                        VirtualInstanceNode instanceObject = (VirtualInstanceNode) virtual;
+                        store = new CyclicMaterializeStoreNode(materialize, valueObj.getMaterializedValue(), instanceObject.field(i));
+                        fieldKind = instanceObject.field(i).getType().getKind();
                     }
+                    deferredStores.addFixedNodeBefore(store, fixed);
+                    values[i] = ConstantNode.defaultForKind(fieldKind, fixed.graph());
                 } else {
-                    values[i] = fieldState[i];
+                    values[i] = valueObj.getMaterializedValue();
                 }
+            } else {
+                values[i] = fieldState[i];
             }
-            deferred.remove(virtual);
-
-            materializeEffects.addMaterialization(materialize, fixed, values);
         }
+        deferred.remove(virtual);
+
+        materializeEffects.addMaterialization(materialize, fixed, values);
     }
 
     void addAndMarkAlias(VirtualObjectNode virtual, ValueNode node, NodeBitMap usages) {
         objectAliases.put(node, virtual);
-        if (node.isAlive()) {
-            for (Node usage : node.usages()) {
-                markVirtualUsages(usage, usages);
-            }
+        for (Node usage : node.usages()) {
+            markVirtualUsages(usage, usages);
         }
     }
 

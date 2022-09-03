@@ -31,12 +31,13 @@ import com.oracle.graal.nodes.virtual.*;
 /**
  * The {@code NewArrayNode} class is the base of all instructions that allocate arrays.
  */
-public abstract class NewArrayNode extends FixedWithNextNode implements Lowerable, VirtualizableAllocation, ArrayLengthProvider {
+public abstract class NewArrayNode extends FixedWithNextNode implements Lowerable, EscapeAnalyzable, ArrayLengthProvider {
 
     @Input private ValueNode length;
     private final ResolvedJavaType elementType;
     private final boolean fillContents;
 
+    public static final int MaximumEscapeAnalysisArrayLength = 32;
     private final boolean locked;
 
     @Override
@@ -104,19 +105,34 @@ public abstract class NewArrayNode extends FixedWithNextNode implements Lowerabl
     }
 
     @Override
-    public void virtualize(VirtualizerTool tool) {
+    public EscapeOp getEscapeOp() {
         if (length().asConstant() != null) {
             final int constantLength = length().asConstant().asInt();
-            if (constantLength >= 0 && constantLength < tool.getMaximumEntryCount()) {
-                ValueNode[] state = new ValueNode[constantLength];
-                ConstantNode defaultForKind = constantLength == 0 ? null : ConstantNode.defaultForKind(elementType().getKind(), graph());
-                for (int i = 0; i < constantLength; i++) {
-                    state[i] = defaultForKind;
-                }
-                VirtualObjectNode virtualObject = new VirtualArrayNode(tool.getNextVirtualId(), elementType, constantLength);
-                tool.createVirtualObject(virtualObject, state, 0);
-                tool.replaceWithVirtual(virtualObject);
+            if (constantLength >= 0 && constantLength < MaximumEscapeAnalysisArrayLength) {
+                return new EscapeOp() {
+
+                    @Override
+                    public ValueNode[] fieldState() {
+                        ValueNode[] state = new ValueNode[constantLength];
+                        ConstantNode defaultForKind = constantLength == 0 ? null : ConstantNode.defaultForKind(elementType().getKind(), graph());
+                        for (int i = 0; i < constantLength; i++) {
+                            state[i] = defaultForKind;
+                        }
+                        return state;
+                    }
+
+                    @Override
+                    public VirtualObjectNode virtualObject(long virtualId) {
+                        return new VirtualArrayNode(virtualId, elementType, constantLength);
+                    }
+
+                    @Override
+                    public int lockCount() {
+                        return 0;
+                    }
+                };
             }
         }
+        return null;
     }
 }

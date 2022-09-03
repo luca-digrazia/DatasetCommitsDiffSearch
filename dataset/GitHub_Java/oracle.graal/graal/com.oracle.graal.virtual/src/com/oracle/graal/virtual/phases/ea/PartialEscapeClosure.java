@@ -27,14 +27,17 @@ import static com.oracle.graal.virtual.phases.ea.PartialEscapeAnalysisPhase.*;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.api.meta.ResolvedJavaType.Representation;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.VirtualState.NodeClosure;
+import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.Virtualizable.EscapeState;
 import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.graph.ReentrantBlockIterator.BlockIteratorClosure;
@@ -44,25 +47,21 @@ import com.oracle.graal.virtual.nodes.*;
 
 class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
 
-    public static final DebugMetric METRIC_MATERIALIZATIONS = Debug.metric("Materializations");
-    public static final DebugMetric METRIC_MATERIALIZATIONS_PHI = Debug.metric("MaterializationsPhi");
-    public static final DebugMetric METRIC_MATERIALIZATIONS_MERGE = Debug.metric("MaterializationsMerge");
-    public static final DebugMetric METRIC_MATERIALIZATIONS_UNHANDLED = Debug.metric("MaterializationsUnhandled");
-    public static final DebugMetric METRIC_MATERIALIZATIONS_LOOP_REITERATION = Debug.metric("MaterializationsLoopReiteration");
-    public static final DebugMetric METRIC_MATERIALIZATIONS_LOOP_END = Debug.metric("MaterializationsLoopEnd");
-    public static final DebugMetric METRIC_ALLOCATION_REMOVED = Debug.metric("AllocationRemoved ");
+
+    private static final DebugMetric metricAllocationRemoved = Debug.metric("AllocationRemoved ");
+
+    private final GraphEffectList effects = new GraphEffectList();
+    private final HashSet<VirtualObjectNode> reusedVirtualObjects = new HashSet<>();
+    private int virtualIds = 0;
 
     private final NodeBitMap usages;
     private final SchedulePhase schedule;
+    private final MetaAccessProvider runtime;
 
-    private final GraphEffectList effects = new GraphEffectList();
-
-    private final VirtualizerToolImpl tool;
-
-    public PartialEscapeClosure(NodeBitMap usages, SchedulePhase schedule, MetaAccessProvider metaAccess) {
+    public PartialEscapeClosure(NodeBitMap usages, SchedulePhase schedule, MetaAccessProvider runtime) {
         this.usages = usages;
         this.schedule = schedule;
-        tool = new VirtualizerToolImpl(effects, usages, metaAccess);
+        this.runtime = runtime;
     }
 
     public GraphEffectList getEffects() {
@@ -70,7 +69,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
     }
 
     public int getVirtualIdCount() {
-        return tool.getNextVirtualId();
+        return virtualIds;
     }
 
     @Override
@@ -80,11 +79,36 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
 
         FixedWithNextNode lastFixedNode = null;
         for (Node node : nodeList) {
-            if (usages.isMarked(node) || node instanceof VirtualizableAllocation) {
-                trace("[[%s]] ", node);
-                processNode((ValueNode) node, lastFixedNode == null ? null : lastFixedNode.next(), state);
+            EscapeOp op = null;
+            if (node instanceof EscapeAnalyzable) {
+                op = ((EscapeAnalyzable) node).getEscapeOp();
+            }
+
+            if (op != null) {
+                trace("{{%s}} ", node);
+                VirtualObjectNode virtualObject = op.virtualObject(virtualIds);
+                if (virtualObject.isAlive()) {
+                    reusedVirtualObjects.add(virtualObject);
+                    state.addAndMarkAlias(virtualObject, virtualObject, usages);
+                } else {
+                    effects.addFloatingNode(virtualObject);
+                }
+                ValueNode[] fieldState = op.fieldState();
+                for (int i = 0; i < fieldState.length; i++) {
+                    fieldState[i] = state.getScalarAlias(fieldState[i]);
+                }
+                state.addObject(virtualObject, new ObjectState(virtualObject, fieldState, op.lockCount()));
+                state.addAndMarkAlias(virtualObject, (ValueNode) node, usages);
+                effects.deleteFixedNode((FixedWithNextNode) node);
+                virtualIds++;
+                metricAllocationRemoved.increment();
             } else {
-                trace("%s ", node);
+                if (usages.isMarked(node)) {
+                    trace("[[%s]] ", node);
+                    processNode((ValueNode) node, lastFixedNode == null ? null : lastFixedNode.next(), state);
+                } else {
+                    trace("%s ", node);
+                }
             }
 
             if (node instanceof FixedWithNextNode && node.isAlive()) {
@@ -95,18 +119,268 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
     }
 
     private void processNode(final ValueNode node, FixedNode insertBefore, final BlockState state) {
-        tool.reset(state, node);
-        if (node instanceof Virtualizable) {
-            ((Virtualizable) node).virtualize(tool);
+        boolean usageFound = false;
+        if (node instanceof PiNode || node instanceof ValueProxyNode) {
+            ValueNode value = node instanceof PiNode ? ((PiNode) node).object() : ((ValueProxyNode) node).value();
+            ObjectState obj = state.getObjectState(value);
+            if (obj != null) {
+                if (obj.isVirtual()) {
+                    state.addAndMarkAlias(obj.virtual, node, usages);
+                } else {
+                    effects.replaceFirstInput(node, value, obj.getMaterializedValue());
+                }
+                usageFound = true;
+            }
+        } else if (node instanceof CheckCastNode) {
+            CheckCastNode x = (CheckCastNode) node;
+            ObjectState obj = state.getObjectState(x.object());
+            if (obj != null) {
+                if (obj.isVirtual()) {
+                    if (obj.virtual.type().isSubtypeOf(x.type())) {
+                        state.addAndMarkAlias(obj.virtual, x, usages);
+                        effects.deleteFixedNode(x);
+                    } else {
+                        replaceWithMaterialized(x.object(), x, state, obj);
+                    }
+                } else {
+                    effects.replaceFirstInput(x, x.object(), obj.getMaterializedValue());
+                }
+                usageFound = true;
+            }
+        } else if (node instanceof IsNullNode) {
+            IsNullNode x = (IsNullNode) node;
+            if (state.getObjectState(x.object()) != null) {
+                replaceAtUsages(state, x, ConstantNode.forBoolean(false, node.graph()));
+                usageFound = true;
+            }
+        } else if (node instanceof AccessMonitorNode) {
+            AccessMonitorNode x = (AccessMonitorNode) node;
+            ObjectState obj = state.getObjectState(x.object());
+            if (obj != null) {
+                Debug.log("monitor operation %s on %s\n", x, obj.virtual);
+                if (node instanceof MonitorEnterNode) {
+                    obj.incLockCount();
+                } else {
+                    assert node instanceof MonitorExitNode;
+                    obj.decLockCount();
+                }
+                if (obj.isVirtual()) {
+                    effects.replaceFirstInput(node, x.object(), obj.virtual);
+                    effects.eliminateMonitor(x);
+                } else {
+                    effects.replaceFirstInput(node, x.object(), obj.getMaterializedValue());
+                }
+                usageFound = true;
+            }
+        } else if (node instanceof CyclicMaterializeStoreNode) {
+            CyclicMaterializeStoreNode x = (CyclicMaterializeStoreNode) node;
+            ObjectState obj = state.getObjectState(x.object());
+            if (obj != null) {
+                if (obj.virtual instanceof VirtualArrayNode) {
+                    obj.setEntry(x.targetIndex(), x.value());
+                } else {
+                    VirtualInstanceNode instance = (VirtualInstanceNode) obj.virtual;
+                    obj.setEntry(instance.fieldIndex(x.targetField()), x.value());
+                }
+                effects.deleteFixedNode(x);
+                usageFound = true;
+            }
+        } else if (node instanceof LoadFieldNode) {
+            LoadFieldNode x = (LoadFieldNode) node;
+            ObjectState obj = state.getObjectState(x.object());
+            if (obj != null) {
+                VirtualInstanceNode virtual = (VirtualInstanceNode) obj.virtual;
+                int fieldIndex = virtual.fieldIndex(x.field());
+                if (fieldIndex == -1) {
+                    // the field does not exist in the virtual object
+                    ensureMaterialized(state, obj, x);
+                }
+                if (obj.isVirtual()) {
+                    ValueNode result = obj.getEntry(fieldIndex);
+                    ObjectState resultObj = state.getObjectState(result);
+                    if (resultObj != null) {
+                        state.addAndMarkAlias(resultObj.virtual, x, usages);
+                    } else {
+                        replaceAtUsages(state, x, result);
+                    }
+                    effects.deleteFixedNode(x);
+                } else {
+                    effects.replaceFirstInput(x, x.object(), obj.getMaterializedValue());
+                }
+                usageFound = true;
+            }
+        } else if (node instanceof StoreFieldNode) {
+            StoreFieldNode x = (StoreFieldNode) node;
+            ValueNode object = x.object();
+            ValueNode value = x.value();
+            ObjectState obj = state.getObjectState(object);
+            if (obj != null) {
+                VirtualInstanceNode virtual = (VirtualInstanceNode) obj.virtual;
+                int fieldIndex = virtual.fieldIndex(x.field());
+                if (fieldIndex == -1) {
+                    // the field does not exist in the virtual object
+                    ensureMaterialized(state, obj, x);
+                }
+                if (obj.isVirtual()) {
+                    obj.setEntry(fieldIndex, state.getScalarAlias(value));
+                    effects.deleteFixedNode(x);
+                } else {
+                    effects.replaceFirstInput(x, object, obj.getMaterializedValue());
+                    ObjectState valueObj = state.getObjectState(value);
+                    if (valueObj != null) {
+                        replaceWithMaterialized(value, x, state, valueObj);
+                    }
+                }
+                usageFound = true;
+            } else {
+                ObjectState valueObj = state.getObjectState(value);
+                if (valueObj != null) {
+                    replaceWithMaterialized(value, x, state, valueObj);
+                    usageFound = true;
+                }
+            }
+        } else if (node instanceof LoadIndexedNode) {
+            LoadIndexedNode x = (LoadIndexedNode) node;
+            ValueNode array = x.array();
+            ObjectState arrayObj = state.getObjectState(array);
+            if (arrayObj != null) {
+                if (arrayObj.isVirtual()) {
+                    ValueNode indexValue = state.getScalarAlias(x.index());
+                    int index = indexValue.isConstant() ? indexValue.asConstant().asInt() : -1;
+                    if (index < 0 || index >= arrayObj.getEntries().length) {
+                        // out of bounds or not constant
+                        replaceWithMaterialized(array, x, state, arrayObj);
+                    } else {
+                        ValueNode result = arrayObj.getEntry(index);
+                        ObjectState resultObj = state.getObjectState(result);
+                        if (resultObj != null) {
+                            state.addAndMarkAlias(resultObj.virtual, x, usages);
+                        } else {
+                            replaceAtUsages(state, x, result);
+                        }
+                        effects.deleteFixedNode(x);
+                    }
+                } else {
+                    effects.replaceFirstInput(x, array, arrayObj.getMaterializedValue());
+                }
+                usageFound = true;
+            }
+        } else if (node instanceof StoreIndexedNode) {
+            StoreIndexedNode x = (StoreIndexedNode) node;
+            ValueNode array = x.array();
+            ValueNode value = x.value();
+            ObjectState arrayObj = state.getObjectState(array);
+            ObjectState valueObj = state.getObjectState(value);
+
+            if (arrayObj != null) {
+                if (arrayObj.isVirtual()) {
+                    ValueNode indexValue = state.getScalarAlias(x.index());
+                    int index = indexValue.isConstant() ? indexValue.asConstant().asInt() : -1;
+                    if (index < 0 || index >= arrayObj.getEntries().length) {
+                        // out of bounds or not constant
+                        replaceWithMaterialized(array, x, state, arrayObj);
+                        if (valueObj != null) {
+                            replaceWithMaterialized(value, x, state, valueObj);
+                        }
+                    } else {
+                        arrayObj.setEntry(index, state.getScalarAlias(value));
+                        effects.deleteFixedNode(x);
+                    }
+                } else {
+                    effects.replaceFirstInput(x, array, arrayObj.getMaterializedValue());
+                    if (valueObj != null) {
+                        replaceWithMaterialized(value, x, state, valueObj);
+                    }
+                }
+                usageFound = true;
+            } else {
+                if (valueObj != null) {
+                    replaceWithMaterialized(value, x, state, valueObj);
+                    usageFound = true;
+                }
+            }
+        } else if (node instanceof RegisterFinalizerNode) {
+            RegisterFinalizerNode x = (RegisterFinalizerNode) node;
+            ObjectState obj = state.getObjectState(x.object());
+            if (obj != null) {
+                replaceWithMaterialized(x.object(), x, state, obj);
+                usageFound = true;
+            }
+        } else if (node instanceof ArrayLengthNode) {
+            ArrayLengthNode x = (ArrayLengthNode) node;
+            ObjectState obj = state.getObjectState(x.array());
+            if (obj != null) {
+                replaceAtUsages(state, x, ConstantNode.forInt(((VirtualArrayNode) obj.virtual).entryCount(), node.graph()));
+                effects.deleteFixedNode(x);
+                usageFound = true;
+            }
+        } else if (node instanceof LoadHubNode) {
+            LoadHubNode x = (LoadHubNode) node;
+            ObjectState obj = state.getObjectState(x.object());
+            if (obj != null) {
+                replaceAtUsages(state, x, ConstantNode.forConstant(obj.virtual.type().getEncoding(Representation.ObjectHub), runtime, node.graph()));
+                effects.deleteFixedNode(x);
+                usageFound = true;
+            }
+        } else if (node instanceof ReturnNode) {
+            ReturnNode x = (ReturnNode) node;
+            ObjectState obj = state.getObjectState(x.result());
+            if (obj != null) {
+                replaceWithMaterialized(x.result(), x, state, obj);
+                usageFound = true;
+            }
+        } else if (node instanceof MethodCallTargetNode) {
+            for (ValueNode argument : ((MethodCallTargetNode) node).arguments()) {
+                ObjectState obj = state.getObjectState(argument);
+                if (obj != null) {
+                    replaceWithMaterialized(argument, node, insertBefore, state, obj);
+                    usageFound = true;
+                }
+            }
+        } else if (node instanceof ObjectEqualsNode) {
+            ObjectEqualsNode x = (ObjectEqualsNode) node;
+            ObjectState xObj = state.getObjectState(x.x());
+            ObjectState yObj = state.getObjectState(x.y());
+            boolean xVirtual = xObj != null && xObj.isVirtual();
+            boolean yVirtual = yObj != null && yObj.isVirtual();
+
+            if (xVirtual ^ yVirtual) {
+                // one of them is virtual: they can never be the same objects
+                replaceAtUsages(state, x, ConstantNode.forBoolean(false, node.graph()));
+                usageFound = true;
+            } else if (xVirtual && yVirtual) {
+                // both are virtual: check if they refer to the same object
+                replaceAtUsages(state, x, ConstantNode.forBoolean(xObj == yObj, node.graph()));
+                usageFound = true;
+            } else {
+                if (xObj != null || yObj != null) {
+                    if (xObj != null) {
+                        assert !xObj.isVirtual();
+                        effects.replaceFirstInput(x, x.x(), xObj.getMaterializedValue());
+                    }
+                    if (yObj != null) {
+                        assert !yObj.isVirtual();
+                        effects.replaceFirstInput(x, x.y(), yObj.getMaterializedValue());
+                    }
+                    usageFound = true;
+                }
+            }
+        } else if (node instanceof MergeNode) {
+            usageFound = true;
+        } else if (node instanceof UnsafeLoadNode || node instanceof UnsafeStoreNode || node instanceof CompareAndSwapNode || node instanceof SafeReadNode) {
+            for (ValueNode input : node.inputs().filter(ValueNode.class)) {
+                ObjectState obj = state.getObjectState(input);
+                if (obj != null) {
+                    replaceWithMaterialized(input, node, insertBefore, state, obj);
+                    usageFound = true;
+                }
+            }
         }
-        if (tool.isDeleted()) {
-            return;
-        }
-        if (node instanceof StateSplit) {
+        if (node.isAlive() && node instanceof StateSplit) {
             StateSplit split = (StateSplit) node;
             FrameState stateAfter = split.stateAfter();
             if (stateAfter != null) {
-                if (stateAfter.usages().count() > 1) {
+                if (stateAfter.usages().size() > 1) {
                     stateAfter = (FrameState) stateAfter.copyWithInputs();
                     split.setStateAfter(stateAfter);
                 }
@@ -172,35 +446,43 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     } else {
                         v = new MaterializedObjectState(obj.virtual, obj.getMaterializedValue());
                     }
-                    effects.addVirtualMapping(stateAfter, v);
+                    effects.addVirtualMapping(stateAfter, v, reusedVirtualObjects);
                 }
             }
+            usageFound = true;
         }
-        if (tool.isCustomAction()) {
-            return;
-        }
-        for (ValueNode input : node.inputs().filter(ValueNode.class)) {
-            ObjectState obj = state.getObjectState(input);
-            if (obj != null) {
-                trace("replacing input %s at %s: %s", input, node, obj);
-                replaceWithMaterialized(input, node, insertBefore, state, obj, METRIC_MATERIALIZATIONS_UNHANDLED);
+        if (!usageFound) {
+            for (ValueNode input : node.inputs().filter(ValueNode.class)) {
+                ObjectState obj = state.getObjectState(input);
+                if (obj != null) {
+                    replaceWithMaterialized(input, node, insertBefore, state, obj);
+                    usageFound = true;
+                }
             }
+            Debug.log("unexpected usage of %s: %s\n", node, node.inputs().snapshot());
         }
     }
 
-    private void ensureMaterialized(BlockState state, ObjectState obj, FixedNode materializeBefore, DebugMetric metric) {
+    private void replaceAtUsages(final BlockState state, ValueNode x, ValueNode value) {
+        effects.replaceAtUsages(x, value);
+        state.addScalarAlias(x, value);
+    }
+
+    private void ensureMaterialized(BlockState state, ObjectState obj, FixedNode materializeBefore) {
         assert obj != null;
-        if (obj.getState() == EscapeState.Virtual) {
-            metric.increment();
-            state.materializeBefore(materializeBefore, obj.virtual, EscapeState.Global, effects);
-        } else {
-            assert obj.getState() == EscapeState.Global;
+        if (obj.isVirtual()) {
+            state.materializeBefore(materializeBefore, obj.virtual, effects);
         }
         assert !obj.isVirtual();
     }
 
-    private void replaceWithMaterialized(ValueNode value, Node usage, FixedNode materializeBefore, BlockState state, ObjectState obj, DebugMetric metric) {
-        ensureMaterialized(state, obj, materializeBefore, metric);
+    private void replaceWithMaterialized(ValueNode value, FixedNode usage, BlockState state, ObjectState obj) {
+        ensureMaterialized(state, obj, usage);
+        effects.replaceFirstInput(usage, value, obj.getMaterializedValue());
+    }
+
+    private void replaceWithMaterialized(ValueNode value, Node usage, FixedNode materializeBefore, BlockState state, ObjectState obj) {
+        ensureMaterialized(state, obj, materializeBefore);
         effects.replaceFirstInput(usage, value, obj.getMaterializedValue());
     }
 
@@ -210,8 +492,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
         BlockState newState = BlockState.meetAliases(states);
 
         // Iterative processing:
-        // Merging the materialized/virtual state of virtual objects can lead to new
-        // materializations, which can
+        // Merging the materialized/virtual state of virtual objects can lead to new materializations, which can
         // lead to new materializations because of phis, and so on.
 
         boolean materialized;
@@ -249,12 +530,12 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 BlockState state = states.get(i);
                                 ObjectState obj = state.getObjectState(object);
                                 materialized |= obj.isVirtual();
-                                ensureMaterialized(state, obj, merge.forwardEndAt(i), METRIC_MATERIALIZATIONS_MERGE);
+                                ensureMaterialized(state, obj, merge.forwardEndAt(i));
                                 effects.addPhiInput(materializedValuePhi, obj.getMaterializedValue());
                             }
-                            newState.addObject(object, new ObjectState(object, materializedValuePhi, EscapeState.Global, lockCount));
+                            newState.addObject(object, new ObjectState(object, materializedValuePhi, lockCount));
                         } else {
-                            newState.addObject(object, new ObjectState(object, singleValue, EscapeState.Global, lockCount));
+                            newState.addObject(object, new ObjectState(object, singleValue, lockCount));
                         }
                     } else {
                         assert virtual == states.size();
@@ -281,7 +562,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                         ObjectState obj = state.getObjectState(fields[index]);
                                         if (obj != null) {
                                             materialized |= obj.isVirtual();
-                                            ensureMaterialized(state, obj, merge.forwardEndAt(i), METRIC_MATERIALIZATIONS_MERGE);
+                                            ensureMaterialized(state, obj, merge.forwardEndAt(i));
                                             fields[index] = obj.getMaterializedValue();
                                         }
                                         effects.addPhiInput(phis[index], fields[index]);
@@ -294,7 +575,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 }
                             }
                         }
-                        newState.addObject(object, new ObjectState(object, values, EscapeState.Virtual, lockCount));
+                        newState.addObject(object, new ObjectState(object, values, lockCount));
                     }
                 }
             }
@@ -364,7 +645,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                 ObjectState obj = states.get(i).getObjectState(value);
                 if (obj != null) {
                     materialized |= obj.isVirtual();
-                    replaceWithMaterialized(value, phi, merge.forwardEndAt(i), states.get(i), obj, METRIC_MATERIALIZATIONS_PHI);
+                    replaceWithMaterialized(value, phi, merge.forwardEndAt(i), states.get(i), obj);
                 }
             }
         }
@@ -443,10 +724,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                 for (VirtualObjectNode virtualObject : additionalMaterializations) {
                     ObjectState obj = initialState.getObjectState(virtualObject);
                     if (obj.isVirtual()) {
-                        METRIC_MATERIALIZATIONS_LOOP_REITERATION.increment();
-                        initialState.materializeBefore(loop.loopBegin().forwardEnd(), virtualObject, EscapeState.Global, effects);
-                    } else {
-                        assert obj.getState() == EscapeState.Global;
+                        initialState.materializeBefore(loop.loopBegin().forwardEnd(), virtualObject, effects);
                     }
                 }
             }
@@ -550,8 +828,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                     if (endValueObj == null || !endValueObj.isVirtual() || valueObj.virtual != endValueObj.virtual) {
                                         additionalMaterializations.add(valueObj.virtual);
                                     } else {
-                                        // endValue is also virtual and refers to the same virtual
-                                        // object, so we're
+                                        // endValue is also virtual and refers to the same virtual object, so we're
                                         // good.
                                     }
                                 }
@@ -559,8 +836,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 if (value instanceof PhiNode && ((PhiNode) value).merge() == loopBegin) {
                                     if (endValueObj != null) {
                                         if (endValueObj.isVirtual()) {
-                                            METRIC_MATERIALIZATIONS_LOOP_END.increment();
-                                            loopEndState.materializeBefore(loopEnd, endValueObj.virtual, EscapeState.Global, successEffects);
+                                            loopEndState.materializeBefore(loopEnd, endValueObj.virtual, successEffects);
                                             materialized = true;
                                         }
                                     }
@@ -587,7 +863,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                         }
                     } else {
                         if (initialMaterialized) {
-                            loopEndState.materializeBefore(loopEnd, loopEndObj.virtual, EscapeState.Global, successEffects);
+                            loopEndState.materializeBefore(loopEnd, loopEndObj.virtual, successEffects);
                             materialized = true;
                         } else {
                             if (loopEndObj.virtual != initialObj.virtual) {
@@ -615,17 +891,14 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                                 if (endValueObj == null || !endValueObj.isVirtual() || valueObj.virtual != endValueObj.virtual) {
                                     assert !additionalMaterializations.isEmpty();
                                 } else {
-                                    // endValue is also virtual and refers to the same virtual
-                                    // object, so we're
+                                    // endValue is also virtual and refers to the same virtual object, so we're
                                     // good.
                                 }
                             } else {
-                                if ((endValueObj != null && endValueObj.getMaterializedValue() != valueObj.getMaterializedValue()) ||
-                                                (endValueObj == null && valueObj.getMaterializedValue() != endValue)) {
+                                if ((endValueObj != null && endValueObj.getMaterializedValue() != valueObj.getMaterializedValue()) || (endValueObj == null && valueObj.getMaterializedValue() != endValue)) {
                                     phis.add(new PhiDesc(state.virtual, i));
                                 } else {
-                                    // either endValue has the same materialized value as value or
-                                    // endValue is the
+                                    // either endValue has the same materialized value as value or endValue is the
                                     // same as the materialized value, so we're good.
                                 }
                             }
@@ -654,8 +927,7 @@ class PartialEscapeClosure extends BlockIteratorClosure<BlockState> {
                     // throw new GraalInternalError("un-materialized object state at %s", loopEnd);
                 } else {
                     if (state.getMaterializedValue() != endState.getMaterializedValue()) {
-                        // throw new
-                        // GraalInternalError("changed materialized value during loop: %s vs %s",
+                        // throw new GraalInternalError("changed materialized value during loop: %s vs %s",
                         // state.materializedValue, endState.materializedValue);
                     }
                 }

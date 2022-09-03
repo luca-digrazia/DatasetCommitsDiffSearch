@@ -22,6 +22,8 @@
  */
 package com.oracle.graal.nodes.java;
 
+import java.util.*;
+
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -81,11 +83,22 @@ public final class NewInstanceNode extends FixedWithNextNode implements EscapeAn
         tool.getRuntime().lower(this, tool);
     }
 
+    private void fillEscapeFields(ResolvedJavaType type, List<ResolvedJavaField> escapeFields) {
+        if (type != null) {
+            fillEscapeFields(type.getSuperclass(), escapeFields);
+            for (ResolvedJavaField field : type.getDeclaredFields()) {
+                escapeFields.add(field);
+            }
+        }
+    }
+
     @Override
     public EscapeOp getEscapeOp() {
         if (instanceClass != null) {
             assert !instanceClass().isArrayClass();
-            final ResolvedJavaField[] fields = instanceClass().getInstanceFields(true);
+            List<ResolvedJavaField> escapeFields = new ArrayList<>();
+            fillEscapeFields(instanceClass(), escapeFields);
+            final ResolvedJavaField[] fields = escapeFields.toArray(new ResolvedJavaField[escapeFields.size()]);
             return new EscapeOp() {
 
                 @Override
