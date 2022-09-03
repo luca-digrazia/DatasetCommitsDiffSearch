@@ -102,10 +102,9 @@ public class AMD64HotSpotAddressLowering extends AMD64AddressLowering {
                 ValueNode base = compression.graph().unique(new HeapBaseNode(heapBaseRegister));
                 addr.setBase(base);
             } else if (encoding.base != 0) {
-                long disp = addr.getDisplacement() + encoding.base;
+                long disp = addr.getDisplacement() + heapBase;
                 if (NumUtil.isInt(disp)) {
                     addr.setDisplacement((int) disp);
-                    addr.setBase(null);
                 } else {
                     return false;
                 }

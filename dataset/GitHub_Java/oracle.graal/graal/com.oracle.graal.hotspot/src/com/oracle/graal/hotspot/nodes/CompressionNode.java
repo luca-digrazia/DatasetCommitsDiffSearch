@@ -22,11 +22,10 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.jvmci.meta.Value;
+import com.oracle.jvmci.meta.JavaConstant;
+import com.oracle.jvmci.meta.ConstantReflectionProvider;
+import com.oracle.jvmci.meta.Constant;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -37,6 +36,9 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.hotspot.*;
+import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
 
 /**
  * Compress or uncompress an oop or metaspace pointer.
@@ -67,10 +69,6 @@ public final class CompressionNode extends UnaryNode implements ConvertNode, LIR
 
     public static CompressionNode compress(ValueNode input, CompressEncoding encoding) {
         return input.graph().unique(new CompressionNode(CompressionOp.Compress, input, encoding));
-    }
-
-    public static CompressionNode compressNoUnique(ValueNode input, CompressEncoding encoding) {
-        return new CompressionNode(CompressionOp.Compress, input, encoding);
     }
 
     public static CompressionNode uncompress(ValueNode input, CompressEncoding encoding) {
