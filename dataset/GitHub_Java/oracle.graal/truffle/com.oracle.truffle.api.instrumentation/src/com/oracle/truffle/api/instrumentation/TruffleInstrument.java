@@ -38,7 +38,6 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AccessorInstrumentHandler;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -253,9 +252,9 @@ public abstract class TruffleInstrument {
          * @throws IOException if the parsing or evaluation fails for some reason
          * @since 0.12
          */
+        @SuppressWarnings("static-method")
         public CallTarget parse(Source source, String... argumentNames) throws IOException {
-            TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().getEnvForInstrument(vm, source.getMimeType());
-            return AccessorInstrumentHandler.langAccess().parse(env, source, null, argumentNames);
+            return InstrumentationHandler.ACCESSOR.parse(null, source, null, argumentNames);
         }
 
         /**
@@ -285,10 +284,10 @@ public abstract class TruffleInstrument {
          * @return a human readable string representation of the value.
          * @since 0.17
          */
-        @SuppressWarnings("static-method")
         public String toString(Node node, Object value) {
             final TruffleLanguage.Env env = getLangEnv(node);
-            return AccessorInstrumentHandler.langAccess().toStringIfVisible(env, value, false);
+            final TruffleLanguage<?> language = AccessorInstrumentHandler.langAccess().findLanguage(env);
+            return AccessorInstrumentHandler.langAccess().toStringIfVisible(language, env, value, null);
         }
 
         /**
@@ -302,10 +301,10 @@ public abstract class TruffleInstrument {
          * @return the meta-object, or <code>null</code>
          * @since 0.22
          */
-        @SuppressWarnings("static-method")
         public Object findMetaObject(Node node, Object value) {
             final TruffleLanguage.Env env = getLangEnv(node);
-            return AccessorInstrumentHandler.langAccess().findMetaObject(env, value);
+            final TruffleLanguage<?> language = AccessorInstrumentHandler.langAccess().findLanguage(env);
+            return AccessorInstrumentHandler.langAccess().findMetaObject(language, env, value);
         }
 
         /**
@@ -316,18 +315,18 @@ public abstract class TruffleInstrument {
          * @return a source location of the object, or <code>null</code>
          * @since 0.22
          */
-        @SuppressWarnings("static-method")
         public SourceSection findSourceLocation(Node node, Object value) {
             final TruffleLanguage.Env env = getLangEnv(node);
-            return AccessorInstrumentHandler.langAccess().findSourceLocation(env, value);
+            final TruffleLanguage<?> language = AccessorInstrumentHandler.langAccess().findLanguage(env);
+            return AccessorInstrumentHandler.langAccess().findSourceLocation(language, env, value);
         }
 
-        private static TruffleLanguage.Env getLangEnv(Node node) {
-            LanguageInfo languageInfo = node.getRootNode().getLanguageInfo();
-            if (languageInfo == null) {
-                throw new IllegalArgumentException("No language available for given node.");
-            }
-            return AccessorInstrumentHandler.engineAccess().getEnvForInstrument(languageInfo);
+        @SuppressWarnings({"rawtypes"})
+        private TruffleLanguage.Env getLangEnv(Node node) {
+            RootNode rootNode = node.getRootNode();
+            Class<? extends TruffleLanguage> languageClass = AccessorInstrumentHandler.nodesAccess().findLanguage(rootNode);
+            TruffleLanguage.Env env = AccessorInstrumentHandler.engineAccess().findEnv(vm, languageClass);
+            return env;
         }
 
     }
