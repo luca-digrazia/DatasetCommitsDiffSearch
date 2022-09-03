@@ -47,7 +47,7 @@ public final class DebugScope implements Debug.Scope {
                 if (parentIndent != null) {
                     parentIndent.printScopeName(str);
                 }
-                str.append(indent).append("[thread:").append(Thread.currentThread().getId()).append("] scope: ").append(getQualifiedName()).append(System.lineSeparator());
+                str.append(indent).append("[thread:").append(Thread.currentThread().getId()).append("] scope: ").append(qualifiedName).append(System.lineSeparator());
                 logScopeName = false;
             }
         }
@@ -92,10 +92,8 @@ public final class DebugScope implements Debug.Scope {
 
     private final Object[] context;
 
-    private DebugValueMap valueMap;
-
-    private String qualifiedName;
-    private final String unqualifiedName;
+    private final DebugValueMap valueMap;
+    private final String qualifiedName;
 
     private static final char SCOPE_SEP = '.';
 
@@ -112,8 +110,9 @@ public final class DebugScope implements Debug.Scope {
     public static DebugScope getInstance() {
         DebugScope result = instanceTL.get();
         if (result == null) {
-            DebugScope topLevelDebugScope = new DebugScope(Thread.currentThread());
+            DebugScope topLevelDebugScope = new DebugScope(Thread.currentThread().getName(), "", null, false);
             instanceTL.set(topLevelDebugScope);
+            DebugValueMap.registerTopLevel(topLevelDebugScope.getValueMap());
             return topLevelDebugScope;
         } else {
             return result;
@@ -124,23 +123,17 @@ public final class DebugScope implements Debug.Scope {
         return configTL.get();
     }
 
-    static final Object[] EMPTY_CONTEXT = new Object[0];
-
-    private DebugScope(Thread thread) {
-        this(thread.getName(), null, false);
-        computeValueMap(thread.getName());
-        DebugValueMap.registerTopLevel(getValueMap());
-    }
-
-    private DebugScope(String unqualifiedName, DebugScope parent, boolean sandbox, Object... context) {
+    private DebugScope(String name, String qualifiedName, DebugScope parent, boolean sandbox, Object... context) {
         this.parent = parent;
         this.sandbox = sandbox;
         this.parentConfig = getConfig();
         this.context = context;
-        this.unqualifiedName = unqualifiedName;
+        this.qualifiedName = qualifiedName;
         if (parent != null) {
-            logScopeName = !unqualifiedName.equals("");
+            lastUsedIndent = new IndentImpl(parent.lastUsedIndent);
+            logScopeName = !parent.qualifiedName.equals(qualifiedName);
         } else {
+            lastUsedIndent = new IndentImpl(null);
             logScopeName = true;
         }
 
@@ -148,9 +141,7 @@ public final class DebugScope implements Debug.Scope {
         // set while logging
         this.output = TTY.cachedOut;
         assert context != null;
-    }
 
-    private void computeValueMap(String name) {
         if (parent != null) {
             for (DebugValueMap child : parent.getValueMap().getChildren()) {
                 if (child.getName().equals(name)) {
@@ -218,10 +209,11 @@ public final class DebugScope implements Debug.Scope {
         if (config instanceof TopLevelDebugConfig) {
             return (TopLevelDebugConfig) config;
         } else {
+            PrintStream out = System.out;
             if (config == null) {
-                TTY.println("DebugScope.%s ignored because debugging is disabled", msg);
+                out.printf("DebugScope.%s ignored because debugging is disabled%n", msg);
             } else {
-                TTY.println("DebugScope.%s ignored because top level delegate config missing", msg);
+                out.printf("DebugScope.%s ignored because top level delegate config missing%n", msg);
             }
             return null;
         }
@@ -249,9 +241,7 @@ public final class DebugScope implements Debug.Scope {
     }
 
     public void log(int logLevel, String msg, Object... args) {
-        if (isLogEnabled(logLevel)) {
-            getLastUsedIndent().log(logLevel, msg, args);
-        }
+        lastUsedIndent.log(logLevel, msg, args);
     }
 
     public void dump(int dumpLevel, Object object, String formatString, Object... args) {
@@ -276,7 +266,8 @@ public final class DebugScope implements Debug.Scope {
                 dumpHandler.dump(object, message);
             }
         } else {
-            TTY.println("Forced dump ignored because debugging is disabled - use -G:Dump=xxx option");
+            PrintStream out = System.out;
+            out.println("Forced dump ignored because debugging is disabled - use -G:Dump=xxx option");
         }
     }
 
@@ -308,7 +299,7 @@ public final class DebugScope implements Debug.Scope {
     public DebugScope scope(CharSequence name, DebugConfig sandboxConfig, Object... newContextObjects) {
         DebugScope newScope = null;
         if (sandboxConfig != null) {
-            newScope = new DebugScope(name.toString(), this, true, newContextObjects);
+            newScope = new DebugScope(name.toString(), name.toString(), this, true, newContextObjects);
             configTL.set(sandboxConfig);
         } else {
             newScope = this.createChild(name.toString(), newContextObjects);
@@ -382,9 +373,6 @@ public final class DebugScope implements Debug.Scope {
     }
 
     private DebugValueMap getValueMap() {
-        if (valueMap == null) {
-            computeValueMap(unqualifiedName);
-        }
         return valueMap;
     }
 
@@ -397,7 +385,12 @@ public final class DebugScope implements Debug.Scope {
     }
 
     private DebugScope createChild(String newName, Object[] newContext) {
-        return new DebugScope(newName, this, false, newContext);
+        String newQualifiedName = newName;
+        if (this.qualifiedName.length() > 0) {
+            newQualifiedName = this.qualifiedName + SCOPE_SEP + newName;
+        }
+        DebugScope result = new DebugScope(newName, newQualifiedName, this, false, newContext);
+        return result;
     }
 
     public Iterable<Object> getCurrentContext() {
@@ -460,29 +453,11 @@ public final class DebugScope implements Debug.Scope {
     }
 
     public String getQualifiedName() {
-        if (qualifiedName == null) {
-            if (parent == null) {
-                qualifiedName = unqualifiedName;
-            } else {
-                qualifiedName = parent.getQualifiedName() + SCOPE_SEP + unqualifiedName;
-            }
-        }
         return qualifiedName;
     }
 
     public Indent pushIndentLogger() {
-        lastUsedIndent = getLastUsedIndent().indent();
-        return lastUsedIndent;
-    }
-
-    public IndentImpl getLastUsedIndent() {
-        if (lastUsedIndent == null) {
-            if (parent != null) {
-                lastUsedIndent = new IndentImpl(parent.getLastUsedIndent());
-            } else {
-                lastUsedIndent = new IndentImpl(null);
-            }
-        }
+        lastUsedIndent = lastUsedIndent.indent();
         return lastUsedIndent;
     }
 }
