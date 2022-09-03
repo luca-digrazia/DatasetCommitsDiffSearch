@@ -1,49 +1,33 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.instrumentation;
 
-import java.util.Collection;
-import java.util.Iterator;
+import java.io.IOException;
 import java.util.Objects;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -53,6 +37,7 @@ import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AccessorIns
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
@@ -119,7 +104,7 @@ public final class EventContext {
      * and {@link EventContext}. The method may be used on compiled code paths.
      *
      * @param tag the tag to check to check, must not be <code>null</code>.
-     * @since 0.33
+     * @since 0.32
      */
     public boolean hasTag(Class<? extends Tag> tag) {
         if (tag == null) {
@@ -142,7 +127,7 @@ public final class EventContext {
      * {@link #getNodeObject()} return the same node object instance.
      *
      * @see InstrumentableNode#getNodeObject()
-     * @since 0.33
+     * @since 0.32
      */
     public Object getNodeObject() {
         Object object = this.nodeObject;
@@ -217,6 +202,33 @@ public final class EventContext {
     }
 
     /**
+     * Evaluates source of (potentially different) language using the current context. The names of
+     * arguments are parameters for the resulting {#link CallTarget} that allow the
+     * <code>source</code> to reference the actual parameters passed to
+     * {@link CallTarget#call(java.lang.Object...)}.
+     *
+     * @param source the source to evaluate
+     * @param argumentNames the names of {@link CallTarget#call(java.lang.Object...)} arguments that
+     *            can be referenced from the source
+     * @return the call target representing the parsed result
+     * @throws IOException if the parsing or evaluation fails for some reason
+     * @since 0.12
+     * @deprecated Use
+     *             {@link TruffleInstrument.Env#parseInline(com.oracle.truffle.api.source.Source, com.oracle.truffle.api.nodes.Node, com.oracle.truffle.api.frame.MaterializedFrame)}
+     *             with {@link #getInstrumentedNode()} instead.
+     */
+    @Deprecated
+    public CallTarget parseInContext(Source source, String... argumentNames) throws IOException {
+        Node instrumentedNode = getInstrumentedNode();
+        LanguageInfo languageInfo = instrumentedNode.getRootNode().getLanguageInfo();
+        if (languageInfo == null) {
+            throw new IllegalArgumentException("No language available for given node.");
+        }
+        Env env = AccessorInstrumentHandler.engineAccess().getEnvForInstrument(languageInfo);
+        return AccessorInstrumentHandler.langAccess().parse(env, source, instrumentedNode, argumentNames);
+    }
+
+    /**
      * Returns the execution event node that was inserted at this location given an event binding.
      * This is useful to disambiguate multiple bindings from each other when installed at the same
      * source location.
@@ -231,18 +243,6 @@ public final class EventContext {
             throw new IllegalArgumentException(String.format("Binding is not a subtype of %s.", ExecutionEventNodeFactory.class.getSimpleName()));
         }
         return probeNode.lookupExecutionEventNode(binding);
-    }
-
-    /**
-     * Returns all execution event nodes in the insertion order at this location, whose event
-     * bindings are contained in the given collection. This is useful to be able to sort out
-     * multiple bindings when installed at the same source location.
-     *
-     * @param bindings a collection of bindings to find the event nodes for at this context location
-     * @since 19.0
-     */
-    public Iterator<ExecutionEventNode> lookupExecutionEventNodes(Collection<EventBinding<? extends ExecutionEventNodeFactory>> bindings) {
-        return probeNode.lookupExecutionEventNodes(bindings);
     }
 
     /**
