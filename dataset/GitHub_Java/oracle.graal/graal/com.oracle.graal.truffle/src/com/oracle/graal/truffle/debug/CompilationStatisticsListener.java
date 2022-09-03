@@ -34,6 +34,7 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.truffle.*;
 import com.oracle.graal.truffle.TruffleInlining.CallTreeNodeVisitor;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -196,8 +197,8 @@ public final class CompilationStatisticsListener extends AbstractDebugCompilatio
     }
 
     @Override
-    public void notifyShutdown(GraalTruffleRuntime runtime) {
-        printStatistics(runtime, OUT);
+    public void notifyShutdown(TruffleRuntime runtime) {
+        printStatistics((GraalTruffleRuntime) runtime, OUT);
     }
 
     public void printStatistics(GraalTruffleRuntime runtime, PrintStream out) {
