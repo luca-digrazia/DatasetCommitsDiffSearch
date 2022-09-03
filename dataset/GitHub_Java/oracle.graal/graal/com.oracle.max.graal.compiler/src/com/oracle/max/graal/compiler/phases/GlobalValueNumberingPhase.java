@@ -22,33 +22,37 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
 
-/**
- * Duplicates every node in the graph to test the implementation of the {@link com.oracle.max.graal.graph.Node#copy()} method in node subclasses.
- */
 public class GlobalValueNumberingPhase extends Phase {
 
+    public static final DebugMetric metricGlobalValueNumberingHits = Debug.metric("GlobalValueNumberingHits");
+
     @Override
-    protected void run(Graph graph) {
+    protected void run(StructuredGraph graph) {
         NodeBitMap visited = graph.createNodeBitMap();
         for (Node n : graph.getNodes()) {
-            apply(n, visited);
+            apply(n, visited, graph);
         }
     }
 
-    private void apply(Node n, NodeBitMap visited) {
-        if (n != null && !visited.isMarked(n)) {
+    private void apply(Node n, NodeBitMap visited, StructuredGraph compilerGraph) {
+        if (!visited.isMarked(n)) {
             visited.mark(n);
             for (Node input : n.inputs()) {
-                apply(input, visited);
+                apply(input, visited, compilerGraph);
             }
-            Node newNode = n.graph().ideal(n);
-            if (GraalOptions.TraceGVN && newNode != n) {
-                TTY.println("GVN applied and new node is " + newNode);
+            if (n.getNodeClass().valueNumberable()) {
+                Node newNode = compilerGraph.findDuplicate(n);
+                if (newNode != null) {
+                    assert !(n instanceof FixedNode || newNode instanceof FixedNode);
+                    n.replaceAtUsages(newNode);
+                    n.safeDelete();
+                    metricGlobalValueNumberingHits.increment();
+                    Debug.log("GVN applied and new node is %1s", newNode);
+                }
             }
         }
     }
