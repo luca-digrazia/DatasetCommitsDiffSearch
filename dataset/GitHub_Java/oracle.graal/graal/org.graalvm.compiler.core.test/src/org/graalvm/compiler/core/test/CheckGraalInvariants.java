@@ -169,7 +169,7 @@ public class CheckGraalInvariants extends GraalTest {
         CompilerThreadFactory factory = new CompilerThreadFactory("CheckInvariantsThread", new DebugConfigAccess() {
             @Override
             public GraalDebugConfig getDebugConfig() {
-                return DebugEnvironment.ensureInitialized();
+                return DebugEnvironment.initialize(System.out);
             }
         });
         int availableProcessors = Runtime.getRuntime().availableProcessors();
