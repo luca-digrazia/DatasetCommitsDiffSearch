@@ -41,7 +41,6 @@ import org.graalvm.nativeimage.IsolateThread;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.NeverInline;
-import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
@@ -68,9 +67,7 @@ public class VMInspection implements Feature {
         RuntimeSupport.getRuntimeSupport().addStartupHook(() -> {
             DumpAllStacks.install();
             DumpHeapReport.install();
-            if (DeoptimizationSupport.enabled()) {
-                DumpRuntimeCompilation.install();
-            }
+            DumpRuntimeCompilation.install();
         });
     }
 
