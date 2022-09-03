@@ -46,7 +46,10 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
-import com.oracle.graal.graphbuilderconf.GraphBuilderContext.Replacement;
+import com.oracle.graal.graphbuilderconf.GraphBuilderContext.*;
+import com.oracle.graal.graphbuilderconf.InlineInvokePlugin.InlineInfo;
+import com.oracle.graal.java.AbstractBytecodeParser.IntrinsicContext;
+import com.oracle.graal.java.AbstractBytecodeParser.ReplacementContext;
 import com.oracle.graal.java.*;
 import com.oracle.graal.java.GraphBuilderPhase.Instance;
 import com.oracle.graal.nodes.*;
@@ -87,11 +90,11 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
      * Determines whether a given method should be inlined based on whether it has a substitution or
      * whether the inlining context is already within a substitution.
      *
-     * @return an object specifying how {@code method} is to be inlined or null if it should not be
-     *         inlined based on substitution related criteria
+     * @return an {@link InlineInfo} object specifying how {@code method} is to be inlined or null
+     *         if it should not be inlined based on substitution related criteria
      */
     public InlineInfo getInlineInfo(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, JavaType returnType) {
-        ResolvedJavaMethod subst = getSubstitutionMethod(method);
+        ResolvedJavaMethod subst = getMethodSubstitutionMethod(method);
         if (subst != null) {
             if (b.parsingReplacement() || InlineDuringParsing.getValue() || InlineIntrinsicsDuringParsing.getValue()) {
                 // Forced inlining of intrinsics
@@ -334,28 +337,9 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
     }
 
     @Override
-    public StructuredGraph getSubstitution(ResolvedJavaMethod original, boolean fromBytecodeOnly, int invokeBci) {
-        ResolvedJavaMethod substitute = null;
-        if (!fromBytecodeOnly) {
-            InvocationPlugin plugin = graphBuilderPlugins.getInvocationPlugins().lookupInvocation(original);
-            if (plugin != null) {
-                if (!plugin.inlineOnly() || invokeBci >= 0) {
-                    if (plugin instanceof MethodSubstitutionPlugin) {
-                        MethodSubstitutionPlugin msplugin = (MethodSubstitutionPlugin) plugin;
-                        substitute = msplugin.getSubstitute(providers.getMetaAccess());
-                    } else {
-                        StructuredGraph graph = new IntrinsicGraphBuilder(providers.getMetaAccess(), providers.getConstantReflection(), providers.getStampProvider(), original, invokeBci).buildGraph(plugin);
-                        if (graph != null) {
-                            return graph;
-                        }
-                    }
-                }
-            }
-        }
-        if (substitute == null) {
-            ClassReplacements cr = getClassReplacements(original.getDeclaringClass().getName());
-            substitute = cr == null ? null : cr.methodSubstitutions.get(original);
-        }
+    public StructuredGraph getMethodSubstitution(ResolvedJavaMethod original) {
+        ClassReplacements cr = getClassReplacements(original.getDeclaringClass().getName());
+        ResolvedJavaMethod substitute = cr == null ? null : cr.methodSubstitutions.get(original);
         if (substitute == null) {
             return null;
         }
@@ -639,7 +623,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
             // to be valid for the entire run of the VM.
             final StructuredGraph graph = new StructuredGraph(methodToParse, AllowAssumptions.NO);
 
-            // They will also never evolve or have breakpoints set in them
+            // They will also never be never be evolved or have breakpoints set in them
             graph.disableInlinedMethodRecording();
 
             try (Scope s = Debug.scope("buildInitialGraph", graph)) {
@@ -669,11 +653,12 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         protected Instance createGraphBuilder(MetaAccessProvider metaAccess, StampProvider stampProvider, ConstantReflectionProvider constantReflection, GraphBuilderConfiguration graphBuilderConfig,
                         OptimisticOptimizations optimisticOpts) {
             ReplacementContext initialReplacementContext = null;
-            if (method.getAnnotation(Snippet.class) == null) {
+            if (method.getAnnotation(MethodSubstitution.class) != null) {
                 // Late inlined intrinsic
                 initialReplacementContext = new IntrinsicContext(substitutedMethod, method, null, -1);
             } else {
                 // Snippet
+                assert method.getAnnotation(Snippet.class) != null;
                 ResolvedJavaMethod original = substitutedMethod != null ? substitutedMethod : method;
                 initialReplacementContext = new ReplacementContext(original, method);
             }
@@ -810,19 +795,8 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
         return cr != null && cr.forcedSubstitutions.contains(method);
     }
 
-    public boolean hasSubstitution(ResolvedJavaMethod method, boolean fromBytecodeOnly, int callerBci) {
-        if (!fromBytecodeOnly) {
-            InvocationPlugin plugin = graphBuilderPlugins.getInvocationPlugins().lookupInvocation(method);
-            if (plugin != null) {
-                if (!plugin.inlineOnly() || callerBci >= 0) {
-                    return true;
-                }
-            }
-        }
-        return getSubstitutionMethod(method) != null;
-    }
-
-    public ResolvedJavaMethod getSubstitutionMethod(ResolvedJavaMethod original) {
+    @Override
+    public ResolvedJavaMethod getMethodSubstitutionMethod(ResolvedJavaMethod original) {
         ClassReplacements cr = getClassReplacements(original.getDeclaringClass().getName());
         return cr == null ? null : cr.methodSubstitutions.get(original);
     }

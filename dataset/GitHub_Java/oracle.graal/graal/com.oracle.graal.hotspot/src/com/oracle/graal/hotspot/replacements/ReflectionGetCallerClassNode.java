@@ -22,40 +22,29 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import jdk.vm.ci.common.JVMCIError;
-import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-import com.oracle.graal.compiler.common.type.StampPair;
-import com.oracle.graal.graph.Node;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.Canonicalizable;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.CallTargetNode.InvokeKind;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.FrameState;
-import com.oracle.graal.nodes.InvokeNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.spi.Lowerable;
-import com.oracle.graal.nodes.spi.LoweringTool;
-import com.oracle.graal.replacements.nodes.MacroStateSplitNode;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.replacements.nodes.*;
 
 @NodeInfo
 public final class ReflectionGetCallerClassNode extends MacroStateSplitNode implements Canonicalizable, Lowerable {
 
     public static final NodeClass<ReflectionGetCallerClassNode> TYPE = NodeClass.create(ReflectionGetCallerClassNode.class);
 
-    public ReflectionGetCallerClassNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode... arguments) {
-        super(TYPE, invokeKind, targetMethod, bci, returnStamp, arguments);
+    public ReflectionGetCallerClassNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, JavaType returnType, ValueNode... arguments) {
+        super(TYPE, invokeKind, targetMethod, bci, returnType, arguments);
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        ConstantNode callerClassNode = getCallerClassNode(tool.getMetaAccess(), tool.getConstantReflection());
+        ConstantNode callerClassNode = getCallerClassNode(tool.getMetaAccess());
         if (callerClassNode != null) {
             return callerClassNode;
         }
@@ -64,7 +53,7 @@ public final class ReflectionGetCallerClassNode extends MacroStateSplitNode impl
 
     @Override
     public void lower(LoweringTool tool) {
-        ConstantNode callerClassNode = getCallerClassNode(tool.getMetaAccess(), tool.getConstantReflection());
+        ConstantNode callerClassNode = getCallerClassNode(tool.getMetaAccess());
 
         if (callerClassNode != null) {
             graph().replaceFixedWithFloating(this, graph().addOrUniqueWithInputs(callerClassNode));
@@ -82,7 +71,7 @@ public final class ReflectionGetCallerClassNode extends MacroStateSplitNode impl
      * @param metaAccess
      * @return ConstantNode of the caller class, or null
      */
-    private ConstantNode getCallerClassNode(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection) {
+    private ConstantNode getCallerClassNode(MetaAccessProvider metaAccess) {
         // Walk back up the frame states to find the caller at the required depth.
         FrameState state = stateAfter();
 
@@ -93,7 +82,7 @@ public final class ReflectionGetCallerClassNode extends MacroStateSplitNode impl
             HotSpotResolvedJavaMethod method = (HotSpotResolvedJavaMethod) state.method();
             switch (n) {
                 case 0:
-                    throw JVMCIError.shouldNotReachHere("current frame state does not include the Reflection.getCallerClass frame");
+                    throw GraalInternalError.shouldNotReachHere("current frame state does not include the Reflection.getCallerClass frame");
                 case 1:
                     // Frame 0 and 1 must be caller sensitive (see JVM_GetCallerClass).
                     if (!method.isCallerSensitive()) {
@@ -104,7 +93,7 @@ public final class ReflectionGetCallerClassNode extends MacroStateSplitNode impl
                     if (!method.ignoredBySecurityStackWalk()) {
                         // We have reached the desired frame; return the holder class.
                         HotSpotResolvedObjectType callerClass = method.getDeclaringClass();
-                        return ConstantNode.forConstant(constantReflection.asJavaClass(callerClass), metaAccess);
+                        return ConstantNode.forConstant(callerClass.getJavaClass(), metaAccess);
                     }
                     break;
             }
