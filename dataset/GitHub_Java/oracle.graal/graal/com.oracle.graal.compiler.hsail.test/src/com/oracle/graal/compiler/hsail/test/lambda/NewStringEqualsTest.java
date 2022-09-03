@@ -23,8 +23,12 @@
 
 package com.oracle.graal.compiler.hsail.test.lambda;
 
-import com.oracle.graal.compiler.hsail.test.infra.GraalKernelTester;
-import org.junit.Test;
+import static com.oracle.graal.debug.Debug.*;
+
+import org.junit.*;
+
+import com.oracle.graal.compiler.hsail.test.infra.*;
+import com.oracle.graal.debug.*;
 
 /**
  * Tests creating a String and calling .equals() on it.
@@ -48,6 +52,12 @@ public class NewStringEqualsTest extends GraalKernelTester {
         setupArrays();
         String base = "ABCDEFGHIJ";
 
+        // Resolving StringIndexOutOfBoundsException causes compilation of the
+        // lambda to fail as. Combined with use of InlineEverything and RemoveNeverExecutedCode
+        // the inlining budget is blown before String.equals can be inlined leaving
+        // a DirectCallTargetNode in the graph which cannot be lowered by HSAIL.
+        new StringIndexOutOfBoundsException().fillInStackTrace();
+
         dispatchLambdaKernel(NUM, (gid) -> {
             outArray[gid] = new String(chars, 0, 10 + (gid % 3)).equals(base);
         });
@@ -59,15 +69,20 @@ public class NewStringEqualsTest extends GraalKernelTester {
         return (canHandleObjectAllocation());
     }
 
-    // NYI emitForeignCall charAlignedDisjointArraycopy
-    @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
+    @Ignore("see comment in runTest")
+    @Test
     public void test() {
-        testGeneratedHsail();
+        try (DebugConfigScope s = disableIntercept()) {
+            testGeneratedHsail();
+        }
     }
 
-    @Test(expected = com.oracle.graal.graph.GraalInternalError.class)
+    @Ignore("see comment in runTest")
+    @Test
     public void testUsingLambdaMethod() {
-        testGeneratedHsailUsingLambdaMethod();
+        try (DebugConfigScope s = disableIntercept()) {
+            testGeneratedHsailUsingLambdaMethod();
+        }
     }
 
 }
