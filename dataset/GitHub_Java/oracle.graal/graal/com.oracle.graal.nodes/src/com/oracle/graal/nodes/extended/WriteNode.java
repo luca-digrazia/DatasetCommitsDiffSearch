@@ -26,6 +26,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.LocationNode.Location;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -37,6 +38,24 @@ public final class WriteNode extends AccessNode implements StateSplit, LIRLowera
     @Input private ValueNode value;
     @Input(notDataflow = true) private FrameState stateAfter;
     private final WriteBarrierType barrierType;
+
+    /*
+     * The types of write barriers attached to stores.
+     */
+    public enum WriteBarrierType {
+        /*
+         * Primitive stores which do not necessitate write barriers.
+         */
+        NONE,
+        /*
+         * Array object stores which necessitate precise write barriers.
+         */
+        PRECISE,
+        /*
+         * Field object stores which necessitate imprecise write barriers.
+         */
+        IMPRECISE
+    }
 
     public FrameState stateAfter() {
         return stateAfter;
@@ -56,8 +75,12 @@ public final class WriteNode extends AccessNode implements StateSplit, LIRLowera
         return value;
     }
 
-    public WriteNode(ValueNode object, ValueNode value, ValueNode location, WriteBarrierType barrierType, boolean compress) {
-        super(object, location, StampFactory.forVoid(), barrierType, compress);
+    public WriteBarrierType getWriteBarrierType() {
+        return barrierType;
+    }
+
+    public WriteNode(ValueNode object, ValueNode value, ValueNode location, WriteBarrierType barrierType) {
+        super(object, location, StampFactory.forVoid());
         this.value = value;
         this.barrierType = barrierType;
     }
@@ -69,7 +92,7 @@ public final class WriteNode extends AccessNode implements StateSplit, LIRLowera
     }
 
     @NodeIntrinsic
-    public static native void writeMemory(Object object, Object value, Location location, @ConstantNodeParameter WriteBarrierType barrierType, @ConstantNodeParameter boolean compress);
+    public static native void writeMemory(Object object, Object value, Location location, @ConstantNodeParameter WriteBarrierType barrierType);
 
     @Override
     public LocationIdentity[] getLocationIdentities() {
