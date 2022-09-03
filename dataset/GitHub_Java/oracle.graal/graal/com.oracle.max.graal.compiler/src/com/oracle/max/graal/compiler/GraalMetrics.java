@@ -49,6 +49,7 @@ public final class GraalMetrics {
     public static int DataPatches;
     public static int DirectCallSitesEmitted;
     public static int IndirectCallSitesEmitted;
+    public static int HIRInstructions;
     public static int LiveHIRInstructions;
     public static int LIRInstructions;
     public static int LIRVariables;
@@ -62,7 +63,6 @@ public final class GraalMetrics {
     public static int FrameStatesCreated;
     public static int FrameStateValuesCreated;
     public static int NodesCanonicalized;
-    public static int LoopsPeeled;
 
     public static void print() {
         for (Entry<String, GraalMetrics> m : map.entrySet()) {

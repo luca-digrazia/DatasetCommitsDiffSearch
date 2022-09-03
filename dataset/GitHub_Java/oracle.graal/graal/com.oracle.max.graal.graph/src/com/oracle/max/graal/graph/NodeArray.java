@@ -147,6 +147,9 @@ public class NodeArray extends AbstractList<Node> {
                 }
                 if (node != null) {
                     node.predecessors.add(self());
+                    if (node.predecessors.size() > 1 && node.getClass().getName().contains("EndNode")) {
+                        assert false;
+                    }
                 }
             }
         }
