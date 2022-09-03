@@ -23,14 +23,13 @@
 package com.oracle.graal.replacements;
 
 import static com.oracle.graal.compiler.common.GraalInternalError.*;
-import static com.oracle.graal.java.GraphBuilderPhase.Options.*;
+import static com.oracle.graal.java.AbstractBytecodeParser.Options.*;
 
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.graphbuilderconf.*;
@@ -149,7 +148,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public IntrinsicContext getIntrinsic() {
+        public Replacement getReplacement() {
             return null;
         }
 
@@ -179,7 +178,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public void setStateAfter(StateSplit stateSplit) {
+        public FrameState createStateAfter() {
             throw unimplemented();
         }
 
@@ -227,11 +226,10 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
 
         @Override
-        public void setStateAfter(StateSplit stateSplit) {
+        public FrameState createStateAfter() {
             Node stateAfter = decodeFloatingNode(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData.stateAfterOrderId);
             getGraph().add(stateAfter);
-            FrameState fs = (FrameState) handleFloatingNodeAfterAdd(methodScope.caller, methodScope.callerLoopScope, stateAfter);
-            stateSplit.setStateAfter(fs);
+            return (FrameState) handleFloatingNodeAfterAdd(methodScope.caller, methodScope.callerLoopScope, stateAfter);
         }
 
         @Override
@@ -422,7 +420,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         if (inlineInfo == null) {
             return false;
         }
-        assert !inlineInfo.isIntrinsic : "not supported";
+        assert !inlineInfo.isIntrinsic && !inlineInfo.isReplacement : "not supported";
 
         ResolvedJavaMethod inlineMethod = inlineInfo.methodToInline;
         EncodedGraph graphToInline = lookupEncodedGraph(inlineMethod);
@@ -501,10 +499,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         deleteInvoke(invoke);
 
         methodScope.inlineInvokePlugin.postInline(inlineMethod);
-
-        if (Debug.isDumpEnabled() && DumpDuringGraphBuilding.getValue()) {
-            Debug.dump(methodScope.graph, "Inline finished: " + inlineMethod.getDeclaringClass().getUnqualifiedName() + "." + inlineMethod.getName());
-        }
         return true;
     }
 
