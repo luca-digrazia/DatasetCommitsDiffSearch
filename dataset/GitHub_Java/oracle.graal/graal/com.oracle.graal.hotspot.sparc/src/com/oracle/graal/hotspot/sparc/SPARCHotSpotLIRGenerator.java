@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,34 +22,21 @@
  */
 package com.oracle.graal.hotspot.sparc;
 
-import com.oracle.jvmci.code.ForeignCallLinkage;
-import com.oracle.jvmci.code.CallingConvention;
-import com.oracle.jvmci.code.StackSlotValue;
-import com.oracle.jvmci.code.VirtualStackSlot;
-import com.oracle.jvmci.code.StackSlot;
-import com.oracle.jvmci.code.Register;
-import com.oracle.jvmci.code.RegisterValue;
-import com.oracle.jvmci.meta.JavaConstant;
-import com.oracle.jvmci.meta.DeoptimizationAction;
-import com.oracle.jvmci.meta.Kind;
-import com.oracle.jvmci.meta.DeoptimizationReason;
-import com.oracle.jvmci.meta.PlatformKind;
-import com.oracle.jvmci.meta.LIRKind;
-import com.oracle.jvmci.meta.Value;
-import com.oracle.jvmci.meta.AllocatableValue;
-import com.oracle.jvmci.sparc.*;
-
-import static com.oracle.jvmci.code.ValueUtil.*;
-import static com.oracle.jvmci.sparc.SPARC.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.hotspot.HotSpotBackend.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.sparc.SPARC.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.compiler.sparc.*;
 import com.oracle.graal.hotspot.*;
+import com.oracle.graal.hotspot.HotSpotVMConfig.CompressEncoding;
 import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
@@ -62,9 +49,7 @@ import com.oracle.graal.lir.sparc.SPARCMove.LoadOp;
 import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StoreConstantOp;
 import com.oracle.graal.lir.sparc.SPARCMove.StoreOp;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.hotspot.*;
-import com.oracle.jvmci.hotspot.HotSpotVMConfig.CompressEncoding;
+import com.oracle.graal.sparc.*;
 
 public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSpotLIRGenerator {
 
@@ -138,6 +123,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState state, Value... args) {
         HotSpotForeignCallLinkage hotspotLinkage = (HotSpotForeignCallLinkage) linkage;
         Variable result;
+        // TODO (je) check if this can be removed
         LIRFrameState deoptInfo = null;
         if (hotspotLinkage.canDeoptimize()) {
             deoptInfo = state;
@@ -172,7 +158,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     @Override
     public void emitTailcall(Value[] args, Value address) {
         // append(new AMD64TailcallOp(args, address));
-        throw JVMCIError.unimplemented();
+        throw GraalInternalError.unimplemented();
     }
 
     @Override
@@ -193,7 +179,7 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
     private void moveValueToThread(Value v, int offset) {
         LIRKind wordKind = LIRKind.value(getProviders().getCodeCache().getTarget().wordKind);
         RegisterValue thread = getProviders().getRegisters().getThreadRegister().asValue(wordKind);
-        SPARCAddressValue pendingDeoptAddress = new SPARCImmediateAddressValue(wordKind, thread, offset);
+        SPARCAddressValue pendingDeoptAddress = new SPARCAddressValue(wordKind, thread, offset);
         append(new StoreOp(v.getKind(), pendingDeoptAddress, load(v), null));
     }
 
@@ -258,14 +244,10 @@ public class SPARCHotSpotLIRGenerator extends SPARCLIRGenerator implements HotSp
         LIRKind kind = newValue.getLIRKind();
         assert kind.equals(expectedValue.getLIRKind());
         Kind memKind = (Kind) kind.getPlatformKind();
+        SPARCAddressValue addressValue = asAddressValue(address);
         Variable result = newVariable(newValue.getLIRKind());
-        append(new CompareAndSwapOp(result, asAllocatable(address), asAllocatable(expectedValue), asAllocatable(newValue)));
+        append(new CompareAndSwapOp(result, asAllocatable(addressValue), asAllocatable(expectedValue), asAllocatable(newValue)));
         return emitConditionalMove(memKind, expectedValue, result, Condition.EQ, true, trueValue, falseValue);
-    }
-
-    public void emitPrefetchAllocate(Value address) {
-        SPARCAddressValue addr = asAddressValue(address);
-        append(new SPARCPrefetchOp(addr, config.allocatePrefetchInstr));
     }
 
     public StackSlot getDeoptimizationRescueSlot() {

@@ -466,8 +466,8 @@ public class SPARCMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, SPARCMacroAssembler masm) {
-            move(crb, masm, result, newValue, SPARCDelayedControlTransfer.DUMMY);
-            compareAndSwap(crb, masm, address, cmpValue, result, delayedControlTransfer);
+            move(crb, masm, result, newValue, delayedControlTransfer);
+            compareAndSwap(masm, address, cmpValue, result);
         }
     }
 
@@ -779,9 +779,7 @@ public class SPARCMove {
         }
     }
 
-    protected static void compareAndSwap(CompilationResultBuilder crb, SPARCMacroAssembler masm, AllocatableValue address, AllocatableValue cmpValue, AllocatableValue newValue,
-                    SPARCDelayedControlTransfer delay) {
-        delay.emitControlTransfer(crb, masm);
+    protected static void compareAndSwap(SPARCMacroAssembler masm, AllocatableValue address, AllocatableValue cmpValue, AllocatableValue newValue) {
         switch (cmpValue.getKind()) {
             case Int:
                 masm.cas(asRegister(address), asRegister(cmpValue), asRegister(newValue));
