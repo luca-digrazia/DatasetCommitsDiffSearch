@@ -99,7 +99,5 @@ public interface VMEntries {
 
     RiTypeProfile RiMethod_typeProfile(long vmId, int bci);
 
-    int RiMethod_branchProbability(long vmId, int bci);
-
     // Checkstyle: resume
 }

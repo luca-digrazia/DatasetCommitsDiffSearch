@@ -72,12 +72,12 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
      * The entry to the exception dispatch chain for this invoke.
      */
     @Override
-    public FixedNode exceptionEdge() {
-        return (FixedNode) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
+    public Instruction exceptionEdge() {
+        return (Instruction) successors().get(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE);
     }
 
-    public FixedNode setExceptionEdge(FixedNode n) {
-        return (FixedNode) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
+    public Instruction setExceptionEdge(Instruction n) {
+        return (Instruction) successors().set(super.successorCount() + SUCCESSOR_EXCEPTION_EDGE, n);
     }
 
     public final int opcode;
@@ -94,6 +94,7 @@ public final class Invoke extends StateSplit implements ExceptionEdgeInstruction
      * @param args the list of instructions producing arguments to the invocation, including the receiver object
      * @param isStatic {@code true} if this call is static (no receiver object)
      * @param target the target method being called
+     * @param stateBefore the state before executing the invocation
      */
     public Invoke(int bci, int opcode, CiKind result, Value[] args, RiMethod target, RiType returnType, RiTypeProfile profile, Graph graph) {
         super(result, args.length, SUCCESSOR_COUNT, graph);

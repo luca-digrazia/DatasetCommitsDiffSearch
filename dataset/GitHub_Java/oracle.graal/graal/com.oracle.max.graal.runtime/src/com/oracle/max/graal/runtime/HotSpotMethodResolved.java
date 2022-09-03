@@ -201,8 +201,4 @@ public final class HotSpotMethodResolved extends HotSpotMethod {
     public RiTypeProfile typeProfile(int bci) {
         return compiler.getVMEntries().RiMethod_typeProfile(vmId, bci);
     }
-
-    public int branchProbability(int bci) {
-        return compiler.getVMEntries().RiMethod_branchProbability(vmId, bci);
-    }
 }
