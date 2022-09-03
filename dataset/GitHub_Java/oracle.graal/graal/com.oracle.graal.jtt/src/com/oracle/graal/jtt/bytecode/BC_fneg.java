@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
+import org.junit.Test;
+
+import com.oracle.graal.jtt.JTTTest;
 
 /*
  */
@@ -35,17 +36,25 @@ public class BC_fneg extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test", 0.0f);
+        runTest("test", 0.0f);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTestWithDelta(0, "test", -1.01f);
+        runTest("test", -1.01f);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTestWithDelta(0, "test", 7263.8734f);
+        runTest("test", 7263.8734f);
     }
 
+    public static float test2(float a, float b) {
+        return -(a - b);
+    }
+
+    @Test
+    public void run3() throws Throwable {
+        runTest("test2", -1.0f, -1.0f);
+    }
 }

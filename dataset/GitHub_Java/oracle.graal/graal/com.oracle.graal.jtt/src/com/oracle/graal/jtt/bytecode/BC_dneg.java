@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,8 +22,9 @@
  */
 package com.oracle.graal.jtt.bytecode;
 
-import com.oracle.graal.jtt.*;
-import org.junit.*;
+import org.junit.Test;
+
+import com.oracle.graal.jtt.JTTTest;
 
 /*
  */
@@ -43,32 +44,40 @@ public class BC_dneg extends JTTTest {
 
     @Test
     public void run0() throws Throwable {
-        runTestWithDelta(0, "test", 0.0d, 1.0d, 0);
+        runTest("test", 0.0d, 1.0d, 0);
     }
 
     @Test
     public void run1() throws Throwable {
-        runTestWithDelta(0, "test", -1.01d, -2.01d, 0);
+        runTest("test", -1.01d, -2.01d, 0);
     }
 
     @Test
     public void run2() throws Throwable {
-        runTestWithDelta(0, "test", 7263.8734d, 8263.8734d, 0);
+        runTest("test", 7263.8734d, 8263.8734d, 0);
     }
 
     @Test
     public void run3() throws Throwable {
-        runTestWithDelta(0, "test", 0.0d, 1.0d, 1);
+        runTest("test", 0.0d, 1.0d, 1);
     }
 
     @Test
     public void run4() throws Throwable {
-        runTestWithDelta(0, "test", -1.01d, -2.01d, 1);
+        runTest("test", -1.01d, -2.01d, 1);
     }
 
     @Test
     public void run5() throws Throwable {
-        runTestWithDelta(0, "test", 7263.8734d, 8263.8734d, 1);
+        runTest("test", 7263.8734d, 8263.8734d, 1);
     }
 
+    public static double test2(double a, double b) {
+        return -(a - b);
+    }
+
+    @Test
+    public void run6() throws Throwable {
+        runTest("test2", -1.0d, -1.0d);
+    }
 }

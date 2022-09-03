@@ -22,9 +22,6 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
-import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
-
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable;
 import com.oracle.graal.compiler.common.type.ArithmeticOpTable.UnaryOp.Neg;
 import com.oracle.graal.compiler.common.type.FloatStamp;
@@ -38,7 +35,7 @@ import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 /**
  * The {@code NegateNode} node negates its operand.
  */
-@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+@NodeInfo
 public final class NegateNode extends UnaryArithmeticNode<Neg> implements NarrowableArithmeticNode {
 
     public static final NodeClass<NegateNode> TYPE = NodeClass.create(NegateNode.class);
