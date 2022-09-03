@@ -36,8 +36,7 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.schedule.*;
 
-public class BinaryGraphPrinter implements GraphPrinter {
-
+public class BinaryGraphPrinter implements GraphPrinter{
     private static final int CONSTANT_POOL_MAX_SIZE = 2000;
 
     private static final int BEGIN_GROUP = 0x00;
@@ -67,16 +66,13 @@ public class BinaryGraphPrinter implements GraphPrinter {
     private static final int ENUM_KLASS = 0x01;
 
     private static final class ConstantPool extends LinkedHashMap<Object, Integer> {
-
         private final LinkedList<Integer> availableIds;
         private int nextId;
         private static final long serialVersionUID = -2676889957907285681L;
-
         public ConstantPool() {
             super(50, 0.65f);
             availableIds = new LinkedList<>();
         }
-
         @Override
         protected boolean removeEldestEntry(java.util.Map.Entry<Object, Integer> eldest) {
             if (size() > CONSTANT_POOL_MAX_SIZE) {
@@ -119,7 +115,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
             } catch (Throwable t) {
             }
         }
-        ControlFlowGraph cfg = schedule == null ? null : schedule.getCFG();
+        ControlFlowGraph cfg =  schedule == null ? null : schedule.getCFG();
         BlockMap<List<ScheduledNode>> blockToNodes = schedule == null ? null : schedule.getBlockToNodesMap();
         Block[] blocks = cfg == null ? null : cfg.getBlocks();
         writeByte(BEGIN_GRAPH);
@@ -253,7 +249,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
         writeByte(POOL_NEW);
         writeInt(index);
         if (object instanceof Class<?>) {
-            Class<?> klass = (Class<?>) object;
+            Class<?> klass = (Class< ? >) object;
             writeByte(POOL_CLASS);
             writeString(getClassName(klass));
             if (klass.isEnum()) {
@@ -340,7 +336,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 writeByte(PROPERTY_FALSE);
             }
         } else if (obj != null && obj.getClass().isArray()) {
-            Class<?> componentType = obj.getClass().getComponentType();
+            Class< ? > componentType = obj.getClass().getComponentType();
             if (componentType.isPrimitive()) {
                 if (componentType == Double.TYPE) {
                     writeByte(PROPERTY_ARRAY);
@@ -386,7 +382,7 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 writePropertyObject(entry.getValue());
             }
             // successors
-            NodeClassIterable successors = node.successors();
+            NodeSuccessorsIterable successors = node.successors();
             writeShort((char) successors.count());
             NodeClassIterator suxIt = successors.iterator();
             while (suxIt.hasNext()) {
@@ -395,8 +391,8 @@ public class BinaryGraphPrinter implements GraphPrinter {
                 writeInt(sux.getId());
                 writeShort((char) pos.index);
             }
-            // inputs
-            NodeClassIterable inputs = node.inputs();
+            //inputs
+            NodeInputsIterable inputs = node.inputs();
             writeShort((char) inputs.count());
             NodeClassIterator inIt = inputs.iterator();
             while (inIt.hasNext()) {
