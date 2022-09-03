@@ -54,9 +54,7 @@ final class SSALinearScan extends LinearScan {
 
     @Override
     protected MoveResolver createMoveResolver() {
-        SSAMoveResolver moveResolver = new SSAMoveResolver(this);
-        assert moveResolver.checkEmpty();
-        return moveResolver;
+        return new SSAMoveResolver(this);
     }
 
     @Override
