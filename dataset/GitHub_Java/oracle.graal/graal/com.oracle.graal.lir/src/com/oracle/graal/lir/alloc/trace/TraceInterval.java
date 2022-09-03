@@ -23,22 +23,22 @@
 package com.oracle.graal.lir.alloc.trace;
 
 import static com.oracle.graal.compiler.common.GraalOptions.DetailedAsserts;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
 import static com.oracle.graal.lir.LIRValueUtil.isVariable;
+import static com.oracle.graal.lir.LIRValueUtil.isVirtualStackSlot;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isIllegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isStackSlotValue;
-import static jdk.vm.ci.code.ValueUtil.isVirtualStackSlot;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.StackSlotValue;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
@@ -266,21 +266,9 @@ final class TraceInterval extends IntervalHint {
         NoSpillStore,
 
         /**
-         * One spill move has already been inserted.
+         * A spill move has already been inserted.
          */
-        OneSpillStore,
-
-        /**
-         * The interval is spilled multiple times or is spilled in a loop. Place the store somewhere
-         * on the dominator path between the definition and the usages.
-         */
-        SpillInDominator,
-
-        /**
-         * The interval should be stored immediately after its definition to prevent multiple
-         * redundant stores.
-         */
-        StoreAtDefinition,
+        SpillStore,
 
         /**
          * The interval starts in memory (e.g. method parameter), so a store is never necessary.
@@ -291,7 +279,9 @@ final class TraceInterval extends IntervalHint {
          * The interval has more than one definition (e.g. resulting from phi moves), so stores to
          * memory are not optimized.
          */
-        NoOptimization
+        NoOptimization;
+
+        public static final EnumSet<SpillState> IN_MEMORY = EnumSet.of(SpillStore, StartInMemory);
     }
 
     /**
@@ -315,7 +305,7 @@ final class TraceInterval extends IntervalHint {
     /**
      * The stack slot to which all splits of this interval are spilled if necessary.
      */
-    private StackSlotValue spillSlot;
+    private AllocatableValue spillSlot;
 
     /**
      * The kind of this interval.
@@ -437,7 +427,13 @@ final class TraceInterval extends IntervalHint {
         return intFrom == Integer.MAX_VALUE && intTo == Integer.MAX_VALUE;
     }
 
+    public void setTo(int pos) {
+        assert intFrom == Integer.MAX_VALUE || intFrom < pos;
+        intTo = pos;
+    }
+
     public void setFrom(int pos) {
+        assert intTo == Integer.MAX_VALUE || pos < intTo;
         intFrom = pos;
     }
 
@@ -477,11 +473,12 @@ final class TraceInterval extends IntervalHint {
     /**
      * Gets the canonical spill slot for this interval.
      */
-    public StackSlotValue spillSlot() {
+    public AllocatableValue spillSlot() {
         return splitParent().spillSlot;
     }
 
-    public void setSpillSlot(StackSlotValue slot) {
+    public void setSpillSlot(AllocatableValue slot) {
+        assert isStackSlotValue(slot);
         assert splitParent().spillSlot == null || (isVirtualStackSlot(splitParent().spillSlot) && isStackSlot(slot)) : "connot overwrite existing spill slot";
         splitParent().spillSlot = slot;
     }
@@ -517,14 +514,19 @@ final class TraceInterval extends IntervalHint {
     }
 
     public void setSpillDefinitionPos(int pos) {
-        assert spillState() == SpillState.SpillInDominator || spillState() == SpillState.NoDefinitionFound || spillDefinitionPos() == -1 : "cannot set the position twice";
+        assert spillState() == SpillState.NoDefinitionFound || spillState() == SpillState.NoSpillStore || spillDefinitionPos() == -1 : "cannot set the position twice";
+        int to = to();
+        assert pos < to : String.format("Cannot spill %s at %d", this, pos);
         splitParent().spillDefinitionPos = pos;
     }
 
-    // returns true if this interval has a shadow copy on the stack that is always correct
-    public boolean alwaysInMemory() {
-        return (splitParent().spillState == SpillState.SpillInDominator || splitParent().spillState == SpillState.StoreAtDefinition || splitParent().spillState == SpillState.StartInMemory) &&
-                        !canMaterialize();
+    /**
+     * Returns true if this interval has a shadow copy on the stack that is correct after
+     * {@code opId}.
+     */
+    public boolean inMemoryAt(int opId) {
+        SpillState spillSt = spillState();
+        return spillSt == SpillState.StartInMemory || (spillSt == SpillState.SpillStore && opId > spillDefinitionPos() && !canMaterialize());
     }
 
     void removeFirstUsePos() {
@@ -892,10 +894,10 @@ final class TraceInterval extends IntervalHint {
         assert from < to : "invalid range";
 
         if (from < intFrom) {
-            intFrom = from;
+            setFrom(from);
         }
         if (intTo == Integer.MAX_VALUE || intTo < to) {
-            intTo = to;
+            setTo(to);
         }
     }
 
@@ -942,8 +944,8 @@ final class TraceInterval extends IntervalHint {
         TraceInterval result = newSplitChild(allocator);
 
         // split the ranges
-        result.intTo = intTo;
-        result.intFrom = splitPos;
+        result.setTo(intTo);
+        result.setFrom(splitPos);
         intTo = splitPos;
 
         // split list of use positions
