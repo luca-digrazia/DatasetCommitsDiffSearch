@@ -182,6 +182,6 @@ public final class IntegerEqualsNode extends CompareNode implements BinaryCommut
                 return TriState.TRUE;
             }
         }
-        return TriState.UNKNOWN;
+        return null;
     }
 }

@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -47,7 +46,7 @@ public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerabl
 
     public BinaryOpLogicNode(NodeClass<? extends BinaryOpLogicNode> c, ValueNode x, ValueNode y) {
         super(c);
-        assert x != null && y != null && x.getStackKind() == y.getStackKind();
+        assert x != null && y != null && x.getKind() == y.getKind();
         this.x = x;
         this.y = y;
     }

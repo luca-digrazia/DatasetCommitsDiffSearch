@@ -22,8 +22,7 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -52,7 +51,7 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
     @Override
     public boolean verify() {
         assertTrue(getValue() != null, "is null input must not be null");
-        assertTrue(getValue().stamp() instanceof AbstractPointerStamp, "input must be a pointer not %s", getValue().stamp());
+        assertTrue(getValue().stamp() instanceof AbstractPointerStamp, "is null input must be a pointer");
         return super.verify();
     }
 
@@ -68,10 +67,8 @@ public final class IsNullNode extends UnaryOpLogicNode implements LIRLowerable, 
 
     @Override
     public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(getValue());
-        TriState fold = tryFold(alias.stamp());
-        if (fold != TriState.UNKNOWN) {
-            tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
+        if (tool.getObjectState(getValue()) != null) {
+            tool.replaceWithValue(LogicConstantNode.contradiction(graph()));
         }
     }
 

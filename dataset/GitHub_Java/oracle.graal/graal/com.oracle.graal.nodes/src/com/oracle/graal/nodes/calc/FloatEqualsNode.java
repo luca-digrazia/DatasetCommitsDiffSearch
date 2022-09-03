@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,31 +22,93 @@
  */
 package com.oracle.graal.nodes.calc;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.Canonicalizable.BinaryCommutative;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "==")
-public final class FloatEqualsNode extends CompareNode {
+public final class FloatEqualsNode extends CompareNode implements BinaryCommutative<ValueNode> {
+    public static final NodeClass<FloatEqualsNode> TYPE = NodeClass.create(FloatEqualsNode.class);
 
-    /**
-     * Constructs a new floating point equality comparison node.
-     *
-     * @param x the instruction producing the first input to the instruction
-     * @param y the instruction that produces the second input to this instruction
-     */
     public FloatEqualsNode(ValueNode x, ValueNode y) {
-        super(x, y);
-        assert x.kind().isFloatOrDouble();
-        assert y.kind().isFloatOrDouble();
+        super(TYPE, Condition.EQ, false, x, y);
+        assert x.stamp() instanceof FloatStamp && y.stamp() instanceof FloatStamp : x.stamp() + " " + y.stamp();
+        assert x.stamp().isCompatible(y.stamp());
+    }
+
+    public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
+        LogicNode result = CompareNode.tryConstantFold(Condition.EQ, x, y, constantReflection, false);
+        if (result != null) {
+            return result;
+        } else {
+            return new FloatEqualsNode(x, y).maybeCommuteInputs();
+        }
     }
 
     @Override
-    public Condition condition() {
-        return Condition.EQ;
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ValueNode result = super.canonical(tool, forX, forY);
+        if (result != this) {
+            return result;
+        }
+        Stamp xStampGeneric = forX.stamp();
+        Stamp yStampGeneric = forY.stamp();
+        if (xStampGeneric instanceof FloatStamp && yStampGeneric instanceof FloatStamp) {
+            FloatStamp xStamp = (FloatStamp) xStampGeneric;
+            FloatStamp yStamp = (FloatStamp) yStampGeneric;
+            if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY) && xStamp.isNonNaN() && yStamp.isNonNaN()) {
+                return LogicConstantNode.tautology();
+            } else if (xStamp.alwaysDistinct(yStamp)) {
+                return LogicConstantNode.contradiction();
+            }
+        }
+        return this;
     }
 
     @Override
-    public boolean unorderedIsTrue() {
-        return false;
+    protected CompareNode duplicateModified(ValueNode newX, ValueNode newY) {
+        if (newX.stamp() instanceof FloatStamp && newY.stamp() instanceof FloatStamp) {
+            return new FloatEqualsNode(newX, newY);
+        } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
+            return new IntegerEqualsNode(newX, newY);
+        }
+        throw GraalInternalError.shouldNotReachHere();
+    }
+
+    @Override
+    public Stamp getSucceedingStampForX(boolean negated) {
+        if (!negated) {
+            return getX().stamp().join(getY().stamp());
+        }
+        return null;
+    }
+
+    @Override
+    public Stamp getSucceedingStampForY(boolean negated) {
+        if (!negated) {
+            return getX().stamp().join(getY().stamp());
+        }
+        return null;
+    }
+
+    @Override
+    public TriState tryFold(Stamp xStampGeneric, Stamp yStampGeneric) {
+        if (xStampGeneric instanceof FloatStamp && yStampGeneric instanceof FloatStamp) {
+            FloatStamp xStamp = (FloatStamp) xStampGeneric;
+            FloatStamp yStamp = (FloatStamp) yStampGeneric;
+            if (xStamp.alwaysDistinct(yStamp)) {
+                return TriState.FALSE;
+            } else if (xStamp.neverDistinct(yStamp)) {
+                return TriState.TRUE;
+            }
+        }
+        return TriState.UNKNOWN;
     }
 }

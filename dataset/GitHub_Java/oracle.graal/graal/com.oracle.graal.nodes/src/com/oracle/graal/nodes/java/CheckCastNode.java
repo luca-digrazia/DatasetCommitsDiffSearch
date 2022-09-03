@@ -26,8 +26,8 @@ import static com.oracle.graal.api.meta.DeoptimizationAction.*;
 import static com.oracle.graal.api.meta.DeoptimizationReason.*;
 import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.Assumptions.AssumptionResult;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -56,7 +56,6 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
     public CheckCastNode(ResolvedJavaType type, ValueNode object, JavaTypeProfile profile, boolean forStoreCheck) {
         super(TYPE, StampFactory.declaredTrusted(type));
-        assert object.stamp() instanceof ObjectStamp : object + ":" + object.stamp();
         assert type != null;
         this.type = type;
         this.object = object;
@@ -70,12 +69,11 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
         if (synonym != null) {
             return synonym;
         }
-        assert object.stamp() instanceof ObjectStamp : object + ":" + object.stamp();
         if (assumptions != null) {
-            AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
-            if (leafConcreteSubtype != null && !leafConcreteSubtype.getResult().equals(type)) {
-                assumptions.record(leafConcreteSubtype);
-                type = leafConcreteSubtype.getResult();
+            ResolvedJavaType uniqueConcreteType = type.findUniqueConcreteSubtype();
+            if (uniqueConcreteType != null && !uniqueConcreteType.equals(type)) {
+                assumptions.recordConcreteSubtype(type, uniqueConcreteType);
+                type = uniqueConcreteType;
             }
         }
         return new CheckCastNode(type, object, profile, forStoreCheck);
@@ -113,7 +111,10 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
      */
     @Override
     public void lower(LoweringTool tool) {
-        Stamp newStamp = StampFactory.declaredTrusted(type).improveWith(object().stamp());
+        Stamp newStamp = StampFactory.declaredTrusted(type);
+        if (stamp() instanceof ObjectStamp && object().stamp() instanceof ObjectStamp) {
+            newStamp = ((ObjectStamp) object().stamp()).castTo((ObjectStamp) newStamp);
+        }
         ValueNode condition;
         ValueNode theValue = object;
         if (newStamp instanceof IllegalStamp) {
@@ -153,7 +154,7 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
     public boolean inferStamp() {
         if (object().stamp() instanceof ObjectStamp) {
             ObjectStamp castStamp = (ObjectStamp) StampFactory.declaredTrusted(type);
-            return updateStamp(castStamp.improveWith(object().stamp()));
+            return updateStamp(((ObjectStamp) object().stamp()).castTo(castStamp));
         }
         return false;
     }
@@ -167,11 +168,11 @@ public final class CheckCastNode extends FixedWithNextNode implements Canonicali
 
         Assumptions assumptions = graph().getAssumptions();
         if (assumptions != null) {
-            AssumptionResult<ResolvedJavaType> leafConcreteSubtype = type.findLeafConcreteSubtype();
-            if (leafConcreteSubtype != null && !leafConcreteSubtype.getResult().equals(type)) {
+            ResolvedJavaType exactType = type.findUniqueConcreteSubtype();
+            if (exactType != null && !exactType.equals(type)) {
                 // Propagate more precise type information to usages of the checkcast.
-                assumptions.record(leafConcreteSubtype);
-                return new CheckCastNode(leafConcreteSubtype.getResult(), object, profile, forStoreCheck);
+                assumptions.recordConcreteSubtype(type, exactType);
+                return new CheckCastNode(exactType, object, profile, forStoreCheck);
             }
         }
 

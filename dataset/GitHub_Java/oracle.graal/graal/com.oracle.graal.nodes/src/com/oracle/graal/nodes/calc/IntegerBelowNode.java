@@ -22,22 +22,15 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.vm.ci.code.CodeUtil;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.TriState;
-
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.compiler.common.type.IntegerStamp;
-import com.oracle.graal.compiler.common.type.Stamp;
-import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodes.LogicConstantNode;
-import com.oracle.graal.nodes.LogicNegationNode;
-import com.oracle.graal.nodes.LogicNode;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.util.GraphUtil;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.util.*;
 
 @NodeInfo(shortName = "|<|")
 public final class IntegerBelowNode extends CompareNode {
@@ -117,17 +110,20 @@ public final class IntegerBelowNode extends CompareNode {
                         long xLowerBound = xStamp.lowerBound();
                         long yLowerBound = yStamp.lowerBound();
                         if (yLowerBound > xLowerBound) {
-                            return StampFactory.forIntegerWithMask(bits, yLowerBound, xStamp.upperBound(), xStamp);
+                            return new IntegerStamp(bits, yLowerBound, xStamp.upperBound(), xStamp.downMask(), xStamp.upMask());
                         }
                     }
                 } else {
                     // x < y
-                    if (yStamp.isStrictlyPositive()) {
+                    if (yStamp.isPositive()) {
                         // x >= 0 && x < y
                         long xUpperBound = xStamp.upperBound();
                         long yUpperBound = yStamp.upperBound();
                         if (yUpperBound <= xUpperBound || !xStamp.isPositive()) {
-                            return StampFactory.forIntegerWithMask(bits, Math.max(0, xStamp.lowerBound()), Math.min(xUpperBound, yUpperBound - 1), xStamp);
+                            if (yUpperBound != 0) {
+                                yUpperBound--;
+                            }
+                            return new IntegerStamp(bits, Math.max(0, xStamp.lowerBound()), Math.min(xUpperBound, yUpperBound), xStamp.downMask(), xStamp.upMask());
                         }
                     }
                 }
@@ -152,7 +148,7 @@ public final class IntegerBelowNode extends CompareNode {
                         long xUpperBound = xStamp.upperBound();
                         long yUpperBound = yStamp.upperBound();
                         if (xUpperBound < yUpperBound || !yStamp.isPositive()) {
-                            return StampFactory.forIntegerWithMask(bits, Math.max(0, yStamp.lowerBound()), Math.min(xUpperBound, yUpperBound), yStamp);
+                            return new IntegerStamp(bits, Math.max(0, yStamp.lowerBound()), Math.min(xUpperBound, yUpperBound), yStamp.downMask(), yStamp.upMask());
                         }
                     }
                 } else {
@@ -160,11 +156,11 @@ public final class IntegerBelowNode extends CompareNode {
                     if (xStamp.isPositive() && yStamp.isPositive()) {
                         long xLowerBound = xStamp.lowerBound();
                         long yLowerBound = yStamp.lowerBound();
-                        if (xLowerBound == CodeUtil.maxValue(bits)) {
-                            return null;
-                        } else if (xLowerBound >= yLowerBound) {
-                            assert xLowerBound != CodeUtil.maxValue(bits);
-                            return StampFactory.forIntegerWithMask(bits, xLowerBound + 1, yStamp.upperBound(), yStamp);
+                        if (xLowerBound >= yLowerBound) {
+                            if (xLowerBound != CodeUtil.maxValue(bits)) {
+                                xLowerBound++;
+                            }
+                            return new IntegerStamp(bits, xLowerBound, yStamp.upperBound(), yStamp.downMask(), yStamp.upMask());
                         }
                     }
                 }

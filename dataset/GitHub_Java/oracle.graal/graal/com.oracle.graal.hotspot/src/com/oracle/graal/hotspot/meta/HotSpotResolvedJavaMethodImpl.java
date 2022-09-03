@@ -34,7 +34,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
-import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.debug.*;
 import com.oracle.graal.nodes.*;
@@ -42,7 +41,7 @@ import com.oracle.graal.nodes.*;
 /**
  * Implementation of {@link JavaMethod} for resolved HotSpot methods.
  */
-public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implements HotSpotResolvedJavaMethod, HotSpotProxified, InvocationPluginIdHolder {
+public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implements HotSpotResolvedJavaMethod, HotSpotProxified {
 
     private static final long serialVersionUID = -5486975070147586588L;
 
@@ -740,16 +739,5 @@ public final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implement
             return hasCompiledCodeAtLevel(level);
         }
         return runtime().getCompilerToVM().hasCompiledCodeForOSR(metaspaceMethod, entryBCI, level);
-    }
-
-    private int invocationPluginId;
-
-    public void setInvocationPluginId(int id) {
-        assert invocationPluginId == 0;
-        invocationPluginId = id;
-    }
-
-    public int getInvocationPluginId() {
-        return invocationPluginId;
     }
 }

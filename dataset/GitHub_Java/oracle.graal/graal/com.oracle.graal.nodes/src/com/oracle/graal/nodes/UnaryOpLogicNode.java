@@ -22,36 +22,34 @@
  */
 package com.oracle.graal.nodes;
 
-import com.oracle.graal.api.meta.ProfilingInfo.*;
-import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
 
-public abstract class UnaryOpLogicNode extends LogicNode implements LIRLowerable, MemoryArithmeticLIRLowerable {
+@NodeInfo
+public abstract class UnaryOpLogicNode extends LogicNode implements LIRLowerable, Canonicalizable.Unary<ValueNode> {
 
-    @Input private ValueNode object;
+    public static final NodeClass<UnaryOpLogicNode> TYPE = NodeClass.create(UnaryOpLogicNode.class);
+    @Input protected ValueNode value;
 
-    public ValueNode object() {
-        return object;
+    public ValueNode getValue() {
+        return value;
     }
 
-    protected void setX(ValueNode object) {
-        updateUsages(this.object, object);
-        this.object = object;
+    public UnaryOpLogicNode(NodeClass<? extends UnaryOpLogicNode> c, ValueNode value) {
+        super(c);
+        assert value != null;
+        this.value = value;
     }
-
-    public UnaryOpLogicNode(ValueNode object) {
-        assert object != null;
-        this.object = object;
-    }
-
-    public abstract TriState evaluate(ValueNode forObject);
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
     }
 
-    @Override
-    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
-        return false;
-    }
+    public abstract Stamp getSucceedingStampForValue(boolean negated);
+
+    public abstract TriState tryFold(Stamp valueStamp);
 }

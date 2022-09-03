@@ -22,10 +22,9 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
@@ -40,8 +39,8 @@ public final class IntegerLessThanNode extends CompareNode {
 
     public IntegerLessThanNode(ValueNode x, ValueNode y) {
         super(TYPE, Condition.LT, false, x, y);
-        assert !x.getStackKind().isNumericFloat() && x.getStackKind() != Kind.Object;
-        assert !y.getStackKind().isNumericFloat() && y.getStackKind() != Kind.Object;
+        assert !x.getKind().isNumericFloat() && x.getKind() != Kind.Object;
+        assert !y.getKind().isNumericFloat() && y.getKind() != Kind.Object;
     }
 
     public static LogicNode create(ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
@@ -65,7 +64,7 @@ public final class IntegerLessThanNode extends CompareNode {
             ValueNode a = mirrored ? normalizeNode.getY() : normalizeNode.getX();
             ValueNode b = mirrored ? normalizeNode.getX() : normalizeNode.getY();
 
-            if (normalizeNode.getX().getStackKind() == Kind.Double || normalizeNode.getX().getStackKind() == Kind.Float) {
+            if (normalizeNode.getX().getKind() == Kind.Double || normalizeNode.getX().getKind() == Kind.Float) {
                 return new FloatLessThanNode(a, b, mirrored ^ normalizeNode.isUnorderedLess);
             } else {
                 return new IntegerLessThanNode(a, b);
@@ -114,7 +113,7 @@ public final class IntegerLessThanNode extends CompareNode {
         } else if (newX.stamp() instanceof IntegerStamp && newY.stamp() instanceof IntegerStamp) {
             return new IntegerLessThanNode(newX, newY);
         }
-        throw JVMCIError.shouldNotReachHere();
+        throw GraalInternalError.shouldNotReachHere();
     }
 
     @Override
@@ -138,11 +137,11 @@ public final class IntegerLessThanNode extends CompareNode {
                     // x < y
                     long xUpperBound = xStamp.upperBound();
                     long yUpperBound = yStamp.upperBound();
-                    if (yUpperBound == CodeUtil.minValue(bits)) {
-                        return null;
-                    } else if (yUpperBound <= xUpperBound) {
-                        assert yUpperBound != CodeUtil.minValue(bits);
-                        return new IntegerStamp(bits, xStamp.lowerBound(), yUpperBound - 1, xStamp.downMask(), xStamp.upMask());
+                    if (yUpperBound <= xUpperBound) {
+                        if (yUpperBound != CodeUtil.minValue(bits)) {
+                            yUpperBound--;
+                        }
+                        return new IntegerStamp(bits, xStamp.lowerBound(), yUpperBound, xStamp.downMask(), xStamp.upMask());
                     }
                 }
             }
@@ -171,11 +170,11 @@ public final class IntegerLessThanNode extends CompareNode {
                     // y > x
                     long xLowerBound = xStamp.lowerBound();
                     long yLowerBound = yStamp.lowerBound();
-                    if (xLowerBound == CodeUtil.maxValue(bits)) {
-                        return null;
-                    } else if (xLowerBound >= yLowerBound) {
-                        assert xLowerBound != CodeUtil.maxValue(bits);
-                        return new IntegerStamp(bits, xLowerBound + 1, yStamp.upperBound(), yStamp.downMask(), yStamp.upMask());
+                    if (xLowerBound >= yLowerBound) {
+                        if (xLowerBound != CodeUtil.maxValue(bits)) {
+                            xLowerBound++;
+                        }
+                        return new IntegerStamp(bits, xLowerBound, yStamp.upperBound(), yStamp.downMask(), yStamp.upMask());
                     }
                 }
             }
