@@ -77,7 +77,7 @@ public class LazyInitializationTest {
 
     @Test
     public void testSLTck() throws IOException, InterruptedException {
-        spawnUnitTests("com.oracle.truffle.sl.test.SLFactorialTest");
+        spawnUnitTests("com.oracle.truffle.sl.test.SLTckTest");
     }
 
     private static final String VERBOSE_PROPERTY = "LazyInitializationTest.verbose";
