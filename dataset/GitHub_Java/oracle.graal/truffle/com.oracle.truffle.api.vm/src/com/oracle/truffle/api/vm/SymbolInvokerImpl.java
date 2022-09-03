@@ -29,18 +29,15 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
 final class SymbolInvokerImpl {
     @SuppressWarnings({"unchecked", "rawtypes"})
-    static CallTarget createCallTarget(TruffleLanguage<?> lang, Object symbol) {
+    static CallTarget createCallTarget(TruffleLanguage<?> lang, Object symbol, Object... arr) {
         Class<? extends TruffleLanguage<?>> type;
         if (lang != null) {
             type = (Class) lang.getClass();
@@ -51,7 +48,8 @@ final class SymbolInvokerImpl {
         if ((symbol instanceof String) || (symbol instanceof Number) || (symbol instanceof Boolean) || (symbol instanceof Character)) {
             symbolNode = RootNode.createConstantNode(symbol);
         } else {
-            symbolNode = new ExecuteRoot(type, (TruffleObject) symbol);
+            Node executeMain = Message.createExecute(arr.length).createNode();
+            symbolNode = createTemporaryRoot(type, executeMain, (TruffleObject) symbol, arr.length);
         }
         return Truffle.getRuntime().createCallTarget(symbolNode);
     }
@@ -68,7 +66,7 @@ final class SymbolInvokerImpl {
         private final TruffleObject function;
 
         @SuppressWarnings("rawtypes")
-        TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
+        public TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function, int argumentLength) {
             super(lang, null, null);
             this.foreignAccess = foreignAccess;
             this.convert = new ConvertNode();
@@ -79,47 +77,12 @@ final class SymbolInvokerImpl {
         @Override
         public Object execute(VirtualFrame frame) {
             final Object[] args = frame.getArguments();
-            try {
-                Object tmp = ForeignAccess.send(foreignAccess, frame, function, args);
-                return convert.convert(frame, tmp);
-            } catch (InteropException e) {
-                throw new AssertionError(e);
+            if (args.length != argumentLength) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new ArgumentsMishmashException();
             }
-        }
-    }
-
-    static class ExecuteRoot extends RootNode {
-        private final TruffleObject function;
-
-        @Child private ConvertNode convert;
-        @Child private Node foreignAccess;
-
-        @SuppressWarnings("rawtypes")
-        ExecuteRoot(Class<? extends TruffleLanguage> lang, TruffleObject function) {
-            super(lang, null, null);
-            this.function = function;
-            this.convert = new ConvertNode();
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            final Object[] args = frame.getArguments();
-            for (int i = 0; i < 2; i++) {
-                try {
-                    if (foreignAccess == null) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        foreignAccess = insert(Message.createExecute(args.length).createNode());
-                    }
-                    Object tmp = ForeignAccess.send(foreignAccess, frame, function, args);
-                    return convert.convert(frame, tmp);
-                } catch (ArityException e) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    foreignAccess = insert(Message.createExecute(args.length).createNode());
-                } catch (InteropException e) {
-                    throw new AssertionError(e);
-                }
-            }
-            throw new IllegalStateException();
+            Object tmp = ForeignAccess.execute(foreignAccess, frame, function, args);
+            return convert.convert(frame, tmp);
         }
     }
 
@@ -128,7 +91,7 @@ final class SymbolInvokerImpl {
         @Child private Node isBoxed;
         @Child private Node unbox;
 
-        ConvertNode() {
+        public ConvertNode() {
             this.isNull = Message.IS_NULL.createNode();
             this.isBoxed = Message.IS_BOXED.createNode();
             this.unbox = Message.UNBOX.createNode();
@@ -144,17 +107,21 @@ final class SymbolInvokerImpl {
 
         private Object convert(VirtualFrame frame, TruffleObject obj) {
             Object isBoxedResult;
-            isBoxedResult = ForeignAccess.sendIsBoxed(isBoxed, frame, obj);
+            try {
+                isBoxedResult = ForeignAccess.execute(isBoxed, frame, obj);
+            } catch (IllegalArgumentException ex) {
+                isBoxedResult = false;
+            }
             if (Boolean.TRUE.equals(isBoxedResult)) {
-                try {
-                    return ForeignAccess.sendUnbox(unbox, frame, obj);
-                } catch (UnsupportedMessageException e) {
-                    return null;
-                }
+                return ForeignAccess.execute(unbox, frame, obj);
             } else {
-                Object isNullResult = ForeignAccess.sendIsNull(isNull, frame, obj);
-                if (Boolean.TRUE.equals(isNullResult)) {
-                    return null;
+                try {
+                    Object isNullResult = ForeignAccess.execute(isNull, frame, obj);
+                    if (Boolean.TRUE.equals(isNullResult)) {
+                        return null;
+                    }
+                } catch (IllegalArgumentException ex) {
+                    // fallthrough
                 }
             }
             return obj;

@@ -218,11 +218,8 @@ public final class SLContext extends ExecutionContext {
         Parser.parseSL(this, source);
     }
 
-    /**
-     * Allocate an empty object.
-     */
     public DynamicObject createObject() {
-        return emptyShape.newInstance();
+        return LAYOUT.newInstance(emptyShape);
     }
 
     public static boolean isSLObject(TruffleObject value) {
