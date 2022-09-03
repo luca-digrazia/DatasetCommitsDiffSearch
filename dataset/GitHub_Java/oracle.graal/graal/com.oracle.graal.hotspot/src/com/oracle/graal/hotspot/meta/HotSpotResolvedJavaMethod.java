@@ -131,15 +131,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return unsafe.getAddress(metaspaceMethod + runtime().getConfig().methodConstMethodOffset);
     }
 
-    /**
-     * Returns this method's constant method flags ({@code ConstMethod::_flags}).
-     * 
-     * @return flags of this method's ConstMethod
-     */
-    private long getConstMethodFlags() {
-        return unsafe.getChar(getConstMethod() + runtime().getConfig().constMethodFlagsOffset);
-    }
-
     @Override
     public ResolvedJavaType getDeclaringClass() {
         return holder;
@@ -191,40 +182,11 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         if (exceptionHandlerCount == 0) {
             return new ExceptionHandler[0];
         }
-
         ExceptionHandler[] handlers = new ExceptionHandler[exceptionHandlerCount];
-        HotSpotVMConfig config = runtime().getConfig();
-        long exceptionTableElement = runtime().getCompilerToVM().exceptionTableStart(metaspaceMethod);
-
         for (int i = 0; i < exceptionHandlerCount; i++) {
-            final int startPc = unsafe.getChar(exceptionTableElement + config.exceptionTableElementStartPcOffset);
-            final int endPc = unsafe.getChar(exceptionTableElement + config.exceptionTableElementEndPcOffset);
-            final int handlerPc = unsafe.getChar(exceptionTableElement + config.exceptionTableElementHandlerPcOffset);
-            int catchTypeIndex = unsafe.getChar(exceptionTableElement + config.exceptionTableElementCatchTypeIndexOffset);
-
-            JavaType catchType;
-            if (catchTypeIndex == 0) {
-                catchType = null;
-            } else {
-                final int opcode = -1;  // opcode is not used
-                catchType = constantPool.lookupType(catchTypeIndex, opcode);
-
-                // Check for Throwable which catches everything.
-                if (catchType instanceof HotSpotResolvedObjectType) {
-                    HotSpotResolvedObjectType resolvedType = (HotSpotResolvedObjectType) catchType;
-                    if (resolvedType.mirror() == Throwable.class) {
-                        catchTypeIndex = 0;
-                        catchType = null;
-                    }
-                }
-            }
-            handlers[i] = new ExceptionHandler(startPc, endPc, handlerPc, catchTypeIndex, catchType);
-
-            // Go to the next ExceptionTableElement
-            exceptionTableElement += config.exceptionTableElementSize;
+            handlers[i] = new ExceptionHandler(-1, -1, -1, -1, null);
         }
-
-        return handlers;
+        return runtime().getCompilerToVM().initializeExceptionHandlers(metaspaceMethod, handlers);
     }
 
     /**
@@ -320,22 +282,13 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     }
 
     public ResolvedJavaMethod uniqueConcreteMethod() {
-        if (holder.isInterface()) {
-            // Cannot trust interfaces. Because of:
-            // interface I { void foo(); }
-            // class A { public void foo() {} }
-            // class B extends A implements I { }
-            // class C extends B { public void foo() { } }
-            // class D extends B { }
-            // Would lead to identify C.foo() as the unique concrete method for I.foo() without
-            // seeing A.foo().
-            return null;
+        HotSpotResolvedObjectType[] resultHolder = {null};
+        long ucm = runtime().getCompilerToVM().getUniqueConcreteMethod(metaspaceMethod, resultHolder);
+        if (ucm != 0L) {
+            assert resultHolder[0] != null;
+            return resultHolder[0].createMethod(ucm);
         }
-        final long uniqueConcreteMethod = runtime().getCompilerToVM().findUniqueConcreteMethod(metaspaceMethod);
-        if (uniqueConcreteMethod == 0) {
-            return null;
-        }
-        return fromMetaspace(uniqueConcreteMethod);
+        return null;
     }
 
     @Override
@@ -530,42 +483,12 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return new LineNumberTableImpl(line, bci);
     }
 
-    /**
-     * Returns whether or not this method has a local variable table.
-     * 
-     * @return true if this method has a local variable table
-     */
-    private boolean hasLocalVariableTable() {
-        return (getConstMethodFlags() & runtime().getConfig().constMethodHasLocalVariableTable) != 0;
-    }
-
     @Override
     public LocalVariableTable getLocalVariableTable() {
-        if (!hasLocalVariableTable()) {
+        Local[] locals = runtime().getCompilerToVM().getLocalVariableTable(this);
+        if (locals == null) {
             return null;
         }
-
-        HotSpotVMConfig config = runtime().getConfig();
-        long localVariableTableElement = runtime().getCompilerToVM().getLocalVariableTableStart(this);
-        final int localVariableTableLength = runtime().getCompilerToVM().getLocalVariableTableLength(this);
-        Local[] locals = new Local[localVariableTableLength];
-
-        for (int i = 0; i < localVariableTableLength; i++) {
-            final int startBci = unsafe.getChar(localVariableTableElement + config.localVariableTableElementStartBciOffset);
-            final int endBci = startBci + unsafe.getChar(localVariableTableElement + config.localVariableTableElementLengthOffset);
-            final int nameCpIndex = unsafe.getChar(localVariableTableElement + config.localVariableTableElementNameCpIndexOffset);
-            final int typeCpIndex = unsafe.getChar(localVariableTableElement + config.localVariableTableElementDescriptorCpIndexOffset);
-            final int slot = unsafe.getChar(localVariableTableElement + config.localVariableTableElementSlotOffset);
-
-            String localName = getConstantPool().lookupUtf8(nameCpIndex);
-            String localType = getConstantPool().lookupUtf8(typeCpIndex);
-
-            locals[i] = new LocalImpl(localName, localType, holder, startBci, endBci, slot);
-
-            // Go to the next LocalVariableTableElement
-            localVariableTableElement += config.localVariableTableElementSize;
-        }
-
         return new LocalVariableTableImpl(locals);
     }
 
@@ -589,11 +512,6 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         return getVtableIndex() >= 0;
     }
 
-    /**
-     * Returns this method's virtual table index.
-     * 
-     * @return virtual table index
-     */
     private int getVtableIndex() {
         HotSpotVMConfig config = runtime().getConfig();
         return unsafe.getInt(metaspaceMethod + config.methodVtableIndexOffset);
