@@ -32,7 +32,6 @@ import com.oracle.graal.api.code.CompilationResult.DataPatch;
 import com.oracle.graal.api.code.CompilationResult.Infopoint;
 import com.oracle.graal.api.code.CompilationResult.Mark;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.bridge.CompilerToVM.CodeInstallResult;
@@ -158,31 +157,21 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
         return runtime.getConfig().runtimeCallStackSize;
     }
 
-    public HotSpotInstalledCode logOrDump(HotSpotInstalledCode installedCode, CompilationResult compResult) {
-        if (Debug.isDumpEnabled()) {
-            Debug.dump(new Object[]{compResult, installedCode}, "After code installation");
-        }
-        if (Debug.isLogEnabled()) {
-            Debug.log("%s", disassemble(installedCode));
-        }
-        return installedCode;
-    }
-
     public HotSpotInstalledCode installMethod(HotSpotResolvedJavaMethod method, int entryBCI, CompilationResult compResult) {
-        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, compResult.getName(), true);
+        HotSpotInstalledCode installedCode = new HotSpotNmethod(method, true);
         runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(method, entryBCI, compResult), installedCode, method.getSpeculationLog());
-        return logOrDump(installedCode, compResult);
+        return installedCode;
     }
 
     @Override
     public InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
         HotSpotResolvedJavaMethod hotspotMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, compResult.getName(), false);
+        HotSpotInstalledCode code = new HotSpotNmethod(hotspotMethod, false);
         CodeInstallResult result = runtime.getCompilerToVM().installCode(new HotSpotCompiledNmethod(hotspotMethod, -1, compResult), code, null);
         if (result != CodeInstallResult.OK) {
             return null;
         }
-        return logOrDump(code, compResult);
+        return code;
     }
 
     public InstalledCode setDefaultMethod(ResolvedJavaMethod method, CompilationResult compResult) {
@@ -191,8 +180,9 @@ public abstract class HotSpotCodeCacheProvider implements CodeCacheProvider {
     }
 
     public InstalledCode addExternalMethod(ResolvedJavaMethod method, CompilationResult compResult) {
+
         HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) method;
-        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, compResult.getName(), false, true);
+        HotSpotInstalledCode icode = new HotSpotNmethod(javaMethod, false, true);
         HotSpotCompiledNmethod compiled = new HotSpotCompiledNmethod(javaMethod, -1, compResult);
         CompilerToVM vm = runtime.getCompilerToVM();
         CodeInstallResult result = vm.installCode(compiled, icode, null);

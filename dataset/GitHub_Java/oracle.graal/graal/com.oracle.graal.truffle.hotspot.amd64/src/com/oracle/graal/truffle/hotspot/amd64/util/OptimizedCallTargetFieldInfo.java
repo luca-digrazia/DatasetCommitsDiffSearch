@@ -45,7 +45,7 @@ public class OptimizedCallTargetFieldInfo {
 
     public static int getCompiledMethodFieldOffset() {
         if (compiledMethodFieldOffset == -1) {
-            compiledMethodFieldOffset = getFieldOffset("installedCode", OptimizedCallTarget.class);
+            compiledMethodFieldOffset = getFieldOffset("compiledMethod", OptimizedCallTarget.class);
         }
         return compiledMethodFieldOffset;
 
