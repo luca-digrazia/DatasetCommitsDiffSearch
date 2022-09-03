@@ -22,17 +22,24 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.spi.*;
-import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.gen.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.Value;
+
+import com.oracle.graal.compiler.common.type.FloatStamp;
+import com.oracle.graal.compiler.common.type.PrimitiveStamp;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.lir.amd64.AMD64ArithmeticLIRGeneratorTool;
+import com.oracle.graal.lir.gen.ArithmeticLIRGeneratorTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.UnaryNode;
+import com.oracle.graal.nodes.spi.ArithmeticLIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 @NodeInfo
 public final class AMD64MathIntrinsicNode extends UnaryNode implements ArithmeticLIRLowerable {
@@ -69,15 +76,29 @@ public final class AMD64MathIntrinsicNode extends UnaryNode implements Arithmeti
     }
 
     protected AMD64MathIntrinsicNode(ValueNode value, Operation op) {
-        super(TYPE, StampFactory.forKind(Kind.Double), value);
+        super(TYPE, StampFactory.forKind(JavaKind.Double), value);
         assert value.stamp() instanceof FloatStamp && PrimitiveStamp.getBits(value.stamp()) == 64;
         this.operation = op;
     }
 
     @Override
-    public void generate(NodeMappableLIRBuilder builder, ArithmeticLIRGenerator lirGen) {
-        AMD64ArithmeticLIRGenerator gen = (AMD64ArithmeticLIRGenerator) lirGen;
-        Value input = builder.operand(getValue());
+    public Stamp foldStamp(Stamp newStamp) {
+        if (newStamp instanceof FloatStamp) {
+            FloatStamp floatStamp = (FloatStamp) newStamp;
+            switch (operation()) {
+                case COS:
+                case SIN:
+                    boolean nonNaN = floatStamp.lowerBound() != Double.NEGATIVE_INFINITY && floatStamp.upperBound() != Double.POSITIVE_INFINITY;
+                    return StampFactory.forFloat(JavaKind.Double, -1.0, 1.0, nonNaN);
+            }
+        }
+        return super.foldStamp(newStamp);
+    }
+
+    @Override
+    public void generate(NodeLIRBuilderTool nodeValueMap, ArithmeticLIRGeneratorTool lirGen) {
+        AMD64ArithmeticLIRGeneratorTool gen = (AMD64ArithmeticLIRGeneratorTool) lirGen;
+        Value input = nodeValueMap.operand(getValue());
         Value result;
         switch (operation()) {
             case LOG:
@@ -96,9 +117,9 @@ public final class AMD64MathIntrinsicNode extends UnaryNode implements Arithmeti
                 result = gen.emitMathTan(input);
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
         }
-        builder.setResult(this, result);
+        nodeValueMap.setResult(this, result);
     }
 
     @Override
@@ -126,7 +147,7 @@ public final class AMD64MathIntrinsicNode extends UnaryNode implements Arithmeti
             case TAN:
                 return Math.tan(value);
             default:
-                throw new GraalInternalError("unknown op %s", op);
+                throw new JVMCIError("unknown op %s", op);
         }
     }
 }
