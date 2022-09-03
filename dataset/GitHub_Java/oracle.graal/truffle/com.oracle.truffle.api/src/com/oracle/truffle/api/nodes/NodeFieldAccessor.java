@@ -24,46 +24,72 @@
  */
 package com.oracle.truffle.api.nodes;
 
-import java.lang.reflect.*;
-
-import sun.misc.*;
+import java.lang.reflect.Field;
 
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.Node.Children;
-import com.oracle.truffle.api.nodes.NodeUtil.FieldOffsetProvider;
+
+import sun.misc.Unsafe;
 
 /**
  * Information about a field in a {@link Node} class.
+ *
+ * @since 0.8 or earlier
  */
+@Deprecated
 public abstract class NodeFieldAccessor {
-
-    public static enum NodeFieldKind {
-        /** The reference to the {@link NodeClass}. */
+    /** @since 0.8 or earlier */
+    public enum NodeFieldKind {
+        /**
+         * The reference to the {@link NodeClass}.
+         *
+         * @since 0.8 or earlier
+         */
         NODE_CLASS,
-        /** The single {@link Node#getParent() parent} field. */
+        /**
+         * The single {@link Node#getParent() parent} field.
+         *
+         * @since 0.8 or earlier
+         */
         PARENT,
-        /** A field annotated with {@link Child}. */
+        /**
+         * A field annotated with {@link Child}.
+         *
+         * @since 0.8 or earlier
+         */
         CHILD,
-        /** A field annotated with {@link Children}. */
+        /**
+         * A field annotated with {@link Children}.
+         *
+         * @since 0.8 or earlier
+         */
         CHILDREN,
-        /** A normal non-child data field of the node. */
+        /**
+         * A normal non-child data field of the node.
+         *
+         * @since 0.8 or earlier
+         */
         DATA
     }
 
-    private static final boolean USE_UNSAFE = Boolean.getBoolean("truffle.unsafe");
+    private static final boolean USE_UNSAFE = Boolean.parseBoolean(System.getProperty("truffle.unsafe", "true"));
 
     private final NodeFieldKind kind;
+    private final Class<?> declaringClass;
     private final String name;
+    /** @since 0.8 or earlier */
     protected final Class<?> type;
-    protected final long offset;
 
-    protected NodeFieldAccessor(NodeFieldKind kind, Field field) {
+    /** @since 0.8 or earlier */
+    protected NodeFieldAccessor(NodeFieldKind kind, Class<?> declaringClass, String name, Class<?> type) {
         this.kind = kind;
-        this.type = field.getType();
-        this.name = field.getName();
-        this.offset = unsafeFieldOffsetProvider.objectFieldOffset(field);
+        this.declaringClass = declaringClass;
+        this.name = name;
+        /** @since 0.8 or earlier */
+        this.type = type;
     }
 
+    /** @since 0.8 or earlier */
     protected static NodeFieldAccessor create(NodeFieldKind kind, Field field) {
         if (USE_UNSAFE) {
             return new UnsafeNodeField(kind, field);
@@ -72,130 +98,146 @@ public abstract class NodeFieldAccessor {
         }
     }
 
+    /** @since 0.8 or earlier */
     public NodeFieldKind getKind() {
         return kind;
     }
 
+    /** @since 0.8 or earlier */
     public Class<?> getType() {
         return type;
     }
 
+    /** @since 0.8 or earlier */
+    public Class<?> getDeclaringClass() {
+        return declaringClass;
+    }
+
+    /** @since 0.8 or earlier */
     public String getName() {
         return name;
     }
 
-    public long getOffset() {
-        return offset;
-    }
-
+    /**
+     * @deprecated The visibility of this method will be reduced to protected. Do not use.
+     * @since 0.8 or earlier
+     */
+    @Deprecated
     public abstract void putObject(Node receiver, Object value);
 
+    /**
+     * @deprecated The visibility of this method will be reduced to protected. Do not use.
+     * @since 0.8 or earlier
+     */
+    @Deprecated
     public abstract Object getObject(Node receiver);
 
+    /** @since 0.8 or earlier */
     public abstract Object loadValue(Node node);
 
+    /** @since 0.14 */
     @Override
-    public int hashCode() {
-        return kind.hashCode() | type.hashCode() | name.hashCode() | ((Long) offset).hashCode();
+    public String toString() {
+        return getDeclaringClass().getName() + "." + getName();
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof NodeFieldAccessor) {
-            NodeFieldAccessor other = (NodeFieldAccessor) obj;
-            return offset == other.offset && name.equals(other.name) && type.equals(other.type) && kind.equals(other.kind);
-        }
-        return false;
-    }
-
-    private static final Unsafe unsafe = getUnsafe();
-
-    private static Unsafe getUnsafe() {
-        try {
-            return Unsafe.getUnsafe();
-        } catch (SecurityException e) {
-        }
-        try {
-            Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafeInstance.setAccessible(true);
-            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
-        } catch (Exception e) {
-            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
-        }
-    }
-
-    private static final FieldOffsetProvider unsafeFieldOffsetProvider = new FieldOffsetProvider() {
-
-        @Override
-        public long objectFieldOffset(Field field) {
-            return unsafe.objectFieldOffset(field);
+    /** @since 0.8 or earlier */
+    @SuppressWarnings("deprecation")
+    public abstract static class AbstractUnsafeNodeFieldAccessor extends NodeFieldAccessor {
+        /** @since 0.8 or earlier */
+        protected AbstractUnsafeNodeFieldAccessor(NodeFieldKind kind, Class<?> declaringClass, String name, Class<?> type) {
+            super(kind, declaringClass, name, type);
         }
 
-        @Override
-        public int getTypeSize(Class<?> clazz) {
-            if (!clazz.isPrimitive()) {
-                return Unsafe.ARRAY_OBJECT_INDEX_SCALE;
-            } else if (clazz == int.class) {
-                return Unsafe.ARRAY_INT_INDEX_SCALE;
-            } else {
-                throw new UnsupportedOperationException("unsupported field type: " + clazz);
-            }
-        }
-    };
+        /** @since 0.8 or earlier */
+        public abstract long getOffset();
 
-    private static final class UnsafeNodeField extends NodeFieldAccessor {
-
-        protected UnsafeNodeField(NodeFieldKind kind, Field field) {
-            super(kind, field);
-        }
-
+        /** @since 0.8 or earlier */
         @Override
         public void putObject(Node receiver, Object value) {
             if (!type.isPrimitive() && value == null || type.isInstance(value)) {
-                unsafe.putObject(receiver, offset, value);
+                unsafe.putObject(receiver, getOffset(), value);
             } else {
-                throw new IllegalArgumentException();
+                throw illegalArgumentException(value);
             }
         }
 
+        private IllegalArgumentException illegalArgumentException(Object value) {
+            return new IllegalArgumentException("Cannot set " + getType().getName() + " field " + toString() + " to " + (value == null ? "null" : value.getClass().getName()));
+        }
+
+        /** @since 0.8 or earlier */
         @Override
         public Object getObject(Node receiver) {
             if (!type.isPrimitive()) {
-                return unsafe.getObject(receiver, offset);
+                return unsafe.getObject(receiver, getOffset());
             } else {
                 throw new IllegalArgumentException();
             }
         }
 
+        /** @since 0.8 or earlier */
         @Override
         public Object loadValue(Node node) {
             if (type == boolean.class) {
-                return unsafe.getBoolean(node, offset);
+                return unsafe.getBoolean(node, getOffset());
             } else if (type == byte.class) {
-                return unsafe.getByte(node, offset);
+                return unsafe.getByte(node, getOffset());
             } else if (type == short.class) {
-                return unsafe.getShort(node, offset);
+                return unsafe.getShort(node, getOffset());
             } else if (type == char.class) {
-                return unsafe.getChar(node, offset);
+                return unsafe.getChar(node, getOffset());
             } else if (type == int.class) {
-                return unsafe.getInt(node, offset);
+                return unsafe.getInt(node, getOffset());
             } else if (type == long.class) {
-                return unsafe.getLong(node, offset);
+                return unsafe.getLong(node, getOffset());
             } else if (type == float.class) {
-                return unsafe.getFloat(node, offset);
+                return unsafe.getFloat(node, getOffset());
             } else if (type == double.class) {
-                return unsafe.getDouble(node, offset);
+                return unsafe.getDouble(node, getOffset());
             } else {
-                return unsafe.getObject(node, offset);
+                return unsafe.getObject(node, getOffset());
+            }
+        }
+
+        private static final Unsafe unsafe = getUnsafe();
+
+        private static Unsafe getUnsafe() {
+            try {
+                return Unsafe.getUnsafe();
+            } catch (SecurityException e) {
+            }
+            try {
+                Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafeInstance.setAccessible(true);
+                return (Unsafe) theUnsafeInstance.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
             }
         }
     }
 
+    @SuppressWarnings("deprecation")
+    private static final class UnsafeNodeField extends AbstractUnsafeNodeFieldAccessor {
+        private final long offset;
+
+        protected UnsafeNodeField(NodeFieldKind kind, Field field) {
+            super(kind, field.getDeclaringClass(), field.getName(), field.getType());
+            this.offset = AbstractUnsafeNodeFieldAccessor.unsafe.objectFieldOffset(field);
+        }
+
+        @Override
+        public long getOffset() {
+            return offset;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
     private static final class ReflectionNodeField extends NodeFieldAccessor {
         private final Field field;
 
         protected ReflectionNodeField(NodeFieldKind kind, Field field) {
-            super(kind, field);
+            super(kind, field.getDeclaringClass(), field.getName(), field.getType());
             this.field = field;
             field.setAccessible(true);
         }
