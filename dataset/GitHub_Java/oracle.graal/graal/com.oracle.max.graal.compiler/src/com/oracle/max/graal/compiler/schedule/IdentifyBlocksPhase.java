@@ -155,12 +155,12 @@ public class IdentifyBlocksPhase extends Phase {
             Node n = block.firstNode();
             if (n instanceof Merge) {
                 for (Node usage : n.usages()) {
-                    if (usage instanceof Phi || usage instanceof LoopCounter) {
+                    if (usage instanceof Phi) {
                         nodeToBlock.set(usage, block);
                     }
                 }
                 Merge m = (Merge) n;
-                for (int i = 0; i < m.endCount(); ++i) {
+                for (int i=0; i<m.endCount(); ++i) {
                     EndNode end = m.endAt(i);
                     Block predBlock = nodeToBlock.get(end);
                     predBlock.addSuccessor(block);
@@ -196,11 +196,11 @@ public class IdentifyBlocksPhase extends Phase {
 
             // Add successors of loop end nodes. Makes the graph cyclic.
             for (Block block : blocks) {
-                Node n = block.lastNode();
-                if (n instanceof LoopEnd) {
-                    LoopEnd loopEnd = (LoopEnd) n;
-                    assert loopEnd.loopBegin() != null;
-                    block.addSuccessor(nodeToBlock.get(loopEnd.loopBegin()));
+                Node n = block.firstNode();
+                if (n instanceof LoopBegin) {
+                    LoopBegin loopBegin = (LoopBegin) n;
+                    assert loopBegin.loopEnd() != null;
+                    nodeToBlock.get(loopBegin.loopEnd()).addSuccessor(block);
                 }
             }
 
@@ -305,17 +305,10 @@ public class IdentifyBlocksPhase extends Phase {
                 }
             } else if (usage instanceof FrameState && ((FrameState) usage).block() != null) {
                 Merge merge = ((FrameState) usage).block();
-                for (int i = 0; i < merge.endCount(); ++i) {
+                for (int i=0; i<merge.endCount(); ++i) {
                     EndNode pred = merge.endAt(i);
                     block = getCommonDominator(block, nodeToBlock.get(pred));
                 }
-            /*} else if (usage instanceof LoopCounter) { //TODO gd
-                LoopCounter counter = (LoopCounter) usage;
-                if (n == counter.init()) {
-                    LoopBegin loopBegin = counter.loopBegin();
-                    Block mergeBlock = nodeToBlock.get(loopBegin);
-                    block = getCommonDominator(block, mergeBlock.dominator());
-                }*/
             } else {
                 block = getCommonDominator(block, assignLatestPossibleBlockToNode(usage));
             }
@@ -356,7 +349,7 @@ public class IdentifyBlocksPhase extends Phase {
 
         if (b.firstNode() == b.lastNode()) {
             Node node = b.firstNode();
-            if (!(node instanceof Merge) || node instanceof LoopEnd) {
+            if (!(node instanceof Merge)) {
                 scheduleFirst = false;
             }
         }
@@ -367,12 +360,12 @@ public class IdentifyBlocksPhase extends Phase {
             addToSorting(b, i, sortedInstructions, map);
         }
         addToSorting(b, b.lastNode(), sortedInstructions, map);
-        assert sortedInstructions.get(sortedInstructions.size() - 1) == b.lastNode() : "lastNode=" + b.lastNode() + ", firstNode=" + b.firstNode() + ", sorted(sz-1)=" + sortedInstructions.get(sortedInstructions.size() - 1);
+        assert sortedInstructions.get(sortedInstructions.size() - 1) == b.lastNode() : "lastNode=" + b.lastNode() + ", firstNode=" + b.firstNode();
         b.setInstructions(sortedInstructions);
     }
 
     private void addToSorting(Block b, Node i, List<Node> sortedInstructions, NodeBitMap map) {
-        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof Phi || i instanceof Local || i instanceof LoopCounter) {
+        if (i == null || map.isMarked(i) || nodeToBlock.get(i) != b || i instanceof Phi || i instanceof Local) {
             return;
         }
 
