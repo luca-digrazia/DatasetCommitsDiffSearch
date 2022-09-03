@@ -183,8 +183,6 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> ExitVMOnException = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> PrintStackTraceOnException = new OptionValue<>(false);
-    @Option(help = "Sets a phase after which the decompiler dumps the graph, -G:Dump= required")
-    public static final OptionValue<String> DecompileAfterPhase = new OptionValue<>(null);
 
     // HotSpot command line options
     @Option(help = "")
@@ -199,6 +197,8 @@ public final class GraalOptions {
     // Code generator settings
     @Option(help = "")
     public static final OptionValue<Boolean> ConditionalElimination = new OptionValue<>(true);
+    @Option(help = "")
+    public static final OptionValue<Boolean> CullFrameStates = new OptionValue<>(false);
     @Option(help = "")
     public static final OptionValue<Boolean> UseProfilingInformation = new OptionValue<>(true);
     @Option(help = "")
@@ -310,7 +310,6 @@ public final class GraalOptions {
     public static final OptionValue<Boolean> IntrinsifyInstalledCodeMethods = new OptionValue<>(true);
     @Option(help = "")
     public static final OptionValue<Boolean> IntrinsifyCallSiteTarget = new OptionValue<>(true);
-
     /**
      * Counts the various paths taken through snippets.
      */
@@ -346,4 +345,12 @@ public final class GraalOptions {
      */
     @Option(help = "")
     public static final OptionValue<Integer> InstanceOfMaxHints = new OptionValue<>(2);
+
+    /**
+     * If the probability that an instanceof will hit one the profiled types (up to {@link #InstanceOfMaxHints})
+     * is above this value, the compiled instanceof will deoptimize if all hints are missed.
+     */
+    @Option(help = "")
+    public static final OptionValue<Double> InstanceOfFullCoverageSpeculationThreshold = new OptionValue<>(0.998);
+
 }
