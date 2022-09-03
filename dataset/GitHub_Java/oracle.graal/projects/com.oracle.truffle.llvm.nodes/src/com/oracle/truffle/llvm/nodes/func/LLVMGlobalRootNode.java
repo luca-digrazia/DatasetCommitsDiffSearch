@@ -33,7 +33,6 @@ import java.util.Deque;
 import java.util.List;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
@@ -41,27 +40,18 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.nodes.base.LLVMFrameUtil;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMAbort;
 import com.oracle.truffle.llvm.nodes.intrinsics.c.LLVMSignal;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMContext.DestructorStackElement;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
 import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
-import com.oracle.truffle.llvm.runtime.types.PointerType;
 
 /**
  * The global entry point initializes the global scope and starts execution with the main function.
@@ -69,9 +59,9 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
  */
 public class LLVMGlobalRootNode extends RootNode {
 
-    @Child private Node executeDestructor = Message.createExecute(1).createNode();
     private final DirectCallNode main;
     @CompilationFinal(dimensions = 1) protected final Object[] arguments;
+    private final LLVMContext context;
     // FIXME instead make the option system "PE safe"
     protected final int executionCount = LLVMOptions.ENGINE.executionCount();
     private final boolean printExecutionTime = !LLVMLogger.TARGET_NONE.equals(LLVMOptions.DEBUG.printExecutionTime());
@@ -79,9 +69,10 @@ public class LLVMGlobalRootNode extends RootNode {
     private long startExecutionTime;
     private long endExecutionTime;
 
-    public LLVMGlobalRootNode(LLVMLanguage language, FrameSlot stackSlot, FrameDescriptor descriptor, CallTarget main, Object... arguments) {
-        super(language, descriptor);
+    public LLVMGlobalRootNode(FrameSlot stackSlot, FrameDescriptor descriptor, LLVMContext context, CallTarget main, Object... arguments) {
+        super(LLVMLanguage.class, null, descriptor);
         this.stackPointerSlot = stackSlot;
+        this.context = context;
         this.main = Truffle.getRuntime().createDirectCallNode(main);
         this.arguments = arguments;
     }
@@ -89,7 +80,7 @@ public class LLVMGlobalRootNode extends RootNode {
     @Override
     @ExplodeLoop
     public Object execute(VirtualFrame frame) {
-        LLVMAddress stackPointer = getContext().getStack().getUpperBounds();
+        LLVMAddress stackPointer = context.getStack().getUpperBounds();
         try {
             Object result = null;
             for (int i = 0; i < executionCount; i++) {
@@ -101,31 +92,17 @@ public class LLVMGlobalRootNode extends RootNode {
                 System.arraycopy(arguments, 0, realArgs, LLVMCallNode.ARG_START_INDEX, arguments.length);
                 result = executeIteration(i, realArgs);
 
-                getContext().awaitThreadTermination();
+                context.awaitThreadTermination();
                 assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
             }
             return result;
         } catch (LLVMExitException e) {
-            getContext().awaitThreadTermination();
+            context.awaitThreadTermination();
             assert LLVMSignal.getNumberOfRegisteredSignals() == 0;
             return e.getReturnCode();
         } finally {
-            runDestructors();
             // if not done already, we want at least call a shutdown command
-            getContext().shutdownThreads();
-        }
-    }
-
-    @TruffleBoundary
-    private void runDestructors() {
-        for (DestructorStackElement destructorStackElement : getContext().getDestructorStack()) {
-            try {
-                ForeignAccess.sendExecute(executeDestructor, destructorStackElement.getDestructor(),
-                                new LLVMTruffleAddress(destructorStackElement.getThiz(), new PointerType(null), getContext()));
-            } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException(e);
-            }
+            context.shutdownThreads();
         }
     }
 
@@ -175,7 +152,7 @@ public class LLVMGlobalRootNode extends RootNode {
 
     @TruffleBoundary
     protected void executeStaticInits() {
-        List<RootCallTarget> globalVarInits = getContext().getGlobalVarInits();
+        List<RootCallTarget> globalVarInits = context.getGlobalVarInits();
         for (RootCallTarget callTarget : globalVarInits) {
             callTarget.call(globalVarInits);
         }
@@ -183,7 +160,7 @@ public class LLVMGlobalRootNode extends RootNode {
 
     @TruffleBoundary
     private void executeConstructorFunctions() {
-        List<RootCallTarget> constructorFunctions = getContext().getConstructorFunctions();
+        List<RootCallTarget> constructorFunctions = context.getConstructorFunctions();
         for (RootCallTarget callTarget : constructorFunctions) {
             callTarget.call(constructorFunctions);
         }
@@ -191,7 +168,7 @@ public class LLVMGlobalRootNode extends RootNode {
 
     @TruffleBoundary
     private void executeDestructorFunctions() {
-        List<RootCallTarget> destructorFunctions = getContext().getDestructorFunctions();
+        List<RootCallTarget> destructorFunctions = context.getDestructorFunctions();
         for (RootCallTarget callTarget : destructorFunctions) {
             callTarget.call(destructorFunctions);
         }
@@ -199,7 +176,7 @@ public class LLVMGlobalRootNode extends RootNode {
 
     @TruffleBoundary
     private void executeAtExitFunctions() {
-        Deque<RootCallTarget> atExitFunctions = getContext().getAtExitFunctions();
+        Deque<RootCallTarget> atExitFunctions = context.getAtExitFunctions();
         LLVMExitException lastExitException = null;
         while (!atExitFunctions.isEmpty()) {
             try {
@@ -211,10 +188,6 @@ public class LLVMGlobalRootNode extends RootNode {
         if (lastExitException != null) {
             throw lastExitException;
         }
-    }
-
-    public final LLVMContext getContext() {
-        return getRootNode().getLanguage(LLVMLanguage.class).getContextReference().get();
     }
 
 }
