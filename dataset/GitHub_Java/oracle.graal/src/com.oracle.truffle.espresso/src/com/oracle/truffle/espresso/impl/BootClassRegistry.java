@@ -28,7 +28,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
@@ -77,7 +76,7 @@ public class BootClassRegistry implements ClassRegistry {
 
         if (klass == null) {
             Klass hostClass = null;
-            String className = TypeDescriptor.slashified(type.toJavaName());
+            String className = type.toJavaName();
 
             if (type.isPrimitive()) {
                 throw EspressoError.shouldNotReachHere("Primitives must be in the registry");
@@ -116,15 +115,5 @@ public class BootClassRegistry implements ClassRegistry {
             return klass.getArrayClass();
         }
         return classes.get(type);
-    }
-
-    @Override
-    public Klass defineKlass(TypeDescriptor type, Klass klass) {
-        assert !classes.containsKey(type);
-        Klass prevKlass = classes.putIfAbsent(type, klass);
-        if (prevKlass != null) {
-            return prevKlass;
-        }
-        return klass;
     }
 }
