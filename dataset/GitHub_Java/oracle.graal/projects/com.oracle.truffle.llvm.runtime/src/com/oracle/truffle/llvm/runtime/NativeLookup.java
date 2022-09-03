@@ -41,7 +41,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.options.LLVMOptions;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
@@ -62,22 +62,6 @@ public final class NativeLookup {
         this.defaultLibrary = loadDefaultLibrary(env);
     }
 
-    public static class UnsupportedNativeTypeException extends Exception {
-
-        private static final long serialVersionUID = 1L;
-
-        private final Type type;
-
-        UnsupportedNativeTypeException(Type type) {
-            super("unsupported type " + type + " in native interop");
-            this.type = type;
-        }
-
-        public Type getType() {
-            return type;
-        }
-    }
-
     /*
      * PRIVATE
      */
@@ -85,14 +69,14 @@ public final class NativeLookup {
     private static List<TruffleObject> loadLibraries(TruffleLanguage.Env env) {
         CompilerAsserts.neverPartOfCompilation();
         List<TruffleObject> handles = new ArrayList<>();
-        String[] dynamicLibraryPaths = SulongEngineOption.getNativeLibraries(env);
+        String[] dynamicLibraryPaths = LLVMOptions.getNativeLibraries();
         for (String library : dynamicLibraryPaths) {
             try {
                 TruffleObject lib = loadLibrary(env, library);
                 handles.add(lib);
             } catch (UnsatisfiedLinkError e) {
-                System.err.println(library + " not found!\n" + e.getMessage());
-                throw e;
+                LLVMLogger.unconditionalInfo(library + " not found!\n" + e.getMessage());
+                e.printStackTrace(System.err);
             }
         }
         return handles;
@@ -131,7 +115,7 @@ public final class NativeLookup {
         }
     }
 
-    private static String getNativeType(Type type) throws UnsupportedNativeTypeException {
+    private static String getNativeType(Type type) {
         if (type instanceof FunctionType) {
             return prepareSignature((FunctionType) type, 0);
         } else if (type instanceof PointerType && ((PointerType) type).getPointeeType() instanceof FunctionType) {
@@ -157,16 +141,16 @@ public final class NativeLookup {
                 case DOUBLE:
                     return "DOUBLE";
                 default:
-                    throw new UnsupportedNativeTypeException(primitiveType);
+                    throw new AssertionError(primitiveType);
 
             }
         } else if (type instanceof VoidType) {
             return "VOID";
         }
-        throw new UnsupportedNativeTypeException(type);
+        throw new AssertionError(type);
     }
 
-    private static String[] getNativeTypes(Type[] argTypes, int skipArguments) throws UnsupportedNativeTypeException {
+    private static String[] getNativeTypes(Type[] argTypes, int skipArguments) {
         String[] types = new String[argTypes.length - skipArguments];
         for (int i = skipArguments; i < argTypes.length; i++) {
             types[i - skipArguments] = getNativeType(argTypes[i]);
@@ -193,6 +177,9 @@ public final class NativeLookup {
             }
         }
         TruffleObject symbol = getNativeFunction(defaultLibrary, name);
+        if (symbol == null) {
+            LLVMLogger.info("external symbol " + nameIn + " could not be resolved!");
+        }
         return symbol;
     }
 
@@ -222,6 +209,9 @@ public final class NativeLookup {
             }
         }
         TruffleObject symbol = getNativeDataObject(defaultLibrary, realName);
+        if (symbol == null) {
+            LLVMLogger.info("external symbol " + name + " could not be resolved!");
+        }
         return symbol;
     }
 
@@ -255,7 +245,7 @@ public final class NativeLookup {
         }
     }
 
-    static String prepareSignature(FunctionType type, int skipArguments) throws UnsupportedNativeTypeException {
+    static String prepareSignature(FunctionType type, int skipArguments) {
         // TODO varargs
         CompilerAsserts.neverPartOfCompilation();
         String nativeRet = getNativeType(type.getReturnType());
