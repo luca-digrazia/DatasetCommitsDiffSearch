@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,8 +25,8 @@ package com.oracle.graal.hotspot;
 import java.io.*;
 import java.lang.management.*;
 
-import jdk.internal.jvmci.hotspot.*;
-import jdk.internal.jvmci.options.*;
+import com.oracle.graal.hotspot.bridge.*;
+import com.oracle.graal.options.*;
 
 /**
  * An option that encapsulates and configures a print stream.
@@ -41,7 +41,7 @@ public class PrintStreamOption extends OptionValue<String> {
      * The print stream to which output will be written.
      *
      * Declared {@code volatile} to enable safe use of double-checked locking in
-     * {@link #getStream()} and {@link #setValue(Object)}.
+     * {@link #getStream(CompilerToVM)} and {@link #setValue(Object)}.
      */
     private volatile PrintStream ps;
 
@@ -73,7 +73,7 @@ public class PrintStreamOption extends OptionValue<String> {
      * Gets the print stream configured by this option. If no file is configured, the print stream
      * will output to {@link CompilerToVM#writeDebugOutput(byte[], int, int)}.
      */
-    public PrintStream getStream() {
+    public PrintStream getStream(final CompilerToVM compilerToVM) {
         if (ps == null) {
             if (getValue() != null) {
                 synchronized (this) {
@@ -95,15 +95,6 @@ public class PrintStreamOption extends OptionValue<String> {
                 }
             } else {
                 OutputStream ttyOut = new OutputStream() {
-                    CompilerToVM vm;
-
-                    private CompilerToVM vm() {
-                        if (vm == null) {
-                            vm = HotSpotJVMCIRuntime.runtime().getCompilerToVM();
-                        }
-                        return vm;
-                    }
-
                     @Override
                     public void write(byte[] b, int off, int len) throws IOException {
                         if (b == null) {
@@ -113,7 +104,7 @@ public class PrintStreamOption extends OptionValue<String> {
                         } else if (len == 0) {
                             return;
                         }
-                        vm().writeDebugOutput(b, off, len);
+                        compilerToVM.writeDebugOutput(b, off, len);
                     }
 
                     @Override
@@ -123,7 +114,7 @@ public class PrintStreamOption extends OptionValue<String> {
 
                     @Override
                     public void flush() throws IOException {
-                        vm().flushDebugOutput();
+                        compilerToVM.flushDebugOutput();
                     }
                 };
                 ps = new PrintStream(ttyOut);

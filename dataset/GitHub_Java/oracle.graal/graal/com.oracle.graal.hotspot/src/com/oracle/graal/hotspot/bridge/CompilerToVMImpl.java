@@ -23,144 +23,189 @@
 
 package com.oracle.graal.hotspot.bridge;
 
-import java.lang.reflect.*;
+import static com.oracle.graal.hotspot.InitTimer.*;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.ri.*;
-import com.oracle.graal.hotspot.server.*;
+import com.oracle.graal.hotspot.meta.*;
 
 /**
  * Entries into the HotSpot VM from Java code.
  */
-public class CompilerToVMImpl implements CompilerToVM, Remote {
+public class CompilerToVMImpl implements CompilerToVM {
 
-    // Checkstyle: stop
+    /**
+     * Initializes the native part of the Graal runtime.
+     */
+    private static native void init();
 
-    @Override
-    public native RiMethod getRiMethod(Method reflectionMethod);
-
-    @Override
-    public native byte[] RiMethod_code(HotSpotMethodResolved method);
-
-    @Override
-    public native String RiMethod_signature(HotSpotMethodResolved method);
-
-    @Override
-    public native RiExceptionHandler[] RiMethod_exceptionHandlers(HotSpotMethodResolved method);
-
-    @Override
-    public native boolean RiMethod_hasBalancedMonitors(HotSpotMethodResolved method);
-
-    @Override
-    public native RiMethod RiMethod_uniqueConcreteMethod(HotSpotMethodResolved method);
-
-    @Override
-    public native int RiMethod_invocationCount(HotSpotMethodResolved method);
-
-    @Override
-    public native RiType RiSignature_lookupType(String returnType, HotSpotTypeResolved accessingClass, boolean eagerResolve);
-
-    @Override
-    public native Object RiConstantPool_lookupConstant(HotSpotTypeResolved pool, int cpi);
-
-    @Override
-    public native RiMethod RiConstantPool_lookupMethod(HotSpotTypeResolved pool, int cpi, byte byteCode);
-
-    @Override
-    public native RiType RiConstantPool_lookupType(HotSpotTypeResolved pool, int cpi);
-
-    @Override
-    public native void RiConstantPool_loadReferencedType(HotSpotTypeResolved pool, int cpi, byte byteCode);
-
-    @Override
-    public native RiField RiConstantPool_lookupField(HotSpotTypeResolved pool, int cpi, byte byteCode);
-
-    @Override
-    public native HotSpotCompiledMethod installMethod(HotSpotTargetMethod targetMethod, boolean installCode);
-
-    @Override
-    public native long installStub(HotSpotTargetMethod targetMethod);
-
-    @Override
-    public native HotSpotVMConfig getConfiguration();
-
-    @Override
-    public native RiMethod RiType_resolveMethodImpl(HotSpotTypeResolved klass, String name, String signature);
-
-    @Override
-    public native boolean RiType_isSubtypeOf(HotSpotTypeResolved klass, RiType other);
-
-    @Override
-    public native RiType RiType_leastCommonAncestor(HotSpotTypeResolved thisType, HotSpotTypeResolved otherType);
-
-    @Override
-    public native RiType getPrimitiveArrayType(CiKind kind);
-
-    @Override
-    public native RiType RiType_arrayOf(HotSpotTypeResolved klass);
-
-    @Override
-    public native RiType RiType_componentType(HotSpotTypeResolved klass);
-
-    @Override
-    public native RiType RiType_uniqueConcreteSubtype(HotSpotTypeResolved klass);
-
-    @Override
-    public native RiType RiType_superType(HotSpotTypeResolved klass);
-
-    @Override
-    public native boolean RiType_isInitialized(HotSpotTypeResolved klass);
-
-    @Override
-    public native HotSpotMethodData RiMethod_methodData(HotSpotMethodResolved method);
-
-    @Override
-    public native RiType getType(Class<?> javaClass);
-
-    @Override
-    public int getArrayLength(CiConstant array) {
-        return Array.getLength(array.asObject());
-    }
-
-    @Override
-    public boolean compareConstantObjects(CiConstant x, CiConstant y) {
-        return x.asObject() == y.asObject();
-    }
-
-    @Override
-    public RiType getRiType(CiConstant constant) {
-        Object o = constant.asObject();
-        if (o == null) {
-            return null;
+    static {
+        try (InitTimer t = timer("CompilerToVMImpl.init")) {
+            init();
         }
-        return getType(o.getClass());
+    }
+
+    private native int installCode0(HotSpotCompiledCode compiledCode, InstalledCode code, SpeculationLog speculationLog);
+
+    @Override
+    public CodeInstallResult installCode(HotSpotCompiledCode compiledCode, InstalledCode code, SpeculationLog speculationLog) {
+        return CodeInstallResult.getEnum(installCode0(compiledCode, code, speculationLog));
     }
 
     @Override
-    public native RiResolvedField[] RiType_fields(HotSpotTypeResolved klass);
+    public native long getMetaspaceMethod(Class<?> holder, int slot);
 
     @Override
-    public native boolean RiMethod_hasCompiledCode(HotSpotMethodResolved method);
+    public native byte[] getBytecode(long metaspaceMethod);
 
     @Override
-    public native int RiMethod_getCompiledCodeSize(HotSpotMethodResolved method);
+    public native int exceptionTableLength(long metaspaceMethod);
 
     @Override
-    public native long getMaxCallTargetOffset(CiRuntimeCall rtcall);
+    public native long exceptionTableStart(long metaspaceMethod);
 
     @Override
-    public native String disassembleNative(byte[] code, long address);
+    public native boolean hasBalancedMonitors(long metaspaceMethod);
 
     @Override
-    public native String disassembleJava(HotSpotMethodResolved method);
+    public native long findUniqueConcreteMethod(long actualHolderMetaspaceKlass, long metaspaceMethod);
 
     @Override
-    public native Object executeCompiledMethod(HotSpotCompiledMethod method, Object arg1, Object arg2, Object arg3);
+    public native long getKlassImplementor(long metaspaceKlass);
 
     @Override
-    public native int RiMethod_vtableEntryOffset(HotSpotMethodResolved method);
+    public native long lookupType(String name, Class<?> accessingClass, boolean eagerResolve);
 
-    // Checkstyle: resume
+    public native Object resolveConstantInPool(long metaspaceConstantPool, int cpi);
+
+    public native Object resolvePossiblyCachedConstantInPool(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native int lookupNameAndTypeRefIndexInPool(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native String lookupNameRefInPool(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native String lookupSignatureRefInPool(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native int lookupKlassRefIndexInPool(long metaspaceConstantPool, int cpi);
+
+    public native long constantPoolKlassAt(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native long lookupKlassInPool(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native long lookupMethodInPool(long metaspaceConstantPool, int cpi, byte opcode);
+
+    @Override
+    public native long resolveField(long metaspaceConstantPool, int cpi, byte opcode, long[] info);
+
+    public native int constantPoolRemapInstructionOperandFromCache(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native Object lookupAppendixInPool(long metaspaceConstantPool, int cpi);
+
+    @Override
+    public native void initializeConfiguration(HotSpotVMConfig config);
+
+    @Override
+    public native long resolveMethod(long metaspaceKlassExactReceiver, long metaspaceMethod, long metaspaceKlassCaller);
+
+    @Override
+    public native boolean hasFinalizableSubclass(long metaspaceKlass);
+
+    public native boolean methodIsIgnoredBySecurityStackWalk(long metaspaceMethod);
+
+    @Override
+    public native long getClassInitializer(long metaspaceKlass);
+
+    @Override
+    public native long getMaxCallTargetOffset(long address);
+
+    // The HotSpot disassembler seems not to be thread safe so it's better to synchronize its usage
+    @Override
+    public synchronized native String disassembleCodeBlob(long codeBlob);
+
+    @Override
+    public native StackTraceElement getStackTraceElement(long metaspaceMethod, int bci);
+
+    @Override
+    public native Object executeCompiledMethodVarargs(Object[] args, InstalledCode hotspotInstalledCode);
+
+    @Override
+    public native long[] getLineNumberTable(long metaspaceMethod);
+
+    @Override
+    public native long getLocalVariableTableStart(long metaspaceMethod);
+
+    @Override
+    public native int getLocalVariableTableLength(long metaspaceMethod);
+
+    @Override
+    public native String getFileName(HotSpotResolvedJavaType method);
+
+    @Override
+    public native void reprofile(long metaspaceMethod);
+
+    @Override
+    public native void invalidateInstalledCode(InstalledCode hotspotInstalledCode);
+
+    @Override
+    public native Class<?> getJavaMirror(long metaspaceKlass);
+
+    @Override
+    public native long readUnsafeKlassPointer(Object o);
+
+    @Override
+    public native Object readUncompressedOop(long address);
+
+    @Override
+    public native void doNotInlineOrCompile(long metaspaceMethod);
+
+    @Override
+    public Object executeCompiledMethod(Object arg1, Object arg2, Object arg3, InstalledCode hotspotInstalledCode) throws InvalidInstalledCodeException {
+        return executeCompiledMethodVarargs(new Object[]{arg1, arg2, arg3}, hotspotInstalledCode);
+    }
+
+    public synchronized native void notifyCompilationStatistics(int id, HotSpotResolvedJavaMethod method, boolean osr, int processedBytecodes, long time, long timeUnitsPerSecond,
+                    InstalledCode installedCode);
+
+    public native void resetCompilationStatistics();
+
+    public native long[] collectCounters();
+
+    public native boolean isMature(long method);
+
+    public native int allocateCompileId(long metaspaceMethod, int entryBCI);
+
+    public String getGPUs() {
+        return "";
+    }
+
+    public native boolean canInlineMethod(long metaspaceMethod);
+
+    public native boolean shouldInlineMethod(long metaspaceMethod);
+
+    public native boolean hasCompiledCodeForOSR(long metaspaceMethod, int entryBCI, int level);
+
+    public native HotSpotStackFrameReference getNextStackFrame(HotSpotStackFrameReference frame, long[] methods, int initialSkip);
+
+    public native void materializeVirtualObjects(HotSpotStackFrameReference stackFrame, boolean invalidate);
+
+    public native long getTimeStamp();
+
+    public native String getSymbol(long metaspaceSymbol);
+
+    public native void resolveInvokeDynamic(long metaspaceConstantPool, int index);
+
+    public native int getVtableIndexForInterface(long metaspaceKlass, long metaspaceMethod);
+
+    public native boolean shouldDebugNonSafepoints();
+
+    public native void writeDebugOutput(byte[] bytes, int offset, int length);
+
+    public native void flushDebugOutput();
 }
