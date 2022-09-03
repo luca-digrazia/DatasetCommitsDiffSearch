@@ -50,7 +50,7 @@ public class PTXTargetMethodAssembler extends TargetMethodAssembler {
         ExternalCompilationResult graalCompile = (ExternalCompilationResult) super.finishTargetMethod(graph);
 
         try {
-            if ((validDevice) && (graalCompile.getTargetCode() != null)) {
+            if (validDevice) {
                 long kernel = toGPU.generateKernel(graalCompile.getTargetCode(), method.getName());
                 graalCompile.setEntryPoint(kernel);
             }
