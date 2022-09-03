@@ -108,7 +108,7 @@ public final class LLVMLanguage extends TruffleLanguage<LLVMContext> {
                 return descr;
             }
         }
-        return null;
+        throw new AssertionError(globalName);
     }
 
     @Override
