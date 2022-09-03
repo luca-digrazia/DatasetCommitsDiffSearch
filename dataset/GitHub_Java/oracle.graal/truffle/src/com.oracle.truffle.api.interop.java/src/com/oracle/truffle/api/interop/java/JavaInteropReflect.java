@@ -24,8 +24,10 @@
  */
 package com.oracle.truffle.api.interop.java;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
@@ -59,17 +61,24 @@ final class JavaInteropReflect {
     static Object readField(JavaObject object, String name) throws NoSuchFieldError, SecurityException, IllegalArgumentException, IllegalAccessException {
         Object obj = object.obj;
         final boolean onlyStatic = obj == null;
-        JavaClassDesc classDesc = JavaClassDesc.forClass(object.clazz);
-        Field field = onlyStatic ? classDesc.lookupStaticField(name) : classDesc.lookupField(name);
-        if (field != null) {
-            Object val = field.get(obj);
-            return JavaInterop.toGuestValue(val, object.languageContext);
-        } else {
-            JavaMethodDesc method = onlyStatic ? classDesc.lookupStaticMethod(name) : classDesc.lookupMethod(name);
-            if (method != null) {
-                return new JavaFunctionObject(method, obj, object.languageContext);
+        Object val;
+        try {
+            final Field field = object.clazz.getField(name);
+            final boolean isStatic = (field.getModifiers() & Modifier.STATIC) != 0;
+            if (onlyStatic != isStatic) {
+                throw UnknownIdentifierException.raise(name);
             }
-
+            val = field.get(obj);
+        } catch (NoSuchFieldException ex) {
+            for (Method m : object.clazz.getMethods()) {
+                final boolean isStatic = (m.getModifiers() & Modifier.STATIC) != 0;
+                if (onlyStatic != isStatic) {
+                    continue;
+                }
+                if (m.getName().equals(name) && m.getDeclaringClass() != Object.class) {
+                    return new JavaFunctionObject(m, obj);
+                }
+            }
             int signature = name.indexOf("__");
             if (signature != -1) {
                 for (Method m : object.clazz.getMethods()) {
@@ -80,7 +89,7 @@ final class JavaInteropReflect {
                     if (name.startsWith(m.getName())) {
                         final String fullName = jniName(m);
                         if (fullName.equals(name)) {
-                            return new JavaFunctionObject(SingleMethodDesc.unreflect(m), obj);
+                            return new JavaFunctionObject(m, obj);
                         }
                     }
                 }
@@ -99,6 +108,7 @@ final class JavaInteropReflect {
             }
             throw UnknownIdentifierException.raise(name);
         }
+        return JavaInterop.toGuestValue(val, object.languageContext);
     }
 
     static boolean isField(JavaObject object, String name) {
@@ -162,42 +172,49 @@ final class JavaInteropReflect {
     }
 
     @CompilerDirectives.TruffleBoundary
-    static JavaMethodDesc findMethod(JavaObject object, String name, Object[] args) {
-        JavaMethodDesc method = findMethod(object, name);
-        if (method != null) {
-            if (!isApplicableByArity(method, args.length)) {
-                return null;
-            }
-        }
-        return method;
-    }
-
-    private static boolean isApplicableByArity(JavaMethodDesc method, int nArgs) {
-        if (method instanceof SingleMethodDesc) {
-            return nArgs == ((SingleMethodDesc) method).getParameterCount() ||
-                            ((SingleMethodDesc) method).isVarArgs() && nArgs >= ((SingleMethodDesc) method).getParameterCount() - 1;
-        } else {
-            SingleMethodDesc[] overloads = ((OverloadedMethodDesc) method).getOverloads();
-            for (SingleMethodDesc overload : overloads) {
-                if (isApplicableByArity(overload, nArgs)) {
-                    return true;
+    static Method findMethod(JavaObject object, String name, Object[] args) {
+        for (Method m : object.clazz.getMethods()) {
+            if (m.getName().equals(name) && m.getDeclaringClass() != Object.class) {
+                if (m.getParameterTypes().length == args.length || m.isVarArgs()) {
+                    return m;
                 }
             }
-            return false;
         }
+        return null;
     }
 
     @CompilerDirectives.TruffleBoundary
-    static JavaMethodDesc findMethod(JavaObject object, String name) {
+    static Method findMethod(JavaObject object, String name) {
         if (TruffleOptions.AOT) {
             return null;
         }
 
-        JavaClassDesc classDesc = JavaClassDesc.forClass(object.clazz);
-        return classDesc.lookupMethod(name);
+        for (Method m : object.clazz.getMethods()) {
+            if (m.getName().equals(name) && m.getDeclaringClass() != Object.class) {
+                return m;
+            }
+        }
+        return null;
     }
 
     private JavaInteropReflect() {
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    static Object newConstructor(final Class<?> clazz, Object[] args) throws IllegalStateException, SecurityException {
+        IllegalStateException ex = new IllegalStateException("No suitable constructor found for " + clazz);
+        for (Constructor<?> constructor : clazz.getConstructors()) {
+            try {
+                Object ret = constructor.newInstance(args);
+                if (ToPrimitiveNode.temporary().isPrimitive(ret)) {
+                    return ret;
+                }
+                return JavaInterop.asTruffleObject(ret);
+            } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException instEx) {
+                ex = new IllegalStateException(instEx);
+            }
+        }
+        throw ex;
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -348,7 +365,7 @@ final class JavaInteropReflect {
                 Object arg = args[i];
                 if (arg instanceof TruffleObject) {
                     continue;
-                } else if (JavaInterop.isPrimitive(arg)) {
+                } else if (ToPrimitiveNode.temporary().isPrimitive(arg)) {
                     continue;
                 } else {
                     arguments[i] = JavaInterop.toGuestValue(arg, languageContext);
@@ -402,7 +419,7 @@ final class JavaInteropReflect {
         MethodNode(String name, Message message, TypeAndClass<?> returnType) {
             super(null);
             this.name = name;
-            this.toJavaNode = ToJavaNode.create();
+            this.toJavaNode = ToJavaNodeGen.create();
             this.message = message;
             this.returnType = returnType;
         }
