@@ -29,9 +29,6 @@ import java.util.*;
 
 import sun.misc.*;
 
-import com.oracle.truffle.api.nodes.Node.Child;
-import com.oracle.truffle.api.nodes.Node.Children;
-
 /**
  * Utility class that manages the special access methods for node instances.
  */
@@ -76,13 +73,15 @@ public class NodeUtil {
                 }
 
                 // Node fields
-                if (Node.class.isAssignableFrom(field.getType()) && field.getName().equals("parent")) {
-                    parentOffsetTemp = unsafe.objectFieldOffset(field);
-                    parentClassTmp = field.getType();
-                } else if (Node.class.isAssignableFrom(field.getType()) && field.getAnnotation(Child.class) != null) {
-                    nodeFieldOffsetsList.add(unsafe.objectFieldOffset(field));
-                    nodeFieldClassesList.add(field.getType());
-                } else if (field.getType().getComponentType() != null && Node.class.isAssignableFrom(field.getType().getComponentType()) && field.getAnnotation(Children.class) != null) {
+                if (Node.class.isAssignableFrom(field.getType())) {
+                    if (!field.getName().equals("parent")) {
+                        nodeFieldOffsetsList.add(unsafe.objectFieldOffset(field));
+                        nodeFieldClassesList.add(field.getType());
+                    } else {
+                        parentOffsetTemp = unsafe.objectFieldOffset(field);
+                        parentClassTmp = field.getType();
+                    }
+                } else if (field.getType().getComponentType() != null && Node.class.isAssignableFrom(field.getType().getComponentType())) {
                     nodeArrayFieldOffsetsList.add(unsafe.objectFieldOffset(field));
                     nodeArrayFieldClassesList.add(field.getType());
                 } else {
@@ -235,8 +234,7 @@ public class NodeUtil {
         for (long fieldOffset : nodeClass.nodeArrayFieldOffsets) {
             Node[] children = (Node[]) unsafe.getObject(orig, fieldOffset);
             if (children != null) {
-                Node[] clonedChildren = children.clone();
-                Arrays.fill(clonedChildren, null);
+                Node[] clonedChildren = new Node[children.length];
                 for (int i = 0; i < children.length; i++) {
                     Node clonedChild = cloneNode(children[i]);
                     if (clonedChild == null) {
@@ -252,18 +250,18 @@ public class NodeUtil {
         return (T) clone;
     }
 
-    public static List<Node> findNodeChildren(Node node) {
-        List<Node> nodes = new ArrayList<>();
+    public static List<Object> findNodeChildren(Object node) {
+        List<Object> nodes = new ArrayList<>();
         NodeClass nodeClass = NodeClass.get(node.getClass());
 
         for (long fieldOffset : nodeClass.nodeFieldOffsets) {
             Object child = unsafe.getObject(node, fieldOffset);
             if (child != null) {
-                nodes.add((Node) child);
+                nodes.add(child);
             }
         }
         for (long fieldOffset : nodeClass.nodeArrayFieldOffsets) {
-            Node[] children = (Node[]) unsafe.getObject(node, fieldOffset);
+            Object[] children = (Object[]) unsafe.getObject(node, fieldOffset);
             if (children != null) {
                 nodes.addAll(Arrays.asList(children));
             }
@@ -387,15 +385,14 @@ public class NodeUtil {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T findFirstNodeInstance(Node root, Class<T> clazz) {
-        for (Node childNode : findNodeChildren(root)) {
+    public static <T> T findFirstNodeInstance(Object root, Class<T> clazz) {
+        List<Object> childNodes = findNodeChildren(root);
+
+        for (Object childNode : childNodes) {
             if (clazz.isInstance(childNode)) {
                 return (T) childNode;
             } else {
-                T node = findFirstNodeInstance(childNode, clazz);
-                if (node != null) {
-                    return node;
-                }
+                return findFirstNodeInstance(childNode, clazz);
             }
         }
         return null;
@@ -638,12 +635,12 @@ public class NodeUtil {
 
         @Override
         public boolean isChildObject(Field f) {
-            return Node.class.isAssignableFrom(f.getType()) && f.getAnnotation(Child.class) != null;
+            return Node.class.isAssignableFrom(f.getType());
         }
 
         @Override
         public boolean isChildArrayObject(Field f) {
-            return f.getType().getComponentType() != null && Node.class.isAssignableFrom(f.getType().getComponentType()) && f.getAnnotation(Children.class) != null;
+            return f.getType().getComponentType() != null && Node.class.isAssignableFrom(f.getType().getComponentType());
         }
 
         @Override
