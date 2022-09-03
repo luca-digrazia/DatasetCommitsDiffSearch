@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.truffle;
 
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TraceTruffleAssumptions;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleBackgroundCompilation;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCallTargetProfiling;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreFatal;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsArePrinted;
 import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleCompilationExceptionsAreThrown;
-import static com.oracle.graal.truffle.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -81,7 +79,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private final RootNode rootNode;
 
     /** Information about when and how the call target should get compiled. */
-    @CompilationFinal protected OptimizedCompilationProfile compilationProfile;
+    @CompilationFinal protected volatile OptimizedCompilationProfile compilationProfile;
 
     /** Source target if this target was duplicated. */
     private final OptimizedCallTarget sourceCallTarget;
@@ -90,7 +88,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private volatile RootNode uninitializedRootNode;
     private volatile int cachedNonTrivialNodeCount = -1;
     private volatile SpeculationLog speculationLog;
-    @CompilationFinal private volatile boolean initialized;
     private volatile int callSitesKnown;
     private volatile Future<?> compilationTask;
     /**
@@ -124,7 +121,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
      */
     private Assumption initializeNodeRewritingAssumption() {
         Assumption newAssumption = runtime().createAssumption(
-                        !TruffleCompilerOptions.getValue(TraceTruffleAssumptions) ? NODE_REWRITING_ASSUMPTION_NAME : NODE_REWRITING_ASSUMPTION_NAME + " of " + rootNode);
+                        !TruffleCompilerOptions.TraceTruffleAssumptions.getValue() ? NODE_REWRITING_ASSUMPTION_NAME : NODE_REWRITING_ASSUMPTION_NAME + " of " + rootNode);
         if (NODE_REWRITING_ASSUMPTION_UPDATER.compareAndSet(this, null, newAssumption)) {
             return newAssumption;
         } else {
@@ -154,11 +151,14 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     public final OptimizedCompilationProfile getCompilationProfile() {
-        if (!initialized) {
+        OptimizedCompilationProfile profile = compilationProfile;
+        if (profile != null) {
+            return profile;
+        } else {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             initialize();
+            return compilationProfile;
         }
-        return compilationProfile;
     }
 
     @Override
@@ -233,33 +233,32 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         runtime().getCompilationNotify().notifyCompilationDeoptimized(this, frame);
     }
 
-    private synchronized void initialize() {
-        if (!initialized) {
-            if (sourceCallTarget == null && rootNode.isCloningAllowed()) {
-                // We are the source CallTarget, so make a copy.
-                this.uninitializedRootNode = cloneRootNode(rootNode);
-            }
-            if (TruffleCompilerOptions.getValue(TruffleCallTargetProfiling)) {
-                this.compilationProfile = TraceCompilationProfile.create();
-            } else {
-                this.compilationProfile = OptimizedCompilationProfile.create();
-            }
-            runtime().getTvmci().onFirstExecution(this);
-            initialized = true;
-        }
-    }
-
     private static GraalTruffleRuntime runtime() {
         return (GraalTruffleRuntime) Truffle.getRuntime();
     }
 
-    public static final void log(String message) {
-        runtime().log(message);
+    private synchronized void initialize() {
+        if (compilationProfile == null) {
+            if (sourceCallTarget == null && rootNode.isCloningAllowed()) {
+                // We are the source CallTarget, so make a copy.
+                this.uninitializedRootNode = cloneRootNode(rootNode);
+            }
+            runtime().getTvmci().onFirstExecution(this);
+            this.compilationProfile = createCompilationProfile();
+        }
+    }
+
+    private static OptimizedCompilationProfile createCompilationProfile() {
+        if (TruffleCallTargetProfiling.getValue()) {
+            return TraceCompilationProfile.create();
+        } else {
+            return OptimizedCompilationProfile.create();
+        }
     }
 
     public final void compile() {
         if (!isCompiling()) {
-            if (!initialized) {
+            if (compilationProfile == null) {
                 initialize();
             }
 
@@ -276,7 +275,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
                 }
             }
             if (submitted != null) {
-                boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
+                boolean mayBeAsynchronous = TruffleBackgroundCompilation.getValue() && !TruffleCompilationExceptionsAreThrown.getValue();
                 runtime().finishCompilation(this, submitted, mayBeAsynchronous);
             }
         }
@@ -305,7 +304,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     OptimizedCallTarget cloneUninitialized() {
         assert sourceCallTarget == null;
-        if (!initialized) {
+        if (compilationProfile == null) {
             initialize();
         }
         RootNode copiedRoot = cloneRootNode(uninitializedRootNode);
@@ -342,17 +341,17 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
              */
         } else {
             compilationProfile.reportCompilationFailure();
-            if (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown)) {
+            if (TruffleCompilationExceptionsAreThrown.getValue()) {
                 throw new OptimizationFailedException(t, this);
             }
             /*
              * Automatically enable TruffleCompilationExceptionsAreFatal when asserts are enabled
              * but respect TruffleCompilationExceptionsAreFatal if it's been explicitly set.
              */
-            boolean truffleCompilationExceptionsAreFatal = TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreFatal);
-            assert TruffleCompilationExceptionsAreFatal.hasBeenSet(TruffleCompilerOptions.getOptions()) || (truffleCompilationExceptionsAreFatal = true) == true;
+            boolean truffleCompilationExceptionsAreFatal = TruffleCompilationExceptionsAreFatal.getValue();
+            assert TruffleCompilationExceptionsAreFatal.hasBeenSet() || (truffleCompilationExceptionsAreFatal = true) == true;
 
-            if (TruffleCompilerOptions.getValue(TruffleCompilationExceptionsArePrinted) || truffleCompilationExceptionsAreFatal) {
+            if (TruffleCompilationExceptionsArePrinted.getValue() || truffleCompilationExceptionsAreFatal) {
                 printException(t);
                 if (truffleCompilationExceptionsAreFatal) {
                     System.exit(-1);
@@ -365,6 +364,10 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         StringWriter string = new StringWriter();
         e.printStackTrace(new PrintWriter(string));
         log(string.toString());
+    }
+
+    public static final void log(String message) {
+        runtime().log(message);
     }
 
     final int getKnownCallSiteCount() {
@@ -421,7 +424,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     /** Intrinsified in {@link TruffleGraphBuilderPlugins}. */
     public static VirtualFrame createFrame(FrameDescriptor descriptor, Object[] args) {
-        if (TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing)) {
+        if (TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue()) {
             return new FrameWithoutBoxing(descriptor, args);
         } else {
             return new FrameWithBoxing(descriptor, args);
