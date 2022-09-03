@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,54 +22,33 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.runtime;
-import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.IDENTITY_HASHCODE;
-import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.VERIFY_OOP;
-import static com.oracle.graal.hotspot.replacements.UnsafeAccess.UNSAFE;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
-import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
-import static jdk.internal.jvmci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
-import jdk.internal.jvmci.code.CodeUtil;
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.hotspot.HotSpotMetaspaceConstant;
-import jdk.internal.jvmci.hotspot.HotSpotResolvedObjectType;
-import jdk.internal.jvmci.hotspot.HotSpotResolvedObjectTypeImpl;
-import jdk.internal.jvmci.hotspot.HotSpotVMConfig;
-import jdk.internal.jvmci.meta.Assumptions;
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.meta.HotSpotForeignCallsProviderImpl.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
+import static jdk.internal.jvmci.common.UnsafeAccess.*;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.hotspot.*;
 import jdk.internal.jvmci.meta.Assumptions.AssumptionResult;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.LocationIdentity;
-import jdk.internal.jvmci.meta.ResolvedJavaType;
+import jdk.internal.jvmci.meta.*;
 
-import com.oracle.graal.api.replacements.Fold;
-import com.oracle.graal.compiler.common.GraalOptions;
-import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
-import com.oracle.graal.compiler.common.type.ObjectStamp;
+import com.oracle.graal.api.replacements.*;
+import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.compiler.common.spi.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.graph.spi.CanonicalizerTool;
-import com.oracle.graal.hotspot.nodes.CompressionNode;
-import com.oracle.graal.hotspot.nodes.SnippetAnchorNode;
-import com.oracle.graal.hotspot.word.KlassPointer;
-import com.oracle.graal.nodes.CanonicalizableLocation;
-import com.oracle.graal.nodes.ConstantNode;
-import com.oracle.graal.nodes.NamedLocationIdentity;
-import com.oracle.graal.nodes.ValueNode;
-import com.oracle.graal.nodes.extended.ForeignCallNode;
-import com.oracle.graal.nodes.extended.GuardingNode;
-import com.oracle.graal.nodes.extended.LoadHubNode;
-import com.oracle.graal.nodes.extended.StoreHubNode;
-import com.oracle.graal.nodes.extended.UnsafeLoadNode;
-import com.oracle.graal.nodes.memory.Access;
-import com.oracle.graal.nodes.memory.address.AddressNode;
-import com.oracle.graal.nodes.memory.address.OffsetAddressNode;
-import com.oracle.graal.nodes.type.StampTool;
-import com.oracle.graal.replacements.ReplacementsUtil;
-import com.oracle.graal.replacements.nodes.ReadRegisterNode;
-import com.oracle.graal.replacements.nodes.WriteRegisterNode;
-import com.oracle.graal.word.Word;
+import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.hotspot.nodes.*;
+import com.oracle.graal.hotspot.word.*;
+import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.memory.*;
+import com.oracle.graal.nodes.memory.address.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.nodes.*;
+import com.oracle.graal.word.*;
 
 //JaCoCo Exclude
 
@@ -336,7 +315,7 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
-    public static JavaKind getWordKind() {
+    public static Kind getWordKind() {
         return runtime().getTarget().wordKind;
     }
 
@@ -347,7 +326,7 @@ public class HotSpotReplacementsUtil {
 
     @Fold
     public static int pageSize() {
-        return UNSAFE.pageSize();
+        return unsafe.pageSize();
     }
 
     @Fold
@@ -537,17 +516,17 @@ public class HotSpotReplacementsUtil {
 
     @Fold
     public static int arrayLengthOffset() {
-        return config().arrayOopDescLengthOffset();
+        return config().arrayLengthOffset;
     }
 
     @Fold
-    public static int arrayBaseOffset(JavaKind elementKind) {
-        return getArrayBaseOffset(elementKind);
+    public static int arrayBaseOffset(Kind elementKind) {
+        return runtime().getJVMCIRuntime().getArrayBaseOffset(elementKind);
     }
 
     @Fold
-    public static int arrayIndexScale(JavaKind elementKind) {
-        return getArrayIndexScale(elementKind);
+    public static int arrayIndexScale(Kind elementKind) {
+        return runtime().getJVMCIRuntime().getArrayIndexScale(elementKind);
     }
 
     @Fold
@@ -712,10 +691,10 @@ public class HotSpotReplacementsUtil {
     public static native void writeRegisterAsWord(@ConstantNodeParameter Register register, Word value);
 
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
-    private static native Word loadWordFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter JavaKind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity);
+    private static native Word loadWordFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter Kind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity);
 
     @NodeIntrinsic(value = UnsafeLoadNode.class, setStampFromReturnType = true)
-    private static native KlassPointer loadKlassFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter JavaKind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity);
+    private static native KlassPointer loadKlassFromObjectIntrinsic(Object object, long offset, @ConstantNodeParameter Kind wordKind, @ConstantNodeParameter LocationIdentity locationIdentity);
 
     @NodeIntrinsic(value = LoadHubNode.class)
     public static native KlassPointer loadHubIntrinsic(Object object, GuardingNode anchor);
@@ -970,7 +949,7 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static long referentOffset() {
         try {
-            return UNSAFE.objectFieldOffset(java.lang.ref.Reference.class.getDeclaredField("referent"));
+            return unsafe.objectFieldOffset(java.lang.ref.Reference.class.getDeclaredField("referent"));
         } catch (Exception e) {
             throw new JVMCIError(e);
         }
@@ -985,10 +964,9 @@ public class HotSpotReplacementsUtil {
                 if (type != null && type.isArray()) {
                     ResolvedJavaType element = type.getComponentType();
                     if (element != null && !element.isPrimitive() && !element.getElementalType().isInterface()) {
-                        Assumptions assumptions = object.graph().getAssumptions();
                         AssumptionResult<ResolvedJavaType> leafType = element.findLeafConcreteSubtype();
-                        if (leafType != null && leafType.canRecordTo(assumptions)) {
-                            leafType.recordTo(assumptions);
+                        if (leafType != null) {
+                            object.graph().getAssumptions().record(leafType);
                             return ConstantNode.forConstant(read.stamp(), leafType.getResult().getObjectHub(), tool.getMetaAccess());
                         }
                     }
