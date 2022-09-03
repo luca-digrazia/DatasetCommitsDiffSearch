@@ -229,7 +229,7 @@ public class MetadataV32 extends Metadata {
         node.setType(metadata.getReference(args.next()));
         node.setLocalToCompileUnit(asInt1(args.next()));
         node.setDefinedInCompileUnit(asInt1(args.next()));
-        metadata.getReference(args.next()); // TODO: Reference to the global variable
+        args.next(); // TODO: Reference to the global variable
 
         metadata.add(node);
     }
@@ -242,7 +242,7 @@ public class MetadataV32 extends Metadata {
         node.setFile(metadata.getReference(args.next()));
         node.setDirectory(metadata.getReference(args.next()));
         node.setProducer(metadata.getReference(args.next()));
-        asInt1(args.next()); // TODO: Main Compile Unit
+        args.next(); // TODO: Main Compile Unit
         node.setOptimized(asInt1(args.next()));
         node.setFlags(metadata.getReference(args.next()));
         node.setRuntimeVersion(asInt32(args.next()));
@@ -267,7 +267,7 @@ public class MetadataV32 extends Metadata {
     protected void createDwTagBasicType(MetadataArgumentParser args) {
         MetadataBasicType node = new MetadataBasicType();
 
-        metadata.getReference(args.next()); // Reference to context
+        args.next(); // Reference to context
         node.setName(metadata.getReference(args.next()));
         node.setFile(metadata.getReference(args.next()));
         node.setLine(asInt32(args.next()));
@@ -311,7 +311,7 @@ public class MetadataV32 extends Metadata {
         MetadataSubprogram node = new MetadataSubprogram();
 
         args.next(); // Unused
-        metadata.getReference(args.next()); // context
+        args.next(); // context
         node.setName(metadata.getReference(args.next()));
         node.setDisplayName(metadata.getReference(args.next()));
         node.setLinkageName(metadata.getReference(args.next()));
@@ -320,16 +320,17 @@ public class MetadataV32 extends Metadata {
         node.setType(metadata.getReference(args.next()));
         node.setLocalToUnit(asInt1(args.next()));
         node.setDefinedInCompileUnit(asInt1(args.next()));
+        node.setScopeLine(asInt32(args.next()));
         node.setVirtuallity(asInt32(args.next()));
-        node.setVirtualIndex(asInt32(args.next()));
-        metadata.getReference(args.next()); // which base type contains the vtable pointer...
-        node.setFlags(asInt32(args.next()));
+        // TODO: structure seems to differ from the documented one
+        // node.setVirtualIndex(asInt32(args.next()));
+        args.next(); // metadata, ;; indicates which base type contains the vtable pointer...
+        node.setFlags(metadata.getReference(args.next()));
         node.setOptimized(asInt1(args.next()));
         args.next(); // Function *,;; Pointer to LLVM function
         node.setTemplateParams(metadata.getReference(args.next()));
         node.setDeclaration(metadata.getReference(args.next()));
         node.setVariables(metadata.getReference(args.next()));
-        node.setScopeLine(asInt32(args.next())); // TODO: correct?
 
         metadata.add(node);
     }
@@ -377,7 +378,7 @@ public class MetadataV32 extends Metadata {
             case DW_LEXICAL_BLOCK_FILE_LENGTH: {
                 MetadataLexicalBlockFile node = new MetadataLexicalBlockFile();
 
-                metadata.getReference(args.next()); // Reference to the scope we're annotating...
+                args.next(); // metadata ;; Reference to the scope we're annotating...
                 node.setFile(metadata.getReference(args.next()));
 
                 metadata.add(node);
@@ -387,11 +388,11 @@ public class MetadataV32 extends Metadata {
             case DW_LEXICAL_BLOCK_LENGTH: {
                 MetadataLexicalBlock node = new MetadataLexicalBlock();
 
-                metadata.getReference(args.next()); // Reference to context descriptor
+                args.next(); // metadata,;; Reference to context descriptor
                 node.setLine(asInt32(args.next()));
                 node.setColumn(asInt32(args.next()));
                 node.setFile(metadata.getReference(args.next()));
-                asInt32(args.next()); // Unique ID to identify blocks from a template function
+                args.next(); // i32 ;; Unique ID to identify blocks from a template function
 
                 metadata.add(node);
                 break;
@@ -405,7 +406,7 @@ public class MetadataV32 extends Metadata {
     protected void createDwDerivedType(MetadataArgumentParser args) {
         MetadataDerivedType node = new MetadataDerivedType();
 
-        metadata.getReference(args.next()); // Context
+        args.next(); // Context
         node.setName(metadata.getReference(args.next()));
         node.setFile(metadata.getReference(args.next()));
         node.setLine(asInt32(args.next()));

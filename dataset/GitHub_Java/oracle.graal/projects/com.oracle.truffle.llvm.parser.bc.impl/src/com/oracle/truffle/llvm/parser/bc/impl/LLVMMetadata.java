@@ -70,8 +70,6 @@ import uk.ac.man.cs.llvm.ir.model.elements.UnreachableInstruction;
 import uk.ac.man.cs.llvm.ir.model.elements.VoidCallInstruction;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataFnNode;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataLocalVariable;
-import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBaseNode;
-import uk.ac.man.cs.llvm.ir.model.metadata.MetadataBasicType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataCompositeType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataDerivedType;
 import uk.ac.man.cs.llvm.ir.model.metadata.MetadataNode;
@@ -222,70 +220,17 @@ public final class LLVMMetadata implements ModelVisitor {
                 StructureType thisStruct = (StructureType) t1;
                 // TODO: should always be this type?
                 if (thisStruct.getMetadataReference().isPresent()) {
-                    MetadataBaseNode node = thisStruct.getMetadataReference().get();
+                    MetadataCompositeType metaStruct = (MetadataCompositeType) thisStruct.getMetadataReference().get();
+                    thisStruct.setName(((MetadataString) metaStruct.getName().get()).getString());
 
-                    // MetadataCompositeType
-                    // MetadataDerivedType
-                    if (node instanceof MetadataCompositeType) {
-                        MetadataCompositeType metaStruct = (MetadataCompositeType) node;
-                        thisStruct.setName(((MetadataString) metaStruct.getName().get()).getString());
+                    MetadataNode elements = (MetadataNode) metaStruct.getMemberDescriptors().get();
 
-                        MetadataNode elements = (MetadataNode) metaStruct.getMemberDescriptors().get();
+                    Symbol idx = gep.getIndices().get(1);
+                    int parsedIndex = idx instanceof IntegerConstant ? (int) ((IntegerConstant) (idx)).getValue() : 0;
+                    MetadataReference element = elements.get(parsedIndex);
 
-                        Symbol idx = gep.getIndices().get(1);
-                        int parsedIndex = idx instanceof IntegerConstant ? (int) ((IntegerConstant) (idx)).getValue() : 0;
-
-                        long elementOffset = thisStruct.getElementOffset(parsedIndex);
-                        for (MetadataReference element : elements) {
-                            MetadataDerivedType derivedType = (MetadataDerivedType) element.get();
-                            if (derivedType.getOffset() == elementOffset) {
-                                gep.setReferenceName(((MetadataString) derivedType.getName().get()).getString());
-                                break;
-                            }
-                        }
-                    } else if (node instanceof MetadataBasicType) {
-                        // TODO: implement?
-                    } else if (node instanceof MetadataDerivedType) {
-                        // TODO: implement?
-                    } else {
-                        throw new AssertionError("unknow node type: " + node);
-                    }
-                }
-            } else {
-                if (gep.getBasePointer() instanceof CastInstruction) {
-                    CastInstruction cast = (CastInstruction) gep.getBasePointer();
-                    Symbol value = cast.getValue();
-                    if (value instanceof AllocateInstruction) {
-                        AllocateInstruction allocate = (AllocateInstruction) value;
-                        Type symType = allocate.getPointeeType();
-                        if (symType instanceof StructureType) {
-                            StructureType thisStruct = (StructureType) symType;
-                            if (thisStruct.getMetadataReference().isPresent()) {
-                                MetadataBaseNode node = thisStruct.getMetadataReference().get();
-                                if (node instanceof MetadataCompositeType) {
-                                    MetadataCompositeType metaStruct = (MetadataCompositeType) node;
-
-                                    MetadataNode elements = (MetadataNode) metaStruct.getMemberDescriptors().get();
-
-                                    Symbol idx = gep.getIndices().get(0);
-                                    int parsedIndex = idx instanceof IntegerConstant ? (int) ((IntegerConstant) (idx)).getValue() : 0;
-
-                                    // TODO: correct sizeof?
-                                    int elementOffset = parsedIndex * cast.getType().sizeof();
-
-                                    for (int i = 0; i < elements.size(); i++) {
-                                        MetadataReference element = elements.get(i);
-                                        MetadataDerivedType derivedType = (MetadataDerivedType) element.get();
-                                        if (derivedType.getOffset() == elementOffset) {
-                                            gep.setReferenceName(((MetadataString) derivedType.getName().get()).getString());
-                                            break;
-                                        }
-                                    }
-
-                                }
-                            }
-                        }
-                    }
+                    MetadataDerivedType derivedType = (MetadataDerivedType) element.get();
+                    gep.setReferenceName(((MetadataString) derivedType.getName().get()).getString());
                 }
             }
         }
