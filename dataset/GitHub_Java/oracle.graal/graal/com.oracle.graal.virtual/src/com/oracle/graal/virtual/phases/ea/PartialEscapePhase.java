@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,94 +22,82 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.phases.GraalOptions.*;
+import static com.oracle.graal.compiler.common.GraalOptions.EscapeAnalysisIterations;
+import static com.oracle.graal.compiler.common.GraalOptions.EscapeAnalyzeOnly;
 
-import java.util.*;
+import java.util.Set;
 
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
-import com.oracle.graal.options.*;
-import com.oracle.graal.phases.graph.*;
-import com.oracle.graal.phases.schedule.*;
-import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
+import com.oracle.graal.nodes.cfg.ControlFlowGraph;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+import com.oracle.graal.options.Option;
+import com.oracle.graal.options.OptionType;
+import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.phases.BasePhase;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.tiers.PhaseContext;
 
 public class PartialEscapePhase extends EffectsPhase<PhaseContext> {
 
-    //@formatter:off
-    @Option(help = "")
-    public static final OptionValue<Boolean> OptEarlyReadElimination = new OptionValue<>(true);
-    //@formatter:on
-
-    private final boolean readElimination;
-
-    public PartialEscapePhase(boolean iterative) {
-        this(iterative, OptEarlyReadElimination.getValue());
+    static class Options {
+        //@formatter:off
+        @Option(help = "", type = OptionType.Debug)
+        public static final OptionValue<Boolean> OptEarlyReadElimination = new OptionValue<>(true);
+        //@formatter:on
     }
 
-    public PartialEscapePhase(boolean iterative, boolean readElimination) {
-        super(iterative ? EscapeAnalysisIterations.getValue() : 1);
+    private final boolean readElimination;
+    private final BasePhase<PhaseContext> cleanupPhase;
+
+    public PartialEscapePhase(boolean iterative, CanonicalizerPhase canonicalizer) {
+        this(iterative, Options.OptEarlyReadElimination.getValue(), canonicalizer, null);
+    }
+
+    public PartialEscapePhase(boolean iterative, CanonicalizerPhase canonicalizer, BasePhase<PhaseContext> cleanupPhase) {
+        this(iterative, Options.OptEarlyReadElimination.getValue(), canonicalizer, cleanupPhase);
+    }
+
+    public PartialEscapePhase(boolean iterative, boolean readElimination, CanonicalizerPhase canonicalizer, BasePhase<PhaseContext> cleanupPhase) {
+        super(iterative ? EscapeAnalysisIterations.getValue() : 1, canonicalizer);
         this.readElimination = readElimination;
+        this.cleanupPhase = cleanupPhase;
+    }
+
+    @Override
+    protected void postIteration(StructuredGraph graph, PhaseContext context, Set<Node> changedNodes) {
+        super.postIteration(graph, context, changedNodes);
+        if (cleanupPhase != null) {
+            cleanupPhase.apply(graph, context);
+        }
     }
 
     @Override
     protected void run(StructuredGraph graph, PhaseContext context) {
         if (VirtualUtil.matches(graph, EscapeAnalyzeOnly.getValue())) {
-            if (readElimination || graph.getNodes().filterInterface(VirtualizableAllocation.class).isNotEmpty()) {
+            if (readElimination || graph.hasVirtualizableAllocation()) {
                 runAnalysis(graph, context);
             }
         }
     }
 
     @Override
-    protected Closure<?> createEffectsClosure(PhaseContext context, SchedulePhase schedule) {
+    protected Closure<?> createEffectsClosure(PhaseContext context, ScheduleResult schedule, ControlFlowGraph cfg) {
+        for (VirtualObjectNode virtual : cfg.graph.getNodes(VirtualObjectNode.TYPE)) {
+            virtual.resetObjectId();
+        }
+        assert schedule != null;
         if (readElimination) {
-            return new PEReadEliminationClosure(schedule, context.getRuntime(), context.getAssumptions());
+            return new PEReadEliminationClosure(schedule, context.getMetaAccess(), context.getConstantReflection(), context.getConstantFieldProvider(), context.getLowerer());
         } else {
-            return new PartialEscapeClosure.Final(schedule, context.getRuntime(), context.getAssumptions());
+            return new PartialEscapeClosure.Final(schedule, context.getMetaAccess(), context.getConstantReflection(), context.getConstantFieldProvider(), context.getLowerer());
         }
     }
 
-    public static Map<Invoke, Double> getHints(StructuredGraph graph) {
-        NodesToDoubles probabilities = new ComputeProbabilityClosure(graph).apply();
-        Map<Invoke, Double> hints = null;
-        for (CommitAllocationNode commit : graph.getNodes(CommitAllocationNode.class)) {
-            double sum = 0;
-            double invokeSum = 0;
-            for (Node commitUsage : commit.usages()) {
-                for (Node usage : commitUsage.usages()) {
-                    if (usage instanceof FixedNode) {
-                        sum += probabilities.get((FixedNode) usage);
-                    } else {
-                        if (usage instanceof MethodCallTargetNode) {
-                            invokeSum += probabilities.get(((MethodCallTargetNode) usage).invoke().asNode());
-                        }
-                        for (Node secondLevelUage : usage.usages()) {
-                            if (secondLevelUage instanceof FixedNode) {
-                                sum += probabilities.get(((FixedNode) secondLevelUage));
-                            }
-                        }
-                    }
-                }
-            }
-            // TODO(lstadler) get rid of this magic number
-            if (sum > 100 && invokeSum > 0) {
-                for (Node commitUsage : commit.usages()) {
-                    for (Node usage : commitUsage.usages()) {
-                        if (usage instanceof MethodCallTargetNode) {
-                            if (hints == null) {
-                                hints = new HashMap<>();
-                            }
-                            Invoke invoke = ((MethodCallTargetNode) usage).invoke();
-                            hints.put(invoke, sum / invokeSum);
-                        }
-                    }
-                }
-            }
-        }
-        return hints;
+    @Override
+    public boolean checkContract() {
+        return false;
     }
+
 }

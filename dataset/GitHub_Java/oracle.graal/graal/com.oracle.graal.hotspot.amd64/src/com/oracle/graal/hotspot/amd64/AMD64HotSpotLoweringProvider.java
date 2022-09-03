@@ -39,8 +39,6 @@ import com.oracle.graal.hotspot.HotSpotGraalRuntimeProvider;
 import com.oracle.graal.hotspot.meta.DefaultHotSpotLoweringProvider;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.hotspot.meta.HotSpotRegistersProvider;
-import com.oracle.graal.hotspot.nodes.profiling.ProfileNode;
-import com.oracle.graal.hotspot.replacements.profiling.ProbabilisticProfileSnippets;
 import com.oracle.graal.nodes.calc.FloatConvertNode;
 import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.replacements.amd64.AMD64ConvertSnippets;
@@ -54,7 +52,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider {
 
     private AMD64ConvertSnippets.Templates convertSnippets;
-    private ProbabilisticProfileSnippets.Templates profileSnippets;
 
     public AMD64HotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
@@ -64,7 +61,6 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     @Override
     public void initialize(HotSpotProviders providers, GraalHotSpotVMConfig config) {
         convertSnippets = new AMD64ConvertSnippets.Templates(providers, providers.getSnippetReflection(), providers.getCodeCache().getTarget());
-        profileSnippets = ProfileNode.Options.ProbabilisticProfiling.getValue() ? new ProbabilisticProfileSnippets.Templates(providers, providers.getCodeCache().getTarget()) : null;
         super.initialize(providers, config);
     }
 
@@ -72,8 +68,6 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
     public void lower(Node n, LoweringTool tool) {
         if (n instanceof FloatConvertNode) {
             convertSnippets.lower((FloatConvertNode) n, tool);
-        } else if (profileSnippets != null && n instanceof ProfileNode) {
-            profileSnippets.lower((ProfileNode) n, tool);
         } else {
             super.lower(n, tool);
         }

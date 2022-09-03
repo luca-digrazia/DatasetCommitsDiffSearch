@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,125 +22,135 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.virtual.*;
+import static com.oracle.graal.compiler.common.GraalOptions.MaximumEscapeAnalysisArrayLength;
 
-class VirtualizerToolImpl implements VirtualizerTool {
+import java.util.List;
 
-    private final GraphEffectList effects;
-    private final NodeBitMap usages;
+import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodes.FixedNode;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.FloatingNode;
+import com.oracle.graal.nodes.java.MonitorIdNode;
+import com.oracle.graal.nodes.spi.LoweringProvider;
+import com.oracle.graal.nodes.spi.VirtualizerTool;
+import com.oracle.graal.nodes.virtual.VirtualObjectNode;
+
+import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
+
+class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
+
     private final MetaAccessProvider metaAccess;
+    private final ConstantReflectionProvider constantReflection;
+    private final ConstantFieldProvider constantFieldProvider;
+    private final PartialEscapeClosure<?> closure;
+    private final Assumptions assumptions;
+    private final LoweringProvider loweringProvider;
 
-    VirtualizerToolImpl(GraphEffectList effects, NodeBitMap usages, MetaAccessProvider metaAccess) {
-        this.effects = effects;
-        this.usages = usages;
+    VirtualizerToolImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider, PartialEscapeClosure<?> closure,
+                    Assumptions assumptions, LoweringProvider loweringProvider) {
         this.metaAccess = metaAccess;
+        this.constantReflection = constantReflection;
+        this.constantFieldProvider = constantFieldProvider;
+        this.closure = closure;
+        this.assumptions = assumptions;
+        this.loweringProvider = loweringProvider;
     }
 
     private boolean deleted;
-    private boolean customAction;
-    private BlockState state;
+    private PartialEscapeBlockState<?> state;
     private ValueNode current;
+    private FixedNode position;
+    private GraphEffectList effects;
 
     @Override
     public MetaAccessProvider getMetaAccessProvider() {
         return metaAccess;
     }
 
-    public void reset(BlockState newState, ValueNode newCurrent) {
+    @Override
+    public ConstantReflectionProvider getConstantReflectionProvider() {
+        return constantReflection;
+    }
+
+    @Override
+    public ConstantFieldProvider getConstantFieldProvider() {
+        return constantFieldProvider;
+    }
+
+    public void reset(PartialEscapeBlockState<?> newState, ValueNode newCurrent, FixedNode newPosition, GraphEffectList newEffects) {
         deleted = false;
-        customAction = false;
-        this.state = newState;
-        this.current = newCurrent;
+        state = newState;
+        current = newCurrent;
+        position = newPosition;
+        effects = newEffects;
     }
 
     public boolean isDeleted() {
         return deleted;
     }
 
-    public boolean isCustomAction() {
-        return customAction;
+    @Override
+    public ValueNode getAlias(ValueNode value) {
+        return closure.getAliasAndResolve(state, value);
     }
 
     @Override
-    public VirtualObjectNode getVirtualState(ValueNode value) {
-        ObjectState obj = state.getObjectState(value);
-        return obj != null && obj.isVirtual() ? obj.virtual : null;
+    public ValueNode getEntry(VirtualObjectNode virtualObject, int index) {
+        return state.getObjectState(virtualObject).getEntry(index);
     }
 
     @Override
-    public ValueNode getVirtualEntry(VirtualObjectNode virtual, int index) {
+    public void setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value, boolean unsafe) {
         ObjectState obj = state.getObjectState(virtual);
-        assert obj != null && obj.isVirtual() : "not virtual: " + obj;
-        ValueNode result = obj.getEntry(index);
-        ValueNode materialized = getMaterializedValue(result);
-        return materialized != null ? materialized : result;
-    }
-
-    @Override
-    public void setVirtualEntry(VirtualObjectNode virtual, int index, ValueNode value) {
-        ObjectState obj = state.getObjectState(virtual);
-        assert obj != null && obj.isVirtual() : "not virtual: " + obj;
-        if (getVirtualState(value) == null) {
-            ValueNode materialized = getMaterializedValue(value);
-            if (materialized != null) {
-                obj.setEntry(index, materialized);
-            } else {
-                obj.setEntry(index, getReplacedValue(value));
-            }
+        assert obj.isVirtual() : "not virtual: " + obj;
+        ValueNode newValue;
+        if (value == null) {
+            newValue = null;
         } else {
-            obj.setEntry(index, value);
+            newValue = closure.getAliasAndResolve(state, value);
+            assert unsafe || obj.getEntry(index) == null || obj.getEntry(index).getStackKind() == newValue.getStackKind() || (isObjectEntry(obj.getEntry(index)) && isObjectEntry(newValue));
         }
+        state.setEntry(virtual.getObjectId(), index, newValue);
     }
 
     @Override
-    public int getVirtualLockCount(VirtualObjectNode virtual) {
-        ObjectState obj = state.getObjectState(virtual);
-        assert obj != null && obj.isVirtual() : "not virtual: " + obj;
-        return obj.getLockCount();
+    public void setEnsureVirtualized(VirtualObjectNode virtualObject, boolean ensureVirtualized) {
+        int id = virtualObject.getObjectId();
+        state.setEnsureVirtualized(id, ensureVirtualized);
     }
 
     @Override
-    public void setVirtualLockCount(VirtualObjectNode virtual, int lockCount) {
-        ObjectState obj = state.getObjectState(virtual);
-        assert obj != null && obj.isVirtual() : "not virtual: " + obj;
-        obj.setLockCount(lockCount);
+    public boolean getEnsureVirtualized(VirtualObjectNode virtualObject) {
+        return state.getObjectState(virtualObject).getEnsureVirtualized();
     }
 
-    @Override
-    public ValueNode getMaterializedValue(ValueNode value) {
-        ObjectState obj = state.getObjectState(value);
-        return obj != null && !obj.isVirtual() ? obj.getMaterializedValue() : null;
-    }
-
-    @Override
-    public ValueNode getReplacedValue(ValueNode original) {
-        return state.getScalarAlias(original);
+    private static boolean isObjectEntry(ValueNode value) {
+        return value.getStackKind() == JavaKind.Object || value instanceof VirtualObjectNode;
     }
 
     @Override
     public void replaceWithVirtual(VirtualObjectNode virtual) {
-        state.addAndMarkAlias(virtual, current, usages);
-        if (current instanceof FixedWithNextNode) {
-            effects.deleteFixedNode((FixedWithNextNode) current);
-        }
+        closure.addAndMarkAlias(virtual, current);
+        effects.deleteNode(current);
         deleted = true;
     }
 
     @Override
     public void replaceWithValue(ValueNode replacement) {
-        effects.replaceAtUsages(current, state.getScalarAlias(replacement));
-        state.addScalarAlias(current, replacement);
+        effects.replaceAtUsages(current, closure.getScalarAlias(replacement));
+        closure.addScalarAlias(current, replacement);
         deleted = true;
     }
 
     @Override
     public void delete() {
-        assert current instanceof FixedWithNextNode;
-        effects.deleteFixedNode((FixedWithNextNode) current);
+        effects.deleteNode(current);
         deleted = true;
     }
 
@@ -150,8 +160,97 @@ class VirtualizerToolImpl implements VirtualizerTool {
     }
 
     @Override
-    public void customAction(Runnable action) {
-        effects.customAction(action);
-        customAction = true;
+    public void addNode(ValueNode node) {
+        if (node instanceof FloatingNode) {
+            effects.addFloatingNode(node, "VirtualizerTool");
+        } else {
+            effects.addFixedNodeBefore((FixedWithNextNode) node, position);
+        }
+    }
+
+    @Override
+    public void createVirtualObject(VirtualObjectNode virtualObject, ValueNode[] entryState, List<MonitorIdNode> locks, boolean ensureVirtualized) {
+        VirtualUtil.trace("{{%s}} ", current);
+        if (!virtualObject.isAlive()) {
+            effects.addFloatingNode(virtualObject, "newVirtualObject");
+        }
+        for (int i = 0; i < entryState.length; i++) {
+            ValueNode entry = entryState[i];
+            entryState[i] = entry instanceof VirtualObjectNode ? entry : closure.getAliasAndResolve(state, entry);
+        }
+        int id = virtualObject.getObjectId();
+        if (id == -1) {
+            id = closure.virtualObjects.size();
+            closure.virtualObjects.add(virtualObject);
+            virtualObject.setObjectId(id);
+        }
+        state.addObject(id, new ObjectState(entryState, locks, ensureVirtualized));
+        closure.addAndMarkAlias(virtualObject, virtualObject);
+        PartialEscapeClosure.COUNTER_ALLOCATION_REMOVED.increment();
+    }
+
+    @Override
+    public int getMaximumEntryCount() {
+        return MaximumEscapeAnalysisArrayLength.getValue();
+    }
+
+    @Override
+    public void replaceWith(ValueNode node) {
+        if (node instanceof VirtualObjectNode) {
+            replaceWithVirtual((VirtualObjectNode) node);
+        } else {
+            replaceWithValue(node);
+        }
+    }
+
+    @Override
+    public boolean ensureMaterialized(VirtualObjectNode virtualObject) {
+        return closure.ensureMaterialized(state, virtualObject.getObjectId(), position, effects, PartialEscapeClosure.COUNTER_MATERIALIZATIONS_UNHANDLED);
+    }
+
+    @Override
+    public void addLock(VirtualObjectNode virtualObject, MonitorIdNode monitorId) {
+        int id = virtualObject.getObjectId();
+        state.addLock(id, monitorId);
+    }
+
+    @Override
+    public MonitorIdNode removeLock(VirtualObjectNode virtualObject) {
+        int id = virtualObject.getObjectId();
+        return state.removeLock(id);
+    }
+
+    @Override
+    public MetaAccessProvider getMetaAccess() {
+        return metaAccess;
+    }
+
+    @Override
+    public ConstantReflectionProvider getConstantReflection() {
+        return constantReflection;
+    }
+
+    @Override
+    public boolean canonicalizeReads() {
+        return false;
+    }
+
+    @Override
+    public boolean allUsagesAvailable() {
+        return true;
+    }
+
+    @Override
+    public Assumptions getAssumptions() {
+        return assumptions;
+    }
+
+    @Override
+    public boolean supportSubwordCompare(int bits) {
+        if (loweringProvider != null) {
+            return loweringProvider.supportSubwordCompare(bits);
+        } else {
+            return false;
+        }
     }
 }

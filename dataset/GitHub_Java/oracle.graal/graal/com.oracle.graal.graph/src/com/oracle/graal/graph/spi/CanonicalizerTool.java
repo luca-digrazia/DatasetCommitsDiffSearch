@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,16 +22,22 @@
  */
 package com.oracle.graal.graph.spi;
 
+import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
+import com.oracle.graal.compiler.common.spi.ConstantFieldProvider;
 import com.oracle.graal.graph.Node;
 
 public interface CanonicalizerTool {
 
+    Assumptions getAssumptions();
+
     MetaAccessProvider getMetaAccess();
 
     ConstantReflectionProvider getConstantReflection();
+
+    ConstantFieldProvider getConstantFieldProvider();
 
     boolean canonicalizeReads();
 
@@ -41,4 +47,10 @@ public interface CanonicalizerTool {
      * {@link Node#hasNoUsages()}.
      */
     boolean allUsagesAvailable();
+
+    /**
+     * Indicates whether the target platform supports comparison of integers of a particular bit
+     * width. This check is used by canonicalizations that might introduce subword compares.
+     */
+    boolean supportSubwordCompare(int bits);
 }

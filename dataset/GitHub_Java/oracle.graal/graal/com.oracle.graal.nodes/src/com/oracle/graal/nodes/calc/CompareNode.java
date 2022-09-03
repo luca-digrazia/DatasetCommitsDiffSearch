@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,12 +22,27 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import com.oracle.max.cri.ci.*;
-import com.oracle.max.cri.ri.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.spi.types.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_1;
+
+import com.oracle.graal.compiler.common.calc.Condition;
+import com.oracle.graal.compiler.common.type.AbstractObjectStamp;
+import com.oracle.graal.compiler.common.type.AbstractPointerStamp;
+import com.oracle.graal.compiler.common.type.IntegerStamp;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.graph.spi.Canonicalizable;
+import com.oracle.graal.graph.spi.CanonicalizerTool;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.BinaryOpLogicNode;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.LogicConstantNode;
+import com.oracle.graal.nodes.LogicNegationNode;
+import com.oracle.graal.nodes.LogicNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 
 /* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
  * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
@@ -35,49 +50,23 @@ import com.oracle.graal.nodes.type.*;
  * Compare should probably be made a value (so that it can be canonicalized for example) and in later stages some Compare usage should be transformed
  * into variants that do not materialize the value (CompareIf, CompareGuard...)
  */
-public final class CompareNode extends BooleanNode implements Canonicalizable, LIRLowerable, ConditionalTypeFeedbackProvider, TypeCanonicalizable {
+@NodeInfo(cycles = CYCLES_1)
+public abstract class CompareNode extends BinaryOpLogicNode implements Canonicalizable.Binary<ValueNode> {
 
-    @Input private ValueNode x;
-    @Input private ValueNode y;
-
-    @Data private final Condition condition;
-    @Data private final boolean unorderedIsTrue;
-
-    public ValueNode x() {
-        return x;
-    }
-
-    public ValueNode y() {
-        return y;
-    }
+    public static final NodeClass<CompareNode> TYPE = NodeClass.create(CompareNode.class);
+    protected final Condition condition;
+    protected final boolean unorderedIsTrue;
 
     /**
      * Constructs a new Compare instruction.
      *
      * @param x the instruction producing the first input to the instruction
-     * @param condition the condition (comparison operation)
      * @param y the instruction that produces the second input to this instruction
-     * @param graph
      */
-    public CompareNode(ValueNode x, Condition condition, ValueNode y) {
-        this(x, condition, false, y);
-    }
-
-    /**
-     * Constructs a new Compare instruction.
-     *
-     * @param x the instruction producing the first input to the instruction
-     * @param condition the condition (comparison operation)
-     * @param y the instruction that produces the second input to this instruction
-     * @param graph
-     */
-    public CompareNode(ValueNode x, Condition condition, boolean unorderedIsTrue, ValueNode y) {
-        super(StampFactory.illegal());
-        assert (x == null && y == null) || x.kind() == y.kind();
+    protected CompareNode(NodeClass<? extends CompareNode> c, Condition condition, boolean unorderedIsTrue, ValueNode x, ValueNode y) {
+        super(c, x, y);
         this.condition = condition;
         this.unorderedIsTrue = unorderedIsTrue;
-        this.x = x;
-        this.y = y;
     }
 
     /**
@@ -85,58 +74,133 @@ public final class CompareNode extends BooleanNode implements Canonicalizable, L
      *
      * @return the condition
      */
-    public Condition condition() {
+    public final Condition condition() {
         return condition;
     }
 
     /**
-     * Checks whether unordered inputs mean true or false.
+     * Checks whether unordered inputs mean true or false (only applies to float operations).
      *
      * @return {@code true} if unordered inputs produce true
      */
-    public boolean unorderedIsTrue() {
-        return unorderedIsTrue;
+    public final boolean unorderedIsTrue() {
+        return this.unorderedIsTrue;
     }
 
-    @Override
-    public BooleanNode negate() {
-        return graph().unique(new CompareNode(x(), condition.negate(), !unorderedIsTrue, y()));
-    }
+    private ValueNode optimizeConditional(Constant constant, ConditionalNode conditionalNode, ConstantReflectionProvider constantReflection, Condition cond) {
+        Constant trueConstant = conditionalNode.trueValue().asConstant();
+        Constant falseConstant = conditionalNode.falseValue().asConstant();
 
-    @Override
-    public void generate(LIRGeneratorTool gen) {
-    }
+        if (falseConstant != null && trueConstant != null && constantReflection != null) {
+            boolean trueResult = cond.foldCondition(trueConstant, constant, constantReflection, unorderedIsTrue());
+            boolean falseResult = cond.foldCondition(falseConstant, constant, constantReflection, unorderedIsTrue());
 
-    @Override
-    public String toString(Verbosity verbosity) {
-        if (verbosity == Verbosity.Name) {
-            return super.toString(Verbosity.Name) + " " + condition.operator;
-        } else {
-            return super.toString(verbosity);
-        }
-    }
-
-    private ValueNode optimizeMaterialize(CiConstant constant, MaterializeNode materializeNode, RiRuntime runtime) {
-        CiConstant trueConstant = materializeNode.trueValue().asConstant();
-        CiConstant falseConstant = materializeNode.falseValue().asConstant();
-
-        if (falseConstant != null && trueConstant != null) {
-            Boolean trueResult = condition().foldCondition(trueConstant, constant, runtime, unorderedIsTrue());
-            Boolean falseResult = condition().foldCondition(falseConstant, constant, runtime, unorderedIsTrue());
-
-            if (trueResult != null && falseResult != null) {
-                boolean trueUnboxedResult = trueResult;
-                boolean falseUnboxedResult = falseResult;
-                if (trueUnboxedResult == falseUnboxedResult) {
-                    return ConstantNode.forBoolean(trueUnboxedResult, graph());
+            if (trueResult == falseResult) {
+                return LogicConstantNode.forBoolean(trueResult);
+            } else {
+                if (trueResult) {
+                    assert falseResult == false;
+                    return conditionalNode.condition();
                 } else {
-                    if (trueUnboxedResult) {
-                        assert falseUnboxedResult == false;
-                        return materializeNode.condition();
+                    assert falseResult == true;
+                    return LogicNegationNode.create(conditionalNode.condition());
+
+                }
+            }
+        }
+        return this;
+    }
+
+    protected ValueNode optimizeNormalizeCmp(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+        throw new GraalError("NormalizeCompareNode connected to %s (%s %s %s)", this, constant, normalizeNode, mirrored);
+    }
+
+    @Override
+    public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
+        ConstantReflectionProvider constantReflection = tool.getConstantReflection();
+        LogicNode constantCondition = tryConstantFold(condition(), forX, forY, constantReflection, unorderedIsTrue());
+        if (constantCondition != null) {
+            return constantCondition;
+        }
+        ValueNode result;
+        if (forX.isConstant()) {
+            if ((result = canonicalizeSymmetricConstant(tool, forX.asConstant(), forY, true)) != this) {
+                return result;
+            }
+        } else if (forY.isConstant()) {
+            if ((result = canonicalizeSymmetricConstant(tool, forY.asConstant(), forX, false)) != this) {
+                return result;
+            }
+        } else if (forX instanceof ConvertNode && forY instanceof ConvertNode) {
+            ConvertNode convertX = (ConvertNode) forX;
+            ConvertNode convertY = (ConvertNode) forY;
+            if (convertX.preservesOrder(condition()) && convertY.preservesOrder(condition()) && convertX.getValue().stamp().isCompatible(convertY.getValue().stamp())) {
+                boolean supported = true;
+                if (convertX.getValue().stamp() instanceof IntegerStamp) {
+                    IntegerStamp intStamp = (IntegerStamp) convertX.getValue().stamp();
+                    supported = tool.supportSubwordCompare(intStamp.getBits());
+                }
+
+                if (supported) {
+                    boolean multiUsage = (convertX.asNode().getUsageCount() > 1 || convertY.asNode().getUsageCount() > 1);
+                    if ((forX instanceof ZeroExtendNode || forX instanceof SignExtendNode) && multiUsage) {
+                        // Do not perform for zero or sign extend if there are multiple usages of
+                        // the value.
+                        return this;
+                    }
+                    return duplicateModified(convertX.getValue(), convertY.getValue());
+                }
+            }
+        }
+        return this;
+    }
+
+    public static LogicNode tryConstantFold(Condition condition, ValueNode forX, ValueNode forY, ConstantReflectionProvider constantReflection, boolean unorderedIsTrue) {
+        if (forX.isConstant() && forY.isConstant() && constantReflection != null) {
+            return LogicConstantNode.forBoolean(condition.foldCondition(forX.asConstant(), forY.asConstant(), constantReflection, unorderedIsTrue));
+        }
+        return null;
+    }
+
+    /**
+     * Does this operation represent an identity check such that for x == y, x is exactly the same
+     * thing as y. This is generally true except for some floating point comparisons.
+     *
+     * @return true for identity comparisons
+     */
+    public boolean isIdentityComparison() {
+        return condition == Condition.EQ;
+    }
+
+    protected abstract LogicNode duplicateModified(ValueNode newX, ValueNode newY);
+
+    protected ValueNode canonicalizeSymmetricConstant(CanonicalizerTool tool, Constant constant, ValueNode nonConstant, boolean mirrored) {
+        if (nonConstant instanceof ConditionalNode) {
+            return optimizeConditional(constant, (ConditionalNode) nonConstant, tool.getConstantReflection(), mirrored ? condition().mirror() : condition());
+        } else if (nonConstant instanceof NormalizeCompareNode) {
+            return optimizeNormalizeCmp(constant, (NormalizeCompareNode) nonConstant, mirrored);
+        } else if (nonConstant instanceof ConvertNode) {
+            ConvertNode convert = (ConvertNode) nonConstant;
+            boolean multiUsage = (convert.asNode().getUsageCount() > 1 && convert.getValue().getUsageCount() == 1);
+            if ((convert instanceof ZeroExtendNode || convert instanceof SignExtendNode) && multiUsage) {
+                // Do not perform for zero or sign extend if it could introduce
+                // new live values.
+                return this;
+            }
+
+            boolean supported = true;
+            if (convert.getValue().stamp() instanceof IntegerStamp) {
+                IntegerStamp intStamp = (IntegerStamp) convert.getValue().stamp();
+                supported = tool.supportSubwordCompare(intStamp.getBits());
+            }
+
+            if (supported) {
+                ConstantNode newConstant = canonicalConvertConstant(tool, convert, constant);
+                if (newConstant != null) {
+                    if (mirrored) {
+                        return duplicateModified(newConstant, convert.getValue());
                     } else {
-                        assert falseUnboxedResult == true;
-                        return materializeNode.condition().negate();
-
+                        return duplicateModified(convert.getValue(), newConstant);
                     }
                 }
             }
@@ -144,162 +208,46 @@ public final class CompareNode extends BooleanNode implements Canonicalizable, L
         return this;
     }
 
-    private ValueNode optimizeNormalizeCmp(CiConstant constant, NormalizeCompareNode normalizeNode) {
-        if (constant.kind == CiKind.Int && constant.asInt() == 0) {
-            Condition cond = condition();
-            boolean isLess = cond == Condition.LE || cond == Condition.LT || cond == Condition.BE || cond == Condition.BT;
-            boolean canonUnorderedIsTrue = cond != Condition.EQ && (cond == Condition.NE || !(isLess ^ normalizeNode.isUnorderedLess));
-            CompareNode result = graph().unique(new CompareNode(normalizeNode.x(), cond, canonUnorderedIsTrue, normalizeNode.y()));
-            return result;
-        }
-        return this;
-    }
-
-    @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
-        if (x().isConstant() && !y().isConstant()) { // move constants to the left (y)
-            return graph().unique(new CompareNode(y(), condition.mirror(), unorderedIsTrue(), x()));
-        } else if (x().isConstant() && y().isConstant()) {
-            CiConstant constX = x().asConstant();
-            CiConstant constY = y().asConstant();
-            Boolean result = condition().foldCondition(constX, constY, tool.runtime(), unorderedIsTrue());
-            if (result != null) {
-                return ConstantNode.forBoolean(result, graph());
-            }
-        }
-
-        if (y().isConstant()) {
-            if (x() instanceof MaterializeNode) {
-                return optimizeMaterialize(y().asConstant(), (MaterializeNode) x(), tool.runtime());
-            } else if (x() instanceof NormalizeCompareNode) {
-                return optimizeNormalizeCmp(y().asConstant(), (NormalizeCompareNode) x());
-            }
-        }
-
-        if (x() == y() && x().kind() != CiKind.Float && x().kind() != CiKind.Double) {
-            return ConstantNode.forBoolean(condition().check(1, 1), graph());
-        }
-        if ((condition == Condition.NE || condition == Condition.EQ) && x().kind() == CiKind.Object) {
-            ValueNode object = null;
-            if (x().isNullConstant()) {
-                object = y();
-            } else if (y().isNullConstant()) {
-                object = x();
-            }
-            if (object != null) {
-                return graph().unique(new NullCheckNode(object, condition == Condition.EQ));
-            } else {
-                Stamp xStamp = x.stamp();
-                Stamp yStamp = y.stamp();
-                if (xStamp.alwaysDistinct(yStamp)) {
-                    return ConstantNode.forBoolean(condition == Condition.NE, graph());
-                }
-            }
-        }
-        return this;
-    }
-
-    @Override
-    public void typeFeedback(TypeFeedbackTool tool) {
-        CiKind kind = x().kind();
-        assert y().kind() == kind;
-        if (kind == CiKind.Object) {
-            assert condition == Condition.EQ || condition == Condition.NE;
-            if (y().isConstant() && !x().isConstant()) {
-                tool.addObject(x()).constantBound(condition, y().asConstant());
-            } else if (x().isConstant() && !y().isConstant()) {
-                tool.addObject(y()).constantBound(condition.mirror(), x().asConstant());
-            } else if (!x().isConstant() && !y.isConstant()) {
-                tool.addObject(x()).valueBound(condition, y());
-                tool.addObject(y()).valueBound(condition.mirror(), x());
-            } else {
-                // both are constant, this should be canonicalized...
-            }
-        } else if (kind == CiKind.Int || kind == CiKind.Long) {
-            assert condition != Condition.NOF && condition != Condition.OF;
-            if (y().isConstant() && !x().isConstant()) {
-                tool.addScalar(x()).constantBound(condition, y().asConstant());
-            } else if (x().isConstant() && !y().isConstant()) {
-                tool.addScalar(y()).constantBound(condition.mirror(), x().asConstant());
-            } else if (!x().isConstant() && !y.isConstant()) {
-                tool.addScalar(x()).valueBound(condition, y(), tool.queryScalar(y()));
-                tool.addScalar(y()).valueBound(condition.mirror(), x(), tool.queryScalar(x()));
-            } else {
-                // both are constant, this should be canonicalized...
-            }
-        } else if (kind == CiKind.Float || kind == CiKind.Double) {
-            // nothing yet...
-        }
-    }
-
-    @Override
-    public Result canonical(TypeFeedbackTool tool) {
-        CiKind kind = x().kind();
-        if (kind == CiKind.Int || kind == CiKind.Long) {
-            assert condition != Condition.NOF && condition != Condition.OF;
-            ScalarTypeQuery queryX = tool.queryScalar(x());
-            if (y().isConstant() && !x().isConstant()) {
-                if (queryX.constantBound(condition, y().asConstant())) {
-                    return new Result(ConstantNode.forBoolean(true, graph()), queryX);
-                } else if (queryX.constantBound(condition.negate(), y().asConstant())) {
-                    return new Result(ConstantNode.forBoolean(false, graph()), queryX);
-                }
-            } else {
-                ScalarTypeQuery queryY = tool.queryScalar(y());
-                if (x().isConstant() && !y().isConstant()) {
-                    if (queryY.constantBound(condition.mirror(), x().asConstant())) {
-                        return new Result(ConstantNode.forBoolean(true, graph()), queryY);
-                    } else if (queryY.constantBound(condition.mirror().negate(), x().asConstant())) {
-                        return new Result(ConstantNode.forBoolean(false, graph()), queryY);
-                    }
-                } else if (!x().isConstant() && !y.isConstant()) {
-                    if (condition == Condition.BT || condition == Condition.BE) {
-                        if (queryY.constantBound(Condition.GE, new CiConstant(kind, 0))) {
-                            if (queryX.constantBound(Condition.GE, new CiConstant(kind, 0))) {
-                                if (queryX.valueBound(condition == Condition.BT ? Condition.LT : Condition.LE, y())) {
-                                    return new Result(ConstantNode.forBoolean(true, graph()), queryX, queryY);
-                                }
-                            }
-                        }
-                    }
-
-                    if (queryX.valueBound(condition, y())) {
-                        return new Result(ConstantNode.forBoolean(true, graph()), queryX);
-                    } else if (queryX.valueBound(condition.negate(), y())) {
-                        return new Result(ConstantNode.forBoolean(false, graph()), queryX);
-                    }
-                } else {
-                    // both are constant, this should be canonicalized...
-                }
-            }
-        } else  if (kind == CiKind.Object) {
-            assert condition == Condition.EQ || condition == Condition.NE;
-            ObjectTypeQuery queryX = tool.queryObject(x());
-            if (y().isConstant() && !x().isConstant()) {
-                if (queryX.constantBound(condition, y().asConstant())) {
-                    return new Result(ConstantNode.forBoolean(true, graph()), queryX);
-                } else if (queryX.constantBound(condition.negate(), y().asConstant())) {
-                    return new Result(ConstantNode.forBoolean(false, graph()), queryX);
-                }
-            } else {
-                ObjectTypeQuery queryY = tool.queryObject(y());
-                if (x().isConstant() && !y().isConstant()) {
-                    if (queryY.constantBound(condition.mirror(), x().asConstant())) {
-                        return new Result(ConstantNode.forBoolean(true, graph()), queryY);
-                    } else if (queryY.constantBound(condition.mirror().negate(), x().asConstant())) {
-                        return new Result(ConstantNode.forBoolean(false, graph()), queryY);
-                    }
-                } else if (!x().isConstant() && !y.isConstant()) {
-                    if (queryX.valueBound(condition, y())) {
-                        return new Result(ConstantNode.forBoolean(true, graph()), queryX);
-                    } else if (queryX.valueBound(condition.negate(), y())) {
-                        return new Result(ConstantNode.forBoolean(false, graph()), queryX);
-                    }
-                } else {
-                    // both are constant, this should be canonicalized...
-                }
+    private ConstantNode canonicalConvertConstant(CanonicalizerTool tool, ConvertNode convert, Constant constant) {
+        ConstantReflectionProvider constantReflection = tool.getConstantReflection();
+        if (convert.preservesOrder(condition(), constant, constantReflection)) {
+            Constant reverseConverted = convert.reverse(constant, constantReflection);
+            if (convert.convert(reverseConverted, constantReflection).equals(constant)) {
+                return ConstantNode.forConstant(convert.getValue().stamp(), reverseConverted, tool.getMetaAccess());
             }
         }
         return null;
+    }
+
+    public static LogicNode createCompareNode(StructuredGraph graph, Condition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
+        LogicNode result = createCompareNode(condition, x, y, constantReflection);
+        return (result.graph() == null ? graph.unique(result) : result);
+    }
+
+    public static LogicNode createCompareNode(Condition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
+        assert x.getStackKind() == y.getStackKind();
+        assert condition.isCanonical() : "condition is not canonical: " + condition;
+        assert !x.getStackKind().isNumericFloat();
+
+        LogicNode comparison;
+        if (condition == Condition.EQ) {
+            if (x.stamp() instanceof AbstractObjectStamp) {
+                comparison = ObjectEqualsNode.create(x, y, constantReflection);
+            } else if (x.stamp() instanceof AbstractPointerStamp) {
+                comparison = PointerEqualsNode.create(x, y);
+            } else {
+                assert x.getStackKind().isNumericInteger();
+                comparison = IntegerEqualsNode.create(x, y, constantReflection);
+            }
+        } else if (condition == Condition.LT) {
+            assert x.getStackKind().isNumericInteger();
+            comparison = IntegerLessThanNode.create(x, y, constantReflection);
+        } else {
+            assert condition == Condition.BT;
+            assert x.getStackKind().isNumericInteger();
+            comparison = IntegerBelowNode.create(x, y, constantReflection);
+        }
+
+        return comparison;
     }
 }
