@@ -22,14 +22,9 @@
  */
 package com.oracle.graal.graph;
 
-import java.util.AbstractList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.RandomAccess;
+import java.util.*;
 
-import com.oracle.graal.graph.iterators.NodeIterable;
+import com.oracle.graal.graph.iterators.*;
 
 public abstract class NodeList<T extends Node> extends AbstractList<T> implements NodeIterable<T>, RandomAccess {
 
@@ -219,10 +214,6 @@ public abstract class NodeList<T extends Node> extends AbstractList<T> implement
         for (int i = 0; i < size; i++) {
             update((T) nodes[i], null);
         }
-        clearWithoutUpdate();
-    }
-
-    void clearWithoutUpdate() {
         nodes = EMPTY_NODE_ARRAY;
         size = 0;
     }
