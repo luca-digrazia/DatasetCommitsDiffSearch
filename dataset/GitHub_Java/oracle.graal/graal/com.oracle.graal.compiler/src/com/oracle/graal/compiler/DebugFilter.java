@@ -30,56 +30,33 @@ import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.phases.*;
 
 /**
- * Implements the filter specified by the {@link GraalOptions#Dump}, {@link GraalOptions#Log},
- * {@link GraalOptions#Meter} and {@link GraalOptions#Time} options.
+ * Implements the filter specified by the {@link GraalOptions#Dump},
+ * {@link GraalOptions#Log}, {@link GraalOptions#Meter} and {@link GraalOptions#Time}
+ * options.
  * <p>
- * These options enable the associated debug facility if their filter matches the
- * {@linkplain DebugScope#getQualifiedName() name} of the {@linkplain Debug#currentScope() current
- * scope}.
+ * These options enable the associated debug facility if their filter
+ * matches the {@linkplain DebugScope#getQualifiedName() name} of the
+ * {@linkplain Debug#currentScope() current scope}.
  * <p>
- * A filter is a list of comma-separated terms. Each term is interpreted as a glob pattern if it
- * contains a "*" or "?" character. Otherwise, it is interpreted as a substring. If a term starts
- * with "~", then it is an positive term. An input is matched by a filter if any of its positive
- * terms match the input (or it has no positive terms) AND none of its negative terms match the
- * input (or it has no negative terms).
+ * A filter is a list of comma-separated terms. Each term is interpreted
+ * as a glob pattern if it contains a "*" or "?" character. Otherwise, it is
+ * interpreted as a substring. If a term starts with "~", then it is an
+ * positive term. An input is matched by a filter if any of its positive
+ * terms match the input (or it has no positive terms) AND none of its
+ * negative terms match the input (or it has no negative terms).
  * <p>
  * Examples of filters include:
  * <p>
  * <ul>
- * <li>
- * 
- * <pre>
- * &quot;&quot;
- * </pre>
- * 
+ * <li><pre>""</pre>
  * Matches any scope.</li>
- * <li>
- * 
- * <pre>
- * &quot;*&quot;
- * </pre>
- * 
+ * <li><pre>"*"</pre>
  * Matches any scope.</li>
- * <li>
- * 
- * <pre>
- * &quot;CodeGen,CodeInstall&quot;
- * </pre>
- * 
+ * <li><pre>"CodeGen,CodeInstall"</pre>
  * Matches a scope whose name contains "CodeGen" or "CodeInstall".</li>
- * <li>
- * 
- * <pre>
- * &quot;Code*&quot;
- * </pre>
- * 
+ * <li><pre>"Code*"</pre>
  * Matches a scope whose name starts with "Code".</li>
- * <li>
- * 
- * <pre>
- * &quot;Code,&tilde;Dead&quot;
- * </pre>
- * 
+ * <li><pre>"Code,~Dead"</pre>
  * Matches a scope whose name contains "Code" but does not contain "Dead".</li>
  * </ul>
  */
@@ -132,9 +109,9 @@ class DebugFilter {
                 }
             }
         }
-        // if (match) {
-        // System.out.println(this + " matches " + input);
-        // }
+//        if (match) {
+//            System.out.println(this + " matches " + input);
+//        }
         return match;
     }
 

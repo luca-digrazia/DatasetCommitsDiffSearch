@@ -124,13 +124,9 @@ public class VMToCompilerImpl implements VMToCompiler {
             }
         }
 
-        if (GraalOptions.Debug) {
-            Debug.enable();
-            if (GraalOptions.DebugSnippets) {
-                DebugEnvironment.initialize(log);
-            }
+        if (GraalOptions.Debug && GraalOptions.DebugSnippets) {
+            DebugEnvironment.initialize(log);
         }
-
         // Install intrinsics.
         GraalCompiler compiler = graalRuntime.getCompiler();
         final HotSpotRuntime runtime = (HotSpotRuntime) compiler.runtime;
@@ -142,7 +138,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                     // Snippets cannot have speculative optimizations since they have to be valid for the entire run of the VM.
                     Assumptions assumptions = new Assumptions(false);
                     VMToCompilerImpl.this.intrinsifyArrayCopy = new IntrinsifyArrayCopyPhase(runtime, assumptions);
-                    SnippetInstaller installer = new HotSpotSnippetInstaller(runtime, assumptions, runtime.getGraalRuntime().getTarget());
+                    SnippetInstaller installer = new SnippetInstaller(runtime, assumptions, runtime.getGraalRuntime().getTarget());
                     GraalIntrinsics.installIntrinsics(installer);
                     runtime.installSnippets(installer, assumptions);
                 }
