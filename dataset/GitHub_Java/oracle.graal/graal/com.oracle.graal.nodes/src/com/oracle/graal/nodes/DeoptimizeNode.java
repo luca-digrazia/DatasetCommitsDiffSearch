@@ -22,11 +22,11 @@
  */
 package com.oracle.graal.nodes;
 
+import com.oracle.graal.api.meta.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.meta.*;
 
 @NodeInfo(shortName = "Deopt", nameTemplate = "Deopt {p#reason/s}")
 public final class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowerable, LIRLowerable {
@@ -40,10 +40,6 @@ public final class DeoptimizeNode extends AbstractDeoptimizeNode implements Lowe
 
     public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason) {
         this(action, reason, DEFAULT_DEBUG_ID, JavaConstant.NULL_POINTER, null);
-    }
-
-    public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, JavaConstant speculation) {
-        this(action, reason, DEFAULT_DEBUG_ID, speculation, null);
     }
 
     public DeoptimizeNode(DeoptimizationAction action, DeoptimizationReason reason, int debugId, JavaConstant speculation, FrameState stateBefore) {

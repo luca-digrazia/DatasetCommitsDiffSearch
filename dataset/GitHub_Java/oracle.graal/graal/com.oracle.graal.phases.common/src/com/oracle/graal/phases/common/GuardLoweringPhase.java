@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,26 @@
  */
 package com.oracle.graal.phases.common;
 
-import com.oracle.jvmci.meta.JavaConstant;
-
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 
 import java.util.*;
 import java.util.Map.Entry;
 
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
+import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.StructuredGraph.GuardsStage;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.memory.*;
 import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 import com.oracle.graal.phases.tiers.*;
-import com.oracle.jvmci.debug.*;
 
 /**
  * This phase lowers {@link GuardNode GuardNodes} into corresponding control-flow structure and
@@ -63,7 +61,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
     private static class UseImplicitNullChecks extends ScheduledNodeIterator {
 
-        private final Map<ValueNode, ValueNode> nullGuarded = Node.newIdentityMap();
+        private final Map<ValueNode, GuardNode> nullGuarded = Node.newIdentityMap();
         private final int implicitNullCheckLimit;
 
         UseImplicitNullChecks(int implicitNullCheckLimit) {
@@ -76,84 +74,48 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
                 processGuard(node);
             } else if (node instanceof Access) {
                 processAccess((Access) node);
-            } else if (node instanceof PiNode) {
-                processPi((PiNode) node);
             }
             if (node instanceof StateSplit && ((StateSplit) node).stateAfter() != null) {
                 nullGuarded.clear();
             } else {
-                Iterator<Entry<ValueNode, ValueNode>> it = nullGuarded.entrySet().iterator();
+                Iterator<Entry<ValueNode, GuardNode>> it = nullGuarded.entrySet().iterator();
                 while (it.hasNext()) {
-                    Entry<ValueNode, ValueNode> entry = it.next();
-                    ValueNode guard = entry.getValue();
+                    Entry<ValueNode, GuardNode> entry = it.next();
+                    GuardNode guard = entry.getValue();
                     if (guard.usages().contains(node)) {
                         it.remove();
-                    } else if (guard instanceof PiNode && guard != node) {
-                        PiNode piNode = (PiNode) guard;
-                        if (piNode.getGuard().asNode().usages().contains(node)) {
-                            it.remove();
-                        }
                     }
                 }
             }
-        }
-
-        private boolean processPi(PiNode node) {
-            ValueNode guardNode = nullGuarded.get(node.object());
-            if (guardNode != null && node.getGuard() == guardNode) {
-                nullGuarded.put(node, node);
-                return true;
-            }
-            return false;
         }
 
         private void processAccess(Access access) {
             if (access.canNullCheck()) {
-                ValueNode object = access.object();
-                check(access, object);
-            }
-        }
-
-        private void check(Access access, ValueNode object) {
-            ValueNode guard = nullGuarded.get(object);
-            if (guard != null && isImplicitNullCheck(access.accessLocation())) {
-                if (object instanceof PiNode) {
-                    PiNode piNode = (PiNode) object;
-                    assert piNode.getGuard() instanceof GuardNode;
-                    assert access.object() == object;
-                    access.asNode().replaceFirstInput(object, piNode.getOriginalNode());
-                } else {
-                    assert guard instanceof GuardNode;
-                }
-                metricImplicitNullCheck.increment();
-                access.setGuard(null);
-                FixedAccessNode fixedAccess;
-                if (access instanceof FloatingAccessNode) {
-                    FloatingAccessNode floatingAccessNode = (FloatingAccessNode) access;
-                    MemoryNode lastLocationAccess = floatingAccessNode.getLastLocationAccess();
-                    fixedAccess = floatingAccessNode.asFixedNode();
-                    replaceCurrent(fixedAccess);
-                    if (lastLocationAccess != null) {
-                        // fixed accesses are not currently part of the memory graph
-                        GraphUtil.tryKillUnused(lastLocationAccess.asNode());
+                GuardNode guard = nullGuarded.get(access.object());
+                if (guard != null && isImplicitNullCheck(access.accessLocation())) {
+                    metricImplicitNullCheck.increment();
+                    access.setGuard(null);
+                    FixedAccessNode fixedAccess;
+                    if (access instanceof FloatingAccessNode) {
+                        FloatingAccessNode floatingAccessNode = (FloatingAccessNode) access;
+                        MemoryNode lastLocationAccess = floatingAccessNode.getLastLocationAccess();
+                        fixedAccess = floatingAccessNode.asFixedNode();
+                        replaceCurrent(fixedAccess);
+                        if (lastLocationAccess != null) {
+                            // fixed accesses are not currently part of the memory graph
+                            GraphUtil.tryKillUnused(lastLocationAccess.asNode());
+                        }
+                    } else {
+                        fixedAccess = (FixedAccessNode) access;
                     }
-                } else {
-                    fixedAccess = (FixedAccessNode) access;
+                    fixedAccess.setNullCheck(true);
+                    LogicNode condition = guard.condition();
+                    guard.replaceAndDelete(fixedAccess);
+                    if (condition.hasNoUsages()) {
+                        GraphUtil.killWithUnusedFloatingInputs(condition);
+                    }
+                    nullGuarded.remove(fixedAccess.object());
                 }
-                fixedAccess.setNullCheck(true);
-                GuardNode guardNode = null;
-                if (guard instanceof GuardNode) {
-                    guardNode = (GuardNode) guard;
-                } else {
-                    PiNode piNode = (PiNode) guard;
-                    guardNode = (GuardNode) piNode.getGuard();
-                }
-                LogicNode condition = guardNode.condition();
-                guardNode.replaceAndDelete(fixedAccess);
-                if (condition.hasNoUsages()) {
-                    GraphUtil.killWithUnusedFloatingInputs(condition);
-                }
-                nullGuarded.remove(object);
             }
         }
 
