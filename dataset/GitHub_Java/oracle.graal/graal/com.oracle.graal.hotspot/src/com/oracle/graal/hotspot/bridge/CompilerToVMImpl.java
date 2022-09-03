@@ -157,7 +157,7 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native void reprofile(long metaspaceMethod);
 
     @Override
-    public native Object lookupAppendixInPool(HotSpotResolvedObjectType pool, int cpi, byte opcode);
+    public native Object lookupAppendixInPool(HotSpotResolvedObjectType pool, int cpi);
 
     @Override
     public native void invalidateInstalledCode(long nativeMethod);
@@ -170,12 +170,5 @@ public class CompilerToVMImpl implements CompilerToVM {
         return executeCompiledMethodIntrinsic(arg1, arg2, arg3, nativeMethod);
     }
 
-    /**
-     * Direct call to the given nativeMethod with three object arguments and an object return value.
-     * This method does not have an implementation on the C++ side, but its entry points (from
-     * interpreter and from compiled code) are directly pointing to a manually generated assembly
-     * stub that does the necessary argument shuffling and a tail call via an indirect jump to the
-     * verified entry point of the given native method.
-     */
     private static native Object executeCompiledMethodIntrinsic(Object arg1, Object arg2, Object arg3, long nativeMethod);
 }

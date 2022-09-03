@@ -32,10 +32,8 @@ import com.oracle.graal.nodes.*;
 
 public class HotSpotInstalledCodeTest extends GraalCompilerTest {
 
-    private static final int ITERATION_COUNT = 100000;
-
     @Test
-    public void testInstallCodeInvalidation() {
+    public void testInstallCode() {
         final ResolvedJavaMethod testJavaMethod = runtime.lookupJavaMethod(getMethod("foo"));
         final StructuredGraph graph = parse("otherFoo");
         final HotSpotInstalledCode installedCode = (HotSpotInstalledCode) getCode(testJavaMethod, graph);
@@ -56,21 +54,6 @@ public class HotSpotInstalledCodeTest extends GraalCompilerTest {
         } catch (InvalidInstalledCodeException e) {
         }
         Assert.assertFalse(installedCode.isValid());
-    }
-
-    @Test
-    public void testInstalledCodeCalledFromCompiledCode() {
-        final ResolvedJavaMethod testJavaMethod = runtime.lookupJavaMethod(getMethod("foo"));
-        final StructuredGraph graph = parse("otherFoo");
-        final HotSpotInstalledCode installedCode = (HotSpotInstalledCode) getCode(testJavaMethod, graph);
-        Assert.assertTrue(installedCode.isValid());
-        try {
-            for (int i = 0; i < ITERATION_COUNT; ++i) {
-                installedCode.execute("a", "b", "c");
-            }
-        } catch (InvalidInstalledCodeException e) {
-            Assert.fail("Code was invalidated");
-        }
     }
 
     @SuppressWarnings("unused")
