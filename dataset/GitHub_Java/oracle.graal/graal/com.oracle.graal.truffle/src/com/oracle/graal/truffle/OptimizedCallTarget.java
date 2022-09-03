@@ -39,7 +39,6 @@ import java.util.concurrent.Future;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.oracle.graal.compiler.common.SuppressFBWarnings;
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.truffle.debug.AbstractDebugCompilationListener;
 import com.oracle.graal.truffle.substitutions.TruffleGraphBuilderPlugins;
@@ -311,12 +310,10 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return callSitesKnown;
     }
 
-    @SuppressFBWarnings(value = "VO_VOLATILE_INCREMENT", justification = "All increments and decrements are synchronized.")
     final synchronized void incrementKnownCallSites() {
         callSitesKnown++;
     }
 
-    @SuppressFBWarnings(value = "VO_VOLATILE_INCREMENT", justification = "All increments and decrements are synchronized.")
     final synchronized void decrementKnownCallSites() {
         callSitesKnown--;
     }
@@ -386,12 +383,9 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         if (isValid()) {
             invalidate(newNode, reason);
         }
-        AbstractCompilationProfile profile = this.compilationProfile;
-        if (profile != null) {
-            profile.reportNodeReplaced();
-            if (cancelInstalledTask(newNode, reason)) {
-                profile.reportInvalidated();
-            }
+        compilationProfile.reportNodeReplaced();
+        if (cancelInstalledTask(newNode, reason)) {
+            compilationProfile.reportInvalidated();
         }
         return false;
     }
