@@ -24,36 +24,15 @@ package com.oracle.graal.compiler.gen;
 
 import com.oracle.graal.lir.*;
 
-public class LIRGenerationResultBase implements LIRGenerationResult {
+public abstract class LIRGenerationResultBase implements LIRGenerationResult {
     private final LIR lir;
-    private final FrameMap frameMap;
-    /**
-     * Records whether the code being generated makes at least one foreign call.
-     */
-    private boolean hasForeignCall;
 
-    public LIRGenerationResultBase(LIR lir, FrameMap frameMap) {
+    public LIRGenerationResultBase(LIR lir) {
         this.lir = lir;
-        this.frameMap = frameMap;
     }
 
     public LIR getLIR() {
         return lir;
-    }
-
-    /**
-     * Determines whether the code being generated makes at least one foreign call.
-     */
-    public boolean hasForeignCall() {
-        return hasForeignCall;
-    }
-
-    public final void setForeignCall(boolean hasForeignCall) {
-        this.hasForeignCall = hasForeignCall;
-    }
-
-    public final FrameMap getFrameMap() {
-        return frameMap;
     }
 
 }
