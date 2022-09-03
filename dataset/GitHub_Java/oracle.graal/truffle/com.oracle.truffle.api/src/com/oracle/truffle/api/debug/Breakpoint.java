@@ -24,19 +24,18 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.instrument.Instrument;
-import com.oracle.truffle.api.instrument.Probe;
-import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.instrument.*;
+import com.oracle.truffle.api.source.*;
+import com.oracle.truffle.api.vm.TruffleVM;
 import java.io.IOException;
 
 /**
- * Breakpoint in a {@link com.oracle.truffle.api.vm.TruffleVM} with
- * {@link com.oracle.truffle.api.debug debugging turned on}. You can ask
+ * Breakpoint in a {@link TruffleVM} with {@link com.oracle.truffle.api.debug debugging turned on}.
+ * You can ask
  * {@link Debugger#setLineBreakpoint(int, com.oracle.truffle.api.source.LineLocation, boolean)} or
  * {@link Debugger#setTagBreakpoint(int, com.oracle.truffle.api.instrument.SyntaxTag, boolean)} to
  * create an instance of {@link Breakpoint}.
  */
-@SuppressWarnings("javadoc")
 public abstract class Breakpoint {
 
     /**
