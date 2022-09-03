@@ -22,28 +22,24 @@
  */
 package com.oracle.max.graal.compiler.phases;
 
-import com.oracle.max.graal.compiler.*;
-import com.oracle.max.graal.compiler.debug.*;
-import com.oracle.max.graal.compiler.ir.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
+import com.oracle.max.graal.nodes.extended.*;
 
-/**
- * Duplicates every node in the graph to test the implementation of the {@link com.oracle.max.graal.graph.Node#copy()} method in node subclasses.
- */
 public class ReadEliminationPhase extends Phase {
 
     @Override
-    protected void run(Graph graph) {
-        for (ReadNode n : graph.getNodes(ReadNode.class)) {
+    protected void run(StructuredGraph graph) {
+        for (FloatingReadNode n : graph.getNodes(FloatingReadNode.class)) {
             if (n.dependencies().size() > 0) {
+                assert n.dependencies().size() == 1;
                 Node memoryInput = n.dependencies().get(0);
                 if (memoryInput instanceof WriteNode) {
                     WriteNode other = (WriteNode) memoryInput;
                     if (other.object() == n.object() && other.location() == n.location()) {
-                        if (GraalOptions.TraceReadElimination) {
-                            TTY.println("Eliminated memory read " + n + "and replaced with node " + other.value());
-                        }
-                        n.replaceAndDelete(other.value());
+                        Debug.log("Eliminated memory read %1.1s and replaced with node %s", n, other.value());
+                        graph.replaceFloating(n, other.value());
                     }
                 }
             }
