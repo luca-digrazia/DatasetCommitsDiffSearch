@@ -279,7 +279,7 @@ public final class JavaInterop {
         if (obj == null) {
             return false;
         }
-        return ToPrimitiveNode.temporary().isPrimitive(obj);
+        return ToPrimitiveNode.shared().isPrimitive(obj);
     }
 
     /**
@@ -344,7 +344,7 @@ public final class JavaInterop {
         if (foreignObject == null) {
             return true;
         }
-        return ToPrimitiveNode.temporary().isNull(foreignObject);
+        return ToPrimitiveNode.shared().isNull(foreignObject);
     }
 
     /**
@@ -365,7 +365,7 @@ public final class JavaInterop {
         if (foreignObject == null) {
             return false;
         }
-        return ToPrimitiveNode.temporary().hasSize(foreignObject);
+        return ToPrimitiveNode.shared().hasSize(foreignObject);
     }
 
     /**
@@ -382,7 +382,7 @@ public final class JavaInterop {
         if (foreignObject == null) {
             return false;
         }
-        return ToPrimitiveNode.temporary().isBoxed(foreignObject);
+        return ToPrimitiveNode.shared().isBoxed(foreignObject);
     }
 
     /**
@@ -402,7 +402,7 @@ public final class JavaInterop {
             return null;
         }
         try {
-            return ToPrimitiveNode.temporary().unbox(foreignObject);
+            return ToPrimitiveNode.shared().unbox(foreignObject);
         } catch (InteropException iex) {
             return null;
         }
