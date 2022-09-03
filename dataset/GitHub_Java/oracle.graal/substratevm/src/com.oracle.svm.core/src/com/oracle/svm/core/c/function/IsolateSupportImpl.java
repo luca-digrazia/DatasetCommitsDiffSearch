@@ -28,17 +28,21 @@ import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
+import org.graalvm.nativeimage.Isolates.CreateIsolateParameters;
+import org.graalvm.nativeimage.Isolates.IsolateException;
 import org.graalvm.nativeimage.StackValue;
-import org.graalvm.nativeimage.c.function.Isolates.CreateIsolateParameters;
-import org.graalvm.nativeimage.c.function.Isolates.IsolateException;
 import org.graalvm.nativeimage.impl.IsolateSupport;
-import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolatePointer;
 import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolateThreadPointer;
+import com.oracle.svm.core.option.SubstrateOptionsParser;
 
 public final class IsolateSupportImpl implements IsolateSupport {
+    private static final String ISOLATES_DISABLED_MESSAGE = "Spawning of multiple isolates is disabled, use " +
+                    SubstrateOptionsParser.commandArgument(SubstrateOptions.SpawnIsolates, "+") + " option.";
+
     static void initialize() {
         ImageSingletons.add(IsolateSupport.class, new IsolateSupportImpl());
     }
@@ -47,16 +51,19 @@ public final class IsolateSupportImpl implements IsolateSupport {
     }
 
     @Override
-    public Isolate createIsolate(CreateIsolateParameters parameters) throws IsolateException {
-        CEntryPointCreateIsolateParameters params = WordFactory.nullPointer();
-        if (parameters != null) {
-            params = StackValue.get(CEntryPointCreateIsolateParameters.class);
-            params.setReservedSpaceSize(parameters.getReservedSpaceSize());
-            params.setVersion(1);
+    public IsolateThread createIsolate(CreateIsolateParameters parameters) throws IsolateException {
+        if (!SubstrateOptions.SpawnIsolates.getValue()) {
+            throw new IsolateException(ISOLATES_DISABLED_MESSAGE);
         }
+
+        CEntryPointCreateIsolateParameters params = StackValue.get(CEntryPointCreateIsolateParameters.class);
+        params.setReservedSpaceSize(parameters.getReservedAddressSpaceSize());
+        params.setVersion(1);
+
         IsolatePointer isolatePtr = StackValue.get(IsolatePointer.class);
         throwOnError(CEntryPointNativeFunctions.createIsolate(params, isolatePtr));
-        return isolatePtr.read();
+        Isolate isolate = isolatePtr.read();
+        return getCurrentThread(isolate);
     }
 
     @Override
@@ -72,7 +79,7 @@ public final class IsolateSupportImpl implements IsolateSupport {
     }
 
     @Override
-    public Isolate getCurrentIsolate(IsolateThread thread) throws IsolateException {
+    public Isolate getIsolate(IsolateThread thread) throws IsolateException {
         return CEntryPointNativeFunctions.getCurrentThreadIsolate(thread);
     }
 
@@ -82,8 +89,12 @@ public final class IsolateSupportImpl implements IsolateSupport {
     }
 
     @Override
-    public void tearDownIsolate(Isolate isolate) throws IsolateException {
-        throwOnError(CEntryPointNativeFunctions.tearDownIsolate(isolate));
+    public void tearDownIsolate(IsolateThread thread) throws IsolateException {
+        if (SubstrateOptions.SpawnIsolates.getValue()) {
+            throwOnError(CEntryPointNativeFunctions.tearDownIsolate(getIsolate(thread)));
+        } else {
+            throw new IsolateException(ISOLATES_DISABLED_MESSAGE);
+        }
     }
 
     private static void throwOnError(int code) {
