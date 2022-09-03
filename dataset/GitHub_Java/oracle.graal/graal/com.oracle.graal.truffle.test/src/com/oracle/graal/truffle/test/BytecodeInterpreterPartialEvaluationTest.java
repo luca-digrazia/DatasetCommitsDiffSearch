@@ -37,7 +37,6 @@ import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind;
 import com.oracle.truffle.api.nodes.RootNode;
 
 public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationTest {
@@ -132,7 +131,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         }
 
         @Override
-        @ExplodeLoop(kind = LoopExplosionKind.MERGE_EXPLODE)
+        @ExplodeLoop(merge = true)
         public Object execute(VirtualFrame frame) {
             trace("Start program");
             int topOfStack = -1;
@@ -141,87 +140,73 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
             boolean running = true;
             outer: while (running) {
                 CompilerAsserts.partialEvaluationConstant(bci);
-                switch (bytecodes[bci]) {
-                    case Bytecode.CONST: {
-                        byte value = bytecodes[bci + 1];
-                        trace("%d (%d): CONST %d", bci, topOfStack, value);
-
-                        topOfStack++;
-                        setInt(frame, topOfStack, nonExplodedLoop(value));
+                byte bc = bytecodes[bci];
+                byte value = 0;
+                switch (bc) {
+                    case Bytecode.CONST:
+                        value = bytecodes[bci + 1];
+                        trace("%d (%d): CONST %s", bci, topOfStack, value);
+                        setInt(frame, ++topOfStack, nonExplodedLoop(value));
                         bci = bci + 2;
                         continue;
-                    }
-                    case Bytecode.RETURN: {
-                        int value = getInt(frame, topOfStack);
-                        trace("%d (%d): RETURN %d", bci, topOfStack, value);
 
-                        result = nonExplodedLoop(value);
+                    case Bytecode.RETURN:
+                        trace("%d (%d): RETURN", bci, topOfStack);
+                        result = nonExplodedLoop(getInt(frame, topOfStack));
                         running = false;
                         continue;
-                    }
+
                     case Bytecode.ADD: {
                         int left = getInt(frame, topOfStack);
                         int right = getInt(frame, topOfStack - 1);
                         trace("%d (%d): ADD %d %d", bci, topOfStack, left, right);
-
+                        setInt(frame, topOfStack - 1, left + right);
                         topOfStack--;
-                        setInt(frame, topOfStack, left + right);
                         bci = bci + 1;
                         continue;
                     }
-                    case Bytecode.IFZERO: {
-                        int value = getInt(frame, topOfStack);
-                        byte trueBci = bytecodes[bci + 1];
-                        trace("%d (%d): IFZERO %d to %d", bci, topOfStack, value, trueBci);
 
-                        topOfStack--;
-                        if (value == 0) {
-                            bci = trueBci;
+                    case Bytecode.IFZERO:
+                        trace("%d (%d): IFZERO", bci, topOfStack);
+                        if (getInt(frame, topOfStack--) == 0) {
+                            bci = bytecodes[bci + 1];
+                            continue;
                         } else {
                             bci = bci + 2;
+                            continue;
                         }
-                        continue;
-                    }
-                    case Bytecode.SWITCH: {
-                        int value = getInt(frame, topOfStack);
-                        byte numCases = bytecodes[bci + 1];
-                        trace("%d (%d): SWITCH", bci, topOfStack);
 
-                        topOfStack--;
-                        for (int i = 0; i < numCases; ++i) {
-                            if (value == i) {
+                    case Bytecode.SWITCH:
+                        trace("%d (%d): SWITCH", bci, topOfStack);
+                        int switchValue = getInt(frame, topOfStack--);
+                        value = bytecodes[bci + 1];
+                        for (int i = 0; i < value; ++i) {
+                            if (switchValue == i) {
                                 bci = bytecodes[bci + i + 2];
                                 continue outer;
                             }
                         }
                         // Continue with the code after the switch.
-                        bci += numCases + 2;
+                        bci += value + 2;
                         continue;
-                    }
-                    case Bytecode.POP: {
-                        int value = getInt(frame, topOfStack);
-                        trace("%d (%d): POP %d", bci, topOfStack, value);
 
+                    case Bytecode.POP:
+                        trace("%d (%d): POP", bci, topOfStack);
                         topOfStack--;
                         bci++;
                         continue;
-                    }
-                    case Bytecode.JMP: {
-                        byte newBci = bytecodes[bci + 1];
-                        trace("%d (%d): JMP to %d", bci, topOfStack, newBci);
 
-                        bci = newBci;
+                    case Bytecode.JMP:
+                        trace("%d (%d): JMP", bci, topOfStack);
+                        bci = bytecodes[bci + 1];
                         continue;
-                    }
-                    case Bytecode.DUP: {
-                        int dupValue = getInt(frame, topOfStack);
-                        trace("%d (%d): DUP %d", bci, topOfStack, dupValue);
 
+                    case Bytecode.DUP:
+                        trace("%d (%d): DUP", bci, topOfStack);
+                        setInt(frame, topOfStack + 1, getInt(frame, topOfStack));
                         topOfStack++;
-                        setInt(frame, topOfStack, dupValue);
                         bci++;
                         continue;
-                    }
                 }
             }
             return nonExplodedLoop(result);
@@ -566,7 +551,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         }
 
         @Override
-        @ExplodeLoop(kind = LoopExplosionKind.MERGE_EXPLODE)
+        @ExplodeLoop(merge = true)
         public Object execute(VirtualFrame frame) {
             int ip = 0;
             while (ip != -1) {
