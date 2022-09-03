@@ -41,23 +41,25 @@ import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.alloc.trace.TraceBuilderPhase;
 import com.oracle.graal.lir.alloc.trace.lsra.TraceInterval.RegisterPriority;
+import com.oracle.graal.lir.debug.IntervalDumper;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterArray;
 import jdk.vm.ci.code.RegisterAttributes;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
 
-public final class IntervalData {
+public final class IntervalData implements IntervalDumper {
 
     private static final int SPLIT_INTERVALS_CAPACITY_RIGHT_SHIFT = 1;
 
     private final LIR ir;
     private final RegisterAttributes[] registerAttributes;
-    private final Register[] registers;
+    private final RegisterArray registers;
 
     /**
      * List of blocks in linear-scan order. This is only correct as long as the CFG does not change.
@@ -70,10 +72,14 @@ public final class IntervalData {
      */
     private int firstDerivedIntervalIndex = -1;
 
-    /** @see #fixedIntervals() */
+    /**
+     * @see #fixedIntervals()
+     */
     private final FixedInterval[] fixedIntervals;
 
-    /** @see #intervals() */
+    /**
+     * @see #intervals()
+     */
     private TraceInterval[] intervals;
 
     /**
@@ -95,13 +101,13 @@ public final class IntervalData {
      */
     private AbstractBlockBase<?>[] opIdToBlockMap;
 
-    IntervalData(TargetDescription target, LIRGenerationResult res, RegisterAllocationConfig regAllocConfig, Trace<? extends AbstractBlockBase<?>> trace) {
+    public IntervalData(TargetDescription target, LIRGenerationResult res, RegisterAllocationConfig regAllocConfig, Trace<? extends AbstractBlockBase<?>> trace) {
         this.ir = res.getLIR();
         this.sortedBlocks = trace.getBlocks();
         this.registerAttributes = regAllocConfig.getRegisterConfig().getAttributesMap();
 
         this.registers = target.arch.getRegisters();
-        this.fixedIntervals = new FixedInterval[registers.length];
+        this.fixedIntervals = new FixedInterval[registers.size()];
     }
 
     private int getFirstLirInstructionId(AbstractBlockBase<?> block) {
@@ -221,9 +227,9 @@ public final class IntervalData {
 
     /**
      * Creates a new variable for a derived interval. Note that the variable is not
-     * {@linkplain LIR#nextVariable() managed} so it must not be inserted into the {@link LIR}.
+     * {@linkplain LIR#numVariables() managed} so it must not be inserted into the {@link LIR}.
      */
-    private Variable createVariable(LIRKind kind) {
+    private Variable createVariable(ValueKind<?> kind) {
         return new Variable(kind, intervalsSize++);
     }
 
@@ -356,7 +362,7 @@ public final class IntervalData {
                     }
                 }
             }
-            Debug.dump(Debug.INFO_LOG_LEVEL, new TraceIntervalDumper(Arrays.copyOf(fixedIntervals, fixedIntervals.length), Arrays.copyOf(intervals, intervalsSize)), label);
+            Debug.dump(Debug.INFO_LOG_LEVEL, this, label);
         }
     }
 
@@ -453,5 +459,57 @@ public final class IntervalData {
 
     private static boolean isEmptyInterval(FixedInterval fixed) {
         return fixed.from() == -1 && fixed.to() == 0;
+    }
+
+    @Override
+    public void visitIntervals(IntervalVisitor visitor) {
+        for (FixedInterval interval : fixedIntervals) {
+            if (interval != null) {
+                printFixedInterval(interval, visitor);
+            }
+        }
+        for (TraceInterval interval : intervals) {
+            if (interval != null) {
+                printInterval(interval, visitor);
+            }
+        }
+    }
+
+    private static void printFixedInterval(FixedInterval interval, IntervalVisitor visitor) {
+        Value hint = null;
+        AllocatableValue operand = interval.operand;
+        String type = "fixed";
+        visitor.visitIntervalStart(operand, operand, operand, hint, type);
+
+        // print ranges
+        for (FixedRange range = interval.first(); range != FixedRange.EndMarker; range = range.next) {
+            visitor.visitRange(range.from, range.to);
+        }
+
+        // no use positions
+
+        visitor.visitIntervalEnd("NOT_SUPPORTED");
+
+    }
+
+    private static void printInterval(TraceInterval interval, IntervalVisitor visitor) {
+        Value hint = interval.locationHint(false) != null ? interval.locationHint(false).location() : null;
+        AllocatableValue operand = interval.operand;
+        String type = isRegister(operand) ? "fixed" : operand.getValueKind().getPlatformKind().toString();
+        visitor.visitIntervalStart(interval.splitParent().operand, operand, interval.location(), hint, type);
+
+        // print ranges
+        visitor.visitRange(interval.from(), interval.to());
+
+        // print use positions
+        int prev = -1;
+        UsePosList usePosList = interval.usePosList();
+        for (int i = usePosList.size() - 1; i >= 0; --i) {
+            assert prev < usePosList.usePos(i) : "use positions not sorted";
+            visitor.visitUsePos(usePosList.usePos(i), usePosList.registerPriority(i));
+            prev = usePosList.usePos(i);
+        }
+
+        visitor.visitIntervalEnd(interval.spillState());
     }
 }
