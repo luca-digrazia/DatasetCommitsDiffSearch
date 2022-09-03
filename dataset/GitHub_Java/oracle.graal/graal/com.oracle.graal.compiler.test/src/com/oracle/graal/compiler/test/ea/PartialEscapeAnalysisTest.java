@@ -35,16 +35,17 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.nodes.virtual.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.graph.*;
 import com.oracle.graal.phases.tiers.*;
+import com.oracle.graal.virtual.nodes.*;
 import com.oracle.graal.virtual.phases.ea.*;
 
 /**
- * The PartialEscapeAnalysisPhase is expected to remove all allocations and return the correct
- * values.
+ * In these test cases the probability of all invokes is set to a high value, such that an
+ * InliningPhase should inline them all. After that, the PartialEscapeAnalysisPhase is expected to
+ * remove all allocations and return the correct values.
  */
 public class PartialEscapeAnalysisTest extends GraalCompilerTest {
 
@@ -136,9 +137,9 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
             NodesToDoubles nodeProbabilities = new ComputeProbabilityClosure(result).apply();
             double probabilitySum = 0;
             int materializeCount = 0;
-            for (CommitAllocationNode materialize : result.getNodes(CommitAllocationNode.class)) {
-                probabilitySum += nodeProbabilities.get(materialize) * materialize.getVirtualObjects().size();
-                materializeCount += materialize.getVirtualObjects().size();
+            for (MaterializeObjectNode materialize : result.getNodes(MaterializeObjectNode.class)) {
+                probabilitySum += nodeProbabilities.get(materialize);
+                materializeCount++;
             }
             Assert.assertEquals("unexpected number of MaterializeObjectNodes", expectedCount, materializeCount);
             Assert.assertEquals("unexpected probability of MaterializeObjectNodes", expectedProbability, probabilitySum, 0.01);
@@ -161,18 +162,15 @@ public class PartialEscapeAnalysisTest extends GraalCompilerTest {
                 StructuredGraph graph = parse(snippet);
 
                 Assumptions assumptions = new Assumptions(false);
-                HighTierContext context = new HighTierContext(runtime(), assumptions, replacements);
+                HighTierContext context = new HighTierContext(runtime(), assumptions);
                 new InliningPhase(runtime(), null, replacements, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
-                CanonicalizerPhase canonicalizer = new CanonicalizerPhase(true);
-                canonicalizer.apply(graph, context);
-                new PartialEscapePhase(false, canonicalizer).apply(graph, context);
+                new CanonicalizerPhase().apply(graph, context);
+                new PartialEscapeAnalysisPhase(false, false).apply(graph, context);
 
-                for (MergeNode merge : graph.getNodes(MergeNode.class)) {
-                    merge.setStateAfter(null);
-                }
+                new CullFrameStatesPhase().apply(graph);
                 new DeadCodeEliminationPhase().apply(graph);
-                canonicalizer.apply(graph, context);
+                new CanonicalizerPhase().apply(graph, context);
                 return graph;
             }
         });
