@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -79,10 +77,10 @@ public class TruffleBoundaryInliningTest extends PartialEvaluationTest {
     private void runTest() {
         RootNode n1 = createRootNodeAllowInline();
         RootCallTarget c1 = runtime.createCallTarget(n1);
-        StructuredGraph allowInline = partialEval((OptimizedCallTarget) c1, new Object[]{}, CompilationIdentifier.INVALID_COMPILATION_ID);
+        StructuredGraph allowInline = partialEval((OptimizedCallTarget) c1, new Object[]{}, StructuredGraph.AllowAssumptions.YES, CompilationIdentifier.INVALID_COMPILATION_ID);
         RootNode n2 = createRootNodeNoInline();
         RootCallTarget c2 = runtime.createCallTarget(n2);
-        StructuredGraph noInline = partialEval((OptimizedCallTarget) c2, new Object[]{}, CompilationIdentifier.INVALID_COMPILATION_ID);
+        StructuredGraph noInline = partialEval((OptimizedCallTarget) c2, new Object[]{}, StructuredGraph.AllowAssumptions.YES, CompilationIdentifier.INVALID_COMPILATION_ID);
         checkHasTestMethod(allowInline);
         checkHasTestMethod(noInline);
     }
