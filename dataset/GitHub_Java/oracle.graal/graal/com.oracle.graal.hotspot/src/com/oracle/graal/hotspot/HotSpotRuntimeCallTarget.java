@@ -22,11 +22,18 @@
  */
 package com.oracle.graal.hotspot;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+import static com.oracle.graal.hotspot.HotSpotRuntimeCallTarget.RegisterEffect.*;
+
+import java.util.*;
+
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.bridge.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
+import com.oracle.graal.word.*;
 
 /**
  * The details required to link a HotSpot runtime or stub call.
@@ -34,37 +41,101 @@ import com.oracle.graal.hotspot.stubs.*;
 public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget {
 
     /**
-     * The descriptor of the stub. This is for informational purposes only.
+     * Constants for specifying whether a call destroys or preserves registers. A call will always
+     * destroy {@link HotSpotRuntimeCallTarget#getCallingConvention() its}
+     * {@linkplain CallingConvention#getTemporaries() temporary} registers.
      */
-    public final Descriptor descriptor;
+    public enum RegisterEffect {
+        DESTROYS_REGISTERS, PRESERVES_REGISTERS
+    }
 
     /**
-     * The entry point address of the stub.
+     * Constants for specifying whether a call is a leaf or not. A leaf function does not lock, GC
+     * or throw exceptions. That is, the thread's execution state during the call is never inspected
+     * by another thread.
+     */
+    public enum Transition {
+        LEAF, NOT_LEAF;
+    }
+
+    /**
+     * Sentinel marker for a computed jump address.
+     */
+    public static final long JUMP_ADDRESS = 0xDEADDEADBEEFBEEFL;
+
+    /**
+     * The descriptor of the call.
+     */
+    private final Descriptor descriptor;
+
+    /**
+     * The entry point address of this call's target.
      */
     private long address;
 
     /**
-     * Non-null (eventually) iff this is a call to a snippet-based {@linkplain Stub stub}.
+     * Non-null (eventually) iff this is a call to a compiled {@linkplain Stub stub}.
      */
     private Stub stub;
 
     /**
-     * Where the stub gets its arguments and where it places its result.
+     * The calling convention for this call.
      */
-    public final CallingConvention cc;
+    private CallingConvention cc;
 
-    private final CompilerToVM vm;
+    private final RegisterEffect effect;
 
-    public HotSpotRuntimeCallTarget(Descriptor descriptor, long address, CallingConvention cc, CompilerToVM vm) {
+    private final Transition transition;
+
+    /**
+     * Creates a {@link HotSpotRuntimeCallTarget}.
+     * 
+     * @param descriptor the descriptor of the call
+     * @param address the address of the code to call
+     * @param effect specifies if the call destroys or preserves all registers (apart from
+     *            temporaries which are always destroyed)
+     * @param ccType calling convention type
+     * @param transition specifies if this is a {@linkplain #isLeaf() leaf} call
+     */
+    public static HotSpotRuntimeCallTarget create(Descriptor descriptor, long address, RegisterEffect effect, Type ccType, Transition transition) {
+        CallingConvention targetCc = createCallingConvention(descriptor, ccType);
+        return new HotSpotRuntimeCallTarget(descriptor, address, effect, transition, targetCc);
+    }
+
+    /**
+     * Gets a calling convention for a given descriptor and call type.
+     */
+    public static CallingConvention createCallingConvention(Descriptor descriptor, Type ccType) {
+        HotSpotRuntime runtime = graalRuntime().getRuntime();
+        Class<?>[] argumentTypes = descriptor.getArgumentTypes();
+        JavaType[] parameterTypes = new JavaType[argumentTypes.length];
+        for (int i = 0; i < parameterTypes.length; ++i) {
+            parameterTypes[i] = asJavaType(argumentTypes[i], runtime);
+        }
+        TargetDescription target = graalRuntime().getTarget();
+        JavaType returnType = asJavaType(descriptor.getResultType(), runtime);
+        return runtime.lookupRegisterConfig().getCallingConvention(ccType, returnType, parameterTypes, target, false);
+    }
+
+    private static JavaType asJavaType(Class type, HotSpotRuntime runtime) {
+        if (WordBase.class.isAssignableFrom(type)) {
+            return runtime.lookupJavaType(wordKind().toJavaClass());
+        } else {
+            return runtime.lookupJavaType(type);
+        }
+    }
+
+    public HotSpotRuntimeCallTarget(Descriptor descriptor, long address, RegisterEffect effect, Transition transition, CallingConvention cc) {
         this.address = address;
+        this.effect = effect;
+        this.transition = transition;
         this.descriptor = descriptor;
         this.cc = cc;
-        this.vm = vm;
     }
 
     @Override
     public String toString() {
-        return (stub == null ? descriptor.toString() : MetaUtil.format("%h.%n", stub.getMethod())) + "@0x" + Long.toHexString(address) + ":" + cc;
+        return (stub == null ? descriptor.toString() : stub) + "@0x" + Long.toHexString(address) + ":" + cc;
     }
 
     public CallingConvention getCallingConvention() {
@@ -72,22 +143,57 @@ public class HotSpotRuntimeCallTarget implements RuntimeCallTarget, InvokeTarget
     }
 
     public long getMaxCallTargetOffset() {
-        return vm.getMaxCallTargetOffset(address);
+        return graalRuntime().getCompilerToVM().getMaxCallTargetOffset(address);
     }
 
     public Descriptor getDescriptor() {
         return descriptor;
     }
 
-    public void setStub(Stub stub) {
+    public void setCompiledStub(Stub stub) {
         assert address == 0L : "cannot set stub for linkage that already has an address: " + this;
         this.stub = stub;
     }
 
+    /**
+     * Determines if this is a call to a compiled {@linkplain Stub stub}.
+     */
+    public boolean isCompiledStub() {
+        return address == 0L || stub != null;
+    }
+
     public void finalizeAddress(Backend backend) {
         if (address == 0) {
-            assert stub != null : "linkage without an address must be a stub";
-            address = stub.getAddress(backend);
+            assert stub != null : "linkage without an address must be a stub - forgot to register a Stub associated with " + descriptor + "?";
+            InstalledCode code = stub.getCode(backend);
+
+            Set<Register> destroyedRegisters = stub.getDestroyedRegisters();
+            AllocatableValue[] temporaryLocations = new AllocatableValue[destroyedRegisters.size()];
+            int i = 0;
+            for (Register reg : destroyedRegisters) {
+                temporaryLocations[i++] = reg.asValue();
+            }
+            // Update calling convention with temporaries
+            cc = new CallingConvention(temporaryLocations, cc.getStackSize(), cc.getReturn(), cc.getArguments());
+            address = code.getStart();
         }
+    }
+
+    public long getAddress() {
+        assert address != 0L : "address not yet finalized: " + this;
+        return address;
+    }
+
+    @Override
+    public boolean destroysRegisters() {
+        return effect == DESTROYS_REGISTERS;
+    }
+
+    /**
+     * Determines if this is call to a function that does not lock, GC or throw exceptions. That is,
+     * the thread's execution state during the call is never inspected by another thread.
+     */
+    public boolean isLeaf() {
+        return transition == Transition.LEAF;
     }
 }

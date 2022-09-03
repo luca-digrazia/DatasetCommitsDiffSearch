@@ -45,18 +45,9 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.ParametersOp;
 import com.oracle.graal.lir.StandardOp.PlaceholderOp;
 import com.oracle.graal.lir.amd64.*;
-import com.oracle.graal.lir.amd64.AMD64ControlFlow.CondMoveOp;
-import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapCompressedOp;
 import com.oracle.graal.lir.amd64.AMD64Move.CompareAndSwapOp;
-import com.oracle.graal.lir.amd64.AMD64Move.LoadCompressedOop;
-import com.oracle.graal.lir.amd64.AMD64Move.LoadOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
-import com.oracle.graal.lir.amd64.AMD64Move.StoreCompressedOop;
-import com.oracle.graal.lir.amd64.AMD64Move.StoreConstantOp;
-import com.oracle.graal.lir.amd64.AMD64Move.StoreOp;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.java.MethodCallTargetNode.InvokeKind;
 
 /**
@@ -195,9 +186,9 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     private LIRFrameState currentRuntimeCallInfo;
 
     @Override
-    protected void emitForeignCall(ForeignCallLinkage linkage, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
+    protected void emitCall(RuntimeCallTarget callTarget, Value result, Value[] arguments, Value[] temps, LIRFrameState info) {
         currentRuntimeCallInfo = info;
-        super.emitForeignCall(linkage, result, arguments, temps, info);
+        super.emitCall(callTarget, result, arguments, temps, info);
     }
 
     protected AMD64SaveRegistersOp emitSaveRegisters(Register[] savedRegisters, StackSlot[] savedRegisterLocations) {
@@ -218,10 +209,10 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    public Variable emitForeignCall(ForeignCallLinkage linkage, DeoptimizingNode info, Value... args) {
+    public Variable emitCall(RuntimeCallTarget callTarget, CallingConvention callCc, DeoptimizingNode info, Value... args) {
         Stub stub = getStub();
-        HotSpotForeignCallLinkage hsLinkage = (HotSpotForeignCallLinkage) linkage;
-        boolean destroysRegisters = hsLinkage.destroysRegisters();
+        HotSpotRuntimeCallTarget hsCallTarget = (HotSpotRuntimeCallTarget) callTarget;
+        boolean destroysRegisters = hsCallTarget.destroysRegisters();
 
         AMD64SaveRegistersOp save = null;
         StackSlot[] savedRegisterLocations = null;
@@ -240,16 +231,14 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
                 }
             }
         }
-
-        Variable result;
-
-        if (!hsLinkage.isLeaf()) {
-            assert info != null;
+        if (!hsCallTarget.isLeaf()) {
             append(new AMD64HotSpotCRuntimeCallPrologueOp());
-            result = super.emitForeignCall(linkage, info, args);
+        }
+
+        Variable result = super.emitCall(callTarget, callCc, info, args);
+
+        if (!hsCallTarget.isLeaf()) {
             append(new AMD64HotSpotCRuntimeCallEpilogueOp());
-        } else {
-            result = super.emitForeignCall(linkage, null, args);
         }
 
         if (destroysRegisters) {
@@ -351,10 +340,10 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
 
     @Override
     public void emitUnwind(Value exception) {
-        ForeignCallLinkage linkage = getRuntime().lookupForeignCall(HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER);
-        CallingConvention linkageCc = linkage.getCallingConvention();
-        assert linkageCc.getArgumentCount() == 2;
-        RegisterValue exceptionParameter = (RegisterValue) linkageCc.getArgument(0);
+        RuntimeCallTarget stub = getRuntime().lookupRuntimeCall(HotSpotBackend.UNWIND_EXCEPTION_TO_CALLER);
+        CallingConvention stubCc = stub.getCallingConvention();
+        assert stubCc.getArgumentCount() == 2;
+        RegisterValue exceptionParameter = (RegisterValue) stubCc.getArgument(0);
         emitMove(exceptionParameter, exception);
         append(new AMD64HotSpotUnwindOp(exceptionParameter));
     }
@@ -377,11 +366,11 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     public void emitJumpToExceptionHandlerInCaller(ValueNode handlerInCallerPc, ValueNode exception, ValueNode exceptionPc) {
         Variable handler = load(operand(handlerInCallerPc));
-        ForeignCallLinkage linkage = getRuntime().lookupForeignCall(EXCEPTION_HANDLER_IN_CALLER);
-        CallingConvention linkageCc = linkage.getCallingConvention();
-        assert linkageCc.getArgumentCount() == 2;
-        RegisterValue exceptionFixed = (RegisterValue) linkageCc.getArgument(0);
-        RegisterValue exceptionPcFixed = (RegisterValue) linkageCc.getArgument(1);
+        RuntimeCallTarget stub = getRuntime().lookupRuntimeCall(EXCEPTION_HANDLER_IN_CALLER);
+        CallingConvention stubCc = stub.getCallingConvention();
+        assert stubCc.getArgumentCount() == 2;
+        RegisterValue exceptionFixed = (RegisterValue) stubCc.getArgument(0);
+        RegisterValue exceptionPcFixed = (RegisterValue) stubCc.getArgument(1);
         emitMove(exceptionFixed, operand(exception));
         emitMove(exceptionPcFixed, operand(exceptionPc));
         AMD64HotSpotJumpToExceptionHandlerInCallerOp op = new AMD64HotSpotJumpToExceptionHandlerInCallerOp(handler, exceptionFixed, exceptionPcFixed);
@@ -399,79 +388,5 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         for (AMD64HotSpotEpilogueOp op : epilogueOps) {
             op.savedRbp = savedRbp;
         }
-    }
-
-    private static boolean isCompressCandidate(DeoptimizingNode access) {
-        return access != null && ((HeapAccess) access).compress();
-    }
-
-    @Override
-    public Variable emitLoad(Kind kind, Value address, DeoptimizingNode access) {
-        AMD64AddressValue loadAddress = asAddressValue(address);
-        Variable result = newVariable(kind);
-        assert access != null || access instanceof HeapAccess;
-        if (runtime().config.useCompressedOops && isCompressCandidate(access)) {
-            assert kind == Kind.Object;
-            Variable scratch = newVariable(Kind.Long);
-            append(new LoadCompressedOop(kind, result, scratch, loadAddress, access != null ? state(access) : null, runtime().config.narrowOopBase, runtime().config.narrowOopShift,
-                            runtime().config.logMinObjAlignment));
-        } else {
-            append(new LoadOp(kind, result, loadAddress, access != null ? state(access) : null));
-        }
-        return result;
-    }
-
-    @Override
-    public void emitStore(Kind kind, Value address, Value inputVal, DeoptimizingNode access) {
-        AMD64AddressValue storeAddress = asAddressValue(address);
-        LIRFrameState state = access != null ? state(access) : null;
-        if (isConstant(inputVal)) {
-            Constant c = asConstant(inputVal);
-            if (canStoreConstant(c)) {
-                append(new StoreConstantOp(kind, storeAddress, c, state, runtime().config.useCompressedOops && isCompressCandidate(access)));
-                return;
-            }
-        }
-        Variable input = load(inputVal);
-        if (runtime().config.useCompressedOops && isCompressCandidate(access)) {
-            assert kind == Kind.Object;
-            Variable scratch = newVariable(Kind.Long);
-            append(new StoreCompressedOop(kind, storeAddress, input, scratch, state, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
-        } else {
-            append(new StoreOp(kind, storeAddress, input, state));
-        }
-    }
-
-    @Override
-    public void visitCompareAndSwap(CompareAndSwapNode node) {
-        Kind kind = node.newValue().kind();
-        assert kind == node.expected().kind();
-
-        Value expected = loadNonConst(operand(node.expected()));
-        Variable newValue = load(operand(node.newValue()));
-
-        AMD64AddressValue address;
-        int displacement = node.displacement();
-        Value index = operand(node.offset());
-        if (isConstant(index) && NumUtil.isInt(asConstant(index).asLong() + displacement)) {
-            assert !runtime.needsDataPatch(asConstant(index));
-            displacement += (int) asConstant(index).asLong();
-            address = new AMD64AddressValue(kind, load(operand(node.object())), displacement);
-        } else {
-            address = new AMD64AddressValue(kind, load(operand(node.object())), load(index), Scale.Times1, displacement);
-        }
-
-        RegisterValue raxRes = AMD64.rax.asValue(kind);
-        emitMove(raxRes, expected);
-        if (runtime().config.useCompressedOops && node.compress()) {
-            assert kind == Kind.Object;
-            Variable scratch = newVariable(Kind.Long);
-            append(new CompareAndSwapCompressedOp(raxRes, address, raxRes, newValue, scratch, runtime().config.narrowOopBase, runtime().config.narrowOopShift, runtime().config.logMinObjAlignment));
-        } else {
-            append(new CompareAndSwapOp(raxRes, address, raxRes, newValue));
-        }
-        Variable result = newVariable(node.kind());
-        append(new CondMoveOp(result, Condition.EQ, load(Constant.TRUE), Constant.FALSE));
-        setResult(node, result);
     }
 }
