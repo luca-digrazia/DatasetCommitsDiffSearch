@@ -26,7 +26,6 @@ package com.oracle.truffle.api.impl;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
@@ -57,7 +56,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
- * Communication between PolyglotEngine, TruffleLanguage API/SPI, and other services.
+ * Communication between TruffleLanguage API/SPI, and other services.
  */
 public abstract class Accessor {
 
@@ -104,10 +103,9 @@ public abstract class Accessor {
     }
 
     public abstract static class JavaInteropSupport {
-
         public abstract Node createToJavaNode();
 
-        public abstract Object toJava(Node toJavaNode, Class<?> rawType, Type genericType, Object value, Object polyglotContext);
+        public abstract Object toJava(Node toJavaNode, Class<?> type, Object value);
 
         public abstract Object toJavaGuestObject(Object obj, Object languageContext);
     }
@@ -227,12 +225,6 @@ public abstract class Accessor {
         public abstract boolean isHostException(Throwable exception);
 
         public abstract Throwable asHostException(Throwable exception);
-
-        public abstract ClassCastException newClassCastException(String message, Throwable cause);
-
-        public abstract NullPointerException newNullPointerException(String message, Throwable cause);
-
-        public abstract Object getCurrentHostContext();
 
         public abstract Object legacyTckEnter(Object vm);
 
@@ -449,19 +441,6 @@ public abstract class Accessor {
     private static void conditionallyInitInstrumentation() throws IllegalStateException {
         try {
             Class.forName("com.oracle.truffle.api.instrumentation.InstrumentationHandler", true, Accessor.class.getClassLoader());
-        } catch (ClassNotFoundException ex) {
-            boolean assertOn = false;
-            assert assertOn = true;
-            if (!assertOn) {
-                throw new IllegalStateException(ex);
-            }
-        }
-    }
-
-    @SuppressWarnings("all")
-    private static void conditionallyInitEngine() throws IllegalStateException {
-        try {
-            Class.forName("com.oracle.truffle.api.vm.PolyglotEngine", true, Accessor.class.getClassLoader());
         } catch (ClassNotFoundException ex) {
             boolean assertOn = false;
             assert assertOn = true;
