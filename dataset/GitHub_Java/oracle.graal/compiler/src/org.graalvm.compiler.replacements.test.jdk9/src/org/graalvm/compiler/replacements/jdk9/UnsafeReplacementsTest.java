@@ -43,7 +43,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest  {
         public volatile long longField = 0x0123456789abcdefL;
         public volatile float floatField = 0.125f;
         public volatile double doubleField = 0.125;
-        public volatile Object objectField = this;
     }
 
     static jdk.internal.misc.Unsafe unsafe = jdk.internal.misc.Unsafe.getUnsafe();
@@ -55,7 +54,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest  {
     static long longOffset;
     static long floatOffset;
     static long doubleOffset;
-    static long objectOffset;
 
     static {
         try {
@@ -67,7 +65,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest  {
             longOffset = unsafe.objectFieldOffset(Container.class.getDeclaredField("longField"));
             floatOffset = unsafe.objectFieldOffset(Container.class.getDeclaredField("floatField"));
             doubleOffset = unsafe.objectFieldOffset(Container.class.getDeclaredField("doubleField"));
-            objectOffset = unsafe.objectFieldOffset(Container.class.getDeclaredField("objectField"));
         } catch (NoSuchFieldException e) {
           throw new RuntimeException(e);
         }
@@ -113,11 +110,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest  {
         return unsafe.compareAndSetDouble(container, doubleOffset, 0.125, 0.25);
     }
 
-    public static boolean unsafeCompareAndSetObject() throws NoSuchFieldException {
-        Container container = new Container();
-        return unsafe.compareAndSetObject(container, objectOffset, container, new Object() {});
-    }
-
     @Test
     public void testCompareAndSet() {
         testGraph("unsafeCompareAndSetBoolean");
@@ -136,7 +128,5 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest  {
         test("unsafeCompareAndSetFloat");
         testGraph("unsafeCompareAndSetDouble");
         test("unsafeCompareAndSetDouble");
-        testGraph("unsafeCompareAndSetObject");
-        test("unsafeCompareAndSetObject");
     }
 }
