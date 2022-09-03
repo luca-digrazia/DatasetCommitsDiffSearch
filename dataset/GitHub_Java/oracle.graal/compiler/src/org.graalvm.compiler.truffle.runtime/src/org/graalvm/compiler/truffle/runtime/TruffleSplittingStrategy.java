@@ -323,7 +323,7 @@ final class TruffleSplittingStrategy {
         return reporter;
     }
 
-    static void newPolymorphicSpecialize(Node node) {
+    static void newPolluteCall(Node node) {
         if (TruffleCompilerOptions.getValue(TruffleTraceSplittingSummary)) {
             final Map<Class<? extends Node>, Integer> pollutedNodes = getReporter().pollutedNodes;
             final Class<? extends Node> aClass = node.getClass();
