@@ -606,7 +606,7 @@ public class MethodTypeFlowBuilder {
                 BytecodeLocation location = BytecodeLocation.create(bciKey, method);
                 TypeFlowBuilder<?> instanceOfBuilder = TypeFlowBuilder.create(bb, node, InstanceOfTypeFlow.class, () -> {
                     InstanceOfTypeFlow instanceOf = new InstanceOfTypeFlow(node, location, declaredType);
-                    methodFlow.addInstanceOf(key, instanceOf);
+                    methodFlow.addInstanceOf(instanceOf);
                     return instanceOf;
                 });
                 /* InstanceOf must not be removed as it is reported by the analysis results. */
@@ -1288,7 +1288,13 @@ public class MethodTypeFlowBuilder {
                     AnalysisMethod targetMethod = (AnalysisMethod) target.targetMethod();
                     bb.isCallAllowed(bb, callerMethod, targetMethod, target.getNodeSourcePosition());
 
-                    Object key = uniqueKey(n);
+                    Object key;
+                    if (invoke.bci() >= 0) {
+                        key = invoke.bci();
+                    } else {
+                        shouldNotReachHere("InvokeTypeFlow has a negative BCI");
+                        key = new Object();
+                    }
                     BytecodeLocation location = BytecodeLocation.create(key, methodFlow.getMethod());
 
                     /*
