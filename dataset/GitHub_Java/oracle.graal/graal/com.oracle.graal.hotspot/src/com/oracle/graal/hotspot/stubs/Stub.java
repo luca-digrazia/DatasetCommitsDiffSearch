@@ -50,6 +50,7 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
@@ -253,29 +254,27 @@ public abstract class Stub extends AbstractTemplates implements Snippets {
         }
     }
 
-    public static final Descriptor STUB_PRINTF_C = descriptorFor(Stub.class, "printfC", false);
+    public static final Descriptor STUB_PRINTF = new Descriptor("stubPrintf", false, void.class, Word.class, long.class, long.class, long.class);
 
-    @NodeIntrinsic(CRuntimeCall.class)
-    private static native void printfC(@ConstantNodeParameter Descriptor stubPrintf, Word format, long v1, long v2, long v3);
+    @NodeIntrinsic(RuntimeCallNode.class)
+    private static native void printf(@ConstantNodeParameter Descriptor stubPrintf, Word format, long v1, long v2, long v3);
 
     /**
-     * Prints a formatted string to the log stream. This differs from {@link Log#LOG_PRINTF} in that
-     * the format string is a C string in the C heap which avoids having an embedded oop in a
-     * RuntimeStub.
+     * Prints a formatted string to the log stream.
      * 
      * @param format a C style printf format value that can contain at most one conversion specifier
      *            (i.e., a sequence of characters starting with '%').
      * @param value the value associated with the conversion specifier
      */
     public static void printf(String format, long value) {
-        printfC(STUB_PRINTF_C, cstring(format), value, 0L, 0L);
+        printf(STUB_PRINTF, cstring(format), value, 0L, 0L);
     }
 
     public static void printf(String format, long v1, long v2) {
-        printfC(STUB_PRINTF_C, cstring(format), v1, v2, 0L);
+        printf(STUB_PRINTF, cstring(format), v1, v2, 0L);
     }
 
     public static void printf(String format, long v1, long v2, long v3) {
-        printfC(STUB_PRINTF_C, cstring(format), v1, v2, v3);
+        printf(STUB_PRINTF, cstring(format), v1, v2, v3);
     }
 }

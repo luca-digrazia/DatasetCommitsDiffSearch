@@ -24,6 +24,7 @@ package com.oracle.graal.hotspot.amd64;
 
 import static com.oracle.graal.amd64.AMD64.*;
 import static com.oracle.graal.compiler.amd64.AMD64LIRGenerator.*;
+import static com.oracle.graal.hotspot.amd64.AMD64DeoptimizeOp.*;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotBackend.*;
 import static com.oracle.graal.hotspot.amd64.AMD64HotSpotUnwindOp.*;
 import static com.oracle.graal.hotspot.nodes.IdentityHashCodeStubCall.*;
@@ -60,6 +61,10 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                /*           temps */ null,
                /*             ret */ ret(Kind.Void),
                /* arg0: exception */ rax.asValue(Kind.Object));
+
+        addRuntimeCall(UNCOMMON_TRAP, config.uncommonTrapStub,
+                /*           temps */ null,
+                /*             ret */ ret(Kind.Void));
 
         addRuntimeCall(ARITHMETIC_FREM, config.arithmeticFremStub,
                 /*           temps */ new Register[]{AMD64.rax},
