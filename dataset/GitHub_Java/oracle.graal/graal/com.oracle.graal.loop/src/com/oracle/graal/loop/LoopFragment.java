@@ -131,8 +131,7 @@ public abstract class LoopFragment {
             } else {
                 dr = null;
             }
-            NodeIterable<Node> nodesIterable = original().nodes();
-            duplicationMap = graph().addDuplicates(nodesIterable, graph(), nodesIterable.count(), dr);
+            duplicationMap = graph().addDuplicates(original().nodes(), dr);
             finishDuplication();
             nodesReady = true;
         } else {
@@ -231,7 +230,6 @@ public abstract class LoopFragment {
                 final Iterator<Block> it = blocks.iterator();
                 return new Iterator<AbstractBeginNode>() {
 
-                    @Override
                     public void remove() {
                         throw new UnsupportedOperationException();
                     }

@@ -991,15 +991,14 @@ public final class NodeClass extends FieldIntrospection {
         for (Entry<Node, Node> entry : newNodes.entrySet()) {
             Node oldNode = entry.getKey();
             Node node = entry.getValue();
-            NodeClass oldNodeClass = oldNode.getNodeClass();
-            NodeClass nodeClass = node.getNodeClass();
             for (NodeClassIterator iter = oldNode.inputs().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
-                if (!nodeClass.isValid(pos, oldNodeClass)) {
+                if (!pos.isValidFor(node, oldNode)) {
                     continue;
                 }
-                Node input = oldNodeClass.get(oldNode, pos);
+                Node input = oldNode.getNodeClass().get(oldNode, pos);
                 Node target = newNodes.get(input);
+                NodeClass nodeClass = node.getNodeClass();
                 if (target == null) {
                     Node replacement = input;
                     if (replacements != null) {
@@ -1014,22 +1013,27 @@ public final class NodeClass extends FieldIntrospection {
                 }
                 nodeClass.set(node, pos, target);
             }
+        }
 
+        // re-wire successors
+        for (Entry<Node, Node> entry : newNodes.entrySet()) {
+            Node oldNode = entry.getKey();
+            Node node = entry.getValue();
             for (NodeClassIterator iter = oldNode.successors().iterator(); iter.hasNext();) {
                 Position pos = iter.nextPosition();
-                if (!nodeClass.isValid(pos, oldNodeClass)) {
+                if (!pos.isValidFor(node, oldNode)) {
                     continue;
                 }
-                Node succ = oldNodeClass.get(oldNode, pos);
+                Node succ = oldNode.getNodeClass().get(oldNode, pos);
                 Node target = newNodes.get(succ);
                 if (target == null) {
                     Node replacement = replacements.replacement(succ);
                     if (replacement != succ) {
-                        assert isAssignable(nodeClass.fieldTypes.get(node.getNodeClass().successorOffsets[pos.index]), replacement);
+                        assert isAssignable(node.getNodeClass().fieldTypes.get(node.getNodeClass().successorOffsets[pos.index]), replacement);
                         target = replacement;
                     }
                 }
-                nodeClass.set(node, pos, target);
+                node.getNodeClass().set(node, pos, target);
             }
         }
         return newNodes;
