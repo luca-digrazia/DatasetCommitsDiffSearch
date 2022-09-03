@@ -232,16 +232,6 @@ public final class JavaInterop {
     }
 
     /**
-     * Returns <code>true</code> if the argument is Java host language object wrapped using Truffle
-     * interop.
-     *
-     * @since 0.28
-     */
-    public static boolean isJavaObject(Object object) {
-        return object instanceof JavaObject;
-    }
-
-    /**
      * Exports a Java object for use in any {@link TruffleLanguage}. The system scans structure of
      * provided object and exposes all <b>public</b> fields and methods to any <em>Truffle</em>
      * language. An instance of class
@@ -539,6 +529,17 @@ public final class JavaInterop {
     }
 
     /**
+     * A message to find out Java class for {@link TruffleObject}s wrapping plain
+     * {@link #asTruffleObject(java.lang.Object) Java objects}. The receiver of the message shall be
+     * an object created via {@link #asTruffleObject(java.lang.Object) asTruffleObject(original)}
+     * method and it is supposed to return the same object as
+     * {@link #asTruffleObject(java.lang.Object) asTruffleObject(original.getClass())}.
+     * <p>
+     * not yet public
+     */
+    static final Message CLASS_MESSAGE = ClassMessage.INSTANCE;
+
+    /**
      * Finds a Java class representation for the provided object. If the object was created via
      * {@link #asTruffleObject(java.lang.Object) asTruffleObject(original)} call, then it is
      * unwrapped and the result is equal to {@link #asTruffleObject(java.lang.Object)
@@ -554,15 +555,13 @@ public final class JavaInterop {
      * @since 0.26
      */
     public static TruffleObject toJavaClass(TruffleObject obj) {
-        if (obj instanceof JavaObject) {
-            JavaObject receiver = (JavaObject) obj;
-            if (receiver.isClass()) {
-                return new JavaObject(null, receiver.clazz.getClass(), receiver.languageContext);
-            } else {
-                return new JavaObject(null, receiver.clazz, receiver.languageContext);
-            }
-        } else {
+        CompilerAsserts.neverPartOfCompilation();
+        try {
+            return (TruffleObject) ForeignAccess.send(CLASS_MESSAGE.createNode(), obj);
+        } catch (UnsupportedMessageException ex) {
             return null;
+        } catch (InteropException ex) {
+            throw ex.raise();
         }
     }
 
