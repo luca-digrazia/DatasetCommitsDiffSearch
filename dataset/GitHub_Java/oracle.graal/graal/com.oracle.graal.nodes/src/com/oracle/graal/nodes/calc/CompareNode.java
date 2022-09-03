@@ -22,15 +22,14 @@
  */
 package com.oracle.graal.nodes.calc;
 
-import jdk.internal.jvmci.common.*;
-import jdk.internal.jvmci.meta.*;
-
 import com.oracle.graal.compiler.common.calc.*;
 import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.jvmci.common.*;
+import com.oracle.jvmci.meta.*;
 
 /* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
  * But in the back-end the comparison should not always be materialized (for example in x86 the comparison result will not be in a register but in a flag)
@@ -174,9 +173,9 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
     }
 
     public static LogicNode createCompareNode(Condition condition, ValueNode x, ValueNode y, ConstantReflectionProvider constantReflection) {
-        assert x.getStackKind() == y.getStackKind();
+        assert x.getKind() == y.getKind();
         assert condition.isCanonical() : "condition is not canonical: " + condition;
-        assert !x.getStackKind().isNumericFloat();
+        assert !x.getKind().isNumericFloat();
 
         LogicNode comparison;
         if (condition == Condition.EQ) {
@@ -185,15 +184,15 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             } else if (x.stamp() instanceof AbstractPointerStamp) {
                 comparison = PointerEqualsNode.create(x, y);
             } else {
-                assert x.getStackKind().isNumericInteger();
+                assert x.getKind().isNumericInteger();
                 comparison = IntegerEqualsNode.create(x, y, constantReflection);
             }
         } else if (condition == Condition.LT) {
-            assert x.getStackKind().isNumericInteger();
+            assert x.getKind().isNumericInteger();
             comparison = IntegerLessThanNode.create(x, y, constantReflection);
         } else {
             assert condition == Condition.BT;
-            assert x.getStackKind().isNumericInteger();
+            assert x.getKind().isNumericInteger();
             comparison = IntegerBelowNode.create(x, y, constantReflection);
         }
 
