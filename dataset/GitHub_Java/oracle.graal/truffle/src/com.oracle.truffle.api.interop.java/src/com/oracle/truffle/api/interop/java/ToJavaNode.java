@@ -81,17 +81,17 @@ abstract class ToJavaNode extends Node {
             convertedValue = value instanceof Value ? value : JavaInterop.toHostValue(value, languageContext);
         } else if (JavaObject.isJavaInstance(targetType, value)) {
             convertedValue = JavaObject.valueOf(value);
+        } else if (!TruffleOptions.AOT && value instanceof TruffleObject && JavaInterop.isJavaFunctionInterface(targetType) && isExecutable((TruffleObject) value)) {
+            if (targetType.isInstance(value)) {
+                convertedValue = value;
+            } else {
+                convertedValue = JavaInteropReflect.asJavaFunction(targetType, (TruffleObject) value, languageContext);
+            }
         } else if (value == JavaObject.NULL) {
             return null;
         } else if (value instanceof TruffleObject) {
             if (targetType == Object.class) {
                 convertedValue = convertToObject((TruffleObject) value, languageContext);
-            } else if (!TruffleOptions.AOT && JavaInterop.isJavaFunctionInterface(targetType) && isExecutable((TruffleObject) value)) {
-                if (targetType.isInstance(value)) {
-                    convertedValue = value;
-                } else {
-                    convertedValue = JavaInteropReflect.asJavaFunction(targetType, (TruffleObject) value, languageContext);
-                }
             } else {
                 convertedValue = asJavaObject((TruffleObject) value, targetType, genericType, languageContext);
             }
@@ -117,6 +117,8 @@ abstract class ToJavaNode extends Node {
             return true;
         } else if (JavaObject.isJavaInstance(targetType, value)) {
             return true;
+        } else if (!TruffleOptions.AOT && value instanceof TruffleObject && JavaInterop.isJavaFunctionInterface(targetType) && isExecutable((TruffleObject) value)) {
+            return true;
         } else if (value == JavaObject.NULL && !targetType.isPrimitive()) {
             return true;
         } else if (value instanceof TruffleObject) {
@@ -124,8 +126,6 @@ abstract class ToJavaNode extends Node {
                 return false;
             }
             if (targetType == Object.class) {
-                return true;
-            } else if (!TruffleOptions.AOT && JavaInterop.isJavaFunctionInterface(targetType) && isExecutable((TruffleObject) value)) {
                 return true;
             } else if (primitive.isNull((TruffleObject) value)) {
                 return true;
@@ -205,8 +205,7 @@ abstract class ToJavaNode extends Node {
             boolean hasKeys = (keyClazz == Object.class || keyClazz == String.class) && primitive.hasKeys(truffleObject);
             boolean hasSize = (keyClazz == Object.class || Number.class.isAssignableFrom(keyClazz)) && primitive.hasSize(truffleObject);
             if (hasKeys || hasSize) {
-                boolean executable = isExecutable(truffleObject);
-                obj = TruffleMap.create(keyClazz, valueType.clazz, valueType.type, truffleObject, languageContext, hasKeys, hasSize, executable);
+                obj = TruffleMap.create(keyClazz, valueType.clazz, valueType.type, truffleObject, languageContext, hasKeys, hasSize);
             } else {
                 throw newClassCastException(truffleObject, targetType, "has no keys");
             }

@@ -292,14 +292,13 @@ final class JavaInteropReflect {
     }
 }
 
-abstract class AbstractFunctionFromJava extends RootNode {
-
-    @Child private Node interopActionNode;
+final class ExecuteFunctionFromJava extends RootNode {
+    @Child private Node executeNode;
     @Child private ToJavaNode toJava;
 
-    AbstractFunctionFromJava(Node interopActionNode) {
+    ExecuteFunctionFromJava() {
         super(null);
-        this.interopActionNode = interopActionNode;
+        this.executeNode = Message.createExecute(0).createNode();
         this.toJava = ToJavaNode.create();
     }
 
@@ -324,10 +323,10 @@ abstract class AbstractFunctionFromJava extends RootNode {
 
         Object raw;
         try {
-            raw = ForeignAccess.send(interopActionNode, function, args);
+            raw = ForeignAccess.send(executeNode, function, args);
         } catch (InteropException ex) {
             CompilerDirectives.transferToInterpreter();
-            throw JavaInteropReflect.rethrow(JavaInterop.wrapHostException(new UnsupportedOperationException(ex.getMessage())));
+            throw ex.raise();
         }
         if (type == null) {
             return raw;
@@ -335,22 +334,6 @@ abstract class AbstractFunctionFromJava extends RootNode {
         Object real = JavaInterop.findOriginalObject(raw);
         return toJava.execute(real, type, genericType, languageContext);
     }
-}
-
-final class InstantiateFromJava extends AbstractFunctionFromJava {
-
-    InstantiateFromJava() {
-        super(Message.createNew(0).createNode());
-    }
-
-}
-
-final class ExecuteFunctionFromJava extends AbstractFunctionFromJava {
-
-    ExecuteFunctionFromJava() {
-        super(Message.createExecute(0).createNode());
-    }
-
 }
 
 final class JavaFunction implements Function<Object[], Object> {
@@ -373,20 +356,6 @@ final class JavaFunction implements Function<Object[], Object> {
             }
         }
         return target.call(functionObj, args, Object.class, null, languageContext);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof JavaFunction) {
-            JavaFunction other = (JavaFunction) obj;
-            return this.languageContext == other.languageContext && this.functionObj.equals(other.functionObj);
-        }
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        return functionObj.hashCode();
     }
 }
 
