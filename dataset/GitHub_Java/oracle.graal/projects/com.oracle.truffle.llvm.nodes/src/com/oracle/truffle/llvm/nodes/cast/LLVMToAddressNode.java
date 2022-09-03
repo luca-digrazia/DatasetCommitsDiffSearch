@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,50 +31,63 @@ package com.oracle.truffle.llvm.nodes.cast;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMFunctionNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-public abstract class LLVMToAddressNode extends LLVMAddressNode {
+@NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
+public abstract class LLVMToAddressNode extends LLVMExpressionNode {
 
-    @NodeChild(value = "fromNode", type = LLVMI1Node.class)
-    public abstract static class LLVMI1ToAddressNode extends LLVMToAddressNode {
-
-        @Specialization
-        public LLVMAddress executeI1(boolean from) {
-            return LLVMAddress.fromLong(from ? 1 : 0);
-        }
+    @Specialization
+    protected LLVMNativePointer doI1(boolean from) {
+        return LLVMNativePointer.create(from ? 1 : 0);
     }
 
-    @NodeChild(value = "fromNode", type = LLVMI8Node.class)
-    public abstract static class LLVMI8ToAddressNode extends LLVMToAddressNode {
-
-        @Specialization
-        public LLVMAddress executeI8(byte from) {
-            return LLVMAddress.fromLong(from);
-        }
+    @Specialization
+    protected LLVMNativePointer doI8(byte from) {
+        return LLVMNativePointer.create(LLVMExpressionNode.I8_MASK & (long) from);
     }
 
-    @NodeChild(value = "fromNode", type = LLVMI64Node.class)
-    public abstract static class LLVMI64ToAddressNode extends LLVMToAddressNode {
-
-        @Specialization
-        public LLVMAddress executeI64(long from) {
-            return LLVMAddress.fromLong(from);
-        }
+    @Specialization
+    protected LLVMNativePointer doI16(short from) {
+        return LLVMNativePointer.create(LLVMExpressionNode.I16_MASK & (long) from);
     }
 
-    @NodeChild(value = "fromNode", type = LLVMFunctionNode.class)
-    public abstract static class LLVMFunctionToAddressNode extends LLVMToAddressNode {
-
-        @Specialization
-        public LLVMAddress executeI64(LLVMFunctionDescriptor from) {
-            return LLVMAddress.fromLong(from.getFunctionIndex());
-        }
+    @Specialization
+    protected LLVMNativePointer doI32(int from) {
+        return LLVMNativePointer.create(LLVMExpressionNode.I32_MASK & from);
     }
 
+    @Specialization
+    protected LLVMNativePointer doI64(long from) {
+        return LLVMNativePointer.create(from);
+    }
+
+    @Specialization
+    protected LLVMPointer doLLVMPointer(LLVMPointer from) {
+        return from;
+    }
+
+    @Specialization
+    protected LLVMVirtualAllocationAddress doVirtualAllocationAddress(LLVMVirtualAllocationAddress from) {
+        return from;
+    }
+
+    @Specialization
+    protected LLVMInteropType doInteropType(LLVMInteropType from) {
+        return from;
+    }
+
+    @Specialization
+    protected String doString(String from) {
+        return from;
+    }
+
+    @Specialization
+    protected LLVMBoxedPrimitive doLLVMBoxedPrimitive(LLVMBoxedPrimitive from) {
+        return from;
+    }
 }
