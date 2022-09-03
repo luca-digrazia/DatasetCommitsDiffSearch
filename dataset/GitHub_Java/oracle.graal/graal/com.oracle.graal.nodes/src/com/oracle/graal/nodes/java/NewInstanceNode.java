@@ -27,7 +27,7 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.nodeinfo.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
@@ -47,11 +47,7 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
      * @param fillContents determines whether the new object's fields should be initialized to
      *            zero/null.
      */
-    public static NewInstanceNode create(ResolvedJavaType type, boolean fillContents) {
-        return new NewInstanceNodeGen(type, fillContents);
-    }
-
-    NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
+    public NewInstanceNode(ResolvedJavaType type, boolean fillContents) {
         super(StampFactory.exactNonNull(type), fillContents);
         assert !type.isArray() && !type.isInterface() && !type.isPrimitive();
         this.instanceClass = type;
@@ -73,7 +69,7 @@ public class NewInstanceNode extends AbstractNewObjectNode implements Virtualiza
          * they're excluded from escape analysis.
          */
         if (!tool.getMetaAccessProvider().lookupJavaType(Reference.class).isAssignableFrom(instanceClass)) {
-            VirtualInstanceNode virtualObject = VirtualInstanceNode.create(instanceClass(), true);
+            VirtualInstanceNode virtualObject = new VirtualInstanceNode(instanceClass(), true);
             ResolvedJavaField[] fields = virtualObject.getFields();
             ValueNode[] state = new ValueNode[fields.length];
             for (int i = 0; i < state.length; i++) {

@@ -28,7 +28,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 
-@NodeInfo
 public class DynamicNewInstanceNode extends AbstractNewObjectNode implements Canonicalizable {
 
     @Input private ValueNode clazz;

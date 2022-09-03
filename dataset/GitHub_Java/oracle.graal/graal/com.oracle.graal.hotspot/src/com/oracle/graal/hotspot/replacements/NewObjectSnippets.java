@@ -23,6 +23,7 @@
 package com.oracle.graal.hotspot.replacements;
 
 import static com.oracle.graal.api.code.UnsignedMath.*;
+import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
 import static com.oracle.graal.hotspot.replacements.NewObjectSnippets.Options.*;
@@ -114,7 +115,7 @@ public class NewObjectSnippets implements Snippets {
         }
     }
 
-    public static void emitPrefetchAllocate(Word address, boolean isArray) {
+    private static void emitPrefetchAllocate(Word address, boolean isArray) {
         if (config().allocatePrefetchStyle > 0) {
             // Insert a prefetch for each allocation only on the fast-path
             // Generate several prefetch instructions.
@@ -397,7 +398,7 @@ public class NewObjectSnippets implements Snippets {
             args.addConst("fillContents", newInstanceNode.fillContents());
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("constantSize", true);
-            args.addConst("typeContext", ProfileAllocations.getValue() ? type.toJavaName(false) : "");
+            args.addConst("typeContext", ProfileAllocations.getValue() ? toJavaName(type, false) : "");
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering allocateInstance in %s: node=%s, template=%s, arguments=%s", graph, newInstanceNode, template, args);
@@ -427,7 +428,7 @@ public class NewObjectSnippets implements Snippets {
             args.addConst("fillContents", newArrayNode.fillContents());
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("maybeUnroll", length.isConstant());
-            args.addConst("typeContext", ProfileAllocations.getValue() ? arrayType.toJavaName(false) : "");
+            args.addConst("typeContext", ProfileAllocations.getValue() ? toJavaName(arrayType, false) : "");
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering allocateArray in %s: node=%s, template=%s, arguments=%s", graph, newArrayNode, template, args);

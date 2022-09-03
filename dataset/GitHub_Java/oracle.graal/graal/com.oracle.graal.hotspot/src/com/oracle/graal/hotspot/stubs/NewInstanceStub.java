@@ -96,11 +96,7 @@ public class NewInstanceStub extends SnippetStub {
      */
     @Snippet
     private static Object newInstance(Word hub, @ConstantParameter Word intArrayHub, @ConstantParameter Register threadRegister) {
-        /*
-         * The type is known to be an instance so Klass::_layout_helper is the instance size as a
-         * raw number
-         */
-        int sizeInBytes = hub.readInt(klassLayoutHelperOffset(), KLASS_LAYOUT_HELPER_LOCATION);
+        int sizeInBytes = hub.readInt(klassInstanceSizeOffset(), LocationIdentity.FINAL_LOCATION);
         Word thread = registerAsWord(threadRegister);
         if (!forceSlowPath() && inlineContiguousAllocationSupported()) {
             if (isInstanceKlassFullyInitialized(hub)) {
