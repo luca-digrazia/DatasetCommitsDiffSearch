@@ -119,8 +119,8 @@ public class LLVMBasicBlockNode extends LLVMNode {
 
     private void incrementCountAtIndex(int successorIndex) {
         if (totalExecutionCount != Long.MAX_VALUE) {
-            totalExecutionCount++;
             successorCount[successorIndex]++;
+            totalExecutionCount++;
         }
     }
 
