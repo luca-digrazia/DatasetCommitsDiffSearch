@@ -122,7 +122,6 @@ public class NativeImageOptions {
         }
     };
 
-    @SuppressWarnings("all")
     private static boolean areAssertionsEnabled() {
         boolean assertsEnabled = false;
         // Next assignment will be executed when asserts are enabled.
