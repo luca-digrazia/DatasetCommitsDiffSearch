@@ -148,10 +148,7 @@ public abstract class Source {
      * @param name the {@link #getName() name} of a source to seek for
      * @return found source or <code>null</code> if no source with name is known
      * @since 0.8 or earlier
-     * @deprecated centralized caching will be removed, if needed cache your {@link Source} objects
-     *             yourself
      */
-    @Deprecated
     public static Source find(String name) {
         return SourceImpl.findSource(name);
     }
@@ -189,7 +186,7 @@ public abstract class Source {
      * @return source representing the file's content
      * @throws IOException if the file cannot be read
      * @since 0.8 or earlier
-     * @deprecated Use {@link #newBuilder(java.io.File)}
+     * @deprecated
      */
     @Deprecated
     public static Source fromFileName(String fileName, boolean reload) throws IOException {
@@ -219,7 +216,7 @@ public abstract class Source {
      * @return source representing the file's content
      * @throws IOException if the file cannot be read
      * @since 0.8 or earlier
-     * @deprecated Use {@link #newBuilder(java.io.File)}
+     * @deprecated
      */
     @Deprecated
     public static Source fromFileName(String fileName) throws IOException {
@@ -247,8 +244,7 @@ public abstract class Source {
      * @throws IOException if the file cannot be found, or if an existing Source not created by this
      *             method matches the file name
      * @since 0.8 or earlier
-     * @deprecated Use {@link #newBuilder(java.io.File)} and
-     *             {@link Builder#content(java.lang.String)}
+     * @deprecated
      */
     @Deprecated
     public static Source fromFileName(CharSequence chars, String fileName) throws IOException {
@@ -274,7 +270,7 @@ public abstract class Source {
      *            <code>null</code>
      * @return a newly created, source representation
      * @since 0.8 or earlier
-     * @deprecated Use {@link #newBuilder(java.lang.String)}
+     * @deprecated
      */
     @Deprecated
     public static Source fromText(CharSequence chars, String name) {
