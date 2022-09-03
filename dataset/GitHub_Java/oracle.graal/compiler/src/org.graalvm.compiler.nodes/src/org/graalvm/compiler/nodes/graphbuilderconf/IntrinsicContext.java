@@ -35,7 +35,6 @@ import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -170,12 +169,7 @@ public class IntrinsicContext {
                 }
             }
             sideEffects.addSideEffect(forStateSplit);
-            FrameState frameState;
-            if (forStateSplit instanceof ExceptionObjectNode) {
-                frameState = graph.add(new FrameState(AFTER_BCI, (ExceptionObjectNode) forStateSplit));
-            } else {
-                frameState = graph.add(new FrameState(AFTER_BCI));
-            }
+            FrameState frameState = graph.add(new FrameState(AFTER_BCI));
             frameState.setNodeSourcePosition(sourcePosition);
             return frameState;
         } else {

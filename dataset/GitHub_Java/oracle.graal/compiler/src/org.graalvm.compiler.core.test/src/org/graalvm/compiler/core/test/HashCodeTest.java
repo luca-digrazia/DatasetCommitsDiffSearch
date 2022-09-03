@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,9 +22,6 @@
  */
 package org.graalvm.compiler.core.test;
 
-import java.util.HashMap;
-import java.util.List;
-
 import org.graalvm.compiler.core.phases.HighTier;
 import org.graalvm.compiler.core.phases.MidTier;
 import org.graalvm.compiler.nodes.InvokeNode;
@@ -37,9 +32,7 @@ import org.graalvm.compiler.nodes.extended.LoadMethodNode;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.tiers.MidTierContext;
-import org.graalvm.compiler.test.SubprocessUtil;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 public class HashCodeTest extends GraalCompilerTest {
@@ -144,17 +137,8 @@ public class HashCodeTest extends GraalCompilerTest {
 
     @Test
     public void test08() {
-        // This test requires profiling information which does not work reliable across platforms
-        // when running with -Xcomp
-        List<String> commandLine = SubprocessUtil.getVMCommandLine();
-        Assume.assumeTrue(commandLine != null);
-        Assume.assumeFalse(commandLine.contains("-Xcomp"));
         initialize(Appendable.class);
         checkForGuardedIntrinsicPattern("hashCodeInterface");
-
-        // Ensure the profile for the dispatch in hashCodeSnippet01
-        // has a receiver type that does not select Object.hashCode intrinsic
-        hashCodeSnippet01(new HashMap<>());
         checkForGuardedIntrinsicPattern("hashCodeSnippet01");
     }
 
