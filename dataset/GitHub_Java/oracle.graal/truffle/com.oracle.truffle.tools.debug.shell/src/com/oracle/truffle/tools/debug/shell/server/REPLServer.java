@@ -159,7 +159,7 @@ public final class REPLServer {
                     }
                 }
             }
-            if (currentServerContext.steppingInto) {
+            if (!currentServerContext.isEval) {
                 event.prepareStepInto();
             }
         }
@@ -289,7 +289,7 @@ public final class REPLServer {
         private final int level;
         private final SuspendedEvent event;
         private Language currentLanguage;
-        private boolean steppingInto = false;  // Only true during a "stepInto" engine call
+        private boolean isEval = false;  // When true, run without StepInto
 
         Context(Context predecessor, SuspendedEvent event, Language language) {
             assert language != null;
@@ -313,15 +313,6 @@ public final class REPLServer {
             return event.getNode();
         }
 
-        void eval(Source source, boolean stepInto) throws IOException {
-            this.steppingInto = stepInto;
-            try {
-                engine.eval(source);
-            } finally {
-                this.steppingInto = false;
-            }
-        }
-
         /**
          * Evaluates a code snippet in the context of a selected frame in the currently suspended
          * execution.
@@ -332,26 +323,18 @@ public final class REPLServer {
          * @return result of the evaluation
          * @throws IOException if something goes wrong
          */
-        Object eval(String code, Integer frameNumber, boolean stepInto) throws IOException {
+        Object eval(String code, Integer frameNumber) throws IOException {
             if (event == null) {
-                this.steppingInto = stepInto;
-                final String mimeType = defaultMIME(currentLanguage);
                 try {
-                    return engine.eval(Source.fromText(code, "eval(\"" + code + "\")").withMimeType(mimeType)).get();
+                    isEval = true;
+                    final String mimeType = defaultMIME(currentLanguage);
+                    final Value value = engine.eval(Source.fromText(code, "eval(\"" + code + "\")").withMimeType(mimeType));
+                    return value.get();
                 } finally {
-                    this.steppingInto = false;
-                }
-            } else {
-                if (stepInto) {
-                    event.prepareStepInto(1);
-                }
-                try {
-                    final Object result = event.eval(code, frameNumber);
-                    return (result instanceof Value) ? ((Value) result).get() : result;
-                } finally {
-                    event.prepareContinue();
+                    isEval = false;
                 }
             }
+            return event.eval(code, frameNumber);
         }
 
         /**
@@ -479,6 +462,10 @@ public final class REPLServer {
         return language.getMimeTypes().iterator().next();
     }
 
+    void eval(Source source) throws IOException {
+        engine.eval(source);
+    }
+
     Breakpoint setLineBreakpoint(int ignoreCount, LineLocation lineLocation, boolean oneShot) throws IOException {
         Breakpoint breakpoint;
         if (db == null) {
@@ -531,22 +518,12 @@ public final class REPLServer {
         breakpoints.remove(breakpoint);
     }
 
-    Object call(String name, List<String> argList) throws IOException {
+    void call(String name, Object... args) throws IOException {
         Value symbol = engine.findGlobalSymbol(name);
         if (symbol == null) {
             throw new IOException("symbol \"" + name + "\" not found");
         }
-        final List<Object> args = new ArrayList<>();
-        for (String stringArg : argList) {
-            Integer intArg = null;
-            try {
-                intArg = Integer.valueOf(stringArg);
-                args.add(intArg);
-            } catch (NumberFormatException e) {
-                args.add(stringArg);
-            }
-        }
-        return symbol.invoke(null, args.toArray(new Object[0])).get();
+        symbol.invoke(null, args);
     }
 
     /**
