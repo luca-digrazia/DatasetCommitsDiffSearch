@@ -51,7 +51,6 @@ public class ClassSubstitutions {
         }
     }
 
-    @MacroSubstitution(macro = ClassIsInterfaceNode.class, isStatic = false)
     @MethodSubstitution(isStatic = false)
     public static boolean isInterface(final Class<?> thisObj) {
         Word klass = loadWordFromObject(thisObj, klassOffset());
