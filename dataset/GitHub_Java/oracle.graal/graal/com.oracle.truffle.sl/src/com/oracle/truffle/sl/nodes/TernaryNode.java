@@ -27,8 +27,24 @@ import java.math.*;
 import com.oracle.truffle.api.codegen.*;
 
 @SuppressWarnings("unused")
-@NodeChildren({@NodeChild(value = "conditionNode", type = ConditionNode.class), @NodeChild("ifPartNode"), @NodeChild("elsePartNode")})
+@ExecuteChildren({"conditionNode", "ifPartNode", "elsePartNode"})
 public abstract class TernaryNode extends TypedNode {
+
+    @Child protected ConditionNode conditionNode;
+
+    @Child protected TypedNode ifPartNode;
+
+    @Child protected TypedNode elsePartNode;
+
+    public TernaryNode(ConditionNode condition, TypedNode ifPart, TypedNode elsePart) {
+        this.conditionNode = adoptChild(condition);
+        this.ifPartNode = adoptChild(ifPart);
+        this.elsePartNode = adoptChild(elsePart);
+    }
+
+    public TernaryNode(TernaryNode condition) {
+        this(condition.conditionNode, condition.ifPartNode, condition.elsePartNode);
+    }
 
     @ShortCircuit("ifPartNode")
     public boolean needsIfPart(boolean condition) {
@@ -40,7 +56,14 @@ public abstract class TernaryNode extends TypedNode {
         return !hasIfPart;
     }
 
+    @GuardCheck
+    public boolean demoIntegerGuard(boolean condition, boolean hasIfPart, int ifPart, boolean hasElsePart, int elsePart) {
+        return true;
+    }
+
     @Specialization
+    @SpecializationGuard(methodName = "demoIntegerGuard")
+    @SpecializationThrows(javaClass = RuntimeException.class, transitionTo = "doBigInteger")
     public int doInteger(boolean condition, boolean hasIfPart, int ifPart, boolean hasElsePart, int elsePart) {
         return hasIfPart ? ifPart : elsePart;
     }
