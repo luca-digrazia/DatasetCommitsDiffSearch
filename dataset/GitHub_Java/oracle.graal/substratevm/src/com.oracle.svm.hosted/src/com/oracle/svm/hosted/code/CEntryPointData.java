@@ -45,10 +45,10 @@ public final class CEntryPointData {
 
     public static final String DEFAULT_NAME = "";
     public static final Class<? extends Function<String, String>> DEFAULT_NAME_TRANSFORMATION = DefaultNameTransformation.class;
-    public static final CEntryPoint.Builtin DEFAULT_BUILTIN = CEntryPoint.Builtin.NO_BUILTIN;
+    public static final CEntryPoint.Builtin DEFAULT_BUILTIN = CEntryPoint.Builtin.NoBuiltin;
     public static final Class<?> DEFAULT_PROLOGUE = CEntryPointOptions.AutomaticPrologue.class;
     public static final Class<?> DEFAULT_EPILOGUE = CEntryPointSetup.LeaveEpilogue.class;
-    public static final Class<?> DEFAULT_EXCEPTION_HANDLER = CEntryPoint.FatalExceptionHandler.class;
+    public static final Class<?> DEFAULT_EXCEPTION_HANDLER = CEntryPointOptions.FatalExceptionHandler.class;
 
     public static CEntryPointData create(ResolvedJavaMethod method) {
         return create(method.getAnnotation(CEntryPoint.class), method.getAnnotation(CEntryPointOptions.class),
@@ -58,7 +58,7 @@ public final class CEntryPointData {
     public static CEntryPointData create(ResolvedJavaMethod method, String name, Class<? extends Function<String, String>> nameTransformation,
                     String documentation, Class<?> prologue, Class<?> epilogue, Class<?> exceptionHandler, Publish publishAs) {
 
-        return create(name, () -> NativeBootImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NO_BUILTIN, prologue, epilogue, exceptionHandler, publishAs);
+        return create(name, () -> NativeBootImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NoBuiltin, prologue, epilogue, exceptionHandler, publishAs);
     }
 
     public static CEntryPointData create(Method method) {
@@ -69,10 +69,9 @@ public final class CEntryPointData {
     public static CEntryPointData create(Method method, String name, Class<? extends Function<String, String>> nameTransformation,
                     String documentation, Class<?> prologue, Class<?> epilogue, Class<?> exceptionHandler, Publish publishAs) {
 
-        return create(name, () -> NativeBootImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NO_BUILTIN, prologue, epilogue, exceptionHandler, publishAs);
+        return create(name, () -> NativeBootImage.globalSymbolNameForMethod(method), nameTransformation, documentation, Builtin.NoBuiltin, prologue, epilogue, exceptionHandler, publishAs);
     }
 
-    @SuppressWarnings("deprecation")
     private static CEntryPointData create(CEntryPoint annotation, CEntryPointOptions options, Supplier<String> alternativeNameSupplier) {
         String annotatedName = annotation.name();
         Class<? extends Function<String, String>> nameTransformation = DEFAULT_NAME_TRANSFORMATION;
@@ -80,12 +79,13 @@ public final class CEntryPointData {
         CEntryPoint.Builtin builtin = annotation.builtin();
         Class<?> prologue = DEFAULT_PROLOGUE;
         Class<?> epilogue = DEFAULT_EPILOGUE;
-        Class<?> exceptionHandler = annotation.exceptionHandler();
+        Class<?> exceptionHandler = DEFAULT_EXCEPTION_HANDLER;
         Publish publishAs = Publish.SymbolAndHeader;
         if (options != null) {
             nameTransformation = options.nameTransformation();
             prologue = options.prologue();
             epilogue = options.epilogue();
+            exceptionHandler = options.exceptionHandler();
             publishAs = options.publishAs();
         }
         return create(annotatedName, alternativeNameSupplier, nameTransformation, documentation, builtin, prologue, epilogue, exceptionHandler, publishAs);
@@ -100,9 +100,9 @@ public final class CEntryPointData {
             String symbolName = !providedName.isEmpty() ? providedName : alternativeNameSupplier.get();
             if (nameTransformation != null) {
                 try {
-                    Function<String, String> instance = nameTransformation.getDeclaredConstructor().newInstance();
+                    Function<String, String> instance = nameTransformation.newInstance();
                     symbolName = instance.apply(symbolName);
-                } catch (Exception e) {
+                } catch (InstantiationException | IllegalAccessException e) {
                     throw VMError.shouldNotReachHere(e);
                 }
             }

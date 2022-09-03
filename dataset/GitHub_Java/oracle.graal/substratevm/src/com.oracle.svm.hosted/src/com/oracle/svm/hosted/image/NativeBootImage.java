@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,11 +47,8 @@ import java.util.stream.Collectors;
 
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.common.CompressEncoding;
-import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
@@ -69,7 +66,6 @@ import com.oracle.objectfile.SectionName;
 import com.oracle.objectfile.macho.MachOObjectFile;
 import com.oracle.svm.core.Isolates;
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.amd64.FrameAccess;
 import com.oracle.svm.core.c.CConst;
 import com.oracle.svm.core.c.CGlobalDataImpl;
 import com.oracle.svm.core.c.CHeader;
@@ -80,7 +76,6 @@ import com.oracle.svm.core.c.function.GraalIsolateHeader;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.code.CGlobalDataInfo;
 import com.oracle.svm.core.graal.code.CGlobalDataReference;
-import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.NativeImageOptions;
@@ -92,15 +87,13 @@ import com.oracle.svm.hosted.code.CEntryPointCallStubMethod;
 import com.oracle.svm.hosted.code.CEntryPointCallStubSupport;
 import com.oracle.svm.hosted.code.CEntryPointData;
 import com.oracle.svm.hosted.image.NativeImageHeap.HeapPartition;
-import com.oracle.svm.hosted.image.NativeImageHeap.ObjectInfo;
-import com.oracle.svm.hosted.image.RelocatableBuffer.Info;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 import com.oracle.svm.hosted.meta.MethodPointer;
 
-import jdk.vm.ci.code.site.ConstantReference;
 import jdk.vm.ci.code.site.DataSectionReference;
+import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaMethod.Parameter;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -379,7 +372,6 @@ public abstract class NativeBootImage extends AbstractBootImage {
                 heapSectionImpl = new BasicProgbitsSectionImpl(heapSectionBuffer.getBytes());
                 final String heapSectionName = SectionName.SVM_HEAP.getFormatDependentName(objectFile.getFormat());
                 heapSection = objectFile.newProgbitsSection(heapSectionName, objectFile.getPageSize(), writable, false, heapSectionImpl);
-                objectFile.createDefinedSymbol(heapSection.getName(), heapSection, 0, 0, false, true);
 
                 heap.setReadOnlySection(heapSection.getName(), 0);
                 long writableSectionOffset = heap.getReadOnlySectionSize();
@@ -423,7 +415,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
             // Mark the sections with the relocations from the maps.
             // - "null" as the objectMap is because relocations from text are always to constants.
-            markRelocationSitesFromMaps(textBuffer, textImpl, heap.objects);
+            markRelocationSitesFromMaps(textBuffer, textImpl, null);
             markRelocationSitesFromMaps(roDataBuffer, roDataImpl, heap.objects);
             markRelocationSitesFromMaps(rwDataBuffer, rwDataImpl, heap.objects);
             if (heapSectionBuffer != null) {
@@ -474,10 +466,11 @@ public abstract class NativeBootImage extends AbstractBootImage {
                 markFunctionRelocationSite(sectionImpl, offset, info);
             } else {
                 // A data relocation.
-                if (sectionImpl.getElement() == textSection) {
+                if (objectMap == null) {
                     // A wrinkle on relocations *from* the text section: they are *always* to
                     // constants (in the "constant partition" of the roDataSection).
-                    markDataRelocationSiteFromText(relocationMap, sectionImpl, offset, info, objectMap);
+                    // The caller passes a null objectMap to indicate a such a relocation.
+                    markDataRelocationSiteFromText(sectionImpl, offset, info);
                 } else {
                     // Relocations from other sections go to the section containing the target.
                     // Pass along the information about the target.
@@ -490,16 +483,10 @@ public abstract class NativeBootImage extends AbstractBootImage {
     }
 
     private static boolean checkEmbeddedOffset(ProgbitsSectionImpl sectionImpl, final int offset, final RelocatableBuffer.Info info) {
+        // FIXME: Do I need to check for embeddedOffsets any more?
         final ByteBuffer dataBuf = ByteBuffer.wrap(sectionImpl.getContent()).order(sectionImpl.getElement().getOwner().getByteOrder());
-        if (info.getRelocationSize() == Long.BYTES) {
-            long value = dataBuf.getLong(offset);
-            assert value == 0 || value == 0xDEADDEADDEADDEADL : "unexpected embedded offset";
-        } else if (info.getRelocationSize() == Integer.BYTES) {
-            int value = dataBuf.getInt(offset);
-            assert value == 0 || value == 0xDEADDEAD : "unexpected embedded offset";
-        } else {
-            shouldNotReachHere("unsupported relocation size: " + info.getRelocationSize());
-        }
+        final long embeddedOffset = (info.getRelocationSize() == 8) ? dataBuf.getLong(offset) : (info.getRelocationSize() == 4) ? dataBuf.getInt(offset) : 0;
+        assert embeddedOffset == 0L : "embeddedOffset should be 0.";
         return true;
     }
 
@@ -535,7 +522,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
         sectionImpl.markRelocationSite(offset, info.getRelocationSize(), info.getRelocationKind(), targetSectionName, false, relocationAddend);
     }
 
-    private void markDataRelocationSiteFromText(RelocatableBuffer buffer, final ProgbitsSectionImpl sectionImpl, final int offset, final Info info, final Map<Object, ObjectInfo> objectMap) {
+    private void markDataRelocationSiteFromText(final ProgbitsSectionImpl sectionImpl, final int offset, final RelocatableBuffer.Info info) {
         assert ((info.getRelocationSize() == 4) || (info.getRelocationSize() == 8)) : "Data relocation size should be 4 or 8 bytes.";
         Object target = info.getTargetObject();
         if (target instanceof DataSectionReference) {
@@ -554,21 +541,6 @@ public abstract class NativeBootImage extends AbstractBootImage {
                 ProgbitsSectionImpl baseSectionImpl = (ProgbitsSectionImpl) rwDataSection.getImpl();
                 int offsetInSection = Math.toIntExact(RWDATA_CGLOBALS_PARTITION_OFFSET + dataInfo.getOffset());
                 baseSectionImpl.markRelocationSite(offsetInSection, wordSize, RelocationKind.DIRECT, data.symbolName, false, 0L);
-            }
-        } else if (target instanceof ConstantReference) {
-            // Direct object reference in code that must be patched (not a linker relocation)
-            assert info.getRelocationKind() == RelocationKind.DIRECT;
-            Object object = SubstrateObjectConstant.asObject(((ConstantReference) target).getConstant());
-            long targetOffset = objectMap.get(object).getOffsetInSection();
-            int encShift = ImageSingletons.lookup(CompressEncoding.class).getShift();
-            long targetValue = targetOffset >>> encShift;
-            assert (targetValue << encShift) == targetOffset : "Reference compression shift discards non-zero bits: " + Long.toHexString(targetOffset);
-            if (info.getRelocationSize() == Long.BYTES) {
-                buffer.getBuffer().putLong(offset, targetValue);
-            } else if (info.getRelocationSize() == Integer.BYTES) {
-                buffer.getBuffer().putInt(offset, NumUtil.safeToInt(targetValue));
-            } else {
-                shouldNotReachHere("Unsupported object reference size");
             }
         } else {
             throw shouldNotReachHere("Unsupported target object for relocation in text section");
@@ -754,7 +726,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
     }
 
     public NativeBootImage(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
-                    List<HostedMethod> entryPoints, HostedMethod mainEntryPoint, ClassLoader imageClassLoader) {
+                    List<HostedMethod> entryPoints, ClassLoader imageClassLoader) {
         super(k, universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, imageClassLoader);
 
         uniqueEntryPoints.addAll(entryPoints);
@@ -768,16 +740,12 @@ public abstract class NativeBootImage extends AbstractBootImage {
             }
         }
 
-        if (mainEntryPoint != null) {
-            objectFile.setMainEntryPoint(globalSymbolNameForMethod(mainEntryPoint));
-        }
-
         objectFile.setByteOrder(ConfigurationValues.getTarget().arch.getByteOrder());
         int pageSize = NativeImageOptions.PageSize.getValue();
         if (pageSize > 0) {
             objectFile.setPageSize(pageSize);
         }
-        wordSize = FrameAccess.wordSize();
+        wordSize = ConfigurationValues.getObjectLayout().sizeInBytes(JavaKind.Object);
         assert objectFile.getWordSizeInBytes() == wordSize;
     }
 
