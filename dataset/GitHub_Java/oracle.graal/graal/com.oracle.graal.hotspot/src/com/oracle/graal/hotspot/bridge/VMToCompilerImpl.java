@@ -33,7 +33,6 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.*;
-import com.oracle.graal.compiler.CompilerThreadFactory.CompilerThread;
 import com.oracle.graal.compiler.CompilerThreadFactory.DebugConfigAccess;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.internal.*;
@@ -96,6 +95,10 @@ public class VMToCompilerImpl implements VMToCompiler {
         this.runtime = runtime;
     }
 
+    public int allocateCompileTaskId(HotSpotResolvedJavaMethod method, int entryBCI) {
+        return runtime.getCompilerToVM().allocateCompileId(method, entryBCI);
+    }
+
     public void startCompiler(boolean bootstrapEnabled) throws Throwable {
 
         FastNodeClassRegistry.initialize();
@@ -154,7 +157,7 @@ public class VMToCompilerImpl implements VMToCompiler {
                 return Debug.isEnabled() ? DebugEnvironment.initialize(log) : null;
             }
         });
-        compileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, new PriorityBlockingQueue<Runnable>(), factory);
+        compileQueue = new ThreadPoolExecutor(Threads.getValue(), Threads.getValue(), 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), factory);
 
         // Create queue status printing thread.
         if (PrintQueue.getValue()) {
@@ -545,24 +548,24 @@ public class VMToCompilerImpl implements VMToCompiler {
             return;
         }
 
-        // Don't allow blocking compiles from CompilerThreads
-        boolean block = blocking && !(Thread.currentThread() instanceof CompilerThread);
         CompilationTask.withinEnqueue.set(Boolean.TRUE);
         try {
             if (method.tryToQueueForCompilation()) {
                 assert method.isQueuedForCompilation();
 
+                int id = allocateCompileTaskId(method, entryBCI);
                 HotSpotBackend backend = runtime.getHostBackend();
-                CompilationTask task = new CompilationTask(backend, method, entryBCI, block);
+                CompilationTask task = new CompilationTask(backend, method, entryBCI, id);
 
-                try {
-                    method.setCurrentTask(task);
-                    compileQueue.execute(task);
-                    if (block) {
-                        task.block();
+                if (blocking) {
+                    task.runCompilation(true);
+                } else {
+                    try {
+                        method.setCurrentTask(task);
+                        compileQueue.execute(task);
+                    } catch (RejectedExecutionException e) {
+                        // The compile queue was already shut down.
                     }
-                } catch (RejectedExecutionException e) {
-                    // The compile queue was already shut down.
                 }
             }
         } finally {
@@ -579,7 +582,7 @@ public class VMToCompilerImpl implements VMToCompiler {
     public JavaField createJavaField(JavaType holder, String name, JavaType type, int offset, int flags, boolean internal) {
         if (offset != -1) {
             HotSpotResolvedObjectType resolved = (HotSpotResolvedObjectType) holder;
-            return resolved.createField(name, type, offset, flags);
+            return resolved.createField(name, type, offset, flags, internal);
         }
         return new HotSpotUnresolvedField(holder, name, type);
     }
