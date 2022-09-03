@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -37,14 +35,11 @@ import org.graalvm.compiler.word.WordTypes;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import com.oracle.svm.core.graal.meta.SubstrateRegisterConfig.ConfigKind;
+import com.oracle.svm.core.graal.code.amd64.SubstrateAMD64RegisterConfig.ConfigKind;
 import com.oracle.svm.core.meta.SharedMethod;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-/**
- * Configuration used by Graal at runtime to compile and install code in the same runtime.
- */
 public class RuntimeConfiguration {
 
     private final Providers providers;
