@@ -22,10 +22,10 @@
  */
 package com.oracle.graal.compiler.test;
 
+import static com.oracle.graal.api.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
+import static com.oracle.graal.compiler.common.GraalOptions.*;
 import static com.oracle.graal.nodes.ConstantNode.*;
-import static com.oracle.jvmci.code.CodeUtil.*;
-import static com.oracle.jvmci.compiler.Compiler.*;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -33,17 +33,24 @@ import java.util.concurrent.atomic.*;
 import java.util.function.*;
 
 import org.junit.*;
-import org.junit.internal.AssumptionViolatedException;
+import org.junit.internal.*;
 
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.directives.*;
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
 import com.oracle.graal.compiler.GraalCompiler.Request;
+import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.target.*;
+import com.oracle.graal.debug.*;
+import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import com.oracle.graal.graphbuilderconf.MethodIdMap.Receiver;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
@@ -53,21 +60,16 @@ import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.common.*;
 import com.oracle.graal.phases.schedule.*;
 import com.oracle.graal.phases.schedule.SchedulePhase.SchedulingStrategy;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.printer.*;
 import com.oracle.graal.runtime.*;
 import com.oracle.graal.test.*;
-import com.oracle.jvmci.code.*;
-import com.oracle.jvmci.code.CallingConvention.Type;
-import com.oracle.jvmci.common.*;
-import com.oracle.jvmci.debug.*;
-import com.oracle.jvmci.debug.Debug.Scope;
-import com.oracle.jvmci.meta.*;
-import com.oracle.jvmci.options.*;
 
 /**
  * Base class for Graal compiler unit tests.
@@ -319,7 +321,7 @@ public abstract class GraalCompilerTest extends GraalTest {
             result.append("\n");
             for (Node node : schedule.getBlockToNodesMap().get(block)) {
                 if (node instanceof ValueNode && node.isAlive()) {
-                    if (!excludeVirtual || !(node instanceof VirtualObjectNode || node instanceof ProxyNode || node instanceof InfopointNode)) {
+                    if (!excludeVirtual || !(node instanceof VirtualObjectNode || node instanceof ProxyNode)) {
                         if (node instanceof ConstantNode) {
                             String name = checkConstants ? node.toString(Verbosity.Name) : node.getClass().getSimpleName();
                             String str = name + (excludeVirtual ? "\n" : "    (" + node.getUsageCount() + ")\n");
@@ -675,7 +677,7 @@ public abstract class GraalCompilerTest extends GraalTest {
             try (Scope s = Debug.scope("CodeInstall", getCodeCache(), installedCodeOwner)) {
                 installedCode = addMethod(installedCodeOwner, compResult);
                 if (installedCode == null) {
-                    throw new JVMCIError("Could not install code for " + installedCodeOwner.format("%H.%n(%p)"));
+                    throw new GraalInternalError("Could not install code for " + installedCodeOwner.format("%H.%n(%p)"));
                 }
             } catch (Throwable e) {
                 throw Debug.handle(e);
