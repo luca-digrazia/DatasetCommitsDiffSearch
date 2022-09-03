@@ -22,7 +22,6 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.api.meta.MetaUtil.*;
 import static com.oracle.graal.graph.FieldIntrospection.*;
 import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
 
@@ -33,7 +32,7 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
+import com.oracle.graal.api.meta.ProfilingInfo.ExceptionSeen;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.debug.*;
@@ -187,7 +186,7 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     @Override
     public String toString() {
-        return format("HotSpotMethod<%H.%n(%p)>", this);
+        return "HotSpotMethod<" + MetaUtil.format("%h.%n", this) + ">";
     }
 
     public int getCompiledCodeSize() {
@@ -228,16 +227,11 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
         if (methodData == null || (!methodData.hasNormalData() && !methodData.hasExtraData())) {
             // Be optimistic and return false for exceptionSeen. A methodDataOop is allocated in
             // case of a deoptimization.
-            info = DefaultProfilingInfo.get(TriState.FALSE);
+            info = DefaultProfilingInfo.get(ExceptionSeen.FALSE);
         } else {
             info = new HotSpotProfilingInfo(methodData, codeSize);
         }
         return info;
-    }
-
-    @Override
-    public void reprofile() {
-        HotSpotGraalRuntime.getInstance().getCompilerToVM().reprofile(metaspaceMethod);
     }
 
     @Override
@@ -361,10 +355,5 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
             speculationLog = new SpeculationLog();
         }
         return speculationLog;
-    }
-
-    public int intrinsicId() {
-        HotSpotVMConfig config = HotSpotGraalRuntime.getInstance().getConfig();
-        return unsafe.getByte(metaspaceMethod + config.methodIntrinsicIdOffset) & 0xff;
     }
 }

@@ -110,6 +110,7 @@ public class HotSpotInstalledCode extends CompilerObject implements InstalledCod
     }
 
     public static Object executeHelper(long nmethod, long metaspaceMethod, Object arg1, Object arg2, Object arg3) {
+// throw new IllegalStateException();
         return HotSpotGraalRuntime.getInstance().getCompilerToVM().executeCompiledMethod(metaspaceMethod, nmethod, arg1, arg2, arg3);
     }
 }

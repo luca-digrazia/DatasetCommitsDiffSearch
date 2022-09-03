@@ -46,6 +46,7 @@ import com.oracle.graal.word.*;
 public class HotSpotSnippetUtils {
 
     public static final Object ANY_LOCATION = LocationNode.ANY_LOCATION;
+    public static final Object UNKNOWN_LOCATION = LocationNode.UNKNOWN_LOCATION;
     public static final Object FINAL_LOCATION = LocationNode.FINAL_LOCATION;
 
     public static HotSpotVMConfig config() {
