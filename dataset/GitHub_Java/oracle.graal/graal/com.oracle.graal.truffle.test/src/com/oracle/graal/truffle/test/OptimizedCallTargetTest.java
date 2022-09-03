@@ -354,7 +354,7 @@ public class OptimizedCallTargetTest {
         // OSR should not trigger for compile-only includes
         try (OverrideScope scope = OptionValue.override(TruffleCompilerOptions.TruffleCompileOnly, "foobar")) {
             final OSRRepeatingNode repeating = new OSRRepeatingNode();
-            final LoopNode loop = runtime.createLoopNode(repeating);
+            final OptimizedOSRLoopNode loop = (OptimizedOSRLoopNode) runtime.createLoopNode(repeating);
             OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(new NamedRootNode("foobar") {
 
                 @Child LoopNode loopChild = loop;
@@ -367,26 +367,11 @@ public class OptimizedCallTargetTest {
 
             });
             target.call();
-            OptimizedCallTarget osrTarget = findOSRTarget(loop);
+            OptimizedCallTarget osrTarget = loop.getCompiledOSRLoop();
             if (osrTarget != null) {
                 assertNotCompiled(osrTarget);
             }
         }
-    }
-
-    private static OptimizedCallTarget findOSRTarget(Node loopNode) {
-        if (loopNode instanceof OptimizedOSRLoopNode) {
-            return ((OptimizedOSRLoopNode) loopNode).getCompiledOSRLoop();
-        }
-
-        for (Node child : loopNode.getChildren()) {
-            OptimizedCallTarget target = findOSRTarget(child);
-            if (target != null) {
-                return target;
-            }
-        }
-
-        return null;
     }
 
     @Test
@@ -394,7 +379,7 @@ public class OptimizedCallTargetTest {
         // OSR should trigger if compile-only with excludes
         try (OverrideScope scope = OptionValue.override(TruffleCompilerOptions.TruffleCompileOnly, "~foobar")) {
             final OSRRepeatingNode repeating = new OSRRepeatingNode();
-            final LoopNode loop = runtime.createLoopNode(repeating);
+            final OptimizedOSRLoopNode loop = (OptimizedOSRLoopNode) runtime.createLoopNode(repeating);
             OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(new NamedRootNode("foobar") {
 
                 @Child LoopNode loopChild = loop;
@@ -407,7 +392,7 @@ public class OptimizedCallTargetTest {
 
             });
             target.call();
-            OptimizedCallTarget osrTarget = findOSRTarget(loop);
+            OptimizedCallTarget osrTarget = loop.getCompiledOSRLoop();
             assertCompiled(osrTarget);
         }
     }
