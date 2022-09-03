@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.junit.Test;
 
@@ -134,8 +133,8 @@ public abstract class BaseTestHarness {
     }
 
     private static Set<Path> collectTestCases(String testDiscoveryPath) throws AssertionError {
-        try (Stream<Path> files = Files.walk(Paths.get(testDiscoveryPath))) {
-            return files.filter(isExecutable).map(f -> f.getParent()).collect(Collectors.toSet());
+        try {
+            return Files.walk(Paths.get(testDiscoveryPath)).filter(isExecutable).map(f -> f.getParent()).collect(Collectors.toSet());
         } catch (IOException e) {
             throw new AssertionError("Test cases not found", e);
         }
@@ -165,8 +164,8 @@ public abstract class BaseTestHarness {
                 return false;
             }
         };
-        try (Stream<Path> files = Files.walk(configDir)) {
-            return files.filter(isIncludeFile).flatMap(f -> {
+        try {
+            return Files.walk(configDir).filter(isIncludeFile).flatMap(f -> {
                 try {
                     return Files.lines(f).filter(file -> file.length() > 0);
                 } catch (IOException e) {
@@ -187,8 +186,8 @@ public abstract class BaseTestHarness {
     }
 
     public static Set<Path> getFiles(Path source) {
-        try (Stream<Path> files = Files.walk(source)) {
-            return files.filter(f -> supportedFiles.contains(getFileEnding(f.getFileName().toString()))).collect(Collectors.toSet());
+        try {
+            return Files.walk(source).filter(f -> supportedFiles.contains(getFileEnding(f.getFileName().toString()))).collect(Collectors.toSet());
         } catch (IOException e) {
             throw new AssertionError("Error getting files.", e);
         }

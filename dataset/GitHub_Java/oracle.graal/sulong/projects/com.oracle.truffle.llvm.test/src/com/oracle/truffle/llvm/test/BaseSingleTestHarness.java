@@ -35,7 +35,6 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -49,41 +48,36 @@ public abstract class BaseSingleTestHarness extends BaseTestHarness {
     @Override
     @Test
     public void test() throws IOException {
-        Path referenceFile;
-        try (Stream<Path> files = Files.walk(getTestDirectory())) {
-            List<Path> executables = files.filter(isExecutable).collect(Collectors.toList());
-            assert executables.size() == 1;
-            referenceFile = executables.get(0);
-        }
-        try (Stream<Path> files = Files.walk(getTestDirectory())) {
-            List<Path> testCandidates = files.filter(isFile).filter(isSulong).collect(Collectors.toList());
-            String command = referenceFile.toAbsolutePath().toString() + " " + Arrays.stream(getArguments(referenceFile.getParent())).map(String::valueOf).collect(Collectors.joining(" "));
-            ProcessResult processResult = ProcessUtil.executeNativeCommand(command);
-            String referenceStdOut = processResult.getStdOutput();
-            final int referenceReturnValue = processResult.getReturnValue();
+        assert Files.walk(getTestDirectory()).filter(isExecutable).count() == 1;
 
-            for (Path candidate : testCandidates) {
-                if (!filterFileName().test(candidate.getFileName().toString())) {
-                    continue;
-                }
+        Path referenceFile = Files.walk(getTestDirectory()).filter(isExecutable).findFirst().get();
+        List<Path> testCandidates = Files.walk(getTestDirectory()).filter(isFile).filter(isSulong).collect(Collectors.toList());
+        String command = referenceFile.toAbsolutePath().toString() + " " + Arrays.stream(getArguments(referenceFile.getParent())).map(String::valueOf).collect(Collectors.joining(" "));
+        ProcessResult processResult = ProcessUtil.executeNativeCommand(command);
+        String referenceStdOut = processResult.getStdOutput();
+        final int referenceReturnValue = processResult.getReturnValue();
 
-                if (!candidate.toAbsolutePath().toFile().exists()) {
-                    throw new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist.");
-                }
-
-                ProcessResult out = ProcessUtil.executeSulongTestMain(candidate.toAbsolutePath().toFile(), getArguments(candidate.getParent()), getContextOptions(), c -> new CaptureNativeOutput());
-                int sulongResult = out.getReturnValue();
-                String sulongStdOut = out.getStdOutput();
-
-                if (sulongResult != (sulongResult & 0xFF)) {
-                    Assert.fail("Broken unittest " + getTestDirectory() + ". Test exits with invalid value.");
-                }
-                String testName = candidate.getFileName().toString() + " in " + getTestDirectory().toAbsolutePath().toString();
-                Assert.assertEquals(testName + " failed. Posix return value missmatch.", referenceReturnValue,
-                                sulongResult);
-                Assert.assertEquals(testName + " failed. Output (stdout) missmatch.", referenceStdOut,
-                                sulongStdOut);
+        for (Path candidate : testCandidates) {
+            if (!filterFileName().test(candidate.getFileName().toString())) {
+                continue;
             }
+
+            if (!candidate.toAbsolutePath().toFile().exists()) {
+                throw new AssertionError("File " + candidate.toAbsolutePath().toFile() + " does not exist.");
+            }
+
+            ProcessResult out = ProcessUtil.executeSulongTestMain(candidate.toAbsolutePath().toFile(), getArguments(candidate.getParent()), getContextOptions(), c -> new CaptureNativeOutput());
+            int sulongResult = out.getReturnValue();
+            String sulongStdOut = out.getStdOutput();
+
+            if (sulongResult != (sulongResult & 0xFF)) {
+                Assert.fail("Broken unittest " + getTestDirectory() + ". Test exits with invalid value.");
+            }
+            String testName = candidate.getFileName().toString() + " in " + getTestDirectory().toAbsolutePath().toString();
+            Assert.assertEquals(testName + " failed. Posix return value missmatch.", referenceReturnValue,
+                            sulongResult);
+            Assert.assertEquals(testName + " failed. Output (stdout) missmatch.", referenceStdOut,
+                            sulongStdOut);
         }
     }
 
