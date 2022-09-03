@@ -40,8 +40,6 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 import org.graalvm.compiler.core.common.Fields;
-import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
-import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.Fingerprint;
 import org.graalvm.compiler.graph.Graph.NodeEvent;
@@ -133,9 +131,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      * Denotes an injected parameter in a {@linkplain NodeIntrinsic node intrinsic} constructor. If
      * the constructor is called as part of node intrinsification, the node intrinsifier will inject
      * an argument for the annotated parameter. Injected parameters must precede all non-injected
-     * parameters in a constructor. If the type of the annotated parameter is {@link Stamp}, the
-     * {@linkplain Stamp#javaType type} of the injected stamp is the return type of the annotated
-     * method (which cannot be {@code void}).
+     * parameters in a constructor.
      */
     @java.lang.annotation.Retention(RetentionPolicy.RUNTIME)
     @java.lang.annotation.Target(ElementType.PARAMETER)
@@ -144,45 +140,40 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
     /**
      * Annotates a method that can be replaced by a compiler intrinsic. A (resolved) call to the
-     * annotated method will be processed by a generated {@code InvocationPlugin} that calls either
-     * a factory method or a constructor corresponding with the annotated method.
+     * annotated method can be replaced with an instance of the node class denoted by
+     * {@link #value()}. For this reason, the signature of the annotated method must match the
+     * signature (excluding a prefix of {@linkplain InjectedNodeParameter injected} parameters) of a
+     * constructor in the node class.
      * <p>
-     * A factory method corresponding to an annotated method is a static method named
-     * {@code intrinsify} defined in the class denoted by {@link #value()}. In order, its signature
-     * is as follows:
-     * <ol>
-     * <li>A {@code GraphBuilderContext} parameter.</li>
-     * <li>A {@code ResolvedJavaMethod} parameter.</li>
-     * <li>A sequence of zero or more {@linkplain InjectedNodeParameter injected} parameters.</li>
-     * <li>Remaining parameters that match the declared parameters of the annotated method.</li>
-     * </ol>
-     * A constructor corresponding to an annotated method is defined in the class denoted by
-     * {@link #value()}. In order, its signature is as follows:
-     * <ol>
-     * <li>A sequence of zero or more {@linkplain InjectedNodeParameter injected} parameters.</li>
-     * <li>Remaining parameters that match the declared parameters of the annotated method.</li>
-     * </ol>
-     * There must be exactly one such factory method or constructor corresponding to a
-     * {@link NodeIntrinsic} annotated method.
+     * If the node class has a static method {@code intrinsify} with a matching signature plus a
+     * {@code GraphBuilderContext} as first argument, this method is called instead of creating the
+     * node.
      */
     @java.lang.annotation.Retention(RetentionPolicy.RUNTIME)
     @java.lang.annotation.Target(ElementType.METHOD)
     public static @interface NodeIntrinsic {
 
         /**
-         * The class declaring the factory method or {@link Node} subclass declaring the constructor
-         * used to intrinsify a call to the annotated method. The default value is the class in
-         * which the annotated method is declared.
+         * Gets the {@link Node} subclass instantiated when intrinsifying a call to the annotated
+         * method. If not specified, then the class in which the annotated method is declared is
+         * used (and is assumed to be a {@link Node} subclass).
          */
         Class<?> value() default NodeIntrinsic.class;
 
         /**
-         * If {@code true}, the factory method or constructor selected by the annotation must have
-         * an {@linkplain InjectedNodeParameter injected} {@link Stamp} parameter. Calling
-         * {@link AbstractPointerStamp#nonNull()} on the injected stamp is guaranteed to return
-         * {@code true}.
+         * Determines if the stamp of the instantiated intrinsic node has its stamp set from the
+         * return type of the annotated method.
+         * <p>
+         * When it is set to true, the stamp that is passed in to the constructor of ValueNode is
+         * ignored and can therefore safely be {@code null}.
          */
-        boolean injectedStampIsNonNull() default false;
+        boolean setStampFromReturnType() default false;
+
+        /**
+         * Determines if the stamp of the instantiated intrinsic node is guaranteed to be non-null.
+         * Generally used in conjunction with {@link #setStampFromReturnType()}.
+         */
+        boolean returnStampIsNonNull() default false;
     }
 
     /**
@@ -337,7 +328,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         if (usage1 == null) {
             return 1;
         }
-        return INLINE_USAGE_COUNT + extraUsagesCount;
+        return 2 + extraUsagesCount;
     }
 
     /**
@@ -400,45 +391,30 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     private void movUsageFromEndTo(int destIndex) {
-        if (destIndex >= INLINE_USAGE_COUNT) {
-            movUsageFromEndToExtraUsages(destIndex - INLINE_USAGE_COUNT);
+        int lastIndex = this.getUsageCount() - 1;
+        if (destIndex == 0) {
+            if (lastIndex == 0) {
+                usage0 = null;
+                return;
+            } else if (lastIndex == 1) {
+                usage0 = usage1;
+                usage1 = null;
+                return;
+            } else {
+                usage0 = extraUsages[lastIndex - INLINE_USAGE_COUNT];
+            }
         } else if (destIndex == 1) {
-            movUsageFromEndToIndexOne();
+            if (lastIndex == 1) {
+                usage1 = null;
+                return;
+            }
+            usage1 = extraUsages[lastIndex - INLINE_USAGE_COUNT];
         } else {
-            assert destIndex == 0;
-            movUsageFromEndToIndexZero();
+            Node n = extraUsages[lastIndex - INLINE_USAGE_COUNT];
+            extraUsages[destIndex - INLINE_USAGE_COUNT] = n;
         }
-    }
-
-    private void movUsageFromEndToExtraUsages(int destExtraIndex) {
+        extraUsages[lastIndex - INLINE_USAGE_COUNT] = null;
         this.extraUsagesCount--;
-        Node n = extraUsages[extraUsagesCount];
-        extraUsages[destExtraIndex] = n;
-        extraUsages[extraUsagesCount] = null;
-    }
-
-    private void movUsageFromEndToIndexZero() {
-        if (extraUsagesCount > 0) {
-            this.extraUsagesCount--;
-            usage0 = extraUsages[extraUsagesCount];
-            extraUsages[extraUsagesCount] = null;
-        } else if (usage1 != null) {
-            usage0 = usage1;
-            usage1 = null;
-        } else {
-            usage0 = null;
-        }
-    }
-
-    private void movUsageFromEndToIndexOne() {
-        if (extraUsagesCount > 0) {
-            this.extraUsagesCount--;
-            usage1 = extraUsages[extraUsagesCount];
-            extraUsages[extraUsagesCount] = null;
-        } else {
-            assert usage1 != null;
-            usage1 = null;
-        }
     }
 
     /**
@@ -449,21 +425,20 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      */
     public boolean removeUsage(Node node) {
         assert node != null;
-        // For large graphs, usage removal is performance critical.
-        // Furthermore, it is critical that this method maintains the invariant that the usage list
-        // has no null element preceding a non-null element.
+        // It is critical that this method maintains the invariant that
+        // the usage list has no null element preceding a non-null element
         incUsageModCount();
         if (usage0 == node) {
-            movUsageFromEndToIndexZero();
+            this.movUsageFromEndTo(0);
             return true;
         }
         if (usage1 == node) {
-            movUsageFromEndToIndexOne();
+            this.movUsageFromEndTo(1);
             return true;
         }
         for (int i = this.extraUsagesCount - 1; i >= 0; i--) {
             if (extraUsages[i] == node) {
-                movUsageFromEndToExtraUsages(i);
+                this.movUsageFromEndTo(i + INLINE_USAGE_COUNT);
                 return true;
             }
         }
@@ -562,9 +537,8 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         assert assertTrue(id == INITIAL_ID, "unexpected id: %d", id);
         this.graph = newGraph;
         newGraph.register(this);
-        NodeClass<? extends Node> nc = nodeClass;
-        nc.registerAtInputsAsUsage(this);
-        nc.registerAtSuccessorsAsPredecessor(this);
+        this.getNodeClass().registerAtInputsAsUsage(this);
+        this.getNodeClass().registerAtSuccessorsAsPredecessor(this);
     }
 
     /**
@@ -606,23 +580,15 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     private boolean checkReplaceWith(Node other) {
-        if (graph != null && graph.isFrozen()) {
-            fail("cannot modify frozen graph");
-        }
-        if (other == this) {
-            fail("cannot replace a node with itself");
-        }
-        if (!isDeleted()) {
-            fail("cannot replace deleted node");
-        }
-        if (other != null && other.isDeleted()) {
-            fail("cannot replace with deleted node %s", other);
-        }
+        assert assertTrue(graph == null || !graph.isFrozen(), "cannot modify frozen graph");
+        assert assertFalse(other == this, "cannot replace a node with itself");
+        assert assertFalse(isDeleted(), "cannot replace deleted node");
+        assert assertTrue(other == null || !other.isDeleted(), "cannot replace with deleted node %s", other);
         return true;
     }
 
     public final void replaceAtUsages(Node other) {
-        replaceAtAllUsages(other, (Node) null);
+        replaceAtUsages(other, null, null);
     }
 
     public final void replaceAtUsages(Node other, Predicate<Node> filter) {
@@ -640,62 +606,22 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     protected void replaceAtUsages(Node other, Predicate<Node> filter, Node toBeDeleted) {
-        if (filter == null) {
-            replaceAtAllUsages(other, toBeDeleted);
-        } else {
-            replaceAtMatchingUsages(other, filter, toBeDeleted);
-        }
-    }
-
-    protected void replaceAtAllUsages(Node other, Node toBeDeleted) {
-        checkReplaceWith(other);
-        if (usage0 == null) {
-            return;
-        }
-        replaceAtUsage(other, toBeDeleted, usage0);
-        usage0 = null;
-
-        if (usage1 == null) {
-            return;
-        }
-        replaceAtUsage(other, toBeDeleted, usage1);
-        usage1 = null;
-
-        if (extraUsagesCount <= 0) {
-            return;
-        }
-        for (int i = 0; i < extraUsagesCount; i++) {
-            Node usage = extraUsages[i];
-            replaceAtUsage(other, toBeDeleted, usage);
-        }
-        this.extraUsages = NO_NODES;
-        this.extraUsagesCount = 0;
-    }
-
-    private void replaceAtUsage(Node other, Node toBeDeleted, Node usage) {
-        boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
-        assert assertTrue(result, "not found in inputs, usage: %s", usage);
-        /*
-         * Don't notify for nodes which are about to be deleted.
-         */
-        if (toBeDeleted == null || usage != toBeDeleted) {
-            maybeNotifyInputChanged(usage);
-        }
-        if (other != null) {
-            other.addUsage(usage);
-        }
-    }
-
-    private void replaceAtMatchingUsages(Node other, Predicate<Node> filter, Node toBeDeleted) {
-        if (filter == null) {
-            fail("filter cannot be null");
-        }
-        checkReplaceWith(other);
+        assert checkReplaceWith(other);
         int i = 0;
         while (i < this.getUsageCount()) {
             Node usage = this.getUsageAt(i);
-            if (filter.test(usage)) {
-                replaceAtUsage(other, toBeDeleted, usage);
+            if (filter == null || filter.test(usage)) {
+                boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
+                assert assertTrue(result, "not found in inputs, usage: %s", usage);
+                /*
+                 * Don't notify for nodes which are about to be deleted.
+                 */
+                if (toBeDeleted == null || usage != toBeDeleted) {
+                    maybeNotifyInputChanged(usage);
+                }
+                if (other != null) {
+                    other.addUsage(usage);
+                }
                 this.movUsageFromEndTo(i);
             } else {
                 ++i;
@@ -714,12 +640,26 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     public void replaceAtMatchingUsages(Node other, NodePredicate usagePredicate) {
-        checkReplaceWith(other);
-        replaceAtMatchingUsages(other, usagePredicate, null);
+        assert checkReplaceWith(other);
+        int index = 0;
+        while (index < this.getUsageCount()) {
+            Node usage = getUsageAt(index);
+            if (usagePredicate.apply(usage)) {
+                boolean result = usage.getNodeClass().replaceFirstInput(usage, this, other);
+                assert assertTrue(result, "not found in inputs, usage: %s", usage);
+                if (other != null) {
+                    maybeNotifyInputChanged(usage);
+                    other.addUsage(usage);
+                }
+                this.movUsageFromEndTo(index);
+            } else {
+                index++;
+            }
+        }
     }
 
     public void replaceAtUsages(InputType type, Node other) {
-        checkReplaceWith(other);
+        assert checkReplaceWith(other);
         for (Node usage : usages().snapshot()) {
             for (Position pos : usage.inputPositions()) {
                 if (pos.getInputType() == type && pos.get(usage) == this) {
@@ -756,20 +696,17 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     public void replaceAtPredecessor(Node other) {
-        checkReplaceWith(other);
+        assert checkReplaceWith(other);
         if (predecessor != null) {
-            if (!predecessor.getNodeClass().replaceFirstSuccessor(predecessor, this, other)) {
-                fail("not found in successors, predecessor: %s", predecessor);
-            }
+            boolean result = predecessor.getNodeClass().replaceFirstSuccessor(predecessor, this, other);
+            assert assertTrue(result, "not found in successors, predecessor: %s", predecessor);
             predecessor.updatePredecessor(this, other);
         }
     }
 
     public void replaceAndDelete(Node other) {
-        checkReplaceWith(other);
-        if (other == null) {
-            fail("cannot replace with null");
-        }
+        assert checkReplaceWith(other);
+        assert other != null;
         if (this.hasUsages()) {
             replaceAtUsages(other);
         }
