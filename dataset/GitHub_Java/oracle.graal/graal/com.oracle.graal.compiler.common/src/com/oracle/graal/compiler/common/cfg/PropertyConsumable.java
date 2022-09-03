@@ -24,22 +24,7 @@ package com.oracle.graal.compiler.common.cfg;
 
 import java.util.function.*;
 
-/**
- * A {@linkplain PrintableCFG printable} {@link DominatorOptimizationProblem}.
- */
-public abstract class PrintableDominatorOptimizationProblem<E extends Enum<E>, C extends PropertyConsumable> extends DominatorOptimizationProblem<E, C> implements PrintableCFG {
+public interface PropertyConsumable {
 
-    protected PrintableDominatorOptimizationProblem(Class<E> keyType, AbstractControlFlowGraph<?> cfg) {
-        super(keyType, cfg);
-    }
-
-    public void forEachPropertyPair(AbstractBlock<?> block, BiConsumer<String, String> action) {
-        // for each flag
-        getFlags().forEach(flag -> ((BiConsumer<String, Boolean>) (name, value) -> action.accept(name, value ? "true" : "false")).accept(getName(flag), get(flag, block)));
-        // for each property
-        C cost = getCost(block);
-        if (cost != null) {
-            cost.forEachProperty((name, value) -> action.accept(name, value));
-        }
-    }
+    void forEachProperty(BiConsumer<String, String> action);
 }

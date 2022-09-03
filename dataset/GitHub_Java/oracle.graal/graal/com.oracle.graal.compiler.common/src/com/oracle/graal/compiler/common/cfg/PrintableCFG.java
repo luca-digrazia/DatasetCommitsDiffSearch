@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.compiler.common.cfg;
 
-import java.util.function.BiConsumer;
+import java.util.*;
+import java.util.function.*;
 
 /**
  * Represents a control-flow graph where each node can be annotated with arbitrary property pairs of
@@ -30,7 +31,7 @@ import java.util.function.BiConsumer;
  */
 public interface PrintableCFG {
 
-    AbstractBlockBase<?>[] getBlocks();
+    List<? extends AbstractBlock<?>> getBlocks();
 
     /**
      * Applies {@code action} to all extra property pairs (name, value) of {@code block}.
@@ -38,7 +39,7 @@ public interface PrintableCFG {
      * @param block a block from {@link #getBlocks()}.
      * @param action a {@link BiConsumer consumer}.
      */
-    default void forEachPropertyPair(AbstractBlockBase<?> block, BiConsumer<String, String> action) {
+    default void forEachPropertyPair(AbstractBlock<?> block, BiConsumer<String, String> action) {
         // no extra properties per default
     }
 }
