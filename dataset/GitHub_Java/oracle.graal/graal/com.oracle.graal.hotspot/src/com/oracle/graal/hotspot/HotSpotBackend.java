@@ -22,13 +22,10 @@
  */
 package com.oracle.graal.hotspot;
 
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
 import com.oracle.graal.compiler.target.*;
-import com.oracle.graal.hotspot.bridge.*;
 import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.stubs.*;
-import com.oracle.graal.word.*;
 
 /**
  * HotSpot specific backend.
@@ -41,10 +38,9 @@ public abstract class HotSpotBackend extends Backend {
     public static final Descriptor UNCOMMON_TRAP = new Descriptor("deoptimize", true, void.class);
 
     /**
-     * Descriptor for {@link ExceptionHandlerStub}. This stub is called by the
-     * {@linkplain Marks#MARK_EXCEPTION_HANDLER_ENTRY exception handler} in a compiled method.
+     * Descriptor for GraalRuntime::handle_exception_nofpu_id.
      */
-    public static final Descriptor EXCEPTION_HANDLER = new Descriptor("exceptionHandler", true, void.class, Object.class, Word.class);
+    public static final Descriptor EXCEPTION_HANDLER = new Descriptor("exceptionHandler", true, void.class);
 
     /**
      * Descriptor for SharedRuntime::deopt_blob()->unpack().
