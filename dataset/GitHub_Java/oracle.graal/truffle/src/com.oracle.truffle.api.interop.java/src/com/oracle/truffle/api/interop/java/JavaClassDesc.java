@@ -28,7 +28,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -212,10 +211,14 @@ final class JavaClassDesc {
             return new MethodInfo();
         }
 
-        private static void putMethod(Method m, Map<String, JavaMethodDesc> methodMap, Map<String, JavaMethodDesc> staticMethodMap) {
+        private static SingleMethodDesc putMethod(Method m, Map<String, JavaMethodDesc> methodMap, Map<String, JavaMethodDesc> staticMethodMap) {
             SingleMethodDesc method = SingleMethodDesc.unreflect(m);
-            Map<String, JavaMethodDesc> map = Modifier.isStatic(m.getModifiers()) ? staticMethodMap : methodMap;
-            map.merge(m.getName(), method, MERGE);
+            if (Modifier.isStatic(m.getModifiers())) {
+                staticMethodMap.merge(m.getName(), method, MERGE);
+            } else {
+                methodMap.merge(m.getName(), method, MERGE);
+            }
+            return method;
         }
 
         static JavaMethodDesc merge(JavaMethodDesc existing, JavaMethodDesc other) {
@@ -337,19 +340,8 @@ final class JavaClassDesc {
         return onlyStatic ? getJNIMembers().staticMethods.get(jniName) : getJNIMembers().methods.get(jniName);
     }
 
-    public Collection<String> getMethodNames(boolean onlyStatic, boolean includeInternal) {
-        Map<String, JavaMethodDesc> methods = onlyStatic ? getMembers().staticMethods : getMembers().methods;
-        if (includeInternal || onlyStatic) {
-            return Collections.unmodifiableCollection(methods.keySet());
-        } else {
-            Collection<String> methodNames = new ArrayList<>(methods.size());
-            for (Map.Entry<String, JavaMethodDesc> entry : methods.entrySet()) {
-                if (!entry.getValue().isInternal()) {
-                    methodNames.add(entry.getKey());
-                }
-            }
-            return methodNames;
-        }
+    public Collection<String> getMethodNames(boolean onlyStatic) {
+        return Collections.unmodifiableCollection((onlyStatic ? getMembers().staticMethods : getMembers().methods).keySet());
     }
 
     public Collection<String> getJNIMethodNames(boolean onlyStatic) {
