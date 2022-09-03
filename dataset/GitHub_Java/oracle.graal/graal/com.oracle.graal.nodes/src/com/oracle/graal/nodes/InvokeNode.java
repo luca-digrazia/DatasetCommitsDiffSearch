@@ -96,15 +96,12 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
     @Override
     public boolean isAllowedUsageType(InputType type) {
-        if (!super.isAllowedUsageType(type)) {
-            if (getKind() != Kind.Void) {
-                if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
-                    return true;
-                }
+        if (getKind() != Kind.Void) {
+            if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
+                return true;
             }
-            return false;
         }
-        return true;
+        return super.isAllowedUsageType(type);
     }
 
     @Override
@@ -165,9 +162,9 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         } else {
             graph().replaceFixed(this, node);
         }
-        GraphUtil.killWithUnusedFloatingInputs(call);
+        call.safeDelete();
         if (stateAfter.usages().isEmpty()) {
-            GraphUtil.killWithUnusedFloatingInputs(stateAfter);
+            stateAfter.safeDelete();
         }
     }
 

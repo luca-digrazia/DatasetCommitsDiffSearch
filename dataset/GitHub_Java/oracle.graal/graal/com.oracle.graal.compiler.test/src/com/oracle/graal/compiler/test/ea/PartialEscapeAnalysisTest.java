@@ -171,13 +171,13 @@ public class PartialEscapeAnalysisTest extends EATestBase {
     @Test
     public void testReference1() {
         prepareGraph("testReference1Snippet", false);
-        assertDeepEquals(1, graph.getNodes().filter(NewInstanceNode.class).count());
+        assertEquals(1, graph.getNodes().filter(NewInstanceNode.class).count());
     }
 
     @SafeVarargs
     protected final void testPartialEscapeAnalysis(final String snippet, double expectedProbability, int expectedCount, Class<? extends Node>... invalidNodeClasses) {
         prepareGraph(snippet, false);
-        for (AbstractMergeNode merge : graph.getNodes(AbstractMergeNode.class)) {
+        for (MergeNode merge : graph.getNodes(MergeNode.class)) {
             merge.setStateAfter(null);
         }
         new DeadCodeEliminationPhase().apply(graph);

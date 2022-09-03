@@ -120,7 +120,7 @@ public class BaselineBytecodeParser extends AbstractBytecodeParser<Value, Baseli
             // add loops ? how do we add looks when we haven't parsed the bytecode?
 
             // create the control flow graph
-            BaselineControlFlowGraph cfg = BaselineControlFlowGraph.compute(blockMap);
+            BaselineControlFlowGraph cfg = new BaselineControlFlowGraph(blockMap);
 
             // create the LIR
             List<? extends AbstractBlock<?>> linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blockMap.blocks.size(), blockMap.startBlock);

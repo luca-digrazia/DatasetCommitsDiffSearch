@@ -180,7 +180,7 @@ public class MonitorSnippets implements Snippets {
                         // owns the bias and we need to revoke that bias. The revocation will occur
                         // in the interpreter runtime.
                         traceObject(trace, "+lock{stub:revoke}", object, true);
-                        monitorenterStubC(MONITORENTER, object, lock);
+                        monitorenterStub(MONITORENTER, object, lock);
                         return;
                     } else {
                         // At this point we know the epoch has expired, meaning that the
@@ -200,7 +200,7 @@ public class MonitorSnippets implements Snippets {
                         // succeeded in biasing it toward itself and we need to revoke that
                         // bias. The revocation will occur in the runtime in the slow case.
                         traceObject(trace, "+lock{stub:epoch-expired}", object, true);
-                        monitorenterStubC(MONITORENTER, object, lock);
+                        monitorenterStub(MONITORENTER, object, lock);
                         return;
                     }
                 } else {
@@ -257,7 +257,7 @@ public class MonitorSnippets implements Snippets {
             if (probability(VERY_SLOW_PATH_PROBABILITY, currentMark.subtract(stackPointer).and(alignedMask.subtract(pageSize())).notEqual(0))) {
                 // Most likely not a recursive lock, go into a slow runtime call
                 traceObject(trace, "+lock{stub:failed-cas}", object, true);
-                monitorenterStubC(MONITORENTER, object, lock);
+                monitorenterStub(MONITORENTER, object, lock);
                 return;
             } else {
                 // Recursively locked => write 0 to the lock slot
@@ -283,7 +283,7 @@ public class MonitorSnippets implements Snippets {
         // cannot float about the null check above
         final Word lock = beginLockScope(lockDepth);
         traceObject(trace, "+lock{stub}", object, true);
-        monitorenterStubC(MONITORENTER, object, lock);
+        monitorenterStub(MONITORENTER, object, lock);
     }
 
     @Snippet
@@ -324,7 +324,7 @@ public class MonitorSnippets implements Snippets {
                 // The object's mark word was not pointing to the displaced header,
                 // we do unlocking via runtime call.
                 traceObject(trace, "-lock{stub}", object, false);
-                monitorexitStubC(MONITOREXIT, object, lock);
+                monitorexitStub(MONITOREXIT, object, lock);
             } else {
                 traceObject(trace, "-lock{cas}", object, false);
             }
@@ -341,7 +341,7 @@ public class MonitorSnippets implements Snippets {
         verifyOop(object);
         traceObject(trace, "-lock{stub}", object, false);
         final Word lock = CurrentLockNode.currentLock(lockDepth);
-        monitorexitStubC(MONITOREXIT, object, lock);
+        monitorexitStub(MONITOREXIT, object, lock);
         endLockScope();
         decCounter();
     }
@@ -501,7 +501,7 @@ public class MonitorSnippets implements Snippets {
                     graph.addAfterFixed(graph.start(), invoke);
 
                     StructuredGraph inlineeGraph = providers.getReplacements().getSnippet(initCounter.getMethod());
-                    InliningUtil.inline(invoke, inlineeGraph, false, null);
+                    InliningUtil.inline(invoke, inlineeGraph, false);
 
                     List<ReturnNode> rets = graph.getNodes(ReturnNode.class).snapshot();
                     for (ReturnNode ret : rets) {
@@ -520,7 +520,7 @@ public class MonitorSnippets implements Snippets {
                         inlineeGraph = template(args).copySpecializedGraph();
 
                         // inlineeGraph = replacements.getSnippet(checkCounter.getMethod());
-                        InliningUtil.inline(invoke, inlineeGraph, false, null);
+                        InliningUtil.inline(invoke, inlineeGraph, false);
                     }
                 }
             }
@@ -531,9 +531,9 @@ public class MonitorSnippets implements Snippets {
     public static final ForeignCallDescriptor MONITOREXIT = new ForeignCallDescriptor("monitorexit", void.class, Object.class, Word.class);
 
     @NodeIntrinsic(ForeignCallNode.class)
-    private static native void monitorenterStubC(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
+    private static native void monitorenterStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
 
     @NodeIntrinsic(ForeignCallNode.class)
-    private static native void monitorexitStubC(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
+    private static native void monitorexitStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object object, Word lock);
 
 }
