@@ -170,14 +170,9 @@ public class ValueAssert {
                 case MEMBERS:
                     assertTrue(msg, value.hasMembers());
 
-                    Map<String, Object> expectedValues = new HashMap<>();
                     for (String key : value.getMemberKeys()) {
                         assertValue(context, value.getMember(key));
-                        expectedValues.put(key, value.getMember(key).as(Object.class));
                     }
-
-                    assertEquals(expectedValues, value.as(Map.class));
-                    assertEquals(expectedValues, value.as(STRING_OBJECT_MAP));
 
                     // TODO virify setting and getting
                     break;
@@ -231,11 +226,7 @@ public class ValueAssert {
                         assertFails(() -> value.asDouble(), NullPointerException.class);
 
                     } else {
-                        if (value.isHostObject() && value.asHostObject() instanceof Number) {
-                            assertSame(value.asHostObject(), value.as(Number.class));
-                        } else {
-                            assertFails(() -> value.as(Number.class), ClassCastException.class);
-                        }
+                        assertFails(() -> value.as(Number.class), ClassCastException.class);
                         assertFails(() -> value.as(Byte.class), ClassCastException.class);
                         assertFails(() -> value.as(Short.class), ClassCastException.class);
                         assertFails(() -> value.as(Integer.class), ClassCastException.class);

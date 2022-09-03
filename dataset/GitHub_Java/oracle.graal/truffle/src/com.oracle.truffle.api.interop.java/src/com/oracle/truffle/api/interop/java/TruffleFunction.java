@@ -104,7 +104,7 @@ final class TruffleFunction<T, R> implements Function<T, R> {
         protected Object executeImpl(Object languageContext, TruffleObject function, Object[] args, int offset) {
             if (apply == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                apply = insert(new TruffleExecuteNode());
+                apply = new TruffleExecuteNode();
             }
             return apply.execute(languageContext, function, args[offset], returnClass, returnType);
         }
