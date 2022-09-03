@@ -1431,29 +1431,27 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         private final ContextReference<InstrumentContext> contextRef;
 
         @CompilationFinal private FrameSlot slot;
-        final AllocationReporter allocationReporter;
 
         private VariableNode(String name, String identifier, BaseNode[] children, ContextReference<InstrumentContext> contextRef) {
             super(children);
             this.name = name;
             this.value = parseIdent(identifier);
             this.contextRef = contextRef;
-            this.allocationReporter = contextRef.get().allocationReporter;
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
-            if (allocationReporter.isActive()) {
+            if (contextRef.get().allocationReporter.isActive()) {
                 // Pretend we're allocating the value, for tests
-                allocationReporter.onEnter(null, 0, getValueSize());
+                contextRef.get().allocationReporter.onEnter(null, 0, getValueSize());
             }
             if (slot == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 slot = frame.getFrameDescriptor().findOrAddFrameSlot(name);
             }
             frame.setObject(slot, value);
-            if (allocationReporter.isActive()) {
-                allocationReporter.onReturnValue(value, 0, getValueSize());
+            if (contextRef.get().allocationReporter.isActive()) {
+                contextRef.get().allocationReporter.onReturnValue(value, 0, getValueSize());
             }
             super.execute(frame);
             return value;
