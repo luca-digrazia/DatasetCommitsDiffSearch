@@ -25,6 +25,7 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import com.oracle.truffle.api.CompilerOptions;
+import org.graalvm.compiler.options.OptionValues;
 
 public interface TruffleInliningPolicy {
 
@@ -33,12 +34,12 @@ public interface TruffleInliningPolicy {
     double calculateScore(TruffleInliningProfile profile);
 
     @SuppressWarnings("unused")
-    static TruffleInliningPolicy getInliningPolicy() {
+    static TruffleInliningPolicy getInliningPolicy(OptionValues options) {
         return new DefaultInliningPolicy();
     }
 
     @SuppressWarnings("unused")
-    static TruffleInliningPolicy getNoInliningPolicy() {
+    static TruffleInliningPolicy getNoInliningPolicy(OptionValues options) {
         return new NoInliningPolicy();
     }
 }

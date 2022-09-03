@@ -41,30 +41,16 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements SubstrateInstalledCode, OptimizedAssumptionDependency {
 
-    private static final int LAST_TIER_INDEX = 2;
-
     protected long address;
-    protected int tier;
 
     public SubstrateOptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
         super(sourceCallTarget, rootNode);
-        this.tier = 1;
     }
 
     @SuppressWarnings("sync-override")
     @Override
     public SubstrateSpeculationLog getSpeculationLog() {
         return (SubstrateSpeculationLog) super.getSpeculationLog();
-    }
-
-    @Override
-    public void setTier(int tier) {
-        this.tier = tier;
-    }
-
-    @Override
-    public int getTier() {
-        return tier;
     }
 
     @Override
@@ -89,15 +75,8 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
 
     @Override
     public boolean isValidLastTier() {
-        // Note: this is correct because the tier field can only change once from 1 to 2.
-        while (true) {
-            int tier0 = this.tier;
-            long address1 = this.address;
-            int tier2 = this.tier;
-            if (tier0 == tier2) {
-                return address1 != 0 && tier0 == LAST_TIER_INDEX;
-            }
-        }
+        // TODO: GR-11926 Support multi-tier compilation in SVM.
+        return true;
     }
 
     @Override

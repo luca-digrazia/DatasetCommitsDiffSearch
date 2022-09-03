@@ -24,23 +24,23 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.getOptions;
-import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.overrideOptions;
+import org.graalvm.compiler.core.CompilerThreadFactory;
+import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RunnableFuture;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
-import org.graalvm.options.OptionValues;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompilerThreads;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.overrideOptions;
 
 /**
  * The compilation queue accepts compilation requests, and schedules compilations.
@@ -54,8 +54,7 @@ import org.graalvm.options.OptionValues;
  */
 public class BackgroundCompileQueue {
     private final AtomicLong idCounter;
-    private volatile ExecutorService compilationExecutorService;
-    private boolean shutdown = false;
+    private final ExecutorService compilationExecutorService;
 
     public class Request implements Runnable, Comparable<Request> {
         private final long id;
@@ -79,7 +78,7 @@ public class BackgroundCompileQueue {
         public void run() {
             OptimizedCallTarget callTarget = weakCallTarget.get();
             if (callTarget != null) {
-                try (TruffleRuntimeOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides) : null) {
+                try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = optionOverrides != null ? overrideOptions(optionOverrides.getMap()) : null) {
                     if (!task.isCancelled()) {
                         OptionValues options = getOptions();
                         runtime.doCompile(options, callTarget, task);
@@ -129,31 +128,18 @@ public class BackgroundCompileQueue {
 
     public BackgroundCompileQueue() {
         this.idCounter = new AtomicLong();
-    }
 
-    private synchronized ExecutorService getExecutorService(OptimizedCallTarget callTarget) {
-        if (compilationExecutorService != null) {
-            return compilationExecutorService;
-        }
-
-        if (shutdown) {
-            throw new RejectedExecutionException("The BackgroundCompileQueue is shutdown");
-        }
-
-        // NOTE: the value from the first Engine compiling wins for now
-        int threads = callTarget.getOptionValue(PolyglotCompilerOptions.CompilerThreads);
-        if (threads == 0) {
+        CompilerThreadFactory factory = new CompilerThreadFactory("TruffleCompilerThread");
+        int selectedProcessors = TruffleCompilerOptions.getValue(TruffleCompilerThreads);
+        if (selectedProcessors == 0) {
             // No manual selection made, check how many processors are available.
             int availableProcessors = Runtime.getRuntime().availableProcessors();
             if (availableProcessors >= 4) {
-                threads = 2;
+                selectedProcessors = 2;
             }
         }
-        threads = Math.max(1, threads);
-
-        TruffleCompilerThreadFactory factory = new TruffleCompilerThreadFactory("TruffleCompilerThread");
-
-        return compilationExecutorService = new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
+        selectedProcessors = Math.max(1, selectedProcessors);
+        this.compilationExecutorService = new ThreadPoolExecutor(selectedProcessors, selectedProcessors, 0, TimeUnit.MILLISECONDS,
                         new PriorityBlockingQueue<>(), factory) {
             @Override
             protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
@@ -162,60 +148,26 @@ public class BackgroundCompileQueue {
         };
     }
 
-    private static final class TruffleCompilerThreadFactory implements ThreadFactory {
-        private final String namePrefix;
-
-        TruffleCompilerThreadFactory(final String namePrefix) {
-            this.namePrefix = namePrefix;
-        }
-
-        @Override
-        public Thread newThread(Runnable r) {
-            final Thread t = new Thread(r) {
-                @Override
-                public void run() {
-                    setContextClassLoader(getClass().getClassLoader());
-                    super.run();
-                }
-            };
-            t.setName(namePrefix + "-" + t.getId());
-            t.setPriority(Thread.MAX_PRIORITY);
-            t.setDaemon(true);
-            return t;
-        }
-    }
-
-    public CancellableCompileTask submitCompilationRequest(GraalTruffleRuntime runtime, OptimizedCallTarget optimizedCallTarget, boolean lastTierCompilation)
-            throws RejectedExecutionException {
-        final OptionValues optionOverrides = TruffleRuntimeOptions.getCurrentOptionOverrides();
+    public CancellableCompileTask submitCompilationRequest(GraalTruffleRuntime runtime, OptimizedCallTarget optimizedCallTarget, boolean lastTierCompilation) {
+        final OptionValues optionOverrides = TruffleCompilerOptions.getCurrentOptionOverrides();
         CancellableCompileTask cancellable = new CancellableCompileTask(lastTierCompilation);
         Request request = new Request(runtime, optionOverrides, optimizedCallTarget, cancellable);
-        cancellable.setFuture(getExecutorService(optimizedCallTarget).submit(request));
+        cancellable.setFuture(compilationExecutorService.submit(request));
         return cancellable;
     }
 
     public int getQueueSize() {
-        final ExecutorService threadPool = compilationExecutorService;
-        if (threadPool instanceof ThreadPoolExecutor) {
-            return ((ThreadPoolExecutor) threadPool).getQueue().size();
+        if (compilationExecutorService instanceof ThreadPoolExecutor) {
+            return ((ThreadPoolExecutor) compilationExecutorService).getQueue().size();
         } else {
             return 0;
         }
     }
 
     public void shutdownAndAwaitTermination(long timeout) {
-        final ExecutorService threadPool;
-        synchronized (this) {
-            threadPool = compilationExecutorService;
-            if (threadPool == null) {
-                shutdown = true;
-                return;
-            }
-        }
-
-        threadPool.shutdownNow();
+        compilationExecutorService.shutdownNow();
         try {
-            threadPool.awaitTermination(timeout, TimeUnit.MILLISECONDS);
+            compilationExecutorService.awaitTermination(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new RuntimeException("Could not terminate compiler threads. Check if there are runaway compilations that don't handle Thread#interrupt.", e);
         }

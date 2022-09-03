@@ -284,7 +284,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     protected final Object callProxy(VirtualFrame frame) {
-        final boolean inCompiled = CompilerDirectives.inCompilationRoot();
+        final boolean inCompiled = CompilerDirectives.inCompiledCode();
         try {
             return getRootNode().execute(frame);
         } catch (ControlFlowException t) {

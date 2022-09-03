@@ -61,6 +61,11 @@ public final class CancellableCompileTask implements TruffleCompilationTask {
         future.get();
     }
 
+    @Override
+    public boolean isCancelled() {
+        return this.cancelled;
+    }
+
     public synchronized boolean cancel() {
         if (!cancelled) {
             cancelled = true;
@@ -70,16 +75,7 @@ public final class CancellableCompileTask implements TruffleCompilationTask {
     }
 
     @Override
-    public boolean isCancelled() {
-        return cancelled;
-    }
-
-    @Override
     public boolean isLastTier() {
         return lastTierCompilation;
-    }
-
-    public Future<?> getFuture() {
-        return future;
     }
 }
