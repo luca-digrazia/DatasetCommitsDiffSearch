@@ -45,10 +45,11 @@ import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.spi.LimitedValueProxy;
 import org.graalvm.compiler.phases.Phase;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedType;
+import com.oracle.svm.hosted.nodes.AssertStampNode;
+import com.oracle.svm.hosted.nodes.AssertTypeStateNode;
 
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -66,6 +67,12 @@ import jdk.vm.ci.meta.TriState;
  * new stamp states that a value is non-null.
  */
 public class StrengthenStampsPhase extends Phase {
+
+    private final boolean insertTypeChecks;
+
+    public StrengthenStampsPhase(boolean insertTypeChecks) {
+        this.insertTypeChecks = insertTypeChecks;
+    }
 
     @Override
     protected void run(StructuredGraph graph) {
@@ -85,7 +92,6 @@ public class StrengthenStampsPhase extends Phase {
 
                 Stamp newStamp = strengthen(node.stamp(NodeView.DEFAULT));
                 if (newStamp != null) {
-                    assert !parseOnce : "Must be done by StrengthenGraphs";
                     node.setStamp(newStamp);
                 }
             }
@@ -98,7 +104,6 @@ public class StrengthenStampsPhase extends Phase {
                 InstanceOfNode node = (InstanceOfNode) n;
                 ObjectStamp newStamp = (ObjectStamp) strengthen(node.getCheckedStamp());
                 if (newStamp != null) {
-                    assert !parseOnce : "Must be done by StrengthenGraphs";
                     node.replaceAndDelete(graph.addOrUniqueWithInputs(InstanceOfNode.createHelper(newStamp, node.getValue(), node.profile(), node.getAnchor())));
                 }
 
@@ -106,7 +111,6 @@ public class StrengthenStampsPhase extends Phase {
                 PiNode node = (PiNode) n;
                 Stamp newStamp = strengthen(node.piStamp());
                 if (newStamp != null) {
-                    assert !parseOnce : "Must be done by StrengthenGraphs";
                     node.strengthenPiStamp(newStamp);
                 }
             }
@@ -156,8 +160,6 @@ public class StrengthenStampsPhase extends Phase {
         return newStamp;
     }
 
-    private final boolean parseOnce = SubstrateOptions.parseOnce();
-
     private void updateStamp(ValueNode node, JavaTypeProfile typeProfile) {
         if (node.getStackKind() != JavaKind.Object) {
             return;
@@ -166,9 +168,21 @@ public class StrengthenStampsPhase extends Phase {
         if (typeProfile != null) {
             Stamp newStamp = strengthenStamp(node, typeProfile);
             if (!newStamp.equals(node.stamp(NodeView.DEFAULT))) {
-                assert !parseOnce : "Must be done by StrengthenGraphs";
                 node.getDebug().log("STAMP UPDATE  method %s  node %s  old %s  new %s\n", node.graph().method().format("%H.%n(%p)"), node, node.stamp(NodeView.DEFAULT), newStamp);
                 node.setStamp(newStamp);
+            }
+
+        }
+        if (insertTypeChecks) {
+            /*
+             * Checking all exact types of the type state is only feasible for type states with few
+             * exact types, because every type requires an explicit comparison. For big type states
+             * we fall back to instanceof-checking based on the stamp.
+             */
+            if (typeProfile != null && typeProfile.getTypes().length < 10) {
+                AssertTypeStateNode.create(node, typeProfile);
+            } else {
+                AssertStampNode.create(node);
             }
         }
     }

@@ -56,13 +56,11 @@ public class AnalysisConstantReflectionProvider extends SharedConstantReflection
     private final SVMHost hostVM;
     private final AnalysisUniverse universe;
     private final ConstantReflectionProvider originalConstantReflection;
-    private final ClassInitializationFeature classInitializationFeature;
 
     public AnalysisConstantReflectionProvider(SVMHost hostVM, AnalysisUniverse universe, ConstantReflectionProvider originalConstantReflection) {
         this.hostVM = hostVM;
         this.universe = universe;
         this.originalConstantReflection = originalConstantReflection;
-        this.classInitializationFeature = ClassInitializationFeature.singleton();
     }
 
     @Override
@@ -80,7 +78,7 @@ public class AnalysisConstantReflectionProvider extends SharedConstantReflection
     }
 
     public JavaConstant readValue(AnalysisField field, JavaConstant receiver) {
-        if (classInitializationFeature.shouldInitializeAtRuntime(field.getDeclaringClass())) {
+        if (ClassInitializationFeature.shouldInitializeAtRuntime(field.getDeclaringClass())) {
             if (field.isStatic()) {
                 /*
                  * Static fields of classes that are initialized at run time have the default
