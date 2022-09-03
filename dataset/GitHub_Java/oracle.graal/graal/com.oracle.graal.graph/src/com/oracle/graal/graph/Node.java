@@ -143,14 +143,6 @@ public abstract class Node implements Cloneable, Formattable {
         boolean setStampFromReturnType() default false;
     }
 
-    /**
-     * Marker for a node that can be replaced by another node via global value numbering. A
-     * {@linkplain NodeClass#isLeafNode() leaf} node can be replaced by another node of the same
-     * type that has exactly the same {@linkplain NodeClass#getData() data} values. A non-leaf node
-     * can be replaced by another node of the same type that has exactly the same data values as
-     * well as the same {@linkplain Node#inputs() inputs} and {@linkplain Node#successors()
-     * successors}.
-     */
     public interface ValueNumberable {
     }
 
@@ -747,7 +739,7 @@ public abstract class Node implements Cloneable, Formattable {
 
     final Node clone(Graph into, boolean clearInputsAndSuccessors) {
         NodeClass nodeClass = getNodeClass();
-        if (into != null && nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
+        if (into != null && nodeClass.valueNumberable() && isLeafNode()) {
             Node otherNode = into.findNodeInCache(this);
             if (otherNode != null) {
                 return otherNode;
@@ -775,11 +767,18 @@ public abstract class Node implements Cloneable, Formattable {
         newNode.extraUsages = NO_NODES;
         newNode.predecessor = null;
 
-        if (into != null && nodeClass.valueNumberable() && nodeClass.isLeafNode()) {
+        if (into != null && nodeClass.valueNumberable() && isLeafNode()) {
             into.putNodeIntoCache(newNode);
         }
         newNode.afterClone(this);
         return newNode;
+    }
+
+    /**
+     * @returns true if this node has no inputs and no successors
+     */
+    public boolean isLeafNode() {
+        return USE_GENERATED_NODES || getNodeClass().isLeafNode();
     }
 
     protected void afterClone(@SuppressWarnings("unused") Node other) {
@@ -997,13 +996,14 @@ public abstract class Node implements Cloneable, Formattable {
     }
 
     /**
-     * If this node is a {@linkplain NodeClass#isLeafNode() leaf} node, returns a hash for this node
-     * based on its {@linkplain NodeClass#getData() data} fields otherwise return 0.
+     * If this node is {@link ValueNumberable}, gets a digest for this node based on the current
+     * value of it's {@link NodeClass#getData() data} fields. If this node is not
+     * {@link ValueNumberable}, 0 is returned.
      *
-     * Overridden by a method generated for leaf nodes.
+     * Overridden by a method generated for {@link ValueNumberable} subclasses.
      */
-    protected int valueNumberLeaf() {
-        assert !getNodeClass().isLeafNode();
+    public int getValueNumber() {
+        assert !(this instanceof ValueNumberable);
         return 0;
     }
 
@@ -1012,7 +1012,7 @@ public abstract class Node implements Cloneable, Formattable {
      *
      * @param other
      */
-    protected boolean dataEquals(Node other) {
+    protected boolean valueEqualsGen(Node other) {
         return true;
     }
 
@@ -1021,12 +1021,13 @@ public abstract class Node implements Cloneable, Formattable {
      * fields of another node of the same type. Primitive fields are compared by value and
      * non-primitive fields are compared by {@link Objects#equals(Object, Object)}.
      *
-     * The result of this method undefined if {@code other.getClass() != this.getClass()}.
+     * The result of this method undefined if {@code other.getClass() != this.getClass()} or if this
+     * node is not {@link ValueNumberable}
      *
      * @param other a node of exactly the same type as this node
      * @return true if the data fields of this object and {@code other} are equal
      */
     public boolean valueEquals(Node other) {
-        return USE_GENERATED_NODES ? dataEquals(other) : getNodeClass().dataEquals(this, other);
+        return USE_GENERATED_NODES ? valueEqualsGen(other) : getNodeClass().valueEqual(this, other);
     }
 }

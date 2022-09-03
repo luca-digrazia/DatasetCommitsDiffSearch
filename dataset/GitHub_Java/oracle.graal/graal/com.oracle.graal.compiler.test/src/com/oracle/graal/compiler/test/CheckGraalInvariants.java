@@ -33,7 +33,6 @@ import java.util.zip.*;
 import org.junit.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.Register.RegisterCategory;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.*;
@@ -186,11 +185,16 @@ public class CheckGraalInvariants extends GraalTest {
      */
     private static void checkClass(Class<?> c, MetaAccessProvider metaAccess) {
         if (Node.class.isAssignableFrom(c)) {
-            if (Modifier.isFinal(c.getModifiers())) {
-                throw new AssertionError(String.format("Node subclass %s must not be final", c.getName()));
-            }
-            if (c.getAnnotation(NodeInfo.class) == null) {
-                throw new AssertionError(String.format("Node subclass %s requires %s annotation", c.getName(), NodeClass.class.getSimpleName()));
+            if (!GeneratedNode.class.isAssignableFrom(c)) {
+                if (Modifier.isFinal(c.getModifiers())) {
+                    throw new AssertionError(String.format("Node subclass %s must not be final", c.getName()));
+                }
+                if (c.getAnnotation(NodeInfo.class) == null) {
+                    throw new AssertionError(String.format("Node subclass %s requires %s annotation", c.getName(), NodeClass.class.getSimpleName()));
+                }
+                if (!Modifier.isAbstract(c.getModifiers())) {
+                    NodeClass.get(c).getGenClass();
+                }
             }
         }
     }
@@ -200,9 +204,9 @@ public class CheckGraalInvariants extends GraalTest {
      */
     private static void checkGraph(HighTierContext context, StructuredGraph graph, boolean verifyEquals) {
         if (verifyEquals) {
+            new VerifyNoNodeClassLiteralIdentityTests().apply(graph, context);
             new VerifyUsageWithEquals(Value.class).apply(graph, context);
             new VerifyUsageWithEquals(Register.class).apply(graph, context);
-            new VerifyUsageWithEquals(RegisterCategory.class).apply(graph, context);
             new VerifyUsageWithEquals(JavaType.class).apply(graph, context);
             new VerifyUsageWithEquals(JavaMethod.class).apply(graph, context);
             new VerifyUsageWithEquals(JavaField.class).apply(graph, context);
