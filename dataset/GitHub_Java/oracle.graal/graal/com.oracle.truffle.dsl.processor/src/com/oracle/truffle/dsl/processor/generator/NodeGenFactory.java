@@ -447,7 +447,6 @@ public class NodeGenFactory {
         clazz.addOptional(createSpecializationCreateMethod(specialization, constructor));
         clazz.addOptional(createMergeMethod(specialization));
         clazz.addOptional(createIsSameMethod(specialization));
-        clazz.addOptional(createIsIdenticalMethod(specialization));
 
         TypeData returnType = specialization.getReturnType().getTypeSystemType();
         int signatureSize = specialization.getSignatureSize();
@@ -494,34 +493,6 @@ public class NodeGenFactory {
         return executable;
     }
 
-    private Element createIsIdenticalMethod(SpecializationData specialization) {
-        boolean cacheBoundGuard = specialization.hasMultipleInstances();
-        if (!cacheBoundGuard) {
-            return null;
-        }
-
-        LocalContext currentLocals = LocalContext.load(this, node.getSignatureSize(), varArgsThreshold);
-        currentLocals.loadFastPathState(specialization);
-
-        CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), getType(boolean.class), "isIdentical");
-        method.addParameter(new CodeVariableElement(getType(SpecializationNode.class), "other"));
-        currentLocals.addParametersTo(method, FRAME_VALUE);
-        method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
-        final CodeTreeBuilder builder = method.createBuilder();
-
-        SpecializationGroup group = SpecializationGroup.create(specialization);
-        SpecializationBody executionFactory = new SpecializationBody(true, false) {
-            @Override
-            public CodeTree createBody(SpecializationData s, LocalContext values) {
-                return builder.create().returnTrue().build();
-            }
-        };
-
-        builder.tree(createGuardAndCast(group, typeSystem.getGenericTypeData(), currentLocals, executionFactory));
-        builder.returnFalse();
-        return method;
-    }
-
     private CodeExecutableElement createIsSameMethod(SpecializationData specialization) {
         if (!specialization.isSpecialized() || !options.implicitCastOptimization().isDuplicateTail()) {
             return null;
@@ -561,29 +532,18 @@ public class NodeGenFactory {
     }
 
     private Element createMergeMethod(SpecializationData specialization) {
-        if (specialization.getExcludedBy().isEmpty() && !specialization.isPolymorphic()) {
+        boolean cacheBoundGuard = specialization.hasMultipleInstances();
+        if (specialization.getExcludedBy().isEmpty() && !specialization.isPolymorphic() && !cacheBoundGuard) {
             return null;
         }
         TypeMirror specializationNodeType = getType(SpecializationNode.class);
-        LocalContext currentLocals = LocalContext.load(this, node.getSignatureSize(), varArgsThreshold);
-
         CodeExecutableElement executable = new CodeExecutableElement(modifiers(PUBLIC), specializationNodeType, "merge");
         executable.addParameter(new CodeVariableElement(specializationNodeType, "newNode"));
-        currentLocals.addParametersTo(executable, FRAME_VALUE);
         executable.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(Override.class)));
         CodeTreeBuilder builder = executable.createBuilder();
 
         if (specialization.isPolymorphic()) {
-            builder.startReturn();
-            builder.startCall("polymorphicMerge");
-            builder.string("newNode");
-            builder.startCall("super", "merge");
-            builder.string("newNode");
-            currentLocals.addReferencesTo(builder, FRAME_VALUE);
-            builder.end();
-            builder.end();
-            builder.end();
-
+            builder.statement("return polymorphicMerge(newNode)");
         } else {
             boolean elseIf = false;
             for (SpecializationData containedSpecialization : specialization.getExcludedBy()) {
@@ -594,12 +554,11 @@ public class NodeGenFactory {
                 builder.statement("removeSame(\"Contained by " + containedSpecialization.createReferenceName() + "\")");
                 builder.end();
             }
-            builder.startReturn();
-            builder.startCall("super", "merge");
-            builder.string("newNode");
-            currentLocals.addReferencesTo(builder, FRAME_VALUE);
-            builder.end();
-            builder.end();
+            if (cacheBoundGuard) {
+                builder.statement("return super.mergeNoSame(newNode)");
+            } else {
+                builder.statement("return super.merge(newNode)");
+            }
         }
 
         return executable;
@@ -679,14 +638,17 @@ public class NodeGenFactory {
 
         CodeTreeBuilder builder = method.createBuilder();
         SpecializationGroup group = createSpecializationGroups();
-        CodeTree execution = createGuardAndCast(group, genericType, locals, new SpecializationBody(false, false) {
-            @Override
-            public CodeTree createBody(SpecializationData specialization, LocalContext values) {
+        CodeTree execution = createGuardAndCast(group, genericType, locals, new SpecializationExecution() {
+            public CodeTree createExecute(SpecializationData specialization, LocalContext values) {
                 CodeTypeElement generatedType = specializationClasses.get(specialization);
                 if (generatedType == null) {
                     throw new AssertionError("No generated type for " + specialization);
                 }
                 return createSlowPathExecute(specialization, values);
+            }
+
+            public boolean isFastPath() {
+                return false;
             }
         });
 
@@ -1563,10 +1525,13 @@ public class NodeGenFactory {
         } else {
             final TypeData finalType = type;
             SpecializationGroup group = SpecializationGroup.create(specialization);
-            SpecializationBody executionFactory = new SpecializationBody(true, true) {
-                @Override
-                public CodeTree createBody(SpecializationData s, LocalContext values) {
+            SpecializationExecution executionFactory = new SpecializationExecution() {
+                public CodeTree createExecute(SpecializationData s, LocalContext values) {
                     return createFastPathExecute(builder, finalType, s, values);
+                }
+
+                public boolean isFastPath() {
+                    return true;
                 }
             };
             builder.tree(createGuardAndCast(group, type, currentLocals, executionFactory));
@@ -1656,11 +1621,11 @@ public class NodeGenFactory {
         return builder.build();
     }
 
-    private CodeTree createGuardAndCast(SpecializationGroup group, TypeData forType, LocalContext currentValues, SpecializationBody execution) {
+    private CodeTree createGuardAndCast(SpecializationGroup group, TypeData forType, LocalContext currentValues, SpecializationExecution execution) {
         CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
 
         Set<TypeGuard> castGuards;
-        if (execution.needsCastedValues()) {
+        if (execution.isFastPath()) {
             castGuards = null; // cast all
         } else {
             castGuards = new HashSet<>();
@@ -1714,7 +1679,7 @@ public class NodeGenFactory {
                 builder.tree(createGuardAndCast(child, forType, currentValues.copy(), execution));
             }
             if (specialization != null) {
-                builder.tree(execution.createBody(specialization, currentValues));
+                builder.tree(execution.createExecute(specialization, currentValues));
             }
         }
         builder.end(ifCount);
@@ -2242,7 +2207,7 @@ public class NodeGenFactory {
     }
 
     private CodeTree[] createTypeCheckAndLocals(SpecializationData specialization, List<TypeGuard> typeGuards, Set<TypeGuard> castGuards, LocalContext currentValues,
-                    SpecializationBody specializationExecution) {
+                    SpecializationExecution specializationExecution) {
         CodeTreeBuilder checksBuilder = CodeTreeBuilder.createBuilder();
         CodeTreeBuilder localsBuilder = CodeTreeBuilder.createBuilder();
         for (TypeGuard typeGuard : typeGuards) {
@@ -2670,25 +2635,11 @@ public class NodeGenFactory {
 
     }
 
-    private abstract class SpecializationBody {
+    private interface SpecializationExecution {
 
-        private final boolean fastPath;
-        private final boolean needsCastedValues;
+        boolean isFastPath();
 
-        public SpecializationBody(boolean fastPath, boolean needsCastedValues) {
-            this.fastPath = fastPath;
-            this.needsCastedValues = needsCastedValues;
-        }
-
-        public final boolean isFastPath() {
-            return fastPath;
-        }
-
-        public final boolean needsCastedValues() {
-            return needsCastedValues;
-        }
-
-        public abstract CodeTree createBody(SpecializationData specialization, LocalContext currentValues);
+        CodeTree createExecute(SpecializationData specialization, LocalContext currentValues);
 
     }
 
