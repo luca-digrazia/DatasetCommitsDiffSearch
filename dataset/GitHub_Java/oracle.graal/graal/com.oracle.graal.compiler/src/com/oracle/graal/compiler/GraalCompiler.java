@@ -38,7 +38,6 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.util.*;
-import com.oracle.graal.options.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.PhasePlan.PhasePosition;
 import com.oracle.graal.phases.common.*;
@@ -52,13 +51,6 @@ import com.oracle.graal.virtual.phases.ea.*;
  * Static methods for orchestrating the compilation of a {@linkplain StructuredGraph graph}.
  */
 public class GraalCompiler {
-
-    // @formatter:off
-    @Option(help = "")
-    public static final OptionValue<Boolean> VerifyUsageWithEquals = new OptionValue<>(true);
-    @Option(help = "Enable inlining")
-    public static final OptionValue<Boolean> Inline = new OptionValue<>(true);
-    // @formatter:on
 
     /**
      * Requests compilation of a given graph.
@@ -133,10 +125,8 @@ public class GraalCompiler {
         } else {
             Debug.dump(graph, "initial state");
         }
-        if (VerifyUsageWithEquals.getValue()) {
-            new VerifyUsageWithEquals(runtime, Value.class).apply(graph);
-            new VerifyUsageWithEquals(runtime, Register.class).apply(graph);
-        }
+        new VerifyUsageWithEquals(runtime, Value.class).apply(graph);
+        new VerifyUsageWithEquals(runtime, Register.class).apply(graph);
 
         if (GraalOptions.OptCanonicalizer) {
             new CanonicalizerPhase.Instance(runtime, assumptions).apply(graph);
@@ -144,7 +134,7 @@ public class GraalCompiler {
 
         HighTierContext highTierContext = new HighTierContext(runtime, assumptions, replacements);
 
-        if (Inline.getValue() && !plan.isPhaseDisabled(InliningPhase.class)) {
+        if (GraalOptions.Inline && !plan.isPhaseDisabled(InliningPhase.class)) {
             if (GraalOptions.IterativeInlining) {
                 new IterativeInliningPhase(replacements, cache, plan, optimisticOpts, GraalOptions.OptEarlyReadElimination).apply(graph, highTierContext);
             } else {

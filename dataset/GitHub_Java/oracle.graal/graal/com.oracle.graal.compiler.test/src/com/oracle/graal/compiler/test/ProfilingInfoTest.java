@@ -105,8 +105,9 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     }
 
     @Test
-    public void testProfileInvokeVirtual() {
+    public void testProfileInvokeVirtual() throws NoSuchMethodException {
         testTypeProfile("invokeVirtualSnippet", 1);
+        testMethodProfile("invokeVirtualSnippet", 1, "hashCode");
     }
 
     public static int invokeVirtualSnippet(Object obj) {
@@ -114,8 +115,9 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     }
 
     @Test
-    public void testTypeProfileInvokeInterface() {
+    public void testTypeProfileInvokeInterface() throws NoSuchMethodException {
         testTypeProfile("invokeInterfaceSnippet", 1);
+        testMethodProfile("invokeInterfaceSnippet", 1, "length");
     }
 
     public static int invokeInterfaceSnippet(CharSequence a) {
@@ -128,11 +130,7 @@ public class ProfilingInfoTest extends GraalCompilerTest {
     }
 
     public static Serializable checkCastSnippet(Object obj) {
-        try {
-            return (Serializable) obj;
-        } catch (ClassCastException e) {
-            return null;
-        }
+        return (Serializable) obj;
     }
 
     @Test
@@ -167,6 +165,31 @@ public class ProfilingInfoTest extends GraalCompilerTest {
         resetProfile(testSnippet);
         typeProfile = info.getTypeProfile(bci);
         Assert.assertNull(typeProfile);
+    }
+
+    private void testMethodProfile(String testSnippet, int bci, String expectedProfiledMethod) throws NoSuchMethodException {
+        ResolvedJavaMethod stringMethod = runtime.lookupJavaMethod(String.class.getMethod(expectedProfiledMethod));
+        ResolvedJavaMethod stringBuilderMethod = runtime.lookupJavaMethod(StringBuilder.class.getMethod(expectedProfiledMethod));
+
+        ProfilingInfo info = profile(testSnippet, "ABC");
+        JavaMethodProfile methodProfile = info.getMethodProfile(bci);
+        Assert.assertEquals(0.0, methodProfile.getNotRecordedProbability(), DELTA);
+        Assert.assertEquals(1, methodProfile.getMethods().length);
+        Assert.assertEquals(stringMethod, methodProfile.getMethods()[0].getMethod());
+        Assert.assertEquals(1.0, methodProfile.getMethods()[0].getProbability(), DELTA);
+
+        continueProfiling(testSnippet, new StringBuilder());
+        methodProfile = info.getMethodProfile(bci);
+        Assert.assertEquals(0.0, methodProfile.getNotRecordedProbability(), DELTA);
+        Assert.assertEquals(2, methodProfile.getMethods().length);
+        Assert.assertEquals(stringMethod, methodProfile.getMethods()[0].getMethod());
+        Assert.assertEquals(stringBuilderMethod, methodProfile.getMethods()[1].getMethod());
+        Assert.assertEquals(0.5, methodProfile.getMethods()[0].getProbability(), DELTA);
+        Assert.assertEquals(0.5, methodProfile.getMethods()[1].getProbability(), DELTA);
+
+        resetProfile(testSnippet);
+        methodProfile = info.getMethodProfile(bci);
+        Assert.assertNull(methodProfile);
     }
 
     @Test
@@ -254,30 +277,19 @@ public class ProfilingInfoTest extends GraalCompilerTest {
 
     @Test
     public void testNullSeen() {
-        testNullSeen("instanceOfSnippet");
-        testNullSeen("checkCastSnippet");
-    }
-
-    private void testNullSeen(String snippet) {
-        ProfilingInfo info = profile(snippet, 1);
+        ProfilingInfo info = profile("instanceOfSnippet", 1);
         Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
 
-        continueProfiling(snippet, "ABC");
+        continueProfiling("instanceOfSnippet", "ABC");
         Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
 
-        continueProfiling(snippet, new Object());
-        Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
-
-        continueProfiling(snippet, (Object) null);
+        continueProfiling("instanceOfSnippet", (Object) null);
         Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
 
-        continueProfiling(snippet, 0.0);
+        continueProfiling("instanceOfSnippet", 0.0);
         Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
 
-        continueProfiling(snippet, new Object());
-        Assert.assertEquals(TriState.TRUE, info.getNullSeen(1));
-
-        resetProfile(snippet);
+        resetProfile("instanceOfSnippet");
         Assert.assertEquals(TriState.FALSE, info.getNullSeen(1));
     }
 

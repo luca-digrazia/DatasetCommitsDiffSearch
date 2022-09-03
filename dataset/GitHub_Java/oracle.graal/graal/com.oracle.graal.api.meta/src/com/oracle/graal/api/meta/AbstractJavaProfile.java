@@ -25,14 +25,10 @@ package com.oracle.graal.api.meta;
 import java.io.*;
 
 /**
- * This object holds probability information for a set of items that were profiled at a specific
- * BCI. The precision of the supplied values may vary, but a runtime that provides this information
- * should be aware that it will be used to guide performance-critical decisions like speculative
- * inlining, etc.
- * 
- * @param <T> a subclass of AbstractProfiledItem
- * @param <U> the class of the items that are profiled at the specific BCI and for which
- *            probabilities are stored. E.g., a ResolvedJavaType or a ResolvedJavaMethod.
+ * This profile object represents a certain set of profiling information at a specific BCI. The
+ * precision of the supplied values may vary, but a runtime that provides this information should be
+ * aware that it will be used to guide performance-critical decisions like speculative inlining,
+ * etc.
  */
 public abstract class AbstractJavaProfile<T extends AbstractProfiledItem<U>, U> implements Serializable {
 
@@ -43,7 +39,7 @@ public abstract class AbstractJavaProfile<T extends AbstractProfiledItem<U>, U> 
 
     public AbstractJavaProfile(double notRecordedProbability, T[] pitems) {
         this.pitems = pitems;
-        assert !Double.isNaN(notRecordedProbability);
+        assert notRecordedProbability != Double.NaN;
         this.notRecordedProbability = notRecordedProbability;
         assert isSorted();
     }
@@ -124,26 +120,28 @@ public abstract class AbstractJavaProfile<T extends AbstractProfiledItem<U>, U> 
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (obj == this) {
+    public boolean equals(Object other) {
+        if (other == this) {
             return true;
         }
-        if (!(obj instanceof AbstractJavaProfile)) {
-            return false;
-        }
-        AbstractJavaProfile that = (AbstractJavaProfile) obj;
-        if (that.notRecordedProbability != notRecordedProbability) {
-            return false;
-        }
-        if (that.pitems.length != pitems.length) {
-            return false;
-        }
-        for (int i = 0; i < pitems.length; ++i) {
-            if (!pitems[i].equals(that.pitems[i])) {
+        if (getClass() == other.getClass()) {
+            AbstractJavaProfile javaTypeProfile = (AbstractJavaProfile) other;
+            if (javaTypeProfile.notRecordedProbability != notRecordedProbability) {
                 return false;
             }
+            if (javaTypeProfile.pitems.length != pitems.length) {
+                return false;
+            }
+
+            for (int i = 0; i < pitems.length; ++i) {
+                if (!pitems[i].equals(javaTypeProfile.pitems[i])) {
+                    return false;
+                }
+            }
+
+            return true;
         }
-        return true;
+        return false;
     }
 
     @Override

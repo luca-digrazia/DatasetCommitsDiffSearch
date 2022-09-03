@@ -22,36 +22,32 @@
  */
 package com.oracle.graal.hotspot.meta;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.phases.*;
 
 public final class HotSpotProfilingInfo extends CompilerObject implements ProfilingInfo {
 
     private static final long serialVersionUID = -8307682725047864875L;
     private static final DebugMetric metricInsufficentSpace = Debug.metric("InsufficientSpaceForProfilingData");
 
-    private final HotSpotMethodData methodData;
-    private final HotSpotResolvedJavaMethod method;
-
     private int position;
     private int hintPosition;
     private int hintBCI;
     private HotSpotMethodDataAccessor dataAccessor;
+    private HotSpotMethodData methodData;
+    private final int codeSize;
 
-    public HotSpotProfilingInfo(HotSpotMethodData methodData, HotSpotResolvedJavaMethod method) {
+    public HotSpotProfilingInfo(HotSpotMethodData methodData, int codeSize) {
         this.methodData = methodData;
-        this.method = method;
+        this.codeSize = codeSize;
         hintPosition = 0;
         hintBCI = -1;
     }
 
     @Override
     public int getCodeSize() {
-        return method.getCodeSize();
+        return codeSize;
     }
 
     @Override
@@ -159,11 +155,6 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
     private void setCurrentData(HotSpotMethodDataAccessor dataAccessor, int position) {
         this.dataAccessor = dataAccessor;
         this.position = position;
-    }
-
-    @Override
-    public boolean isMature() {
-        return true;
     }
 
     @Override

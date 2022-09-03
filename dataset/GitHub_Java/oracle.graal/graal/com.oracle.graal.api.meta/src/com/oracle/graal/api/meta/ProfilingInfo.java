@@ -87,8 +87,7 @@ public interface ProfilingInfo {
     TriState getExceptionSeen(int bci);
 
     /**
-     * Returns information if null was ever seen for the given BCI. This information is collected
-     * for the aastore, checkcast and instanceof bytecodes.
+     * Returns information if null was ever seen for the given BCI.
      * 
      * @return {@link TriState#TRUE} if null was seen for the instruction, {@link TriState#FALSE} if
      *         null was NOT seen, and {@link TriState#UNKNOWN} if this information was not recorded.
@@ -112,13 +111,5 @@ public interface ProfilingInfo {
      * @return the number of times the compiled method deoptimized for the given reason.
      */
     int getDeoptimizationCount(DeoptimizationReason reason);
-
-    /**
-     * Returns true if the profiling information can be assumed as sufficiently accurate.
-     * 
-     * @return true if the profiling information was recorded often enough mature enough, false
-     *         otherwise.
-     */
-    boolean isMature();
 
 }
