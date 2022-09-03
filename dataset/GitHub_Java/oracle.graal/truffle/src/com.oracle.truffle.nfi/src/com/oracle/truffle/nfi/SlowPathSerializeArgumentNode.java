@@ -33,6 +33,9 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.nfi.LibFFIType.PrepareArgument;
+import com.oracle.truffle.nfi.TypeConversion.AsPointerNode;
+import com.oracle.truffle.nfi.TypeConversionFactory.AsPointerNodeGen;
 
 abstract class SlowPathSerializeArgumentNode extends Node {
 
@@ -42,31 +45,42 @@ abstract class SlowPathSerializeArgumentNode extends Node {
     @SuppressWarnings("unused")
     protected Object cacheType(NativeArgumentBuffer buffer, LibFFIType type, Object value, @Cached("type") LibFFIType cachedType,
                     @Cached("cachedType.createSerializeArgumentNode()") SerializeArgumentNode serialize) {
-        return serialize.execute(buffer, value);
+        boolean consumed = serialize.execute(buffer, value);
+        assert cachedType.injectedArgument != consumed : "return value of SerializeArgumentNode doesn't agree with injectedArgument flag";
+        return null;
     }
 
-    @Specialization(replaces = "cacheType", guards = "needNoUnbox(value)")
-    protected Object genericWithoutUnbox(NativeArgumentBuffer buffer, LibFFIType type, Object value) {
+    @Specialization(replaces = "cacheType", guards = "needNoPrepare(value)")
+    protected Object genericWithoutPrepare(NativeArgumentBuffer buffer, LibFFIType type, Object value) {
         slowPathSerialize(buffer, type, value);
         return null;
     }
 
-    @Specialization(replaces = "cacheType", guards = "value != null")
-    protected Object genericWithUnbox(NativeArgumentBuffer buffer, LibFFIType type, TruffleObject value,
-                    @Cached("createIsNull()") Node isNull,
+    @Specialization(replaces = "cacheType", guards = {"value != null"})
+    protected Object genericWithPrepare(NativeArgumentBuffer buffer, LibFFIType type, TruffleObject value,
                     @Cached("createUnbox()") Node unbox,
+                    @Cached("createIsExecutable()") Node isExecutable,
+                    @Cached("createAsPointer()") AsPointerNode asPointer,
                     @Cached("createRecursive()") SlowPathSerializeArgumentNode recursive) {
         Object prepared = type.slowpathPrepareArgument(value);
-        if (prepared == null) {
-            Object unboxed;
-            if (!ForeignAccess.sendIsNull(isNull, value)) {
-                try {
-                    unboxed = ForeignAccess.sendUnbox(unbox, value);
-                } catch (UnsupportedMessageException ex) {
-                    throw UnsupportedTypeException.raise(ex, new Object[]{value});
-                }
-                return recursive.execute(buffer, type, unboxed);
+        if (prepared == PrepareArgument.EXECUTABLE) {
+            if (ForeignAccess.sendIsExecutable(isExecutable, value)) {
+                prepared = value;
+            } else {
+                prepared = PrepareArgument.POINTER;
             }
+        }
+
+        if (prepared == PrepareArgument.POINTER) {
+            prepared = asPointer.execute(value);
+        } else if (prepared == PrepareArgument.UNBOX) {
+            Object unboxed;
+            try {
+                unboxed = ForeignAccess.sendUnbox(unbox, value);
+            } catch (UnsupportedMessageException ex) {
+                throw UnsupportedTypeException.raise(ex, new Object[]{value});
+            }
+            return recursive.execute(buffer, type, unboxed);
         }
         slowPathSerialize(buffer, type, prepared);
         return null;
@@ -80,11 +94,19 @@ abstract class SlowPathSerializeArgumentNode extends Node {
         return Message.UNBOX.createNode();
     }
 
+    protected static Node createIsExecutable() {
+        return Message.IS_EXECUTABLE.createNode();
+    }
+
     protected static SlowPathSerializeArgumentNode createRecursive() {
         return SlowPathSerializeArgumentNodeGen.create();
     }
 
-    protected static boolean needNoUnbox(Object value) {
+    protected static AsPointerNode createAsPointer() {
+        return AsPointerNodeGen.create();
+    }
+
+    protected static boolean needNoPrepare(Object value) {
         return value == null || !(value instanceof TruffleObject);
     }
 
