@@ -92,7 +92,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
          OBJECT_TO_TRACKED,
          OBJECT_TO_UNTRACKED,
          TO_OBJECT,
-         TO_OBJECT_NON_NULL,
          TO_RAW_VALUE,
     }
      // @formatter:on
@@ -219,10 +218,6 @@ public abstract class Word implements Signed, Unsigned, Pointer {
     @Override
     @Operation(opcode = Opcode.TO_OBJECT)
     public native Object toObject();
-
-    @Override
-    @Operation(opcode = Opcode.TO_OBJECT_NON_NULL)
-    public native Object toObjectNonNull();
 
     @Override
     @Operation(node = AddNode.class)

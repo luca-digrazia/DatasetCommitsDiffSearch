@@ -32,7 +32,6 @@ import static org.graalvm.compiler.asm.amd64.AMD64Assembler.OperandSize.QWORD;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.lir.LIRValueUtil.asConstantValue;
 import static org.graalvm.compiler.lir.LIRValueUtil.asJavaConstant;
-import static org.graalvm.compiler.lir.LIRValueUtil.isConstantValue;
 import static org.graalvm.compiler.lir.LIRValueUtil.isJavaConstant;
 
 import org.graalvm.compiler.asm.NumUtil;
@@ -357,7 +356,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
                 throw GraalError.shouldNotReachHere("unexpected kind: " + cmpKind);
         }
 
-        if (isConstantValue(a)) {
+        if (isJavaConstant(a)) {
             return emitCompareMemoryConOp(size, asConstantValue(a), b, state);
         } else {
             return emitCompareRegMemoryOp(size, asAllocatable(a), b, state);
