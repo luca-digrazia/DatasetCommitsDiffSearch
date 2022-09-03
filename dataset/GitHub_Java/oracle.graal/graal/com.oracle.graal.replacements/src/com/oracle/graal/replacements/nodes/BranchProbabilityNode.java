@@ -24,15 +24,16 @@ package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.util.*;
 
 /**
  * Instances of this node class will look for a preceding if node and put the given probability into
  * the if node's taken probability. Then the branch probability node will be removed. This node is
  * intended primarily for snippets, so that they can define their fast and slow paths.
  */
-public class BranchProbabilityNode extends FloatingNode implements Canonicalizable, Lowerable {
+public class BranchProbabilityNode extends FixedWithNextNode implements Simplifiable, Lowerable {
 
     public static final double LIKELY_PROBABILITY = 0.6;
     public static final double NOT_LIKELY_PROBABILITY = 1 - LIKELY_PROBABILITY;
@@ -43,28 +44,18 @@ public class BranchProbabilityNode extends FloatingNode implements Canonicalizab
     public static final double FAST_PATH_PROBABILITY = 0.99;
     public static final double SLOW_PATH_PROBABILITY = 1 - FAST_PATH_PROBABILITY;
 
-    public static final double VERY_FAST_DEOPT_PATH_PROBABILITY = 0.999;
-    public static final double VERY_SLOW_PATH_PROBABILITY = 1 - VERY_FAST_DEOPT_PATH_PROBABILITY;
+    public static final double NOT_DEOPT_PATH_PROBABILITY = 0.999;
+    public static final double DEOPT_PATH_PROBABILITY = 1 - NOT_DEOPT_PATH_PROBABILITY;
 
     @Input private ValueNode probability;
-    @Input private ValueNode condition;
 
-    public BranchProbabilityNode(ValueNode probability, ValueNode condition) {
-        super(condition.stamp());
+    public BranchProbabilityNode(ValueNode probability) {
+        super(StampFactory.forVoid());
         this.probability = probability;
-        this.condition = condition;
-    }
-
-    public ValueNode getProbability() {
-        return probability;
-    }
-
-    public ValueNode getCondition() {
-        return condition;
     }
 
     @Override
-    public ValueNode canonical(CanonicalizerTool tool) {
+    public void simplify(SimplifierTool tool) {
         if (probability.isConstant()) {
             double probabilityValue = probability.asConstant().asDouble();
             if (probabilityValue < 0.0) {
@@ -72,22 +63,40 @@ public class BranchProbabilityNode extends FloatingNode implements Canonicalizab
             } else if (probabilityValue > 1.0) {
                 throw new GraalInternalError("A probability of more than 1.0 (" + probabilityValue + ") is not allowed!");
             }
-            for (IfNode ifNodeUsages : this.usages().filter(IfNode.class)) {
-                ifNodeUsages.setTrueSuccessorProbability(probabilityValue);
+            FixedNode current = this;
+            while (!(current instanceof BeginNode)) {
+                current = (FixedNode) current.predecessor();
             }
-            return condition;
+            BeginNode begin = (BeginNode) current;
+            if (!(begin.predecessor() instanceof IfNode)) {
+                return;
+            }
+            IfNode ifNode = (IfNode) begin.predecessor();
+            if (ifNode.trueSuccessor() == begin) {
+                ifNode.setTrueSuccessorProbability(probabilityValue);
+            } else {
+                ifNode.setTrueSuccessorProbability(1 - probabilityValue);
+            }
+
+            FixedNode next = next();
+            setNext(null);
+            ((FixedWithNextNode) predecessor()).setNext(next);
+            GraphUtil.killCFG(this);
         }
-        return this;
     }
 
     @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static boolean probability(double probability, boolean condition) {
-        return condition;
+    public static void probability(double probability) {
     }
 
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
-        throw new GraalInternalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
+        if (probability.isConstant()) {
+            throw new GraalInternalError("Injected branch probability must follow an if node.");
+        } else {
+            throw new GraalInternalError("Branch probability could not be injected, because the probability value did not reduce to a constant value.");
+        }
     }
+
 }
