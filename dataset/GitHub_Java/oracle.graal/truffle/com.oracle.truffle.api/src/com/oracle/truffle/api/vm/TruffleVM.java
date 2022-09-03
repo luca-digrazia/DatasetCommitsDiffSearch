@@ -24,6 +24,12 @@
  */
 package com.oracle.truffle.api.vm;
 
+import java.io.*;
+import java.net.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.logging.*;
+
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
@@ -31,13 +37,6 @@ import com.oracle.truffle.api.debug.*;
 import com.oracle.truffle.api.impl.*;
 import com.oracle.truffle.api.instrument.*;
 import com.oracle.truffle.api.source.*;
-import java.io.*;
-import java.net.*;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
-import java.util.logging.*;
 
 /**
  * <em>Virtual machine</em> for Truffle based languages. Term virtual machine is a bit overloaded,
@@ -76,7 +75,6 @@ public final class TruffleVM {
     private static final Logger LOG = Logger.getLogger(TruffleVM.class.getName());
     private static final SPIAccessor SPI = new SPIAccessor();
     private final Thread initThread;
-    private final Executor executor;
     private final Map<String, Language> langs;
     private final Reader in;
     private final Writer err;
@@ -96,14 +94,16 @@ public final class TruffleVM {
         this.langs = null;
         this.handlers = null;
         this.globals = null;
-        this.executor = null;
     }
 
     /**
      * Real constructor used from the builder.
+     *
+     * @param out stdout
+     * @param err stderr
+     * @param in stdin
      */
-    private TruffleVM(Executor executor, Map<String, Object> globals, Writer out, Writer err, Reader in, EventConsumer<?>[] handlers) {
-        this.executor = executor;
+    private TruffleVM(Map<String, Object> globals, Writer out, Writer err, Reader in, EventConsumer<?>[] handlers) {
         this.out = out;
         this.err = err;
         this.in = in;
@@ -194,7 +194,6 @@ public final class TruffleVM {
         private Reader in;
         private final List<EventConsumer<?>> handlers = new ArrayList<>();
         private final Map<String, Object> globals = new HashMap<>();
-        private Executor executor;
 
         Builder() {
         }
@@ -254,7 +253,7 @@ public final class TruffleVM {
          * and will take precedence over {@link TruffleLanguage#findExportedSymbol symbols exported
          * by languages itself}. Repeated use of <code>globalSymbol</code> is possible; later
          * definition of the same name overrides the previous one.
-         *
+         * 
          * @param name name of the symbol to register
          * @param obj value of the object - expected to be primitive wrapper, {@link String} or
          *            <code>TruffleObject</code> for mutual inter-operability
@@ -263,26 +262,6 @@ public final class TruffleVM {
          */
         public Builder globalSymbol(String name, Object obj) {
             globals.put(name, obj);
-            return this;
-        }
-
-        /**
-         * Provides own executor for running {@link TruffleVM} scripts. By default
-         * {@link TruffleVM#eval(com.oracle.truffle.api.source.Source)} and
-         * {@link Symbol#invoke(java.lang.Object, java.lang.Object...) are executed synchronously in
-         * the calling thread. Sometimes, however it is more beneficial to run them asynchronously -
-         * the easiest way to do so is to provide own executor when configuring the {
-         * @link #executor(java.util.concurrent.Executor) the builder}. The executor is expected to
-         * execute all {@link Runnable runnables} passed into its
-         * {@link Executor#execute(java.lang.Runnable)} method in the order they arrive and in a
-         * single (yet arbitrary) thread.
-         *
-         * @param executor the executor to use for internal execution inside the {@link #build() to
-         *            be created} {@link TruffleVM}
-         * @return instance of this builder
-         */
-        public Builder executor(Executor executor) {
-            this.executor = executor;
             return this;
         }
 
@@ -302,13 +281,7 @@ public final class TruffleVM {
             if (in == null) {
                 in = new InputStreamReader(System.in);
             }
-            Executor nonNullExecutor = executor != null ? executor : new Executor() {
-                @Override
-                public void execute(Runnable command) {
-                    command.run();
-                }
-            };
-            return new TruffleVM(nonNullExecutor, globals, out, err, in, handlers.toArray(new EventConsumer[0]));
+            return new TruffleVM(globals, out, err, in, handlers.toArray(new EventConsumer[0]));
         }
     }
 
@@ -334,7 +307,7 @@ public final class TruffleVM {
      * @deprecated use {@link #eval(com.oracle.truffle.api.source.Source)}
      */
     @Deprecated
-    public Symbol eval(URI location) throws IOException {
+    public Object eval(URI location) throws IOException {
         checkThread();
         Source s;
         String mimeType;
@@ -356,7 +329,7 @@ public final class TruffleVM {
             URLConnection conn = url.openConnection();
             mimeType = conn.getContentType();
         }
-        Language l = langs.get(mimeType);
+        TruffleLanguage<?> l = getTruffleLang(mimeType);
         if (l == null) {
             throw new IOException("No language for " + location + " with MIME type " + mimeType + " found. Supported types: " + langs.keySet());
         }
@@ -374,9 +347,9 @@ public final class TruffleVM {
      * @deprecated use {@link #eval(com.oracle.truffle.api.source.Source)}
      */
     @Deprecated
-    public Symbol eval(String mimeType, Reader reader) throws IOException {
+    public Object eval(String mimeType, Reader reader) throws IOException {
         checkThread();
-        Language l = langs.get(mimeType);
+        TruffleLanguage<?> l = getTruffleLang(mimeType);
         if (l == null) {
             throw new IOException("No language for MIME type " + mimeType + " found. Supported types: " + langs.keySet());
         }
@@ -394,9 +367,9 @@ public final class TruffleVM {
      * @deprecated use {@link #eval(com.oracle.truffle.api.source.Source)}
      */
     @Deprecated
-    public Symbol eval(String mimeType, String code) throws IOException {
+    public Object eval(String mimeType, String code) throws IOException {
         checkThread();
-        Language l = langs.get(mimeType);
+        TruffleLanguage<?> l = getTruffleLang(mimeType);
         if (l == null) {
             throw new IOException("No language for MIME type " + mimeType + " found. Supported types: " + langs.keySet());
         }
@@ -412,44 +385,24 @@ public final class TruffleVM {
      * @return result of an execution, possibly <code>null</code>
      * @throws IOException thrown to signal errors while processing the code
      */
-    public Symbol eval(Source source) throws IOException {
+    public Object eval(Source source) throws IOException {
         String mimeType = source.getMimeType();
         checkThread();
-        Language l = langs.get(mimeType);
+        TruffleLanguage<?> l = getTruffleLang(mimeType);
         if (l == null) {
             throw new IOException("No language for MIME type " + mimeType + " found. Supported types: " + langs.keySet());
         }
         return eval(l, source);
     }
 
-    private Symbol eval(final Language l, final Source s) throws IOException {
-        final Debugger[] fillIn = {debugger};
-        final Object[] result = {null, null};
-        final CountDownLatch ready = new CountDownLatch(1);
-        final TruffleLanguage[] lang = {null};
-        executor.execute(new Runnable() {
-            @Override
-            public void run() {
-                TruffleLanguage<?> langImpl = l.getImpl();
-                lang[0] = langImpl;
-                TruffleVM.findDebuggerSupport(langImpl);
-                evalImpl(fillIn, s, result, langImpl, ready);
-            }
-        });
-        exceptionCheck(result);
-        return new Symbol(lang[0], result, ready);
-    }
-
-    private void evalImpl(Debugger[] fillIn, Source s, Object[] result, TruffleLanguage<?> l, CountDownLatch ready) {
+    private Object eval(TruffleLanguage<?> l, Source s) throws IOException {
+        TruffleVM.findDebuggerSupport(l);
+        Debugger[] fillIn = {debugger};
         try (Closeable d = SPI.executionStart(this, fillIn, s)) {
             if (debugger == null) {
                 debugger = fillIn[0];
             }
-            result[0] = SPI.eval(l, s);
-        } catch (IOException ex) {
-            result[1] = ex;
-        } finally {
-            ready.countDown();
+            return SPI.eval(l, s);
         }
     }
 
@@ -470,57 +423,46 @@ public final class TruffleVM {
      * @param globalName the name of the symbol to find
      * @return found symbol or <code>null</code> if it has not been found
      */
-    public Symbol findGlobalSymbol(final String globalName) {
+    public Symbol findGlobalSymbol(String globalName) {
         checkThread();
-        final TruffleLanguage<?>[] lang = {null};
-        final Object[] obj = {globals.get(globalName), null};
-        final CountDownLatch ready = new CountDownLatch(1);
-        if (obj[0] == null) {
-            executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    findGlobalSymbolImpl(obj, globalName, lang, ready);
-                }
-            });
-            try {
-                ready.await();
-            } catch (InterruptedException ex) {
-                LOG.log(Level.SEVERE, null, ex);
-            }
-        } else {
-            ready.countDown();
-        }
-        return obj[0] == null ? null : new Symbol(lang[0], obj, ready);
-    }
-
-    private void findGlobalSymbolImpl(Object[] obj, String globalName, TruffleLanguage<?>[] lang, CountDownLatch ready) {
-        if (obj[0] == null) {
+        TruffleLanguage<?> lang = null;
+        Object obj = globals.get(globalName);
+        Object global = null;
+        if (obj == null) {
             for (Language dl : langs.values()) {
                 TruffleLanguage<?> l = dl.getImpl();
-                obj[0] = SPI.findExportedSymbol(dl.getEnv(), globalName, true);
-                if (obj[0] != null) {
-                    lang[0] = l;
+                obj = SPI.findExportedSymbol(dl.env, globalName, true);
+                if (obj != null) {
+                    lang = l;
+                    global = SPI.languageGlobal(dl.env);
                     break;
                 }
             }
         }
-        if (obj[0] == null) {
+        if (obj == null) {
             for (Language dl : langs.values()) {
                 TruffleLanguage<?> l = dl.getImpl();
-                obj[0] = SPI.findExportedSymbol(dl.getEnv(), globalName, false);
-                if (obj[0] != null) {
-                    lang[0] = l;
+                obj = SPI.findExportedSymbol(dl.env, globalName, false);
+                if (obj != null) {
+                    lang = l;
+                    global = SPI.languageGlobal(dl.env);
                     break;
                 }
             }
         }
-        ready.countDown();
+        return obj == null ? null : new Symbol(lang, obj, global);
     }
 
     private void checkThread() {
         if (initThread != Thread.currentThread()) {
             throw new IllegalStateException("TruffleVM created on " + initThread.getName() + " but used on " + Thread.currentThread().getName());
         }
+    }
+
+    private TruffleLanguage<?> getTruffleLang(String mimeType) {
+        checkThread();
+        Language l = langs.get(mimeType);
+        return l == null ? null : l.getImpl();
     }
 
     @SuppressWarnings("all")
@@ -552,44 +494,20 @@ public final class TruffleVM {
         }
     }
 
-    static void exceptionCheck(Object[] result) throws RuntimeException, IOException {
-        if (result[1] instanceof IOException) {
-            throw (IOException) result[1];
-        }
-        if (result[1] instanceof RuntimeException) {
-            throw (RuntimeException) result[1];
-        }
-    }
-
     /**
      * Represents {@link TruffleVM#findGlobalSymbol(java.lang.String) global symbol} provided by one
      * of the initialized languages in {@link TruffleVM Truffle virtual machine}.
      */
     public class Symbol {
         private final TruffleLanguage<?> language;
-        private final Object[] result;
-        private final CountDownLatch ready;
+        private final Object obj;
+        private final Object global;
         private CallTarget target;
 
-        Symbol(TruffleLanguage<?> language, Object[] result, CountDownLatch ready) {
+        Symbol(TruffleLanguage<?> language, Object obj, Object global) {
             this.language = language;
-            this.result = result;
-            this.ready = ready;
-        }
-
-        /**
-         * Obtains the object represented by this symbol. The <em>raw</em> object can either be a
-         * wrapper about primitive type (e.g. {@link Number}, {@link String}, {@link Character},
-         * {@link Boolean}) or a <em>TruffleObject</em> representing more complex object from a
-         * language. The method can return <code>null</code>.
-         *
-         * @return the object or <code>null</code>
-         * @throws IOException in case it is not possible to obtain the value of the object
-         */
-        public Object get() throws IOException {
-            waitForSymbol();
-            exceptionCheck(result);
-            return result[0];
+            this.obj = obj;
+            this.global = global;
         }
 
         /**
@@ -604,29 +522,15 @@ public final class TruffleVM {
          * @return the value returned by invoking the symbol
          * @throws IOException signals problem during execution
          */
-        public Symbol invoke(final Object thiz, final Object... args) throws IOException {
-            get();
-            final Debugger[] fillIn = {debugger};
-            final CountDownLatch done = new CountDownLatch(1);
-            final Object[] res = {null, null};
-            executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    invokeImpl(fillIn, thiz, args, res, done);
-                }
-            });
-            exceptionCheck(res);
-            return new Symbol(language, res, done);
-        }
-
-        private void invokeImpl(Debugger[] fillIn, Object thiz, Object[] args, Object[] res, CountDownLatch done) {
-            try (final Closeable c = SPI.executionStart(TruffleVM.this, fillIn, null)) {
+        public Object invoke(Object thiz, Object... args) throws IOException {
+            checkThread();
+            Debugger[] fillIn = {debugger};
+            try (Closeable c = SPI.executionStart(TruffleVM.this, fillIn, null)) {
                 if (debugger == null) {
                     debugger = fillIn[0];
                 }
                 List<Object> arr = new ArrayList<>();
-                if (thiz == null && language != null) {
-                    Object global = SPI.languageGlobal(SPI.findLanguage(TruffleVM.this, language.getClass()));
+                if (thiz == null) {
                     if (global != null) {
                         arr.add(global);
                     }
@@ -635,31 +539,15 @@ public final class TruffleVM {
                 }
                 arr.addAll(Arrays.asList(args));
                 for (;;) {
+                    if (target == null) {
+                        target = SPI.createCallTarget(language, obj, arr.toArray());
+                    }
                     try {
-                        if (target == null) {
-                            target = SPI.createCallTarget(language, result[0], arr.toArray());
-                        }
-                        res[0] = target.call(arr.toArray());
-                        break;
+                        return target.call(arr.toArray());
                     } catch (SymbolInvoker.ArgumentsMishmashException ex) {
                         target = null;
                     }
                 }
-            } catch (IOException ex) {
-                res[1] = ex;
-            } catch (RuntimeException ex) {
-                res[1] = ex;
-            } finally {
-                done.countDown();
-            }
-        }
-
-        private void waitForSymbol() throws InterruptedIOException {
-            checkThread();
-            try {
-                ready.await();
-            } catch (InterruptedException ex) {
-                throw (InterruptedIOException) new InterruptedIOException(ex.getMessage()).initCause(ex);
             }
         }
     }
@@ -749,13 +637,6 @@ public final class TruffleVM {
         public String toString() {
             return "[" + getShortName() + " for " + getMimeTypes() + "]";
         }
-
-        TruffleLanguage.Env getEnv() {
-            if (env == null) {
-                env = SPI.attachEnv(TruffleVM.this, impl, out, err, in);
-            }
-            return env;
-        }
     } // end of Language
 
     //
@@ -777,7 +658,7 @@ public final class TruffleVM {
         for (Map.Entry<String, Language> entrySet : langs.entrySet()) {
             Language languageDescription = entrySet.getValue();
             if (languageClazz.isInstance(languageDescription.impl)) {
-                return languageDescription.getEnv();
+                return languageDescription.env;
             }
         }
         throw new IllegalStateException("Cannot find language " + languageClazz + " among " + langs);
@@ -800,7 +681,7 @@ public final class TruffleVM {
                 if (l == ownLang) {
                     continue;
                 }
-                Object obj = SPI.findExportedSymbol(dl.getEnv(), globalName, true);
+                Object obj = SPI.findExportedSymbol(dl.env, globalName, true);
                 if (obj != null) {
                     return obj;
                 }
@@ -810,7 +691,7 @@ public final class TruffleVM {
                 if (l == ownLang) {
                     continue;
                 }
-                Object obj = SPI.findExportedSymbol(dl.getEnv(), globalName, false);
+                Object obj = SPI.findExportedSymbol(dl.env, globalName, false);
                 if (obj != null) {
                     return obj;
                 }
