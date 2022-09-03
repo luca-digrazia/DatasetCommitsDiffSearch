@@ -24,22 +24,34 @@
  */
 package com.oracle.truffle.api.interop.java;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 
 final class ToPrimitiveNode extends Node {
-
+    @Child Node isNullNode;
     @Child Node isBoxedNode;
     @Child Node hasSizeNode;
     @Child Node unboxNode;
 
-    ToPrimitiveNode() {
+    private ToPrimitiveNode() {
+        this.isNullNode = Message.IS_NULL.createNode();
         this.isBoxedNode = Message.IS_BOXED.createNode();
         this.hasSizeNode = Message.HAS_SIZE.createNode();
         this.unboxNode = Message.UNBOX.createNode();
+    }
+
+    static ToPrimitiveNode create() {
+        return new ToPrimitiveNode();
+    }
+
+    static ToPrimitiveNode temporary() {
+        CompilerAsserts.neverPartOfCompilation();
+        return new ToPrimitiveNode();
     }
 
     boolean isPrimitive(Object attr) {
@@ -108,6 +120,23 @@ final class ToPrimitiveNode extends Node {
 
     boolean hasSize(TruffleObject truffleObject) {
         return ForeignAccess.sendHasSize(hasSizeNode, truffleObject);
+    }
+
+    boolean isNull(TruffleObject ret) {
+        return ForeignAccess.sendIsNull(isNullNode, ret);
+    }
+
+    Object unbox(TruffleObject ret) throws UnsupportedMessageException {
+        Object result = ForeignAccess.sendUnbox(unboxNode, ret);
+        if (result instanceof TruffleObject && isNull((TruffleObject) result)) {
+            return null;
+        } else {
+            return result;
+        }
+    }
+
+    boolean isBoxed(TruffleObject foreignObject) {
+        return ForeignAccess.sendIsBoxed(isBoxedNode, foreignObject);
     }
 
 }

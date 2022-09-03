@@ -137,7 +137,7 @@ public class ConstraintInteropTypesTest {
 
         @Override
         public ForeignAccess getForeignAccess() {
-            return BrokenTruffleObjectForeign.ACCESS;
+            return BrokenTruffleObjectForeign.createAccess();
         }
 
         @Resolve(message = "EXECUTE")

@@ -899,6 +899,7 @@ public class PolyglotEngine {
     public abstract class Value {
         private final TruffleLanguage<?>[] language;
         private CallTarget executeTarget;
+        private CallTarget unwrapTarget;
         private CallTarget asJavaObjectTarget;
 
         Value(TruffleLanguage<?>[] language) {
@@ -911,7 +912,9 @@ public class PolyglotEngine {
 
         @SuppressWarnings("unchecked")
         private <T> T unwrapJava(Object value) {
-            CallTarget unwrapTarget = cachedTargets.lookupAsJava(value.getClass());
+            if (unwrapTarget == null) {
+                unwrapTarget = cachedTargets.lookupAsJava(value.getClass());
+            }
             return (T) unwrapTarget.call(value, Object.class);
         }
 
@@ -945,7 +948,7 @@ public class PolyglotEngine {
         public Object get() {
             Object result = waitForSymbol();
             if (result instanceof TruffleObject) {
-                result = unwrapJava(ConvertedObject.value(result));
+                result = unwrapJava((TruffleObject) result);
                 if (result instanceof TruffleObject) {
                     result = EngineTruffleObject.wrap(PolyglotEngine.this, result);
                 }
@@ -987,12 +990,12 @@ public class PolyglotEngine {
             Object unwrapped = original;
 
             if (original instanceof TruffleObject) {
-                unwrapped = unwrapJava(ConvertedObject.original(original));
+                unwrapped = unwrapJava(original);
             }
             if (representation == String.class) {
                 if (language[0] != null) {
                     final Class<? extends TruffleLanguage> clazz = language[0].getClass();
-                    Object unwrappedConvered = ConvertedObject.original(unwrapped);
+                    Object unwrappedConvered = unwrapped instanceof ConvertedObject ? ((ConvertedObject) unwrapped).getOriginal() : unwrapped;
                     return representation.cast(Access.LANGS.toStringIfVisible(language[0], findEnv(clazz), unwrappedConvered, null));
                 }
             }

@@ -24,21 +24,19 @@
  */
 package com.oracle.truffle.api.interop.java;
 
-import java.util.AbstractList;
-import java.util.List;
-import java.util.Objects;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import java.util.AbstractList;
+import java.util.List;
 
 final class TruffleList<T> extends AbstractList<T> {
     private final TruffleObject array;
@@ -92,7 +90,7 @@ final class TruffleList<T> extends AbstractList<T> {
         @Child private ToJavaNode toJavaNode;
 
         ListNode(Message msg) {
-            super(null);
+            super(TruffleLanguage.class, null, null);
             this.msg = msg;
             this.node = msg.createNode();
             this.toJavaNode = ToJavaNodeGen.create();
@@ -116,9 +114,6 @@ final class TruffleList<T> extends AbstractList<T> {
                     CompilerDirectives.transferToInterpreter();
                     throw UnsupportedMessageException.raise(msg);
                 }
-            } catch (UnknownIdentifierException ex) {
-                CompilerDirectives.transferToInterpreter();
-                throw new IndexOutOfBoundsException(Objects.toString(args[2]));
             } catch (InteropException ex) {
                 CompilerDirectives.transferToInterpreter();
                 throw ex.raise();

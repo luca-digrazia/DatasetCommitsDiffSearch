@@ -38,32 +38,50 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.sl.nodes.interop;
+package com.oracle.truffle.sl.runtime;
 
-import com.oracle.truffle.sl.runtime.SLBigTruffleObject;
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.sl.nodes.SLTypes;
+import com.oracle.truffle.sl.SLLanguage;
 import java.math.BigInteger;
 
-/**
- * The node for converting a foreign primitive or boxed primitive value to an SL value.
- */
-@TypeSystemReference(SLTypes.class)
-public abstract class SLTypeToForeignNode extends Node {
+@MessageResolution(language = SLLanguage.class, receiverType = SLBigTruffleObject.class)
+public class SLBigTruffleObject implements TruffleObject {
 
-    public abstract Object executeConvert(Object value);
+    private final BigInteger value;
 
-    @Specialization
-    static TruffleObject fromObject(BigInteger value) {
-        return new SLBigTruffleObject(value);
+    public SLBigTruffleObject(BigInteger value) {
+        this.value = value;
     }
 
-    @Fallback
-    static Object identity(Object value) {
+    public BigInteger getValue() {
         return value;
+    }
+
+    @Override
+    public ForeignAccess getForeignAccess() {
+        return SLBigTruffleObjectForeign.createAccess();
+    }
+
+    static boolean isInstance(TruffleObject obj) {
+        return obj instanceof SLBigTruffleObject;
+    }
+
+    @Resolve(message = "UNBOX")
+    abstract static class UnboxBigNode extends Node {
+        Object access(SLBigTruffleObject obj) {
+            return obj.value.doubleValue();
+        }
+    }
+
+    @Resolve(message = "IS_BOXED")
+    abstract static class IsBoxedBigNode extends Node {
+        @SuppressWarnings("unused")
+        Object access(SLBigTruffleObject obj) {
+            return true;
+        }
     }
 }

@@ -151,7 +151,8 @@ class JavaObjectMessageResolution {
         @Child private ToPrimitiveNode primitive = ToPrimitiveNode.create();
 
         public Object access(JavaObject object) {
-            return primitive.toPrimitive(object.obj, null);
+            Object result = primitive.toPrimitive(object.obj, null);
+            return result == null ? JavaObject.NULL : result;
         }
 
     }
@@ -226,7 +227,7 @@ class JavaObjectMessageResolution {
                     fields[i++] = Objects.toString(key, null);
                 }
             } else {
-                fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findUniquePublicMemberNames(receiver.clazz, receiver.obj != null);
+                fields = TruffleOptions.AOT ? new String[0] : JavaInteropReflect.findPublicFieldsNames(receiver.clazz, receiver.obj != null);
             }
             return JavaInterop.asTruffleObject(fields);
         }

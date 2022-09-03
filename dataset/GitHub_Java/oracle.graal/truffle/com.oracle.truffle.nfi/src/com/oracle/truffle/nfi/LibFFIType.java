@@ -34,9 +34,9 @@ import com.oracle.truffle.nfi.ClosureArgumentNode.ObjectClosureArgumentNode;
 import com.oracle.truffle.nfi.ClosureArgumentNode.StringClosureArgumentNode;
 import com.oracle.truffle.nfi.ClosureArgumentNodeFactory.BufferClosureArgumentNodeGen;
 import com.oracle.truffle.nfi.NativeArgumentBuffer.TypeTag;
-import com.oracle.truffle.nfi.SerializeArgumentNode.SerializeObjectArgumentNode;
 import com.oracle.truffle.nfi.SerializeArgumentNodeFactory.SerializeArrayArgumentNodeGen;
 import com.oracle.truffle.nfi.SerializeArgumentNodeFactory.SerializeClosureArgumentNodeGen;
+import com.oracle.truffle.nfi.SerializeArgumentNodeFactory.SerializeObjectArgumentNodeGen;
 import com.oracle.truffle.nfi.SerializeArgumentNodeFactory.SerializePointerArgumentNodeGen;
 import com.oracle.truffle.nfi.SerializeArgumentNodeFactory.SerializeSimpleArgumentNodeGen;
 import com.oracle.truffle.nfi.SerializeArgumentNodeFactory.SerializeStringArgumentNodeGen;
@@ -224,7 +224,7 @@ abstract class LibFFIType {
         public final Object fromPrimitive(long primitive) {
             switch (simpleType) {
                 case VOID:
-                    return new NativePointer(0);
+                    return JavaInterop.asTruffleObject(null);
                 case UINT8:
                 case SINT8:
                     return (byte) primitive;
@@ -406,7 +406,8 @@ abstract class LibFFIType {
         }
 
         @Override
-        protected void doSerialize(NativeArgumentBuffer buffer, Object object) {
+        protected void doSerialize(NativeArgumentBuffer buffer, Object value) {
+            TruffleObject object = (TruffleObject) value;
             buffer.putObject(TypeTag.OBJECT, object, size);
         }
 
@@ -422,7 +423,7 @@ abstract class LibFFIType {
 
         @Override
         public SerializeArgumentNode createSerializeArgumentNode() {
-            return new SerializeObjectArgumentNode(this);
+            return SerializeObjectArgumentNodeGen.create(this);
         }
 
         @Override
@@ -438,17 +439,16 @@ abstract class LibFFIType {
 
     abstract static class BasePointerType extends LibFFIType {
 
+        private static final LibFFIType POINTER;
+
         static {
             // make sure simpleTypeMap is initialized
             NativeAccess.ensureInitialized();
-        }
-
-        private static LibFFIType getPointerType() {
-            return simpleTypeMap[NativeSimpleType.POINTER.ordinal()];
+            POINTER = simpleTypeMap[NativeSimpleType.POINTER.ordinal()];
         }
 
         protected BasePointerType(Direction direction) {
-            super(getPointerType().size, getPointerType().alignment, 1, getPointerType().type, direction);
+            super(POINTER.size, POINTER.alignment, 1, POINTER.type, direction);
         }
     }
 
