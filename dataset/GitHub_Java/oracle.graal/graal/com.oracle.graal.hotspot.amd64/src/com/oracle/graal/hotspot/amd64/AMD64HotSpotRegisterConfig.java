@@ -34,7 +34,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.nodes.type.*;
-import com.oracle.graal.phases.*;
 
 public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
@@ -44,12 +43,10 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
 
     /**
      * The same as {@link #allocatable}, except if parameter registers are removed with the
-     * {@link GraalOptions#RegisterPressure} option. The caller saved registers always include all
-     * parameter registers.
+     * {@link #RegisterPressure} option. The caller saved registers always include all parameter
+     * registers.
      */
     private final Register[] callerSaved;
-
-    private final boolean allAllocatableAreCallerSaved;
 
     private final HashMap<PlatformKind, Register[]> categorized = new HashMap<>();
 
@@ -155,18 +152,12 @@ public class AMD64HotSpotRegisterConfig implements RegisterConfig {
         callerSaved = callerSaveSet.toArray(new Register[callerSaveSet.size()]);
         assert callerSaved.length == allocatable.length || RegisterPressure.getValue() != null;
 
-        allAllocatableAreCallerSaved = true;
         attributesMap = RegisterAttributes.createMap(this, AMD64.allRegisters);
     }
 
     @Override
     public Register[] getCallerSaveRegisters() {
         return callerSaved;
-    }
-
-    @Override
-    public boolean areAllAllocatableRegistersCallerSaved() {
-        return allAllocatableAreCallerSaved;
     }
 
     @Override
