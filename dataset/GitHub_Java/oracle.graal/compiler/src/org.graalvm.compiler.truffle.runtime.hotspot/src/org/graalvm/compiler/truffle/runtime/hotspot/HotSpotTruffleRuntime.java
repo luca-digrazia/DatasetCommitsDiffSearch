@@ -48,7 +48,6 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompiler;
 import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompiler.Factory;
 import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompilerRuntime;
-import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleInstalledCode;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.TruffleCallBoundary;
@@ -62,6 +61,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
+import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.stack.StackIntrospection;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
@@ -86,7 +86,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
     }
 
     public HotSpotTruffleRuntime(Supplier<GraalRuntime> graalRuntimeSupplier) {
-        super(graalRuntimeSupplier, Arrays.asList(HotSpotOptimizedCallTarget.class));
+        super(graalRuntimeSupplier);
         setDontInlineCallBoundaryMethod();
     }
 
@@ -97,7 +97,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
 
     @Override
     public String getName() {
-        return "Graal Truffle Engine";
+        return "Graal Truffle Runtime";
     }
 
     private volatile Lazy lazy;
@@ -173,14 +173,9 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
     }
 
     @Override
-    public OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode) {
-        return new HotSpotOptimizedCallTarget(source, rootNode, HotSpotTruffleCompiler.INVALID_CODE);
-    }
-
-    @Override
-    public void onCodeInstallation(HotSpotTruffleInstalledCode installedCode) {
-        HotSpotOptimizedCallTarget callTarget = (HotSpotOptimizedCallTarget) installedCode.getCompilable();
-        callTarget.setInstalledCode(installedCode);
+    protected OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode) {
+        /* No HotSpot-specific subclass is currently necessary for call targets. */
+        return new OptimizedCallTarget(source, rootNode);
     }
 
     @Override
@@ -204,7 +199,7 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
         }
     }
 
-    static MetaAccessProvider getMetaAccess() {
+    private static MetaAccessProvider getMetaAccess() {
         return JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess();
     }
 
@@ -246,10 +241,25 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime implements 
         return super.cancelInstalledTask(optimizedCallTarget, source, reason);
     }
 
+    private static CodeCacheProvider getCodeCache() {
+        return JVMCI.getRuntime().getHostJVMCIBackend().getCodeCache();
+    }
+
+    @Override
+    public void invalidateInstalledCode(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+        getCodeCache().invalidateInstalledCode(optimizedCallTarget);
+        getListener().onCompilationInvalidated(optimizedCallTarget, source, reason);
+    }
+
     @SuppressWarnings("try")
     @Override
-    public void bypassedInstalledCode() {
+    public void bypassedCompiledCode() {
         getTruffleCompiler().installTruffleCallBoundaryMethods();
+    }
+
+    @Override
+    protected boolean platformEnableInfopoints() {
+        return getCodeCache().shouldDebugNonSafepoints();
     }
 
     @Override
