@@ -190,17 +190,12 @@ public class SourceSectionTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testOutOfRange13() {
-        shortSource.createSection(2);
+        longSource.createSection(4);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testOutOfRange14() {
         longSource.createSection(-1);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testOutOfRange15() {
-        longSource.createSection(5);
     }
 
     @Test
@@ -263,21 +258,6 @@ public class SourceSectionTest {
         SourceSection other = longSource.createSection(longSource.getLength(), 0);
         assertTrue(section.equals(other));
         assertEquals(other.hashCode(), section.hashCode());
-    }
-
-    @Test
-    public void testFinalNL() {
-        int sourceLength = longSource.getCharacters().length();
-        SourceSection section = longSource.createSection(4);
-        assertNotNull(section);
-        assertEquals(sourceLength, section.getCharIndex());
-        assertEquals(0, section.getCharLength());
-        assertEquals(4, section.getStartLine());
-        assertEquals(4, section.getEndLine());
-        assertEquals(1, section.getStartColumn());
-        assertEquals(1, section.getEndColumn());
-        assertEquals("", section.getCharacters());
-        assertTrue(section.isAvailable());
     }
 
     @Test
