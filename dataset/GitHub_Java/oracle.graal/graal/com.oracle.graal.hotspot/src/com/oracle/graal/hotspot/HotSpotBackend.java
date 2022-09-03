@@ -27,7 +27,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.stack.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.stubs.*;
@@ -36,6 +35,7 @@ import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 import com.oracle.graal.lir.StandardOp.LabelOp;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.word.*;
 
@@ -45,11 +45,21 @@ import com.oracle.graal.word.*;
 public abstract class HotSpotBackend extends Backend {
 
     /**
+     * Descriptor for SharedRuntime::deopt_blob()-&gt;uncommon_trap().
+     */
+    public static final ForeignCallDescriptor UNCOMMON_TRAP = new ForeignCallDescriptor("deoptimize", void.class);
+
+    /**
      * Descriptor for {@link ExceptionHandlerStub}. This stub is called by the
      * {@linkplain HotSpotVMConfig#codeInstallerMarkIdExceptionHandlerEntry exception handler} in a
      * compiled method.
      */
     public static final ForeignCallDescriptor EXCEPTION_HANDLER = new ForeignCallDescriptor("exceptionHandler", void.class, Object.class, Word.class);
+
+    /**
+     * Descriptor for SharedRuntime::deopt_blob()-&gt;unpack().
+     */
+    public static final ForeignCallDescriptor DEOPT_HANDLER = new ForeignCallDescriptor("deoptHandler", void.class);
 
     /**
      * Descriptor for SharedRuntime::get_ic_miss_stub().

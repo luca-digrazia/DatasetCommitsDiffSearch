@@ -24,6 +24,7 @@
 package com.oracle.graal.hotspot.bridge;
 
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.meta.*;
 
@@ -144,6 +145,9 @@ public class CompilerToVMImpl implements CompilerToVM {
     public native Class<?> getJavaMirror(long metaspaceKlass);
 
     @Override
+    public native void setNodeClass(Class<?> c, NodeClass nodeClass);
+
+    @Override
     public native long readUnsafeKlassPointer(Object o);
 
     @Override
@@ -175,7 +179,7 @@ public class CompilerToVMImpl implements CompilerToVM {
 
     public native boolean hasCompiledCodeForOSR(long metaspaceMethod, int entryBCI, int level);
 
-    public native HotSpotStackFrameReference getNextStackFrame(HotSpotStackFrameReference frame, long[] methods, int initialSkip);
+    public native HotSpotStackFrameReference getNextStackFrame(HotSpotStackFrameReference frame, HotSpotResolvedJavaMethod method);
 
     public native void materializeVirtualObjects(HotSpotStackFrameReference stackFrame, boolean invalidate);
 
