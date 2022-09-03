@@ -36,7 +36,6 @@ import com.oracle.truffle.api.nodes.Node.Children;
  *
  * @since 0.8 or earlier
  */
-@Deprecated
 public abstract class NodeFieldAccessor {
     /** @since 0.8 or earlier */
     public enum NodeFieldKind {
@@ -136,7 +135,6 @@ public abstract class NodeFieldAccessor {
     public abstract Object loadValue(Node node);
 
     /** @since 0.8 or earlier */
-    @SuppressWarnings("deprecation")
     public abstract static class AbstractUnsafeNodeFieldAccessor extends NodeFieldAccessor {
         /** @since 0.8 or earlier */
         protected AbstractUnsafeNodeFieldAccessor(NodeFieldKind kind, Class<?> declaringClass, String name, Class<?> type) {
@@ -147,6 +145,7 @@ public abstract class NodeFieldAccessor {
         public abstract long getOffset();
 
         /** @since 0.8 or earlier */
+        @SuppressWarnings("deprecation")
         @Override
         public void putObject(Node receiver, Object value) {
             if (!type.isPrimitive() && value == null || type.isInstance(value)) {
@@ -157,6 +156,7 @@ public abstract class NodeFieldAccessor {
         }
 
         /** @since 0.8 or earlier */
+        @SuppressWarnings("deprecation")
         @Override
         public Object getObject(Node receiver) {
             if (!type.isPrimitive()) {
@@ -207,7 +207,6 @@ public abstract class NodeFieldAccessor {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private static final class UnsafeNodeField extends AbstractUnsafeNodeFieldAccessor implements NodeClass.NodeField {
         private final long offset;
 
@@ -247,7 +246,6 @@ public abstract class NodeFieldAccessor {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private static final class ReflectionNodeField extends NodeFieldAccessor implements NodeClass.NodeField {
         private final Field field;
 
@@ -257,6 +255,7 @@ public abstract class NodeFieldAccessor {
             field.setAccessible(true);
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void putObject(Node receiver, Object value) {
             assert !type.isPrimitive() && value == null || type.isInstance(value);
@@ -267,6 +266,7 @@ public abstract class NodeFieldAccessor {
             }
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public Object getObject(Node receiver) {
             assert !type.isPrimitive();
