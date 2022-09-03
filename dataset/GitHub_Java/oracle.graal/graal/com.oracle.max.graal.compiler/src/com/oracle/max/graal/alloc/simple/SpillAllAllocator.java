@@ -39,15 +39,16 @@ import com.oracle.max.graal.compiler.lir.LIRInstruction.ValueProcedure;
 import com.oracle.max.graal.compiler.lir.LIRPhiMapping.PhiValueProcedure;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.util.*;
-import com.oracle.max.graal.debug.*;
 
 public class SpillAllAllocator {
+    private final GraalContext context;
     private final LIR lir;
     private final FrameMap frameMap;
 
     private final DataFlowAnalysis dataFlow;
 
-    public SpillAllAllocator(LIR lir, FrameMap frameMap) {
+    public SpillAllAllocator(GraalContext context, LIR lir, FrameMap frameMap) {
+        this.context = context;
         this.lir = lir;
         this.frameMap = frameMap;
 
@@ -133,23 +134,23 @@ public class SpillAllAllocator {
         assert LIRVerifier.verify(true, lir, frameMap);
 
         dataFlow.execute();
-        IntervalPrinter.printBeforeAllocation("Before register allocation", lir, frameMap.registerConfig, dataFlow);
+        IntervalPrinter.printBeforeAllocation("Before register allocation", context, lir, frameMap.registerConfig, dataFlow);
 
         allocate();
 
-        IntervalPrinter.printAfterAllocation("After spill all allocation", lir, frameMap.registerConfig, dataFlow, blockLocations);
+        IntervalPrinter.printAfterAllocation("After spill all allocation", context, lir, frameMap.registerConfig, dataFlow, blockLocations);
 
         ResolveDataFlow resolveDataFlow = new ResolveDataFlowImpl(lir, moveResolver, dataFlow);
         resolveDataFlow.execute();
         frameMap.finish();
 
-        IntervalPrinter.printAfterAllocation("After resolve data flow", lir, frameMap.registerConfig, dataFlow, blockLocations);
+        IntervalPrinter.printAfterAllocation("After resolve data flow", context, lir, frameMap.registerConfig, dataFlow, blockLocations);
         assert RegisterVerifier.verify(lir, frameMap);
 
         AssignRegisters assignRegisters = new AssignRegistersImpl(lir, frameMap);
         assignRegisters.execute();
 
-        Debug.dump(lir, "After register asignment");
+        context.observable.fireCompilationEvent("After register asignment", lir);
         assert LIRVerifier.verify(false, lir, frameMap);
     }
 
