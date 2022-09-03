@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,86 +55,62 @@ public class GraalHotSpotVMConfigNode extends FloatingNode implements LIRLowerab
     private final GraalHotSpotVMConfig config;
     protected final int markId;
 
-    /**
-     * Constructor for {@link #areConfigValuesConstant()}.
-     *
-     * @param config
-     */
-    public GraalHotSpotVMConfigNode(@InjectedNodeParameter GraalHotSpotVMConfig config) {
-        super(TYPE, StampFactory.forKind(JavaKind.Boolean));
-        this.config = config;
-        this.markId = 0;
-    }
-
-    /**
-     * Constructor for node intrinsics below.
-     *
-     * @param config
-     * @param markId id of the config value
-     */
-    public GraalHotSpotVMConfigNode(@InjectedNodeParameter GraalHotSpotVMConfig config, int markId) {
-        super(TYPE, StampFactory.forNodeIntrinsic());
-        this.config = config;
-        this.markId = markId;
-    }
-
-    /**
-     * Constructor with explicit type specification.
-     *
-     * @param config
-     * @param markId id of the config value
-     * @param kind explicit type of the node
-     */
     public GraalHotSpotVMConfigNode(@InjectedNodeParameter GraalHotSpotVMConfig config, int markId, JavaKind kind) {
         super(TYPE, StampFactory.forKind(kind));
         this.config = config;
         this.markId = markId;
     }
 
+    /**
+     * Constructor selected by {@link #loadConfigValue(int, JavaKind)}.
+     *
+     * @param config
+     * @param markId
+     */
+    public GraalHotSpotVMConfigNode(@InjectedNodeParameter GraalHotSpotVMConfig config, int markId) {
+        super(TYPE, StampFactory.forKind(JavaKind.Boolean));
+        this.config = config;
+        this.markId = 0;
+    }
+
     @Override
     public void generate(NodeLIRBuilderTool generator) {
-        Value res = ((HotSpotLIRGenerator) generator.getLIRGeneratorTool()).emitLoadConfigValue(markId, generator.getLIRGeneratorTool().getLIRKind(stamp));
+        Value res = ((HotSpotLIRGenerator) generator.getLIRGeneratorTool()).emitLoadConfigValue(markId);
         generator.setResult(this, res);
     }
 
     @NodeIntrinsic
-    private static native boolean areConfigValuesConstant();
+    private static native boolean isConfigValueConstant(@ConstantNodeParameter int markId);
 
-    @NodeIntrinsic(setStampFromReturnType = true)
-    private static native long loadLongConfigValue(@ConstantNodeParameter int markId);
-
-    @NodeIntrinsic(setStampFromReturnType = true)
-    private static native int loadIntConfigValue(@ConstantNodeParameter int markId);
-
-    @NodeIntrinsic(setStampFromReturnType = true)
-    private static native byte loadByteConfigValue(@ConstantNodeParameter int markId);
+    @NodeIntrinsic
+    private static native long loadConfigValue(@ConstantNodeParameter int markId, @ConstantNodeParameter JavaKind kind);
 
     public static long cardTableAddress() {
-        return loadLongConfigValue(cardTableAddressMark(INJECTED_VMCONFIG));
+        return loadConfigValue(cardTableAddressMark(INJECTED_VMCONFIG), JavaKind.Long);
     }
 
     public static boolean isCardTableAddressConstant() {
-        return areConfigValuesConstant();
+        return isConfigValueConstant(cardTableAddressMark(INJECTED_VMCONFIG));
     }
 
     public static long heapTopAddress() {
-        return loadLongConfigValue(heapTopAddressMark(INJECTED_VMCONFIG));
+        return loadConfigValue(heapTopAddressMark(INJECTED_VMCONFIG), JavaKind.Long);
     }
 
     public static long heapEndAddress() {
-        return loadLongConfigValue(heapEndAddressMark(INJECTED_VMCONFIG));
+        return loadConfigValue(heapEndAddressMark(INJECTED_VMCONFIG), JavaKind.Long);
     }
 
     public static long crcTableAddress() {
-        return loadLongConfigValue(crcTableAddressMark(INJECTED_VMCONFIG));
+        return loadConfigValue(crcTableAddressMark(INJECTED_VMCONFIG), JavaKind.Long);
     }
 
     public static int logOfHeapRegionGrainBytes() {
-        return loadIntConfigValue(logOfHeapRegionGrainBytesMark(INJECTED_VMCONFIG));
+        return (int) loadConfigValue(logOfHeapRegionGrainBytesMark(INJECTED_VMCONFIG), JavaKind.Byte);
     }
 
     public static boolean inlineContiguousAllocationSupported() {
-        return loadByteConfigValue(inlineContiguousAllocationSupportedMark(INJECTED_VMCONFIG)) != 0;
+        return loadConfigValue(inlineContiguousAllocationSupportedMark(INJECTED_VMCONFIG), JavaKind.Byte) > 0;
     }
 
     @Fold
