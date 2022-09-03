@@ -23,17 +23,25 @@
 
 package com.oracle.graal.lir.ssa;
 
-import static com.oracle.graal.api.code.ValueUtil.*;
+import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
+import static com.oracle.graal.lir.LIRValueUtil.isStackSlotValue;
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 
-import java.util.*;
+import java.util.BitSet;
+import java.util.EnumSet;
+import java.util.HashMap;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.cfg.*;
-import com.oracle.graal.debug.*;
+import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
+import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.lir.*;
+import com.oracle.graal.debug.Indent;
+import com.oracle.graal.lir.InstructionValueConsumer;
+import com.oracle.graal.lir.LIR;
+import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+
+import jdk.vm.ci.meta.Value;
 
 final class SSAVerifier {
     private static class Entry {
@@ -53,12 +61,12 @@ final class SSAVerifier {
 
     SSAVerifier(LIR lir) {
         this.lir = lir;
-        this.visited = new BitSet(lir.getControlFlowGraph().getBlocks().size());
+        this.visited = new BitSet(lir.getControlFlowGraph().getBlocks().length);
         this.defined = new HashMap<>();
     }
 
+    @SuppressWarnings("try")
     public boolean verify() {
-        // init();
         try (Scope s = Debug.scope("SSAVerifier", lir)) {
             for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
                 doBlock(block);
@@ -69,6 +77,7 @@ final class SSAVerifier {
         return true;
     }
 
+    @SuppressWarnings("try")
     private void doBlock(AbstractBlockBase<?> b) {
         if (visited.get(b.getId())) {
             return;
@@ -78,7 +87,7 @@ final class SSAVerifier {
                 doBlock(pred);
             }
         }
-        try (Indent indent = Debug.logAndIndent("handle block %s", b)) {
+        try (Indent indent = Debug.logAndIndent(Debug.INFO_LOG_LEVEL, "handle block %s", b)) {
             assert verifyBlock(b);
         }
     }
@@ -89,12 +98,7 @@ final class SSAVerifier {
         visited.set(block.getId());
         for (LIRInstruction op : lir.getLIRforBlock(block)) {
             op.visitEachAlive(this::useConsumer);
-            /*
-             * TODO(je) we are currently skipping LIRFrameStates because there are problems with
-             * eliminated StackLockValue. (The slot is not defined but we can't tell that the lock
-             * is eliminated.)
-             */
-            // op.visitEachState(this::useConsumer);
+            op.visitEachState(this::useConsumer);
             op.visitEachInput(this::useConsumer);
 
             op.visitEachTemp(this::defConsumer);
@@ -131,7 +135,7 @@ final class SSAVerifier {
     }
 
     private static boolean shouldProcess(Value value) {
-        return !value.equals(Value.ILLEGAL) && !isConstant(value) && !isRegister(value);
+        return !value.equals(Value.ILLEGAL) && !isJavaConstant(value) && !isRegister(value) && !isStackSlotValue(value);
     }
 
 }

@@ -40,11 +40,13 @@ import com.oracle.graal.lir.LIR;
 import com.oracle.graal.lir.LIRInstruction;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.StandardOp.BlockEndOp;
+import com.oracle.graal.lir.StandardOp.LabelOp;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.Value;
 
-public final class SSIBuilder extends SSIBuilderBase {
+public final class SSIBuilder {
 
     private static class BlockData {
 
@@ -77,18 +79,23 @@ public final class SSIBuilder extends SSIBuilderBase {
         public BitSet liveKill;
     }
 
+    private static final int LOG_LEVEL = 2;
+
+    private final LIR lir;
+    private final Value[] operands;
     private final BlockMap<SSIBuilder.BlockData> blockData;
 
     protected SSIBuilder(LIR lir) {
-        super(lir);
+        this.lir = lir;
         this.blockData = new BlockMap<>(lir.getControlFlowGraph());
+        this.operands = new Value[lir.numVariables()];
     }
 
-    @Override
-    protected void buildIntern() {
+    protected void build() {
         init();
         computeLocalLiveSets();
         computeGlobalLiveSets();
+        finish();
     }
 
     /**
@@ -96,11 +103,15 @@ public final class SSIBuilder extends SSIBuilderBase {
      * block.
      */
     private int liveSetSize() {
-        return getLIR().numVariables();
+        return lir.numVariables();
     }
 
-    AbstractBlockBase<?>[] getBlocks() {
-        return getLIR().getControlFlowGraph().getBlocks();
+    private AbstractBlockBase<?>[] getBlocks() {
+        return lir.getControlFlowGraph().getBlocks();
+    }
+
+    private LIR getLIR() {
+        return lir;
     }
 
     static int operandNumber(Value operand) {
@@ -315,16 +326,67 @@ public final class SSIBuilder extends SSIBuilderBase {
                     }
                 }
             } while (changeOccurred);
+
+            // check that the liveIn set of the first block is empty
+            AbstractBlockBase<?> startBlock = getLIR().getControlFlowGraph().getStartBlock();
+            if (getBlockData(startBlock).liveIn.cardinality() != 0) {
+                // bailout if this occurs in product mode.
+                throw new GraalError("liveIn set of first block must be empty: " + getBlockData(startBlock).liveIn);
+            }
         }
     }
 
-    @Override
-    BitSet getLiveIn(final AbstractBlockBase<?> block) {
-        return getBlockData(block).liveIn;
+    @SuppressWarnings("try")
+    void finish() {
+        Debug.dump(Debug.INFO_LOG_LEVEL, getLIR(), "Before SSI operands");
+        // iterate all blocks in reverse order
+        AbstractBlockBase<?>[] blocks = getBlocks();
+        for (int i = blocks.length - 1; i >= 0; i--) {
+            final AbstractBlockBase<?> block = blocks[i];
+            try (Indent indent = Debug.logAndIndent(LOG_LEVEL, "Finish Block %s", block)) {
+                // set label
+                SSIBuilder.BlockData data = blockData.get(block);
+                assert data != null;
+                buildOutgoing(block, data.liveOut);
+                buildIncoming(block, data.liveIn);
+            }
+        }
     }
 
-    @Override
-    BitSet getLiveOut(final AbstractBlockBase<?> block) {
-        return getBlockData(block).liveOut;
+    private void buildIncoming(AbstractBlockBase<?> block, BitSet liveIn) {
+        /*
+         * Collect live out of predecessors since there might be values not used in this block which
+         * might cause out/in mismatch.
+         */
+        BitSet predLiveOut = new BitSet(liveIn.length());
+        for (AbstractBlockBase<?> pred : block.getPredecessors()) {
+            predLiveOut.or(getBlockData(pred).liveOut);
+        }
+        if (predLiveOut.isEmpty()) {
+            return;
+        }
+
+        Value[] values = new Value[predLiveOut.cardinality()];
+        assert values.length > 0;
+        int cnt = 0;
+        for (int i = predLiveOut.nextSetBit(0); i >= 0; i = predLiveOut.nextSetBit(i + 1)) {
+            values[cnt++] = liveIn.get(i) ? operands[i] : Value.ILLEGAL;
+        }
+        LabelOp label = SSIUtil.incoming(getLIR(), block);
+        label.addIncomingValues(values);
+    }
+
+    private void buildOutgoing(AbstractBlockBase<?> block, BitSet liveOut) {
+        if (liveOut.isEmpty()) {
+            return;
+        }
+        Value[] values = new Value[liveOut.cardinality()];
+        assert values.length > 0;
+        int cnt = 0;
+        for (int i = liveOut.nextSetBit(0); i >= 0; i = liveOut.nextSetBit(i + 1)) {
+            values[cnt++] = operands[i];
+        }
+        BlockEndOp blockEndOp = SSIUtil.outgoing(getLIR(), block);
+        blockEndOp.addOutgoingValues(values);
     }
 }
