@@ -29,6 +29,7 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.lir.LIRInstruction.InstructionValueProcedure;
 import com.oracle.graal.lir.LIRInstruction.OperandFlag;
 import com.oracle.graal.lir.LIRInstruction.OperandMode;
+import com.oracle.graal.lir.LIRInstruction.ValueProcedure;
 
 /**
  * Base class to represent values that need to be stored in more than one register.
@@ -52,6 +53,10 @@ public abstract class CompositeValue extends Value {
         super(kind);
         COMPOSITE_VALUE_COUNT.increment();
         valueClass = CompositeValueClass.get(getClass());
+    }
+
+    public final void forEachComponent(OperandMode mode, ValueProcedure proc) {
+        valueClass.forEachComponent(this, mode, proc);
     }
 
     public final void forEachComponent(LIRInstruction inst, OperandMode mode, InstructionValueProcedure proc) {
