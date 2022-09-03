@@ -286,11 +286,6 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
 
     @Override
     public LLVMExpressionNode createAlloc(LLVMParserRuntime runtime, Type type, int byteSize, int alignment, LLVMBaseType llvmType, LLVMExpressionNode numElements) {
-        return createNamedAllocation(runtime, type, byteSize, alignment, llvmType, numElements, null);
-    }
-
-    @Override
-    public LLVMExpressionNode createNamedAllocation(LLVMParserRuntime runtime, Type type, int byteSize, int alignment, LLVMBaseType llvmType, LLVMExpressionNode numElements, String name) {
         if (numElements == null) {
             assert llvmType == null;
             if (type instanceof StructureType) {
@@ -309,14 +304,14 @@ public class NodeFactoryFacadeImpl implements NodeFactoryFacade {
                     types[i] = elemType.getLLVMBaseType();
                     currentOffset += runtime.getByteSize(elemType);
                 }
-                LLVMAllocaInstruction alloc = LLVMAllocFactory.createAlloc(runtime, byteSize, alignment, name);
+                LLVMAllocaInstruction alloc = LLVMAllocFactory.createAlloc(runtime, byteSize, alignment);
                 alloc.setTypes(types);
                 alloc.setOffsets(offsets);
                 return alloc;
             }
-            return LLVMAllocFactory.createAlloc(runtime, byteSize, alignment, name);
+            return LLVMAllocFactory.createAlloc(runtime, byteSize, alignment);
         } else {
-            return LLVMAllocFactory.createAlloc(runtime, llvmType, numElements, byteSize, alignment, name);
+            return LLVMAllocFactory.createAlloc(runtime, llvmType, numElements, byteSize, alignment);
         }
     }
 

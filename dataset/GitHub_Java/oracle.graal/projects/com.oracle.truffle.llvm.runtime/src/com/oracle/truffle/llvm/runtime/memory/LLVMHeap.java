@@ -33,7 +33,6 @@ import com.oracle.nfi.NativeFunctionInterfaceRuntime;
 import com.oracle.nfi.api.NativeFunctionHandle;
 import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMHeap extends LLVMMemory {
 
@@ -49,9 +48,9 @@ public final class LLVMHeap extends LLVMMemory {
         return baseAddress;
     }
 
-    public static LLVMAddress allocateMemory(Type type, long size) {
+    public static LLVMAddress allocateMemory(String name, long size) {
         long allocateMemory = (long) mallocHandle.call(size);
-        return LLVMAddress.fromLong(type, allocateMemory);
+        return LLVMAddress.fromLong(name, allocateMemory);
     }
 
     public static LLVMAddress allocateMemory(long size) {

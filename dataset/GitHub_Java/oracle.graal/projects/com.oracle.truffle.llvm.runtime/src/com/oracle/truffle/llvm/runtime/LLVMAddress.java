@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 @ValueType
 public final class LLVMAddress {
@@ -39,14 +38,14 @@ public final class LLVMAddress {
 
     public static final LLVMAddress NULL_POINTER = fromLong(0);
 
-    private final Type type;
+    private final String symbolName;
 
     private final long symbolIndex;
 
     private final long val;
 
-    private LLVMAddress(Type type, long val, long index) {
-        this.type = type;
+    private LLVMAddress(String symbolName, long val, long index) {
+        this.symbolName = symbolName;
         this.val = val;
         this.symbolIndex = index;
     }
@@ -63,12 +62,12 @@ public final class LLVMAddress {
         return new LLVMAddress(val);
     }
 
-    public static LLVMAddress fromLong(Type type, long val) {
-        return new LLVMAddress(type, val, 0);
+    public static LLVMAddress fromLong(String symbolName, long val) {
+        return new LLVMAddress(symbolName, val, 0);
     }
 
-    public Type getType() {
-        return type;
+    public String getSymbolName() {
+        return symbolName;
     }
 
     public long getSymbolIndex() {
@@ -96,7 +95,7 @@ public final class LLVMAddress {
     }
 
     public LLVMAddress index(long incr, long index) {
-        return new LLVMAddress(type, val + incr, index);
+        return new LLVMAddress(symbolName, val + incr, index);
     }
 
     @Override
@@ -131,8 +130,8 @@ public final class LLVMAddress {
 
     @Override
     public String toString() {
-        if (getType() != null) {
-            return String.format("0x%x (%s)", getVal(), getType());
+        if (getSymbolName() != null) {
+            return String.format("0x%x (%s)", getVal(), getSymbolName());
         }
         return String.format("0x%x", getVal());
     }
