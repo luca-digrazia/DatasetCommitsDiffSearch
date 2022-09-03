@@ -56,7 +56,6 @@ import jdk.vm.ci.meta.JavaKind;
  * implemented via pthreads.
  */
 @AutomaticFeature
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class PthreadVMLockFeature implements Feature {
 
     private final ClassInstanceReplacer<VMMutex, VMMutex> mutexReplacer = new ClassInstanceReplacer<VMMutex, VMMutex>(VMMutex.class) {

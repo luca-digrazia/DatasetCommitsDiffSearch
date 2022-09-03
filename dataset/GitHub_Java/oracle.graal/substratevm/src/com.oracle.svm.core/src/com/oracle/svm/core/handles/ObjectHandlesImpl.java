@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,19 +22,22 @@
  */
 package com.oracle.svm.core.handles;
 
+// Allow unsafe
+// Checkstyle: stop
+
 import java.lang.ref.WeakReference;
 
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.word.SignedWord;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.heap.FeebleReference;
 
-//Checkstyle: stop
 import sun.misc.Unsafe;
+
 // Checkstyle: resume
 
 /**
@@ -57,8 +58,6 @@ import sun.misc.Unsafe;
  * significant role in how indexing is implemented.
  */
 public final class ObjectHandlesImpl implements ObjectHandles {
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
-
     /**
      * Internal weak reference. Other code can create its own {@link WeakReference} objects and
      * handles to them, which we should distinguish from explicit weak references. Therefore, we
@@ -135,14 +134,15 @@ public final class ObjectHandlesImpl implements ObjectHandles {
     }
 
     private static long getObjectArrayByteOffset(int index) {
-        return UNSAFE.arrayBaseOffset(Object[].class) + index * UNSAFE.arrayIndexScale(Object[].class);
+        Unsafe unsafe = UnsafeAccess.UNSAFE;
+        return unsafe.arrayBaseOffset(Object[].class) + index * unsafe.arrayIndexScale(Object[].class);
     }
 
     private Object[] getBucket(int bucketIndex) {
         // buckets[i] is changed only once from null to its final value: try without volatile first
         Object[] bucket = buckets[bucketIndex];
         if (bucket == null) {
-            bucket = (Object[]) UNSAFE.getObjectVolatile(buckets, getObjectArrayByteOffset(bucketIndex));
+            bucket = (Object[]) UnsafeAccess.UNSAFE.getObjectVolatile(buckets, getObjectArrayByteOffset(bucketIndex));
         }
         return bucket;
     }
@@ -171,7 +171,7 @@ public final class ObjectHandlesImpl implements ObjectHandles {
             for (;;) {
                 while (indexInBucket < bucket.length) {
                     if (bucket[indexInBucket] == null) {
-                        if (UNSAFE.compareAndSwapObject(bucket, getObjectArrayByteOffset(indexInBucket), null, obj)) {
+                        if (UnsafeAccess.UNSAFE.compareAndSwapObject(bucket, getObjectArrayByteOffset(indexInBucket), null, obj)) {
                             int newSearchIndexInBucket = (indexInBucket + 1 < bucket.length) ? (indexInBucket + 1) : indexInBucket;
                             unusedHandleSearchIndex = toIndex(bucketIndex, newSearchIndexInBucket);
                             // (if the next index is in another bucket, we let the next create()
@@ -198,8 +198,8 @@ public final class ObjectHandlesImpl implements ObjectHandles {
                             newBucketCapacity = getIndexInBucket(maxIndex) + 1;
                         }
                         Object[] newBucket = new Object[newBucketCapacity];
-                        UNSAFE.putObjectVolatile(newBucket, getObjectArrayByteOffset(0), obj);
-                        if (UNSAFE.compareAndSwapObject(buckets, getObjectArrayByteOffset(newBucketIndex), null, newBucket)) {
+                        UnsafeAccess.UNSAFE.putObjectVolatile(newBucket, getObjectArrayByteOffset(0), obj);
+                        if (UnsafeAccess.UNSAFE.compareAndSwapObject(buckets, getObjectArrayByteOffset(newBucketIndex), null, newBucket)) {
                             unusedHandleSearchIndex = toIndex(newBucketIndex, 1);
                             return toHandle(newBucketIndex, 0);
                         }
@@ -247,7 +247,7 @@ public final class ObjectHandlesImpl implements ObjectHandles {
             throw new IllegalArgumentException("Invalid handle");
         }
         int indexInBucket = getIndexInBucket(index);
-        return UNSAFE.getObjectVolatile(bucket, getObjectArrayByteOffset(indexInBucket));
+        return UnsafeAccess.UNSAFE.getObjectVolatile(bucket, getObjectArrayByteOffset(indexInBucket));
     }
 
     public boolean isWeak(ObjectHandle handle) {
@@ -268,14 +268,14 @@ public final class ObjectHandlesImpl implements ObjectHandles {
             throw new IllegalArgumentException("Invalid handle");
         }
         int indexInBucket = getIndexInBucket(index);
-        UNSAFE.putOrderedObject(bucket, getObjectArrayByteOffset(indexInBucket), null);
+        UnsafeAccess.UNSAFE.putOrderedObject(bucket, getObjectArrayByteOffset(indexInBucket), null);
     }
 
     public void destroyWeak(ObjectHandle handle) {
         destroy(handle);
     }
 
-    public long computeCurrentCount() {
+    long getCurrentCount() {
         long count = 0;
         int bucketIndex = 0;
         Object[] bucket = getBucket(bucketIndex);
@@ -291,7 +291,7 @@ public final class ObjectHandlesImpl implements ObjectHandles {
         return count;
     }
 
-    public long computeCurrentCapacity() {
+    long getCurrentCapacity() {
         long capacity = 0;
         int bucketIndex = 0;
         Object[] bucket = getBucket(bucketIndex);

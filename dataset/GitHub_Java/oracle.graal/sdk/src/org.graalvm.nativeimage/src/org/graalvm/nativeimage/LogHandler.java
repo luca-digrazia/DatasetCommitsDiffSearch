@@ -47,8 +47,7 @@ import org.graalvm.word.UnsignedWord;
  * default one has been installed, results in an error.
  * <p>
  * The methods defined in this interface are called from places where Java object allocation is not
- * possible, e.g., during a garbage collection or before the heap is set up. If an implementation of
- * the interface allocates a Java object or array, an error is reported during image generation.
+ * possible, e.g., during a garbage collection or before the heap is set up.
  *
  * @since 1.0
  */
@@ -56,11 +55,6 @@ public interface LogHandler {
 
     /**
      * Write raw bytes to the log.
-     * <p>
-     * The methods defined in this interface are called from places where Java object allocation is
-     * not possible, e.g., during a garbage collection or before the heap is set up. If an
-     * implementation of the interface allocates a Java object or array, an error is reported during
-     * image generation.
      *
      * @since 1.0
      */
@@ -68,11 +62,6 @@ public interface LogHandler {
 
     /**
      * Flush the log to its destination.
-     * <p>
-     * The methods defined in this interface are called from places where Java object allocation is
-     * not possible, e.g., during a garbage collection or before the heap is set up. If an
-     * implementation of the interface allocates a Java object or array, an error is reported during
-     * image generation.
      *
      * @since 1.0
      */
@@ -82,11 +71,6 @@ public interface LogHandler {
      * Exit the VM because a fatal, non-recoverable error situation has been detected. The
      * implementation of this method must not return, and it must not throw a Java exception. A
      * valid implementation is, e.g., to ask the OS to kill the process.
-     * <p>
-     * The methods defined in this interface are called from places where Java object allocation is
-     * not possible, e.g., during a garbage collection or before the heap is set up. If an
-     * implementation of the interface allocates a Java object or array, an error is reported during
-     * image generation.
      *
      * @since 1.0
      */

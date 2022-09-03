@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -32,7 +30,6 @@ import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.thread.JavaThreads;
 
 /**
  * Advanced entry and leave actions for entry point methods annotated with {@link CEntryPoint}.
@@ -49,9 +46,9 @@ public final class CEntryPointActions {
     }
 
     /**
-     * Creates a new isolate, then {@linkplain #enterAttachThread attaches} the current thread to
-     * the created isolate, creating a context for the thread in the isolate, and then enters that
-     * context before returning.
+     * Creates a new isolate, then {@linkplain #enterAttachThread(Isolate) attaches} the current
+     * thread to the created isolate, creating a context for the thread in the isolate, and then
+     * enters that context before returning.
      *
      * @param params initialization parameters.
      * @return 0 on success, otherwise non-zero.
@@ -63,18 +60,13 @@ public final class CEntryPointActions {
      * context. If the thread has already been attached, this does not cause the operation to fail.
      *
      * @param isolate an existing isolate.
-     * @param ensureJavaThread when set to true, the method ensures that the
-     *            {@link java.lang.Thread} object for the newly attached thread is created. If the
-     *            parameter is set to false, a later call to one of the
-     *            {@link JavaThreads#ensureJavaThread} methods early after the prologue must be used
-     *            to do the initialization manually.
      * @return 0 on success, otherwise non-zero.
      */
-    public static native int enterAttachThread(Isolate isolate, boolean ensureJavaThread);
+    public static native int enterAttachThread(Isolate isolate);
 
     /**
      * Enters an existing context for the current thread (for example, one created with
-     * {@link #enterAttachThread}).
+     * {@link #enterAttachThread(Isolate)}).
      *
      * @param thread existing context for the current thread.
      * @return 0 on success, otherwise non-zero.

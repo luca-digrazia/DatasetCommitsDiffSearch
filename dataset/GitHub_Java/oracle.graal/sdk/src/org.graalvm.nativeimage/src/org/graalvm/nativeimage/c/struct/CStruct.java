@@ -38,19 +38,12 @@ import org.graalvm.word.PointerBase;
  * <p>
  * Field accesses are done via interface methods that are annotated with {@link CField},
  * {@link CFieldAddress}, or {@link CFieldOffset}. All calls of the interface methods are replaced
- * with the appropriate memory or address arithmetic operations. Here is an example to define a
- * complex number structure:
- * 
- * {@codesnippet org.graalvm.nativeimage.StackValueSnippets.ComplexNumber}
- *
+ * with the appropriate memory or address arithmetic operations.
+ * <p>
  * The annotated interface, or an outer class that contains the interface, must be annotated with
- * {@link CContext}. Allocate an instances of the {@code struct} either by
- * {@link org.graalvm.nativeimage.StackValue#get(java.lang.Class)} or by
- * {@link org.graalvm.nativeimage.UnmanagedMemory#malloc(org.graalvm.word.UnsignedWord)}.
- *
+ * {@link CContext}.
+ * 
  * @since 1.0
- * @see org.graalvm.nativeimage.StackValue
- * @see org.graalvm.nativeimage.UnmanagedMemory
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})

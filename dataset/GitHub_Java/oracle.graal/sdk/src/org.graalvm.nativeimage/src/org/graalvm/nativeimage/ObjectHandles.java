@@ -70,7 +70,8 @@ public interface ObjectHandles {
     <T> T get(ObjectHandle handle);
 
     /**
-     * Destroys the given handle. After calling this method, the handle must not be used anymore.
+     * Destroys the given global handle. After calling this method, the handle must not be used
+     * anymore.
      *
      * @since 1.0
      */

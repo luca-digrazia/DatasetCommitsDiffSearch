@@ -69,7 +69,7 @@ public class RealLog extends Log {
     @Override
     public Log string(String str, int fill, int align) {
 
-        int spaces = fill - str.length();
+        int spaces = fill - SubstrateUtil.getRawStringChars(str).length;
 
         if (align == RIGHT_ALIGN) {
             spaces(spaces);
@@ -110,7 +110,7 @@ public class RealLog extends Log {
      * Write a raw java array by copying it first to a stack allocated temporary buffer. Caller must
      * ensure that the offset and length are within bounds.
      */
-    private void rawBytes(Object value, int offset, int length) {
+    private void rawBytes(byte[] value, int offset, int length) {
         /*
          * Stack allocation needs an allocation size that is a compile time constant, so we split
          * the byte array up in multiple chunks and write them separately.
@@ -124,15 +124,7 @@ public class RealLog extends Log {
             int chunkLength = Math.min(inputLength, chunkSize);
 
             for (int i = 0; i < chunkLength; i++) {
-                int index = chunkOffset + i;
-                byte b;
-                if (value instanceof String) {
-                    b = (byte) charAt((String) value, index);
-                } else if (value instanceof char[]) {
-                    b = (byte) ((char[]) value)[index];
-                } else {
-                    b = ((byte[]) value)[index];
-                }
+                byte b = value[chunkOffset + i];
                 bytes.write(i, b);
             }
             rawBytes(bytes, WordFactory.unsigned(chunkLength));
@@ -140,11 +132,6 @@ public class RealLog extends Log {
             chunkOffset += chunkLength;
             inputLength -= chunkLength;
         }
-    }
-
-    @RestrictHeapAccess(access = RestrictHeapAccess.Access.UNRESTRICTED, overridesCallers = true, reason = "String.charAt can allocate exception, but we know that our access is in bounds")
-    private static char charAt(String s, int index) {
-        return s.charAt(index);
     }
 
     @Override
@@ -401,11 +388,32 @@ public class RealLog extends Log {
     }
 
     private void rawString(String value) {
-        rawBytes(value, 0, value.length());
+        rawString(SubstrateUtil.getRawStringChars(value));
     }
 
     private void rawString(char[] value) {
-        rawBytes(value, 0, value.length);
+        int length = value.length;
+
+        /*
+         * Stack allocation needs an allocation size that is a compile time constant, so we split
+         * the string up in multiple chunks and write them separately.
+         */
+        final int chunkSize = 256;
+        final CCharPointer bytes = StackValue.get(chunkSize);
+
+        int chunkOffset = 0;
+        while (length > 0) {
+            int chunkLength = Math.min(length, chunkSize);
+
+            for (int i = 0; i < chunkLength; i++) {
+                char c = value[chunkOffset + i];
+                bytes.write(i, (byte) c);
+            }
+            rawBytes(bytes, WordFactory.unsigned(chunkLength));
+
+            chunkOffset += chunkLength;
+            length -= chunkLength;
+        }
     }
 
     @Override
