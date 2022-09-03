@@ -54,7 +54,7 @@ public final class InitializeNode extends FixedWithNextNode implements Lowerable
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(CiLoweringTool tool) {
         tool.getRuntime().lower(this, tool);
     }
 

@@ -102,10 +102,6 @@ public class StampFactory {
         return new IntegerStamp(kind, lowerBound, upperBound, mask);
     }
 
-    public static Stamp forFloat(Kind kind, double lowerBound, double upperBound, boolean nonNaN) {
-        return new FloatStamp(kind, lowerBound, upperBound, nonNaN);
-    }
-
     public static Stamp forConstant(Constant value) {
         assert value.kind != Kind.Object;
         if (value.kind == Kind.Object) {
@@ -113,8 +109,6 @@ public class StampFactory {
         } else {
             if (value.kind == Kind.Int || value.kind == Kind.Long) {
                 return forInteger(value.kind, value.asLong(), value.asLong(), value.asLong() & IntegerStamp.defaultMask(value.kind));
-            } else if (value.kind == Kind.Float || value.kind == Kind.Double) {
-                return forFloat(value.kind, value.asDouble(), value.asDouble(), true);
             }
             return forKind(value.kind.stackKind());
         }
@@ -126,7 +120,7 @@ public class StampFactory {
             ResolvedJavaType type = value.isNull() ? null : runtime.getTypeOf(value);
             return new ObjectStamp(type, value.isNonNull(), value.isNonNull());
         } else {
-            throw new GraalInternalError(Kind.Object + " expected, actual kind: %s", value.kind);
+            throw new GraalInternalError("CiKind.Object expected, actual kind: %s", value.kind);
         }
     }
 
