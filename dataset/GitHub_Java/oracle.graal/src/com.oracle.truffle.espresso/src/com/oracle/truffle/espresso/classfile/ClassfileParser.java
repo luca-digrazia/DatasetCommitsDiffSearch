@@ -46,7 +46,6 @@ import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
-import com.oracle.truffle.object.DebugCounter;
 
 public class ClassfileParser {
 
@@ -101,15 +100,9 @@ public class ClassfileParser {
     private FieldInfo.Builder[] fields;
     private TypeDescriptor typeDescriptor;
 
-    static final DebugCounter parsedClasses = DebugCounter.create("Parsed classes");
-
     public ClassfileParser(Object classLoader, ClasspathFile classpathFile, String requestedClassName, Klass hostClass, EspressoContext context) {
         this.requestedClassName = requestedClassName;
-        this.classLoader = classLoader == StaticObject.NULL ? null : classLoader; // The BCL is
-                                                                                  // SO.NULL on the
-                                                                                  // guest, we store
-                                                                                  // as null on the
-                                                                                  // host.
+        this.classLoader = classLoader == StaticObject.NULL ? null : classLoader; // The BCL is SO.NULL on the guest, we store as null on the host.
         this.className = requestedClassName;
         this.hostClass = hostClass;
         this.context = context;
@@ -119,11 +112,7 @@ public class ClassfileParser {
 
     public ClassfileParser(Object classLoader, ClassfileStream stream, String requestedClassName, Klass hostClass, EspressoContext context) {
         this.requestedClassName = requestedClassName;
-        this.classLoader = classLoader == StaticObject.NULL ? null : classLoader; // The BCL is
-                                                                                  // SO.NULL on the
-                                                                                  // guest, we store
-                                                                                  // as null on the
-                                                                                  // host.
+        this.classLoader = classLoader == StaticObject.NULL ? null : classLoader; // The BCL is SO.NULL on the guest, we store as null on the host.
         this.className = requestedClassName;
         this.hostClass = hostClass;
         this.context = context;
@@ -238,8 +227,6 @@ public class ClassfileParser {
         Optional<AttributeInfo> optInnerClasses = Arrays.stream(attributes).filter(a -> a.getName().equals("InnerClasses")).findAny();
         Optional<AttributeInfo> optVisibleAnnotations = Arrays.stream(attributes).filter(a -> a.getName().equals("RuntimeVisibleAnnotations")).findAny();
 
-        parsedClasses.inc();
-
         return ObjectKlass.create(context, typeDescriptor.toString(), superClass, localInterfaces, methods, fields, accessFlags,
                         (EnclosingMethodAttribute) optEnclosingMethod.orElse(null),
                         (InnerClassesAttribute) optInnerClasses.orElse(null),
@@ -274,6 +261,7 @@ public class ClassfileParser {
 
         Optional<AttributeInfo> optCode = Arrays.stream(attributes).filter(a -> a.getName().equals("Code")).findAny();
         Optional<AttributeInfo> optExceptions = Arrays.stream(attributes).filter(a -> a.getName().equals("Exceptions")).findAny();
+
 
         if (optCode.isPresent()) {
             CodeAttribute code = (CodeAttribute) optCode.get();
