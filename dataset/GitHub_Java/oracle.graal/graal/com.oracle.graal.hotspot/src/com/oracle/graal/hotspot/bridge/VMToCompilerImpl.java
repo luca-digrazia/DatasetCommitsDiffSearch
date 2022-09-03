@@ -576,20 +576,24 @@ public class VMToCompilerImpl implements VMToCompiler {
     }
 
     @Override
-    public void compileMethod(long metaspaceMethod, final HotSpotResolvedObjectType holder, final int entryBCI, boolean blocking, int priority) throws Throwable {
+    public boolean compileMethod(long metaspaceMethod, final HotSpotResolvedObjectType holder, final int entryBCI, boolean blocking, int priority) throws Throwable {
         HotSpotResolvedJavaMethod method = holder.createMethod(metaspaceMethod);
-        compileMethod(method, entryBCI, blocking, priority);
+        return compileMethod(method, entryBCI, blocking, priority);
     }
 
     /**
-     * Compiled a method to machine code.
+     * Compiles a method to machine code.
+     * 
+     * @return true if the method is in the queue (either added to the queue or already in the
+     *         queue)
      */
-    public void compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable {
+    public boolean compileMethod(final HotSpotResolvedJavaMethod method, final int entryBCI, boolean blocking, int priority) throws Throwable {
+        CompilationTask current = method.currentTask();
         boolean osrCompilation = entryBCI != StructuredGraph.INVOCATION_ENTRY_BCI;
         if (osrCompilation && bootstrapRunning) {
             // no OSR compilations during bootstrap - the compiler is just too slow at this point,
             // and we know that there are no endless loops
-            return;
+            return current != null && (current.isInProgress() || !current.isCancelled());
         }
 
         if (CompilationTask.withinEnqueue.get()) {
@@ -597,32 +601,39 @@ public class VMToCompilerImpl implements VMToCompiler {
             // java.util.concurrent.BlockingQueue is used to implement the compilation worker
             // queues. If a compiler thread triggers a compilation, then it may be blocked trying
             // to add something to its own queue.
-            return;
+            return current != null && (current.isInProgress() || !current.isCancelled());
         }
+        CompilationTask.withinEnqueue.set(Boolean.TRUE);
 
         try {
-            CompilationTask.withinEnqueue.set(Boolean.TRUE);
-            if (!method.tryToQueueForCompilation()) {
-                // method is already queued
-                CompilationTask current = method.currentTask();
-                if (!PriorityCompileQueue.getValue() || current == null || !current.tryToCancel()) {
-                    // normally compilation tasks will only be re-queued when they get a
-                    // priority boost, so cancel the old task and add a new one
-                    // without a prioritizing compile queue it makes no sense to re-queue the
-                    // compilation task
-                    return;
+            if (!blocking && current != null) {
+                if (current.isInProgress()) {
+                    if (current.getEntryBCI() == entryBCI) {
+                        // a compilation with the correct bci is already in progress, so just return
+                        // true
+                        return true;
+                    }
+                } else {
+                    if (PriorityCompileQueue.getValue()) {
+                        // normally compilation tasks will only be re-queued when they get a
+                        // priority boost, so cancel the old task and add a new one
+                        current.cancel();
+                    } else if (!current.isCancelled()) {
+                        // without a prioritizing compile queue it makes no sense to re-queue the
+                        // compilation task
+                        return true;
+                    }
                 }
             }
-            assert method.isQueuedForCompilation();
 
             final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(method);
             int id = compileTaskIds.incrementAndGet();
             // OSR compilations need to be finished quickly, so they get max priority
             int queuePriority = osrCompilation ? -1 : priority;
             CompilationTask task = CompilationTask.create(graalRuntime, createPhasePlan(optimisticOpts, osrCompilation), optimisticOpts, method, entryBCI, id, queuePriority);
-
             if (blocking) {
                 task.runCompilation();
+                return false;
             } else {
                 try {
                     method.setCurrentTask(task);
@@ -631,8 +642,10 @@ public class VMToCompilerImpl implements VMToCompiler {
                     } else {
                         compileQueue.execute(task);
                     }
+                    return true;
                 } catch (RejectedExecutionException e) {
                     // The compile queue was already shut down.
+                    return false;
                 }
             }
         } finally {

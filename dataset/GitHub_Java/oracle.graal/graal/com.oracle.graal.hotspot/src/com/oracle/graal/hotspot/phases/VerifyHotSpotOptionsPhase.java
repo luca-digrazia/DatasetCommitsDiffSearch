@@ -101,8 +101,6 @@ public class VerifyHotSpotOptionsPhase extends Phase {
             return method.getName().equals("valueOf");
         } else if (method.getDeclaringClass() == runtime.lookupJavaType(Class.class)) {
             return method.getName().equals("desiredAssertionStatus");
-        } else if (method.getDeclaringClass().equals(declaringClass)) {
-            return (method.getName().equals("$jacocoInit"));
         }
         return false;
     }
