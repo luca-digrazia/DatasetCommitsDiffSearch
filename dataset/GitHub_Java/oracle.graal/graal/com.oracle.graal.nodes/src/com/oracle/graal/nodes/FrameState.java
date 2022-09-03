@@ -24,8 +24,8 @@ package com.oracle.graal.nodes;
 
 import java.util.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
+import com.oracle.max.cri.ci.*;
+import com.oracle.max.cri.ri.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.spi.*;
@@ -82,7 +82,7 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
      */
     public final int bci;
 
-    private final ResolvedJavaMethod method;
+    private final RiResolvedMethod method;
 
     /**
      * Creates a {@code FrameState} for the given scope and maximum number of stack and local variables.
@@ -93,7 +93,7 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
      * @param stackSize size of the stack
      * @param rethrowException if true the VM should re-throw the exception on top of the stack when deopt'ing using this framestate
      */
-    public FrameState(ResolvedJavaMethod method, int bci, int localsSize, int stackSize, boolean rethrowException, boolean duringCall) {
+    public FrameState(RiResolvedMethod method, int bci, int localsSize, int stackSize, boolean rethrowException, boolean duringCall) {
         assert stackSize >= 0;
         this.method = method;
         this.bci = bci;
@@ -106,7 +106,7 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
         assert !rethrowException || stackSize == 1 : "must have exception on top of the stack";
     }
 
-    public FrameState(ResolvedJavaMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, boolean rethrowException, boolean duringCall) {
+    public FrameState(RiResolvedMethod method, int bci, ValueNode[] locals, ValueNode[] stack, int stackSize, boolean rethrowException, boolean duringCall) {
         this.method = method;
         this.bci = bci;
         this.localsSize = locals.length;
@@ -156,7 +156,7 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
         this.duringCall = b;
     }
 
-    public ResolvedJavaMethod method() {
+    public RiResolvedMethod method() {
         return method;
     }
 
@@ -208,9 +208,9 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
      * values in pushedValues pushed on the stack. The pushedValues are expected to be in slot encoding: a long
      * or double is followed by a null slot.
      */
-    public FrameState duplicateModified(int newBci, boolean newRethrowException, Kind popKind, ValueNode... pushedValues) {
+    public FrameState duplicateModified(int newBci, boolean newRethrowException, CiKind popKind, ValueNode... pushedValues) {
         int popSlots = 0;
-        if (popKind != Kind.Void) {
+        if (popKind != CiKind.Void) {
             if (stackAt(stackSize() - 1) == null) {
                 popSlots = 2;
             } else {
@@ -282,15 +282,15 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
 
     @Override
     public void generate(LIRGeneratorTool gen) {
-        // Nothing to do, frame states are processed as part of the handling of StateSplit nodes.
+        // Nothing to do, frame states are processed as part of the handling of AbstractStateSplit nodes.
     }
 
     private static String toString(FrameState frameState) {
         StringBuilder sb = new StringBuilder();
-        String nl = CodeUtil.NEW_LINE;
+        String nl = CiUtil.NEW_LINE;
         FrameState fs = frameState;
         while (fs != null) {
-            CodeUtil.appendLocation(sb, fs.method, fs.bci).append(nl);
+            CiUtil.appendLocation(sb, fs.method, fs.bci).append(nl);
             sb.append("locals: [");
             for (int i = 0; i < fs.localsSize(); i++) {
                 sb.append(i == 0 ? "" : ", ").append(fs.localAt(i) == null ? "_" : fs.localAt(i).toString(Verbosity.Id));
@@ -321,11 +321,7 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
         Map<Object, Object> properties = super.getDebugProperties();
         properties.put("bci", bci);
         if (method != null) {
-            properties.put("method", CodeUtil.format("%H.%n(%p):%r", method));
-            StackTraceElement ste = method.toStackTraceElement(bci);
-            if (ste.getFileName() != null && ste.getLineNumber() >= 0) {
-                properties.put("source", ste.getFileName() + ":" + ste.getLineNumber());
-            }
+            properties.put("method", CiUtil.format("%H.%n(%p):%r", method));
         } else {
             properties.put("method", "None");
         }
@@ -348,7 +344,7 @@ public final class FrameState extends Node implements Node.IterableNodeType, LIR
     public boolean verify() {
         for (ValueNode value : values) {
             assert assertTrue(value == null || !value.isDeleted(), "frame state must not contain deleted nodes");
-            assert assertTrue(value == null || value instanceof VirtualObjectNode || (value.kind() != Kind.Void && value.kind() != Kind.Illegal), "unexpected value: %s", value);
+            assert assertTrue(value == null || value instanceof VirtualObjectNode || (value.kind() != CiKind.Void && value.kind() != CiKind.Illegal), "unexpected value: %s", value);
         }
         return super.verify();
     }
