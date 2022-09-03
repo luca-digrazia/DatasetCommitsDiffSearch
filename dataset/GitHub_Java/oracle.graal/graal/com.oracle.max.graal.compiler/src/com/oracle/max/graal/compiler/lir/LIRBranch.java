@@ -73,7 +73,7 @@ public class LIRBranch extends LIRInstruction {
      *
      */
     public LIRBranch(Condition cond, LIRBlock block) {
-        super(LIROpcode.Branch, CiValue.IllegalValue, block.debugInfo(), false);
+        super(LIROpcode.Branch, CiValue.IllegalValue, null, false);
         this.cond = cond;
         this.label = block.label();
         this.block = block;
@@ -81,7 +81,7 @@ public class LIRBranch extends LIRInstruction {
     }
 
     public LIRBranch(Condition cond, LIRBlock block, LIRBlock ublock) {
-        super(LIROpcode.CondFloatBranch, CiValue.IllegalValue, (block.debugInfo() != null ? block.debugInfo() : (ublock != null ? ublock.debugInfo() : null)), false);
+        super(LIROpcode.CondFloatBranch, CiValue.IllegalValue, null, false);
         this.cond = cond;
         this.label = block.label();
         this.block = block;
@@ -110,10 +110,14 @@ public class LIRBranch extends LIRInstruction {
     public void changeBlock(LIRBlock b) {
         assert block != null : "must have old block";
         assert block.label() == label() : "must be equal";
-        assert b != null;
 
         this.block = b;
         this.label = b.label();
+    }
+
+    public void changeUblock(LIRBlock b) {
+        assert unorderedBlock != null : "must have old block";
+        this.unorderedBlock = b;
     }
 
     public void negateCondition() {
@@ -142,7 +146,6 @@ public class LIRBranch extends LIRInstruction {
     }
 
     public void substitute(LIRBlock oldBlock, LIRBlock newBlock) {
-        assert newBlock != null;
         if (block == oldBlock) {
             block = newBlock;
             LIRInstruction instr = newBlock.lir().instructionsList().get(0);

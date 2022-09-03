@@ -39,7 +39,6 @@ public abstract class ValueVisitor {
     public abstract void visitConstant(Constant i);
     public abstract void visitConvert(Convert i);
     public abstract void visitExceptionObject(ExceptionObject i);
-    public abstract void visitEndNode(EndNode i);
     public abstract void visitFrameState(FrameState i);
     public abstract void visitAnchor(Anchor i);
     public abstract void visitIf(If i);
@@ -59,7 +58,7 @@ public abstract class ValueVisitor {
     public abstract void visitNewMultiArray(NewMultiArray i);
     public abstract void visitNewObjectArray(NewObjectArray i);
     public abstract void visitNewTypeArray(NewTypeArray i);
-    public abstract void visitFixedGuard(FixedGuard fixedGuard);
+    public abstract void visitNullCheck(FixedNullCheck i);
     public abstract void visitPhi(Phi i);
     public abstract void visitRegisterFinalizer(RegisterFinalizer i);
     public abstract void visitReturn(Return i);

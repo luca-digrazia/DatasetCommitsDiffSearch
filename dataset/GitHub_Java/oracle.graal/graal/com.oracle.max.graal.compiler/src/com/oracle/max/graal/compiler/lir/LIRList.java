@@ -104,8 +104,9 @@ public final class LIRList {
         append(new LIRLabel(lbl));
     }
 
-    public void negate(CiValue src, CiValue dst) {
+    public void negate(CiValue src, CiValue dst, GlobalStub globalStub) {
         LIRNegate op = new LIRNegate(src, dst);
+        op.globalStub = globalStub;
         append(op);
     }
 
@@ -244,7 +245,6 @@ public final class LIRList {
     }
 
     public void jump(LIRBlock block) {
-        assert block != null;
         append(new LIRBranch(Condition.TRUE, block));
     }
 
