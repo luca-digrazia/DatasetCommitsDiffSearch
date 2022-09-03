@@ -66,7 +66,7 @@ public class GraphChangeMonitoringPhase<C extends PhaseContext> extends PhaseSui
          * having their inputs change are the main interesting differences.
          */
         HashSetNodeEventListener listener = new HashSetNodeEventListener().exclude(NodeEvent.NODE_ADDED);
-        StructuredGraph graphCopy = (StructuredGraph) graph.copy();
+        StructuredGraph graphCopy = graph.copy();
         try (NodeEventScope s = graphCopy.trackNodeEvents(listener)) {
             try (Scope s2 = Debug.sandbox("WithoutMonitoring", null)) {
                 super.run(graphCopy, context);
