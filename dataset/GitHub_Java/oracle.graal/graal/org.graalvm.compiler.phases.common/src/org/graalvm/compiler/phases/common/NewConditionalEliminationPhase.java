@@ -432,8 +432,8 @@ public class NewConditionalEliminationPhase extends BasePhase<PhaseContext> {
                                     if (input == null) {
                                         input = valueAt;
                                     }
-                                    ValueNode valueNode = graph.maybeAddOrUnique(PiNode.create(input, curBestStamp, (ValueNode) infoElement.guard));
-                                    valueAt = valueNode;
+                                    PiNode piNode = graph.unique(new PiNode(input, curBestStamp, (ValueNode) infoElement.guard));
+                                    valueAt = piNode;
                                 }
                                 newPhi.addInput(valueAt);
                             }
