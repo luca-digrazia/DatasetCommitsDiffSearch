@@ -28,7 +28,6 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.test.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.*;
@@ -46,55 +45,55 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
     private final ReplacementsImpl installer;
 
     public ObjectAccessTest() {
-        installer = new ReplacementsImpl(getProviders(), getSnippetReflection(), getTarget());
+        installer = new ReplacementsImpl(getProviders(), getSnippetReflection(), new Assumptions(false), getTarget());
     }
 
     private static final ThreadLocal<SnippetInliningPolicy> inliningPolicy = new ThreadLocal<>();
 
     @Override
-    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
+    protected StructuredGraph parseEager(ResolvedJavaMethod m) {
         return installer.makeGraph(m, null, inliningPolicy.get(), FrameStateProcessing.CollapseFrameForSingleSideEffect);
     }
 
     @Test
     public void testRead1() {
         for (Kind kind : KINDS) {
-            assertRead(parseEager("read" + kind.name() + "1", AllowAssumptions.YES), kind, true, ID);
+            assertRead(parseEager("read" + kind.name() + "1"), kind, true, ID);
         }
     }
 
     @Test
     public void testRead2() {
         for (Kind kind : KINDS) {
-            assertRead(parseEager("read" + kind.name() + "2", AllowAssumptions.YES), kind, true, ID);
+            assertRead(parseEager("read" + kind.name() + "2"), kind, true, ID);
         }
     }
 
     @Test
     public void testRead3() {
         for (Kind kind : KINDS) {
-            assertRead(parseEager("read" + kind.name() + "3", AllowAssumptions.YES), kind, true, LocationIdentity.ANY_LOCATION);
+            assertRead(parseEager("read" + kind.name() + "3"), kind, true, LocationIdentity.ANY_LOCATION);
         }
     }
 
     @Test
     public void testWrite1() {
         for (Kind kind : KINDS) {
-            assertWrite(parseEager("write" + kind.name() + "1", AllowAssumptions.YES), true, ID);
+            assertWrite(parseEager("write" + kind.name() + "1"), kind, true, ID);
         }
     }
 
     @Test
     public void testWrite2() {
         for (Kind kind : KINDS) {
-            assertWrite(parseEager("write" + kind.name() + "2", AllowAssumptions.YES), true, ID);
+            assertWrite(parseEager("write" + kind.name() + "2"), kind, true, ID);
         }
     }
 
     @Test
     public void testWrite3() {
         for (Kind kind : KINDS) {
-            assertWrite(parseEager("write" + kind.name() + "3", AllowAssumptions.YES), true, LocationIdentity.ANY_LOCATION);
+            assertWrite(parseEager("write" + kind.name() + "3"), kind, true, LocationIdentity.ANY_LOCATION);
         }
     }
 
@@ -104,6 +103,7 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
         Assert.assertEquals(graph.getParameter(0), read.object());
 
         IndexedLocationNode location = (IndexedLocationNode) read.location();
+        Assert.assertEquals(kind, location.getValueKind());
         Assert.assertEquals(locationIdentity, location.getLocationIdentity());
         Assert.assertEquals(1, location.getIndexScaling());
 
@@ -120,13 +120,14 @@ public class ObjectAccessTest extends GraalCompilerTest implements Snippets {
         Assert.assertEquals(read, ret.result());
     }
 
-    private static void assertWrite(StructuredGraph graph, boolean indexConvert, LocationIdentity locationIdentity) {
+    private static void assertWrite(StructuredGraph graph, Kind kind, boolean indexConvert, LocationIdentity locationIdentity) {
         JavaWriteNode write = (JavaWriteNode) graph.start().next();
         Assert.assertEquals(graph.getParameter(2), write.value());
         Assert.assertEquals(graph.getParameter(0), write.object());
         Assert.assertEquals(BytecodeFrame.AFTER_BCI, write.stateAfter().bci);
 
         IndexedLocationNode location = (IndexedLocationNode) write.location();
+        Assert.assertEquals(kind, location.getValueKind());
         Assert.assertEquals(locationIdentity, location.getLocationIdentity());
         Assert.assertEquals(1, location.getIndexScaling());
 

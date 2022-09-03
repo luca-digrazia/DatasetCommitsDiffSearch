@@ -30,17 +30,22 @@ import java.util.*;
 public final class NamedLocationIdentity implements LocationIdentity {
 
     /**
-     * Map for asserting all {@link NamedLocationIdentity} instances have a unique name.
+     * Canonicalizing map for {@link NamedLocationIdentity} instances. This is in a separate class
+     * to work around class initialization issues.
      */
     static class DB {
         private static final HashMap<String, NamedLocationIdentity> map = new HashMap<>();
 
-        static boolean checkUnique(NamedLocationIdentity identity) {
+        static synchronized NamedLocationIdentity register(NamedLocationIdentity identity) {
             NamedLocationIdentity oldValue = map.put(identity.name, identity);
             if (oldValue != null) {
-                throw new AssertionError("identity " + identity + " already exists");
+                throw new IllegalArgumentException("identity " + identity + " already exists");
             }
-            return true;
+            return identity;
+        }
+
+        static synchronized NamedLocationIdentity lookup(String name) {
+            return map.get(name);
         }
     }
 
@@ -81,9 +86,14 @@ public final class NamedLocationIdentity implements LocationIdentity {
      * @param immutable true if the location is immutable
      */
     private static NamedLocationIdentity create(String name, boolean immutable) {
-        NamedLocationIdentity id = new NamedLocationIdentity(name, immutable);
-        assert DB.checkUnique(id);
-        return id;
+        return DB.register(new NamedLocationIdentity(name, immutable));
+    }
+
+    /**
+     * Gets the unique {@link NamedLocationIdentity} (if any) for a given name.
+     */
+    public static NamedLocationIdentity lookup(String name) {
+        return DB.lookup(name);
     }
 
     @Override
@@ -98,9 +108,7 @@ public final class NamedLocationIdentity implements LocationIdentity {
         }
         if (obj instanceof NamedLocationIdentity) {
             NamedLocationIdentity that = (NamedLocationIdentity) obj;
-            boolean res = this.name.equals(that.name);
-            assert !res || this.immutable == that.immutable;
-            return res;
+            return this.name.equals(that.name);
         }
         return false;
     }

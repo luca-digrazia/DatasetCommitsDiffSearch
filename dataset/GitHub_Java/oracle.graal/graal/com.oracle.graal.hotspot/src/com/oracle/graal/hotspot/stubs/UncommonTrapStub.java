@@ -22,13 +22,11 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.HotSpotBackend.*;
-import static com.oracle.graal.hotspot.HotSpotBackend.Options.*;
 import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
@@ -38,6 +36,7 @@ import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.replacements.*;
 import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.word.*;
 
 /**
@@ -86,7 +85,6 @@ public class UncommonTrapStub extends SnippetStub {
     public UncommonTrapStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
         super(UncommonTrapStub.class, "uncommonTrapHandler", providers, target, linkage);
         this.target = target;
-        assert PreferGraalStubs.getValue();
     }
 
     @Override
@@ -149,7 +147,7 @@ public class UncommonTrapStub extends SnippetStub {
          * Stack bang to make sure there's enough room for the interpreter frames. Bang stack for
          * total size of the interpreter frames plus shadow page size. Bang one page at a time
          * because large sizes can bang beyond yellow and red zones.
-         *
+         * 
          * @deprecated This code should go away as soon as JDK-8032410 hits the Graal repository.
          */
         final int totalFrameSizes = unrollBlock.readInt(deoptimizationUnrollBlockTotalFrameSizesOffset());
@@ -285,6 +283,8 @@ public class UncommonTrapStub extends SnippetStub {
     private static int deoptimizationUnpackUncommonTrap() {
         return config().deoptimizationUnpackUncommonTrap;
     }
+
+    public static final ForeignCallDescriptor UNPACK_FRAMES = newDescriptor(UncommonTrapStub.class, "unpackFrames", int.class, Word.class, int.class);
 
     @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
     public static native int unpackFrames(@ConstantNodeParameter ForeignCallDescriptor unpackFrames, Word thread, int mode);

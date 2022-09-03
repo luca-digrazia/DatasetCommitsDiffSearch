@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,14 +29,13 @@ import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.replacements.*;
+import com.oracle.graal.replacements.Snippet.Fold;
 import com.oracle.graal.replacements.nodes.*;
 import com.oracle.graal.word.*;
 
@@ -298,17 +297,9 @@ public class HotSpotReplacementsUtil {
         return config().klassLayoutHelperOffset;
     }
 
-    public static int readLayoutHelper(TypePointer hub) {
-        // return hub.readInt(klassLayoutHelperOffset(), KLASS_LAYOUT_HELPER_LOCATION);
-        GuardingNode anchorNode = SnippetAnchorNode.anchor();
-        return loadKlassLayoutHelperIntrinsic(hub, anchorNode);
+    public static int readLayoutHelper(Word hub) {
+        return hub.readInt(klassLayoutHelperOffset(), KLASS_LAYOUT_HELPER_LOCATION);
     }
-
-    @NodeIntrinsic(value = KlassLayoutHelperNode.class)
-    public static native int loadKlassLayoutHelperIntrinsic(TypePointer object, GuardingNode anchor);
-
-    @NodeIntrinsic(value = KlassLayoutHelperNode.class)
-    public static native int loadKlassLayoutHelperIntrinsic(TypePointer object);
 
     /**
      * Checks if class {@code klass} is an array.
@@ -318,7 +309,7 @@ public class HotSpotReplacementsUtil {
      * @param klass the class to be checked
      * @return true if klass is an array, false otherwise
      */
-    public static boolean klassIsArray(TypePointer klass) {
+    public static boolean klassIsArray(Word klass) {
         /*
          * The less-than check only works if both values are ints. We use local variables to make
          * sure these are still ints and haven't changed.
@@ -358,7 +349,7 @@ public class HotSpotReplacementsUtil {
         return config().hubOffset;
     }
 
-    public static void initializeObjectHeader(Word memory, Word markWord, TypePointer hub) {
+    public static void initializeObjectHeader(Word memory, Word markWord, Word hub) {
         memory.writeWord(markOffset(), markWord, MARK_WORD_LOCATION);
         StoreHubNode.write(memory, hub);
     }
@@ -502,7 +493,7 @@ public class HotSpotReplacementsUtil {
         return config().secondarySuperCacheOffset;
     }
 
-    public static final LocationIdentity SECONDARY_SUPERS_LOCATION = NamedLocationIdentity.immutable("SecondarySupers");
+    public static final LocationIdentity SECONDARY_SUPERS_LOCATION = NamedLocationIdentity.mutable("SecondarySupers");
 
     @Fold
     public static int secondarySupersOffset() {
@@ -549,8 +540,8 @@ public class HotSpotReplacementsUtil {
     /**
      * Loads the hub of an object (without null checking it first).
      */
-    public static TypePointer loadHub(Object object) {
-        return loadHubIntrinsic(object);
+    public static Word loadHub(Object object) {
+        return loadHubIntrinsic(object, getWordKind());
     }
 
     public static Object verifyOop(Object object) {
@@ -566,11 +557,6 @@ public class HotSpotReplacementsUtil {
     public static Word loadWordFromObject(Object object, int offset) {
         ReplacementsUtil.staticAssert(offset != hubOffset(), "Use loadHubIntrinsic instead of loadWordFromObject");
         return loadWordFromObjectIntrinsic(object, offset, getWordKind(), LocationIdentity.ANY_LOCATION);
-    }
-
-    public static Word loadWordFromObject(Object object, int offset, LocationIdentity identity) {
-        ReplacementsUtil.staticAssert(offset != hubOffset(), "Use loadHubIntrinsic instead of loadWordFromObject");
-        return loadWordFromObjectIntrinsic(object, offset, getWordKind(), identity);
     }
 
     /**
@@ -596,14 +582,15 @@ public class HotSpotReplacementsUtil {
     }
 
     @SuppressWarnings("unused")
-    @NodeIntrinsic(value = LoadHubNode.class)
-    public static TypePointer loadHubIntrinsic(Object object, GuardingNode anchor) {
-        return Word.unsigned(unsafeReadKlassPointer(object)).toTypePointer();
+    @NodeIntrinsic(value = LoadHubNode.class, setStampFromReturnType = true)
+    public static Word loadHubIntrinsic(Object object, @ConstantNodeParameter Kind word, GuardingNode anchor) {
+        return Word.unsigned(unsafeReadKlassPointer(object));
     }
 
-    @NodeIntrinsic(value = LoadHubNode.class)
-    public static TypePointer loadHubIntrinsic(Object object) {
-        return Word.unsigned(unsafeReadKlassPointer(object)).toTypePointer();
+    @SuppressWarnings("unused")
+    @NodeIntrinsic(value = LoadHubNode.class, setStampFromReturnType = true)
+    public static Word loadHubIntrinsic(Object object, @ConstantNodeParameter Kind word) {
+        return Word.unsigned(unsafeReadKlassPointer(object));
     }
 
     @Fold
@@ -628,11 +615,11 @@ public class HotSpotReplacementsUtil {
      * @param hub the hub of an InstanceKlass
      * @return true is the InstanceKlass represented by hub is fully initialized
      */
-    public static boolean isInstanceKlassFullyInitialized(Pointer hub) {
+    public static boolean isInstanceKlassFullyInitialized(Word hub) {
         return readInstanceKlassState(hub) == instanceKlassStateFullyInitialized();
     }
 
-    private static byte readInstanceKlassState(Pointer hub) {
+    private static byte readInstanceKlassState(Word hub) {
         return hub.readByte(instanceKlassInitStateOffset(), CLASS_STATE_LOCATION);
     }
 
@@ -643,21 +630,17 @@ public class HotSpotReplacementsUtil {
         return config().klassModifierFlagsOffset;
     }
 
-    public static final LocationIdentity CLASS_KLASS_LOCATION = NamedLocationIdentity.immutable("Class._klass");
-
     @Fold
     public static int klassOffset() {
         return config().klassOffset;
     }
-
-    public static final LocationIdentity CLASS_ARRAY_KLASS_LOCATION = NamedLocationIdentity.mutable("Class._array_klass");
 
     @Fold
     public static int arrayKlassOffset() {
         return config().arrayKlassOffset;
     }
 
-    public static final LocationIdentity KLASS_NODE_CLASS = NamedLocationIdentity.immutable("KlassNodeClass");
+    public static final LocationIdentity KLASS_NODE_CLASS = NamedLocationIdentity.mutable("KlassNodeClass");
 
     @Fold
     public static int instanceKlassNodeClassOffset() {

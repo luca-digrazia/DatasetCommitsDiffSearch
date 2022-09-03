@@ -77,15 +77,13 @@ public class WriteBarrierSnippets implements Snippets {
             oop = Word.fromObject(fixedObject);
         }
         serialWriteBarrierCounter.inc();
-        int cardTableShift = (isImmutableCode() && generatePIC()) ? CardTableShiftNode.cardTableShift() : cardTableShift();
-        long cardTableAddress = (isImmutableCode() && generatePIC()) ? CardTableAddressNode.cardTableAddress() : cardTableStart();
-        Word base = (Word) oop.unsignedShiftRight(cardTableShift);
-        long startAddress = cardTableAddress;
+        Word base = (Word) oop.unsignedShiftRight(cardTableShift());
+        long startAddress = cardTableStart();
         int displacement = 0;
         if (((int) startAddress) == startAddress) {
             displacement = (int) startAddress;
         } else {
-            base = base.add(Word.unsigned(cardTableAddress));
+            base = base.add(Word.unsigned(cardTableStart()));
         }
         base.writeByte(displacement, (byte) 0, GC_CARD_LOCATION);
     }
@@ -483,7 +481,7 @@ public class WriteBarrierSnippets implements Snippets {
     public static void validateObject(Object parent, Object child) {
         if (verifyOops() && child != null && !validateOop(VALIDATE_OBJECT, parent, child)) {
             log(true, "Verification ERROR, Parent: %p Child: %p\n", Word.fromObject(parent).rawValue(), Word.fromObject(child).rawValue());
-            DirectObjectStoreNode.storeObject(null, 0, 0, null, LocationIdentity.ANY_LOCATION, Kind.Object);
+            DirectObjectStoreNode.storeObject(null, 0, 0, null, LocationIdentity.ANY_LOCATION);
         }
     }
 
