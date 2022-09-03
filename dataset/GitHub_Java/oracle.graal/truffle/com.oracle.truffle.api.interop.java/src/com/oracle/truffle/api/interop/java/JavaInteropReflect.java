@@ -78,7 +78,7 @@ final class JavaInteropReflect {
                     return new JavaFunctionObject(m, obj);
                 }
             }
-            throw UnknownIdentifierException.raise(name);
+            throw (NoSuchFieldError) new NoSuchFieldError(ex.getMessage()).initCause(ex);
         }
         return JavaInterop.asTruffleObject(val);
     }
