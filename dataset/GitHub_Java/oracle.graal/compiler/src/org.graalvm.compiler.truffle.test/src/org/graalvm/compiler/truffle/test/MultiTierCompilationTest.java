@@ -33,11 +33,9 @@ import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.overrid
 import org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -94,7 +92,6 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
     @SuppressWarnings("try")
     @Test
     public void testCompilationTiers() {
-        Assume.assumeTrue(TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompileImmediately));
         try (TruffleRuntimeOptionsOverrideScope scope = overrideOptions(
                         TruffleBackgroundCompilation, false,
                         TruffleMultiTier, true,

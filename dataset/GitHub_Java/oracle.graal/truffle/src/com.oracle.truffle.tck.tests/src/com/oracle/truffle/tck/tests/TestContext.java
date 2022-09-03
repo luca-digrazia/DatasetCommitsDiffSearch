@@ -76,7 +76,6 @@ final class TestContext implements Closeable {
     private final Map<String, Collection<? extends Snippet>> scripts;
     private final Map<String, Collection<? extends InlineSnippet>> inlineScripts;
     private final boolean printOutput;
-    private final boolean enableInlineVerifier;
     private Context context;
     private InlineVerifier inlineVerifier;
     private State state;
@@ -89,13 +88,11 @@ final class TestContext implements Closeable {
         this.scripts = new HashMap<>();
         this.inlineScripts = new HashMap<>();
         boolean verbose = Boolean.getBoolean("tck.verbose");
-        String propValue = System.getProperty(String.format("tck.%s.verbose", testClass.getSimpleName()));
+        final String propValue = System.getProperty(String.format("tck.%s.verbose", testClass.getSimpleName()));
         if (propValue != null) {
             verbose = Boolean.parseBoolean(propValue);
         }
         printOutput = verbose;
-        propValue = System.getProperty("tck.inlineVerifierInstrument");
-        enableInlineVerifier = propValue == null ? true : Boolean.parseBoolean(propValue);
     }
 
     Map<String, ? extends LanguageProvider> getInstalledProviders() {
@@ -136,7 +133,7 @@ final class TestContext implements Closeable {
                 builder.out(NullOutputStream.INSTANCE).err(NullOutputStream.INSTANCE);
             }
             this.context = builder.build();
-            if (enableInlineVerifier) {
+            if (!isTruffleCompileImmediately()) {
                 Instrument instrument = context.getEngine().getInstruments().get(InlineVerifier.ID);
                 this.inlineVerifier = instrument.lookup(InlineVerifier.class);
                 Assert.assertNotNull(this.inlineVerifier);
@@ -275,6 +272,10 @@ final class TestContext implements Closeable {
         if (inlineVerifier != null) {
             inlineVerifier.setInlineSnippet(languageId, inlineSnippet, verifier);
         }
+    }
+
+    private static boolean isTruffleCompileImmediately() {
+        return Boolean.getBoolean("graal.TruffleCompileImmediately");
     }
 
     private enum State {
