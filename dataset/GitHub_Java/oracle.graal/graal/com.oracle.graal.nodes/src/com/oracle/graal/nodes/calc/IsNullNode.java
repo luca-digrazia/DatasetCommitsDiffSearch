@@ -44,6 +44,7 @@ public final class IsNullNode extends LogicNode implements Canonicalizable, LIRL
      * @param object the instruction producing the object to check against null
      */
     public IsNullNode(ValueNode object) {
+        assert object.kind() == Kind.Object : object;
         this.object = object;
     }
 
@@ -55,7 +56,7 @@ public final class IsNullNode extends LogicNode implements Canonicalizable, LIRL
     @Override
     public boolean verify() {
         assertTrue(object() != null, "is null input must not be null");
-        assertTrue(object().stamp() instanceof ObjectStamp || object().stamp() instanceof IllegalStamp, "is null input must be an object");
+        assertTrue(object().kind() == Kind.Object, "is null input must be an object");
         return super.verify();
     }
 
@@ -66,7 +67,7 @@ public final class IsNullNode extends LogicNode implements Canonicalizable, LIRL
             assert constant.getKind() == Kind.Object;
             return LogicConstantNode.forBoolean(constant.isNull(), graph());
         }
-        if (ObjectStamp.isObjectNonNull(object.stamp())) {
+        if (object.objectStamp().nonNull()) {
             return LogicConstantNode.contradiction(graph());
         }
         return this;
@@ -81,9 +82,9 @@ public final class IsNullNode extends LogicNode implements Canonicalizable, LIRL
 
     @Override
     public boolean push(PiNode parent) {
-        if (parent.stamp() instanceof ObjectStamp && parent.object().stamp() instanceof ObjectStamp) {
-            ObjectStamp piStamp = (ObjectStamp) parent.stamp();
-            ObjectStamp piValueStamp = (ObjectStamp) parent.object().stamp();
+        ObjectStamp piStamp = parent.objectStamp();
+        if (parent.object().kind() == Kind.Object) {
+            ObjectStamp piValueStamp = parent.object().objectStamp();
             if (piStamp.nonNull() == piValueStamp.nonNull() && piStamp.alwaysNull() == piValueStamp.alwaysNull()) {
                 replaceFirstInput(parent, parent.object());
                 return true;

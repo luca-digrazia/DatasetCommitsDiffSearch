@@ -82,10 +82,19 @@ public class ArrayCopySnippets implements Snippets {
     private static final long VECTOR_SIZE = arrayIndexScale(Kind.Long);
 
     private static void checkedCopy(Object src, int srcPos, Object dest, int destPos, int length, Kind baseKind) {
-        Object nonNullSrc = guardingNonNull(src);
-        Object nonNullDest = guardingNonNull(dest);
+        Object nonNullSrc = checkNonNull(src);
+        Object nonNullDest = checkNonNull(dest);
         checkLimits(nonNullSrc, srcPos, nonNullDest, destPos, length);
         UnsafeArrayCopyNode.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, baseKind);
+    }
+
+    @Fold
+    private static Stamp nonNull() {
+        return StampFactory.objectNonNull();
+    }
+
+    public static Object checkNonNull(Object obj) {
+        return guardingPi(obj, isNull(obj), true, DeoptimizationReason.RuntimeConstraint, DeoptimizationAction.None, nonNull());
     }
 
     public static int checkArrayType(Word hub) {
@@ -182,8 +191,8 @@ public class ArrayCopySnippets implements Snippets {
 
     @Snippet
     public static void arraycopy(Object src, int srcPos, Object dest, int destPos, int length) {
-        Object nonNullSrc = guardingNonNull(src);
-        Object nonNullDest = guardingNonNull(dest);
+        Object nonNullSrc = checkNonNull(src);
+        Object nonNullDest = checkNonNull(dest);
         Word srcHub = loadHub(nonNullSrc);
         Word destHub = loadHub(nonNullDest);
         if (probability(FAST_PATH_PROBABILITY, srcHub.equal(destHub)) && probability(FAST_PATH_PROBABILITY, nonNullSrc != nonNullDest)) {
