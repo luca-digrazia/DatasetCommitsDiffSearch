@@ -24,14 +24,12 @@ package com.oracle.graal.nodes;
 
 import com.oracle.graal.compiler.common.type.StampFactory;
 import com.oracle.graal.graph.NodeClass;
-import com.oracle.graal.nodeinfo.NodeCycles;
 import com.oracle.graal.nodeinfo.NodeInfo;
-import com.oracle.graal.nodeinfo.NodeSize;
 import com.oracle.graal.nodes.spi.LIRLowerable;
 import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
 
 /** A node that results in a platform dependent pause instruction being emitted. */
-@NodeInfo(cycles = NodeCycles.CYCLES_500, size = NodeSize.SIZE_1)
+@NodeInfo
 public final class PauseNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<PauseNode> TYPE = NodeClass.create(PauseNode.class);

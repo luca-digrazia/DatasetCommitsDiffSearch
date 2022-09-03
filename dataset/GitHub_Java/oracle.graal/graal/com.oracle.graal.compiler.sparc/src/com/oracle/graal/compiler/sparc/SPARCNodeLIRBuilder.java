@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,21 +23,27 @@
 
 package com.oracle.graal.compiler.sparc;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.gen.*;
-import com.oracle.graal.lir.sparc.*;
-import com.oracle.graal.lir.sparc.SPARCMove.NullCheckOp;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.Value;
+
+import com.oracle.graal.compiler.gen.NodeLIRBuilder;
+import com.oracle.graal.lir.LabelRef;
+import com.oracle.graal.lir.StandardOp.JumpOp;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.lir.sparc.SPARCBreakpointOp;
+import com.oracle.graal.lir.sparc.SPARCJumpOp;
+import com.oracle.graal.nodes.BreakpointNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
 
 /**
  * This class implements the SPARC specific portion of the LIR generator.
  */
 public abstract class SPARCNodeLIRBuilder extends NodeLIRBuilder {
 
-    public SPARCNodeLIRBuilder(StructuredGraph graph, LIRGenerator lirGen) {
-        super(graph, lirGen);
+    public SPARCNodeLIRBuilder(StructuredGraph graph, LIRGeneratorTool lirGen, SPARCNodeMatchRules nodeMatchRules) {
+        super(graph, lirGen, nodeMatchRules);
     }
 
     @Override
@@ -47,29 +53,30 @@ public abstract class SPARCNodeLIRBuilder extends NodeLIRBuilder {
     }
 
     @Override
-    public void visitCompareAndSwap(LoweredCompareAndSwapNode i, Value address) {
-        throw new InternalError("NYI");
-    }
-
-    @Override
     public void visitBreakpointNode(BreakpointNode node) {
         JavaType[] sig = new JavaType[node.arguments().size()];
         for (int i = 0; i < sig.length; i++) {
             sig[i] = node.arguments().get(i).stamp().javaType(gen.getMetaAccess());
         }
 
-        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMap().registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false), node.arguments());
+        Value[] parameters = visitInvokeArguments(gen.getResult().getFrameMapBuilder().getRegisterConfig().getCallingConvention(CallingConvention.Type.JavaCall, null, sig, gen.target(), false),
+                        node.arguments());
         append(new SPARCBreakpointOp(parameters));
     }
 
     @Override
-    public void emitNullCheck(ValueNode v, DeoptimizingNode deopting) {
-        assert v.getKind() == Kind.Object;
-        append(new NullCheckOp(gen.load(operand(v)), gen.state(deopting)));
+    protected JumpOp newJumpOp(LabelRef ref) {
+        return new SPARCJumpOp(ref);
     }
 
     @Override
-    public void visitInfopointNode(InfopointNode i) {
-        throw new InternalError("NYI");
+    public SPARCLIRGenerator getLIRGeneratorTool() {
+        return (SPARCLIRGenerator) super.getLIRGeneratorTool();
+    }
+
+    @Override
+    protected void emitPrologue(StructuredGraph graph) {
+        getLIRGeneratorTool().emitLoadConstantTableBase();
+        super.emitPrologue(graph);
     }
 }

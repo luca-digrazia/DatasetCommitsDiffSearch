@@ -22,18 +22,39 @@
  */
 package com.oracle.graal.nodes.spi;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.java.*;
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.code.CallingConvention;
+import jdk.vm.ci.code.InfopointReason;
+import jdk.vm.ci.meta.Value;
 
-public interface NodeLIRBuilderTool extends NodeMappableLIRBuilder {
+import com.oracle.graal.compiler.common.cfg.BlockMap;
+import com.oracle.graal.compiler.common.type.Stamp;
+import com.oracle.graal.graph.Node;
+import com.oracle.graal.lir.LIRFrameState;
+import com.oracle.graal.lir.gen.LIRGeneratorTool;
+import com.oracle.graal.nodes.AbstractBeginNode;
+import com.oracle.graal.nodes.AbstractEndNode;
+import com.oracle.graal.nodes.AbstractMergeNode;
+import com.oracle.graal.nodes.BreakpointNode;
+import com.oracle.graal.nodes.DeoptimizingNode;
+import com.oracle.graal.nodes.FullInfopointNode;
+import com.oracle.graal.nodes.IfNode;
+import com.oracle.graal.nodes.Invoke;
+import com.oracle.graal.nodes.LoopEndNode;
+import com.oracle.graal.nodes.SafepointNode;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.calc.ConditionalNode;
+import com.oracle.graal.nodes.cfg.Block;
+import com.oracle.graal.nodes.extended.SwitchNode;
 
-    void emitNullCheck(ValueNode v, DeoptimizingNode deopting);
+public interface NodeLIRBuilderTool extends NodeValueMap {
+
+    // TODO (je) remove and move into the Node
+    LIRFrameState state(DeoptimizingNode deopt);
 
     void emitIf(IfNode i);
 
@@ -44,13 +65,11 @@ public interface NodeLIRBuilderTool extends NodeMappableLIRBuilder {
     void emitInvoke(Invoke i);
 
     // Handling of block-end nodes still needs to be unified in the LIRGenerator.
-    void visitMerge(MergeNode i);
+    void visitMerge(AbstractMergeNode i);
 
     void visitEndNode(AbstractEndNode i);
 
     void visitLoopEnd(LoopEndNode i);
-
-    void visitCompareAndSwap(LoweredCompareAndSwapNode i, Value address);
 
     // These methods define the contract a runtime specific backend must provide.
 
@@ -58,13 +77,15 @@ public interface NodeLIRBuilderTool extends NodeMappableLIRBuilder {
 
     void visitBreakpointNode(BreakpointNode i);
 
-    void visitInfopointNode(InfopointNode i);
+    void visitFullInfopointNode(FullInfopointNode i);
+
+    void recordSimpleInfopoint(InfopointReason reason, BytecodePosition position);
 
     LIRGeneratorTool getLIRGeneratorTool();
 
-    void emitOverflowCheckBranch(AbstractBeginNode overflowSuccessor, AbstractBeginNode next, double probability);
+    void emitOverflowCheckBranch(AbstractBeginNode overflowSuccessor, AbstractBeginNode next, Stamp compareStamp, double probability);
 
     Value[] visitInvokeArguments(CallingConvention cc, Collection<ValueNode> arguments);
 
-    MemoryArithmeticLIRLowerer getMemoryLowerer();
+    void doBlock(Block block, StructuredGraph graph, BlockMap<List<Node>> blockMap);
 }

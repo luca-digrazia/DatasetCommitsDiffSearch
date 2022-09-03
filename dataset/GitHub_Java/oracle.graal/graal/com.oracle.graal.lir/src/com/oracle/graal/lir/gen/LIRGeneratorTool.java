@@ -80,7 +80,7 @@ public interface LIRGeneratorTool extends BenchmarkCounterFactory {
         LIRInstruction createLoad(AllocatableValue result, Constant input);
     }
 
-    abstract class BlockScope implements AutoCloseable {
+    public abstract class BlockScope implements AutoCloseable {
 
         public abstract AbstractBlockBase<?> getCurrentBlock();
 
