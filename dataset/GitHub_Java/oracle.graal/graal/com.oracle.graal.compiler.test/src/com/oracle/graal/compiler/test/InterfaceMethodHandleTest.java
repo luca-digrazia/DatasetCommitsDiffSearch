@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,12 +26,17 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
+import org.junit.Test;
+
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.test.ExportingClassLoader;
+
 import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.Label;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 import jdk.internal.org.objectweb.asm.Opcodes;
-
-import org.junit.Test;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public final class InterfaceMethodHandleTest extends GraalCompilerTest implements Opcodes {
     private static final MethodHandle INTERFACE_HANDLE_M;
@@ -44,12 +49,27 @@ public final class InterfaceMethodHandleTest extends GraalCompilerTest implement
     }
 
     static class A implements I {
+        @Override
         public int m() {
             return 0;
         }
 
+        @Override
         public int m2(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
             return 1;
+        }
+
+    }
+
+    static class M2Thrower implements I {
+        @Override
+        public int m() {
+            return 0;
+        }
+
+        @Override
+        public int m2(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+            throw new InternalError();
         }
 
     }
@@ -84,21 +104,32 @@ public final class InterfaceMethodHandleTest extends GraalCompilerTest implement
         return (int) INTERFACE_HANDLE_M2.invokeExact(o, a, b, c, d, e, f, g, h, i, j);
     }
 
-    @Test
-    public void testInvokeInterface03() throws InstantiationException, IllegalAccessException, ClassNotFoundException {
-        A goodInstance = new A();
-        try {
-            invokeInterfaceHandle2(goodInstance, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-        } catch (Throwable t) {
-
+    @Override
+    protected InstalledCode addMethod(ResolvedJavaMethod method, CompilationResult compResult) {
+        if (method.getDeclaringClass().equals(getMetaAccess().lookupJavaType(M2Thrower.class))) {
+            // Make sure M2Thrower.m2 is invoked from normal code
+            return getBackend().createDefaultInstalledCode(method, compResult);
         }
-        System.err.println(getCode(getMetaAccess().lookupJavaMethod(getMethod("invokeInterfaceHandle2"))));
-        I badInstance = (I) loader.findClass(NAME).newInstance();
-        for (int i = 0; i < 100001; i++) {
-            try {
-                invokeInterfaceHandle2(i < 100000 ? goodInstance : badInstance, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-            } catch (Throwable e) {
+        return super.addMethod(method, compResult);
+    }
 
+    /**
+     * Try to exercise a mixed calling sequence with regular JIT code calling a method handle that
+     * can't be inlined with an implementation compiled by Graal that throws an exception.
+     */
+    @Test
+    public void testInvokeInterface03() throws Throwable {
+        A goodInstance = new A();
+        I badInstance = new M2Thrower();
+        getCode(getMetaAccess().lookupJavaMethod(getMethod(M2Thrower.class, "m2")));
+        for (int x = 0; x < 1000; x++) {
+            final int limit = 20000;
+            for (int i = 0; i <= limit; i++) {
+                try {
+                    invokeInterfaceHandle2(i < limit - 1 ? goodInstance : badInstance, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+                } catch (InternalError e) {
+
+                }
             }
         }
     }
@@ -159,7 +190,7 @@ public final class InterfaceMethodHandleTest extends GraalCompilerTest implement
         return cw.toByteArray();
     }
 
-    public static class AsmLoader extends ClassLoader {
+    public static class AsmLoader extends ExportingClassLoader {
         Class<?> loaded;
 
         public AsmLoader(ClassLoader parent) {

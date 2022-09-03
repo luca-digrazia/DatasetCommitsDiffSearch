@@ -41,7 +41,6 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.graal.code.CompilationResult;
-import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.hotspot.meta.HotSpotGraphBuilderPlugins;
 import com.oracle.graal.hotspot.meta.HotSpotProviders;
 import com.oracle.graal.java.GraphBuilderPhase;
@@ -131,11 +130,10 @@ public class HotSpotCryptoSubstitutionTest extends HotSpotGraalCompilerTest {
                 StructuredGraph subst = getReplacements().getSubstitution(installedCodeOwner, 0);
                 ResolvedJavaMethod substMethod = subst == null ? null : subst.method();
                 if (substMethod != null) {
-                    CompilationIdentifier compilationId = getBackend().getCompilationIdentifier(substMethod);
-                    StructuredGraph graph = new StructuredGraph(substMethod, AllowAssumptions.YES, NO_PROFILING_INFO, compilationId);
+                    StructuredGraph graph = new StructuredGraph(substMethod, AllowAssumptions.YES, NO_PROFILING_INFO);
                     Plugins plugins = new Plugins(((HotSpotProviders) getProviders()).getGraphBuilderPlugins());
                     GraphBuilderConfiguration config = GraphBuilderConfiguration.getSnippetDefault(plugins);
-                    IntrinsicContext initialReplacementContext = new IntrinsicContext(installedCodeOwner, substMethod, getReplacements().getReplacementBytecodeProvider(), ROOT_COMPILATION);
+                    IntrinsicContext initialReplacementContext = new IntrinsicContext(installedCodeOwner, substMethod, ROOT_COMPILATION);
                     new GraphBuilderPhase.Instance(getMetaAccess(), getProviders().getStampProvider(), getConstantReflection(), getProviders().getConstantFieldProvider(), config,
                                     OptimisticOptimizations.NONE, initialReplacementContext).apply(graph);
                     Assert.assertNotNull(getCode(installedCodeOwner, graph, true));

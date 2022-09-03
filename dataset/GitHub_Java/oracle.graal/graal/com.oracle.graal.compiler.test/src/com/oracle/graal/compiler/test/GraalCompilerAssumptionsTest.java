@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,13 +22,15 @@
  */
 package com.oracle.graal.compiler.test;
 
-import static org.junit.Assert.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.Assumptions.Assumption;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
+import com.oracle.graal.code.CompilationResult;
+import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+
+import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.Assumptions.Assumption;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 public abstract class GraalCompilerAssumptionsTest extends GraalCompilerTest {
 
@@ -63,16 +65,16 @@ public abstract class GraalCompilerAssumptionsTest extends GraalCompilerTest {
         checkGraph(expectedAssumption, graph);
 
         CompilationResult compilationResult = compile(javaMethod, graph);
-        final InstalledCode installedCode = getProviders().getCodeCache().setDefaultMethod(javaMethod, compilationResult);
+        final InstalledCode installedCode = getBackend().createDefaultInstalledCode(javaMethod, compilationResult);
         assertTrue(installedCode.isValid());
         if (classToLoad != null) {
             String fullName = getClass().getName() + "$" + classToLoad;
             try {
                 Class.forName(fullName);
             } catch (ClassNotFoundException e) {
-                assertFalse(String.format("Can't find class %s", fullName), true);
+                fail("Can't find class %s", fullName);
             }
-            assertTrue(!willInvalidate == installedCode.isValid());
+            assertTrue(!willInvalidate == installedCode.isValid(), "method should be %s", willInvalidate ? "invalid" : "valid");
         }
     }
 
@@ -83,7 +85,7 @@ public abstract class GraalCompilerAssumptionsTest extends GraalCompilerTest {
                 found = true;
             }
         }
-        assertTrue(String.format("Can't find assumption %s", expectedAssumption), found);
+        assertTrue(found, "Can't find assumption %s", expectedAssumption);
     }
 
     /**
