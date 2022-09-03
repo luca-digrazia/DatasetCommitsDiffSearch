@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2017, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,8 +33,9 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
 import com.oracle.truffle.llvm.runtime.NativeAllocator;
 import com.oracle.truffle.llvm.runtime.NativeResolver;
@@ -43,10 +44,12 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 abstract class Container {
+    private static final int CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC = 2;
 
     protected final Type type;
 
     Container(Type type) {
+        CompilerAsserts.neverPartOfCompilation();
         this.type = type;
     }
 
@@ -55,6 +58,8 @@ abstract class Container {
     }
 
     abstract void destroy();
+
+    abstract boolean isNative();
 
     abstract LLVMAddress getNativeLocation(LLVMGlobalVariable global);
 
@@ -74,13 +79,13 @@ abstract class Container {
 
     abstract void putAddress(LLVMGlobalVariable global, LLVMAddress value);
 
-    abstract void putTruffleObject(LLVMGlobalVariable global, TruffleObject value);
-
     abstract void putLLVMTruffleObject(LLVMGlobalVariable global, LLVMTruffleObject value);
 
     abstract void putFunction(LLVMGlobalVariable global, LLVMFunction value);
 
-    abstract void putNull(LLVMGlobalVariable global, LLVMTruffleNull value);
+    abstract void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value);
+
+    abstract void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value);
 
     abstract void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value);
 
@@ -110,63 +115,71 @@ abstract class Container {
         }
 
         @Override
+        boolean isNative() {
+            return false;
+        }
+
+        @Override
         LLVMAddress getNativeLocation(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getNativeLocation(global);
         }
 
         @Override
         void putI1(LLVMGlobalVariable global, boolean value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putI1(global, value);
         }
 
         @Override
         void putI8(LLVMGlobalVariable global, byte value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putI8(global, value);
         }
 
         @Override
         void putI16(LLVMGlobalVariable global, short value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putI16(global, value);
         }
 
         @Override
         void putI32(LLVMGlobalVariable global, int value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putI32(global, value);
         }
 
         @Override
         void putI64(LLVMGlobalVariable global, long value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putI64(global, value);
         }
 
         @Override
         void putFloat(LLVMGlobalVariable global, float value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putFloat(global, value);
         }
 
         @Override
         void putDouble(LLVMGlobalVariable global, double value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putDouble(global, value);
         }
 
         @Override
         void putAddress(LLVMGlobalVariable global, LLVMAddress value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putAddress(global, value);
-        }
-
-        @Override
-        void putTruffleObject(LLVMGlobalVariable global, TruffleObject value) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Cannot store managed object to native memory");
         }
 
         @Override
@@ -177,66 +190,84 @@ abstract class Container {
 
         @Override
         void putFunction(LLVMGlobalVariable global, LLVMFunction value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putFunction(global, value);
         }
 
         @Override
-        void putNull(LLVMGlobalVariable global, LLVMTruffleNull value) {
+        void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
-            global.getContainer().putNull(global, value);
+            global.getContainer().putManaged(global, value);
+        }
+
+        @Override
+        void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            global.setContainer(new NativeContainer(type, resolver.resolve()));
+            global.getContainer().putBoxedPrimitive(global, value);
         }
 
         @Override
         Object get(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().get(global);
         }
 
         @Override
         boolean getI1(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getI1(global);
         }
 
         @Override
         byte getI8(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getI8(global);
         }
 
         @Override
         short getI16(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getI16(global);
         }
 
         @Override
         int getI32(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getI32(global);
         }
 
         @Override
         long getI64(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getI64(global);
         }
 
         @Override
         float getFloat(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getFloat(global);
         }
 
         @Override
         double getDouble(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             return global.getContainer().getDouble(global);
         }
 
         @Override
         void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             global.setContainer(new NativeContainer(type, resolver.resolve()));
             global.getContainer().putGlobal(global, value);
         }
@@ -249,11 +280,11 @@ abstract class Container {
     }
 
     static final class NativeContainer extends Container {
-        private final LLVMAddress address;
+        private final long address;
 
         NativeContainer(Type type, LLVMAddress address) {
             super(type);
-            this.address = address;
+            this.address = address.getVal();
         }
 
         @Override
@@ -261,9 +292,18 @@ abstract class Container {
             LLVMMemory.free(address);
         }
 
+        public long getAddress() {
+            return address;
+        }
+
+        @Override
+        boolean isNative() {
+            return true;
+        }
+
         @Override
         LLVMAddress getNativeLocation(LLVMGlobalVariable global) {
-            return address;
+            return LLVMAddress.fromLong(address);
         }
 
         @Override
@@ -274,7 +314,6 @@ abstract class Container {
         @Override
         void putI8(LLVMGlobalVariable global, byte value) {
             LLVMMemory.putI8(address, value);
-
         }
 
         @Override
@@ -308,7 +347,7 @@ abstract class Container {
         }
 
         @Override
-        void putTruffleObject(LLVMGlobalVariable global, TruffleObject value) {
+        void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Cannot store managed object to native memory");
         }
@@ -321,12 +360,16 @@ abstract class Container {
 
         @Override
         void putFunction(LLVMGlobalVariable global, LLVMFunction value) {
-            LLVMMemory.putAddress(address, LLVMAddress.fromLong(value.getFunctionIndex()));
+            LLVMMemory.putAddress(address, value.getFunctionPointer());
         }
 
         @Override
-        void putNull(LLVMGlobalVariable global, LLVMTruffleNull value) {
-            LLVMMemory.putAddress(address, LLVMAddress.fromLong(0));
+        void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
+            // do not store the boxed primitive to native memory.
+            // the boxed primitive was never converted to an address; when reading it would be
+            // interpreted as an address
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Cannot store managed object to native memory");
         }
 
         @Override
@@ -371,7 +414,9 @@ abstract class Container {
 
         @Override
         void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value) {
-            LLVMMemory.putAddress(address, value.getNativeLocation());
+            // this is specially handeled in the LLVMGlobalVariableAccess node
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException();
         }
     }
 
@@ -384,13 +429,30 @@ abstract class Container {
         }
 
         @Override
+        boolean isNative() {
+            return false;
+        }
+
+        @Override
         LLVMAddress getNativeLocation(LLVMGlobalVariable global) {
             return transferToNativeWithCopy(global);
         }
 
-        abstract LLVMAddress transferToNativeWithCopy(LLVMGlobalVariable global);
+        LLVMAddress transferToNativeNoCopy(LLVMGlobalVariable global) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            LLVMAddress address = allocator.allocate();
+            NativeContainer nativeContainer = new NativeContainer(type, address);
+            global.setContainer(nativeContainer);
+            return address;
+        }
 
-        abstract LLVMAddress transferToNativeNoCopy(LLVMGlobalVariable global);
+        LLVMAddress transferToNativeWithCopy(LLVMGlobalVariable global) {
+            LLVMAddress address = transferToNativeNoCopy(global);
+            copyToNative(address);
+            return address;
+        }
+
+        abstract void copyToNative(LLVMAddress a);
 
         @Override
         void putI1(LLVMGlobalVariable global, boolean value) {
@@ -491,72 +553,71 @@ abstract class Container {
         }
 
         @Override
-        LLVMAddress transferToNativeWithCopy(LLVMGlobalVariable global) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMAddress address = allocator.allocate();
-            NativeContainer nativeContainer = new NativeContainer(type, address);
-            global.setContainer(nativeContainer);
-            return address;
-        }
-
-        @Override
-        LLVMAddress transferToNativeNoCopy(LLVMGlobalVariable global) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMAddress address = allocator.allocate();
-            NativeContainer nativeContainer = new NativeContainer(type, address);
-            global.setContainer(nativeContainer);
-            return address;
+        void copyToNative(LLVMAddress a) {
+            // nothing to do
         }
 
         @Override
         void putAddress(LLVMGlobalVariable global, LLVMAddress value) {
-            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value);
-            global.setContainer(newContainer);
-        }
-
-        @Override
-        void putTruffleObject(LLVMGlobalVariable global, TruffleObject value) {
-            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value);
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CachedLLVMAddressContainer newContainer = new CachedLLVMAddressContainer(type, allocator, value, 0);
             global.setContainer(newContainer);
         }
 
         @Override
         void putLLVMTruffleObject(LLVMGlobalVariable global, LLVMTruffleObject value) {
-            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value);
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, 0);
             global.setContainer(newContainer);
         }
 
         @Override
         void putFunction(LLVMGlobalVariable global, LLVMFunction value) {
-            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value);
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, 0);
             global.setContainer(newContainer);
         }
 
         @Override
-        void putNull(LLVMGlobalVariable global, LLVMTruffleNull value) {
-            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value);
+        void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, 0);
+            global.setContainer(newContainer);
+        }
+
+        @Override
+        void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, 0);
             global.setContainer(newContainer);
         }
 
         @Override
         void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value) {
-            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value);
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, 0);
             global.setContainer(newContainer);
         }
 
         @Override
         Object get(LLVMGlobalVariable global) {
-            return LLVMAddress.fromLong(0);
+            return LLVMAddress.nullPointer();
         }
     }
 
-    static final class CachedManagedContainer extends AbstractManagedContainer {
+    static final class CachedLLVMAddressContainer extends AbstractManagedContainer {
 
-        private final Object managedValue;
+        private final long address;
+        private int changes;
 
-        CachedManagedContainer(Type type, NativeAllocator allocator, Object managedValue) {
+        CachedLLVMAddressContainer(Type type, NativeAllocator allocator, LLVMAddress address, int changes) {
+            this(type, allocator, address.getVal(), changes);
+        }
+
+        CachedLLVMAddressContainer(Type type, NativeAllocator allocator, long ptr, int changes) {
             super(type, allocator);
-            this.managedValue = managedValue;
+            this.address = ptr;
+            this.changes = changes;
         }
 
         @Override
@@ -565,37 +626,124 @@ abstract class Container {
         }
 
         @Override
-        LLVMAddress transferToNativeWithCopy(LLVMGlobalVariable global) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMAddress address = allocator.allocate();
-            NativeContainer nativeContainer = new NativeContainer(type, address);
-            global.setContainer(nativeContainer);
-            copyToNative(address);
-            return address;
+        void copyToNative(LLVMAddress a) {
+            CompilerAsserts.neverPartOfCompilation();
+            assert type instanceof PointerType;
+            LLVMMemory.putAddress(a, address);
         }
 
         @Override
-        LLVMAddress transferToNativeNoCopy(LLVMGlobalVariable global) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMAddress address = allocator.allocate();
-            NativeContainer nativeContainer = new NativeContainer(type, address);
-            global.setContainer(nativeContainer);
-            return address;
+        void putAddress(LLVMGlobalVariable global, LLVMAddress value) {
+            assert value != null;
+            if (value.getVal() != address) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                    GenericLLVMAddressContainer newContainer = new GenericLLVMAddressContainer(type, allocator, value);
+                    global.setContainer(newContainer);
+                } else {
+                    CachedLLVMAddressContainer newContainer = new CachedLLVMAddressContainer(type, allocator, value.getVal(), changes);
+                    global.setContainer(newContainer);
+                }
+            }
         }
 
-        private void copyToNative(LLVMAddress address) {
+        @Override
+        void putLLVMTruffleObject(LLVMGlobalVariable global, LLVMTruffleObject value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                global.setContainer(newContainer);
+            } else {
+                CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                global.setContainer(newContainer);
+            }
+        }
+
+        @Override
+        void putFunction(LLVMGlobalVariable global, LLVMFunction value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                global.setContainer(newContainer);
+            } else {
+                CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                global.setContainer(newContainer);
+            }
+        }
+
+        @Override
+        void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                global.setContainer(newContainer);
+            } else {
+                CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                global.setContainer(newContainer);
+            }
+        }
+
+        @Override
+        void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                global.setContainer(newContainer);
+            } else {
+                CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                global.setContainer(newContainer);
+            }
+        }
+
+        @Override
+        void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                global.setContainer(newContainer);
+            } else {
+                CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                global.setContainer(newContainer);
+            }
+        }
+
+        @Override
+        Object get(LLVMGlobalVariable global) {
+            return LLVMAddress.fromLong(address);
+        }
+
+    }
+
+    static final class CachedManagedContainer extends AbstractManagedContainer {
+
+        private final Object managedValue;
+        private int changes;
+
+        CachedManagedContainer(Type type, NativeAllocator allocator, Object managedValue, int changes) {
+            super(type, allocator);
+            this.managedValue = managedValue;
+            this.changes = changes;
+        }
+
+        @Override
+        void destroy() {
+            // nothing to do
+        }
+
+        @Override
+        void copyToNative(LLVMAddress address) {
             CompilerAsserts.neverPartOfCompilation();
             assert type instanceof PointerType;
             if (managedValue instanceof LLVMFunction) {
-                LLVMMemory.putAddress(address, LLVMAddress.fromLong(((LLVMFunction) managedValue).getFunctionIndex()));
-            } else if (managedValue instanceof LLVMTruffleNull) {
-                LLVMMemory.putAddress(address, LLVMAddress.fromLong(0));
+                LLVMMemory.putAddress(address, ((LLVMFunction) managedValue).getFunctionPointer());
             } else if (managedValue instanceof LLVMAddress) {
                 LLVMMemory.putAddress(address, (LLVMAddress) managedValue);
             } else if (managedValue instanceof LLVMGlobalVariable) {
-                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getNativeLocation());
+                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getContainer().getNativeLocation((LLVMGlobalVariable) managedValue));
             } else if (managedValue instanceof TruffleObject || managedValue instanceof LLVMTruffleObject) {
                 throw new IllegalStateException("Cannot resolve address of a foreign TruffleObject: " + managedValue);
+            } else if (managedValue instanceof LLVMVirtualAllocationAddress) {
+                throw new IllegalStateException("Cannot resolve address of a managed allocation.");
             } else if (managedValue == null) {
                 // nothing to do
             } else {
@@ -605,38 +753,85 @@ abstract class Container {
 
         @Override
         void putAddress(LLVMGlobalVariable global, LLVMAddress value) {
-            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
-            global.setContainer(newContainer);
-        }
-
-        @Override
-        void putTruffleObject(LLVMGlobalVariable global, TruffleObject value) {
-            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
-            global.setContainer(newContainer);
+            assert !(managedValue instanceof LLVMAddress) && !value.equals(managedValue) : "there is a separate cached container class for LLVMAddress objects";
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                GenericLLVMAddressContainer newContainer = new GenericLLVMAddressContainer(type, allocator, value);
+                global.setContainer(newContainer);
+            } else {
+                CachedLLVMAddressContainer newContainer = new CachedLLVMAddressContainer(type, allocator, value, changes);
+                global.setContainer(newContainer);
+            }
         }
 
         @Override
         void putLLVMTruffleObject(LLVMGlobalVariable global, LLVMTruffleObject value) {
-            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
-            global.setContainer(newContainer);
+            if (value != managedValue) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                    GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                    global.setContainer(newContainer);
+                } else {
+                    CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                    global.setContainer(newContainer);
+                }
+            }
         }
 
         @Override
         void putFunction(LLVMGlobalVariable global, LLVMFunction value) {
-            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
-            global.setContainer(newContainer);
+            if (value != managedValue) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                    GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                    global.setContainer(newContainer);
+                } else {
+                    CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                    global.setContainer(newContainer);
+                }
+            }
         }
 
         @Override
-        void putNull(LLVMGlobalVariable global, LLVMTruffleNull value) {
-            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
-            global.setContainer(newContainer);
+        void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
+            if (value != managedValue) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                    GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                    global.setContainer(newContainer);
+                } else {
+                    CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                    global.setContainer(newContainer);
+                }
+            }
+        }
+
+        @Override
+        void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
+            if (value != managedValue) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                    GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                    global.setContainer(newContainer);
+                } else {
+                    CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                    global.setContainer(newContainer);
+                }
+            }
         }
 
         @Override
         void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value) {
-            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
-            global.setContainer(newContainer);
+            if (value != managedValue) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                if (++changes >= CACHING_TRIES_BEFORE_SWITCHING_TO_GENERIC) {
+                    GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+                    global.setContainer(newContainer);
+                } else {
+                    CachedManagedContainer newContainer = new CachedManagedContainer(type, allocator, value, changes);
+                    global.setContainer(newContainer);
+                }
+            }
         }
 
         @Override
@@ -646,6 +841,77 @@ abstract class Container {
 
     }
 
+    static final class GenericLLVMAddressContainer extends AbstractManagedContainer {
+
+        private long address;
+
+        GenericLLVMAddressContainer(Type type, NativeAllocator allocator, LLVMAddress address) {
+            super(type, allocator);
+            this.address = address.getVal();
+        }
+
+        @Override
+        void destroy() {
+            // nothing to do
+        }
+
+        @Override
+        void copyToNative(LLVMAddress a) {
+            CompilerAsserts.neverPartOfCompilation();
+            LLVMMemory.putAddress(a, address);
+        }
+
+        @Override
+        void putAddress(LLVMGlobalVariable global, LLVMAddress value) {
+            this.address = value.getVal();
+        }
+
+        @Override
+        void putLLVMTruffleObject(LLVMGlobalVariable global, LLVMTruffleObject value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+            global.setContainer(newContainer);
+        }
+
+        @Override
+        void putFunction(LLVMGlobalVariable global, LLVMFunction value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+            global.setContainer(newContainer);
+        }
+
+        @Override
+        void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+            global.setContainer(newContainer);
+        }
+
+        @Override
+        void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+            global.setContainer(newContainer);
+        }
+
+        @Override
+        void putGlobal(LLVMGlobalVariable global, LLVMGlobalVariable value) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            GenericManagedContainer newContainer = new GenericManagedContainer(type, allocator, value);
+            global.setContainer(newContainer);
+        }
+
+        @Override
+        Object get(LLVMGlobalVariable global) {
+            return LLVMAddress.fromLong(address);
+        }
+
+    }
+
+    /**
+     * This class is the most generic implementation and must not do any specializations. Otherwise,
+     * we would risk an endless deopt loop.
+     */
     static final class GenericManagedContainer extends AbstractManagedContainer {
 
         private Object managedValue;
@@ -661,37 +927,19 @@ abstract class Container {
         }
 
         @Override
-        LLVMAddress transferToNativeWithCopy(LLVMGlobalVariable global) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMAddress address = allocator.allocate();
-            NativeContainer nativeContainer = new NativeContainer(type, address);
-            global.setContainer(nativeContainer);
-            copyToNative(address);
-            return address;
-        }
-
-        @Override
-        LLVMAddress transferToNativeNoCopy(LLVMGlobalVariable global) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMAddress address = allocator.allocate();
-            NativeContainer nativeContainer = new NativeContainer(type, address);
-            global.setContainer(nativeContainer);
-            return address;
-        }
-
-        private void copyToNative(LLVMAddress address) {
+        void copyToNative(LLVMAddress address) {
             CompilerAsserts.neverPartOfCompilation();
             assert type instanceof PointerType;
             if (managedValue instanceof LLVMFunction) {
-                LLVMMemory.putAddress(address, LLVMAddress.fromLong(((LLVMFunction) managedValue).getFunctionIndex()));
-            } else if (managedValue instanceof LLVMTruffleNull) {
-                LLVMMemory.putAddress(address, LLVMAddress.fromLong(0));
+                LLVMMemory.putAddress(address, ((LLVMFunction) managedValue).getFunctionPointer());
             } else if (managedValue instanceof LLVMAddress) {
                 LLVMMemory.putAddress(address, (LLVMAddress) managedValue);
             } else if (managedValue instanceof LLVMGlobalVariable) {
-                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getNativeLocation());
+                LLVMMemory.putAddress(address, ((LLVMGlobalVariable) managedValue).getContainer().getNativeLocation((LLVMGlobalVariable) managedValue));
             } else if (managedValue instanceof TruffleObject || managedValue instanceof LLVMTruffleObject) {
                 throw new IllegalStateException("Cannot resolve address of a foreign TruffleObject: " + managedValue);
+            } else if (managedValue instanceof LLVMVirtualAllocationAddress) {
+                throw new IllegalStateException("Cannot resolve address of a managed allocation");
             } else if (managedValue == null) {
                 // nothing to do
             } else {
@@ -701,11 +949,6 @@ abstract class Container {
 
         @Override
         void putAddress(LLVMGlobalVariable global, LLVMAddress value) {
-            this.managedValue = value;
-        }
-
-        @Override
-        void putTruffleObject(LLVMGlobalVariable global, TruffleObject value) {
             this.managedValue = value;
         }
 
@@ -720,7 +963,12 @@ abstract class Container {
         }
 
         @Override
-        void putNull(LLVMGlobalVariable global, LLVMTruffleNull value) {
+        void putManaged(LLVMGlobalVariable global, LLVMVirtualAllocationAddress value) {
+            this.managedValue = value;
+        }
+
+        @Override
+        void putBoxedPrimitive(LLVMGlobalVariable global, LLVMBoxedPrimitive value) {
             this.managedValue = value;
         }
 
