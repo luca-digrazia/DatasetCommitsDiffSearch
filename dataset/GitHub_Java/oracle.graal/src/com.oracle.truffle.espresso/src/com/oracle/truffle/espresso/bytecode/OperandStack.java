@@ -39,8 +39,6 @@ public interface OperandStack {
 
     void pushObject(Object value);
 
-    void pushReturnAddress(int bci);
-
     void pushInt(int value);
 
     void pushLong(long value);

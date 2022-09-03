@@ -22,13 +22,13 @@
  */
 package com.oracle.truffle.espresso.bytecode;
 
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.espresso.impl.MethodInfo;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import com.oracle.truffle.api.frame.FrameSlotKind;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.espresso.impl.MethodInfo;
 
 public interface FrameOperandStack {
 
