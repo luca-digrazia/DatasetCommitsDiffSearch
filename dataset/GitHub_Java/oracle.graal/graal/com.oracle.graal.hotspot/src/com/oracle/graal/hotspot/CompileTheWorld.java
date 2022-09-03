@@ -34,7 +34,6 @@ import java.util.*;
 import java.util.jar.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.meta.ProfilingInfo.TriState;
 import com.oracle.graal.bytecode.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
@@ -348,8 +347,7 @@ public final class CompileTheWorld {
         try {
             long start = System.currentTimeMillis();
 
-            // Be optimistic and return false for exceptionSeen.
-            final ProfilingInfo profilingInfo = DefaultProfilingInfo.get(TriState.FALSE);
+            final ProfilingInfo profilingInfo = method.getCompilationProfilingInfo(false);
             final OptimisticOptimizations optimisticOpts = new OptimisticOptimizations(profilingInfo);
             int id = vmToCompiler.allocateCompileTaskId();
             HotSpotBackend backend = runtime.getHostBackend();
