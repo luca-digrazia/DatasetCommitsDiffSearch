@@ -34,21 +34,14 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
     private final HotSpotMethodData methodData;
     private final HotSpotResolvedJavaMethod method;
 
-    private boolean isMature;
     private int position;
     private int hintPosition;
     private int hintBCI;
     private HotSpotMethodDataAccessor dataAccessor;
 
-    private boolean includeNormal;
-    private boolean includeOSR;
-
-    public HotSpotProfilingInfo(HotSpotMethodData methodData, HotSpotResolvedJavaMethod method, boolean includeNormal, boolean includeOSR) {
+    public HotSpotProfilingInfo(HotSpotMethodData methodData, HotSpotResolvedJavaMethod method) {
         this.methodData = methodData;
         this.method = method;
-        this.includeNormal = includeNormal;
-        this.includeOSR = includeOSR;
-        this.isMature = methodData.isProfileMature();
         hintPosition = 0;
         hintBCI = -1;
     }
@@ -60,36 +53,24 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
 
     @Override
     public JavaTypeProfile getTypeProfile(int bci) {
-        if (!isMature) {
-            return null;
-        }
         findBCI(bci, false);
         return dataAccessor.getTypeProfile(methodData, position);
     }
 
     @Override
     public JavaMethodProfile getMethodProfile(int bci) {
-        if (!isMature) {
-            return null;
-        }
         findBCI(bci, false);
         return dataAccessor.getMethodProfile(methodData, position);
     }
 
     @Override
     public double getBranchTakenProbability(int bci) {
-        if (!isMature) {
-            return -1;
-        }
         findBCI(bci, false);
         return dataAccessor.getBranchTakenProbability(methodData, position);
     }
 
     @Override
     public double[] getSwitchProbabilities(int bci) {
-        if (!isMature) {
-            return null;
-        }
         findBCI(bci, false);
         return dataAccessor.getSwitchProbabilities(methodData, position);
     }
@@ -108,23 +89,13 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
 
     @Override
     public int getExecutionCount(int bci) {
-        if (!isMature) {
-            return -1;
-        }
         findBCI(bci, false);
         return dataAccessor.getExecutionCount(methodData, position);
     }
 
     @Override
     public int getDeoptimizationCount(DeoptimizationReason reason) {
-        int count = 0;
-        if (includeNormal) {
-            count += methodData.getDeoptimizationCount(reason);
-        }
-        if (includeOSR) {
-            count += methodData.getOSRDeoptimizationCount(reason);
-        }
-        return count;
+        return methodData.getDeoptimizationCount(reason);
     }
 
     private void findBCI(int targetBCI, boolean searchExtraData) {
@@ -189,20 +160,11 @@ public final class HotSpotProfilingInfo extends CompilerObject implements Profil
 
     @Override
     public boolean isMature() {
-        return isMature;
-    }
-
-    public void ignoreMature() {
-        isMature = true;
+        return true;
     }
 
     @Override
     public String toString() {
         return "HotSpotProfilingInfo<" + MetaUtil.profileToString(this, null, "; ") + ">";
-    }
-
-    @Override
-    public void setMature() {
-        isMature = true;
     }
 }
