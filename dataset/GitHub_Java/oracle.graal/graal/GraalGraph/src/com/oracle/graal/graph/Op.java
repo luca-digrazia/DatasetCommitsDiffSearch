@@ -20,38 +20,9 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.sun.c1x.ir;
-
-import com.oracle.graal.graph.*;
-import com.sun.cri.bytecode.*;
-import com.sun.cri.ci.*;
+package com.oracle.graal.graph;
 
 
-/**
- *
- */
-public final class Or extends Logic {
-
-    /**
-     * @param opcode
-     * @param kind
-     * @param x
-     * @param y
-     * @param graph
-     */
-    public Or(CiKind kind, Value x, Value y, Graph graph) {
-        super(kind, kind == CiKind.Int ? Bytecodes.IOR : Bytecodes.LOR, x, y, graph);
-    }
-
-    @Override
-    public String shortName() {
-        return "|";
-    }
-
-    @Override
-    public Node copy(Graph into) {
-        Or x = new Or(kind, null, null, into);
-        return x;
-    }
+public interface Op {
 
 }

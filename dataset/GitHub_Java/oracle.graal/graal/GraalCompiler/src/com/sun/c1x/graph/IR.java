@@ -22,21 +22,23 @@
  */
 package com.sun.c1x.graph;
 
+import java.lang.reflect.*;
 import java.util.*;
 
+import com.oracle.graal.graph.*;
+import com.oracle.max.graal.schedule.*;
 import com.sun.c1x.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.ir.*;
+import com.sun.c1x.lir.*;
 import com.sun.c1x.observer.*;
-import com.sun.c1x.opt.*;
 import com.sun.c1x.value.*;
+import com.sun.cri.ci.*;
+import com.sun.cri.ri.*;
 
 /**
  * This class implements the overall container for the HIR (high-level IR) graph
  * and directs its construction, optimization, and finalization.
- *
- * @author Thomas Wuerthinger
- * @author Ben L. Titzer
  */
 public class IR {
 
@@ -48,22 +50,12 @@ public class IR {
     /**
      * The start block of this IR.
      */
-    public BlockBegin startBlock;
-
-    /**
-     * The entry block for an OSR compile.
-     */
-    public BlockBegin osrEntryBlock;
-
-    /**
-     * The top IRScope.
-     */
-    public IRScope topScope;
+    public LIRBlock startBlock;
 
     /**
      * The linear-scan ordered list of blocks.
      */
-    private List<BlockBegin> orderedBlocks;
+    private List<LIRBlock> orderedBlocks;
 
     /**
      * Creates a new IR instance for the specified compilation.
@@ -72,6 +64,8 @@ public class IR {
     public IR(C1XCompilation compilation) {
         this.compilation = compilation;
     }
+
+    public Map<Node, LIRBlock> valueToBlock;
 
     /**
      * Builds the graph, optimizes it, and computes the linear scan block order.
@@ -88,9 +82,70 @@ public class IR {
             C1XTimers.HIR_OPTIMIZE.start();
         }
 
-        optimize1();
-        computeLinearScanOrder();
-        optimize2();
+        Graph graph = compilation.graph;
+
+        // Split critical edges.
+        List<Node> nodes = graph.getNodes();
+        for (int i = 0; i < nodes.size(); ++i) {
+            Node n = nodes.get(i);
+            if (Schedule.trueSuccessorCount(n) > 1) {
+                for (int j = 0; j < n.successors().size(); ++j) {
+                    Node succ = n.successors().get(j);
+                    if (Schedule.truePredecessorCount(succ) > 1) {
+                        Anchor a = new Anchor(graph);
+                        a.successors().setAndClear(1, n, j);
+                        n.successors().set(j, a);
+                    }
+                }
+            }
+        }
+
+        Schedule schedule = new Schedule(graph);
+        List<Block> blocks = schedule.getBlocks();
+        List<LIRBlock> lirBlocks = new ArrayList<LIRBlock>();
+        Map<Block, LIRBlock> map = new HashMap<Block, LIRBlock>();
+        for (Block b : blocks) {
+            LIRBlock block = new LIRBlock(b.blockID());
+            map.put(b, block);
+            block.setInstructions(b.getInstructions());
+            block.setLinearScanNumber(b.blockID());
+
+            block.setFirstInstruction(b.firstNode());
+            block.setLastInstruction(b.lastNode());
+            lirBlocks.add(block);
+        }
+
+        for (Block b : blocks) {
+            for (Block succ : b.getSuccessors()) {
+                map.get(b).blockSuccessors().add(map.get(succ));
+            }
+
+            for (Block pred : b.getPredecessors()) {
+                map.get(b).blockPredecessors().add(map.get(pred));
+            }
+        }
+
+        orderedBlocks = lirBlocks;
+        valueToBlock = new HashMap<Node, LIRBlock>();
+        for (LIRBlock b : orderedBlocks) {
+            for (Node i : b.getInstructions()) {
+                valueToBlock.put(i, b);
+            }
+        }
+        startBlock = lirBlocks.get(0);
+        assert startBlock != null;
+        assert startBlock.blockPredecessors().size() == 0;
+
+        ComputeLinearScanOrder clso = new ComputeLinearScanOrder(lirBlocks.size(), startBlock);
+        orderedBlocks = clso.linearScanOrder();
+        this.compilation.stats.loopCount = clso.numLoops();
+
+        int z = 0;
+        for (LIRBlock b : orderedBlocks) {
+            b.setLinearScanNumber(z++);
+        }
+
+        verifyAndPrint("After linear scan order");
 
         if (C1XOptions.PrintTimers) {
             C1XTimers.HIR_OPTIMIZE.stop();
@@ -98,91 +153,37 @@ public class IR {
     }
 
     private void buildGraph() {
-        topScope = new IRScope(null, null, compilation.method, compilation.osrBCI);
-
         // Graph builder must set the startBlock and the osrEntryBlock
-        new GraphBuilder(compilation, this).build(topScope);
-        assert startBlock != null;
+        new GraphBuilder(compilation, compilation.method, compilation.graph).build(false);
+
+//        CompilerGraph duplicate = new CompilerGraph();
+//        Map<Node, Node> replacements = new HashMap<Node, Node>();
+//        replacements.put(compilation.graph.start(), duplicate.start());
+//        duplicate.addDuplicate(compilation.graph.getNodes(), replacements);
+//        compilation.graph = duplicate;
+
         verifyAndPrint("After graph building");
 
+        DeadCodeElimination dce = new DeadCodeElimination();
+        dce.apply(compilation.graph);
+        if (dce.deletedNodeCount > 0) {
+            verifyAndPrint("After dead code elimination");
+        }
+
+        if (C1XOptions.Inline) {
+            new Inlining(compilation, this).apply(compilation.graph);
+        }
+
         if (C1XOptions.PrintCompilation) {
-            TTY.print(String.format("%3d blocks | ", this.numberOfBlocks()));
+            TTY.print(String.format("%3d blocks | ", compilation.stats.blockCount));
         }
-    }
-
-    private void optimize1() {
-        if (!compilation.isTypesafe()) {
-            new UnsafeCastEliminator(this);
-            verifyAndPrint("After unsafe cast elimination");
-        }
-
-        // do basic optimizations
-        if (C1XOptions.PhiSimplify) {
-            new PhiSimplifier(this);
-            verifyAndPrint("After phi simplification");
-        }
-        if (C1XOptions.OptNullCheckElimination) {
-            new NullCheckEliminator(this);
-            verifyAndPrint("After null check elimination");
-        }
-        if (C1XOptions.OptDeadCodeElimination1) {
-            new LivenessMarker(this).removeDeadCode();
-            verifyAndPrint("After dead code elimination 1");
-        }
-        if (C1XOptions.OptCEElimination) {
-            new CEEliminator(this);
-            verifyAndPrint("After CEE elimination");
-        }
-        if (C1XOptions.OptBlockMerging) {
-            new BlockMerger(this);
-            verifyAndPrint("After block merging");
-        }
-
-        if (compilation.compiler.extensions != null) {
-            for (C1XCompilerExtension ext : compilation.compiler.extensions) {
-                ext.run(this);
-            }
-        }
-    }
-
-    private void computeLinearScanOrder() {
-        if (C1XOptions.GenLIR) {
-            makeLinearScanOrder();
-            verifyAndPrint("After linear scan order");
-        }
-    }
-
-    private void makeLinearScanOrder() {
-        if (orderedBlocks == null) {
-            CriticalEdgeFinder finder = new CriticalEdgeFinder(this);
-            startBlock.iteratePreOrder(finder);
-            finder.splitCriticalEdges();
-            ComputeLinearScanOrder computeLinearScanOrder = new ComputeLinearScanOrder(compilation.stats.blockCount, startBlock);
-            orderedBlocks = computeLinearScanOrder.linearScanOrder();
-            compilation.stats.loopCount = computeLinearScanOrder.numLoops();
-            computeLinearScanOrder.printBlocks();
-        }
-    }
-
-    private void optimize2() {
-        // do more advanced, dominator-based optimizations
-        if (C1XOptions.OptGlobalValueNumbering) {
-            makeLinearScanOrder();
-            new GlobalValueNumberer(this);
-            verifyAndPrint("After global value numbering");
-        }
-        if (C1XOptions.OptDeadCodeElimination2) {
-            new LivenessMarker(this).removeDeadCode();
-            verifyAndPrint("After dead code elimination 2");
-        }
-
     }
 
     /**
      * Gets the linear scan ordering of blocks as a list.
      * @return the blocks in linear scan order
      */
-    public List<BlockBegin> linearScanOrder() {
+    public List<LIRBlock> linearScanOrder() {
         return orderedBlocks;
     }
 
@@ -190,8 +191,8 @@ public class IR {
         if (!TTY.isSuppressed()) {
             TTY.println("IR for " + compilation.method);
             final InstructionPrinter ip = new InstructionPrinter(TTY.out());
-            final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly, false);
-            startBlock.iteratePreOrder(bp);
+            final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly);
+            //getHIRStartBlock().iteratePreOrder(bp);
         }
     }
 
@@ -200,115 +201,48 @@ public class IR {
      * @param phase the name of the phase for printing
      */
     public void verifyAndPrint(String phase) {
-        printToTTY(phase);
-
-        if (compilation.compiler.isObserved()) {
-            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, startBlock, true, false));
-        }
-    }
-
-    private void printToTTY(String phase) {
         if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
             TTY.println(phase);
             print(false);
         }
-    }
 
-    /**
-     * Creates and inserts a new block between this block and the specified successor,
-     * altering the successor and predecessor lists of involved blocks appropriately.
-     * @param source the source of the edge
-     * @param target the successor before which to insert a block
-     * @return the new block inserted
-     */
-    public BlockBegin splitEdge(BlockBegin source, BlockBegin target) {
-        int bci;
-        if (target.predecessors().size() == 1) {
-            bci = target.bci();
-        } else {
-            bci = source.end().bci();
-        }
-
-        // create new successor and mark it for special block order treatment
-        BlockBegin newSucc = new BlockBegin(bci, nextBlockNumber());
-
-        newSucc.setCriticalEdgeSplit(true);
-
-        // This goto is not a safepoint.
-        Goto e = new Goto(target, null, false);
-        newSucc.setNext(e, bci);
-        newSucc.setEnd(e);
-        // setup states
-        FrameState s = source.end().stateAfter();
-        newSucc.setStateBefore(s);
-        e.setStateAfter(s);
-        assert newSucc.stateBefore().localsSize() == s.localsSize();
-        assert newSucc.stateBefore().stackSize() == s.stackSize();
-        assert newSucc.stateBefore().locksSize() == s.locksSize();
-        // link predecessor to new block
-        source.end().substituteSuccessor(target, newSucc);
-
-        // The ordering needs to be the same, so remove the link that the
-        // set_end call above added and substitute the new_sux for this
-        // block.
-        target.removePredecessor(newSucc);
-
-        // the successor could be the target of a switch so it might have
-        // multiple copies of this predecessor, so substitute the new_sux
-        // for the first and delete the rest.
-        List<BlockBegin> list = target.predecessors();
-        int x = list.indexOf(source);
-        assert x >= 0;
-        list.set(x, newSucc);
-        newSucc.addPredecessor(source);
-        Iterator<BlockBegin> iterator = list.iterator();
-        while (iterator.hasNext()) {
-            if (iterator.next() == source) {
-                iterator.remove();
-                newSucc.addPredecessor(source);
-            }
-        }
-        return newSucc;
-    }
-
-    public void replaceBlock(BlockBegin oldBlock, BlockBegin newBlock) {
-        assert !oldBlock.isExceptionEntry() : "cannot replace exception handler blocks (yet)";
-        for (BlockBegin succ : oldBlock.end().successors()) {
-            succ.removePredecessor(oldBlock);
-        }
-        for (BlockBegin pred : oldBlock.predecessors()) {
-            // substitute the new successor for this block in each predecessor
-            pred.end().substituteSuccessor(oldBlock, newBlock);
-            // and add each predecessor to the successor
-            newBlock.addPredecessor(pred);
-        }
-        // this block is now disconnected; remove all its incoming and outgoing edges
-        oldBlock.predecessors().clear();
-        oldBlock.end().successors().clear();
-    }
-
-    /**
-     * Disconnects the specified block from all other blocks.
-     * @param block the block to remove from the graph
-     */
-    public void disconnectFromGraph(BlockBegin block) {
-        for (BlockBegin p : block.predecessors()) {
-            p.end().successors().remove(block);
-        }
-        for (BlockBegin s : block.end().successors()) {
-            s.predecessors().remove(block);
+        if (compilation.compiler.isObserved()) {
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, compilation.graph, true, false));
         }
     }
 
-    public int nextBlockNumber() {
-        return compilation.stats.blockCount++;
-    }
+    public void printGraph(String phase, Graph graph) {
+        if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
+            TTY.println(phase);
+            print(false);
+        }
 
-    public int numberOfBlocks() {
-        return compilation.stats.blockCount;
+        if (compilation.compiler.isObserved()) {
+            compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, graph, true, false));
+        }
     }
 
     public int numLoops() {
         return compilation.stats.loopCount;
+    }
+
+    /**
+     * Gets the maximum number of locks in the graph's frame states.
+     */
+    public final int maxLocks() {
+        int maxLocks = 0;
+        for (Node node : compilation.graph.getNodes()) {
+            if (node instanceof FrameState) {
+                int lockCount = ((FrameState) node).locksSize();
+                if (lockCount > maxLocks) {
+                    maxLocks = lockCount;
+                }
+            }
+        }
+        return maxLocks;
+    }
+
+    public Instruction getHIRStartBlock() {
+        return (Instruction) compilation.graph.start().successors().get(0);
     }
 }

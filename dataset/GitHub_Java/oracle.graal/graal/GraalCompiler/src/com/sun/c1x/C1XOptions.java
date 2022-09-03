@@ -39,30 +39,22 @@ public final class C1XOptions {
     // Checkstyle: resume
 
     // inlining settings
-    public static boolean OptInline                          = ____;
-    public static boolean OptInlineExcept                    = ____;
-    public static boolean OptInlineSynchronized              = ____;
-
+    public static boolean Inline                             = ____;
     public static int     MaximumInstructionCount            = 37000;
     public static float   MaximumInlineRatio                 = 0.90f;
     public static int     MaximumInlineSize                  = 35;
     public static int     MaximumTrivialSize                 = 6;
     public static int     MaximumInlineLevel                 = 9;
-    public static int     MaximumRecursiveInlineLevel        = 1;
+    public static int     MaximumRecursiveInlineLevel        = 2;
     public static int     MaximumDesiredSize                 = 8000;
     public static int     MaximumShortLoopSize               = 5;
 
-    // intrinsification settings
-    public static boolean OptIntrinsify                      = ____;
-
     // debugging settings
     public static boolean VerifyPointerMaps                  = ____;
-    public static boolean PinAllInstructions                 = ____;
-    public static boolean TestPatching                       = ____;
-    public static boolean FatalUnimplemented                 = ____;
     public static int     MethodEndBreakpointGuards          = 0;
     public static boolean ZapStackOnMethodEntry              = ____;
     public static boolean StressLinearScan                   = ____;
+    public static boolean BailoutOnException                 = ____;
 
     /**
      * See {@link Filter#Filter(String, Object)}.
@@ -71,9 +63,21 @@ public final class C1XOptions {
 
     // printing settings
     public static boolean PrintHIR                           = ____;
-    public static boolean PrintInliningFailures              = ____;
     public static boolean PrintLIR                           = ____;
     public static boolean PrintCFGToFile                     = ____;
+
+    // DOT output settings
+    public static boolean PrintDOTGraphToFile                = ____;
+    public static boolean PrintDOTGraphToPdf                 = ____;
+    public static boolean OmitDOTFrameStates                 = ____;
+
+    // Ideal graph visualizer output settings
+    public static int     PrintIdealGraphLevel               = 0;
+    public static boolean PrintIdealGraphFile                = ____;
+    public static String  PrintIdealGraphAddress             = "127.0.0.1";
+    public static int     PrintIdealGraphPort                = 4444;
+
+    // Other printing settings
     public static boolean PrintMetrics                       = ____;
     public static boolean PrintTimers                        = ____;
     public static boolean PrintCompilation                   = ____;
@@ -83,130 +87,45 @@ public final class C1XOptions {
     public static boolean PrintCodeBytes                     = ____;
     public static int     PrintAssemblyBytesPerLine          = 16;
     public static int     TraceLinearScanLevel               = 0;
+    public static int     TraceLIRGeneratorLevel             = 0;
     public static boolean TraceRelocation                    = ____;
     public static boolean TraceLIRVisit                      = ____;
     public static boolean TraceAssembler                     = ____;
+    public static boolean TraceInlining                      = ____;
+    public static boolean TraceDeadCodeElimination           = ____;
     public static int     TraceBytecodeParserLevel           = 0;
-    public static boolean PrintAssumptions                   = ____;
-    public static boolean PrintInlinedIntrinsics             = ____;
-
-    // IR checking
-    public static boolean InterpretInvokedMethods            = ____;
-    public static boolean PrintStateInInterpreter            = ____;
-
-    // canonicalizer settings
-    public static boolean CanonicalizeIntrinsics             = true;
-    public static boolean CanonicalizeFloatingPoint          = true;
-    public static boolean CanonicalizeNarrowingInStores      = true;
-    public static boolean CanonicalizeConstantFields         = true;
-    public static boolean CanonicalizeUnsafes                = true;
-    public static boolean CanonicalizeMultipliesToShifts     = true;
-    public static boolean CanonicalizeObjectCheckCast        = true;
-    public static boolean CanonicalizeObjectInstanceOf       = true;
-    public static boolean CanonicalizeFoldableMethods        = true;
-    public static boolean CanonicalizeArrayStoreChecks       = true;
-
-    // all optimization settings
-    public static boolean OptCanonicalize;
-    public static boolean OptLocalValueNumbering;
-    public static boolean OptLocalLoadElimination;
-    public static boolean OptCSEArrayLength;
-    public static boolean OptGlobalValueNumbering;
-    public static boolean OptCEElimination;
-    public static boolean OptBlockMerging;
-    public static boolean OptBlockSkipping;
-    public static boolean OptNullCheckElimination;
-    public static boolean OptIterativeNCE;
-    public static boolean OptFlowSensitiveNCE;
-    public static boolean OptDeadCodeElimination1;
-    public static boolean OptDeadCodeElimination2;
-    public static boolean OptControlFlow;
-    public static boolean OptMoveElimination;
-
-    // optimistic optimization settings
-    public static boolean UseAssumptions                = true;
+    public static boolean QuietBailout                       = ____;
 
     // state merging settings
-    public static boolean AssumeVerifiedBytecode        = ____;
-    public static boolean PhiSimplify                   = true;
-    public static boolean PhiLoopStores                 = true;
-
-    // miscellaneous settings
-    public static boolean SupportObjectConstants        = true;
+    public static boolean AssumeVerifiedBytecode             = ____;
 
     // Linear scan settings
-    public static boolean CopyPointerStackArguments     = true;
+    public static boolean CopyPointerStackArguments          = true;
 
     // Code generator settings
-    public static boolean GenLIR                        = true;
-    public static boolean GenCode                       = true;
+    public static boolean GenLIR                             = true;
+    public static boolean GenCode                            = true;
 
-    public static boolean UseConstDirectCall            = false;
+    public static boolean UseConstDirectCall                 = false;
 
-    public static boolean GenSpecialDivChecks           = ____;
-    public static boolean GenAssertionCode              = ____;
-    public static boolean AlignCallsForPatching         = true;
-    public static boolean NullCheckUniquePc             = ____;
-    public static boolean InvokeSnippetAfterArguments   = ____;
-    public static boolean ResolveClassBeforeStaticInvoke = true;
+    public static boolean GenSpecialDivChecks                = ____;
+    public static boolean GenAssertionCode                   = ____;
+    public static boolean AlignCallsForPatching              = true;
+    public static boolean NullCheckUniquePc                  = ____;
+    public static boolean InvokeSnippetAfterArguments        = ____;
+    public static boolean ResolveClassBeforeStaticInvoke     = true;
 
     // Translating tableswitch instructions
-    public static int     SequentialSwitchLimit         = 4;
-    public static int     RangeTestsSwitchDensity       = 5;
+    public static int     SequentialSwitchLimit              = 4;
+    public static int     RangeTestsSwitchDensity            = 5;
 
-    public static int     InitialCodeBufferSize         = 232;
-    public static boolean DetailedAsserts               = true;
+    public static boolean DetailedAsserts                    = ____;
 
     // Runtime settings
-    public static int     ReadPrefetchInstr             = 0;
-    public static boolean UseStackMapTableLiveness      = ____;
-    public static int     StackShadowPages              = 2;
+    public static int     ReadPrefetchInstr                  = 0;
+    public static int     StackShadowPages                   = 2;
 
     // Assembler settings
-    public static boolean CommentedAssembly             = ____;
-    public static boolean PrintLIRWithAssembly          = ____;
-    public static int     Atomics                       = 0;
-    public static boolean UseNormalNop                  = true;
-    public static boolean UseAddressNop                 = true;
-    public static boolean UseIncDec                     = ____;
-    public static boolean UseXmmLoadAndClearUpper       = ____;
-    public static boolean UseXmmRegToRegMoveAll         = ____;
-
-    static {
-        setOptimizationLevel(1);
-    }
-
-    public static void setOptimizationLevel(int level) {
-        final boolean l = (level >= 1);
-        final boolean ll = (level >= 2);
-        final boolean lll = (level >= 3);
-
-        // Level 1 optimizations
-        OptCanonicalize                 = l;
-        OptLocalValueNumbering          = l;
-        OptLocalLoadElimination         = l;
-        PhiLoopStores                   = l;
-        OptControlFlow                  = l;
-        OptMoveElimination              = l;
-        OptNullCheckElimination         = l;
-
-        // Level 2 optimizations
-        OptInline                       = ll;
-        OptBlockMerging                 = ll;
-
-        // Level 3 optimizations
-        OptCSEArrayLength               = lll;
-        OptIntrinsify                   = lll;
-        OptInlineExcept                 = lll;
-        OptInlineSynchronized           = lll;
-        UseStackMapTableLiveness        = lll;
-        UseAssumptions                  = lll;
-        OptIterativeNCE                 = lll;
-        OptFlowSensitiveNCE             = lll;
-        OptDeadCodeElimination1         = lll;
-        OptDeadCodeElimination2         = lll;
-        OptGlobalValueNumbering         = lll;
-        OptCEElimination                = lll;
-        OptBlockSkipping                = lll;
-    }
+    public static boolean CommentedAssembly                  = ____;
+    public static boolean PrintLIRWithAssembly               = ____;
 }
