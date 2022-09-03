@@ -49,6 +49,7 @@ import jdk.vm.ci.meta.LIRKind;
 import jdk.vm.ci.meta.Value;
 
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
+import com.oracle.graal.compiler.common.alloc.RegisterAllocationConfig;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.util.BitMap2D;
 import com.oracle.graal.debug.Debug;
@@ -65,6 +66,7 @@ import com.oracle.graal.lir.alloc.lsra.Interval.RegisterPriority;
 import com.oracle.graal.lir.alloc.lsra.Interval.SpillState;
 import com.oracle.graal.lir.alloc.lsra.LinearScan.BlockData;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
+import com.oracle.graal.lir.gen.LIRGeneratorTool.SpillMoveFactory;
 import com.oracle.graal.lir.phases.AllocationPhase;
 
 public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
@@ -79,7 +81,8 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory,
+                    RegisterAllocationConfig registerAllocationConfig) {
         numberInstructions();
         allocator.printLir("Before register allocation", true);
         computeLocalLiveSets();
@@ -212,9 +215,9 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                          * processed in live sets. Process them only in debug mode so that this can
                          * be checked
                          */
-                                verifyTemp(liveKill, operand);
-                            }
-                        };
+                        verifyTemp(liveKill, operand);
+                    }
+                };
 
                 // iterate all instructions of the block
                 for (int j = 0; j < numInst; j++) {
@@ -331,7 +334,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                             /*
                              * liveIn(block) is the union of liveGen(block) with (liveOut(block) &
                              * !liveKill(block)).
-                             * 
+                             *
                              * Note: liveIn has to be computed only in first iteration or if liveOut
                              * has changed!
                              */
@@ -586,19 +589,19 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                     Interval to = allocator.getOrCreateInterval((AllocatableValue) targetValue);
 
                     /* hints always point from def to use */
-                            if (hintAtDef) {
-                                to.setLocationHint(from);
-                            } else {
-                                from.setLocationHint(to);
-                            }
-                            if (Debug.isLogEnabled()) {
-                                Debug.log("operation at opId %d: added hint from interval %d to %d", op.id(), from.operandNumber, to.operandNumber);
-                            }
+                    if (hintAtDef) {
+                        to.setLocationHint(from);
+                    } else {
+                        from.setLocationHint(to);
+                    }
+                    if (Debug.isLogEnabled()) {
+                        Debug.log("operation at opId %d: added hint from interval %d to %d", op.id(), from.operandNumber, to.operandNumber);
+                    }
 
-                            return registerHint;
-                        }
-                        return null;
-                    });
+                    return registerHint;
+                }
+                return null;
+            });
         }
     }
 
