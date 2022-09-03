@@ -26,7 +26,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
@@ -39,7 +38,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.oracle.graal.compiler.common.SuppressFBWarnings;
 import com.oracle.graal.debug.CSVUtil;
-import com.oracle.graal.debug.GraalDebugConfig;
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.TTY;
 import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
@@ -49,7 +47,6 @@ import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
 import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.options.StableOptionValue;
-import com.oracle.graal.options.UniquePathUtilities;
 
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 
@@ -439,9 +436,7 @@ public class BenchmarkCounters {
     private static PrintStream getPrintStream() {
         if (Options.BenchmarkCountersFile.getValue() != null) {
             try {
-                Path path = UniquePathUtilities.getPathGlobal(Options.BenchmarkCountersFile, GraalDebugConfig.Options.DumpPath, "csv");
-                TTY.println("Writing benchmark counters to '%s'", path);
-                return new PrintStream(path.toFile());
+                return new PrintStream(Options.BenchmarkCountersFile.getValue());
             } catch (FileNotFoundException e) {
                 TTY.out().println(e.getMessage());
                 TTY.out().println("Fallback to default");
