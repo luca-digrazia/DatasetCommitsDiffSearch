@@ -30,7 +30,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.word.*;
@@ -40,11 +39,9 @@ import com.oracle.graal.word.*;
  */
 public class TypeCheckSnippetUtils {
 
-    public static final Object TYPE_DISPLAY_LOCATION = LocationNode.createLocation("TypeDisplay");
-
     static boolean checkSecondarySubType(Word t, Word s) {
         // if (S.cache == T) return true
-        if (s.readWord(secondarySuperCacheOffset(), SECONDARY_SUPER_CACHE_LOCATION).equal(t)) {
+        if (s.readWord(secondarySuperCacheOffset()).equal(t)) {
             cacheHit.inc();
             return true;
         }
@@ -54,11 +51,11 @@ public class TypeCheckSnippetUtils {
 
     static boolean checkUnknownSubType(Word t, Word s) {
         // int off = T.offset
-        int superCheckOffset = t.readInt(superCheckOffsetOffset(), FINAL_LOCATION);
+        int superCheckOffset = t.readInt(superCheckOffsetOffset());
         boolean primary = superCheckOffset != secondarySuperCacheOffset();
 
         // if (T = S[off]) return true
-        if (s.readWord(superCheckOffset, TYPE_DISPLAY_LOCATION).equal(t)) {
+        if (s.readWord(superCheckOffset).equal(t)) {
             if (primary) {
                 cacheHit.inc();
             } else {
@@ -84,12 +81,12 @@ public class TypeCheckSnippetUtils {
         }
 
         // if (S.scan_s_s_array(T)) { S.cache = T; return true; }
-        Word secondarySupers = s.readWord(secondarySupersOffset(), SECONDARY_SUPERS_LOCATION);
-        int length = secondarySupers.readInt(metaspaceArrayLengthOffset(), FINAL_LOCATION);
+        Word secondarySupers = s.readWord(secondarySupersOffset());
+        int length = secondarySupers.readInt(metaspaceArrayLengthOffset());
         for (int i = 0; i < length; i++) {
-            if (t.equal(loadSecondarySupersElement(secondarySupers, i))) {
+            if (t.equal(loadWordElement(secondarySupers, i))) {
                 probability(NOT_LIKELY_PROBABILITY);
-                s.writeWord(secondarySuperCacheOffset(), t, SECONDARY_SUPER_CACHE_LOCATION);
+                s.writeWord(secondarySuperCacheOffset(), t);
                 secondariesHit.inc();
                 return true;
             }
@@ -106,8 +103,8 @@ public class TypeCheckSnippetUtils {
         return hintHubs;
     }
 
-    static Word loadSecondarySupersElement(Word metaspaceArray, int index) {
-        return metaspaceArray.readWord(metaspaceArrayBaseOffset() + index * wordSize(), FINAL_LOCATION);
+    static Word loadWordElement(Word metaspaceArray, int index) {
+        return metaspaceArray.readWord(metaspaceArrayBaseOffset() + index * wordSize());
     }
 
     private static final SnippetCounter.Group counters = GraalOptions.SnippetCounters ? new SnippetCounter.Group("TypeCheck") : null;

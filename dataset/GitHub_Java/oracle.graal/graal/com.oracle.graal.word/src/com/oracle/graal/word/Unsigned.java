@@ -22,7 +22,7 @@
  */
 package com.oracle.graal.word;
 
-public interface Unsigned extends ComparableWord {
+public interface Unsigned extends WordBase {
 
     /**
      * Returns a Unsigned whose value is {@code (this + val)}.
