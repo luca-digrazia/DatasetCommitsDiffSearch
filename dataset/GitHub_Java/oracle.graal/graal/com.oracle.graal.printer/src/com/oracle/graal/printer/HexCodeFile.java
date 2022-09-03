@@ -26,18 +26,17 @@ import java.io.*;
 import java.util.*;
 import java.util.regex.*;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CompilationResult.CodeAnnotation;
-import com.oracle.graal.api.code.CompilationResult.CodeComment;
-import com.oracle.graal.api.code.CompilationResult.JumpTable;
-import com.oracle.graal.api.code.CompilationResult.LookupTable;
-
+import com.oracle.jvmci.code.*;
+import com.oracle.jvmci.code.CompilationResult.CodeAnnotation;
+import com.oracle.jvmci.code.CompilationResult.CodeComment;
+import com.oracle.jvmci.code.CompilationResult.JumpTable;
 
 /**
- * A HexCodeFile is a textual format for representing a chunk of machine code along
- * with extra information that can be used to enhance a disassembly of the code.
+ * A HexCodeFile is a textual format for representing a chunk of machine code along with extra
+ * information that can be used to enhance a disassembly of the code.
  *
  * A pseudo grammar for a HexCodeFile is given below.
+ *
  * <pre>
  *     HexCodeFile ::= Platform Delim HexCode Delim (OptionalSection Delim)*
  *
@@ -57,30 +56,31 @@ import com.oracle.graal.api.code.CompilationResult.LookupTable;
  *
  *     Position, EntrySize, Low, High, NPairs KeySize OffsetSize ::= int
  *
- *     Delim := "<||@"
+ *     Delim := "&lt;||@"
  * </pre>
  *
- * There must be exactly one HexCode and Platform part in a HexCodeFile. The length of HexDigits must be even
- * as each pair of digits represents a single byte.
+ * There must be exactly one HexCode and Platform part in a HexCodeFile. The length of HexDigits
+ * must be even as each pair of digits represents a single byte.
  * <p>
  * Below is an example of a valid Code input:
+ *
  * <pre>
  *
- *  Platform AMD64 64  <||@
- *  HexCode 0 e8000000009090904883ec084889842410d0ffff48893c24e800000000488b3c24488bf0e8000000004883c408c3  <||@
+ *  Platform AMD64 64  &lt;||@
+ *  HexCode 0 e8000000009090904883ec084889842410d0ffff48893c24e800000000488b3c24488bf0e8000000004883c408c3  &lt;||@
  *  Comment 24 frame-ref-map: +0 {0}
  *  at java.lang.String.toLowerCase(String.java:2496) [bci: 1]
  *              |0
  *     locals:  |stack:0:a
  *     stack:   |stack:0:a
- *    <||@
- *  OperandComment 24 {java.util.Locale.getDefault()}  <||@
+ *    &lt;||@
+ *  OperandComment 24 {java.util.Locale.getDefault()}  &lt;||@
  *  Comment 36 frame-ref-map: +0 {0}
  *  at java.lang.String.toLowerCase(String.java:2496) [bci: 4]
  *              |0
  *     locals:  |stack:0:a
- *    <||@
- *  OperandComment 36 {java.lang.String.toLowerCase(Locale)}  <||@
+ *    &lt;||@
+ *  OperandComment 36 {java.lang.String.toLowerCase(Locale)}  lt;||@
  *
  * </pre>
  */
@@ -88,6 +88,7 @@ public class HexCodeFile {
 
     public static final String NEW_LINE = CodeUtil.NEW_LINE;
     public static final String SECTION_DELIM = " <||@";
+    public static final String COLUMN_END = " <|@";
     public static final Pattern SECTION = Pattern.compile("(\\S+)\\s+(.*)", Pattern.DOTALL);
     public static final Pattern COMMENT = Pattern.compile("(\\d+)\\s+(.*)", Pattern.DOTALL);
     public static final Pattern OPERAND_COMMENT = COMMENT;
@@ -112,15 +113,14 @@ public class HexCodeFile {
     public final Map<Integer, List<String>> comments = new TreeMap<>();
 
     /**
-     * Map from a machine code position to a comment for the operands of the instruction at the position.
+     * Map from a machine code position to a comment for the operands of the instruction at the
+     * position.
      */
     public final Map<Integer, String> operandComments = new TreeMap<>();
 
     public final byte[] code;
 
     public final ArrayList<JumpTable> jumpTables = new ArrayList<>();
-
-    public final ArrayList<LookupTable> lookupTables = new ArrayList<>();
 
     public final String isa;
 
@@ -136,14 +136,16 @@ public class HexCodeFile {
     }
 
     /**
-     * Parses a string in the format produced by {@link #toString()} to produce a {@link HexCodeFile} object.
+     * Parses a string in the format produced by {@link #toString()} to produce a
+     * {@link HexCodeFile} object.
      */
     public static HexCodeFile parse(String input, int sourceOffset, String source, String sourceName) {
         return new Parser(input, sourceOffset, source, sourceName).hcf;
     }
 
     /**
-     * Formats this HexCodeFile as a string that can be parsed with {@link #parse(String, int, String, String)}.
+     * Formats this HexCodeFile as a string that can be parsed with
+     * {@link #parse(String, int, String, String)}.
      */
     @Override
     public String toString() {
@@ -158,15 +160,11 @@ public class HexCodeFile {
 
     public void writeTo(OutputStream out) {
         PrintStream ps = out instanceof PrintStream ? (PrintStream) out : new PrintStream(out);
-        ps.printf("Platform %s %d %s%n",  isa, wordWidth, SECTION_DELIM);
+        ps.printf("Platform %s %d %s%n", isa, wordWidth, SECTION_DELIM);
         ps.printf("HexCode %x %s %s%n", startAddress, HexCodeFile.hexCodeString(code), SECTION_DELIM);
 
         for (JumpTable table : jumpTables) {
             ps.printf("JumpTable %d %d %d %d %s%n", table.position, table.entrySize, table.low, table.high, SECTION_DELIM);
-        }
-
-        for (LookupTable table : lookupTables) {
-            ps.printf("LookupTable %d %d %d %d %s%n", table.position, table.npairs, table.keySize, table.keySize, SECTION_DELIM);
         }
 
         for (Map.Entry<Integer, List<String>> e : comments.entrySet()) {
@@ -182,20 +180,23 @@ public class HexCodeFile {
         ps.flush();
     }
 
-
     /**
      * Formats a byte array as a string of hex digits.
      */
     public static String hexCodeString(byte[] code) {
-        StringBuilder sb = new StringBuilder(code.length * 2);
-        for (int b : code) {
-            String hex = Integer.toHexString(b & 0xff);
-            if (hex.length() == 1) {
-                sb.append('0');
+        if (code == null) {
+            return "";
+        } else {
+            StringBuilder sb = new StringBuilder(code.length * 2);
+            for (int b : code) {
+                String hex = Integer.toHexString(b & 0xff);
+                if (hex.length() == 1) {
+                    sb.append('0');
+                }
+                sb.append(hex);
             }
-            sb.append(hex);
+            return sb.toString();
         }
-        return sb.toString();
     }
 
     /**
@@ -230,9 +231,6 @@ public class HexCodeFile {
             if (a instanceof JumpTable) {
                 JumpTable table = (JumpTable) a;
                 hcf.jumpTables.add(table);
-            } else if (a instanceof LookupTable) {
-                LookupTable table = (LookupTable) a;
-                hcf.lookupTables.add(table);
             } else if (a instanceof CodeComment) {
                 CodeComment comment = (CodeComment) a;
                 hcf.addComment(comment.position, comment.value);
@@ -241,7 +239,8 @@ public class HexCodeFile {
     }
 
     /**
-     * Modifies a string to mangle any substrings matching {@link #SECTION_DELIM}.
+     * Modifies a string to mangle any substrings matching {@link #SECTION_DELIM} and
+     * {@link #COLUMN_END}.
      */
     public static String encodeString(String input) {
         int index;
@@ -249,12 +248,15 @@ public class HexCodeFile {
         while ((index = s.indexOf(SECTION_DELIM)) != -1) {
             s = s.substring(0, index) + " < |@" + s.substring(index + SECTION_DELIM.length());
         }
+        while ((index = s.indexOf(COLUMN_END)) != -1) {
+            s = s.substring(0, index) + " < @" + s.substring(index + COLUMN_END.length());
+        }
         return s;
     }
 
     /**
-     * Helper class to parse a string in the format produced by {@link HexCodeFile#toString()}
-     * and produce a {@link HexCodeFile} object.
+     * Helper class to parse a string in the format produced by {@link HexCodeFile#toString()} and
+     * produce a {@link HexCodeFile} object.
      */
     static class Parser {
 
@@ -295,7 +297,8 @@ public class HexCodeFile {
         }
 
         void warning(int offset, String message) {
-            System.err.println("Warning: " + errorMessage(offset, message));
+            PrintStream err = System.err;
+            err.println("Warning: " + errorMessage(offset, message));
         }
 
         String errorMessage(int offset, String message) {
@@ -308,8 +311,10 @@ public class HexCodeFile {
         }
 
         static class InputPos {
+
             final int line;
             final int col;
+
             public InputPos(int line, int col) {
                 this.line = line;
                 this.col = col;
@@ -321,8 +326,9 @@ public class HexCodeFile {
             int lineStart = input.lastIndexOf(HexCodeFile.NEW_LINE, index) + 1;
 
             String l = input.substring(lineStart, lineStart + 10);
-            System.out.println("YYY" + input.substring(index, index + 10) + "...");
-            System.out.println("XXX" + l + "...");
+            PrintStream out = System.out;
+            out.println("YYY" + input.substring(index, index + 10) + "...");
+            out.println("XXX" + l + "...");
 
             int pos = input.indexOf(HexCodeFile.NEW_LINE, 0);
             int line = 1;
@@ -417,15 +423,6 @@ public class HexCodeFile {
                 int low = parseInt(bodyOffset + m.start(3), m.group(3));
                 int high = parseInt(bodyOffset + m.start(4), m.group(4));
                 hcf.jumpTables.add(new JumpTable(pos, low, high, entrySize));
-            } else if (header.equals("LookupTable")) {
-                checkHCF("LookupTable", headerOffset);
-                m = HexCodeFile.LOOKUP_TABLE.matcher(body);
-                check(m.matches(), bodyOffset, "LookupTable does not match pattern " + HexCodeFile.LOOKUP_TABLE);
-                int pos = parseInt(bodyOffset + m.start(1), m.group(1));
-                int npairs = parseInt(bodyOffset + m.start(2), m.group(2));
-                int keySize = parseInt(bodyOffset + m.start(3), m.group(3));
-                int offsetSize = parseInt(bodyOffset + m.start(4), m.group(4));
-                hcf.lookupTables.add(new LookupTable(pos, npairs, keySize, offsetSize));
             } else {
                 error(offset, "Unknown section header: " + header);
             }

@@ -22,18 +22,19 @@
  */
 package com.oracle.graal.truffle;
 
+import com.oracle.jvmci.code.CallingConvention;
+import com.oracle.jvmci.code.CodeCacheProvider;
+import com.oracle.jvmci.code.InstalledCode;
+import com.oracle.jvmci.code.CompilationResult;
+import com.oracle.jvmci.meta.*;
+
+import static com.oracle.jvmci.code.CodeUtil.*;
 import static com.oracle.graal.compiler.GraalCompiler.*;
-import static jdk.internal.jvmci.code.CodeUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.code.*;
-import jdk.internal.jvmci.code.CallingConvention.*;
-import jdk.internal.jvmci.debug.*;
-import jdk.internal.jvmci.debug.Debug.*;
-import jdk.internal.jvmci.meta.*;
-import jdk.internal.jvmci.meta.Assumptions.Assumption;
-
+import com.oracle.jvmci.code.CallingConvention.Type;
+import com.oracle.jvmci.meta.Assumptions.Assumption;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graphbuilderconf.*;
 import com.oracle.graal.graphbuilderconf.GraphBuilderConfiguration.Plugins;
@@ -44,7 +45,10 @@ import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 import com.oracle.graal.phases.util.*;
+import com.oracle.graal.printer.*;
 import com.oracle.graal.truffle.nodes.*;
+import com.oracle.jvmci.debug.*;
+import com.oracle.jvmci.debug.Debug.Scope;
 import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.nodes.*;
 
@@ -134,7 +138,7 @@ public abstract class TruffleCompiler {
             }
 
             compilationNotify.notifyCompilationTruffleTierFinished(compilable, graph);
-            CompilationResult compilationResult = compileMethodHelper(graph, compilable.toString(), graphBuilderSuite, compilable);
+            CompilationResult compilationResult = compileMethodHelper(graph, compilable.toString(), graphBuilderSuite, compilable.getSpeculationLog(), compilable);
             compilationNotify.notifyCompilationSuccess(compilable, graph, compilationResult);
         } catch (Throwable t) {
             System.out.println("compilation failed!?");
@@ -143,7 +147,7 @@ public abstract class TruffleCompiler {
         }
     }
 
-    public CompilationResult compileMethodHelper(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, InstalledCode predefinedInstalledCode) {
+    public CompilationResult compileMethodHelper(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, SpeculationLog speculationLog, InstalledCode predefinedInstalledCode) {
         try (Scope s = Debug.scope("TruffleFinal")) {
             Debug.dump(1, graph, "After TruffleTier");
         } catch (Throwable e) {
@@ -155,7 +159,7 @@ public abstract class TruffleCompiler {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
-            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), graphBuilderSuite, Optimizations, getProfilingInfo(graph), suites, lirSuites,
+            result = compileGraph(graph, cc, graph.method(), providers, backend, codeCache.getTarget(), graphBuilderSuite, Optimizations, getProfilingInfo(graph), speculationLog, suites, lirSuites,
                             compilationResult, CompilationResultBuilderFactory.Default);
         } catch (Throwable e) {
             throw Debug.handle(e);
@@ -165,7 +169,6 @@ public abstract class TruffleCompiler {
 
         if (graph.isInlinedMethodRecordingEnabled()) {
             result.setMethods(graph.method(), graph.getInlinedMethods());
-            result.setBytecodeSize(graph.getBytecodeSize());
         } else {
             assert result.getMethods() == null;
         }
@@ -186,7 +189,7 @@ public abstract class TruffleCompiler {
 
         InstalledCode installedCode;
         try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); DebugCloseable a = CodeInstallationTime.start(); DebugCloseable c = CodeInstallationMemUse.start()) {
-            installedCode = providers.getCodeCache().addMethod(graph.method(), result, graph.getSpeculationLog(), predefinedInstalledCode);
+            installedCode = providers.getCodeCache().addMethod(graph.method(), result, speculationLog, predefinedInstalledCode);
         } catch (Throwable e) {
             throw Debug.handle(e);
         }
