@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,23 +34,6 @@ public class ArraySubstitutions {
 
     @MethodSubstitution
     public static Object newInstance(Class<?> componentType, int length) throws NegativeArraySizeException {
-        // The error cases must be handled here since DynamicNewArrayNode can only deoptimize the
-        // caller in response to exceptions.
-        if (length < 0) {
-            throw new NegativeArraySizeException();
-        }
-        if (componentType == void.class) {
-            throw new IllegalArgumentException();
-        }
         return DynamicNewArrayNode.newArray(GuardingPiNode.guardingNonNull(componentType), length);
     }
-
-    @MethodSubstitution
-    public static int getLength(Object array) {
-        if (!array.getClass().isArray()) {
-            throw new IllegalArgumentException("Argument is not an array");
-        }
-        return ArrayLengthNode.arrayLength(array);
-    }
-
 }
