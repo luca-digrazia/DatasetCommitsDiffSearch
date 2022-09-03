@@ -60,6 +60,7 @@ import org.graalvm.compiler.debug.DebugDumpScope;
 import org.graalvm.compiler.debug.DebugEnvironment;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
+import org.graalvm.compiler.debug.internal.DebugScope;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeMap;
@@ -1235,8 +1236,10 @@ public abstract class GraalCompilerTest extends GraalTest {
      * This method should be called in "timeout" tests which JUnit runs in a different thread.
      */
     public static void initializeForTimeout() {
-        // timeout tests run in a separate thread which needs the DebugEnvironment to be
-        // initialized
-        DebugEnvironment.ensureInitialized();
+        if (Debug.isEnabled() && DebugScope.getConfig() == null) {
+            // timeout tests run in a separate thread which needs the DebugEnvironment to be
+            // initialized
+            DebugEnvironment.initialize(TTY.out);
+        }
     }
 }
