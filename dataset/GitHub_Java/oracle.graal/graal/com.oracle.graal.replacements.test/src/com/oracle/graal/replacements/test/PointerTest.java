@@ -26,7 +26,6 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.graal.api.replacements.Snippet;
-import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.compiler.test.GraalCompilerTest;
 import com.oracle.graal.nodes.NamedLocationIdentity;
@@ -67,7 +66,7 @@ public class PointerTest extends GraalCompilerTest implements Snippets {
     }
 
     @Override
-    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
+    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions) {
         return installer.makeGraph(m, null, null);
     }
 

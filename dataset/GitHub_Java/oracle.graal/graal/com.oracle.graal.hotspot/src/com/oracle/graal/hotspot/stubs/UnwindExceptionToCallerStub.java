@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,32 +22,40 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerInCallerNode.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.*;
+import static com.oracle.graal.hotspot.nodes.JumpToExceptionHandlerInCallerNode.jumpToExceptionHandlerInCaller;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
+import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.checkExceptionNotNull;
+import static com.oracle.graal.hotspot.stubs.ExceptionHandlerStub.checkNoExceptionInThread;
+import static com.oracle.graal.hotspot.stubs.StubUtil.cAssertionsEnabled;
+import static com.oracle.graal.hotspot.stubs.StubUtil.decipher;
+import static com.oracle.graal.hotspot.stubs.StubUtil.newDescriptor;
+import static com.oracle.graal.hotspot.stubs.StubUtil.printf;
 
-import com.oracle.graal.api.code.RuntimeCallTarget.Descriptor;
-import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.api.replacements.Fold.InjectedParameter;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.Fold;
-import com.oracle.graal.word.*;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
+import com.oracle.graal.nodes.UnwindNode;
+import com.oracle.graal.word.Pointer;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.code.Register;
 
 /**
  * Stub called by an {@link UnwindNode}. This stub executes in the frame of the method throwing an
  * exception and completes by jumping to the exception handler in the calling frame.
  */
-public class UnwindExceptionToCallerStub extends CRuntimeStub {
+public class UnwindExceptionToCallerStub extends SnippetStub {
 
-    public UnwindExceptionToCallerStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
-        super(runtime, replacements, target, linkage);
+    public UnwindExceptionToCallerStub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+        super("unwindExceptionToCaller", providers, linkage);
     }
 
     /**
@@ -59,45 +67,60 @@ public class UnwindExceptionToCallerStub extends CRuntimeStub {
         return false;
     }
 
+    @Override
+    protected Object getConstantParameterValue(int index, String name) {
+        assert index == 2;
+        return providers.getRegisters().getThreadRegister();
+    }
+
     @Snippet
-    private static void unwindExceptionToCaller(Object exception, Word returnAddress) {
-        Pointer exceptionOop = Word.fromObject(exception);
+    private static void unwindExceptionToCaller(Object exception, Word returnAddress, @ConstantParameter Register threadRegister) {
+        Pointer exceptionOop = Word.objectToTrackedPointer(exception);
         if (logging()) {
-            StubUtil.printf("unwinding exception %p (", exceptionOop.rawValue());
-            StubUtil.decipher(exceptionOop.rawValue());
-            StubUtil.printf(") at %p (", exceptionOop.rawValue(), returnAddress.rawValue());
-            StubUtil.decipher(returnAddress.rawValue());
-            StubUtil.printf(")\n");
+            printf("unwinding exception %p (", exceptionOop.rawValue());
+            decipher(exceptionOop.rawValue());
+            printf(") at %p (", returnAddress.rawValue());
+            decipher(returnAddress.rawValue());
+            printf(")\n");
         }
-        checkNoExceptionInThread(assertionsEnabled());
-        checkExceptionNotNull(assertionsEnabled(), exception);
+        Word thread = registerAsWord(threadRegister);
+        checkNoExceptionInThread(thread, assertionsEnabled(null));
+        checkExceptionNotNull(assertionsEnabled(null), exception);
 
-        Word handlerInCallerPc = exceptionHandlerForReturnAddress(EXCEPTION_HANDLER_FOR_RETURN_ADDRESS, thread(), returnAddress);
+        Word handlerInCallerPc = exceptionHandlerForReturnAddress(EXCEPTION_HANDLER_FOR_RETURN_ADDRESS, thread, returnAddress);
 
         if (logging()) {
-            StubUtil.printf("handler for exception %p at return address %p is at %p (", exceptionOop.rawValue(), returnAddress.rawValue(), handlerInCallerPc.rawValue());
-            StubUtil.decipher(handlerInCallerPc.rawValue());
-            StubUtil.printf(")\n");
+            printf("handler for exception %p at return address %p is at %p (", exceptionOop.rawValue(), returnAddress.rawValue(), handlerInCallerPc.rawValue());
+            decipher(handlerInCallerPc.rawValue());
+            printf(")\n");
         }
 
         jumpToExceptionHandlerInCaller(handlerInCallerPc, exception, returnAddress);
     }
 
     @Fold
-    private static boolean logging() {
-        return Boolean.getBoolean("graal.logUnwindExceptionToCallerStub");
+    static boolean logging() {
+        return StubOptions.TraceUnwindStub.getValue();
     }
 
+    /**
+     * Determines if either Java assertions are enabled for {@link UnwindExceptionToCallerStub} or
+     * if this is a HotSpot build where the ASSERT mechanism is enabled.
+     * <p>
+     * This first check relies on the per-class assertion status which is why this method must be in
+     * this class.
+     */
     @Fold
     @SuppressWarnings("all")
-    private static boolean assertionsEnabled() {
+    static boolean assertionsEnabled(@InjectedParameter GraalHotSpotVMConfig config) {
         boolean enabled = false;
         assert enabled = true;
-        return enabled || graalRuntime().getConfig().cAssertions;
+        return enabled || cAssertionsEnabled(config);
     }
 
-    public static final Descriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = StubUtil.descriptorFor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress", false);
+    public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_RETURN_ADDRESS = newDescriptor(UnwindExceptionToCallerStub.class, "exceptionHandlerForReturnAddress", Word.class, Word.class,
+                    Word.class);
 
-    @NodeIntrinsic(value = CRuntimeCall.class, setStampFromReturnType = true)
-    public static native Word exceptionHandlerForReturnAddress(@ConstantNodeParameter Descriptor exceptionHandlerForReturnAddress, Word thread, Word returnAddress);
+    @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
+    public static native Word exceptionHandlerForReturnAddress(@ConstantNodeParameter ForeignCallDescriptor exceptionHandlerForReturnAddress, Word thread, Word returnAddress);
 }

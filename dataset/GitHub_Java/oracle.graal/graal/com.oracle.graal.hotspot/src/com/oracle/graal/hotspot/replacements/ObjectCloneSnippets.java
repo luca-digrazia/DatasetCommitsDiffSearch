@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,111 +22,104 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotSnippetUtils.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
+import java.lang.reflect.Method;
+import java.util.EnumMap;
 
-import java.lang.reflect.*;
+import com.oracle.graal.api.directives.GraalDirectives;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.hotspot.replacements.arraycopy.ArrayCopyCallNode;
+import com.oracle.graal.nodes.java.DynamicNewArrayNode;
+import com.oracle.graal.nodes.java.NewArrayNode;
+import com.oracle.graal.replacements.Snippets;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.word.*;
+import jdk.vm.ci.meta.JavaKind;
 
 public class ObjectCloneSnippets implements Snippets {
 
-    public static final Method instanceCloneMethod = getCloneMethod("instanceClone");
-    public static final Method arrayCloneMethod = getCloneMethod("arrayClone");
-    public static final Method genericCloneMethod = getCloneMethod("genericClone");
+    public static final EnumMap<JavaKind, Method> arrayCloneMethods = new EnumMap<>(JavaKind.class);
 
-    private static Method getCloneMethod(String name) {
+    static {
+        arrayCloneMethods.put(JavaKind.Boolean, getCloneMethod("booleanArrayClone", boolean[].class));
+        arrayCloneMethods.put(JavaKind.Byte, getCloneMethod("byteArrayClone", byte[].class));
+        arrayCloneMethods.put(JavaKind.Char, getCloneMethod("charArrayClone", char[].class));
+        arrayCloneMethods.put(JavaKind.Short, getCloneMethod("shortArrayClone", short[].class));
+        arrayCloneMethods.put(JavaKind.Int, getCloneMethod("intArrayClone", int[].class));
+        arrayCloneMethods.put(JavaKind.Float, getCloneMethod("floatArrayClone", float[].class));
+        arrayCloneMethods.put(JavaKind.Long, getCloneMethod("longArrayClone", long[].class));
+        arrayCloneMethods.put(JavaKind.Double, getCloneMethod("doubleArrayClone", double[].class));
+        arrayCloneMethods.put(JavaKind.Object, getCloneMethod("objectArrayClone", Object[].class));
+    }
+
+    private static Method getCloneMethod(String name, Class<?> param) {
         try {
-            return ObjectCloneSnippets.class.getDeclaredMethod(name, Object.class);
+            return ObjectCloneSnippets.class.getDeclaredMethod(name, param);
         } catch (SecurityException | NoSuchMethodException e) {
-            throw new GraalInternalError(e);
+            throw new GraalError(e);
         }
     }
 
-    private static Object instanceClone(Object src, Word hub, int layoutHelper) {
-        int instanceSize = layoutHelper;
-        Pointer memory = NewObjectSnippets.allocate(instanceSize);
-        Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
-        Object result = NewObjectSnippets.initializeObject((Word) memory, hub, prototypeMarkWord, instanceSize, false, false);
-
-        memory = Word.fromObject(result);
-        for (int offset = 2 * wordSize(); offset < instanceSize; offset += wordSize()) {
-            memory.writeWord(offset, Word.fromObject(src).readWord(offset, ANY_LOCATION), ANY_LOCATION);
-        }
-
+    @Snippet
+    public static boolean[] booleanArrayClone(boolean[] src) {
+        boolean[] result = (boolean[]) NewArrayNode.newUninitializedArray(Boolean.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Boolean);
         return result;
     }
 
-    private static Object arrayClone(Object src, Word hub, int layoutHelper) {
-        int arrayLength = ArrayLengthNode.arrayLength(src);
-        int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
-        int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
-        int sizeInBytes = NewObjectSnippets.computeArrayAllocationSize(arrayLength, wordSize(), headerSize, log2ElementSize);
-
-        Pointer memory = NewObjectSnippets.allocate(sizeInBytes);
-        Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(), PROTOTYPE_MARK_WORD_LOCATION);
-        Object result = NewObjectSnippets.initializeArray((Word) memory, hub, arrayLength, sizeInBytes, prototypeMarkWord, headerSize, false, false);
-
-        memory = Word.fromObject(result);
-        for (int offset = headerSize; offset < sizeInBytes; offset += wordSize()) {
-            memory.writeWord(offset, Word.fromObject(src).readWord(offset, ANY_LOCATION), ANY_LOCATION);
-        }
+    @Snippet
+    public static byte[] byteArrayClone(byte[] src) {
+        byte[] result = (byte[]) NewArrayNode.newUninitializedArray(Byte.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Byte);
         return result;
     }
 
-    private static Word getAndCheckHub(Object src) {
-        Word hub = loadHub(src);
-        if (!(src instanceof Cloneable)) {
-            probability(DEOPT_PATH_PROBABILITY);
-            DeoptimizeNode.deopt(DeoptimizationAction.None, DeoptimizationReason.RuntimeConstraint);
-        }
-        return hub;
+    @Snippet
+    public static short[] shortArrayClone(short[] src) {
+        short[] result = (short[]) NewArrayNode.newUninitializedArray(Short.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Short);
+        return result;
     }
 
     @Snippet
-    public static Object instanceClone(Object src) {
-        instanceCloneCounter.inc();
-        Word hub = getAndCheckHub(src);
-        return instanceClone(src, hub, hub.readInt(layoutHelperOffset(), FINAL_LOCATION));
+    public static char[] charArrayClone(char[] src) {
+        char[] result = (char[]) NewArrayNode.newUninitializedArray(Character.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Char);
+        return result;
     }
 
     @Snippet
-    public static Object arrayClone(Object src) {
-        arrayCloneCounter.inc();
-        Word hub = getAndCheckHub(src);
-        int layoutHelper = hub.readInt(layoutHelperOffset(), FINAL_LOCATION);
-        return arrayClone(src, hub, layoutHelper);
+    public static int[] intArrayClone(int[] src) {
+        int[] result = (int[]) NewArrayNode.newUninitializedArray(Integer.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Int);
+        return result;
     }
 
     @Snippet
-    public static Object genericClone(Object src) {
-        genericCloneCounter.inc();
-        Word hub = getAndCheckHub(src);
-        int layoutHelper = hub.readInt(layoutHelperOffset(), FINAL_LOCATION);
-        if (layoutHelper < 0) {
-            probability(LIKELY_PROBABILITY);
-            genericArrayCloneCounter.inc();
-            return arrayClone(src, hub, layoutHelper);
-        } else {
-            genericInstanceCloneCounter.inc();
-            return instanceClone(src, hub, layoutHelper);
-        }
+    public static float[] floatArrayClone(float[] src) {
+        float[] result = (float[]) NewArrayNode.newUninitializedArray(Float.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Float);
+        return result;
     }
 
-    private static final SnippetCounter.Group cloneCounters = GraalOptions.SnippetCounters ? new SnippetCounter.Group("Object.clone") : null;
-    private static final SnippetCounter instanceCloneCounter = new SnippetCounter(cloneCounters, "instanceClone", "clone snippet for instances");
-    private static final SnippetCounter arrayCloneCounter = new SnippetCounter(cloneCounters, "arrayClone", "clone snippet for arrays");
-    private static final SnippetCounter genericCloneCounter = new SnippetCounter(cloneCounters, "genericClone", "clone snippet for arrays and instances");
+    @Snippet
+    public static long[] longArrayClone(long[] src) {
+        long[] result = (long[]) NewArrayNode.newUninitializedArray(Long.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Long);
+        return result;
+    }
 
-    private static final SnippetCounter.Group genericCloneCounters = GraalOptions.SnippetCounters ? new SnippetCounter.Group("Object.clone generic snippet") : null;
-    private static final SnippetCounter genericInstanceCloneCounter = new SnippetCounter(genericCloneCounters, "genericInstanceClone", "generic clone implementation took instance path");
-    private static final SnippetCounter genericArrayCloneCounter = new SnippetCounter(genericCloneCounters, "genericArrayClone", "generic clone implementation took array path");
+    @Snippet
+    public static double[] doubleArrayClone(double[] src) {
+        double[] result = (double[]) NewArrayNode.newUninitializedArray(Double.TYPE, src.length);
+        ArrayCopyCallNode.disjointArraycopy(src, 0, result, 0, src.length, JavaKind.Double);
+        return result;
+    }
 
+    @Snippet
+    public static Object[] objectArrayClone(Object[] src) {
+        /* Since this snippet is lowered early the array must be initialized */
+        Object[] result = (Object[]) DynamicNewArrayNode.newArray(GraalDirectives.guardingNonNull(src.getClass().getComponentType()), src.length, JavaKind.Object);
+        ArrayCopyCallNode.disjointUninitializedArraycopy(src, 0, result, 0, src.length, JavaKind.Object);
+        return result;
+    }
 }

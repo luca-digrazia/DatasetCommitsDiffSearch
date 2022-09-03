@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,37 @@
  */
 package com.oracle.graal.replacements;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
-import static com.oracle.graal.replacements.SnippetTemplate.*;
+import static com.oracle.graal.compiler.common.GraalOptions.SnippetCounters;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_IGNORED;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_IGNORED;
+import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
-import java.util.*;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.compiler.common.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
-import com.oracle.graal.nodeinfo.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.phases.util.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.Lowerable;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.util.Providers;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.word.*;
+import com.oracle.graal.word.ObjectAccess;
+
+import jdk.vm.ci.code.TargetDescription;
+import sun.misc.Unsafe;
 
 /**
  * This node can be used to add a counter to the code that will estimate the dynamic number of calls
@@ -52,7 +62,7 @@ import com.oracle.graal.word.*;
  * A unique counter will be created for each unique name passed to the constructor. Depending on the
  * value of withContext, the name of the root method is added to the counter's name.
  */
-@NodeInfo
+@NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED)
 public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
 
     public static final NodeClass<SnippetCounterNode> TYPE = NodeClass.create(SnippetCounterNode.class);
@@ -82,6 +92,7 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
         add(counter, 1);
     }
 
+    @Override
     public void lower(LoweringTool tool) {
         if (graph().getGuardsStage().areFrameStatesAtDeopts()) {
             SnippetCounterSnippets.Templates templates = tool.getReplacements().getSnippetTemplateCache(SnippetCounterSnippets.Templates.class);
@@ -120,11 +131,11 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
     static class SnippetCounterSnippets implements Snippets {
 
         @Fold
-        private static int countOffset() {
+        static int countOffset() {
             try {
-                return (int) unsafe.objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
+                return (int) UNSAFE.objectFieldOffset(SnippetCounter.class.getDeclaredField("value"));
             } catch (Exception e) {
-                throw new GraalInternalError(e);
+                throw new GraalError(e);
             }
         }
 
@@ -138,7 +149,7 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
 
             private final SnippetInfo add = snippet(SnippetCounterSnippets.class, "add", SNIPPET_COUNTER_LOCATION);
 
-            public Templates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
+            Templates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
                 super(providers, snippetReflection, target);
             }
 
@@ -153,4 +164,19 @@ public class SnippetCounterNode extends FixedWithNextNode implements Lowerable {
         }
     }
 
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    private static Unsafe initUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
+    }
 }

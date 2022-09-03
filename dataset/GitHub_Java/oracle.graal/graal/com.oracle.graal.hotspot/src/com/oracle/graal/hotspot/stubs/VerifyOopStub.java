@@ -22,24 +22,24 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
+import static com.oracle.graal.hotspot.stubs.StubUtil.verifyObject;
+
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
+import com.oracle.graal.hotspot.meta.HotSpotHostForeignCallsProvider;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
 
 /**
- * Stub called from {@link VerifyOopStubCall}.
+ * Stub called via {@link HotSpotHostForeignCallsProvider#VERIFY_OOP}.
  */
-public class VerifyOopStub extends CRuntimeStub {
+public class VerifyOopStub extends SnippetStub {
 
-    public VerifyOopStub(final HotSpotRuntime runtime, Replacements replacements, TargetDescription target, HotSpotRuntimeCallTarget linkage) {
-        super(runtime, replacements, target, linkage);
+    public VerifyOopStub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+        super("verifyOop", providers, linkage);
     }
 
     @Snippet
     private static Object verifyOop(Object object) {
-        return StubUtil.verifyObject(object);
+        return verifyObject(object);
     }
 }

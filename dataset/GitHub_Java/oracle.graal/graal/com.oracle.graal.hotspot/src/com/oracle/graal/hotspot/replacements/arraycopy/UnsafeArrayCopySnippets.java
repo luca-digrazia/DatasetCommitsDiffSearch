@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,37 +22,55 @@
  */
 package com.oracle.graal.hotspot.replacements.arraycopy;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
-import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
-import static com.oracle.graal.replacements.SnippetTemplate.*;
+import static com.oracle.graal.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayBaseOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayIndexScale;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperHeaderSizeMask;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperHeaderSizeShift;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperLog2ElementSizeMask;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.layoutHelperLog2ElementSizeShift;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.runtime;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.wordSize;
+import static com.oracle.graal.nodes.NamedLocationIdentity.any;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
+import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
+import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayIndexScale;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.api.replacements.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.phases.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.compiler.common.LocationIdentity;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.phases.WriteBarrierAdditionPhase;
+import com.oracle.graal.nodes.NamedLocationIdentity;
+import com.oracle.graal.nodes.extended.UnsafeCopyNode;
+import com.oracle.graal.nodes.extended.UnsafeLoadNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.replacements.SnippetTemplate;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.replacements.nodes.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.replacements.Snippets;
+import com.oracle.graal.replacements.nodes.DirectObjectStoreNode;
+import com.oracle.graal.word.ObjectAccess;
+import com.oracle.graal.word.Unsigned;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * As opposed to {@link ArrayCopySnippets}, these Snippets do <b>not</b> perform store checks.
  */
 public class UnsafeArrayCopySnippets implements Snippets {
-    private static final boolean supportsUnalignedMemoryAccess = runtime().getTarget().arch.supportsUnalignedMemoryAccess();
 
-    private static final Kind VECTOR_KIND = Kind.Long;
-    private static final long VECTOR_SIZE = arrayIndexScale(VECTOR_KIND);
+    private static final boolean supportsUnalignedMemoryAccess = runtime().getHostJVMCIBackend().getTarget().arch.supportsUnalignedMemoryAccess();
 
-    private static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, Kind baseKind, LocationIdentity locationIdentity) {
+    private static final JavaKind VECTOR_KIND = JavaKind.Long;
+    private static final long VECTOR_SIZE = getArrayIndexScale(VECTOR_KIND);
+
+    private static void vectorizedCopy(Object src, int srcPos, Object dest, int destPos, int length, JavaKind baseKind, LocationIdentity locationIdentity) {
         int arrayBaseOffset = arrayBaseOffset(baseKind);
         int elementSize = arrayIndexScale(baseKind);
         long byteLength = (long) length * elementSize;
@@ -128,55 +146,55 @@ public class UnsafeArrayCopySnippets implements Snippets {
     }
 
     @Fold
-    private static LocationIdentity getArrayLocation(Kind kind) {
+    static LocationIdentity getArrayLocation(JavaKind kind) {
         return NamedLocationIdentity.getArrayLocation(kind);
     }
 
     @Snippet
     public static void arraycopyByte(byte[] src, int srcPos, byte[] dest, int destPos, int length) {
-        Kind kind = Kind.Byte;
+        JavaKind kind = JavaKind.Byte;
         vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
     }
 
     @Snippet
     public static void arraycopyBoolean(boolean[] src, int srcPos, boolean[] dest, int destPos, int length) {
-        Kind kind = Kind.Boolean;
+        JavaKind kind = JavaKind.Boolean;
         vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
     }
 
     @Snippet
     public static void arraycopyChar(char[] src, int srcPos, char[] dest, int destPos, int length) {
-        Kind kind = Kind.Char;
+        JavaKind kind = JavaKind.Char;
         vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
     }
 
     @Snippet
     public static void arraycopyShort(short[] src, int srcPos, short[] dest, int destPos, int length) {
-        Kind kind = Kind.Short;
+        JavaKind kind = JavaKind.Short;
         vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
     }
 
     @Snippet
     public static void arraycopyInt(int[] src, int srcPos, int[] dest, int destPos, int length) {
-        Kind kind = Kind.Int;
+        JavaKind kind = JavaKind.Int;
         vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
     }
 
     @Snippet
     public static void arraycopyFloat(float[] src, int srcPos, float[] dest, int destPos, int length) {
-        Kind kind = Kind.Float;
+        JavaKind kind = JavaKind.Float;
         vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
     }
 
     @Snippet
     public static void arraycopyLong(long[] src, int srcPos, long[] dest, int destPos, int length) {
-        Kind kind = Kind.Long;
+        JavaKind kind = JavaKind.Long;
         vectorizedCopy(src, srcPos, dest, destPos, length, kind, getArrayLocation(kind));
     }
 
     @Snippet
     public static void arraycopyDouble(double[] src, int srcPos, double[] dest, int destPos, int length) {
-        Kind kind = Kind.Double;
+        JavaKind kind = JavaKind.Double;
         /*
          * TODO atomicity problem on 32-bit architectures: The JVM spec requires double values to be
          * copied atomically, but not long values. For example, on Intel 32-bit this code is not
@@ -193,7 +211,7 @@ public class UnsafeArrayCopySnippets implements Snippets {
      */
     @Snippet
     public static void arraycopyObject(Object[] src, int srcPos, Object[] dest, int destPos, int length) {
-        Kind kind = Kind.Object;
+        JavaKind kind = JavaKind.Object;
         final int scale = arrayIndexScale(kind);
         int arrayBaseOffset = arrayBaseOffset(kind);
         LocationIdentity arrayLocation = getArrayLocation(kind);
@@ -214,8 +232,8 @@ public class UnsafeArrayCopySnippets implements Snippets {
 
     @Snippet
     public static void arraycopyPrimitive(Object src, int srcPos, Object dest, int destPos, int length, int layoutHelper) {
-        int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift()) & layoutHelperLog2ElementSizeMask();
-        int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift()) & layoutHelperHeaderSizeMask();
+        int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift(INJECTED_VMCONFIG)) & layoutHelperLog2ElementSizeMask(INJECTED_VMCONFIG);
+        int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift(INJECTED_VMCONFIG)) & layoutHelperHeaderSizeMask(INJECTED_VMCONFIG);
 
         Unsigned vectorSize = Word.unsigned(VECTOR_SIZE);
         Unsigned srcOffset = Word.unsigned(srcPos).shiftLeft(log2ElementSize).add(headerSize);
@@ -243,19 +261,19 @@ public class UnsafeArrayCopySnippets implements Snippets {
 
         Unsigned destNonVectorEnd = destStart.add(nonVectorBytes);
         while (destOffset.belowThan(destNonVectorEnd)) {
-            ObjectAccess.writeByte(dest, destOffset, ObjectAccess.readByte(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
+            ObjectAccess.writeByte(dest, destOffset, ObjectAccess.readByte(src, srcOffset, any()), any());
             destOffset = destOffset.add(1);
             srcOffset = srcOffset.add(1);
         }
         // Unsigned destVectorEnd = destEnd.subtract(destEnd.unsignedRemainder(8));
         while (destOffset.belowThan(destVectorEnd)) {
-            ObjectAccess.writeWord(dest, destOffset, ObjectAccess.readWord(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
+            ObjectAccess.writeWord(dest, destOffset, ObjectAccess.readWord(src, srcOffset, any()), any());
             destOffset = destOffset.add(wordSize());
             srcOffset = srcOffset.add(wordSize());
         }
         // Do the last bytes each when it is required to have absolute alignment.
         while (!supportsUnalignedMemoryAccess && destOffset.belowThan(destEnd)) {
-            ObjectAccess.writeByte(dest, destOffset, ObjectAccess.readByte(src, srcOffset, ANY_LOCATION), ANY_LOCATION);
+            ObjectAccess.writeByte(dest, destOffset, ObjectAccess.readByte(src, srcOffset, any()), any());
             destOffset = destOffset.add(1);
             srcOffset = srcOffset.add(1);
         }
@@ -269,22 +287,22 @@ public class UnsafeArrayCopySnippets implements Snippets {
         public Templates(HotSpotProviders providers, TargetDescription target) {
             super(providers, providers.getSnippetReflection(), target);
 
-            arraycopySnippets = new SnippetInfo[Kind.values().length];
-            arraycopySnippets[Kind.Boolean.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyBoolean");
-            arraycopySnippets[Kind.Byte.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyByte");
-            arraycopySnippets[Kind.Short.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyShort");
-            arraycopySnippets[Kind.Char.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyChar");
-            arraycopySnippets[Kind.Int.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyInt");
-            arraycopySnippets[Kind.Long.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyLong");
-            arraycopySnippets[Kind.Float.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyFloat");
-            arraycopySnippets[Kind.Double.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyDouble");
-            arraycopySnippets[Kind.Object.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyObject");
+            arraycopySnippets = new SnippetInfo[JavaKind.values().length];
+            arraycopySnippets[JavaKind.Boolean.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyBoolean");
+            arraycopySnippets[JavaKind.Byte.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyByte");
+            arraycopySnippets[JavaKind.Short.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyShort");
+            arraycopySnippets[JavaKind.Char.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyChar");
+            arraycopySnippets[JavaKind.Int.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyInt");
+            arraycopySnippets[JavaKind.Long.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyLong");
+            arraycopySnippets[JavaKind.Float.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyFloat");
+            arraycopySnippets[JavaKind.Double.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyDouble");
+            arraycopySnippets[JavaKind.Object.ordinal()] = snippet(UnsafeArrayCopySnippets.class, "arraycopyObject");
 
             genericPrimitiveSnippet = snippet(UnsafeArrayCopySnippets.class, "arraycopyPrimitive");
         }
 
         public void lower(UnsafeArrayCopyNode node, LoweringTool tool) {
-            Kind elementKind = node.getElementKind();
+            JavaKind elementKind = node.getElementKind();
             SnippetInfo snippet;
             if (elementKind == null) {
                 // primitive array of unknown kind

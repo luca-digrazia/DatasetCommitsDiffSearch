@@ -111,7 +111,7 @@ import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.nodes.spi.MemoryProxy;
 import com.oracle.graal.nodes.util.GraphUtil;
 import com.oracle.graal.options.Option;
-import com.oracle.graal.options.OptionKey;
+import com.oracle.graal.options.OptionValue;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.DeadCodeEliminationPhase;
 import com.oracle.graal.phases.common.FloatingReadPhase;
@@ -546,10 +546,10 @@ public class SnippetTemplate {
 
     static class Options {
         @Option(help = "Use a LRU cache for snippet templates.")//
-        static final OptionKey<Boolean> UseSnippetTemplateCache = new OptionKey<>(true);
+        static final OptionValue<Boolean> UseSnippetTemplateCache = new OptionValue<>(true);
 
         @Option(help = "")//
-        static final OptionKey<Integer> MaxTemplatesPerSnippet = new OptionKey<>(50);
+        static final OptionValue<Integer> MaxTemplatesPerSnippet = new OptionValue<>(50);
     }
 
     /**
@@ -1393,7 +1393,7 @@ public class SnippetTemplate {
 
             updateStamps(replacee, duplicates);
 
-            if (UseGraalInstrumentation.getValue(replaceeGraph.getOptions())) {
+            if (UseGraalInstrumentation.getValue()) {
                 for (InstrumentationNode instrumentation : replaceeGraph.getNodes().filter(InstrumentationNode.class)) {
                     if (instrumentation.getTarget() == replacee) {
                         instrumentation.replaceFirstInput(replacee, firstCFGNodeDuplicate);

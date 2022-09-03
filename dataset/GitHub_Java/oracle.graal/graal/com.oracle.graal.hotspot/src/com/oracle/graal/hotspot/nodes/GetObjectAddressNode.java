@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,52 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
+import static com.oracle.graal.nodeinfo.NodeCycles.CYCLES_2;
+import static com.oracle.graal.nodeinfo.NodeSize.SIZE_1;
+
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.compiler.common.LIRKind;
+import com.oracle.graal.compiler.common.type.StampFactory;
+import com.oracle.graal.graph.NodeClass;
+import com.oracle.graal.nodeinfo.NodeInfo;
+import com.oracle.graal.nodes.FixedWithNextNode;
+import com.oracle.graal.nodes.ValueNode;
+import com.oracle.graal.nodes.spi.LIRLowerable;
+import com.oracle.graal.nodes.spi.NodeLIRBuilderTool;
+
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Intrinsification for getting the address of an object.
- * The code path(s) between a call to {@link #get(Object)} and all uses
- * of the returned value must be atomic. The only exception to this is
- * if the usage is not an attempt to dereference the value.
+ * Intrinsification for getting the address of an object. The code path(s) between a call to
+ * {@link #get(Object)} and all uses of the returned value must not contain safepoints. This can
+ * only be guaranteed if used in a snippet that is instantiated after frame state assignment.
+ * {@link ComputeObjectAddressNode} should generally be used in preference to this node.
  */
-public class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
-    @Input private ValueNode object;
+@NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+public final class GetObjectAddressNode extends FixedWithNextNode implements LIRLowerable {
+    public static final NodeClass<GetObjectAddressNode> TYPE = NodeClass.create(GetObjectAddressNode.class);
+
+    @Input ValueNode object;
 
     public GetObjectAddressNode(ValueNode obj) {
-        super(StampFactory.forKind(Kind.Long));
+        super(TYPE, StampFactory.forKind(JavaKind.Long));
         this.object = obj;
     }
 
-    @SuppressWarnings("unused")
     @NodeIntrinsic
-    public static long get(Object array) {
-        throw new UnsupportedOperationException();
+    public static native long get(Object array);
+
+    @Override
+    public void generate(NodeLIRBuilderTool gen) {
+        AllocatableValue obj = gen.getLIRGeneratorTool().newVariable(LIRKind.unknownReference(gen.getLIRGeneratorTool().target().arch.getWordKind()));
+        gen.getLIRGeneratorTool().emitMove(obj, gen.operand(object));
+        gen.setResult(this, obj);
     }
 
     @Override
-    public void generate(LIRGeneratorTool gen) {
-        Value obj = gen.newVariable(gen.target().wordKind);
-        gen.emitMove(gen.operand(object), obj);
-        gen.setResult(this, obj);
+    public boolean verify() {
+        assert graph().getGuardsStage().areFrameStatesAtDeopts() || graph().method().getAnnotation(Snippet.class) != null : "GetObjectAddressNode can't be used directly until frame states are fixed";
+        return super.verify();
     }
 }

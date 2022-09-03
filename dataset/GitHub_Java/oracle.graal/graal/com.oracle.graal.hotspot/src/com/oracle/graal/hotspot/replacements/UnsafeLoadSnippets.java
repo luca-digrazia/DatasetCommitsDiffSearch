@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,32 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.replacements.SnippetTemplate.*;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.referentOffset;
+import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.nodes.extended.FixedValueAnchorNode;
+import com.oracle.graal.nodes.extended.UnsafeLoadNode;
+import com.oracle.graal.nodes.memory.HeapAccess.BarrierType;
+import com.oracle.graal.nodes.spi.LoweringTool;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
-import com.oracle.graal.word.*;
+import com.oracle.graal.replacements.Snippets;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.code.TargetDescription;
 
 public class UnsafeLoadSnippets implements Snippets {
 
     @Snippet
-    public static Object lowerUnsafeLoad(Object object, long offset, int disp) {
-        long displacement = disp + offset;
-        if (object instanceof java.lang.ref.Reference && referentOffset() == displacement) {
-            return Word.fromObject(object).readObject((int) displacement, 1, true);
+    public static Object lowerUnsafeLoad(Object object, long offset) {
+        Object fixedObject = FixedValueAnchorNode.getObject(object);
+        if (object instanceof java.lang.ref.Reference && referentOffset() == offset) {
+            return Word.objectToTrackedPointer(fixedObject).readObject((int) offset, BarrierType.PRECISE);
         } else {
-            return Word.fromObject(object).readObject((int) displacement, 0, true);
+            return Word.objectToTrackedPointer(fixedObject).readObject((int) offset, BarrierType.NONE);
         }
     }
 
@@ -50,16 +55,15 @@ public class UnsafeLoadSnippets implements Snippets {
 
         private final SnippetInfo unsafeLoad = snippet(UnsafeLoadSnippets.class, "lowerUnsafeLoad");
 
-        public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
-            super(runtime, replacements, target);
+        public Templates(HotSpotProviders providers, TargetDescription target) {
+            super(providers, providers.getSnippetReflection(), target);
         }
 
-        public void lower(UnsafeLoadNode load, @SuppressWarnings("unused") LoweringTool tool) {
-            Arguments args = new Arguments(unsafeLoad);
+        public void lower(UnsafeLoadNode load, LoweringTool tool) {
+            Arguments args = new Arguments(unsafeLoad, load.graph().getGuardsStage(), tool.getLoweringStage());
             args.add("object", load.object());
             args.add("offset", load.offset());
-            args.add("disp", load.displacement());
-            template(args).instantiate(runtime, load, DEFAULT_REPLACER, args);
+            template(args).instantiate(providers.getMetaAccess(), load, DEFAULT_REPLACER, args);
         }
     }
 }

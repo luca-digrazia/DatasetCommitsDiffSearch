@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,160 +22,248 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.*;
-import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
-import static com.oracle.graal.hotspot.snippets.HotSpotSnippetUtils.*;
-import static com.oracle.graal.hotspot.snippets.NewObjectSnippets.*;
-import static com.oracle.graal.snippets.nodes.DirectObjectStoreNode.*;
+import static com.oracle.graal.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static com.oracle.graal.hotspot.nodes.DirectCompareAndSwapNode.compareAndSwap;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.HEAP_END_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.HEAP_TOP_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.PROTOTYPE_MARK_WORD_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_FAST_REFILL_WASTE_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_NOF_REFILLS_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_REFILL_WASTE_LIMIT_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_SIZE_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_SLOW_ALLOCATIONS_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.TLAB_THREAD_ALLOCATED_BYTES_LOCATION;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.arrayBaseOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.getAndClearObjectResult;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.heapEndAddress;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.heapTopAddress;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.initializeTlab;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.inlineContiguousAllocationSupported;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.isInstanceKlassFullyInitialized;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.loadKlassLayoutHelperIntrinsic;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.log2WordSize;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.prototypeMarkWordOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readTlabEnd;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readTlabStart;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.readTlabTop;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.threadAllocatedBytesOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.threadTlabSizeOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabAlignmentReserveInHeapWords;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabFastRefillWasteOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabIntArrayMarkWord;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabNumberOfRefillsOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabRefillWasteIncrement;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabRefillWasteLimitOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabSlowAllocationsOffset;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.tlabStats;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.useG1GC;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.useTLAB;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.wordSize;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeTlabTop;
+import static com.oracle.graal.hotspot.stubs.StubUtil.handlePendingException;
+import static com.oracle.graal.hotspot.stubs.StubUtil.newDescriptor;
+import static com.oracle.graal.hotspot.stubs.StubUtil.printf;
+import static com.oracle.graal.hotspot.stubs.StubUtil.verifyObject;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.hotspot.snippets.*;
-import com.oracle.graal.snippets.*;
-import com.oracle.graal.snippets.Snippet.ConstantParameter;
-import com.oracle.graal.snippets.Snippet.Parameter;
-import com.oracle.graal.snippets.SnippetTemplate.Key;
+import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.graph.Node.ConstantNodeParameter;
+import com.oracle.graal.graph.Node.NodeIntrinsic;
+import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
+import com.oracle.graal.hotspot.nodes.type.KlassPointerStamp;
+import com.oracle.graal.hotspot.replacements.NewObjectSnippets;
+import com.oracle.graal.hotspot.word.KlassPointer;
+import com.oracle.graal.nodes.ConstantNode;
+import com.oracle.graal.nodes.memory.address.RawAddressNode;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Stub implementing the fast path for TLAB refill during instance class allocation.
- * This stub is called from the {@linkplain NewObjectSnippets inline} allocation
- * code when TLAB allocation fails. If this stub fails to refill the TLAB
- * or allocate the object, it calls out to the HotSpot C++ runtime for
- * to complete the allocation.
+ * Stub implementing the fast path for TLAB refill during instance class allocation. This stub is
+ * called from the {@linkplain NewObjectSnippets inline} allocation code when TLAB allocation fails.
+ * If this stub fails to refill the TLAB or allocate the object, it calls out to the HotSpot C++
+ * runtime for to complete the allocation.
  */
-public class NewInstanceStub extends Stub {
+public class NewInstanceStub extends SnippetStub {
 
-    public NewInstanceStub(final HotSpotRuntime runtime, Assumptions assumptions, TargetDescription target) {
-        super(runtime, assumptions, target, NEW_INSTANCE);
+    public NewInstanceStub(HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
+        super("newInstance", providers, linkage);
     }
 
     @Override
-    protected void populateKey(Key key) {
-        HotSpotResolvedObjectType intArrayType = (HotSpotResolvedObjectType) runtime.lookupJavaType(int[].class);
-        Constant intArrayHub = intArrayType.klass();
-        key.add("intArrayHub", intArrayHub);
+    protected Object[] makeConstArgs() {
+        HotSpotResolvedObjectType intArrayType = (HotSpotResolvedObjectType) providers.getMetaAccess().lookupJavaType(int[].class);
+        int count = method.getSignature().getParameterCount(false);
+        Object[] args = new Object[count];
+        assert checkConstArg(1, "intArrayHub");
+        assert checkConstArg(2, "threadRegister");
+        args[1] = ConstantNode.forConstant(KlassPointerStamp.klassNonNull(), intArrayType.klass(), null);
+        args[2] = providers.getRegisters().getThreadRegister();
+        return args;
+    }
+
+    private static Word allocate(Word thread, int size) {
+        Word top = readTlabTop(thread);
+        Word end = readTlabEnd(thread);
+        Word newTop = top.add(size);
+        /*
+         * this check might lead to problems if the TLAB is within 16GB of the address space end
+         * (checked in c++ code)
+         */
+        if (probability(FAST_PATH_PROBABILITY, newTop.belowOrEqual(end))) {
+            writeTlabTop(thread, newTop);
+            return top;
+        }
+        return Word.zero();
+    }
+
+    @Fold
+    static boolean logging() {
+        return StubOptions.TraceNewInstanceStub.getValue();
     }
 
     /**
-     * Re-attempts allocation after an initial TLAB allocation failed or was skipped (e.g., due to -XX:-UseTLAB).
+     * Re-attempts allocation after an initial TLAB allocation failed or was skipped (e.g., due to
+     * -XX:-UseTLAB).
      *
      * @param hub the hub of the object to be allocated
      * @param intArrayHub the hub for {@code int[].class}
      */
     @Snippet
-    private static Object newInstance(@Parameter("hub") Word hub, @ConstantParameter("intArrayHub") Word intArrayHub) {
-        int sizeInBytes = loadIntFromWord(hub, klassInstanceSizeOffset());
-        logf("newInstance: size %d\n", sizeInBytes);
-        if (inlineContiguousAllocationSupported()) {
-            if (loadIntFromWord(hub, klassStateOffset()) == klassStateFullyInitialized()) {
-                Word memory;
-                if (refillTLAB(intArrayHub, Word.fromLong(tlabIntArrayMarkWord()), tlabAlignmentReserveInHeapWords() * wordSize())) {
-                    memory = allocate(sizeInBytes);
-                } else {
-                    logf("newInstance: allocating directly in eden\n", 0L);
-                    memory = edenAllocate(Word.fromInt(sizeInBytes));
-                }
-                if (memory != Word.zero()) {
-                    logf("newInstance: allocated new object at %p\n", memory.toLong());
-                    Word prototypeMarkWord = loadWordFromWord(hub, prototypeMarkWordOffset());
-                    storeWord(memory, 0, markOffset(), prototypeMarkWord);
-                    storeWord(memory, 0, hubOffset(), hub);
-                    for (int offset = 2 * wordSize(); offset < sizeInBytes; offset += wordSize()) {
-                        storeWord(memory, 0, offset, Word.zero());
-                    }
-                    return verifyOop(memory.toObject());
+    private static Object newInstance(KlassPointer hub, @ConstantParameter KlassPointer intArrayHub, @ConstantParameter Register threadRegister) {
+        /*
+         * The type is known to be an instance so Klass::_layout_helper is the instance size as a
+         * raw number
+         */
+        int sizeInBytes = loadKlassLayoutHelperIntrinsic(hub);
+        Word thread = registerAsWord(threadRegister);
+        if (!forceSlowPath() && inlineContiguousAllocationSupported(INJECTED_VMCONFIG)) {
+            if (isInstanceKlassFullyInitialized(hub)) {
+                Word memory = refillAllocate(thread, intArrayHub, sizeInBytes, logging());
+                if (memory.notEqual(0)) {
+                    Word prototypeMarkWord = hub.readWord(prototypeMarkWordOffset(INJECTED_VMCONFIG), PROTOTYPE_MARK_WORD_LOCATION);
+                    NewObjectSnippets.formatObjectForStub(hub, sizeInBytes, memory, prototypeMarkWord);
+                    return verifyObject(memory.toObject());
                 }
             }
         }
-        logf("newInstance: calling new_instance_slow", 0L);
-        return verifyOop(NewInstanceSlowStubCall.call(hub));
+
+        if (logging()) {
+            printf("newInstance: calling new_instance_c\n");
+        }
+
+        newInstanceC(NEW_INSTANCE_C, thread, hub);
+        handlePendingException(thread, true);
+        return verifyObject(getAndClearObjectResult(thread));
     }
 
     /**
-     * Attempts to refill the current thread's TLAB.
+     * Attempts to refill the current thread's TLAB and retries the allocation.
      *
      * @param intArrayHub the hub for {@code int[].class}
-     * @param intArrayMarkWord the mark word for the int array placed in the left over TLAB space
-     * @param alignmentReserveInBytes the amount of extra bytes to reserve in a new TLAB
-     * @return whether or not a new TLAB was allocated
+     * @param sizeInBytes the size of the allocation
+     * @param log specifies if logging is enabled
+     *
+     * @return the newly allocated, uninitialized chunk of memory, or {@link Word#zero()} if the
+     *         operation was unsuccessful
      */
-    static boolean refillTLAB(Word intArrayHub, Word intArrayMarkWord, int alignmentReserveInBytes) {
+    static Word refillAllocate(Word thread, KlassPointer intArrayHub, int sizeInBytes, boolean log) {
+        // If G1 is enabled, the "eden" allocation space is not the same always
+        // and therefore we have to go to slowpath to allocate a new TLAB.
+        if (useG1GC(INJECTED_VMCONFIG)) {
+            return Word.zero();
+        }
+        if (!useTLAB(INJECTED_VMCONFIG)) {
+            return edenAllocate(Word.unsigned(sizeInBytes), log);
+        }
+        Word intArrayMarkWord = Word.unsigned(tlabIntArrayMarkWord(INJECTED_VMCONFIG));
+        int alignmentReserveInBytes = tlabAlignmentReserveInHeapWords(INJECTED_VMCONFIG) * wordSize();
 
-        Word thread = thread();
-        Word top = loadWordFromWord(thread, threadTlabTopOffset());
-        Word end = loadWordFromWord(thread, threadTlabEndOffset());
+        Word top = readTlabTop(thread);
+        Word end = readTlabEnd(thread);
 
         // calculate amount of free space
-        Word tlabFreeSpaceInBytes = end.minus(top);
+        long tlabFreeSpaceInBytes = end.subtract(top).rawValue();
 
-        logf("refillTLAB: thread=%p\n", thread.toLong());
-        logf("refillTLAB: top=%p\n", top.toLong());
-        logf("refillTLAB: end=%p\n", end.toLong());
-        logf("refillTLAB: tlabFreeSpaceInBytes=%d\n", tlabFreeSpaceInBytes.toLong());
+        if (log) {
+            printf("refillTLAB: thread=%p\n", thread.rawValue());
+            printf("refillTLAB: top=%p\n", top.rawValue());
+            printf("refillTLAB: end=%p\n", end.rawValue());
+            printf("refillTLAB: tlabFreeSpaceInBytes=%ld\n", tlabFreeSpaceInBytes);
+        }
 
-        // a DIV or SHR operations on Words would be handy here...
-        Word tlabFreeSpaceInWords = Word.fromLong(tlabFreeSpaceInBytes.toLong() >>> log2WordSize());
+        long tlabFreeSpaceInWords = tlabFreeSpaceInBytes >>> log2WordSize();
 
         // Retain TLAB and allocate object in shared space if
         // the amount free in the TLAB is too large to discard.
-        if (tlabFreeSpaceInWords.belowOrEqual(loadWordFromWord(thread, tlabRefillWasteLimitOffset()))) {
-            logf("refillTLAB: discarding TLAB\n", 0L);
-
-            if (tlabStats()) {
+        Word refillWasteLimit = thread.readWord(tlabRefillWasteLimitOffset(INJECTED_VMCONFIG), TLAB_REFILL_WASTE_LIMIT_LOCATION);
+        if (tlabFreeSpaceInWords <= refillWasteLimit.rawValue()) {
+            if (tlabStats(INJECTED_VMCONFIG)) {
                 // increment number of refills
-                storeInt(thread, 0, tlabNumberOfRefillsOffset(), loadIntFromWord(thread, tlabNumberOfRefillsOffset()) + 1);
+                thread.writeInt(tlabNumberOfRefillsOffset(INJECTED_VMCONFIG), thread.readInt(tlabNumberOfRefillsOffset(INJECTED_VMCONFIG), TLAB_NOF_REFILLS_LOCATION) + 1, TLAB_NOF_REFILLS_LOCATION);
+                if (log) {
+                    printf("thread: %p -- number_of_refills %d\n", thread.rawValue(), thread.readInt(tlabNumberOfRefillsOffset(INJECTED_VMCONFIG), TLAB_NOF_REFILLS_LOCATION));
+                }
                 // accumulate wastage
-                storeWord(thread, 0, tlabFastRefillWasteOffset(), loadWordFromWord(thread, tlabFastRefillWasteOffset()).plus(tlabFreeSpaceInWords));
+                int wastage = thread.readInt(tlabFastRefillWasteOffset(INJECTED_VMCONFIG), TLAB_FAST_REFILL_WASTE_LOCATION) + (int) tlabFreeSpaceInWords;
+                if (log) {
+                    printf("thread: %p -- accumulated wastage %d\n", thread.rawValue(), wastage);
+                }
+                thread.writeInt(tlabFastRefillWasteOffset(INJECTED_VMCONFIG), wastage, TLAB_FAST_REFILL_WASTE_LOCATION);
             }
 
             // if TLAB is currently allocated (top or end != null) then
             // fill [top, end + alignment_reserve) with array object
-            if (top != Word.zero()) {
-                int headerSize = arrayBaseOffset(Kind.Int);
-                // just like the HotSpot assembler stubs, assumes that tlabFreeSpaceInInts fits in an int
-                int tlabFreeSpaceInInts = (int) tlabFreeSpaceInBytes.toLong() >>> 2;
+            if (top.notEqual(0)) {
+                int headerSize = arrayBaseOffset(JavaKind.Int);
+                // just like the HotSpot assembler stubs, assumes that tlabFreeSpaceInInts fits in
+                // an int
+                int tlabFreeSpaceInInts = (int) tlabFreeSpaceInBytes >>> 2;
                 int length = ((alignmentReserveInBytes - headerSize) >>> 2) + tlabFreeSpaceInInts;
-                logf("refillTLAB: alignmentReserveInBytes %d\n", alignmentReserveInBytes);
-                logf("refillTLAB: headerSize %d\n", headerSize);
-                logf("refillTLAB: filler.length %d\n", length);
-                NewObjectSnippets.formatArray(intArrayHub, -1, length, headerSize, top, intArrayMarkWord, false);
+                NewObjectSnippets.formatArray(intArrayHub, 0, length, headerSize, top, intArrayMarkWord, false, false, false);
 
-                Word allocated = loadWordFromWord(thread, threadAllocatedBytesOffset());
-                allocated = allocated.plus(top.minus(loadWordFromWord(thread, threadTlabStartOffset())));
-                storeWord(thread, 0, threadAllocatedBytesOffset(), allocated);
+                long allocated = thread.readLong(threadAllocatedBytesOffset(INJECTED_VMCONFIG), TLAB_THREAD_ALLOCATED_BYTES_LOCATION);
+                allocated = allocated + top.subtract(readTlabStart(thread)).rawValue();
+                thread.writeLong(threadAllocatedBytesOffset(INJECTED_VMCONFIG), allocated, TLAB_THREAD_ALLOCATED_BYTES_LOCATION);
             }
 
             // refill the TLAB with an eden allocation
-            Word tlabRefillSizeInWords = loadWordFromWord(thread, threadTlabSizeOffset());
-            Word tlabRefillSizeInBytes = Word.fromLong(tlabRefillSizeInWords.toLong() * wordSize());
+            Word tlabRefillSizeInWords = thread.readWord(threadTlabSizeOffset(INJECTED_VMCONFIG), TLAB_SIZE_LOCATION);
+            Word tlabRefillSizeInBytes = tlabRefillSizeInWords.multiply(wordSize());
             // allocate new TLAB, address returned in top
-            top = edenAllocate(tlabRefillSizeInBytes);
-            if (top != Word.zero()) {
-                storeWord(thread, 0, threadTlabStartOffset(), top);
-                storeWord(thread, 0, threadTlabTopOffset(), top);
+            top = edenAllocate(tlabRefillSizeInBytes, log);
+            if (top.notEqual(0)) {
+                end = top.add(tlabRefillSizeInBytes.subtract(alignmentReserveInBytes));
+                initializeTlab(thread, top, end);
 
-                end = top.plus(tlabRefillSizeInBytes.minus(alignmentReserveInBytes));
-                storeWord(thread, 0, threadTlabEndOffset(), end);
-                logf("refillTLAB: top'=%p\n", top.toLong());
-                logf("refillTLAB: start'=%p\n", top.toLong());
-                logf("refillTLAB: end'=%p\n", end.toLong());
-                return true;
+                return NewInstanceStub.allocate(thread, sizeInBytes);
             } else {
-                return false;
+                return Word.zero();
             }
         } else {
             // Retain TLAB
-            Word newRefillWasteLimit = loadWordFromWord(thread, tlabRefillWasteLimitOffset()).plus(tlabRefillWasteIncrement());
-            storeWord(thread, 0, tlabRefillWasteLimitOffset(), newRefillWasteLimit);
-            logf("refillTLAB: retaining TLAB - newRefillWasteLimit=%p\n", newRefillWasteLimit.toLong());
-
-            if (tlabStats()) {
-                storeInt(thread, 0, tlabSlowAllocationsOffset(), loadIntFromWord(thread, tlabSlowAllocationsOffset()) + 1);
+            Word newRefillWasteLimit = refillWasteLimit.add(tlabRefillWasteIncrement(INJECTED_VMCONFIG));
+            thread.writeWord(tlabRefillWasteLimitOffset(INJECTED_VMCONFIG), newRefillWasteLimit, TLAB_REFILL_WASTE_LIMIT_LOCATION);
+            if (log) {
+                printf("refillTLAB: retaining TLAB - newRefillWasteLimit=%p\n", newRefillWasteLimit.rawValue());
             }
 
-            return false;
+            if (tlabStats(INJECTED_VMCONFIG)) {
+                thread.writeInt(tlabSlowAllocationsOffset(INJECTED_VMCONFIG), thread.readInt(tlabSlowAllocationsOffset(INJECTED_VMCONFIG), TLAB_SLOW_ALLOCATIONS_LOCATION) + 1,
+                                TLAB_SLOW_ALLOCATIONS_LOCATION);
+            }
+
+            return edenAllocate(Word.unsigned(sizeInBytes), log);
         }
     }
 
@@ -183,43 +271,38 @@ public class NewInstanceStub extends Stub {
      * Attempts to allocate a chunk of memory from Eden space.
      *
      * @param sizeInBytes the size of the chunk to allocate
+     * @param log specifies if logging is enabled
      * @return the allocated chunk or {@link Word#zero()} if allocation fails
      */
-    static Word edenAllocate(Word sizeInBytes) {
-        Word heapTopAddress = Word.fromLong(heapTopAddress());
-        Word heapEndAddress = Word.fromLong(heapEndAddress());
-        logf("edenAllocate: heapTopAddress %p\n", heapTopAddress.toLong());
-        logf("edenAllocate: heapEndAddress %p\n", heapEndAddress.toLong());
+    public static Word edenAllocate(Word sizeInBytes, boolean log) {
+        Word heapTopAddress = Word.unsigned(heapTopAddress(INJECTED_VMCONFIG));
+        Word heapEndAddress = Word.unsigned(heapEndAddress(INJECTED_VMCONFIG));
 
         while (true) {
-            Word heapTop = loadWordFromWord(heapTopAddress, 0);
-            Word newHeapTop = heapTop.plus(sizeInBytes);
-            logf("edenAllocate: heapTop %p\n", heapTop.toLong());
-            logf("edenAllocate: newHeapTop %p\n", newHeapTop.toLong());
+            Word heapTop = heapTopAddress.readWord(0, HEAP_TOP_LOCATION);
+            Word newHeapTop = heapTop.add(sizeInBytes);
             if (newHeapTop.belowOrEqual(heapTop)) {
-                logf("edenAllocate: fail 1\n", 0L);
                 return Word.zero();
             }
 
-            Word heapEnd = loadWordFromWord(heapEndAddress, 0);
-            logf("edenAllocate: heapEnd %p\n", heapEnd.toLong());
-            if (newHeapTop.above(heapEnd)) {
-                logf("edenAllocate: fail 2\n", 0L);
+            Word heapEnd = heapEndAddress.readWord(0, HEAP_END_LOCATION);
+            if (newHeapTop.aboveThan(heapEnd)) {
                 return Word.zero();
             }
 
-            if (compareAndSwap(heapTopAddress, 0, heapTop, newHeapTop) == heapTop) {
-                logf("edenAllocate: success %p\n", heapTop.toLong());
+            if (compareAndSwap(RawAddressNode.address(heapTopAddress), heapTop, newHeapTop, HEAP_TOP_LOCATION).equal(heapTop)) {
                 return heapTop;
             }
         }
     }
 
-    private static final boolean LOGGING_ENABLED = Boolean.getBoolean("graal.logNewInstanceStub");
-
-    private static void logf(String format, long value) {
-        if (LOGGING_ENABLED) {
-            Log.printf(format, value);
-        }
+    @Fold
+    static boolean forceSlowPath() {
+        return StubOptions.ForceUseOfNewInstanceStub.getValue();
     }
+
+    public static final ForeignCallDescriptor NEW_INSTANCE_C = newDescriptor(NewInstanceStub.class, "newInstanceC", void.class, Word.class, KlassPointer.class);
+
+    @NodeIntrinsic(StubForeignCallNode.class)
+    public static native void newInstanceC(@ConstantNodeParameter ForeignCallDescriptor newInstanceC, Word thread, KlassPointer hub);
 }

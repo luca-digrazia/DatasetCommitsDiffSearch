@@ -22,21 +22,24 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import static com.oracle.graal.replacements.SnippetTemplate.*;
-import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
+import static com.oracle.graal.nodes.extended.BranchProbabilityNode.probability;
+import static com.oracle.graal.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
-import java.util.*;
-
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.debug.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.calc.ConvertNode.Op;
-import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.replacements.*;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.api.replacements.SnippetReflectionProvider;
+import com.oracle.graal.debug.Debug;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.calc.FloatConvertNode;
+import com.oracle.graal.nodes.spi.LoweringTool;
+import com.oracle.graal.phases.util.Providers;
+import com.oracle.graal.replacements.SnippetTemplate;
 import com.oracle.graal.replacements.SnippetTemplate.AbstractTemplates;
 import com.oracle.graal.replacements.SnippetTemplate.Arguments;
 import com.oracle.graal.replacements.SnippetTemplate.SnippetInfo;
+import com.oracle.graal.replacements.Snippets;
+
+import jdk.vm.ci.code.TargetDescription;
 
 /**
  * Snippets used for conversion operations on AMD64 where the AMD64 instruction used does not match
@@ -51,14 +54,13 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the float value is a NaN, infinity or if the result of the conversion is
      * larger than {@link Integer#MAX_VALUE} then CVTTSS2SI returns {@link Integer#MIN_VALUE} and
      * extra tests are required on the float value to return the correct int value.
-     * 
+     *
      * @param input the float being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
     @Snippet
     public static int f2i(float input, int result) {
-        if (result == Integer.MIN_VALUE) {
-            probability(NOT_FREQUENT_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, result == Integer.MIN_VALUE)) {
             if (Float.isNaN(input)) {
                 // input is NaN -> return 0
                 return 0;
@@ -77,14 +79,13 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the float value is a NaN or infinity then CVTTSS2SI returns
      * {@link Long#MIN_VALUE} and extra tests are required on the float value to return the correct
      * long value.
-     * 
+     *
      * @param input the float being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
     @Snippet
     public static long f2l(float input, long result) {
-        if (result == Long.MIN_VALUE) {
-            probability(NOT_FREQUENT_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, result == Long.MIN_VALUE)) {
             if (Float.isNaN(input)) {
                 // input is NaN -> return 0
                 return 0;
@@ -103,14 +104,13 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the double value is a NaN, infinity or if the result of the conversion is
      * larger than {@link Integer#MAX_VALUE} then CVTTSD2SI returns {@link Integer#MIN_VALUE} and
      * extra tests are required on the double value to return the correct int value.
-     * 
+     *
      * @param input the double being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
     @Snippet
     public static int d2i(double input, int result) {
-        if (result == Integer.MIN_VALUE) {
-            probability(NOT_FREQUENT_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, result == Integer.MIN_VALUE)) {
             if (Double.isNaN(input)) {
                 // input is NaN -> return 0
                 return 0;
@@ -129,14 +129,13 @@ public class AMD64ConvertSnippets implements Snippets {
      * conversion. If the double value is a NaN, infinity or if the result of the conversion is
      * larger than {@link Long#MAX_VALUE} then CVTTSD2SI returns {@link Long#MIN_VALUE} and extra
      * tests are required on the double value to return the correct long value.
-     * 
+     *
      * @param input the double being converted
      * @param result the result produced by the CVTTSS2SI instruction
      */
     @Snippet
     public static long d2l(double input, long result) {
-        if (result == Long.MIN_VALUE) {
-            probability(NOT_FREQUENT_PROBABILITY);
+        if (probability(SLOW_PATH_PROBABILITY, result == Long.MIN_VALUE)) {
             if (Double.isNaN(input)) {
                 // input is NaN -> return 0
                 return 0;
@@ -150,40 +149,49 @@ public class AMD64ConvertSnippets implements Snippets {
 
     public static class Templates extends AbstractTemplates {
 
-        private final EnumMap<Op, SnippetInfo> snippets;
+        private final SnippetInfo f2i;
+        private final SnippetInfo f2l;
+        private final SnippetInfo d2i;
+        private final SnippetInfo d2l;
 
-        public Templates(CodeCacheProvider runtime, Replacements replacements, TargetDescription target) {
-            super(runtime, replacements, target);
+        public Templates(Providers providers, SnippetReflectionProvider snippetReflection, TargetDescription target) {
+            super(providers, snippetReflection, target);
 
-            snippets = new EnumMap<>(Op.class);
-            snippets.put(Op.F2I, snippet(AMD64ConvertSnippets.class, "f2i"));
-            snippets.put(Op.F2L, snippet(AMD64ConvertSnippets.class, "f2l"));
-            snippets.put(Op.D2I, snippet(AMD64ConvertSnippets.class, "d2i"));
-            snippets.put(Op.D2L, snippet(AMD64ConvertSnippets.class, "d2l"));
+            f2i = snippet(AMD64ConvertSnippets.class, "f2i");
+            f2l = snippet(AMD64ConvertSnippets.class, "f2l");
+            d2i = snippet(AMD64ConvertSnippets.class, "d2i");
+            d2l = snippet(AMD64ConvertSnippets.class, "d2l");
         }
 
-        public void lower(ConvertNode convert, LoweringTool tool) {
-            SnippetInfo key = snippets.get(convert.opcode);
-            if (key == null) {
-                return;
+        public void lower(FloatConvertNode convert, LoweringTool tool) {
+            SnippetInfo key;
+            switch (convert.getFloatConvert()) {
+                case F2I:
+                    key = f2i;
+                    break;
+                case F2L:
+                    key = f2l;
+                    break;
+                case D2I:
+                    key = d2i;
+                    break;
+                case D2L:
+                    key = d2l;
+                    break;
+                default:
+                    return;
             }
 
-            StructuredGraph graph = (StructuredGraph) convert.graph();
+            StructuredGraph graph = convert.graph();
 
-            // Insert a unique placeholder node in place of the Convert node so that the
-            // Convert node can be used as an input to the snippet. All usage of the
-            // Convert node are replaced by the placeholder which in turn is replaced by the
-            // snippet.
-
-            LocalNode replacee = graph.add(new LocalNode(Integer.MAX_VALUE, convert.stamp()));
-            convert.replaceAtUsages(replacee);
-            Arguments args = new Arguments(key);
-            args.add("input", convert.value());
-            args.add("result", convert);
+            Arguments args = new Arguments(key, graph.getGuardsStage(), tool.getLoweringStage());
+            args.add("input", convert.getValue());
+            args.add("result", graph.unique(new AMD64FloatConvertNode(convert.getFloatConvert(), convert.getValue())));
 
             SnippetTemplate template = template(args);
-            Debug.log("Lowering %s in %s: node=%s, template=%s, arguments=%s", convert.opcode, graph, convert, template, args);
-            template.instantiate(runtime, replacee, DEFAULT_REPLACER, tool, args);
+            Debug.log("Lowering %s in %s: node=%s, template=%s, arguments=%s", convert.getFloatConvert(), graph, convert, template, args);
+            template.instantiate(providers.getMetaAccess(), convert, DEFAULT_REPLACER, tool, args);
+            convert.safeDelete();
         }
     }
 }

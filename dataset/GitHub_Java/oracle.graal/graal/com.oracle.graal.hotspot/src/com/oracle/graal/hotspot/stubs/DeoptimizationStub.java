@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,22 +22,39 @@
  */
 package com.oracle.graal.hotspot.stubs;
 
-import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.*;
-import static com.oracle.graal.hotspot.stubs.StubUtil.*;
+import static com.oracle.graal.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static com.oracle.graal.hotspot.HotSpotBackend.UNPACK_FRAMES;
+import static com.oracle.graal.hotspot.HotSpotBackend.Options.PreferGraalStubs;
+import static com.oracle.graal.hotspot.nodes.DeoptimizationFetchUnrollInfoCallNode.fetchUnrollInfo;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.pageSize;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.wordSize;
+import static com.oracle.graal.hotspot.replacements.HotSpotReplacementsUtil.writeRegisterAsWord;
+import static com.oracle.graal.hotspot.stubs.UncommonTrapStub.STACK_BANG_LOCATION;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
-import com.oracle.graal.asm.*;
-import com.oracle.graal.compiler.common.*;
+import com.oracle.graal.api.replacements.Fold;
+import com.oracle.graal.api.replacements.Fold.InjectedParameter;
+import com.oracle.graal.api.replacements.Snippet;
+import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
+import com.oracle.graal.asm.NumUtil;
+import com.oracle.graal.compiler.common.spi.ForeignCallDescriptor;
+import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node.ConstantNodeParameter;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
-import com.oracle.graal.hotspot.*;
-import com.oracle.graal.hotspot.meta.*;
-import com.oracle.graal.hotspot.nodes.*;
-import com.oracle.graal.replacements.*;
-import com.oracle.graal.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.replacements.Snippet.Fold;
-import com.oracle.graal.word.*;
+import com.oracle.graal.hotspot.GraalHotSpotVMConfig;
+import com.oracle.graal.hotspot.HotSpotForeignCallLinkage;
+import com.oracle.graal.hotspot.meta.HotSpotProviders;
+import com.oracle.graal.hotspot.nodes.EnterUnpackFramesStackFrameNode;
+import com.oracle.graal.hotspot.nodes.LeaveCurrentStackFrameNode;
+import com.oracle.graal.hotspot.nodes.LeaveDeoptimizedStackFrameNode;
+import com.oracle.graal.hotspot.nodes.LeaveUnpackFramesStackFrameNode;
+import com.oracle.graal.hotspot.nodes.PushInterpreterFrameNode;
+import com.oracle.graal.hotspot.nodes.SaveAllRegistersNode;
+import com.oracle.graal.hotspot.nodes.StubForeignCallNode;
+import com.oracle.graal.word.Word;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.TargetDescription;
 
 /**
  * Deoptimization stub.
@@ -81,8 +98,9 @@ public class DeoptimizationStub extends SnippetStub {
     private final TargetDescription target;
 
     public DeoptimizationStub(HotSpotProviders providers, TargetDescription target, HotSpotForeignCallLinkage linkage) {
-        super(DeoptimizationStub.class, "deoptimizationHandler", providers, target, linkage);
+        super(DeoptimizationStub.class, "deoptimizationHandler", providers, linkage);
         this.target = target;
+        assert PreferGraalStubs.getValue();
     }
 
     @Override
@@ -98,21 +116,25 @@ public class DeoptimizationStub extends SnippetStub {
             case 1:
                 return providers.getRegisters().getStackPointerRegister();
             default:
-                throw GraalInternalError.shouldNotReachHere("unknown parameter " + name + " at index " + index);
+                throw GraalError.shouldNotReachHere("unknown parameter " + name + " at index " + index);
         }
     }
 
     /**
      * Deoptimization handler for normal deoptimization
-     * {@link HotSpotVMConfig#deoptimizationUnpackDeopt}.
+     * {@link GraalHotSpotVMConfig#deoptimizationUnpackDeopt}.
      */
     @Snippet
     private static void deoptimizationHandler(@ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister) {
         final Word thread = registerAsWord(threadRegister);
         final long registerSaver = SaveAllRegistersNode.saveAllRegisters();
 
-        final Word unrollBlock = DeoptimizationFetchUnrollInfoCallNode.fetchUnrollInfo(registerSaver);
+        final Word unrollBlock = fetchUnrollInfo(registerSaver, deoptimizationUnpackDeopt(INJECTED_VMCONFIG));
 
+        deoptimizationCommon(stackPointerRegister, thread, registerSaver, unrollBlock);
+    }
+
+    static void deoptimizationCommon(Register stackPointerRegister, final Word thread, final long registerSaver, final Word unrollBlock) {
         // Pop all the frames we must move/replace.
         //
         // Frame picture (youngest to oldest)
@@ -124,10 +146,10 @@ public class DeoptimizationStub extends SnippetStub {
         LeaveCurrentStackFrameNode.leaveCurrentStackFrame(registerSaver);
 
         // Load the initial info we should save (e.g. frame pointer).
-        final Word initialInfo = unrollBlock.readWord(deoptimizationUnrollBlockInitialInfoOffset());
+        final Word initialInfo = unrollBlock.readWord(deoptimizationUnrollBlockInitialInfoOffset(INJECTED_VMCONFIG));
 
         // Pop deoptimized frame.
-        final int sizeOfDeoptimizedFrame = unrollBlock.readInt(deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset());
+        final int sizeOfDeoptimizedFrame = unrollBlock.readInt(deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset(INJECTED_VMCONFIG));
         LeaveDeoptimizedStackFrameNode.leaveDeoptimizedStackFrame(sizeOfDeoptimizedFrame, initialInfo);
 
         /*
@@ -137,22 +159,22 @@ public class DeoptimizationStub extends SnippetStub {
          *
          * @deprecated This code should go away as soon as JDK-8032410 hits the Graal repository.
          */
-        final int totalFrameSizes = unrollBlock.readInt(deoptimizationUnrollBlockTotalFrameSizesOffset());
-        final int bangPages = NumUtil.roundUp(totalFrameSizes, pageSize()) / pageSize() + stackShadowPages();
+        final int totalFrameSizes = unrollBlock.readInt(deoptimizationUnrollBlockTotalFrameSizesOffset(INJECTED_VMCONFIG));
+        final int bangPages = NumUtil.roundUp(totalFrameSizes, pageSize()) / pageSize() + stackShadowPages(INJECTED_VMCONFIG);
         Word stackPointer = readRegister(stackPointerRegister);
 
         for (int i = 1; i < bangPages; i++) {
-            stackPointer.writeInt((-i * pageSize()) + stackBias(), 0);
+            stackPointer.writeInt((-i * pageSize()) + stackBias(INJECTED_VMCONFIG), 0, STACK_BANG_LOCATION);
         }
 
         // Load number of interpreter frames.
-        final int numberOfFrames = unrollBlock.readInt(deoptimizationUnrollBlockNumberOfFramesOffset());
+        final int numberOfFrames = unrollBlock.readInt(deoptimizationUnrollBlockNumberOfFramesOffset(INJECTED_VMCONFIG));
 
         // Load address of array of frame sizes.
-        final Word frameSizes = unrollBlock.readWord(deoptimizationUnrollBlockFrameSizesOffset());
+        final Word frameSizes = unrollBlock.readWord(deoptimizationUnrollBlockFrameSizesOffset(INJECTED_VMCONFIG));
 
         // Load address of array of frame PCs.
-        final Word framePcs = unrollBlock.readWord(deoptimizationUnrollBlockFramePcsOffset());
+        final Word framePcs = unrollBlock.readWord(deoptimizationUnrollBlockFramePcsOffset(INJECTED_VMCONFIG));
 
         /*
          * Get the current stack pointer (sender's original SP) before adjustment so that we can
@@ -161,7 +183,7 @@ public class DeoptimizationStub extends SnippetStub {
         Word senderSp = readRegister(stackPointerRegister);
 
         // Adjust old interpreter frame to make space for new frame's extra Java locals.
-        final int callerAdjustment = unrollBlock.readInt(deoptimizationUnrollBlockCallerAdjustmentOffset());
+        final int callerAdjustment = unrollBlock.readInt(deoptimizationUnrollBlockCallerAdjustmentOffset(INJECTED_VMCONFIG));
         writeRegister(stackPointerRegister, readRegister(stackPointerRegister).subtract(callerAdjustment));
 
         for (int i = 0; i < numberOfFrames; i++) {
@@ -185,8 +207,7 @@ public class DeoptimizationStub extends SnippetStub {
         final Word senderFp = initialInfo;
         EnterUnpackFramesStackFrameNode.enterUnpackFramesStackFrame(framePc, senderSp, senderFp, registerSaver);
 
-        // Pass unpack deopt mode to unpack frames.
-        final int mode = deoptimizationUnpackDeopt();
+        final int mode = unrollBlock.readInt(deoptimizationUnrollBlockUnpackKindOffset(INJECTED_VMCONFIG));
         unpackFrames(UNPACK_FRAMES, thread, mode);
 
         LeaveUnpackFramesStackFrameNode.leaveUnpackFramesStackFrame(registerSaver);
@@ -209,8 +230,8 @@ public class DeoptimizationStub extends SnippetStub {
     }
 
     @Fold
-    private static int stackShadowPages() {
-        return config().useStackBanging ? config().stackShadowPages : 0;
+    static int stackShadowPages(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.useStackBanging ? config.stackShadowPages : 0;
     }
 
     /**
@@ -222,60 +243,59 @@ public class DeoptimizationStub extends SnippetStub {
      */
     @Deprecated
     @Fold
-    private static int stackBias() {
-        return config().stackBias;
+    static int stackBias(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.stackBias;
     }
 
     @Fold
-    private static int deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset() {
-        return config().deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset;
+    static int deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockSizeOfDeoptimizedFrameOffset;
     }
 
     @Fold
-    private static int deoptimizationUnrollBlockCallerAdjustmentOffset() {
-        return config().deoptimizationUnrollBlockCallerAdjustmentOffset;
+    static int deoptimizationUnrollBlockCallerAdjustmentOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockCallerAdjustmentOffset;
     }
 
     @Fold
-    private static int deoptimizationUnrollBlockNumberOfFramesOffset() {
-        return config().deoptimizationUnrollBlockNumberOfFramesOffset;
+    static int deoptimizationUnrollBlockNumberOfFramesOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockNumberOfFramesOffset;
     }
 
     @Fold
-    private static int deoptimizationUnrollBlockTotalFrameSizesOffset() {
-        return config().deoptimizationUnrollBlockTotalFrameSizesOffset;
+    static int deoptimizationUnrollBlockTotalFrameSizesOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockTotalFrameSizesOffset;
     }
 
     @Fold
-    private static int deoptimizationUnrollBlockFrameSizesOffset() {
-        return config().deoptimizationUnrollBlockFrameSizesOffset;
+    static int deoptimizationUnrollBlockUnpackKindOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockUnpackKindOffset;
     }
 
     @Fold
-    private static int deoptimizationUnrollBlockFramePcsOffset() {
-        return config().deoptimizationUnrollBlockFramePcsOffset;
+    static int deoptimizationUnrollBlockFrameSizesOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockFrameSizesOffset;
     }
 
     @Fold
-    private static int deoptimizationUnrollBlockInitialInfoOffset() {
-        return config().deoptimizationUnrollBlockInitialInfoOffset;
+    static int deoptimizationUnrollBlockFramePcsOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockFramePcsOffset;
     }
 
     @Fold
-    private static int deoptimizationUnpackDeopt() {
-        return config().deoptimizationUnpackDeopt;
+    static int deoptimizationUnrollBlockInitialInfoOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnrollBlockInitialInfoOffset;
     }
 
     @Fold
-    private static int deoptimizationUnpackUncommonTrap() {
-        return config().deoptimizationUnpackUncommonTrap;
+    static int deoptimizationUnpackDeopt(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnpackDeopt;
     }
 
-    public static final ForeignCallDescriptor FETCH_UNROLL_INFO = newDescriptor(DeoptimizationStub.class, "fetchUnrollInfo", Word.class, Word.class);
-    public static final ForeignCallDescriptor UNPACK_FRAMES = newDescriptor(DeoptimizationStub.class, "unpackFrames", int.class, Word.class, int.class);
-
-    @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
-    public static native Word fetchUnrollInfo(@ConstantNodeParameter ForeignCallDescriptor fetchUnrollInfo, Word thread);
+    @Fold
+    static int deoptimizationUnpackUncommonTrap(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.deoptimizationUnpackUncommonTrap;
+    }
 
     @NodeIntrinsic(value = StubForeignCallNode.class, setStampFromReturnType = true)
     public static native int unpackFrames(@ConstantNodeParameter ForeignCallDescriptor unpackFrames, Word thread, int mode);

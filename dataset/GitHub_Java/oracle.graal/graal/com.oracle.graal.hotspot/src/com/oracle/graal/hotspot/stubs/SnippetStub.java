@@ -29,7 +29,6 @@ import java.lang.reflect.Method;
 
 import com.oracle.graal.api.replacements.Snippet;
 import com.oracle.graal.api.replacements.Snippet.ConstantParameter;
-import com.oracle.graal.compiler.common.CompilationIdentifier;
 import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
@@ -101,7 +100,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
 
     @Override
     @SuppressWarnings("try")
-    protected StructuredGraph getGraph(CompilationIdentifier compilationId) {
+    protected StructuredGraph getGraph() {
         Plugins defaultPlugins = providers.getGraphBuilderPlugins();
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         SnippetReflectionProvider snippetReflection = providers.getSnippetReflection();
@@ -112,7 +111,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
 
         // Stubs cannot have optimistic assumptions since they have
         // to be valid for the entire run of the VM.
-        final StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO, compilationId);
+        final StructuredGraph graph = new StructuredGraph(method, AllowAssumptions.NO, NO_PROFILING_INFO);
         try (Scope outer = Debug.scope("SnippetStub", graph)) {
             graph.disableUnsafeAccessTracking();
 
