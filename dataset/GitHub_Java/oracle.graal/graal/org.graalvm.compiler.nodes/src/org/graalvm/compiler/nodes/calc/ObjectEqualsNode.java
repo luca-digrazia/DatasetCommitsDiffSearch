@@ -75,14 +75,6 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
         }
     }
 
-    public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, ValueNode x, ValueNode y) {
-        LogicNode result = OP.canonical(constantReflection, metaAccess, options, null, Condition.EQ, false, x, y);
-        if (result != null) {
-            return result;
-        }
-        return create(x, y, constantReflection);
-    }
-
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, false, forX, forY);
@@ -95,7 +87,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
     public static class ObjectEqualsOp extends PointerEqualsOp {
 
         @Override
-        protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
+        protected ValueNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                         Condition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue) {
             ResolvedJavaType type = constantReflection.asJavaType(constant);
             if (type != null && nonConstant instanceof GetClassNode) {
@@ -110,7 +102,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
             return super.canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, constant, nonConstant, mirrored, unorderedIsTrue);
         }
 
-        @Override
+       @Override
         protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
             if (newX.stamp() instanceof ObjectStamp && newY.stamp() instanceof ObjectStamp) {
                 return new ObjectEqualsNode(newX, newY);
@@ -172,7 +164,7 @@ public final class ObjectEqualsNode extends PointerEqualsNode implements Virtual
                         // both are virtual without identity: check contents
                         assert xVirtual.entryCount() == 1 && yVirtual.entryCount() == 1;
                         assert xVirtual.entryKind(0).getStackKind() == JavaKind.Int || xVirtual.entryKind(0) == JavaKind.Long;
-                        IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
+                            IntegerEqualsNode equals = new IntegerEqualsNode(tool.getEntry(xVirtual, 0), tool.getEntry(yVirtual, 0));
                         tool.addNode(equals);
                         tool.replaceWithValue(equals);
                     }

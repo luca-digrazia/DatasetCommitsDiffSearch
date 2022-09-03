@@ -84,7 +84,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
         return this.unorderedIsTrue;
     }
 
-    public static LogicNode tryConstantFold(Condition condition, ValueNode forX, ValueNode forY, ConstantReflectionProvider constantReflection, boolean unorderedIsTrue) {
+   public static LogicNode tryConstantFold(Condition condition, ValueNode forX, ValueNode forY, ConstantReflectionProvider constantReflection, boolean unorderedIsTrue) {
         if (forX.isConstant() && forY.isConstant() && (constantReflection != null || forX.asConstant() instanceof PrimitiveConstant)) {
             return LogicConstantNode.forBoolean(condition.foldCondition(forX.asConstant(), forY.asConstant(), constantReflection, unorderedIsTrue));
         }
@@ -109,13 +109,12 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
     }
 
     public abstract static class CompareOp {
-        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, Condition condition,
-                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY) {
+        public ValueNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, Condition condition, boolean unorderedIsTrue, ValueNode forX, ValueNode forY) {
             LogicNode constantCondition = tryConstantFold(condition, forX, forY, constantReflection, unorderedIsTrue);
             if (constantCondition != null) {
                 return constantCondition;
             }
-            LogicNode result;
+            ValueNode result;
             if (forX.isConstant()) {
                 if ((result = canonicalizeSymmetricConstant(constantReflection, metaAccess, options, smallestCompareWidth, condition, forX.asConstant(), forY, true, unorderedIsTrue)) != null) {
                     return result;
@@ -137,8 +136,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                     if (supported) {
                         boolean multiUsage = (convertX.asNode().hasMoreThanOneUsage() || convertY.asNode().hasMoreThanOneUsage());
                         if ((forX instanceof ZeroExtendNode || forX instanceof SignExtendNode) && multiUsage) {
-                            // Do not perform for zero or sign extend if there are multiple usages
-                            // of
+                            // Do not perform for zero or sign extend if there are multiple usages of
                             // the value.
                             return null;
                         }
@@ -149,7 +147,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             return null;
         }
 
-        protected LogicNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
+        protected ValueNode canonicalizeSymmetricConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
                         Condition condition, Constant constant, ValueNode nonConstant, boolean mirrored, boolean unorderedIsTrue) {
             if (nonConstant instanceof ConditionalNode) {
                 return optimizeConditional(constant, (ConditionalNode) nonConstant, constantReflection, mirrored ? condition.mirror() : condition, unorderedIsTrue);
@@ -185,8 +183,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             return null;
         }
 
-        private static ConstantNode canonicalConvertConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Condition condition,
-                        ConvertNode convert, Constant constant) {
+        private ConstantNode canonicalConvertConstant(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Condition condition, ConvertNode convert, Constant constant) {
             if (convert.preservesOrder(condition, constant, constantReflection)) {
                 Constant reverseConverted = convert.reverse(constant, constantReflection);
                 if (reverseConverted != null && convert.convert(reverseConverted, constantReflection).equals(constant)) {
@@ -200,11 +197,11 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
             return null;
         }
 
-        protected LogicNode optimizeNormalizeCompare(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
+        protected ValueNode optimizeNormalizeCompare(Constant constant, NormalizeCompareNode normalizeNode, boolean mirrored) {
             throw new GraalError("NormalizeCompareNode connected to %s (%s %s %s)", this, constant, normalizeNode, mirrored);
         }
 
-        private static LogicNode optimizeConditional(Constant constant, ConditionalNode conditionalNode, ConstantReflectionProvider constantReflection, Condition cond, boolean unorderedIsTrue) {
+        private ValueNode optimizeConditional(Constant constant, ConditionalNode conditionalNode, ConstantReflectionProvider constantReflection, Condition cond, boolean unorderedIsTrue) {
             Constant trueConstant = conditionalNode.trueValue().asConstant();
             Constant falseConstant = conditionalNode.falseValue().asConstant();
 
