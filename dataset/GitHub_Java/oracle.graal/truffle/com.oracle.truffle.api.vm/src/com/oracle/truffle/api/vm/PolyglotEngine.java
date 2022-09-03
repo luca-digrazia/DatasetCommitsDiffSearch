@@ -637,7 +637,6 @@ public class PolyglotEngine {
             try {
                 Access.DEBUG.executionStarted(PolyglotEngine.this);
                 final Object[] args = ForeignAccess.getArguments(frame).toArray();
-                SymbolInvokerImpl.unwrapArgs(args);
                 res = ForeignAccess.execute(foreignNode, frame, receiver, args);
             } finally {
                 ExecutionImpl.executionEnded(prev);
@@ -645,7 +644,11 @@ public class PolyglotEngine {
         } else {
             res = invokeForeignOnExecutor(foreignNode, frame, receiver);
         }
-        return EngineTruffleObject.wrap(this, res);
+        if (res instanceof TruffleObject) {
+            return new EngineTruffleObject(this, (TruffleObject) res);
+        } else {
+            return res;
+        }
     }
 
     static void assertNoTruffle() {
@@ -918,7 +921,7 @@ public class PolyglotEngine {
 
     private static class PolyglotEvalRootNode extends PolyglotRootNode {
 
-        private static final Object[] DEFAULT_ARGUMENTS = new Object[0];
+        private static final Object[] EMPTY_ARRAY = new Object[0];
 
         @Child private DirectCallNode call;
         private TruffleLanguage<?> fillLanguage;
@@ -945,7 +948,7 @@ public class PolyglotEngine {
                 initialize();
             }
             fillLang[0] = fillLanguage;
-            return call.call(frame, DEFAULT_ARGUMENTS);
+            return call.call(EMPTY_ARRAY);
         }
 
         private void initialize() {
@@ -1005,8 +1008,8 @@ public class PolyglotEngine {
                 if (unwrapJava) {
                     result = JavaInterop.asJavaObject(Object.class, (TruffleObject) result);
                 }
-                if (wrapEngine && result instanceof TruffleObject) {
-                    return EngineTruffleObject.wrap(PolyglotEngine.this, result);
+                if (wrapEngine && executor != null && result instanceof TruffleObject) {
+                    return new EngineTruffleObject(PolyglotEngine.this, (TruffleObject) result);
                 }
             }
             return result;
@@ -1040,7 +1043,7 @@ public class PolyglotEngine {
          * owner. Let's start by defining the structure with Java interfaces:
          *
          * {@codesnippet com.oracle.truffle.tck.impl.PolyglotEngineWithJavaScript#accessJSONObjectProperties}
-         * 
+         *
          * The example defines a parser that somehow obtains object representing the JSON data and
          * converts it into {@link List} of {@code Repository} instances. After calling the method
          * we can safely use the interfaces ({@link List}, {@code Repository}, {@code Owner}) and
@@ -1663,14 +1666,6 @@ public class PolyglotEngine {
                 PolyglotEngine engine = (PolyglotEngine) vm;
                 assert engine.debugger()[0] == null || engine.debugger()[0] == debugger;
                 engine.debugger()[0] = debugger;
-            }
-
-            @Override
-            public Object findOriginalObject(Object truffleObject) {
-                if (truffleObject instanceof EngineTruffleObject) {
-                    return ((EngineTruffleObject) truffleObject).getDelegate();
-                }
-                return truffleObject;
             }
         }
 

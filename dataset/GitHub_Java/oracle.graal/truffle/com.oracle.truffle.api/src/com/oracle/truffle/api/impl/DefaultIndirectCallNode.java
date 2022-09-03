@@ -24,40 +24,17 @@
  */
 package com.oracle.truffle.api.impl;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
 
 /**
  * This is runtime specific API. Do not use in a guest language.
  */
 final class DefaultIndirectCallNode extends IndirectCallNode {
+
     @Override
-    public Object call(final VirtualFrame frame, final CallTarget target, Object[] arguments) {
-        DefaultTruffleRuntime truffleRuntime = (DefaultTruffleRuntime) Truffle.getRuntime();
-        final CallTarget currentCallTarget = truffleRuntime.getCurrentFrame().getCallTarget();
-        FrameInstance frameInstance = new FrameInstance() {
-            public Frame getFrame(FrameAccess access, boolean slowPath) {
-                return frame;
-            }
-
-            public boolean isVirtualFrame() {
-                return false;
-            }
-
-            public Node getCallNode() {
-                return DefaultIndirectCallNode.this;
-            }
-
-            public CallTarget getCallTarget() {
-                return currentCallTarget;
-            }
-        };
-        truffleRuntime.pushFrame(frameInstance);
-        try {
-            return target.call(arguments);
-        } finally {
-            truffleRuntime.popFrame();
-        }
+    public Object call(CallTarget target, Object[] arguments) {
+        return ((DefaultCallTarget) target).callDirectOrIndirect(this, arguments);
     }
+
 }

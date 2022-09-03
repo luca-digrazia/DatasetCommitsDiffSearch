@@ -677,10 +677,12 @@ public final class Breakpoint {
             if (key instanceof URI) {
                 final URI sourceUri = (URI) key;
                 f.sourceIs(new SourcePredicate() {
-                    @Override
                     public boolean test(Source s) {
                         URI uri = s.getURI();
-                        return sourceUri.equals(uri);
+                        if (uri == null) {
+                            return false;
+                        }
+                        return uri.equals(sourceUri);
                     }
 
                     @Override
@@ -709,7 +711,7 @@ public final class Breakpoint {
             if (!isResolved()) {
                 resolveBreakpoint();
             }
-            return new BreakpointNode(Breakpoint.this, context, session);
+            return new BreakpointNode(Breakpoint.this, context);
         }
 
     }
@@ -718,14 +720,12 @@ public final class Breakpoint {
 
         private final Breakpoint breakpoint;
         private final BranchProfile breakBranch = BranchProfile.create();
-        private final DebuggerSession session;
 
         @Child private ConditionalBreakNode breakCondition;
 
-        BreakpointNode(Breakpoint breakpoint, EventContext context, DebuggerSession session) {
+        BreakpointNode(Breakpoint breakpoint, EventContext context) {
             super(context);
             this.breakpoint = breakpoint;
-            this.session = session;
             if (breakpoint.condition != null) {
                 this.breakCondition = new ConditionalBreakNode(context, breakpoint);
             }
@@ -748,9 +748,6 @@ public final class Breakpoint {
 
         @Override
         protected void onEnter(VirtualFrame frame) {
-            if (!session.isBreakpointsActive()) {
-                return;
-            }
             BreakpointConditionFailure conditionError = null;
             try {
                 if (!shouldBreak(frame)) {
