@@ -28,7 +28,6 @@ import com.oracle.graal.graph.Graph.DuplicationReplacement;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.VirtualState.NodeClosure;
 import com.oracle.graal.nodes.PhiNode.*;
 import com.oracle.graal.nodes.util.*;
 
@@ -236,8 +235,8 @@ public class LoopFragmentInside extends LoopFragment {
                 newExitMerge.addForwardEnd(end);
             }
 
-            for (final PhiNode phi : loopBegin.phis().snapshot()) {
-                final PhiNode firstPhi = graph.add(phi.type() == PhiType.Value ? new PhiNode(phi.kind(), newExitMerge) : new PhiNode(phi.type(), newExitMerge));
+            for (PhiNode phi : loopBegin.phis().snapshot()) {
+                PhiNode firstPhi = graph.add(phi.type() == PhiType.Value ? new PhiNode(phi.kind(), newExitMerge) : new PhiNode(phi.type(), newExitMerge));
                 for (EndNode end : newExitMerge.forwardEnds()) {
                     LoopEndNode loopEnd = reverseEnds.get(end);
                     ValueNode prim = prim(phi.valueAt(loopEnd));
@@ -246,15 +245,7 @@ public class LoopFragmentInside extends LoopFragment {
                 }
                 ValueNode initializer = firstPhi;
                 if (duplicateState != null) {
-                    // fix the merge's state after
-                    duplicateState.applyToNonVirtual(new NodeClosure<ValueNode>() {
-                        @Override
-                        public void apply(Node from, ValueNode node) {
-                            if (node == phi) {
-                                from.replaceFirstInput(phi, firstPhi);
-                            }
-                        }
-                    });
+                    duplicateState.replaceFirstInput(phi, firstPhi); // fix the merge's state after
                 }
                 mergedInitializers.put(phi, initializer);
             }

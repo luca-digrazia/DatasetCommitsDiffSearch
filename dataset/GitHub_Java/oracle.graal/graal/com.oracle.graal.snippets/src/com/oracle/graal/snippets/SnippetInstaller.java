@@ -134,10 +134,10 @@ public class SnippetInstaller {
         }
     }
 
-    public StructuredGraph makeGraph(final ResolvedJavaMethod method, final InliningPolicy policy) {
+    private StructuredGraph makeGraph(final ResolvedJavaMethod method, final InliningPolicy policy) {
         StructuredGraph graph = graphCache.get(method);
         if (graph == null) {
-            graph = buildGraph(method, policy == null ? inliningPolicy(method) : policy);
+            graph = buildGraph(method, policy);
             //System.out.println("built " + graph);
             graphCache.put(method, graph);
         }

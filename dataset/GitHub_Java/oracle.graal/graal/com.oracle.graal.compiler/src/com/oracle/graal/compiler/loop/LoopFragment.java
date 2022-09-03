@@ -246,6 +246,7 @@ public abstract class LoopFragment {
                     PhiNode phi = graph.add(vpn.type() == PhiType.Value ? new PhiNode(vpn.kind(), merge) : new PhiNode(vpn.type(), merge));
                     phi.addInput(vpn);
                     phi.addInput(newVpn);
+                    assert vpn.type() == PhiType.Value;
                     replaceWith = phi;
                 } else {
                     replaceWith = vpn.value();
