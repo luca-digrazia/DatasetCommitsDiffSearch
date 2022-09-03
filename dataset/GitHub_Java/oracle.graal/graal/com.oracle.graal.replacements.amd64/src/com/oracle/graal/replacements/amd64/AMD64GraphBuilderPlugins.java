@@ -22,12 +22,8 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.COS;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.EXP;
 import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG;
 import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.LOG10;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.SIN;
-import static com.oracle.graal.replacements.nodes.UnaryMathIntrinsicNode.UnaryOperation.TAN;
 
 import com.oracle.graal.compiler.common.LocationIdentity;
 import com.oracle.graal.lir.amd64.AMD64ArithmeticLIRGeneratorTool.RoundingMode;
@@ -59,7 +55,7 @@ import sun.misc.Unsafe;
 
 public class AMD64GraphBuilderPlugins {
 
-    public static void register(Plugins plugins, AMD64 arch, boolean arithmeticStubs) {
+    public static void register(Plugins plugins, AMD64 arch) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
         invocationPlugins.defer(new Runnable() {
             @Override
@@ -67,7 +63,7 @@ public class AMD64GraphBuilderPlugins {
                 registerIntegerLongPlugins(invocationPlugins, IntegerSubstitutions.class, JavaKind.Int, arch);
                 registerIntegerLongPlugins(invocationPlugins, LongSubstitutions.class, JavaKind.Long, arch);
                 registerUnsafePlugins(invocationPlugins);
-                registerMathPlugins(invocationPlugins, arch, arithmeticStubs);
+                registerMathPlugins(invocationPlugins, arch);
             }
         });
     }
@@ -120,22 +116,15 @@ public class AMD64GraphBuilderPlugins {
         }
     }
 
-    private static void registerMathPlugins(InvocationPlugins plugins, AMD64 arch, boolean arithmeticStubs) {
+    private static void registerMathPlugins(InvocationPlugins plugins, AMD64 arch) {
         Registration r = new Registration(plugins, Math.class);
         registerUnaryMath(r, "log", LOG);
         registerUnaryMath(r, "log10", LOG10);
-        registerUnaryMath(r, "exp", EXP);
+        // registerUnaryMath(r, "exp", EXP);
 
-        if (arithmeticStubs) {
-            registerUnaryMath(r, "sin", SIN);
-            registerUnaryMath(r, "cos", COS);
-            registerUnaryMath(r, "tan", TAN);
-        } else {
-            r.registerMethodSubstitution(AMD64MathSubstitutions.class, "sin", double.class);
-            r.registerMethodSubstitution(AMD64MathSubstitutions.class, "cos", double.class);
-            r.registerMethodSubstitution(AMD64MathSubstitutions.class, "tan", double.class);
-        }
-
+        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "sin", double.class);
+        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "cos", double.class);
+        r.registerMethodSubstitution(AMD64MathSubstitutions.class, "tan", double.class);
         r.register2("pow", Double.TYPE, Double.TYPE, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode x, ValueNode y) {
