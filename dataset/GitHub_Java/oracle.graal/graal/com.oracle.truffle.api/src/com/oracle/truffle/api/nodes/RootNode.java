@@ -61,6 +61,33 @@ public abstract class RootNode extends Node {
         }
     }
 
+    /**
+     * @deprecated Not required anymore. Do not use.
+     */
+    @Deprecated
+    public RootNode inline() {
+        if (!isInlinable()) {
+            throw new UnsupportedOperationException("Inlining is not enabled.");
+        }
+        return split();
+    }
+
+    /**
+     * @deprecated Not required anymore. Do not use.
+     */
+    @Deprecated
+    public int getInlineNodeCount() {
+        return 0;
+    }
+
+    /**
+     * @deprecated Not required anymore. Do not use.
+     */
+    @Deprecated
+    public boolean isInlinable() {
+        return true;
+    }
+
     public RootNode split() {
         return NodeUtil.cloneNode(this);
     }
@@ -121,4 +148,11 @@ public abstract class RootNode extends Node {
         return Collections.unmodifiableSet(cachedCallNodes);
     }
 
+    /**
+     * @deprecated use {@link #getCachedCallNodes()} instead.
+     */
+    @Deprecated
+    public final CallNode getParentInlinedCall() {
+        return cachedCallNodes.isEmpty() ? null : cachedCallNodes.iterator().next();
+    }
 }
