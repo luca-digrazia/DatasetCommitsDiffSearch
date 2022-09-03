@@ -53,7 +53,6 @@ import com.oracle.truffle.api.dsl.test.ImplicitCastTestFactory.StringEquals3Node
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.dsl.test.examples.ExampleNode;
-import com.oracle.truffle.api.dsl.test.examples.ExampleNode.ExampleArgumentNode;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -462,32 +461,7 @@ public class ImplicitCastTest {
     @DSLOptions(defaultGenerator = DSLGenerator.FLAT)
     public static class TS {
         @ImplicitCast
-        public static int promoteToInt(byte value) {
-            return value;
-        }
-
-        @ImplicitCast
-        public static int promoteToInt(short value) {
-            return value;
-        }
-
-        @ImplicitCast
-        public static long promoteToLong(byte value) {
-            return value;
-        }
-
-        @ImplicitCast
-        public static long promoteToLong(short value) {
-            return value;
-        }
-
-        @ImplicitCast
-        public static long promoteToLong(int value) {
-            return value;
-        }
-
-        @ImplicitCast
-        public static double promoteToDouble(float value) {
+        static long upcast(int value) {
             return value;
         }
     }
@@ -510,38 +484,6 @@ public class ImplicitCastTest {
         public String s2(long a, long b) {
             return "s2";
         }
-
-    }
-
-    @Test
-    public void testImplicitCastExecute2() {
-        ExampleArgumentNode[] args = ExampleNode.createArguments(2);
-        CallTarget target = ExampleNode.createTarget(ImplicitCastExecuteNodeGen.create(args));
-
-        Assert.assertEquals("s2", target.call(1L, 1L));
-        Assert.assertEquals(0, args[0].longInvocationCount);
-        Assert.assertEquals(0, args[1].longInvocationCount);
-        Assert.assertEquals(1, args[0].genericInvocationCount);
-        Assert.assertEquals(1, args[1].genericInvocationCount);
-
-        Assert.assertEquals("s2", target.call(1L, 1L));
-
-        Assert.assertEquals(1, args[0].longInvocationCount);
-        Assert.assertEquals(1, args[1].longInvocationCount);
-        Assert.assertEquals(2, args[0].genericInvocationCount);
-        Assert.assertEquals(2, args[1].genericInvocationCount);
-
-        Assert.assertEquals("s2", target.call(1L, 1L));
-
-        Assert.assertEquals(2, args[0].longInvocationCount);
-        Assert.assertEquals(2, args[1].longInvocationCount);
-        Assert.assertEquals(3, args[0].genericInvocationCount);
-        Assert.assertEquals(3, args[1].genericInvocationCount);
-
-        Assert.assertEquals(0, args[0].doubleInvocationCount);
-        Assert.assertEquals(0, args[1].doubleInvocationCount);
-        Assert.assertEquals(0, args[0].intInvocationCount);
-        Assert.assertEquals(0, args[1].intInvocationCount);
 
     }
 
