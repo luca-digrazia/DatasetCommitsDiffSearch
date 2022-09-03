@@ -257,6 +257,7 @@ public final class GraphBuilder {
         Instruction target = createTargetAt(0, stateAfter);
         Goto base = new Goto(target, stateAfter, graph);
         appendWithBCI(base);
+        ((BlockBegin) startBlock.firstInstruction).setEnd(base);
     }
 
     public void mergeOrClone(Block target, FrameStateAccess newState) {
@@ -374,6 +375,7 @@ public final class GraphBuilder {
                     unwindBlock = new BlockBegin(bci, ir.nextBlockNumber(), graph);
                     Unwind unwind = new Unwind(null, graph);
                     unwindBlock.appendNext(unwind);
+                    unwindBlock.setEnd(unwind);
                 }
                 successor = unwindBlock;
             }
@@ -401,11 +403,13 @@ public final class GraphBuilder {
                         ExceptionDispatch end = new ExceptionDispatch(null, entry, null, handler, null, graph);
                         end.setBlockSuccessor(0, successor);
                         dispatchEntry.appendNext(end);
+                        dispatchEntry.setEnd(end);
                     } else {
                         Deoptimize deopt = new Deoptimize(graph);
                         dispatchEntry.appendNext(deopt);
                         Goto end = new Goto(successor, null, graph);
                         deopt.appendNext(end);
+                        dispatchEntry.setEnd(end);
                     }
 
                     newBlocks.add(dispatchEntry);
@@ -422,6 +426,7 @@ public final class GraphBuilder {
             FrameState stateWithException = entryState.duplicateModified(bci, CiKind.Void, exception);
             BlockEnd end = new Goto(successor, stateWithException, graph);
             exception.appendNext(end);
+            entry.setEnd(end);
 
             if (x instanceof Invoke) {
                 ((Invoke) x).setExceptionEdge(entry);
@@ -1160,6 +1165,7 @@ public final class GraphBuilder {
 
         genThrow(bci);
         BlockEnd end = (BlockEnd) lastInstr;
+        ((BlockBegin) syncHandler.firstInstruction).setEnd(end);
         end.setStateAfter(frameState.create(bci()));
 
         frameState.initializeFrom(origState);
@@ -1172,8 +1178,7 @@ public final class GraphBuilder {
         while ((block = removeFromWorkList()) != null) {
 
             // remove blocks that have no predecessors by the time it their bytecodes are parsed
-            Instruction firstInstruction = block.firstInstruction;
-            if (firstInstruction.predecessors().size() == 0) {
+            if (block.firstInstruction == null) {
                 markVisited(block);
                 continue;
             }
@@ -1181,9 +1186,9 @@ public final class GraphBuilder {
             if (!isVisited(block)) {
                 markVisited(block);
                 // now parse the block
-                frameState.initializeFrom(((BlockBegin) firstInstruction).stateBefore());
-                lastInstr = firstInstruction;
-                assert firstInstruction.next() == null;
+                frameState.initializeFrom(((BlockBegin) block.firstInstruction).stateBefore());
+                lastInstr = block.firstInstruction;
+                assert block.firstInstruction.next() == null;
 
                 iterateBytecodesForBlock(block);
             }
@@ -1241,6 +1246,9 @@ public final class GraphBuilder {
         assert end != null : "end should exist after iterating over bytecodes";
         FrameState stateAtEnd = frameState.create(bci());
         end.setStateAfter(stateAtEnd);
+        if (block.firstInstruction instanceof BlockBegin) {
+            ((BlockBegin) block.firstInstruction).setEnd(end);
+        }
         return end;
     }
 

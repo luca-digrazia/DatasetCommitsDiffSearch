@@ -26,7 +26,6 @@ import com.oracle.graal.graph.*;
 import com.sun.c1x.debug.*;
 import com.sun.c1x.value.*;
 import com.sun.cri.ci.*;
-import com.sun.cri.ri.*;
 
 /**
  * This instruction takes an exception object and has two successors:
@@ -60,21 +59,21 @@ public final class ExceptionDispatch extends BlockEnd {
         return (Value) inputs().set(super.inputCount() + INPUT_EXCEPTION, n);
     }
 
-    private final RiType catchType;
+    private final ExceptionHandler handler;
 
     /**
      * Constructs a new ExceptionDispatch instruction.
      */
-    public ExceptionDispatch(Value exception, Instruction catchSuccessor, Instruction otherSuccessor, RiType catchType, FrameState stateAfter, Graph graph) {
+    public ExceptionDispatch(Value exception, Instruction catchSuccessor, Instruction otherSuccessor, ExceptionHandler handler, FrameState stateAfter, Graph graph) {
         super(CiKind.Int, stateAfter, 2, INPUT_COUNT, SUCCESSOR_COUNT, graph);
         setException(exception);
         setBlockSuccessor(0, otherSuccessor);
         setBlockSuccessor(1, catchSuccessor);
-        this.catchType = catchType;
+        this.handler = handler;
     }
 
-    public RiType catchType() {
-        return catchType;
+    public ExceptionHandler handler() {
+        return handler;
     }
 
     /**
@@ -114,7 +113,7 @@ public final class ExceptionDispatch extends BlockEnd {
         print(' ').
         print("instanceof").
         print(' ').
-        print(catchType().name()).
+        print(handler.handler.catchType().name()).
         print(" then B").
         print(blockSuccessors().get(1).blockID).
         print(" else B").
@@ -123,7 +122,7 @@ public final class ExceptionDispatch extends BlockEnd {
 
     @Override
     public String shortName() {
-        return "Dispatch " + catchType().name();
+        return "Dispatch " + handler.handler.catchType().name();
     }
 
 
