@@ -24,22 +24,22 @@ package com.oracle.max.graal.compiler.graph;
 
 import java.util.*;
 
-import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.*;
 
 public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
 
     private final NodeBitMap visitedEnds;
     private final Deque<FixedNode> nodeQueue;
-    private final HashMap<FixedNode, T> nodeStates;
+    private final IdentityHashMap<FixedNode, T> nodeStates;
     private final FixedNode start;
 
     protected T state;
 
     public PostOrderNodeIterator(FixedNode start, T initialState) {
         visitedEnds = start.graph().createNodeBitMap();
-        nodeQueue = new ArrayDeque<FixedNode>();
-        nodeStates = new HashMap<FixedNode, T>();
+        nodeQueue = new ArrayDeque<>();
+        nodeStates = new IdentityHashMap<>();
         this.start = start;
         this.state = initialState;
     }
@@ -48,61 +48,67 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         FixedNode current = start;
 
         do {
-            if (current instanceof Invoke) {
+            if (current instanceof InvokeWithExceptionNode) {
                 invoke((Invoke) current);
-                queueSuccessors(current);
+                queueSuccessors(current, null);
                 current = nextQueuedNode();
-            } else if (current instanceof LoopBegin) {
-                state.loopBegin((LoopBegin) current);
+            } else if (current instanceof LoopBeginNode) {
+                state.loopBegin((LoopBeginNode) current);
                 nodeStates.put(current, state);
                 state = state.clone();
-                loopBegin((LoopBegin) current);
-                current = ((LoopBegin) current).next();
+                loopBegin((LoopBeginNode) current);
+                current = ((LoopBeginNode) current).next();
                 assert current != null;
-            } else if (current instanceof LoopEnd) {
-                T loopBeginState = nodeStates.get(((LoopEnd) current).loopBegin());
-                if (loopBeginState != null) {
-                    loopBeginState.loopEnd((LoopEnd) current, state);
-                }
-                loopEnd((LoopEnd) current);
+            } else if (current instanceof LoopEndNode) {
+                loopEnd((LoopEndNode) current);
+                finishLoopEnds((LoopEndNode) current);
                 current = nextQueuedNode();
-            } else if (current instanceof Merge) {
-                merge((Merge) current);
-                current = ((Merge) current).next();
+            } else if (current instanceof MergeNode) {
+                merge((MergeNode) current);
+                current = ((MergeNode) current).next();
                 assert current != null;
-            } else if (current instanceof FixedNodeWithNext) {
-                FixedNode next = ((FixedNodeWithNext) current).next();
+            } else if (current instanceof FixedWithNextNode) {
+                FixedNode next = ((FixedWithNextNode) current).next();
+                assert next != null : current;
                 node(current);
                 current = next;
-                assert current != null;
             } else if (current instanceof EndNode) {
                 end((EndNode) current);
                 queueMerge((EndNode) current);
                 current = nextQueuedNode();
-            } else if (current instanceof Deoptimize) {
-                deoptimize((Deoptimize) current);
+            } else if (current instanceof DeoptimizeNode) {
+                deoptimize((DeoptimizeNode) current);
                 current = nextQueuedNode();
-            } else if (current instanceof Return) {
-                returnNode((Return) current);
+            } else if (current instanceof ReturnNode) {
+                returnNode((ReturnNode) current);
                 current = nextQueuedNode();
-            } else if (current instanceof Unwind) {
-                unwind((Unwind) current);
+            } else if (current instanceof UnwindNode) {
+                unwind((UnwindNode) current);
                 current = nextQueuedNode();
-            } else if (current instanceof ControlSplit) {
-                controlSplit((ControlSplit) current);
-                queueSuccessors(current);
+            } else if (current instanceof ControlSplitNode) {
+                Set<Node> successors = controlSplit((ControlSplitNode) current);
+                queueSuccessors(current, successors);
                 current = nextQueuedNode();
             } else {
-                assert false : current.shortName();
+                assert false : current;
             }
         } while(current != null);
     }
 
-    private void queueSuccessors(FixedNode x) {
+    private void queueSuccessors(FixedNode x, Set<Node> successors) {
         nodeStates.put(x, state);
-        for (Node node : x.successors()) {
-            if (node != null) {
-                nodeQueue.addFirst((FixedNode) node);
+        if (successors != null) {
+            for (Node node : successors) {
+                if (node != null) {
+                    nodeStates.put((FixedNode) node.predecessor(), state);
+                    nodeQueue.addFirst((FixedNode) node);
+                }
+            }
+        } else {
+            for (Node node : x.successors()) {
+                if (node != null) {
+                    nodeQueue.addFirst((FixedNode) node);
+                }
             }
         }
     }
@@ -111,12 +117,12 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         int maxIterations = nodeQueue.size();
         while (maxIterations-- > 0) {
             FixedNode node = nodeQueue.removeFirst();
-            if (node instanceof Merge) {
-                Merge merge = (Merge) node;
-                state = nodeStates.get(merge.endAt(0)).clone();
-                ArrayList<T> states = new ArrayList<T>(merge.endCount() - 1);
-                for (int i = 1; i < merge.endCount(); i++) {
-                    T other = nodeStates.get(merge.endAt(i));
+            if (node instanceof MergeNode) {
+                MergeNode merge = (MergeNode) node;
+                state = nodeStates.get(merge.forwardEndAt(0)).clone();
+                ArrayList<T> states = new ArrayList<>(merge.forwardEndCount() - 1);
+                for (int i = 1; i < merge.forwardEndCount(); i++) {
+                    T other = nodeStates.get(merge.forwardEndAt(i));
                     assert other != null;
                     states.add(other);
                 }
@@ -127,8 +133,8 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
                     nodeQueue.addLast(merge);
                 }
             } else {
-                assert node.predecessors().size() == 1;
-                state = nodeStates.get(node.predecessors().get(0)).clone();
+                assert node.predecessor() != null;
+                state = nodeStates.get(node.predecessor()).clone();
                 state.afterSplit(node);
                 return node;
             }
@@ -136,15 +142,40 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         return null;
     }
 
+    private void finishLoopEnds(LoopEndNode end) {
+        assert !visitedEnds.isMarked(end);
+        assert !nodeStates.containsKey(end);
+        nodeStates.put(end, state);
+        visitedEnds.mark(end);
+        LoopBeginNode begin = end.loopBegin();
+        boolean endsVisited = true;
+        for (LoopEndNode le : begin.loopEnds()) {
+            if (!visitedEnds.isMarked(le)) {
+                endsVisited = false;
+                break;
+            }
+        }
+        if (endsVisited) {
+            ArrayList<T> states = new ArrayList<>(begin.loopEnds().count());
+            for (LoopEndNode le : begin.orderedLoopEnds()) {
+                states.add(nodeStates.get(le));
+            }
+            T loopBeginState = nodeStates.get(begin);
+            if (loopBeginState != null) {
+                loopBeginState.loopEnds(begin, states);
+            }
+        }
+    }
+
     private void queueMerge(EndNode end) {
         assert !visitedEnds.isMarked(end);
         assert !nodeStates.containsKey(end);
         nodeStates.put(end, state);
         visitedEnds.mark(end);
-        Merge merge = end.merge();
+        MergeNode merge = end.merge();
         boolean endsVisited = true;
-        for (int i = 0; i < merge.endCount(); i++) {
-            if (!visitedEnds.isMarked(merge.endAt(i))) {
+        for (int i = 0; i < merge.forwardEndCount(); i++) {
+            if (!visitedEnds.isMarked(merge.forwardEndAt(i))) {
                 endsVisited = false;
                 break;
             }
@@ -160,35 +191,36 @@ public abstract class PostOrderNodeIterator<T extends MergeableState<T>> {
         node(endNode);
     }
 
-    protected void merge(Merge merge) {
+    protected void merge(MergeNode merge) {
         node(merge);
     }
 
-    protected void loopBegin(LoopBegin loopBegin) {
+    protected void loopBegin(LoopBeginNode loopBegin) {
         node(loopBegin);
     }
 
-    protected void loopEnd(LoopEnd loopEnd) {
+    protected void loopEnd(LoopEndNode loopEnd) {
         node(loopEnd);
     }
 
-    protected void deoptimize(Deoptimize deoptimize) {
+    protected void deoptimize(DeoptimizeNode deoptimize) {
         node(deoptimize);
     }
 
-    protected void controlSplit(ControlSplit controlSplit) {
+    protected Set<Node> controlSplit(ControlSplitNode controlSplit) {
         node(controlSplit);
+        return null;
     }
 
-    protected void returnNode(Return returnNode) {
+    protected void returnNode(ReturnNode returnNode) {
         node(returnNode);
     }
 
     protected void invoke(Invoke invoke) {
-        node(invoke);
+        node(invoke.node());
     }
 
-    protected void unwind(Unwind unwind) {
+    protected void unwind(UnwindNode unwind) {
         node(unwind);
     }
 }
