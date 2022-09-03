@@ -431,7 +431,10 @@ public final class TruffleVM {
         executor.execute(new Runnable() {
             @Override
             public void run() {
-                evalImpl(fillIn, lang, s, result, l, ready);
+                TruffleLanguage<?> langImpl = l.getImpl();
+                lang[0] = langImpl;
+                TruffleVM.findDebuggerSupport(langImpl);
+                evalImpl(fillIn, s, result, langImpl, ready);
             }
         });
         exceptionCheck(result);
@@ -439,15 +442,12 @@ public final class TruffleVM {
     }
 
     @SuppressWarnings("try")
-    private void evalImpl(Debugger[] fillIn, TruffleLanguage<?>[] fillLang, Source s, Object[] result, Language l, CountDownLatch ready) {
+    private void evalImpl(Debugger[] fillIn, Source s, Object[] result, TruffleLanguage<?> l, CountDownLatch ready) {
         try (Closeable d = SPI.executionStart(this, fillIn, s)) {
-            TruffleLanguage<?> langImpl = l.getImpl();
-            fillLang[0] = langImpl;
-            TruffleVM.findDebuggerSupport(langImpl);
             if (debugger == null) {
                 debugger = fillIn[0];
             }
-            result[0] = SPI.eval(langImpl, s);
+            result[0] = SPI.eval(l, s);
         } catch (IOException ex) {
             result[1] = ex;
         } finally {
@@ -498,10 +498,7 @@ public final class TruffleVM {
     private void findGlobalSymbolImpl(Object[] obj, String globalName, TruffleLanguage<?>[] lang, CountDownLatch ready) {
         if (obj[0] == null) {
             for (Language dl : langs.values()) {
-                TruffleLanguage<?> l = dl.getImpl(false);
-                if (l == null) {
-                    continue;
-                }
+                TruffleLanguage<?> l = dl.getImpl();
                 obj[0] = SPI.findExportedSymbol(dl.getEnv(), globalName, true);
                 if (obj[0] != null) {
                     lang[0] = l;
@@ -511,10 +508,7 @@ public final class TruffleVM {
         }
         if (obj[0] == null) {
             for (Language dl : langs.values()) {
-                TruffleLanguage<?> l = dl.getImpl(false);
-                if (l == null) {
-                    continue;
-                }
+                TruffleLanguage<?> l = dl.getImpl();
                 obj[0] = SPI.findExportedSymbol(dl.getEnv(), globalName, false);
                 if (obj[0] != null) {
                     lang[0] = l;
@@ -743,11 +737,7 @@ public final class TruffleVM {
         }
 
         TruffleLanguage<?> getImpl() {
-            return getImpl(true);
-        }
-
-        TruffleLanguage<?> getImpl(boolean create) {
-            if (impl == null && create) {
+            if (impl == null) {
                 String n = props.getProperty(prefix + "className");
                 try {
                     impl = LanguageCache.find(n, loader());
