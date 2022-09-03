@@ -26,7 +26,6 @@ import java.lang.annotation.*;
 import java.util.*;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 
 import com.oracle.truffle.dsl.processor.*;
 import com.oracle.truffle.dsl.processor.node.*;
@@ -59,8 +58,7 @@ public class GuardParser extends NodeMethodParser<GuardData> {
         spec.getRequired().clear();
 
         for (ActualParameter parameter : specialization.getRequiredParameters()) {
-            List<TypeMirror> assignableTypes = Utils.getAssignableTypes(getContext(), parameter.getType());
-            ParameterSpec paramSpec = new ParameterSpec(parameter.getLocalName(), assignableTypes);
+            ParameterSpec paramSpec = new ParameterSpec(parameter.getLocalName(), parameter.getType(), getNode().getTypeSystem().getGenericType());
             paramSpec.setSignature(true);
             spec.addRequired(paramSpec);
         }
@@ -91,13 +89,7 @@ public class GuardParser extends NodeMethodParser<GuardData> {
             if (specializationParameter == null) {
                 newParameters.add(parameter);
             } else {
-                ActualParameter p;
-                if (parameter.getTypeSystemType() != null) {
-                    p = new ActualParameter(specializationParameter.getSpecification(), parameter.getTypeSystemType(), specializationParameter.getIndex(), parameter.isImplicit());
-                } else {
-                    p = new ActualParameter(specializationParameter.getSpecification(), parameter.getType(), specializationParameter.getIndex(), parameter.isImplicit());
-                }
-                newParameters.add(p);
+                newParameters.add(new ActualParameter(specializationParameter.getSpecification(), parameter.getTypeSystemType(), specializationParameter.getIndex(), parameter.isImplicit()));
             }
         }
         guard.setParameters(newParameters);
