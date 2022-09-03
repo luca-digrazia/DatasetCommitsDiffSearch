@@ -25,6 +25,7 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.max.cri.util.*;
 
 /**
  * Condition codes used in conditionals.
@@ -239,29 +240,27 @@ public enum Condition {
 
     /**
      * Attempts to fold a comparison between two constants and return the result.
-     *
      * @param lt the constant on the left side of the comparison
      * @param rt the constant on the right side of the comparison
-     * @param runtime needed to compare runtime-specific types
+     * @param runtime the RiRuntime (might be needed to compare runtime-specific types)
      * @return {@link Boolean#TRUE} if the comparison is known to be true,
      * {@link Boolean#FALSE} if the comparison is known to be false
      */
     public boolean foldCondition(Constant lt, Constant rt, CodeCacheProvider runtime) {
-        assert lt.getKind() != Kind.Double && lt.getKind() != Kind.Float && rt.getKind() != Kind.Double && rt.getKind() != Kind.Float;
+        assert !lt.kind.isFloatOrDouble() && !rt.kind.isFloatOrDouble();
         return foldCondition(lt, rt, runtime, false);
     }
 
     /**
      * Attempts to fold a comparison between two constants and return the result.
-     *
      * @param lt the constant on the left side of the comparison
      * @param rt the constant on the right side of the comparison
-     * @param runtime needed to compare runtime-specific types
+     * @param runtime the RiRuntime (might be needed to compare runtime-specific types)
      * @param unorderedIsTrue true if an undecided float comparison should result in "true"
      * @return true if the comparison is known to be true, false if the comparison is known to be false
      */
     public boolean foldCondition(Constant lt, Constant rt, MetaAccessProvider runtime, boolean unorderedIsTrue) {
-        switch (lt.getKind()) {
+        switch (lt.kind) {
             case Boolean:
             case Byte:
             case Char:
@@ -303,8 +302,8 @@ public enum Condition {
             }
             case Object: {
                 switch (this) {
-                    case EQ: return runtime.constantEquals(lt, rt);
-                    case NE: return !runtime.constantEquals(lt, rt);
+                    case EQ: return runtime.areConstantObjectsEqual(lt, rt);
+                    case NE: return !runtime.areConstantObjectsEqual(lt, rt);
                     default: throw new GraalInternalError("expected condition: %s", this);
                 }
             }
@@ -340,7 +339,7 @@ public enum Condition {
                     default: throw new GraalInternalError("expected condition: %s", this);
                 }
             }
-            default: throw new GraalInternalError("expected value kind %s while folding condition: %s", lt.getKind(), this);
+            default: throw new GraalInternalError("expected value kind %s while folding condition: %s", lt.kind, this);
         }
     }
 
