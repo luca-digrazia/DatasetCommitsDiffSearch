@@ -29,26 +29,21 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.constants.integer;
 
-import com.oracle.truffle.llvm.parser.model.Symbol;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.AbstractConstant;
-import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
+import com.oracle.truffle.llvm.runtime.types.IntegerType;
 
 public final class IntegerConstant extends AbstractConstant {
 
     private final long value;
 
-    public IntegerConstant(Type type, long value) {
+    public IntegerConstant(IntegerType type, long value) {
         super(type);
         this.value = value;
     }
 
     @Override
-    public void replace(Symbol oldValue, Symbol newValue) {
-    }
-
-    @Override
-    public void accept(SymbolVisitor visitor) {
+    public void accept(ConstantVisitor visitor) {
         visitor.visit(this);
     }
 
@@ -58,15 +53,15 @@ public final class IntegerConstant extends AbstractConstant {
 
     @Override
     public String toString() {
-        if (getType().getBitSize() == 1) {
+        if (getType().getBits() == 1) {
             return value == 0 ? "false" : "true";
         }
         return String.valueOf(value);
     }
 
-    public static IntegerConstant fromDatum(Type type, long datum) {
+    public static IntegerConstant fromDatum(IntegerType type, long datum) {
         // Sign extend for everything except i1 (boolean)
-        final int bits = type.getBitSize();
+        final int bits = type.getBits();
         long d = datum;
         if (bits > 1 && bits < Long.SIZE) {
             d = extendSign(bits, d);

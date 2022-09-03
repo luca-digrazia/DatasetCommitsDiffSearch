@@ -29,40 +29,39 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.constants;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import com.oracle.truffle.llvm.parser.model.SymbolImpl;
-import com.oracle.truffle.llvm.parser.model.SymbolTable;
-import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
+import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
+import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
 public final class GetElementPointerConstant extends AbstractConstant {
 
     private final boolean isInbounds;
 
-    private SymbolImpl base;
+    private Symbol base;
 
-    private final SymbolImpl[] indices;
+    private final List<Symbol> indices = new ArrayList<>();
 
-    private GetElementPointerConstant(Type type, boolean isInbounds, int size) {
+    private GetElementPointerConstant(Type type, boolean isInbounds) {
         super(type);
         this.isInbounds = isInbounds;
-        indices = new SymbolImpl[size];
     }
 
     @Override
-    public void accept(SymbolVisitor visitor) {
+    public void accept(ConstantVisitor visitor) {
         visitor.visit(this);
     }
 
-    public SymbolImpl getBasePointer() {
+    public Symbol getBasePointer() {
         return base;
     }
 
-    public List<SymbolImpl> getIndices() {
-        return Collections.unmodifiableList(Arrays.asList(indices));
+    public List<Symbol> getIndices() {
+        return Collections.unmodifiableList(indices);
     }
 
     public boolean isInbounds() {
@@ -70,23 +69,23 @@ public final class GetElementPointerConstant extends AbstractConstant {
     }
 
     @Override
-    public void replace(SymbolImpl original, SymbolImpl replacement) {
+    public void replace(Symbol original, Symbol replacement) {
         if (base == original) {
             base = replacement;
         }
-        for (int i = 0; i < indices.length; i++) {
-            if (indices[i] == original) {
-                indices[i] = replacement;
+        for (int i = 0; i < indices.size(); i++) {
+            if (indices.get(i) == original) {
+                indices.set(i, replacement);
             }
         }
     }
 
-    public static GetElementPointerConstant fromSymbols(SymbolTable symbols, Type type, int pointer, int[] indices, boolean isInbounds) {
-        final GetElementPointerConstant constant = new GetElementPointerConstant(type, isInbounds, indices.length);
+    public static GetElementPointerConstant fromSymbols(Symbols symbols, Type type, int pointer, int[] indices, boolean isInbounds) {
+        final GetElementPointerConstant constant = new GetElementPointerConstant(type, isInbounds);
 
-        constant.base = symbols.getForwardReferenced(pointer, constant);
-        for (int i = 0; i < indices.length; i++) {
-            constant.indices[i] = symbols.getForwardReferenced(indices[i], constant);
+        constant.base = symbols.getSymbol(pointer, constant);
+        for (int index : indices) {
+            constant.indices.add(symbols.getSymbol(index, constant));
         }
         return constant;
     }

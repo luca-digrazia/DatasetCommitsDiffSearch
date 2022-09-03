@@ -27,21 +27,15 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.parser.model.symbols.constants;
+package com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate;
 
 import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.ArrayType;
 
-public final class StringConstant extends AbstractConstant {
+public final class ArrayConstant extends AggregateConstant {
 
-    private final String value;
-
-    private final boolean isCString;
-
-    public StringConstant(Type type, String value, boolean isCString) {
-        super(type);
-        this.value = value;
-        this.isCString = isCString;
+    ArrayConstant(ArrayType type, int valueCount) {
+        super(type, valueCount);
     }
 
     @Override
@@ -49,29 +43,13 @@ public final class StringConstant extends AbstractConstant {
         visitor.visit(this);
     }
 
-    public String getString() {
-        return value;
-    }
-
-    public boolean isCString() {
-        return isCString;
+    @Override
+    public ArrayType getType() {
+        return (ArrayType) super.getType();
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("c\"");
-        for (int i = 0; i < value.length(); i++) {
-            byte b = (byte) value.charAt(i);
-            if (b < ' ' || b >= '~') {
-                sb.append(String.format("\\%02X", b));
-            } else {
-                sb.append((char) b);
-            }
-        }
-        sb.append("\"");
-
-        return sb.toString();
+        return String.format("[%s]", super.toString());
     }
 }

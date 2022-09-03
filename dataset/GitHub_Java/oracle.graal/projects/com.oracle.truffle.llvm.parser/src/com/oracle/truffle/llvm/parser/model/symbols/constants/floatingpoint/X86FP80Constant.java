@@ -27,21 +27,20 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.parser.model.symbols.constants;
+package com.oracle.truffle.llvm.parser.model.symbols.constants.floatingpoint;
+
+import java.util.Arrays;
 
 import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
-import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.FloatingPointType;
 
-public final class StringConstant extends AbstractConstant {
+public final class X86FP80Constant extends FloatingPointConstant {
 
-    private final String value;
+    private final byte[] value;
 
-    private final boolean isCString;
-
-    public StringConstant(Type type, String value, boolean isCString) {
-        super(type);
+    X86FP80Constant(byte[] value) {
+        super(FloatingPointType.X86_FP80);
         this.value = value;
-        this.isCString = isCString;
     }
 
     @Override
@@ -49,29 +48,25 @@ public final class StringConstant extends AbstractConstant {
         visitor.visit(this);
     }
 
-    public String getString() {
+    public byte[] getValue() {
         return value;
-    }
-
-    public boolean isCString() {
-        return isCString;
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        return Arrays.toString(value);
+    }
 
-        sb.append("c\"");
-        for (int i = 0; i < value.length(); i++) {
-            byte b = (byte) value.charAt(i);
-            if (b < ' ' || b >= '~') {
-                sb.append(String.format("\\%02X", b));
-            } else {
-                sb.append((char) b);
-            }
+    private static final int HEX_MASK = 0xf;
+
+    private static final int BYTE_MSB_SHIFT = 4;
+
+    @Override
+    public String getStringValue() {
+        final StringBuilder builder = new StringBuilder("0xK");
+        for (byte aValue : value) {
+            builder.append(String.format("%x%x", (aValue >>> BYTE_MSB_SHIFT) & HEX_MASK, aValue & HEX_MASK));
         }
-        sb.append("\"");
-
-        return sb.toString();
+        return builder.toString();
     }
 }

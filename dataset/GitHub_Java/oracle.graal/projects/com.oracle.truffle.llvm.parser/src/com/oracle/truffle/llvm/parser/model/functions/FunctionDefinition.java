@@ -36,13 +36,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.generators.FunctionGenerator;
 import com.oracle.truffle.llvm.parser.model.symbols.Symbols;
@@ -63,15 +60,14 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstruction;
 import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.FunctionVisitor;
+import com.oracle.truffle.llvm.runtime.types.FloatingPointType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.IntegerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.parser.metadata.MetadataList;
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
+import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock;
 import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
-public final class FunctionDefinition implements Constant, FunctionGenerator, ValueSymbol {
-
-    private final MetadataList metadata;
+public final class FunctionDefinition extends FunctionType implements Constant, FunctionGenerator {
 
     private final Symbols symbols = new Symbols();
 
@@ -81,40 +77,14 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
 
     private int currentBlock = 0;
 
+    private MetadataBlock metadata;
+
     private final Map<String, Type> namesToTypes;
 
-    private final FunctionType type;
-
-    private String name;
-
-    private final AttributesCodeEntry paramAttr;
-
-    public FunctionDefinition(FunctionType type, String name, MetadataList metadata, AttributesCodeEntry paramAttr) {
-        this.type = type;
+    public FunctionDefinition(FunctionType type, MetadataBlock metadata) {
+        super(type.getReturnType(), type.getArgumentTypes(), type.isVarArg());
         this.metadata = metadata;
         namesToTypes = new HashMap<>();
-        this.name = name;
-        this.paramAttr = paramAttr;
-    }
-
-    public FunctionDefinition(FunctionType type, MetadataList metadata, AttributesCodeEntry paramAttr) {
-        this(type, LLVMIdentifier.UNKNOWN, metadata, paramAttr);
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = LLVMIdentifier.toGlobalIdentifier(name);
-    }
-
-    @Override
-    public boolean hasName() {
-        return name != null;
-    }
-
-    @Override
-    public String getName() {
-        assert name != null;
-        return name;
     }
 
     @Override
@@ -130,6 +100,9 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
 
     @Override
     public void allocateBlocks(int count) {
+        // we don't want do add function specific metadata to the global scope
+        metadata = new MetadataBlock(metadata);
+
         blocks = new InstructionBlock[count];
         for (int i = 0; i < count; i++) {
             blocks[i] = new InstructionBlock(this, i);
@@ -137,25 +110,8 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
     }
 
     @Override
-    public FunctionType getType() {
-        return type;
-    }
-
-    public Optional<AttributesGroup> getFunctionAttributesGroup() {
-        CompilerAsserts.neverPartOfCompilation();
-        return paramAttr.getFunctionAttributesGroup();
-    }
-
-    public Optional<AttributesGroup> getReturnAttributesGroup() {
-        CompilerAsserts.neverPartOfCompilation();
-        return paramAttr.getReturnAttributesGroup();
-    }
-
-    @Override
-    public void createParameter(Type t) {
-        final int index = parameters.size();
-        final Optional<AttributesGroup> attrGroup = paramAttr.getParameterAttributesGroup(index);
-        FunctionParameter parameter = new FunctionParameter(t, index, attrGroup);
+    public void createParameter(Type type) {
+        FunctionParameter parameter = new FunctionParameter(type, parameters.size());
         symbols.addSymbol(parameter);
         parameters.add(parameter);
     }
@@ -166,17 +122,17 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
 
         // in K&R style function declarations the parameters are not assigned names
         for (final FunctionParameter parameter : parameters) {
-            if (LLVMIdentifier.UNKNOWN.equals(parameter.getName())) {
+            if (ValueSymbol.UNKNOWN.equals(parameter.getName())) {
                 parameter.setName(String.valueOf(symbolIndex++));
             }
             namesToTypes.put(parameter.getName(), parameter.getType());
         }
 
-        final Set<String> explicitBlockNames = Arrays.stream(blocks).map(InstructionBlock::getName).filter(blockName -> !LLVMIdentifier.UNKNOWN.equals(blockName)).collect(Collectors.toSet());
+        final Set<String> explicitBlockNames = Arrays.stream(blocks).map(InstructionBlock::getName).filter(blockName -> !ValueSymbol.UNKNOWN.equals(blockName)).collect(Collectors.toSet());
         for (final InstructionBlock block : blocks) {
-            if (block.getName().equals(LLVMIdentifier.UNKNOWN)) {
+            if (block.getName().equals(ValueSymbol.UNKNOWN)) {
                 do {
-                    block.setImplicitName(symbolIndex++);
+                    block.setName(String.valueOf(symbolIndex++));
                     // avoid name clashes
                 } while (explicitBlockNames.contains(block.getName()));
             }
@@ -184,7 +140,7 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
                 final Instruction instruction = block.getInstruction(i);
                 if (instruction instanceof ValueInstruction) {
                     final ValueInstruction value = (ValueInstruction) instruction;
-                    if (value.getName().equals(LLVMIdentifier.UNKNOWN)) {
+                    if (value.getName().equals(ValueSymbol.UNKNOWN)) {
                         value.setName(String.valueOf(symbolIndex++));
                     }
                     namesToTypes.put(value.getName(), value.getType());
@@ -223,7 +179,6 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
         return parameters;
     }
 
-    @Override
     public Symbols getSymbols() {
         CompilerAsserts.neverPartOfCompilation();
         return symbols;
@@ -245,77 +200,77 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
     }
 
     @Override
-    public void createBinaryOperationExpression(Type t, int opcode, int lhs, int rhs) {
-        symbols.addSymbol(BinaryOperationConstant.fromSymbols(symbols, t, opcode, lhs, rhs));
+    public void createBinaryOperationExpression(Type type, int opcode, int lhs, int rhs) {
+        symbols.addSymbol(BinaryOperationConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
     }
 
     @Override
-    public void createBlockAddress(Type t, int function, int block) {
-        symbols.addSymbol(BlockAddressConstant.fromSymbols(symbols, t, function, block));
+    public void createBlockAddress(Type type, int function, int block) {
+        symbols.addSymbol(BlockAddressConstant.fromSymbols(symbols, type, function, block));
     }
 
     @Override
-    public void createCastExpression(Type t, int opcode, int value) {
-        symbols.addSymbol(CastConstant.fromSymbols(symbols, t, opcode, value));
+    public void createCastExpression(Type type, int opcode, int value) {
+        symbols.addSymbol(CastConstant.fromSymbols(symbols, type, opcode, value));
     }
 
     @Override
-    public void createCompareExpression(Type t, int opcode, int lhs, int rhs) {
-        symbols.addSymbol(CompareConstant.fromSymbols(symbols, t, opcode, lhs, rhs));
+    public void createCompareExpression(Type type, int opcode, int lhs, int rhs) {
+        symbols.addSymbol(CompareConstant.fromSymbols(symbols, type, opcode, lhs, rhs));
     }
 
     @Override
-    public void createFloatingPoint(Type t, long[] bits) {
-        symbols.addSymbol(FloatingPointConstant.create(t, bits));
+    public void createFloatingPoint(Type type, long[] bits) {
+        symbols.addSymbol(FloatingPointConstant.create((FloatingPointType) type, bits));
     }
 
     @Override
-    public void createFromData(Type t, long[] data) {
-        symbols.addSymbol(Constant.createFromData(t, data));
+    public void createFromData(Type type, long[] data) {
+        symbols.addSymbol(Constant.createFromData(type, data));
     }
 
     @Override
-    public void creatFromString(Type t, String string, boolean isCString) {
-        symbols.addSymbol(new StringConstant(t, string, isCString));
+    public void creatFromString(Type type, String string, boolean isCString) {
+        symbols.addSymbol(new StringConstant(type, string, isCString));
     }
 
     @Override
-    public void createFromValues(Type t, int[] values) {
-        symbols.addSymbol(Constant.createFromValues(t, symbols, values));
+    public void createFromValues(Type type, int[] values) {
+        symbols.addSymbol(Constant.createFromValues(type, symbols, values));
     }
 
     @Override
-    public void createGetElementPointerExpression(Type t, int pointer, int[] indices, boolean isInbounds) {
-        symbols.addSymbol(GetElementPointerConstant.fromSymbols(symbols, t, pointer, indices, isInbounds));
+    public void createGetElementPointerExpression(Type type, int pointer, int[] indices, boolean isInbounds) {
+        symbols.addSymbol(GetElementPointerConstant.fromSymbols(symbols, type, pointer, indices, isInbounds));
     }
 
     @Override
-    public void createInlineASM(Type t, long[] asm) {
-        symbols.addSymbol(InlineAsmConstant.generate(t, asm));
+    public void createInlineASM(Type type, long[] asm) {
+        symbols.addSymbol(InlineAsmConstant.generate(type, asm));
     }
 
     @Override
-    public void createInteger(Type t, long value) {
-        symbols.addSymbol(new IntegerConstant(t, value));
+    public void createInteger(Type type, long value) {
+        symbols.addSymbol(new IntegerConstant((IntegerType) type, value));
     }
 
     @Override
-    public void createInteger(Type t, BigInteger value) {
-        symbols.addSymbol(new BigIntegerConstant(t, value));
+    public void createInteger(Type type, BigInteger value) {
+        symbols.addSymbol(new BigIntegerConstant((IntegerType) type, value));
     }
 
     @Override
-    public void createNull(Type t) {
-        symbols.addSymbol(new NullConstant(t));
+    public void createNull(Type type) {
+        symbols.addSymbol(new NullConstant(type));
     }
 
     @Override
-    public void createUndefined(Type t) {
-        symbols.addSymbol(new UndefinedConstant(t));
+    public void createUndefined(Type type) {
+        symbols.addSymbol(new UndefinedConstant(type));
     }
 
     @Override
-    public MetadataList getMetadata() {
+    public MetadataBlock getMetadata() {
         CompilerAsserts.neverPartOfCompilation();
         return metadata;
     }
@@ -342,8 +297,7 @@ public final class FunctionDefinition implements Constant, FunctionGenerator, Va
 
     @Override
     public String toString() {
-        return "FunctionDefinition [symbols=" + symbols + ", parameters=" + parameters + ", blocks=" + Arrays.toString(blocks) + ", currentBlock=" + currentBlock + ", name=" + name + ", paramattr=" +
-                        paramAttr + "]";
+        CompilerAsserts.neverPartOfCompilation();
+        return "FunctionDefinition [symbolCount=" + symbols.getSize() + ", parameters=" + parameters + ", blocks=" + blocks.length + ", currentBlock=" + currentBlock + ", name=" + getName() + "]";
     }
-
 }

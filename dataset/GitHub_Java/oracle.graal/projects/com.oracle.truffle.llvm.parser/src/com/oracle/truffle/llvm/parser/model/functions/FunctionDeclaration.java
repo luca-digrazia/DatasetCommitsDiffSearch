@@ -29,44 +29,14 @@
  */
 package com.oracle.truffle.llvm.parser.model.functions;
 
-import java.util.Optional;
-
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.Constant;
 import com.oracle.truffle.llvm.parser.model.visitors.ConstantVisitor;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
-import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
-import com.oracle.truffle.llvm.runtime.types.symbols.ValueSymbol;
 
-public final class FunctionDeclaration implements Constant, ValueSymbol {
-
-    private final FunctionType type;
-    private String name;
-    private final AttributesCodeEntry paramAttr;
-
-    public FunctionDeclaration(FunctionType type, String name, AttributesCodeEntry paramAttr) {
-        this.type = type;
-        this.name = name;
-        this.paramAttr = paramAttr;
-    }
-
-    public FunctionDeclaration(FunctionType type, AttributesCodeEntry paramAttr) {
-        this(type, LLVMIdentifier.UNKNOWN, paramAttr);
-    }
+public final class FunctionDeclaration extends FunctionType implements Constant {
 
     public FunctionDeclaration(FunctionType type) {
-        this(type, LLVMIdentifier.UNKNOWN, AttributesCodeEntry.EMPTY);
-    }
-
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = LLVMIdentifier.toGlobalIdentifier(name);
+        super(type.getReturnType(), type.getArgumentTypes(), type.isVarArg());
     }
 
     @Override
@@ -75,67 +45,12 @@ public final class FunctionDeclaration implements Constant, ValueSymbol {
     }
 
     @Override
-    public String toString() {
-        return "FunctionDeclaration [type=" + type + ", name=" + name + ", paramattr=" + paramAttr + "]";
-    }
-
-    @Override
-    public FunctionType getType() {
-        return type;
-    }
-
-    public Optional<AttributesGroup> getFunctionAttributesGroup() {
-        return paramAttr.getFunctionAttributesGroup();
-    }
-
-    public Optional<AttributesGroup> getReturnAttributesGroup() {
-        return paramAttr.getReturnAttributesGroup();
-    }
-
-    public Optional<AttributesGroup> getParameterAttributesGroup(int idx) {
-        return paramAttr.getParameterAttributesGroup(idx);
-    }
-
-    @Override
-    public boolean hasName() {
-        return name != null;
-    }
-
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((name == null) ? 0 : name.hashCode());
-        result = prime * result + ((type == null) ? 0 : type.hashCode());
-        return result;
-    }
-
-    @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        FunctionDeclaration other = (FunctionDeclaration) obj;
-        if (name == null) {
-            if (other.name != null) {
-                return false;
-            }
-        } else if (!name.equals(other.name)) {
-            return false;
-        }
-        if (type == null) {
-            if (other.type != null) {
-                return false;
-            }
-        } else if (!type.equals(other.type)) {
-            return false;
-        }
-        return true;
+        return obj instanceof FunctionDeclaration && super.equals(obj);
+    }
+
+    @Override
+    public String toString() {
+        return "FunctionDeclaration [name=" + getName() + ", types=" + super.toString() + "]";
     }
 }
