@@ -189,7 +189,7 @@ public final class GraphBuilderPhase extends Phase {
         // Add safepoints to loop ends
         if (GraalOptions.GenLoopSafepoints) {
             for (LoopEndNode loopEnd : currentGraph.getNodes(LoopEndNode.class)) {
-                SafepointNode safepoint = currentGraph.add(new SafepointNode());
+                SafepointNode safepoint = currentGraph.add(new SafepointNode(loopEnd));
                 currentGraph.addBeforeFixed(loopEnd, safepoint);
             }
         }

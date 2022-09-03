@@ -74,7 +74,8 @@ public class FrameStateBuilder {
             CiKind kind = type.kind(false).stackKind();
             Stamp stamp;
             if (kind == CiKind.Object && type instanceof RiResolvedType) {
-                stamp = StampFactory.declared((RiResolvedType) type);
+                RiResolvedType resolvedType = (RiResolvedType) type;
+                stamp = StampFactory.declared(resolvedType);
             } else {
                 stamp = StampFactory.forKind(kind);
             }
@@ -169,7 +170,7 @@ public class FrameStateBuilder {
                 return null;
             }
 
-            PhiNode phi = graph.unique(new PhiNode(currentValue.kind(), block));
+            PhiNode phi = graph.unique(new PhiNode(currentValue.kind(), block, PhiType.Value));
             for (int i = 0; i < block.phiPredecessorCount(); i++) {
                 phi.addInput(currentValue);
             }
@@ -256,7 +257,7 @@ public class FrameStateBuilder {
         }
         assert !block.isPhiAtMerge(value) : "phi function for this block already created";
 
-        PhiNode phi = graph.unique(new PhiNode(value.kind(), block));
+        PhiNode phi = graph.unique(new PhiNode(value.kind(), block, PhiType.Value));
         phi.addInput(value);
         return phi;
     }
