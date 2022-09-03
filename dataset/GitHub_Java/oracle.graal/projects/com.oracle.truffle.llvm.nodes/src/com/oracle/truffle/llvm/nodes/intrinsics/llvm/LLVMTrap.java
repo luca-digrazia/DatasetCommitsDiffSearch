@@ -29,20 +29,17 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
 
-@GenerateNodeFactory
-public abstract class LLVMTrap extends LLVMNode {
+public abstract class LLVMTrap extends LLVMBuiltin {
 
     // see
     // http://stackoverflow.com/questions/2862731/when-assert-fails-what-is-the-program-exit-code
     private static final int UNIX_SIGABORT = 134;
 
     @Specialization
-    public void executeVoid() {
+    public Object executeVoid() {
         throw new LLVMExitException(UNIX_SIGABORT);
     }
 

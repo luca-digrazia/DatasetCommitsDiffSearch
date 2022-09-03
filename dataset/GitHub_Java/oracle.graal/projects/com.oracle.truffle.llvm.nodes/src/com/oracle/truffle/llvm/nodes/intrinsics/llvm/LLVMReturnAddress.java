@@ -29,20 +29,17 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@GenerateNodeFactory
-@NodeChild(type = LLVMI32Node.class, value = "val")
-public abstract class LLVMReturnAddress extends LLVMAddressNode {
+@NodeChild(type = LLVMExpressionNode.class, value = "val")
+public abstract class LLVMReturnAddress extends LLVMBuiltin {
 
     @Specialization
     public LLVMAddress executePointee(@SuppressWarnings("unused") int frameLevel) {
-        return LLVMAddress.NULL_POINTER;
+        return LLVMAddress.nullPointer();
     }
 
 }

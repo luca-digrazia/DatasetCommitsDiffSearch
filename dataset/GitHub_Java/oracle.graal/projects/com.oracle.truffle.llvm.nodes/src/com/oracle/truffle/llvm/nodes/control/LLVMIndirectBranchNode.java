@@ -37,19 +37,18 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
-public final class LLVMIndirectBranchNode extends LLVMControlFlowNode {
+public class LLVMIndirectBranchNode extends LLVMControlFlowNode {
 
-    @Child private LLVMBranchAddressNode branchAddress;
+    @Child private LLVMExpressionNode address;
     @CompilationFinal(dimensions = 2) private final LLVMExpressionNode[][] phiWriteNodes;
     @CompilationFinal(dimensions = 1) private final int[] successors;
 
-    public LLVMIndirectBranchNode(LLVMBranchAddressNode branchAddress, int[] indices, LLVMExpressionNode[][] phiWriteNodes, SourceSection sourceSection) {
+    public LLVMIndirectBranchNode(LLVMExpressionNode address, int[] indices, LLVMExpressionNode[][] phiWriteNodes, SourceSection sourceSection) {
         super(sourceSection);
         assert indices.length > 1;
         this.successors = indices;
-        this.branchAddress = branchAddress;
+        this.address = address;
         this.phiWriteNodes = phiWriteNodes;
     }
 
@@ -67,34 +66,15 @@ public final class LLVMIndirectBranchNode extends LLVMControlFlowNode {
     }
 
     public int executeCondition(VirtualFrame frame) {
-        return branchAddress.branchAddress(frame);
+        try {
+            return (int) address.executeLLVMAddress(frame).getVal();
+        } catch (UnexpectedResultException e) {
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("should not reach here", e);
+        }
     }
 
     public int[] getSuccessors() {
         return successors;
-    }
-
-    public abstract static class LLVMBranchAddressNode extends LLVMNode {
-        public abstract int branchAddress(VirtualFrame frame);
-    }
-
-    public static final class LLVMBasicBranchAddressNode extends LLVMBranchAddressNode {
-
-        @Child private LLVMExpressionNode address;
-
-        public LLVMBasicBranchAddressNode(LLVMExpressionNode address) {
-            this.address = address;
-        }
-
-        @Override
-        public int branchAddress(VirtualFrame frame) {
-            try {
-                return (int) address.executeLLVMAddress(frame).getVal();
-            } catch (UnexpectedResultException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException("should not reach here", e);
-            }
-        }
-
     }
 }

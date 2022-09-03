@@ -29,19 +29,16 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm.bit;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
+import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMBuiltin;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class CountTrailingZeroesNode {
 
-    @GenerateNodeFactory
-    @NodeChildren({@NodeChild(type = LLVMI32Node.class), @NodeChild(type = LLVMI1Node.class)})
-    public abstract static class CountTrailingZeroesI32Node extends LLVMI32Node {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class CountTrailingZeroesI32Node extends LLVMBuiltin {
 
         @Specialization
         public int executeI32(int val, @SuppressWarnings("unused") boolean isZeroUndefined) {
@@ -49,9 +46,8 @@ public abstract class CountTrailingZeroesNode {
         }
     }
 
-    @GenerateNodeFactory
-    @NodeChildren({@NodeChild(type = LLVMI64Node.class), @NodeChild(type = LLVMI1Node.class)})
-    public abstract static class CountTrailingZeroesI64Node extends LLVMI64Node {
+    @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+    public abstract static class CountTrailingZeroesI64Node extends LLVMBuiltin {
 
         @Specialization
         public long executeI64(long val, @SuppressWarnings("unused") boolean isZeroUndefined) {

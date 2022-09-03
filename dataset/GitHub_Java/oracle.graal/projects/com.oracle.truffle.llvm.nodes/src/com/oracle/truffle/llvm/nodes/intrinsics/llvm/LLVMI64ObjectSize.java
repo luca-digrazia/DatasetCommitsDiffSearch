@@ -32,16 +32,13 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI1Node;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI1Node.class)})
-public abstract class LLVMI64ObjectSize extends LLVMI64Node {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+public abstract class LLVMI64ObjectSize extends LLVMBuiltin {
 
     @Specialization
-    public long executeI64(@SuppressWarnings("unused") LLVMAddress addr, boolean min) {
+    public long executeI64(@SuppressWarnings("unused") Object addr, boolean min) {
         int objectSizeUnknown = min ? 0 : -1;
         return objectSizeUnknown;
     }

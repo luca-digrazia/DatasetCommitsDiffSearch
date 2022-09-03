@@ -40,7 +40,6 @@ import com.oracle.truffle.llvm.parser.instructions.LLVMConversionType;
 import com.oracle.truffle.llvm.parser.instructions.LLVMLogicalInstructionKind;
 import com.oracle.truffle.llvm.parser.model.blocks.InstructionBlock;
 import com.oracle.truffle.llvm.parser.model.enums.AsmDialect;
-import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.InlineAsmConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.NullConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.integer.IntegerConstant;
@@ -246,16 +245,6 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
     @Override
     public void visit(VoidCallInstruction call) {
         final Symbol target = call.getCallTarget();
-
-        if (target instanceof FunctionDeclaration) {
-            final String name = ((FunctionDeclaration) target).getName();
-            if ("@llvm.dbg.declare".equals(name) || "@llvm.dbg.value".equals(name)) {
-                // these intrinsics are debug information and should be resolved during parsing, not
-                // at runtime
-                return;
-            }
-        }
-
         final int argumentCount;
         int explicitArgumentCount = call.getArgumentCount();
         argumentCount = explicitArgumentCount + 1; // stackpointer
@@ -273,14 +262,14 @@ final class LLVMBitcodeInstructionVisitor implements InstructionVisitor {
         }
 
         final SourceSection sourceSection = runtime.getSourceSection(call);
+        FunctionType functionType = new FunctionType(call.getType(), argsType, false);
         LLVMExpressionNode node = nodeFactory.createLLVMBuiltin(target, args, method.getStackSlot(), method.getArgCount(), sourceSection);
         if (node == null) {
             if (target instanceof InlineAsmConstant) {
                 final InlineAsmConstant inlineAsmConstant = (InlineAsmConstant) target;
                 node = createInlineAssemblerNode(inlineAsmConstant, args, argsType, call.getType(), sourceSection);
             } else {
-                final LLVMExpressionNode function = symbols.resolve(target);
-                final FunctionType functionType = new FunctionType(call.getType(), argsType, false);
+                LLVMExpressionNode function = symbols.resolve(target);
                 node = nodeFactory.createFunctionCall(runtime, function, args, functionType, sourceSection);
             }
         }

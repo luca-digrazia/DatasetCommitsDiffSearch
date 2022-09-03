@@ -29,23 +29,18 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
-import com.oracle.truffle.api.dsl.GenerateNodeFactory;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.nodes.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.types.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@GenerateNodeFactory
-@NodeChildren({@NodeChild(type = LLVMAddressNode.class), @NodeChild(type = LLVMI32Node.class), @NodeChild(type = LLVMI32Node.class), @NodeChild(type = LLVMI32Node.class)})
-public abstract class LLVMPrefetch extends LLVMNode {
+@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+public abstract class LLVMPrefetch extends LLVMBuiltin {
 
     @SuppressWarnings("unused")
     @Specialization
-    public void executeVoid(LLVMAddress address, int rw, int locality, int cacheType) {
-
+    public Object executeVoid(Object address, int rw, int locality, int cacheType) {
+        return null;
     }
 
 }

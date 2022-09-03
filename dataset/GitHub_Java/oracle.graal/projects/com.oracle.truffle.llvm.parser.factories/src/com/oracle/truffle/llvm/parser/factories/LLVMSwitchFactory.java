@@ -31,29 +31,31 @@ package com.oracle.truffle.llvm.parser.factories;
 
 import java.util.Arrays;
 
-import com.oracle.truffle.llvm.nodes.base.LLVMExpressionNode;
-import com.oracle.truffle.llvm.nodes.impl.base.LLVMStatementNode;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI32Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI64Node;
-import com.oracle.truffle.llvm.nodes.impl.base.integers.LLVMI8Node;
-import com.oracle.truffle.llvm.nodes.impl.control.LLVMSwitchNode.LLVMI32SwitchNode;
-import com.oracle.truffle.llvm.nodes.impl.control.LLVMSwitchNode.LLVMI64SwitchNode;
-import com.oracle.truffle.llvm.nodes.impl.control.LLVMSwitchNode.LLVMI8SwitchNode;
-import com.oracle.truffle.llvm.parser.LLVMBaseType;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI16SwitchNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI32SwitchNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI64SwitchNode;
+import com.oracle.truffle.llvm.nodes.control.LLVMSwitchNode.LLVMI8SwitchNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
-public class LLVMSwitchFactory {
+final class LLVMSwitchFactory {
 
-    public static LLVMStatementNode createSwitch(LLVMExpressionNode cond, int defaultLabel, int[] otherLabels, LLVMExpressionNode[] cases, LLVMBaseType llvmType) {
-        switch (llvmType) {
+    static LLVMControlFlowNode createSwitch(LLVMExpressionNode cond, int[] successors, LLVMExpressionNode[] cases, PrimitiveType llvmType, LLVMExpressionNode[][] phiWriteNodes, SourceSection source) {
+        switch (llvmType.getPrimitiveKind()) {
             case I8:
-                LLVMI8Node[] i8Cases = Arrays.copyOf(cases, cases.length, LLVMI8Node[].class);
-                return new LLVMI8SwitchNode((LLVMI8Node) cond, i8Cases, otherLabels, defaultLabel);
+                LLVMExpressionNode[] i8Cases = Arrays.copyOf(cases, cases.length, LLVMExpressionNode[].class);
+                return new LLVMI8SwitchNode(cond, i8Cases, successors, phiWriteNodes, source);
+            case I16:
+                LLVMExpressionNode[] i16Cases = Arrays.copyOf(cases, cases.length, LLVMExpressionNode[].class);
+                return new LLVMI16SwitchNode(cond, i16Cases, successors, phiWriteNodes, source);
             case I32:
-                LLVMI32Node[] i32Cases = Arrays.copyOf(cases, cases.length, LLVMI32Node[].class);
-                return new LLVMI32SwitchNode((LLVMI32Node) cond, i32Cases, otherLabels, defaultLabel);
+                LLVMExpressionNode[] i32Cases = Arrays.copyOf(cases, cases.length, LLVMExpressionNode[].class);
+                return new LLVMI32SwitchNode(cond, i32Cases, successors, phiWriteNodes, source);
             case I64:
-                LLVMI64Node[] i64Cases = Arrays.copyOf(cases, cases.length, LLVMI64Node[].class);
-                return new LLVMI64SwitchNode((LLVMI64Node) cond, i64Cases, otherLabels, defaultLabel);
+                LLVMExpressionNode[] i64Cases = Arrays.copyOf(cases, cases.length, LLVMExpressionNode[].class);
+                return new LLVMI64SwitchNode(cond, i64Cases, successors, phiWriteNodes, source);
             default:
                 throw new AssertionError(llvmType);
         }

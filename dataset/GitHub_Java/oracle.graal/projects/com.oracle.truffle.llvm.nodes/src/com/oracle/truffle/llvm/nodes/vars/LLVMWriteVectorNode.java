@@ -34,19 +34,72 @@ import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.vector.LLVMVectorNode;
-import com.oracle.truffle.llvm.types.vector.LLVMVector;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 
-@NodeChild(value = "valueNode", type = LLVMVectorNode.class)
+@NodeChild(value = "valueNode", type = LLVMExpressionNode.class)
 @NodeField(name = "slot", type = FrameSlot.class)
-public abstract class LLVMWriteVectorNode extends LLVMNode {
+public abstract class LLVMWriteVectorNode extends LLVMExpressionNode {
+
+    public LLVMWriteVectorNode(SourceSection sourceSection) {
+        this.sourceSection = sourceSection;
+    }
 
     protected abstract FrameSlot getSlot();
 
+    private final SourceSection sourceSection;
+
     @Specialization
-    protected void writeVector(VirtualFrame frame, LLVMVector<?> value) {
+    protected Object writeVector(VirtualFrame frame, LLVMDoubleVector value) {
         frame.setObject(getSlot(), value);
+        return null;
     }
 
+    @Specialization
+    protected Object writeVector(VirtualFrame frame, LLVMFloatVector value) {
+        frame.setObject(getSlot(), value);
+        return null;
+    }
+
+    @Specialization
+    protected Object writeVector(VirtualFrame frame, LLVMI16Vector value) {
+        frame.setObject(getSlot(), value);
+        return null;
+    }
+
+    @Specialization
+    protected Object writeVector(VirtualFrame frame, LLVMI1Vector value) {
+        frame.setObject(getSlot(), value);
+        return null;
+    }
+
+    @Specialization
+    protected Object writeVector(VirtualFrame frame, LLVMI32Vector value) {
+        frame.setObject(getSlot(), value);
+        return null;
+    }
+
+    @Specialization
+    protected Object writeVector(VirtualFrame frame, LLVMI64Vector value) {
+        frame.setObject(getSlot(), value);
+        return null;
+    }
+
+    @Specialization
+    protected Object writeVector(VirtualFrame frame, LLVMI8Vector value) {
+        frame.setObject(getSlot(), value);
+        return null;
+    }
+
+    @Override
+    public SourceSection getSourceSection() {
+        return sourceSection;
+    }
 }

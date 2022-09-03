@@ -30,25 +30,28 @@
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm.x86;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.nodes.base.LLVMAddressNode;
-import com.oracle.truffle.llvm.types.LLVMAddress;
-import com.oracle.truffle.llvm.types.memory.LLVMHeap;
-import com.oracle.truffle.llvm.types.memory.LLVMMemory;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-public class LLVMX86_64BitVAEnd extends LLVMNode {
+public final class LLVMX86_64BitVAEnd extends LLVMExpressionNode {
 
-    @Child private LLVMAddressNode target;
+    final SourceSection sourceSection;
 
-    public LLVMX86_64BitVAEnd(LLVMAddressNode target) {
+    @Child private LLVMExpressionNode target;
+
+    public LLVMX86_64BitVAEnd(LLVMExpressionNode target, SourceSection sourceSection) {
         this.target = target;
+        this.sourceSection = sourceSection;
     }
 
     @Override
-    public void executeVoid(VirtualFrame frame) {
-        LLVMAddress address = target.executePointee(frame);
-        LLVMAddress regSaveArea = LLVMMemory.getAddress(address.increment(X86_64BitVarArgs.REG_SAVE_AREA));
-        LLVMHeap.freeMemory(regSaveArea);
+    public Object executeGeneric(VirtualFrame frame) {
+        // nop
+        return null;
     }
 
+    @Override
+    public SourceSection getSourceSection() {
+        return sourceSection;
+    }
 }

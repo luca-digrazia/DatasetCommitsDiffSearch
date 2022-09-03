@@ -31,9 +31,10 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm;
 
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeField(name = "sourceSection", type = SourceSection.class)
-public abstract class LLVMBuiltin extends LLVMIntrinsic {
+public abstract class LLVMBuiltin extends LLVMExpressionNode {
 
     @Override
     public abstract SourceSection getSourceSection();

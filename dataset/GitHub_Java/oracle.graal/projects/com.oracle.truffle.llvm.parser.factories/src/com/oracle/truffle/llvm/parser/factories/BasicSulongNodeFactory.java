@@ -686,9 +686,32 @@ public class BasicSulongNodeFactory implements SulongNodeFactory {
             case "@llvm.eh.sjlj.setjmp":
                 throw new LLVMUnsupportedException(UnsupportedReason.SET_JMP_LONG_JMP);
             case "@llvm.dbg.declare":
-                throw new IllegalStateException("@llvm.dbg.declare should be handled in the parser!");
+                return new LLVMExpressionNode() {
+
+                    @Override
+                    public Object executeGeneric(VirtualFrame frame) {
+                        // TODO: implement debugging support
+                        return null;
+                    }
+
+                };
             case "@llvm.dbg.value":
-                throw new IllegalStateException("@llvm.dbg.value should be handled in the parser!");
+                return new LLVMExpressionNode() {
+
+                    @Override
+                    public Object executeGeneric(VirtualFrame frame) {
+                        /*
+                         * TODO: implement
+                         *
+                         * it seems like this call is used when the project was build with higher
+                         * optimization levels.
+                         *
+                         * $ opt -O3 mycode.ll -S -o mycode.opt.ll
+                         */
+                        return null;
+                    }
+
+                };
             case "@llvm.eh.typeid.for":
                 return new LLVMTypeIdForExceptionNode(args[1], sourceSection);
             case "@llvm.expect.i1": {
