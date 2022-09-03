@@ -130,9 +130,9 @@ public class IdealGraphPrinter {
         }
         List<Loop> loops = null;
         try {
-            loops = LoopUtil.computeLoops(graph);
+            LoopUtil.computeLoops(graph);
         } catch (Throwable t) {
-            t.printStackTrace();
+
         }
 
         stream.println("  <nodes>");

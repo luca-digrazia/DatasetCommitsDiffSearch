@@ -48,10 +48,6 @@ public abstract class Phase {
     }
 
     public final void apply(Graph graph) {
-        apply(graph, true);
-    }
-
-    public final void apply(Graph graph, boolean plotOnError) {
         assert graph != null && (!shouldVerify || graph.verify());
 
         int startDeletedNodeCount = graph.getDeletedNodeCount();
@@ -70,13 +66,13 @@ public abstract class Phase {
             run(graph);
         } catch (AssertionError t) {
             GraalCompilation compilation = GraalCompilation.compilation();
-            if (compilation.compiler.isObserved() && plotOnError) {
+            if (compilation.compiler.isObserved() && this.getClass() != IdentifyBlocksPhase.class) {
                 compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "AssertionError in " + getName(), graph, true, false, true));
             }
             throw t;
         } catch (RuntimeException t) {
             GraalCompilation compilation = GraalCompilation.compilation();
-            if (compilation.compiler.isObserved() && plotOnError) {
+            if (compilation.compiler.isObserved() && this.getClass() != IdentifyBlocksPhase.class) {
                 compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, "RuntimeException in " + getName(), graph, true, false, true));
             }
             throw t;

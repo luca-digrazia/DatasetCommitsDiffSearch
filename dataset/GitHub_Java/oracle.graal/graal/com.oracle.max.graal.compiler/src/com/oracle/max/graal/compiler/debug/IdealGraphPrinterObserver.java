@@ -140,17 +140,12 @@ public class IdealGraphPrinterObserver implements CompilationObserver {
 
     @Override
     public void compilationEvent(CompilationEvent event) {
-        boolean lazyStart = false;
         if (printer == null && event.isErrorEvent()) {
-            this.compilationStarted(event);
-            lazyStart = true;
+            this.compilationStarted(event); // lazy start
         }
         if (printer != null && event.getGraph() != null && event.isHIRValid()) {
             Graph graph = event.getGraph();
             printer.print(graph, event.getLabel(), true, event.getDebugObjects());
-        }
-        if (lazyStart) {
-            this.compilationFinished(event);
         }
     }
 
