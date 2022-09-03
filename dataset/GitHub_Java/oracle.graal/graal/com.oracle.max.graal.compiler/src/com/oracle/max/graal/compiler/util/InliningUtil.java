@@ -386,7 +386,7 @@ public class InliningUtil {
         public String toString() {
             StringBuilder builder = new StringBuilder(String.format("type-checked inlining of %d methods with %d type checks: ", concretes.size(), types.length));
             for (int i = 0; i < concretes.size(); i++) {
-                builder.append(CiUtil.format("  %H.%n(%p):%r", concretes.get(i)));
+                builder.append(CiUtil.format("\n        %H.%n(%p):%r", concretes.get(i)));
             }
             return builder.toString();
         }
@@ -514,13 +514,8 @@ public class InliningUtil {
                     }
                 } else {
                     if (GraalOptions.InlinePolymorphicCalls) {
-                        if (notRecordedTypeProbability > 0) {
-                            // TODO (ch) allow inlining only the most frequent calls (e.g. 8 different methods, inline only 2 and invoke others)
-                            // may affect peak performance negatively if immature profiling information is used
-                            Debug.log("not inlining %s because not all seen types were could be recorded during profiling", methodName(callTarget.targetMethod(), invoke));
-                            return null;
-                        }
-
+                        // TODO (ch) allow inlining only the most frequent calls (e.g. 8 different methods, inline only 2 and invoke others)
+                        // may affect peak performance negatively if immature profiling information is used
                         // TODO (ch) sort types by probability
 
                         // determine concrete methods and map type to specific method
@@ -539,12 +534,12 @@ public class InliningUtil {
 
                         double totalWeight = 0;
                         boolean canInline = true;
-                        for (RiResolvedMethod concrete: concreteMethods) {
-                            if (concrete == null || !checkTargetConditions(concrete)) {
+                        for (RiResolvedMethod method: concreteMethods) {
+                            if (method == null || !checkTargetConditions(method)) {
                                 canInline = false;
                                 break;
                             }
-                            totalWeight += callback == null ? 0 : callback.inliningWeight(parent, concrete, invoke);
+                            totalWeight += callback == null ? 0 : callback.inliningWeight(parent, method, invoke);
                         }
 
                         if (canInline) {

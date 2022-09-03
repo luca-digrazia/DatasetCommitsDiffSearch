@@ -747,9 +747,6 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
         XirArgument otherClass = toXirArgument(x.type().getEncoding(Representation.ObjectHub));
         XirSnippet snippet = xir.genTypeBranch(site(x), thisClass, otherClass, x.type());
         emitXir(snippet, x, info, null, false, trueSuccessor, falseSuccessor);
-        if (trueSuccessor != null) {
-            emitJump(trueSuccessor, null);
-        }
     }
 
     @Override
