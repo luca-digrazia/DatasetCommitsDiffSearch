@@ -28,7 +28,6 @@ import static com.oracle.graal.compiler.amd64.AMD64LIRGenerator.*;
 import static com.oracle.graal.hotspot.nodes.MonitorEnterStubCall.*;
 import static com.oracle.graal.hotspot.nodes.MonitorExitStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewArrayStubCall.*;
-import static com.oracle.graal.hotspot.nodes.NewInstanceSlowStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewInstanceStubCall.*;
 import static com.oracle.graal.hotspot.nodes.NewMultiArrayStubCall.*;
 import static com.oracle.graal.hotspot.nodes.VMErrorNode.*;
@@ -85,18 +84,19 @@ public class AMD64HotSpotRuntime extends HotSpotRuntime {
                 /* arg0: object */ arg(0, Kind.Object),
                 /* arg1:   lock */ arg(1, word));
 
-        addRuntimeCall(NEW_ARRAY, c.newArrayStub,
+        addRuntimeCall(NEW_OBJECT_ARRAY, c.newObjectArrayStub,
                 /*        temps */ new Register[] {rcx, rdi, rsi},
                 /*          ret */ rax.asValue(Kind.Object),
                 /* arg0:    hub */ rdx.asValue(word),
                 /* arg1: length */ rbx.asValue(Kind.Int));
 
-        addRuntimeCall(NEW_INSTANCE, 0L,
-                /*        temps */ null,
+        addRuntimeCall(NEW_TYPE_ARRAY, c.newTypeArrayStub,
+                /*        temps */ new Register[] {rcx, rdi, rsi},
                 /*          ret */ rax.asValue(Kind.Object),
-                /* arg0:    hub */ rdx.asValue(word));
+                /* arg0:    hub */ rdx.asValue(word),
+                /* arg1: length */ rbx.asValue(Kind.Int));
 
-        addRuntimeCall(NEW_INSTANCE_SLOW, c.newInstanceStub,
+        addRuntimeCall(NEW_INSTANCE, c.newInstanceStub,
                 /*        temps */ null,
                 /*          ret */ rax.asValue(Kind.Object),
                 /* arg0:    hub */ rdx.asValue(word));
