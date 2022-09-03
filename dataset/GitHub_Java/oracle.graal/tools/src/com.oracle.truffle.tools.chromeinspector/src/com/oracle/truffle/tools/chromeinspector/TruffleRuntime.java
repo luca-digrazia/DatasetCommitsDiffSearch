@@ -55,7 +55,6 @@ import com.oracle.truffle.tools.chromeinspector.events.Event;
 import com.oracle.truffle.tools.chromeinspector.instrument.Enabler;
 import com.oracle.truffle.tools.chromeinspector.instrument.OutputConsumerInstrument;
 import com.oracle.truffle.tools.chromeinspector.server.CommandProcessException;
-import com.oracle.truffle.tools.chromeinspector.server.InspectServerSession.CommandPostProcessor;
 import com.oracle.truffle.tools.chromeinspector.types.CallArgument;
 import com.oracle.truffle.tools.chromeinspector.types.ExceptionDetails;
 import com.oracle.truffle.tools.chromeinspector.types.InternalPropertyDescriptor;
@@ -85,6 +84,7 @@ public final class TruffleRuntime extends RuntimeDomain {
     private final TruffleExecutionContext context;
     private TruffleExecutionContext.Listener contextListener;
     private ScriptsHandler slh;
+    private Enabler enabler;
 
     public TruffleRuntime(TruffleExecutionContext context) {
         this.context = context;
@@ -97,7 +97,8 @@ public final class TruffleRuntime extends RuntimeDomain {
             contextListener = new ContextListener();
             context.addListener(contextListener);
             InstrumentInfo instrumentInfo = context.getEnv().getInstruments().get(OutputConsumerInstrument.ID);
-            context.getEnv().lookup(instrumentInfo, Enabler.class).enable();
+            enabler = context.getEnv().lookup(instrumentInfo, Enabler.class);
+            enabler.enable();
             OutputHandler oh = context.getEnv().lookup(instrumentInfo, OutputHandler.Provider.class).getOutputHandler();
             oh.setOutListener(new ConsoleOutputListener("log"));
             oh.setErrListener(new ConsoleOutputListener("error"));
@@ -107,10 +108,10 @@ public final class TruffleRuntime extends RuntimeDomain {
     @Override
     public void disable() {
         if (contextListener != null) {
-            InstrumentInfo instrumentInfo = context.getEnv().getInstruments().get(OutputConsumerInstrument.ID);
-            context.getEnv().lookup(instrumentInfo, Enabler.class).disable();
             context.removeListener(contextListener);
             contextListener = null;
+            enabler.disable();
+            enabler = null;
             slh = null;
             context.releaseScriptsHandler();
         }
@@ -410,7 +411,6 @@ public final class TruffleRuntime extends RuntimeDomain {
         JSONObject json = new JSONObject();
         if (object != null) {
             DebugValue value = object.getDebugValue();
-            DebugScope scope = object.getScope();
             DebuggerSuspendedInfo suspendedInfo = context.getSuspendedInfo();
             if (suspendedInfo != null) {
                 try {
@@ -420,7 +420,7 @@ public final class TruffleRuntime extends RuntimeDomain {
                         public Void executeCommand() throws CommandProcessException {
                             JSONObject result;
                             if (function.startsWith(FUNCTION_COMPLETION)) {
-                                result = createCodecompletion(value, scope);
+                                result = createCodecompletion(value);
                             } else if (function.equals(FUNCTION_SET_PROPERTY)) {
                                 // Set of an array element, or object property
                                 if (arguments.length() < 2) {
@@ -428,7 +428,7 @@ public final class TruffleRuntime extends RuntimeDomain {
                                 }
                                 Object property = ((JSONObject) arguments.get(0)).get("value");
                                 CallArgument newValue = CallArgument.get((JSONObject) arguments.get(1));
-                                setPropertyValue(value, scope, property, newValue, suspendedInfo.lastEvaluatedValue.getAndSet(null));
+                                setPropertyValue(value, property, newValue, suspendedInfo.lastEvaluatedValue.getAndSet(null));
                                 result = new JSONObject();
                             } else if (FUNCTION_GETTER_PATTERN1.matcher(functionDeclaration).matches()) {
                                 if (arguments.length() < 1) {
@@ -437,13 +437,9 @@ public final class TruffleRuntime extends RuntimeDomain {
                                 String propertyNames = ((JSONObject) arguments.get(0)).getString("value");
                                 JSONArray properties = new JSONArray(propertyNames);
                                 DebugValue v = value;
-                                for (int i = 0; i < properties.length() && (i == 0 || v != null); i++) {
+                                for (int i = 0; i < properties.length() && v != null; i++) {
                                     String propertyName = properties.getString(i);
-                                    if (v != null) {
-                                        v = v.getProperty(propertyName);
-                                    } else {
-                                        v = scope.getDeclaredValue(propertyName);
-                                    }
+                                    v = v.getProperty(propertyName);
                                 }
                                 result = asResult(v);
                             } else if (FUNCTION_GETTER_PATTERN2.matcher(functionDeclaration).matches()) {
@@ -451,15 +447,10 @@ public final class TruffleRuntime extends RuntimeDomain {
                                     throw new CommandProcessException("Expecting an argument to invokeGetter function.");
                                 }
                                 String propertyName = ((JSONObject) arguments.get(0)).getString("value");
-                                DebugValue p;
-                                if (value != null) {
-                                    p = value.getProperty(propertyName);
-                                } else {
-                                    p = scope.getDeclaredValue(propertyName);
-                                }
+                                DebugValue p = value.getProperty(propertyName);
                                 result = asResult(p);
                             } else {
-                                String code = "(" + functionDeclaration + ")(" + ((value != null) ? value.getName() : "") + ")";
+                                String code = "(" + functionDeclaration + ")(" + value.getName() + ")";
                                 DebugValue eval = suspendedInfo.getSuspendedEvent().getTopStackFrame().eval(code);
                                 result = asResult(eval);
                             }
@@ -497,10 +488,10 @@ public final class TruffleRuntime extends RuntimeDomain {
         return new Params(json);
     }
 
-    private void setPropertyValue(DebugValue object, DebugScope scope, Object property, CallArgument newValue, Pair<DebugValue, Object> evaluatedValue) throws CommandProcessException {
+    private void setPropertyValue(DebugValue object, Object property, CallArgument newValue, Pair<DebugValue, Object> evaluatedValue) throws CommandProcessException {
         DebugValue propValue;
         Number index = null;
-        if (object != null && object.isArray()) {
+        if (object.isArray()) {
             if (property instanceof Number) {
                 index = (Number) property;
             } else {
@@ -519,11 +510,7 @@ public final class TruffleRuntime extends RuntimeDomain {
             }
             propValue = array.get(i);
         } else {
-            if (object != null) {
-                propValue = object.getProperty(property.toString());
-            } else {
-                propValue = scope.getDeclaredValue(property.toString());
-            }
+            propValue = object.getProperty(property.toString());
             if (propValue == null) {
                 throw new CommandProcessException("No property named " + property.toString() + " was found.");
             }
@@ -535,21 +522,17 @@ public final class TruffleRuntime extends RuntimeDomain {
         }
     }
 
-    private JSONObject createCodecompletion(DebugValue value, DebugScope scope) {
+    private JSONObject createCodecompletion(DebugValue value) {
         JSONObject result = new JSONObject();
-        Iterable<DebugValue> properties = null;
+        Collection<DebugValue> properties = null;
         try {
-            if (value != null) {
-                properties = value.getProperties();
-            } else {
-                properties = scope.getDeclaredValues();
-            }
+            properties = value.getProperties();
         } catch (DebugException ex) {
             fillExceptionDetails(result, ex);
             if (ex.isInternalError()) {
                 PrintWriter err = context.getErr();
                 if (err != null) {
-                    err.println("getProperties(" + ((value != null) ? value.getName() : scope.getName()) + ") has caused: " + ex);
+                    err.println("getProperties(" + value.getName() + ") has caused: " + ex);
                     ex.printStackTrace(err);
                 }
             }
@@ -584,8 +567,8 @@ public final class TruffleRuntime extends RuntimeDomain {
     }
 
     @Override
-    public void runIfWaitingForDebugger(CommandPostProcessor postProcessor) {
-        postProcessor.setPostProcessJob(() -> context.doRunIfWaitingForDebugger());
+    public void runIfWaitingForDebugger() {
+        context.doRunIfWaitingForDebugger();
     }
 
     private JSONObject createPropertyJSON(DebugValue v) {
