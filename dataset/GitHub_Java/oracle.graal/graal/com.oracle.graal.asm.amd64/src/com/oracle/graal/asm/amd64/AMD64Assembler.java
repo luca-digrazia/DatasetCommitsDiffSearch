@@ -203,16 +203,16 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     // immediate-to-memory forms
-    private void emitArithOperand(int op1, int op2, AMD64Address adr, int imm32) {
+    private void emitArithOperand(int op1, Register rm, AMD64Address adr, int imm32) {
         assert (op1 & 0x01) == 1 : "should be 32bit operation";
         assert (op1 & 0x02) == 0 : "sign-extension bit should not be set";
         if (isByte(imm32)) {
             emitByte(op1 | 0x02); // set sign bit
-            emitOperandHelper(op2, adr);
+            emitOperandHelper(rm, adr);
             emitByte(imm32 & 0xFF);
         } else {
             emitByte(op1);
-            emitOperandHelper(op2, adr);
+            emitOperandHelper(rm, adr);
             emitInt(imm32);
         }
     }
@@ -224,14 +224,6 @@ public class AMD64Assembler extends AbstractAssembler {
     }
 
     protected void emitOperandHelper(Register reg, AMD64Address addr) {
-        assert reg != Register.None;
-        emitOperandHelper(encode(reg), addr);
-    }
-
-    protected void emitOperandHelper(int reg, AMD64Address addr) {
-        assert (reg & 0x07) == reg;
-        int regenc = reg << 3;
-
         Register base = isLegal(addr.getBase()) ? asRegister(addr.getBase()) : Register.None;
         Register index = isLegal(addr.getIndex()) ? asRegister(addr.getIndex()) : Register.None;
 
@@ -242,6 +234,11 @@ public class AMD64Assembler extends AbstractAssembler {
             assert frameRegister != null : "cannot use register " + Register.Frame + " in assembler with null register configuration";
             base = frameRegister;
         }
+
+        // Encode the registers as needed in the fields they are used in
+
+        assert reg != Register.None;
+        int regenc = encode(reg) << 3;
 
         if (base == AMD64.rip) { // also matches Placeholder
             // [00 000 101] disp32
@@ -334,7 +331,7 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public final void addl(AMD64Address dst, int imm32) {
         prefix(dst);
-        emitArithOperand(0x81, 0, dst, imm32);
+        emitArithOperand(0x81, rax, dst, imm32);
     }
 
     public final void addl(Register dst, int imm32) {
@@ -603,7 +600,7 @@ public class AMD64Assembler extends AbstractAssembler {
     protected final void decl(AMD64Address dst) {
         prefix(dst);
         emitByte(0xFF);
-        emitOperandHelper(1, dst);
+        emitOperandHelper(rcx, dst);
     }
 
     public final void divsd(Register dst, AMD64Address src) {
@@ -667,13 +664,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0xC0 | encode);
     }
 
-    public final void imull(Register dst, AMD64Address src) {
-        prefix(src, dst);
-        emitByte(0x0F);
-        emitByte(0xAF);
-        emitOperandHelper(dst, src);
-    }
-
     public final void imull(Register dst, Register src, int value) {
         int encode = prefixAndEncode(dst.encoding, src.encoding);
         if (isByte(value)) {
@@ -690,7 +680,7 @@ public class AMD64Assembler extends AbstractAssembler {
     protected final void incl(AMD64Address dst) {
         prefix(dst);
         emitByte(0xFF);
-        emitOperandHelper(0, dst);
+        emitOperandHelper(rax, dst);
     }
 
     private void jcc(ConditionFlag cc, int jumpTarget, boolean forceDisp32) {
@@ -866,7 +856,7 @@ public class AMD64Assembler extends AbstractAssembler {
     public final void movb(AMD64Address dst, int imm8) {
         prefix(dst);
         emitByte(0xC6);
-        emitOperandHelper(0, dst);
+        emitOperandHelper(rax, dst);
         emitByte(imm8);
     }
 
@@ -917,7 +907,7 @@ public class AMD64Assembler extends AbstractAssembler {
     public final void movl(AMD64Address dst, int imm32) {
         prefix(dst);
         emitByte(0xC7);
-        emitOperandHelper(0, dst);
+        emitOperandHelper(rax, dst);
         emitInt(imm32);
     }
 
@@ -1064,7 +1054,7 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x66); // switch to 16-bit mode
         prefix(dst);
         emitByte(0xC7);
-        emitOperandHelper(0, dst);
+        emitOperandHelper(rax, dst);
         emitShort(imm16);
     }
 
@@ -1471,7 +1461,15 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public final void subl(AMD64Address dst, int imm32) {
         prefix(dst);
-        emitArithOperand(0x81, 5, dst, imm32);
+        if (isByte(imm32)) {
+            emitByte(0x83);
+            emitOperandHelper(rbp, dst);
+            emitByte(imm32 & 0xFF);
+        } else {
+            emitByte(0x81);
+            emitOperandHelper(rbp, dst);
+            emitInt(imm32);
+        }
     }
 
     public final void subl(Register dst, int imm32) {
@@ -2005,7 +2003,7 @@ public class AMD64Assembler extends AbstractAssembler {
     protected final void decq(AMD64Address dst) {
         prefixq(dst);
         emitByte(0xFF);
-        emitOperandHelper(1, dst);
+        emitOperandHelper(rcx, dst);
     }
 
     public final void divq(Register src) {
@@ -2025,13 +2023,6 @@ public class AMD64Assembler extends AbstractAssembler {
         emitByte(0x0F);
         emitByte(0xAF);
         emitByte(0xC0 | encode);
-    }
-
-    public final void imulq(Register dst, AMD64Address src) {
-        prefixq(src, dst);
-        emitByte(0x0F);
-        emitByte(0xAF);
-        emitOperandHelper(dst, src);
     }
 
     public final void imulq(Register dst, Register src, int value) {
@@ -2087,7 +2078,7 @@ public class AMD64Assembler extends AbstractAssembler {
     public final void movslq(AMD64Address dst, int imm32) {
         prefixq(dst);
         emitByte(0xC7);
-        emitOperandHelper(0, dst);
+        emitOperandHelper(rax, dst);
         emitInt(imm32);
     }
 
@@ -2328,7 +2319,7 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public final void fld(AMD64Address src) {
         emitByte(0xDD);
-        emitOperandHelper(0, src);
+        emitOperandHelper(rax, src);
     }
 
     public final void fldln2() {
@@ -2348,7 +2339,7 @@ public class AMD64Assembler extends AbstractAssembler {
 
     public final void fstp(AMD64Address src) {
         emitByte(0xDD);
-        emitOperandHelper(3, src);
+        emitOperandHelper(rbx, src);
     }
 
     public final void fsin() {

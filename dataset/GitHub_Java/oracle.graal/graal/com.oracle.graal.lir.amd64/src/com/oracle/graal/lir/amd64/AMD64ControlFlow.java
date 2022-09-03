@@ -26,13 +26,13 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
 import com.oracle.graal.amd64.*;
-import com.oracle.graal.api.code.CompilationResult.JumpTable;
+import com.oracle.graal.amd64.AMD64Address.Scale;
 import com.oracle.graal.api.code.*;
+import com.oracle.graal.api.code.CompilationResult.JumpTable;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.*;
-import com.oracle.graal.asm.amd64.*;
-import com.oracle.graal.asm.amd64.AMD64Address.Scale;
 import com.oracle.graal.asm.amd64.AMD64Assembler.ConditionFlag;
+import com.oracle.graal.asm.amd64.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.LIRInstruction.Opcode;
@@ -63,14 +63,16 @@ public class AMD64ControlFlow {
     public static class BranchOp extends AMD64LIRInstruction implements StandardOp.BranchOp {
         protected ConditionFlag condition;
         protected LabelRef destination;
+        @State protected LIRFrameState state;
 
-        public BranchOp(Condition condition, LabelRef destination) {
-            this(intCond(condition), destination);
+        public BranchOp(Condition condition, LabelRef destination, LIRFrameState info) {
+            this(intCond(condition), destination, info);
         }
 
-        public BranchOp(ConditionFlag condition, LabelRef destination) {
+        public BranchOp(ConditionFlag condition, LabelRef destination, LIRFrameState state) {
             this.condition = condition;
             this.destination = destination;
+            this.state = state;
         }
 
         @Override
@@ -94,8 +96,8 @@ public class AMD64ControlFlow {
     public static class FloatBranchOp extends BranchOp {
         protected boolean unorderedIsTrue;
 
-        public FloatBranchOp(Condition condition, boolean unorderedIsTrue, LabelRef destination) {
-            super(floatCond(condition), destination);
+        public FloatBranchOp(Condition condition, boolean unorderedIsTrue, LabelRef destination, LIRFrameState info) {
+            super(floatCond(condition), destination, info);
             this.unorderedIsTrue = unorderedIsTrue;
         }
 
@@ -336,11 +338,11 @@ public class AMD64ControlFlow {
 
         // Set scratch to address of jump table
         int leaPos = buf.position();
-        masm.leaq(scratch, new AMD64Address(AMD64.rip, 0));
+        masm.leaq(scratch, new AMD64Address(tasm.target.wordKind, AMD64.rip.asValue(), 0));
         int afterLea = buf.position();
 
         // Load jump table entry into scratch and jump to it
-        masm.movslq(value, new AMD64Address(scratch, value, Scale.Times4, 0));
+        masm.movslq(value, new AMD64Address(Kind.Int, scratch.asValue(), value.asValue(), Scale.Times4, 0));
         masm.addq(scratch, value);
         masm.jmp(scratch);
 
@@ -352,7 +354,7 @@ public class AMD64ControlFlow {
         // Patch LEA instruction above now that we know the position of the jump table
         int jumpTablePos = buf.position();
         buf.setPosition(leaPos);
-        masm.leaq(scratch, new AMD64Address(AMD64.rip, jumpTablePos - afterLea));
+        masm.leaq(scratch, new AMD64Address(tasm.target.wordKind, AMD64.rip.asValue(), jumpTablePos - afterLea));
         buf.setPosition(jumpTablePos);
 
         // Emit jump table entries
