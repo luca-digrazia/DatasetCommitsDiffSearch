@@ -26,8 +26,6 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
@@ -37,7 +35,7 @@ import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.MessageResolution;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 
-final class ForeignAccessFactoryGenerator {
+public final class ForeignAccessFactoryGenerator {
 
     private final String receiverTypeClass;
     private final String packageName;
@@ -45,31 +43,26 @@ final class ForeignAccessFactoryGenerator {
     private final ProcessingEnvironment processingEnv;
     protected final TypeElement element;
 
-    private final SortedSet<String> imports;
-    private final Map<Object, MessageGenerator> messageGenerators;
-    private LanguageCheckGenerator languageCheckGenerator;
+    private final Map<Object, String> messageHandlers;
 
-    ForeignAccessFactoryGenerator(ProcessingEnvironment processingEnv, MessageResolution messageResolutionAnnotation, TypeElement element) {
+    private String languageCheckFactoryInvokation;
+
+    public ForeignAccessFactoryGenerator(ProcessingEnvironment processingEnv, MessageResolution messageResolutionAnnotation, TypeElement element) {
         this.processingEnv = processingEnv;
         this.element = element;
         this.packageName = ElementUtils.getPackageName(element);
         this.simpleClassName = ElementUtils.getSimpleName(element) + "Foreign";
         this.receiverTypeClass = Utils.getReceiverTypeFullClassName(messageResolutionAnnotation);
-        this.imports = new TreeSet<>();
-        this.messageGenerators = new HashMap<>();
-        this.languageCheckGenerator = null;
+        this.messageHandlers = new HashMap<>();
+        this.languageCheckFactoryInvokation = null;
     }
 
-    public void addMessageHandler(Object message, MessageGenerator messageGenerator) {
-        messageGenerators.put(message, messageGenerator);
+    public void addMessageHandler(Object message, String factoryMethodInvocation) {
+        messageHandlers.put(message, factoryMethodInvocation);
     }
 
-    public void addLanguageCheckHandler(LanguageCheckGenerator generator) {
-        this.languageCheckGenerator = generator;
-    }
-
-    public String getSimpleClassName() {
-        return simpleClassName;
+    public void addLanguageCheckHandler(String invocation) {
+        this.languageCheckFactoryInvokation = invocation;
     }
 
     public String getFullClassName() {
@@ -79,7 +72,7 @@ final class ForeignAccessFactoryGenerator {
     public void generate() throws IOException {
         JavaFileObject factoryFile = processingEnv.getFiler().createSourceFile(packageName + "." + simpleClassName, element);
         Writer w = factoryFile.openWriter();
-        w.append("package ").append(packageName).append(";\n\n");
+        w.append("package ").append(packageName).append(";\n");
         appendImports(w);
         Utils.appendFactoryGeneratedFor(w, "", receiverTypeClass, ElementUtils.getQualifiedName(element));
         Utils.appendVisibilityModifier(w, element);
@@ -108,86 +101,65 @@ final class ForeignAccessFactoryGenerator {
         appendFactoryAccessToNative(w);
         appendFactoryAccessMessage(w);
 
-        for (MessageGenerator generator : messageGenerators.values()) {
-            generator.appendNode(w);
-        }
-        if (languageCheckGenerator != null) {
-            languageCheckGenerator.appendNode(w);
-        }
-
         w.append("}\n");
         w.close();
     }
 
     private boolean hasLanguageCheckNode() {
-        return languageCheckGenerator != null;
-    }
-
-    private void collectImports() {
-        imports.add("com.oracle.truffle.api.CallTarget");
-        if (hasLanguageCheckNode()) {
-            imports.add("com.oracle.truffle.api.CompilerDirectives.TruffleBoundary");
-        }
-        imports.add("com.oracle.truffle.api.Truffle");
-        imports.add("com.oracle.truffle.api.interop.ForeignAccess.Factory26");
-        imports.add("com.oracle.truffle.api.interop.ForeignAccess.Factory");
-        imports.add("com.oracle.truffle.api.interop.ForeignAccess");
-        imports.add("com.oracle.truffle.api.interop.Message");
-        imports.add("com.oracle.truffle.api.interop.TruffleObject");
-        if (!(messageGenerators.containsKey(Message.IS_BOXED) &&
-                        messageGenerators.containsKey(Message.IS_NULL) &&
-                        messageGenerators.containsKey(Message.IS_EXECUTABLE) &&
-                        messageGenerators.containsKey(Message.KEY_INFO) &&
-                        messageGenerators.containsKey(Message.HAS_SIZE) &&
-                        messageGenerators.containsKey(Message.IS_POINTER))) {
-            imports.add("com.oracle.truffle.api.nodes.RootNode");
-        }
-
-        for (MessageGenerator generator : messageGenerators.values()) {
-            generator.addImports(imports);
-        }
-        if (languageCheckGenerator != null) {
-            languageCheckGenerator.addImports(imports);
-        }
+        return languageCheckFactoryInvokation != null;
     }
 
     private void appendImports(Writer w) throws IOException {
-        collectImports();
-
-        for (String importedClassName : imports) {
-            w.append("import ").append(importedClassName).append(";\n");
+        w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory26;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.ForeignAccess.Factory;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.Message;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.ForeignAccess;").append("\n");
+        w.append("import com.oracle.truffle.api.interop.TruffleObject;").append("\n");
+        w.append("import com.oracle.truffle.api.CallTarget;").append("\n");
+        if (hasLanguageCheckNode()) {
+            w.append("import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;").append("\n");
+        }
+        w.append("import com.oracle.truffle.api.Truffle;").append("\n");
+        if (!(messageHandlers.containsKey(Message.IS_BOXED) &&
+                        messageHandlers.containsKey(Message.IS_NULL) &&
+                        messageHandlers.containsKey(Message.IS_EXECUTABLE) &&
+                        messageHandlers.containsKey(Message.KEY_INFO) &&
+                        messageHandlers.containsKey(Message.HAS_SIZE) &&
+                        messageHandlers.containsKey(Message.IS_POINTER))) {
+            w.append("import com.oracle.truffle.api.nodes.RootNode;").append("\n");
         }
     }
 
     private void appendSingletonAndGetter(Writer w) throws IOException {
         String allocation;
         if (hasLanguageCheckNode()) {
-            allocation = "ForeignAccess.create(new " + simpleClassName + "(), " + languageCheckGenerator.getRootNodeFactoryInvocation() + ");";
+            allocation = "ForeignAccess.create(new " + simpleClassName + "(), " + languageCheckFactoryInvokation + ");";
         } else {
             allocation = "ForeignAccess.create(new " + simpleClassName + "(), null);";
         }
-        w.append("    public static final ForeignAccess ACCESS = ").append(allocation).append("\n");
-        w.append("    @Deprecated public static ForeignAccess createAccess() { return ").append(allocation).append(" }\n");
+        w.append("  public static final ForeignAccess ACCESS = ").append(allocation).append("\n");
+        w.append("  @Deprecated");
+        w.append("  public static ForeignAccess createAccess() { return ").append(allocation).append(" }\n");
         w.append("\n");
     }
 
     private void appendPrivateConstructor(Writer w) throws IOException {
-        w.append("    private ").append(simpleClassName).append("() { }").append("\n");
+        w.append("  private ").append(simpleClassName).append("() { }").append("\n");
         w.append("\n");
     }
 
     private void appendFactoryCanHandle(Writer w) throws IOException {
-        w.append("    @Override").append("\n");
+        w.append("  @Override").append("\n");
         if (hasLanguageCheckNode()) {
-            w.append("    @TruffleBoundary").append("\n");
+            w.append("  @TruffleBoundary").append("\n");
         }
-        w.append("    public boolean canHandle(TruffleObject obj) {").append("\n");
+        w.append("  public boolean canHandle(TruffleObject obj) {").append("\n");
         if (hasLanguageCheckNode()) {
-            w.append("        return (boolean) Truffle.getRuntime().createCallTarget(").append(languageCheckGenerator.getRootNodeFactoryInvocation()).append(").call(obj);\n");
+            w.append("    return (boolean) Truffle.getRuntime().createCallTarget(").append(languageCheckFactoryInvokation).append(").call(obj);\n");
         } else {
-            w.append("        return ").append(receiverTypeClass).append(".isInstance(obj);").append("\n");
+            w.append("    return ").append(receiverTypeClass).append(".isInstance(obj);").append("\n");
         }
-        w.append("    }").append("\n");
+        w.append("  }").append("\n");
         w.append("\n");
     }
 
@@ -224,10 +196,10 @@ final class ForeignAccessFactoryGenerator {
     }
 
     private void appendOptionalDefaultHandlerBody(Writer w, Message message, String defaultValue) throws IOException {
-        if (!messageGenerators.containsKey(message)) {
+        if (!messageHandlers.containsKey(message)) {
             w.append("      return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(" + defaultValue + "));").append("\n");
         } else {
-            w.append("      return Truffle.getRuntime().createCallTarget(").append(messageGenerators.get(message).getRootNodeFactoryInvocation()).append(");").append("\n");
+            w.append("      return Truffle.getRuntime().createCallTarget(").append(messageHandlers.get(message)).append(");").append("\n");
         }
     }
 
@@ -316,21 +288,21 @@ final class ForeignAccessFactoryGenerator {
     }
 
     private void appendOptionalHandlerBody(Writer w, Message message) throws IOException {
-        if (!messageGenerators.containsKey(message)) {
+        if (!messageHandlers.containsKey(message)) {
             w.append("      return null;\n");
         } else {
-            w.append("      return com.oracle.truffle.api.Truffle.getRuntime().createCallTarget(").append(messageGenerators.get(message).getRootNodeFactoryInvocation()).append(");").append("\n");
+            w.append("      return com.oracle.truffle.api.Truffle.getRuntime().createCallTarget(").append(messageHandlers.get(message)).append(");").append("\n");
         }
     }
 
     private void appendFactoryAccessMessage(Writer w) throws IOException {
         w.append("    @Override").append("\n");
         w.append("    public CallTarget accessMessage(Message unknown) {").append("\n");
-        for (Object m : messageGenerators.keySet()) {
+        for (Object m : messageHandlers.keySet()) {
             if (!InteropDSLProcessor.KNOWN_MESSAGES.contains(m)) {
                 String msg = m instanceof Message ? Message.toString((Message) m) : (String) m;
                 w.append("      if (unknown != null && unknown.getClass().getCanonicalName().equals(\"").append(msg).append("\")) {").append("\n");
-                w.append("        return Truffle.getRuntime().createCallTarget(").append(messageGenerators.get(m).getRootNodeFactoryInvocation()).append(");").append("\n");
+                w.append("        return Truffle.getRuntime().createCallTarget(").append(messageHandlers.get(m)).append(");").append("\n");
                 w.append("      }").append("\n");
             }
         }
