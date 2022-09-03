@@ -22,8 +22,7 @@
  */
 package com.oracle.max.graal.compiler.ir;
 
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.NotifyReProcess;
-import com.oracle.max.graal.compiler.phases.CanonicalizerPhase.*;
+import com.oracle.max.graal.compiler.opt.CanonicalizerPhase.*;
 import com.oracle.max.graal.graph.*;
 import com.sun.cri.bytecode.*;
 import com.sun.cri.ci.*;
@@ -67,7 +66,7 @@ public final class Or extends Logic {
 
     private static class OrCanonicalizerOp implements CanonicalizerOp {
         @Override
-        public Node canonical(Node node, NotifyReProcess reProcess) {
+        public Node canonical(Node node) {
             Or or = (Or) node;
             CiKind kind = or.kind;
             Graph graph = or.graph();

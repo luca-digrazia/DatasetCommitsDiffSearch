@@ -29,7 +29,7 @@ import com.oracle.max.graal.compiler.debug.*;
 import com.oracle.max.graal.compiler.ir.*;
 import com.oracle.max.graal.compiler.lir.*;
 import com.oracle.max.graal.compiler.observer.*;
-import com.oracle.max.graal.compiler.phases.*;
+import com.oracle.max.graal.compiler.opt.*;
 import com.oracle.max.graal.compiler.schedule.*;
 import com.oracle.max.graal.compiler.value.*;
 import com.oracle.max.graal.graph.*;
@@ -84,6 +84,7 @@ public class IR {
 
         if (C1XOptions.OptCanonicalizer) {
             new CanonicalizerPhase().apply(graph);
+            verifyAndPrint("After canonicalization");
         }
 
         // Split critical edges.
@@ -156,7 +157,7 @@ public class IR {
 
     private void buildGraph() {
         // Graph builder must set the startBlock and the osrEntryBlock
-        new GraphBuilderPhase(compilation, compilation.method, false).apply(compilation.graph);
+        new GraphBuilder(compilation, compilation.method, false).apply(compilation.graph);
 
 //        CompilerGraph duplicate = new CompilerGraph();
 //        Map<Node, Node> replacements = new HashMap<Node, Node>();
@@ -164,16 +165,16 @@ public class IR {
 //        duplicate.addDuplicate(compilation.graph.getNodes(), replacements);
 //        compilation.graph = duplicate;
 
-        new DuplicationPhase().apply(compilation.graph);
+        verifyAndPrint("After graph building");
 
-        DeadCodeEliminationPhase dce = new DeadCodeEliminationPhase();
+        DeadCodeElimination dce = new DeadCodeElimination();
         dce.apply(compilation.graph);
         if (dce.deletedNodeCount > 0) {
             verifyAndPrint("After dead code elimination");
         }
 
         if (C1XOptions.Inline) {
-            new InliningPhase(compilation, this).apply(compilation.graph);
+            new Inlining(compilation, this).apply(compilation.graph);
         }
 
         if (C1XOptions.PrintCompilation) {
@@ -189,17 +190,36 @@ public class IR {
         return orderedBlocks;
     }
 
+    private void print(boolean cfgOnly) {
+        if (!TTY.isSuppressed()) {
+            TTY.println("IR for " + compilation.method);
+            final InstructionPrinter ip = new InstructionPrinter(TTY.out());
+            final BlockPrinter bp = new BlockPrinter(this, ip, cfgOnly);
+            //getHIRStartBlock().iteratePreOrder(bp);
+        }
+    }
+
     /**
      * Verifies the IR and prints it out if the relevant options are set.
      * @param phase the name of the phase for printing
      */
     public void verifyAndPrint(String phase) {
+        if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
+            TTY.println(phase);
+            print(false);
+        }
+
         if (compilation.compiler.isObserved()) {
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, compilation.graph, true, false));
         }
     }
 
     public void printGraph(String phase, Graph graph) {
+        if (C1XOptions.PrintHIR && !TTY.isSuppressed()) {
+            TTY.println(phase);
+            print(false);
+        }
+
         if (compilation.compiler.isObserved()) {
             compilation.compiler.fireCompilationEvent(new CompilationEvent(compilation, phase, graph, true, false));
         }
