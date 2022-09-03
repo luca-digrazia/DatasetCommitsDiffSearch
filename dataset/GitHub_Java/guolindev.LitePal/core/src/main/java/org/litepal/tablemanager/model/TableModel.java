@@ -16,8 +16,6 @@
 
 package org.litepal.tablemanager.model;
 
-import org.litepal.util.BaseUtility;
-
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -91,7 +89,7 @@ public class TableModel {
      *            A column model contains name, type and constraints.
      */
     public void addColumnModel(ColumnModel columnModel) {
-        columnModelMap.put(BaseUtility.changeCase(columnModel.getColumnName()), columnModel);
+        columnModelMap.put(columnModel.getColumnName(), columnModel);
     }
 
     /**
@@ -109,7 +107,7 @@ public class TableModel {
      * @return A ColumnModel which can map the column name passed in. Or null.
      */
     public ColumnModel getColumnModelByName(String columnName) {
-        return columnModelMap.get(BaseUtility.changeCase(columnName));
+        return columnModelMap.get(columnName);
     }
 
     /**
@@ -118,7 +116,7 @@ public class TableModel {
      *          Name of the column to remove.
      */
     public void removeColumnModelByName(String columnName) {
-        columnModelMap.remove(BaseUtility.changeCase(columnName));
+        columnModelMap.remove(columnName);
     }
 
     /**
@@ -128,7 +126,7 @@ public class TableModel {
      * @return True if matches a column in the table model. False otherwise.
      */
     public boolean containsColumn(String columnName) {
-        return columnModelMap.containsKey(BaseUtility.changeCase(columnName));
+        return columnModelMap.containsKey(columnName);
     }
 
 }
