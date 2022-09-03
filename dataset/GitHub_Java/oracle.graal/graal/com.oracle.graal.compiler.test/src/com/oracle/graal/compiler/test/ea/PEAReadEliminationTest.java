@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,140 +22,182 @@
  */
 package com.oracle.graal.compiler.test.ea;
 
-import static org.junit.Assert.*;
+import org.junit.Test;
 
-import java.util.concurrent.*;
+import sun.misc.Unsafe;
 
-import org.junit.*;
+import com.oracle.graal.nodes.StructuredGraph;
+import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
+import com.oracle.graal.nodes.extended.UnsafeLoadNode;
+import com.oracle.graal.nodes.java.LoadIndexedNode;
+import com.oracle.graal.nodes.java.StoreIndexedNode;
+import com.oracle.graal.phases.common.CanonicalizerPhase;
+import com.oracle.graal.phases.common.inlining.InliningPhase;
+import com.oracle.graal.phases.tiers.HighTierContext;
+import com.oracle.graal.virtual.phases.ea.PartialEscapePhase;
 
-import com.oracle.graal.api.code.*;
-import com.oracle.graal.compiler.test.*;
-import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.phases.*;
-import com.oracle.graal.phases.common.*;
-import com.oracle.graal.virtual.phases.ea.*;
+public class PEAReadEliminationTest extends EarlyReadEliminationTest {
 
-public class PEAReadEliminationTest extends GraalCompilerTest {
-
-    private StructuredGraph graph;
-
-    public static Object staticField;
-
-    public static class TestObject implements Callable<Integer> {
-
-        public int x;
-        public int y;
-
-        public TestObject(int x, int y) {
-            this.x = x;
-            this.y = y;
-        }
-
-        @Override
-        public Integer call() throws Exception {
-            return x;
-        }
-    }
-
-    public static class TestObject2 {
-
-        public Object x;
-        public Object y;
-
-        public TestObject2(Object x, Object y) {
-            this.x = x;
-            this.y = y;
-        }
-    }
-
-    @SuppressWarnings("all")
-    public static int testSimpleSnippet(TestObject a) {
-        a.x = 2;
-        return a.x;
+    public static int testIndexed1Snippet(int[] array) {
+        array[1] = 1;
+        array[2] = 2;
+        array[3] = 3;
+        array[4] = 4;
+        array[5] = 5;
+        array[6] = 6;
+        return array[1] + array[2] + array[3] + array[4] + array[5] + array[6];
     }
 
     @Test
-    public void testSimple() {
-        ValueNode result = getReturn("testSimpleSnippet").result();
-        assertTrue(graph.getNodes(LoadFieldNode.class).isEmpty());
-        assertTrue(result.isConstant());
-        assertEquals(2, result.asConstant().asInt());
+    public void testIndexed1() {
+        StructuredGraph graph = processMethod("testIndexed1Snippet", false);
+        assertDeepEquals(0, graph.getNodes().filter(LoadIndexedNode.class).count());
     }
 
-    @SuppressWarnings("all")
-    public static int testParamSnippet(TestObject a, int b) {
-        a.x = b;
-        return a.x;
-    }
-
-    @Test
-    public void testParam() {
-        ValueNode result = getReturn("testParamSnippet").result();
-        assertTrue(graph.getNodes(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getLocal(1), result);
-    }
-
-    @SuppressWarnings("all")
-    public static int testMaterializedSnippet(int a) {
-        TestObject obj = new TestObject(a, 0);
-        staticField = obj;
-        return obj.x;
+    public static int testIndexed2Snippet(int v, int[] array) {
+        array[1] = 1;
+        array[2] = 2;
+        array[3] = 3;
+        array[v] = 0;
+        array[4] = 4;
+        array[5] = 5;
+        array[6] = 6;
+        array[4] = 4;
+        array[5] = 5;
+        array[6] = 6;
+        return array[1] + array[2] + array[3] + array[4] + array[5] + array[6];
     }
 
     @Test
-    public void testMaterialized() {
-        ValueNode result = getReturn("testMaterializedSnippet").result();
-        assertTrue(graph.getNodes(LoadFieldNode.class).isEmpty());
-        assertEquals(graph.getLocal(0), result);
+    public void testIndexed2() {
+        StructuredGraph graph = processMethod("testIndexed2Snippet", false);
+        assertDeepEquals(3, graph.getNodes().filter(LoadIndexedNode.class).count());
+        assertDeepEquals(7, graph.getNodes().filter(StoreIndexedNode.class).count());
     }
 
-    @SuppressWarnings("all")
-    public static int testPhiSnippet(TestObject a, int b) {
-        if (b < 0) {
-            a.x = 1;
-        } else {
-            a.x = 2;
-        }
-        return a.x;
-    }
-
-    @Test
-    public void testPhi() {
-        ValueNode result = getReturn("testPhiSnippet").result();
-        assertTrue(graph.getNodes(LoadFieldNode.class).isEmpty());
-        assertTrue(result instanceof PhiNode);
-        PhiNode phi = (PhiNode) result;
-        assertTrue(phi.valueAt(0).isConstant());
-        assertTrue(phi.valueAt(1).isConstant());
-        assertEquals(1, phi.valueAt(0).asConstant().asInt());
-        assertEquals(2, phi.valueAt(1).asConstant().asInt());
-    }
-
-    @SuppressWarnings("all")
-    public static void testSimpleStoreSnippet(TestObject a, int b) {
-        a.x = b;
-        a.x = b;
+    public static int testIndexed3Snippet(int v, int[] array, short[] array2) {
+        array[1] = 1;
+        array2[1] = 1;
+        array[2] = 2;
+        array2[2] = 2;
+        array[3] = 3;
+        array2[3] = 3;
+        array[v] = 0;
+        array[4] = 4;
+        array2[4] = 4;
+        array[5] = 5;
+        array2[5] = 5;
+        array[6] = 6;
+        array2[6] = 6;
+        return array[1] + array[2] + array[3] + array[4] + array[5] + array[6] + array2[1] + array2[2] + array2[3] + array2[4] + array2[5] + array2[6];
     }
 
     @Test
-    public void testSimpleStore() {
-        processMethod("testSimpleStoreSnippet");
-        assertEquals(1, graph.getNodes().filter(StoreFieldNode.class).count());
+    public void testIndexed3() {
+        StructuredGraph graph = processMethod("testIndexed3Snippet", false);
+        assertDeepEquals(3, graph.getNodes().filter(LoadIndexedNode.class).count());
     }
 
-    final ReturnNode getReturn(String snippet) {
-        processMethod(snippet);
-        assertEquals(1, graph.getNodes(ReturnNode.class).count());
-        return graph.getNodes(ReturnNode.class).first();
+    private static native void nonInlineable();
+
+    public static int testIndexed4Snippet(int[] array) {
+        array[1] = 1;
+        array[2] = 2;
+        array[3] = 3;
+        nonInlineable();
+        array[4] = 4;
+        array[5] = 5;
+        array[6] = 6;
+        return array[1] + array[2] + array[3] + array[4] + array[5] + array[6];
     }
 
-    private void processMethod(final String snippet) {
-        graph = parse(snippet);
-        new ComputeProbabilityPhase().apply(graph);
-        Assumptions assumptions = new Assumptions(false);
-        new InliningPhase(runtime(), null, assumptions, null, getDefaultPhasePlan(), OptimisticOptimizations.ALL).apply(graph);
-        GraalOptions.PEAReadCache = true;
-        new PartialEscapeAnalysisPhase(runtime(), assumptions, false).apply(graph);
+    @Test
+    public void testIndexed4() {
+        StructuredGraph graph = processMethod("testIndexed4Snippet", false);
+        assertDeepEquals(3, graph.getNodes().filter(LoadIndexedNode.class).count());
+    }
+
+    private static final long offsetInt1 = Unsafe.ARRAY_INT_BASE_OFFSET + Unsafe.ARRAY_INT_INDEX_SCALE * 1;
+    private static final long offsetInt2 = Unsafe.ARRAY_INT_BASE_OFFSET + Unsafe.ARRAY_INT_INDEX_SCALE * 2;
+
+    public static int testUnsafe1Snippet(int v, int[] array) {
+        int s = UNSAFE.getInt(array, offsetInt1);
+        UNSAFE.putInt(array, offsetInt1, v);
+        UNSAFE.putInt(array, offsetInt2, v);
+        return s + UNSAFE.getInt(array, offsetInt1) + UNSAFE.getInt(array, offsetInt2);
+    }
+
+    @Test
+    public void testUnsafe1() {
+        StructuredGraph graph = processMethod("testUnsafe1Snippet", false);
+        assertDeepEquals(1, graph.getNodes().filter(UnsafeLoadNode.class).count());
+    }
+
+    public static int testUnsafe2Snippet(int v, Object array) {
+        int s = UNSAFE.getInt(array, offsetInt1);
+        UNSAFE.putInt(array, offsetInt1, v);
+        UNSAFE.putInt(array, offsetInt2, v);
+        return s + UNSAFE.getInt(array, offsetInt1) + UNSAFE.getInt(array, offsetInt2);
+    }
+
+    @Test
+    public void testUnsafe2() {
+        StructuredGraph graph = processMethod("testUnsafe2Snippet", false);
+        assertDeepEquals(3, graph.getNodes().filter(UnsafeLoadNode.class).count());
+    }
+
+    private static final long offsetObject1 = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * 1;
+    private static final long offsetObject2 = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * 2;
+
+    public static int testUnsafe3Snippet(int v, Object[] array) {
+        int s = (Integer) UNSAFE.getObject(array, offsetObject1);
+        UNSAFE.putObject(array, offsetObject1, v);
+        UNSAFE.putObject(array, offsetObject2, v);
+        return s + (Integer) UNSAFE.getObject(array, offsetObject1) + (Integer) UNSAFE.getObject(array, offsetObject2);
+    }
+
+    @Test
+    public void testUnsafe3() {
+        StructuredGraph graph = processMethod("testUnsafe3Snippet", false);
+        assertDeepEquals(1, graph.getNodes().filter(UnsafeLoadNode.class).count());
+    }
+
+    public static int testUnsafe4Snippet(int v, Object[] array) {
+        int s = (Integer) UNSAFE.getObject(array, offsetObject1);
+        UNSAFE.putObject(array, offsetObject1, v);
+        UNSAFE.putObject(array, offsetObject2, v);
+        array[v] = null;
+        return s + (Integer) UNSAFE.getObject(array, offsetObject1) + (Integer) UNSAFE.getObject(array, offsetObject2);
+    }
+
+    @Test
+    public void testUnsafe4() {
+        StructuredGraph graph = processMethod("testUnsafe4Snippet", false);
+        assertDeepEquals(3, graph.getNodes().filter(UnsafeLoadNode.class).count());
+    }
+
+    private static final long offsetLong1 = Unsafe.ARRAY_LONG_BASE_OFFSET + Unsafe.ARRAY_LONG_INDEX_SCALE * 1;
+    private static final long offsetLong2 = Unsafe.ARRAY_LONG_BASE_OFFSET + Unsafe.ARRAY_LONG_INDEX_SCALE * 2;
+
+    public static int testUnsafe5Snippet(int v, long[] array) {
+        int s = UNSAFE.getInt(array, offsetLong1);
+        UNSAFE.putInt(array, offsetLong1, v);
+        UNSAFE.putInt(array, offsetLong2, v);
+        return s + UNSAFE.getInt(array, offsetLong1) + UNSAFE.getInt(array, offsetLong2);
+    }
+
+    @Test
+    public void testUnsafe5() {
+        StructuredGraph graph = processMethod("testUnsafe5Snippet", false);
+        assertDeepEquals(1, graph.getNodes().filter(UnsafeLoadNode.class).count());
+    }
+
+    @Override
+    protected StructuredGraph processMethod(final String snippet, boolean doLowering) {
+        StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
+        HighTierContext context = getDefaultHighTierContext();
+        new InliningPhase(new CanonicalizerPhase()).apply(graph, context);
+        new PartialEscapePhase(false, true, new CanonicalizerPhase(), null).apply(graph, context);
+        return graph;
     }
 }

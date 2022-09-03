@@ -25,7 +25,7 @@ package com.oracle.graal.virtual.phases.ea;
 import java.util.HashMap;
 import java.util.Map;
 
-import jdk.vm.ci.meta.LocationIdentity;
+import jdk.internal.jvmci.meta.LocationIdentity;
 
 import com.oracle.graal.compiler.common.CollectionsFactory;
 import com.oracle.graal.nodes.ValueNode;
@@ -39,7 +39,7 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
         public final ValueNode object;
         public final T identity;
 
-        CacheEntry(ValueNode object, T identity) {
+        public CacheEntry(ValueNode object, T identity) {
             this.object = object;
             this.identity = identity;
         }
@@ -71,7 +71,7 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
 
     static class LoadCacheEntry extends CacheEntry<LocationIdentity> {
 
-        LoadCacheEntry(ValueNode object, LocationIdentity identity) {
+        public LoadCacheEntry(ValueNode object, LocationIdentity identity) {
             super(object, identity);
         }
 
@@ -96,7 +96,7 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
 
         private LocationIdentity locationIdentity;
 
-        UnsafeLoadCacheEntry(ValueNode object, ValueNode location, LocationIdentity locationIdentity) {
+        public UnsafeLoadCacheEntry(ValueNode object, ValueNode location, LocationIdentity locationIdentity) {
             super(object, location);
             this.locationIdentity = locationIdentity;
         }
