@@ -30,23 +30,23 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.debug.Debug;
-import com.oracle.graal.debug.DebugCounter;
-import com.oracle.graal.debug.GraalError;
+import com.oracle.graal.debug.DebugMetric;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.LIRInsertionBuffer;
 import com.oracle.graal.lir.LIRInstruction;
-
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.Value;
 
 /**
  */
 public class MoveResolver {
 
-    private static final DebugCounter cycleBreakingSlotsAllocated = Debug.counter("LSRA[cycleBreakingSlotsAllocated]");
+    private static final DebugMetric cycleBreakingSlotsAllocated = Debug.metric("LSRA[cycleBreakingSlotsAllocated]");
 
     private final LinearScan allocator;
 
@@ -64,7 +64,7 @@ public class MoveResolver {
         if (isRegister(location)) {
             registerBlocked[asRegister(location).number] += direction;
         } else {
-            throw GraalError.shouldNotReachHere("unhandled value " + location);
+            throw JVMCIError.shouldNotReachHere("unhandled value " + location);
         }
     }
 
@@ -80,7 +80,7 @@ public class MoveResolver {
         if (isRegister(location)) {
             return registerBlocked[asRegister(location).number];
         }
-        throw GraalError.shouldNotReachHere("unhandled value " + location);
+        throw JVMCIError.shouldNotReachHere("unhandled value " + location);
     }
 
     void setMultipleReadsAllowed() {
@@ -108,12 +108,12 @@ public class MoveResolver {
         this.mappingTo = new ArrayList<>(8);
         this.insertIdx = -1;
         this.insertionBuffer = new LIRInsertionBuffer();
-        this.registerBlocked = new int[allocator.getRegisters().size()];
+        this.registerBlocked = new int[allocator.getRegisters().length];
     }
 
     protected boolean checkEmpty() {
         assert mappingFrom.size() == 0 && mappingFromOpr.size() == 0 && mappingTo.size() == 0 : "list must be empty before and after processing";
-        for (int i = 0; i < getAllocator().getRegisters().size(); i++) {
+        for (int i = 0; i < getAllocator().getRegisters().length; i++) {
             assert registerBlocked[i] == 0 : "register map must be empty before and after processing";
         }
         checkMultipleReads();
@@ -183,8 +183,7 @@ public class MoveResolver {
         }
         for (int i = 0; i < mappingTo.size(); i++) {
             Interval interval = mappingTo.get(i);
-            assert !usedRegs.contains(interval.location()) ||
-                            checkIntervalLocation(mappingFrom.get(i), interval, mappingFromOpr.get(i)) : "stack slots used in mappingFrom must be disjoint to mappingTo";
+            assert !usedRegs.contains(interval.location()) || checkIntervalLocation(mappingFrom.get(i), interval, mappingFromOpr.get(i)) : "stack slots used in mappingFrom must be disjoint to mappingTo";
         }
     }
 
@@ -240,7 +239,7 @@ public class MoveResolver {
             return true;
         }
         if (from != null && isRegister(from) && isRegister(to) && asRegister(from).equals(asRegister(to))) {
-            assert LIRKind.verifyMoveKinds(to.getValueKind(), from.getValueKind()) : String.format("Same register but Kind mismatch %s <- %s", to, from);
+            assert LIRKind.verifyMoveKinds(to.getLIRKind(), from.getLIRKind()) : String.format("Same register but Kind mismatch %s <- %s", to, from);
             return true;
         }
         return false;
@@ -317,11 +316,10 @@ public class MoveResolver {
                 }
             }
 
-            ArrayList<AllocatableValue> busySpillSlots = new ArrayList<>();
+            int spillCandidate = -1;
             while (mappingFrom.size() > 0) {
                 boolean processedInterval = false;
 
-                int spillCandidate = -1;
                 for (i = mappingFrom.size() - 1; i >= 0; i--) {
                     Interval fromInterval = mappingFrom.get(i);
                     Interval toInterval = mappingTo.get(i);
@@ -334,13 +332,12 @@ public class MoveResolver {
                         } else {
                             insertMove(mappingFromOpr.get(i), toInterval);
                         }
-                        busySpillSlots.add(toInterval.location());
                         mappingFrom.remove(i);
                         mappingFromOpr.remove(i);
                         mappingTo.remove(i);
 
                         processedInterval = true;
-                    } else if (fromInterval != null && isRegister(fromInterval.location()) && !busySpillSlots.contains(fromInterval.spillSlot())) {
+                    } else if (fromInterval != null && isRegister(fromInterval.location())) {
                         // this interval cannot be processed now because target is not free
                         // it starts in a register, so it is a possible candidate for spilling
                         spillCandidate = i;

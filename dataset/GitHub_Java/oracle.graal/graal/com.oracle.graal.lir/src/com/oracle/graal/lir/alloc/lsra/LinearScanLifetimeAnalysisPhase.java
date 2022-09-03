@@ -38,13 +38,22 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 
-import com.oracle.graal.compiler.common.LIRKind;
+import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.StackSlot;
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.LIRKind;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.alloc.ComputeBlockOrder;
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.compiler.common.util.BitMap2D;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Debug.Scope;
-import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.debug.Indent;
 import com.oracle.graal.lir.InstructionValueConsumer;
 import com.oracle.graal.lir.LIRInstruction;
@@ -59,17 +68,6 @@ import com.oracle.graal.lir.alloc.lsra.LinearScan.BlockData;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.phases.AllocationPhase;
 
-import jdk.vm.ci.code.BailoutException;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterArray;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
-
 public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
 
     protected final LinearScan allocator;
@@ -82,8 +80,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
     }
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
-                    AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
         numberInstructions();
         allocator.printLir("Before register allocation", true);
         computeLocalLiveSets();
@@ -216,9 +213,9 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                          * processed in live sets. Process them only in debug mode so that this can
                          * be checked
                          */
-                        verifyTemp(liveKill, operand);
-                    }
-                };
+                                verifyTemp(liveKill, operand);
+                            }
+                        };
 
                 // iterate all instructions of the block
                 for (int j = 0; j < numInst; j++) {
@@ -306,9 +303,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
 
                         changeOccurredInBlock = false;
 
-                        /*
-                         * liveOut(block) is the union of liveIn(sux), for successors sux of block.
-                         */
+                        /* liveOut(block) is the union of liveIn(sux), for successors sux of block. */
                         int n = block.getSuccessorCount();
                         if (n > 0) {
                             liveOut.clear();
@@ -337,7 +332,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                             /*
                              * liveIn(block) is the union of liveGen(block) with (liveOut(block) &
                              * !liveKill(block)).
-                             *
+                             * 
                              * Note: liveIn has to be computed only in first iteration or if liveOut
                              * has changed!
                              */
@@ -371,7 +366,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                     reportFailure(numBlocks);
                 }
                 // bailout if this occurs in product mode.
-                throw new GraalError("liveIn set of first block must be empty: " + allocator.getBlockData(startBlock).liveIn);
+                throw new JVMCIError("liveIn set of first block must be empty: " + allocator.getBlockData(startBlock).liveIn);
             }
         }
     }
@@ -475,7 +470,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         }
     }
 
-    protected void addUse(AllocatableValue operand, int from, int to, RegisterPriority registerPriority, ValueKind<?> kind) {
+    protected void addUse(AllocatableValue operand, int from, int to, RegisterPriority registerPriority, LIRKind kind) {
         if (!allocator.isProcessed(operand)) {
             return;
         }
@@ -495,7 +490,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         }
     }
 
-    protected void addTemp(AllocatableValue operand, int tempPos, RegisterPriority registerPriority, ValueKind<?> kind) {
+    protected void addTemp(AllocatableValue operand, int tempPos, RegisterPriority registerPriority, LIRKind kind) {
         if (!allocator.isProcessed(operand)) {
             return;
         }
@@ -514,7 +509,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         }
     }
 
-    protected void addDef(AllocatableValue operand, LIRInstruction op, RegisterPriority registerPriority, ValueKind<?> kind) {
+    protected void addDef(AllocatableValue operand, LIRInstruction op, RegisterPriority registerPriority, LIRKind kind) {
         if (!allocator.isProcessed(operand)) {
             return;
         }
@@ -592,19 +587,19 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                     Interval to = allocator.getOrCreateInterval((AllocatableValue) targetValue);
 
                     /* hints always point from def to use */
-                    if (hintAtDef) {
-                        to.setLocationHint(from);
-                    } else {
-                        from.setLocationHint(to);
-                    }
-                    if (Debug.isLogEnabled()) {
-                        Debug.log("operation at opId %d: added hint from interval %d to %d", op.id(), from.operandNumber, to.operandNumber);
-                    }
+                            if (hintAtDef) {
+                                to.setLocationHint(from);
+                            } else {
+                                from.setLocationHint(to);
+                            }
+                            if (Debug.isLogEnabled()) {
+                                Debug.log("operation at opId %d: added hint from interval %d to %d", op.id(), from.operandNumber, to.operandNumber);
+                            }
 
-                    return registerHint;
-                }
-                return null;
-            });
+                            return registerHint;
+                        }
+                        return null;
+                    });
         }
     }
 
@@ -649,7 +644,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
          * Object method arguments that are passed on the stack are currently not optimized because
          * this requires that the runtime visits method arguments during stack walking.
          */
-        return isStackSlot(value) && asStackSlot(value).isInCallerFrame() && LIRKind.isValue(value);
+        return isStackSlot(value) && asStackSlot(value).isInCallerFrame() && value.getLIRKind().isValue();
     }
 
     /**
@@ -685,14 +680,14 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
         try (Indent indent = Debug.logAndIndent("build intervals")) {
             InstructionValueConsumer outputConsumer = (op, operand, mode, flags) -> {
                 if (LinearScan.isVariableOrRegister(operand)) {
-                    addDef((AllocatableValue) operand, op, registerPriorityOfOutputOperand(op), operand.getValueKind());
+                    addDef((AllocatableValue) operand, op, registerPriorityOfOutputOperand(op), operand.getLIRKind());
                     addRegisterHint(op, operand, mode, flags, true);
                 }
             };
 
             InstructionValueConsumer tempConsumer = (op, operand, mode, flags) -> {
                 if (LinearScan.isVariableOrRegister(operand)) {
-                    addTemp((AllocatableValue) operand, op.id(), RegisterPriority.MustHaveRegister, operand.getValueKind());
+                    addTemp((AllocatableValue) operand, op.id(), RegisterPriority.MustHaveRegister, operand.getLIRKind());
                     addRegisterHint(op, operand, mode, flags, false);
                 }
             };
@@ -702,7 +697,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                     RegisterPriority p = registerPriorityOfInputOperand(flags);
                     int opId = op.id();
                     int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
-                    addUse((AllocatableValue) operand, blockFrom, opId + 1, p, operand.getValueKind());
+                    addUse((AllocatableValue) operand, blockFrom, opId + 1, p, operand.getLIRKind());
                     addRegisterHint(op, operand, mode, flags, false);
                 }
             };
@@ -712,7 +707,7 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                     int opId = op.id();
                     int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
                     RegisterPriority p = registerPriorityOfInputOperand(flags);
-                    addUse((AllocatableValue) operand, blockFrom, opId, p, operand.getValueKind());
+                    addUse((AllocatableValue) operand, blockFrom, opId, p, operand.getLIRKind());
                     addRegisterHint(op, operand, mode, flags, false);
                 }
             };
@@ -721,12 +716,12 @@ public class LinearScanLifetimeAnalysisPhase extends AllocationPhase {
                 if (LinearScan.isVariableOrRegister(operand)) {
                     int opId = op.id();
                     int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
-                    addUse((AllocatableValue) operand, blockFrom, opId + 1, RegisterPriority.None, operand.getValueKind());
+                    addUse((AllocatableValue) operand, blockFrom, opId + 1, RegisterPriority.None, operand.getLIRKind());
                 }
             };
 
             // create a list with all caller-save registers (cpu, fpu, xmm)
-            RegisterArray callerSaveRegs = allocator.getRegisterAllocationConfig().getRegisterConfig().getCallerSaveRegisters();
+            Register[] callerSaveRegs = allocator.getRegisterAllocationConfig().getRegisterConfig().getCallerSaveRegisters();
 
             // iterate all blocks in reverse order
             for (int i = allocator.blockCount() - 1; i >= 0; i--) {
