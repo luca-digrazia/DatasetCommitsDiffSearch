@@ -45,8 +45,6 @@ import com.oracle.truffle.api.nodes.LanguageInfo;
 
 import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.server.WebSocketServer;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Chrome inspector as an instrument.
@@ -197,8 +195,8 @@ public final class InspectorInstrument extends TruffleInstrument {
             info.println("    " + address);
             info.flush();
             if (debugBreak || waitAttached) {
-                final AtomicReference<EventBinding<?>> execEnter = new AtomicReference<>();
-                execEnter.set(env.getInstrumenter().attachContextsListener(new ContextsListener() {
+                final EventBinding<?>[] execEnter = new EventBinding<?>[1];
+                execEnter[0] = env.getInstrumenter().attachContextsListener(new ContextsListener() {
                     @Override
                     public void onContextCreated(TruffleContext context) {
                     }
@@ -214,10 +212,7 @@ public final class InspectorInstrument extends TruffleInstrument {
                             executionContext.waitForRunPermission();
                         } catch (InterruptedException ex) {
                         }
-                        final EventBinding<?> binding = execEnter.getAndSet(null);
-                        if (binding != null) {
-                            binding.dispose();
-                        }
+                        execEnter[0].dispose();
                     }
 
                     @Override
@@ -231,10 +226,7 @@ public final class InspectorInstrument extends TruffleInstrument {
                     @Override
                     public void onContextClosed(TruffleContext context) {
                     }
-                }, true));
-                if (disposeBinding.get()) {
-                    execEnter.get().dispose();
-                }
+                }, true);
             }
             return address;
         }
