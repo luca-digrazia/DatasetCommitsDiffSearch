@@ -49,9 +49,7 @@ public final class EndNode extends FixedNode {
 
     @Override
     public Node copy(Graph into) {
-        EndNode x = new EndNode(into);
-        super.copyInto(x);
-        return x;
+        return new EndNode(into);
     }
 
     public Merge merge() {
@@ -68,7 +66,7 @@ public final class EndNode extends FixedNode {
         assertTrue(inputs().size() == 0, "inputs empty");
         assertTrue(successors().size() == 0, "successors empty");
         assertTrue(usages().size() <= 1, "at most one usage");
-        assertTrue(predecessors().size() <= 1, "at most one predecessor " + predecessors());
+        assertTrue(predecessors().size() <= 1, "at most one predecessor");
         return true;
     }
 

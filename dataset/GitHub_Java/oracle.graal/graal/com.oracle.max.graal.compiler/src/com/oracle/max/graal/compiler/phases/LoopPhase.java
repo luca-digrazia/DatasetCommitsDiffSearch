@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.max.graal.compiler.*;
 import com.oracle.max.graal.compiler.ir.*;
-import com.oracle.max.graal.compiler.ir.Phi.PhiType;
 import com.oracle.max.graal.compiler.observer.*;
 import com.oracle.max.graal.compiler.util.*;
 import com.oracle.max.graal.compiler.util.LoopUtil.Loop;
@@ -61,18 +60,7 @@ peeling:
                         continue peeling;
                     }
                 }
-                boolean canInvert = false;
-                if (loop.loopBegin().next() instanceof If) {
-                    If ifNode = (If) loop.loopBegin().next();
-                    if (loop.exits().isMarked(ifNode.trueSuccessor()) || loop.exits().isMarked(ifNode.falseSuccessor())) {
-                        canInvert = true;
-                    }
-                }
-                if (canInvert) {
-                    LoopUtil.inverseLoop(loop, (If) loop.loopBegin().next());
-                } else {
-                    LoopUtil.peelLoop(loop);
-                }
+                LoopUtil.peelLoop(loop);
             }
         } else {
 //            loops = LoopUtil.computeLoops(graph); // TODO (gd) avoid recomputing loops
@@ -115,7 +103,7 @@ peeling:
                         IntegerSub sub = new IntegerSub(kind, c2.init(), c1.init(), graph);
                         IntegerAdd addStride = new IntegerAdd(kind, sub, c1.stride(), graph);
                         IntegerAdd add = new IntegerAdd(kind, c1, addStride, graph);
-                        Phi phi = new Phi(kind, loopBegin, PhiType.Value, graph); // (gd) assumes order on loopBegin preds - works in collab with graph builder
+                        Phi phi = new Phi(kind, loopBegin, graph); // (gd) assumes order on loopBegin preds - works in collab with graph builder
                         phi.addInput(c2.init());
                         phi.addInput(add);
                         c2.replaceAndDelete(phi);
@@ -172,7 +160,7 @@ peeling:
                             useCounterAfterAdd = true;
                         }
                     }
-                    if (stride != null && !loopNodes.isNotNewNotMarked(stride)) {
+                    if (stride != null && !loopNodes.isNew(stride) &&  !loopNodes.isMarked(stride)) {
                         Graph graph = loopBegin.graph();
                         LoopCounter counter = new LoopCounter(init.kind, init, stride, loopBegin, graph);
                         counters.add(counter);
