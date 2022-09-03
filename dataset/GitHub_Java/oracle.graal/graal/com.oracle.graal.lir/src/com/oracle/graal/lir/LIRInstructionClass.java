@@ -244,15 +244,15 @@ public class LIRInstructionClass extends LIRIntrospection {
     /**
      * Describes an operand slot for a {@link LIRInstructionClass}.
      *
-     * @see LIRInstructionClass#get(LIRInstruction, ValuePosition)
+     * @see LIRInstructionClass#get(LIRInstruction, Position)
      */
-    public static final class ValuePosition {
+    public static final class Position {
 
         private final OperandMode mode;
         private final int index;
         private final int subIndex;
 
-        public ValuePosition(OperandMode mode, int index, int subIndex) {
+        public Position(OperandMode mode, int index, int subIndex) {
             this.mode = mode;
             this.index = index;
             this.subIndex = subIndex;
@@ -308,7 +308,7 @@ public class LIRInstructionClass extends LIRIntrospection {
             if (getClass() != obj.getClass()) {
                 return false;
             }
-            ValuePosition other = (ValuePosition) obj;
+            Position other = (Position) obj;
             if (index != other.index) {
                 return false;
             }
@@ -322,7 +322,7 @@ public class LIRInstructionClass extends LIRIntrospection {
         }
     }
 
-    protected Value get(LIRInstruction obj, ValuePosition pos) {
+    protected Value get(LIRInstruction obj, Position pos) {
         long[] offsets;
         int directCount;
         switch (pos.getMode()) {
@@ -351,7 +351,7 @@ public class LIRInstructionClass extends LIRIntrospection {
         return getValueArray(obj, offsets[pos.getIndex()])[pos.getSubIndex()];
     }
 
-    protected void set(LIRInstruction obj, ValuePosition pos, Value value) {
+    protected void set(LIRInstruction obj, Position pos, Value value) {
         long[] offsets;
         int directCount;
         switch (pos.getMode()) {
@@ -380,7 +380,7 @@ public class LIRInstructionClass extends LIRIntrospection {
         getValueArray(obj, offsets[pos.getIndex()])[pos.getSubIndex()] = value;
     }
 
-    public EnumSet<OperandFlag> getFlags(ValuePosition pos) {
+    public EnumSet<OperandFlag> getFlags(Position pos) {
         switch (pos.getMode()) {
             case USE:
                 return useFlags[pos.getIndex()];
