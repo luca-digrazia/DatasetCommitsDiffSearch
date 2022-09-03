@@ -37,8 +37,8 @@ import com.oracle.graal.nodes.type.*;
 public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable {
     @Input private LogicNode guardingCondition;
 
-    public UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity) {
-        this(object, offset, accessKind, locationIdentity, null);
+    public UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind) {
+        this(object, offset, accessKind, LocationIdentity.ANY_LOCATION, null);
     }
 
     public UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity, LogicNode condition) {
@@ -65,7 +65,7 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
                 int entryIndex = state.getVirtualObject().entryIndexForOffset(offset);
                 if (entryIndex != -1) {
                     ValueNode entry = state.getEntry(entryIndex);
-                    if (entry.getKind() == getKind() || state.getVirtualObject().entryKind(entryIndex) == accessKind()) {
+                    if (entry.kind() == kind() || state.getVirtualObject().entryKind(entryIndex) == accessKind()) {
                         tool.replaceWith(entry);
                     }
                 }
@@ -78,9 +78,9 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
         return this.graph().add(new LoadFieldNode(object(), field));
     }
 
-    @SuppressWarnings({"unchecked", "unused"})
+    @SuppressWarnings("unchecked")
     @NodeIntrinsic
-    public static <T> T load(Object object, long offset, @ConstantNodeParameter Kind kind, @ConstantNodeParameter LocationIdentity locationIdentity) {
+    public static <T> T load(Object object, long offset, @ConstantNodeParameter Kind kind) {
         if (kind == Kind.Boolean) {
             return (T) (Boolean) unsafe.getBoolean(object, offset);
         }

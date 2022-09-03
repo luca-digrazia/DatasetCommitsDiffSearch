@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,16 +27,13 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
-import com.oracle.graal.truffle.nodes.*;
 import com.oracle.graal.truffle.nodes.asserts.*;
 import com.oracle.truffle.api.*;
 
 /**
  * Macro node for method {@link CompilerDirectives#unsafeCast(Object, Class, boolean)}.
  */
-public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode implements Canonicalizable, StateSplit {
-
-    @Input(InputType.State) private FrameState stateAfter;
+public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode implements Canonicalizable {
 
     private static final int ARGUMENT_COUNT = 4;
     private static final int OBJECT_ARGUMENT_INDEX = 0;
@@ -47,7 +44,6 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
     public CustomizedUnsafeStoreMacroNode(Invoke invoke) {
         super(invoke, "The location argument could not be resolved to a constant.");
         assert arguments.size() == ARGUMENT_COUNT;
-        this.stateAfter = invoke.stateAfter();
     }
 
     @Override
@@ -57,28 +53,19 @@ public class CustomizedUnsafeStoreMacroNode extends NeverPartOfCompilationNode i
             ValueNode objectArgument = arguments.get(OBJECT_ARGUMENT_INDEX);
             ValueNode offsetArgument = arguments.get(OFFSET_ARGUMENT_INDEX);
             ValueNode valueArgument = arguments.get(VALUE_ARGUMENT_INDEX);
+            Object locationIdentityObject = locationArgument.asConstant().asObject();
             LocationIdentity locationIdentity;
-            if (locationArgument.asConstant().isNull()) {
+            if (locationIdentityObject == null) {
                 locationIdentity = LocationIdentity.ANY_LOCATION;
             } else {
-                locationIdentity = ObjectLocationIdentity.create(locationArgument.asConstant());
+                locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
             }
 
-            return new UnsafeStoreNode(objectArgument, offsetArgument, valueArgument, this.getTargetMethod().getSignature().getParameterKind(VALUE_ARGUMENT_INDEX), locationIdentity, stateAfter);
+            UnsafeStoreNode unsafeStoreNode = graph().add(
+                            new UnsafeStoreNode(objectArgument, offsetArgument, valueArgument, this.getTargetMethod().getSignature().getParameterKind(VALUE_ARGUMENT_INDEX), locationIdentity));
+            unsafeStoreNode.setStateAfter(this.stateAfter());
+            return unsafeStoreNode;
         }
         return this;
-    }
-
-    @Override
-    public FrameState stateAfter() {
-        return stateAfter;
-    }
-
-    public void setStateAfter(FrameState x) {
-        this.stateAfter = x;
-    }
-
-    public boolean hasSideEffect() {
-        return true;
     }
 }
