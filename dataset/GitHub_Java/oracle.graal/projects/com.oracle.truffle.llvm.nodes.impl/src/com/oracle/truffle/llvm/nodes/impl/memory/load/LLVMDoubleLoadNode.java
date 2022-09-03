@@ -34,6 +34,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
@@ -49,13 +50,12 @@ import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 public abstract class LLVMDoubleLoadNode extends LLVMDoubleNode {
     @Child protected Node foreignRead = Message.READ.createNode();
     @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
-    protected static final Class<?> type = double.class;
 
     protected double doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
         try {
             int index = (int) (addr.getOffset() / LLVMDoubleNode.BYTE_SIZE);
             Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
-            return (double) toLLVM.convert(frame, value, type);
+            return toLLVM.convert(frame, value, double.class);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new IllegalStateException(e);
         }
@@ -72,6 +72,11 @@ public abstract class LLVMDoubleLoadNode extends LLVMDoubleNode {
         public double executeDouble(VirtualFrame frame, LLVMTruffleObject addr) {
             return doForeignAccess(frame, addr);
         }
+
+        @Specialization
+        public double executeDouble(VirtualFrame frame, TruffleObject addr) {
+            return executeDouble(frame, new LLVMTruffleObject(addr));
+        }
     }
 
     public abstract static class LLVMDoubleProfilingLoadNode extends LLVMDoubleLoadNode {
@@ -87,6 +92,11 @@ public abstract class LLVMDoubleLoadNode extends LLVMDoubleNode {
         @Specialization
         public double executeDouble(VirtualFrame frame, LLVMTruffleObject addr) {
             return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public double executeDouble(VirtualFrame frame, TruffleObject addr) {
+            return doForeignAccess(frame, new LLVMTruffleObject(addr));
         }
     }
 

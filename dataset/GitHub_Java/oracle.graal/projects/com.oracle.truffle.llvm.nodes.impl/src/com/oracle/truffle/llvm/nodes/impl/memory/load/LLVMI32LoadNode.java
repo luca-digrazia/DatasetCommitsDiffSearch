@@ -34,6 +34,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
@@ -49,13 +50,12 @@ import com.oracle.truffle.llvm.types.memory.LLVMMemory;
 public abstract class LLVMI32LoadNode extends LLVMI32Node {
     @Child protected Node foreignRead = Message.READ.createNode();
     @Child protected ToLLVMNode toLLVM = new ToLLVMNode();
-    protected static final Class<?> type = int.class;
 
     protected int doForeignAccess(VirtualFrame frame, LLVMTruffleObject addr) {
         try {
             int index = (int) (addr.getOffset() / LLVMI32Node.BYTE_SIZE);
             Object value = ForeignAccess.sendRead(foreignRead, frame, addr.getObject(), index);
-            return (int) toLLVM.convert(frame, value, type);
+            return toLLVM.convert(frame, value, int.class);
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
             throw new IllegalStateException(e);
         }
@@ -73,6 +73,11 @@ public abstract class LLVMI32LoadNode extends LLVMI32Node {
             return doForeignAccess(frame, addr);
         }
 
+        @Specialization
+        public int executeI32(VirtualFrame frame, TruffleObject addr) {
+            return executeI32(frame, new LLVMTruffleObject(addr));
+        }
+
     }
 
     public abstract static class LLVMI32ProfilingLoadNode extends LLVMI32LoadNode {
@@ -88,6 +93,11 @@ public abstract class LLVMI32LoadNode extends LLVMI32Node {
         @Specialization
         public int executeI32(VirtualFrame frame, LLVMTruffleObject addr) {
             return doForeignAccess(frame, addr);
+        }
+
+        @Specialization
+        public int executeI32(VirtualFrame frame, TruffleObject addr) {
+            return executeI32(frame, new LLVMTruffleObject(addr));
         }
 
     }
