@@ -22,84 +22,37 @@
  */
 package com.oracle.graal.lir.sparc;
 
-import static com.oracle.graal.asm.sparc.SPARCAssembler.CBCOND;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm10;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm11;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm13;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.isSimm5;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.ANNUL;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.NOT_ANNUL;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_NOT_TAKEN;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.PREDICT_TAKEN;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Icc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.Xcc;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Always;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Equal;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_Equal;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_Greater;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_GreaterOrEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_Less;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_LessOrEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_UnorderedGreaterOrEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_UnorderedOrEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_UnorderedOrGreater;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_UnorderedOrLess;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.F_UnorderedOrLessOrEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Greater;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.GreaterEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.GreaterEqualUnsigned;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.GreaterUnsigned;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.Less;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.LessEqual;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.LessEqualUnsigned;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.LessUnsigned;
-import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.NotEqual;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.CONST;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.HINT;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.ILLEGAL;
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.REG;
-import static com.oracle.graal.lir.LIRValueUtil.asJavaConstant;
-import static com.oracle.graal.lir.LIRValueUtil.isJavaConstant;
-import static com.oracle.graal.lir.sparc.SPARCMove.const2reg;
-import static jdk.internal.jvmci.code.ValueUtil.asRegister;
-import static jdk.internal.jvmci.sparc.SPARC.g0;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.Annul.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.CC.*;
+import static com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag.*;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
+import static com.oracle.graal.lir.LIRValueUtil.*;
+import static com.oracle.graal.lir.sparc.SPARCMove.*;
+import static jdk.internal.jvmci.code.ValueUtil.*;
+import static jdk.internal.jvmci.sparc.SPARC.*;
 
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import jdk.internal.jvmci.code.Register;
-import jdk.internal.jvmci.common.JVMCIError;
-import jdk.internal.jvmci.meta.AllocatableValue;
-import jdk.internal.jvmci.meta.Constant;
-import jdk.internal.jvmci.meta.JavaConstant;
-import jdk.internal.jvmci.meta.JavaKind;
-import jdk.internal.jvmci.meta.Value;
-import jdk.internal.jvmci.sparc.SPARC;
+import jdk.internal.jvmci.code.*;
+import jdk.internal.jvmci.common.*;
+import jdk.internal.jvmci.meta.*;
+import jdk.internal.jvmci.sparc.*;
 import jdk.internal.jvmci.sparc.SPARC.CPUFeature;
 
-import com.oracle.graal.asm.Assembler;
+import com.oracle.graal.asm.*;
 import com.oracle.graal.asm.Assembler.LabelHint;
-import com.oracle.graal.asm.Label;
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.asm.sparc.SPARCAssembler;
+import com.oracle.graal.asm.sparc.*;
 import com.oracle.graal.asm.sparc.SPARCAssembler.BranchPredict;
 import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
-import com.oracle.graal.asm.sparc.SPARCMacroAssembler;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.ScratchRegister;
 import com.oracle.graal.asm.sparc.SPARCMacroAssembler.Setx;
-import com.oracle.graal.compiler.common.calc.Condition;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.LabelRef;
-import com.oracle.graal.lir.Opcode;
-import com.oracle.graal.lir.StandardOp;
-import com.oracle.graal.lir.SwitchStrategy;
+import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.SwitchStrategy.BaseSwitchClosure;
-import com.oracle.graal.lir.Variable;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
+import com.oracle.graal.lir.asm.*;
 
 public class SPARCControlFlow {
     // This describes the maximum offset between the first emitted (load constant in to scratch,
@@ -285,8 +238,7 @@ public class SPARCControlFlow {
             switch ((JavaKind) actualX.getLIRKind().getPlatformKind()) {
                 case Int:
                     if (isJavaConstant(actualY)) {
-                        JavaConstant c = asJavaConstant(actualY);
-                        int constantY = c.isNull() ? 0 : c.asInt();
+                        int constantY = asJavaConstant(actualY).asInt();
                         CBCOND.emit(masm, conditionFlag, false, asRegister(actualX, JavaKind.Int), constantY, actualTrueTarget);
                     } else {
                         CBCOND.emit(masm, conditionFlag, false, asRegister(actualX, JavaKind.Int), asRegister(actualY, JavaKind.Int), actualTrueTarget);
@@ -294,9 +246,7 @@ public class SPARCControlFlow {
                     break;
                 case Long:
                     if (isJavaConstant(actualY)) {
-                        JavaConstant c = asJavaConstant(actualY);
-                        assert NumUtil.is32bit(c.asLong());
-                        int constantY = c.isNull() ? 0 : (int) c.asLong();
+                        int constantY = (int) asJavaConstant(actualY).asLong();
                         CBCOND.emit(masm, conditionFlag, true, asRegister(actualX, JavaKind.Long), constantY, actualTrueTarget);
                     } else {
                         CBCOND.emit(masm, conditionFlag, true, asRegister(actualX, JavaKind.Long), asRegister(actualY, JavaKind.Long), actualTrueTarget);
@@ -539,7 +489,7 @@ public class SPARCControlFlow {
                         break;
                     }
                     case Object: {
-                        conditionCode = crb.codeCache.getTarget().arch.getWordKind() == JavaKind.Long ? CC.Xcc : CC.Icc;
+                        conditionCode = crb.codeCache.getTarget().wordKind == JavaKind.Long ? CC.Xcc : CC.Icc;
                         bits = constant.isDefaultForKind() ? 0L : null;
                         break;
                     }
