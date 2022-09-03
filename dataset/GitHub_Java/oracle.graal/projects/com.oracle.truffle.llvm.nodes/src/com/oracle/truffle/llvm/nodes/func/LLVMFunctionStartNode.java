@@ -79,10 +79,7 @@ public class LLVMFunctionStartNode extends RootNode {
     @ExplodeLoop
     private void nullStack(VirtualFrame frame) {
         for (FrameSlot frameSlot : frameSlotsToInitialize) {
-            // In LLVM IR, it is possible that SSA values are used *before* they are defined (so
-            // far, we only saw this for @llvm.dbg.value tail calls). So, even in such a case, it
-            // must be possible to read from the frame in a typed way.
-            LLVMFrameNullerUtil.nullFrameSlot(frame, frameSlot, true);
+            LLVMFrameNullerUtil.nullFrameSlot(frame, frameSlot);
         }
     }
 
