@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,10 +22,8 @@
  */
 package com.oracle.svm.core.util;
 
+import java.io.CharConversionException;
 import java.nio.ByteBuffer;
-
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
 
 /**
  * Implements UTF-8 encoding and decoding of strings with support for zero-bytes as string
@@ -122,9 +118,9 @@ public final class Utf8 {
      * @param zeroTerminated if true, then a 0 byte marks the end of the string, and character '\0'
      *            in the input must be encoded as two bytes as opposed to one
      * @param source the byte buffer to read from
-     * @return the decoded string, or null if the buffer is not a valid UTF-8 string.
+     * @return the decoded string
      */
-    public static String utf8ToString(boolean zeroTerminated, ByteBuffer source) {
+    public static String utf8ToString(boolean zeroTerminated, ByteBuffer source) throws CharConversionException {
         final StringBuilder sb = new StringBuilder();
         while (source.hasRemaining()) {
             final int c0 = source.get() & 0xff;
@@ -149,7 +145,7 @@ public final class Utf8 {
                     /* 110x xxxx 10xx xxxx */
                     final int c1 = source.get();
                     if ((c1 & 0xC0) != 0x80) {
-                        return null;
+                        throw new CharConversionException();
                     }
                     sb.append((char) (((c0 & 0x1F) << 6) | (c1 & 0x3F)));
                     break;
@@ -159,31 +155,18 @@ public final class Utf8 {
                     final int c1 = source.get();
                     final int c2 = source.get();
                     if (((c1 & 0xC0) != 0x80) || ((c2 & 0xC0) != 0x80)) {
-                        return null;
+                        throw new CharConversionException();
                     }
                     sb.append((char) (((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F)));
                     break;
                 }
                 default: {
                     /* 10xx xxxx, 1111 xxxx */
-                    return null;
+                    throw new CharConversionException();
                 }
             }
         }
         return sb.toString();
     }
 
-    /**
-     * Converts a pointer to zero-terminated UTF-8 data to a String. If the provided data is the C
-     * null pointer, or the data is not a valid UTF-8 string, then a Java null value is returned.
-     *
-     * @param source the memory to read from
-     * @return the decoded string
-     */
-    public static String utf8ToString(CCharPointer source) {
-        if (source.isNull()) {
-            return null;
-        }
-        return utf8ToString(true, CTypeConversion.asByteBuffer(source, Integer.MAX_VALUE));
-    }
 }
