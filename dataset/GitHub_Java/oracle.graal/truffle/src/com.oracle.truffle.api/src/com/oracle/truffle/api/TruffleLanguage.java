@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -362,24 +361,14 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * @since 0.27
-     * @deprecated in 0.27 implement {@link #getOptionDescriptors()} instead.
-     */
-    @Deprecated
-    protected List<OptionDescriptor> describeOptions() {
-        return null;
-    }
-
-    /**
-     * Returns a set of option descriptors that are supported by this language. Option values are
+     * Returns a list of option descriptors that are supported by this language. Option values are
      * accessible using the {@link Env#getOptions() environment} when the context is
-     * {@link #createContext(Env) created}. To construct option descriptors from a list then
-     * {@link OptionDescriptors#create(List)} can be used.
+     * {@link #createContext(Env) created}.
      *
      * @since 0.27
      */
-    protected OptionDescriptors getOptionDescriptors() {
-        return OptionDescriptors.create(describeOptions());
+    protected List<OptionDescriptor> describeOptions() {
+        return null;
     }
 
     /**
@@ -844,7 +833,7 @@ public abstract class TruffleLanguage<C> {
 
         /**
          * Returns option values for the options described in
-         * {@link TruffleLanguage#getOptionDescriptors()}. The returned options are never
+         * {@link TruffleLanguage#describeOptions()}. The returned options are never
          * <code>null</code>.
          *
          * @since 0.27
@@ -1504,10 +1493,10 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public OptionDescriptors describeOptions(TruffleLanguage<?> language, String requiredGroup) {
-            OptionDescriptors descriptors = language.getOptionDescriptors();
+        public List<OptionDescriptor> describeOptions(TruffleLanguage<?> language, String requiredGroup) {
+            List<OptionDescriptor> descriptors = language.describeOptions();
             if (descriptors == null) {
-                return OptionDescriptors.EMPTY;
+                return Collections.emptyList();
             }
             String groupPlusDot = requiredGroup + ".";
             for (OptionDescriptor descriptor : descriptors) {
