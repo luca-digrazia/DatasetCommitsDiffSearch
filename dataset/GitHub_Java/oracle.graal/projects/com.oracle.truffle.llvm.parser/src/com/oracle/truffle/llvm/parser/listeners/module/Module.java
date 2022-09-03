@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.parser.listeners.module;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.oracle.truffle.llvm.parser.records.ModuleRecord;
 import com.oracle.truffle.llvm.parser.listeners.IRVersionController;
 import com.oracle.truffle.llvm.parser.listeners.Identification;
 import com.oracle.truffle.llvm.parser.listeners.ParserListener;
@@ -43,7 +44,6 @@ import com.oracle.truffle.llvm.parser.model.generators.ModuleGenerator;
 import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.model.target.TargetInformation;
 import com.oracle.truffle.llvm.parser.model.target.TargetTriple;
-import com.oracle.truffle.llvm.parser.records.ModuleRecord;
 import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.parser.scanner.Block;
 import com.oracle.truffle.llvm.runtime.LLVMLogger;
@@ -74,52 +74,12 @@ public final class Module implements ParserListener {
 
     private void createFunction(long[] args) {
         // this allows us to switch module version at runtime
-        FunctionType type = version.createModuleVersionHelper().getFunctionType(this, args[0]);
-        boolean isPrototype = args[2] != 0;
-
-        generator.createFunction(type, isPrototype);
-        symbols.add(type);
-        if (!isPrototype) {
-            functions.add(type);
-        }
+        version.createModuleVersionHelper().createFunction(this, args);
     }
 
     private void createGlobalVariable(long[] args) {
         // this allows us to switch module version at runtime
-        Type type = version.createModuleVersionHelper().getGlobalType(this, args[0]);
-        boolean isConstant = (args[1] & 1) == 1;
-        int initialiser = (int) args[2];
-        long linkage = args[3];
-        int align = (int) args[4];
-
-        long visibility = Visibility.DEFAULT.getEncodedValue();
-        if (args.length >= 7) {
-            visibility = args[6];
-        }
-
-        generator.createGlobal(type, isConstant, initialiser, align, linkage, visibility);
-        symbols.add(type);
-    }
-
-    private void createGlobalAliasNew(long[] args) {
-        // this allows us to switch module version at runtime
-        Type type = version.createModuleVersionHelper().getGlobalType(this, args[0]);
-        // idx = 1 is address space information
-        int value = (int) args[2];
-        long linkage = args[3];
-
-        generator.createAlias(type, value, linkage, Visibility.DEFAULT.ordinal());
-        symbols.add(type);
-    }
-
-    private void createGlobalAliasOld(long[] args) {
-        // this allows us to switch module version at runtime
-        Type type = version.createModuleVersionHelper().getGlobalType(this, args[0]);
-        int value = (int) args[1];
-        long linkage = args[2];
-
-        generator.createAlias(type, value, linkage, Visibility.DEFAULT.ordinal());
-        symbols.add(type);
+        version.createModuleVersionHelper().createGlobalVariable(this, args);
     }
 
     @Override
@@ -195,10 +155,10 @@ public final class Module implements ParserListener {
                 break;
 
             case ALIAS:
-                createGlobalAliasNew(args);
+                createAliasNew(args);
                 break;
             case ALIAS_OLD:
-                createGlobalAliasOld(args);
+                createAliasOld(args);
                 break;
 
             default:
@@ -206,4 +166,24 @@ public final class Module implements ParserListener {
                 break;
         }
     }
+
+    private void createAliasNew(long[] args) {
+        Type type = types.get(args[0]);
+        // idx = 1 is address space information
+        int value = (int) args[2];
+        long linkage = args[3];
+
+        generator.createAlias(type, value, linkage, Visibility.DEFAULT.ordinal());
+        symbols.add(type);
+    }
+
+    private void createAliasOld(long[] args) {
+        Type type = types.get(args[0]);
+        int value = (int) args[1];
+        long linkage = args[2];
+
+        generator.createAlias(type, value, linkage, Visibility.DEFAULT.ordinal());
+        symbols.add(type);
+    }
+
 }

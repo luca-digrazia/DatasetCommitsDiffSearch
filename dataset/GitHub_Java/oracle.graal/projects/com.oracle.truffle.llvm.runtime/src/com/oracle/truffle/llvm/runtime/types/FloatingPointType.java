@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.runtime.types;
 
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public enum FloatingPointType implements Type {
 
@@ -56,6 +57,11 @@ public enum FloatingPointType implements Type {
     @Override
     public LLVMBaseType getLLVMBaseType() {
         return llvmBaseType;
+    }
+
+    @Override
+    public void accept(TypeVisitor visitor) {
+        visitor.visit(this);
     }
 
     @Override
@@ -94,7 +100,7 @@ public enum FloatingPointType implements Type {
     @Override
     public int getAlignment(DataSpecConverter targetDataLayout) {
         if (targetDataLayout != null) {
-            return targetDataLayout.getBitAlignment(llvmBaseType) / Byte.SIZE;
+            return targetDataLayout.getBitAlignment(this) / Byte.SIZE;
         } else {
             return alignment;
         }
@@ -102,7 +108,7 @@ public enum FloatingPointType implements Type {
 
     @Override
     public int getSize(DataSpecConverter targetDataLayout) {
-        return Math.max(1, width / Byte.SIZE);
+        return targetDataLayout.getSize(this);
     }
 
     public int width() {

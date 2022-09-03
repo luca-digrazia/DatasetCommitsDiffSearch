@@ -33,7 +33,6 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.truffle.llvm.parser.model.attributes.AttributesCodeEntry;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.generators.FunctionGenerator;
@@ -58,9 +57,11 @@ import com.oracle.truffle.llvm.parser.model.symbols.constants.integer.BigInteger
 import com.oracle.truffle.llvm.parser.model.symbols.constants.integer.IntegerConstant;
 import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
+import com.oracle.truffle.llvm.runtime.types.FloatingPointType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
+import com.oracle.truffle.llvm.runtime.types.IntegerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.parser.metadata.MetadataList;
+import com.oracle.truffle.llvm.runtime.types.metadata.MetadataBlock;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
 
 public final class ModelModule implements ModuleGenerator {
@@ -75,7 +76,7 @@ public final class ModelModule implements ModuleGenerator {
 
     private final Symbols symbols = new Symbols();
 
-    private final MetadataList metadata;
+    private final MetadataBlock metadata = new MetadataBlock();
 
     private int currentFunction = -1;
 
@@ -95,7 +96,6 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     public ModelModule() {
-        metadata = new MetadataList();
     }
 
     public void accept(ModelVisitor visitor) {
@@ -140,7 +140,7 @@ public final class ModelModule implements ModuleGenerator {
 
     @Override
     public void createFloatingPoint(Type type, long[] value) {
-        symbols.addSymbol(FloatingPointConstant.create(type, value));
+        symbols.addSymbol(FloatingPointConstant.create((FloatingPointType) type, value));
     }
 
     @Override
@@ -170,22 +170,22 @@ public final class ModelModule implements ModuleGenerator {
 
     @Override
     public void createInteger(Type type, long value) {
-        symbols.addSymbol(new IntegerConstant(type, value));
+        symbols.addSymbol(new IntegerConstant((IntegerType) type, value));
     }
 
     @Override
     public void createInteger(Type type, BigInteger value) {
-        symbols.addSymbol(new BigIntegerConstant(type, value));
+        symbols.addSymbol(new BigIntegerConstant((IntegerType) type, value));
     }
 
     @Override
-    public void createFunction(FunctionType type, boolean isPrototype, AttributesCodeEntry paramAttr) {
+    public void createFunction(FunctionType type, boolean isPrototype) {
         if (isPrototype) {
-            final FunctionDeclaration function = new FunctionDeclaration(type, paramAttr);
+            FunctionDeclaration function = new FunctionDeclaration(type);
             symbols.addSymbol(function);
             declares.add(function);
         } else {
-            final FunctionDefinition method = new FunctionDefinition(type, metadata.instantiate(), paramAttr);
+            FunctionDefinition method = new FunctionDefinition(type, metadata);
             symbols.addSymbol(method);
             defines.add(method);
         }
@@ -239,7 +239,7 @@ public final class ModelModule implements ModuleGenerator {
     }
 
     @Override
-    public MetadataList getMetadata() {
+    public MetadataBlock getMetadata() {
         return metadata;
     }
 
@@ -255,11 +255,6 @@ public final class ModelModule implements ModuleGenerator {
     @Override
     public void nameFunction(int index, int offset, String name) {
         symbols.setSymbolName(index, name);
-    }
-
-    @Override
-    public Symbols getSymbols() {
-        return symbols;
     }
 
     @Override
