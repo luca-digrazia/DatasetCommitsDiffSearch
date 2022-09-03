@@ -269,7 +269,7 @@ public abstract class PartialEvaluator {
         @Override
         public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
             TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-            InlineInfo inlineInfo = rt.getInlineInfo(original);
+            InlineInfo inlineInfo = rt.getInlineInfo(original, true);
             if (!inlineInfo.allowsInlining()) {
                 return inlineInfo;
             }
@@ -345,7 +345,7 @@ public abstract class PartialEvaluator {
             }
 
             TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-            InlineInfo inlineInfo = rt.getInlineInfo(original);
+            InlineInfo inlineInfo = rt.getInlineInfo(original, true);
             if (!inlineInfo.allowsInlining()) {
                 return inlineInfo;
             }
@@ -460,8 +460,7 @@ public abstract class PartialEvaluator {
         new ConvertDeoptimizeToGuardPhase().apply(graph, tierContext);
 
         for (MethodCallTargetNode methodCallTargetNode : graph.getNodes(MethodCallTargetNode.TYPE)) {
-            StructuredGraph inlineGraph = providers.getReplacements().getSubstitution(methodCallTargetNode.targetMethod(), methodCallTargetNode.invoke().bci(), graph.trackNodeSourcePosition(),
-                            methodCallTargetNode.asNode().getNodeSourcePosition());
+            StructuredGraph inlineGraph = providers.getReplacements().getSubstitution(methodCallTargetNode.targetMethod(), methodCallTargetNode.invoke().bci(), graph.trackNodeSourcePosition());
             if (inlineGraph != null) {
                 InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, true, methodCallTargetNode.targetMethod());
             }
@@ -518,7 +517,7 @@ public abstract class PartialEvaluator {
         if (!TruffleCompilerOptions.getValue(TruffleInlineAcrossTruffleBoundary)) {
             // Do not inline across Truffle boundaries.
             for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.TYPE)) {
-                InlineInfo inlineInfo = rt.getInlineInfo(mct.targetMethod());
+                InlineInfo inlineInfo = rt.getInlineInfo(mct.targetMethod(), false);
                 if (!inlineInfo.allowsInlining()) {
                     mct.invoke().setUseForInlining(false);
                 }
@@ -618,7 +617,7 @@ public abstract class PartialEvaluator {
                     continue; // native methods cannot be inlined
                 }
                 TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
-                if (runtime.getInlineInfo(call.targetMethod()).getMethodToInline() != null) {
+                if (runtime.getInlineInfo(call.targetMethod(), true).getMethodToInline() != null) {
                     logPerformanceWarning(target.getName(), Arrays.asList(call), String.format("not inlined %s call to %s (%s)", call.invokeKind(), call.targetMethod(), call), null);
                     warnings.add(call);
                 }
