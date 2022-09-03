@@ -28,7 +28,6 @@ import java.util.*;
 
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.iterators.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, LIRLowerable {
@@ -36,7 +35,6 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     private double loopFrequency;
     private int nextEndIndex;
     private int unswitches;
-    @Input private GuardingNode overflowGuard;
 
     public LoopBeginNode() {
         loopFrequency = 1;
@@ -47,7 +45,6 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
     }
 
     public void setLoopFrequency(double loopFrequency) {
-        assert loopFrequency >= 0;
         this.loopFrequency = loopFrequency;
     }
 
@@ -185,14 +182,5 @@ public class LoopBeginNode extends MergeNode implements Node.IterableNodeType, L
             loopexit.removeProxies();
             graph().replaceFixedWithFixed(loopexit, graph().add(new BeginNode()));
         }
-    }
-
-    public GuardingNode getOverflowGuard() {
-        return overflowGuard;
-    }
-
-    public void setOverflowGuard(GuardingNode overflowGuard) {
-        updateUsages(this.overflowGuard == null ? null : this.overflowGuard.asNode(), overflowGuard == null ? null : overflowGuard.asNode());
-        this.overflowGuard = overflowGuard;
     }
 }

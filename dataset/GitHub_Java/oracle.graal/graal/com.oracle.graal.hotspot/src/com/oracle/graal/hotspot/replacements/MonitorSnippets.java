@@ -37,6 +37,7 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.graph.iterators.*;
+import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.hotspot.nodes.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
@@ -372,7 +373,7 @@ public class MonitorSnippets implements Snippets {
     }
 
     @Snippet
-    private static void checkCounter(@ConstantParameter String errMsg) {
+    private static void checkCounter(String errMsg) {
         final Word counter = MonitorCounterNode.counter();
         final int count = counter.readInt(0, MONITOR_COUNTER_LOCATION);
         if (count != 0) {
@@ -497,7 +498,7 @@ public class MonitorSnippets implements Snippets {
                     List<ReturnNode> rets = graph.getNodes().filter(ReturnNode.class).snapshot();
                     for (ReturnNode ret : rets) {
                         returnType = checkCounter.getMethod().getSignature().getReturnType(checkCounter.getMethod().getDeclaringClass());
-                        String msg = "unbalanced monitors in " + MetaUtil.format("%H.%n(%p)", graph.method()) + ", count = %d";
+                        Object msg = ((HotSpotRuntime) runtime).registerGCRoot("unbalanced monitors in " + MetaUtil.format("%H.%n(%p)", graph.method()) + ", count = %d");
                         ConstantNode errMsg = ConstantNode.forObject(msg, runtime, graph);
                         callTarget = graph.add(new MethodCallTargetNode(InvokeKind.Static, checkCounter.getMethod(), new ValueNode[]{errMsg}, returnType));
                         invoke = graph.add(new InvokeNode(callTarget, 0));
@@ -505,12 +506,7 @@ public class MonitorSnippets implements Snippets {
                         FrameState stateAfter = new FrameState(graph.method(), FrameState.AFTER_BCI, new ValueNode[0], stack, new ValueNode[0], false, false);
                         invoke.setStateAfter(graph.add(stateAfter));
                         graph.addBeforeFixed(ret, invoke);
-
-                        Arguments args = new Arguments(checkCounter);
-                        args.addConst("errMsg", msg);
-                        inlineeGraph = template(args).copySpecializedGraph();
-
-                        // inlineeGraph = replacements.getSnippet(checkCounter.getMethod());
+                        inlineeGraph = replacements.getSnippet(checkCounter.getMethod());
                         InliningUtil.inline(invoke, inlineeGraph, false);
                     }
                 }

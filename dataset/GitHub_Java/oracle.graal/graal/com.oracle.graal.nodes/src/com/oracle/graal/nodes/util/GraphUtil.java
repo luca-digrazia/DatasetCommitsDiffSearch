@@ -30,7 +30,6 @@ import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.java.*;
-import com.oracle.graal.nodes.spi.*;
 
 public class GraphUtil {
 
@@ -258,6 +257,14 @@ public class GraphUtil {
         return null;
     }
 
+    public static ValueNode unProxify(ValueNode proxy) {
+        ValueNode v = proxy;
+        while (v instanceof ProxyNode) {
+            v = ((ProxyNode) v).value();
+        }
+        return v;
+    }
+
     /**
      * Returns a string representation of the given collection of objects.
      * 
@@ -278,31 +285,16 @@ public class GraphUtil {
     }
 
     /**
-     * Gets the original value by iterating through all {@link ValueProxy ValueProxies}.
-     * 
-     * @param value The start value.
-     * @return The first non-proxy value encountered.
-     */
-    public static ValueNode unproxify(ValueNode value) {
-        ValueNode result = value;
-        while (result instanceof ValueProxy) {
-            result = ((ValueProxy) result).getOriginalValue();
-        }
-        return result;
-    }
-
-    /**
      * Tries to find an original value of the given node by traversing through proxies and
-     * unambiguous phis. Note that this method will perform an exhaustive search through phis. It is
-     * intended to be used during graph building, when phi nodes aren't yet canonicalized.
+     * unambiguous phis.
      * 
      * @param proxy The node whose original value should be determined.
      */
     public static ValueNode originalValue(ValueNode proxy) {
         ValueNode v = proxy;
         do {
-            if (v instanceof ValueProxy) {
-                v = ((ValueProxy) v).getOriginalValue();
+            if (v instanceof ProxyNode) {
+                v = ((ProxyNode) v).value();
             } else if (v instanceof PhiNode) {
                 v = ((PhiNode) v).singleValue();
             } else {
@@ -316,8 +308,8 @@ public class GraphUtil {
             NodeWorkList worklist = proxy.graph().createNodeWorkList();
             worklist.add(proxy);
             for (Node node : worklist) {
-                if (node instanceof ValueProxy) {
-                    worklist.add(((ValueProxy) node).getOriginalValue());
+                if (node instanceof ProxyNode) {
+                    worklist.add(((ProxyNode) node).value());
                 } else if (node instanceof PhiNode) {
                     worklist.addAll(((PhiNode) node).values());
                 } else {

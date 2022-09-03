@@ -22,16 +22,15 @@
  */
 package com.oracle.graal.word.phases;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
-
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.HeapAccess.WriteBarrierType;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
+import com.oracle.graal.nodes.extended.WriteNode.WriteBarrierType;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.util.*;
@@ -165,7 +164,7 @@ public class WordTypeRewriterPhase extends Phase {
                         Kind readKind = asKind(callTargetNode.returnType());
                         LocationNode location;
                         if (arguments.size() == 2) {
-                            location = makeLocation(graph, arguments.get(1), readKind, ANY_LOCATION);
+                            location = makeLocation(graph, arguments.get(1), readKind, LocationNode.ANY_LOCATION);
                         } else {
                             location = makeLocation(graph, arguments.get(1), readKind, arguments.get(2));
                         }
@@ -177,7 +176,7 @@ public class WordTypeRewriterPhase extends Phase {
                         Kind writeKind = asKind(targetMethod.getSignature().getParameterType(1, targetMethod.getDeclaringClass()));
                         LocationNode location;
                         if (arguments.size() == 3) {
-                            location = makeLocation(graph, arguments.get(1), writeKind, LocationIdentity.ANY_LOCATION);
+                            location = makeLocation(graph, arguments.get(1), writeKind, LocationNode.ANY_LOCATION);
                         } else {
                             location = makeLocation(graph, arguments.get(1), writeKind, arguments.get(3));
                         }
@@ -310,16 +309,16 @@ public class WordTypeRewriterPhase extends Phase {
     }
 
     private static ValueNode readOp(StructuredGraph graph, ValueNode base, Invoke invoke, LocationNode location) {
-        ReadNode read = graph.add(new ReadNode(base, location, invoke.asNode().stamp(), WriteBarrierType.NONE, false));
+        ReadNode read = graph.add(new ReadNode(base, location, invoke.asNode().stamp()));
         graph.addBeforeFixed(invoke.asNode(), read);
         // The read must not float outside its block otherwise it may float above an explicit zero
         // check on its base address
-        read.setGuard(AbstractBeginNode.prevBegin(invoke.asNode()));
+        read.dependencies().add(AbstractBeginNode.prevBegin(invoke.asNode()));
         return read;
     }
 
     private static ValueNode writeOp(StructuredGraph graph, ValueNode base, ValueNode value, Invoke invoke, LocationNode location) {
-        WriteNode write = graph.add(new WriteNode(base, value, location, WriteBarrierType.NONE, false));
+        WriteNode write = graph.add(new WriteNode(base, value, location, WriteBarrierType.NONE));
         write.setStateAfter(invoke.stateAfter());
         graph.addBeforeFixed(invoke.asNode(), write);
         return write;

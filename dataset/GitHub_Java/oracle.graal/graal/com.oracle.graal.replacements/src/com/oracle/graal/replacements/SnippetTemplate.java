@@ -34,7 +34,6 @@ import com.oracle.graal.graph.*;
 import com.oracle.graal.loop.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -724,14 +723,10 @@ public class SnippetTemplate {
             } else {
                 returnValue = (ValueNode) duplicates.get(returnNode.result());
             }
-            Node returnDuplicate = duplicates.get(returnNode);
-            if (returnValue == null && replacee.usages().isNotEmpty() && replacee instanceof MemoryCheckpoint) {
-                replacer.replace(replacee, (ValueNode) returnDuplicate.predecessor());
-            } else {
-                assert returnValue != null || replacee.usages().isEmpty() : this + " " + returnValue + " " + returnNode + " " + replacee.usages();
-                replacer.replace(replacee, returnValue);
+            assert returnValue != null || replacee.usages().isEmpty();
+            replacer.replace(replacee, returnValue);
 
-            }
+            Node returnDuplicate = duplicates.get(returnNode);
             if (returnDuplicate.isAlive()) {
                 returnDuplicate.clearInputs();
                 returnDuplicate.replaceAndDelete(next);

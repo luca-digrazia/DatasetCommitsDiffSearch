@@ -22,58 +22,88 @@
  */
 package com.oracle.graal.hotspot.nodes;
 
+import static com.oracle.graal.hotspot.HotSpotGraalRuntime.*;
+
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
+import com.oracle.graal.hotspot.meta.*;
+import com.oracle.graal.hotspot.replacements.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
+import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.word.*;
+import com.oracle.graal.phases.common.*;
 
 public class HotSpotInstalledCodeExecuteNode extends AbstractCallNode implements Lowerable {
 
-    @Input private final ValueNode targetAddress;
-    @Input private final ValueNode metaspaceObject;
+    @Input private final ValueNode code;
     private final Class[] signature;
 
-    public HotSpotInstalledCodeExecuteNode(Kind kind, ValueNode targetAddress, ValueNode metaspaceObject, Class[] signature, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
+    public HotSpotInstalledCodeExecuteNode(Kind kind, Class[] signature, ValueNode code, ValueNode arg1, ValueNode arg2, ValueNode arg3) {
         super(StampFactory.forKind(kind), new ValueNode[]{arg1, arg2, arg3});
-        this.targetAddress = targetAddress;
-        this.metaspaceObject = metaspaceObject;
+        this.code = code;
         this.signature = signature;
     }
 
     @Override
-    public Object[] getLocationIdentities() {
-        return new Object[]{LocationNode.ANY_LOCATION};
+    public LocationIdentity[] getLocationIdentities() {
+        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        replaceWithInvoke(tool);
+    public void lower(LoweringTool tool, LoweringType loweringType) {
+        if (code.isConstant() && code.asConstant().asObject() instanceof HotSpotInstalledCode) {
+            HotSpotInstalledCode hsCode = (HotSpotInstalledCode) code.asConstant().asObject();
+            InvokeNode invoke = replaceWithInvoke(tool.getRuntime());
+            StructuredGraph graph = (StructuredGraph) hsCode.getGraph();
+            if (graph != null) {
+                InliningUtil.inline(invoke, (StructuredGraph) hsCode.getGraph(), false);
+            }
+        } else {
+            replaceWithInvoke(tool.getRuntime());
+        }
     }
 
-    private InvokeNode replaceWithInvoke(LoweringTool tool) {
-        InvokeNode invoke = createInvoke(tool);
-        ((StructuredGraph) graph()).replaceFixedWithFixed(this, invoke);
-        return invoke;
-    }
-
-    protected InvokeNode createInvoke(LoweringTool tool) {
+    protected InvokeNode replaceWithInvoke(MetaAccessProvider tool) {
         ResolvedJavaMethod method = null;
+        ResolvedJavaField methodField = null;
+        ResolvedJavaField metaspaceMethodField = null;
+        ResolvedJavaField codeBlobField = null;
         try {
-            method = tool.getRuntime().lookupJavaMethod(HotSpotInstalledCodeExecuteNode.class.getMethod("placeholder", Object.class, Object.class, Object.class));
-        } catch (NoSuchMethodException | SecurityException e) {
-            throw new IllegalStateException();
+            method = tool.lookupJavaMethod(HotSpotInstalledCodeExecuteNode.class.getMethod("placeholder", Object.class, Object.class, Object.class));
+            methodField = tool.lookupJavaField(HotSpotInstalledCode.class.getDeclaredField("method"));
+            codeBlobField = tool.lookupJavaField(HotSpotInstalledCode.class.getDeclaredField("codeBlob"));
+            metaspaceMethodField = tool.lookupJavaField(HotSpotResolvedJavaMethod.class.getDeclaredField("metaspaceMethod"));
+        } catch (NoSuchMethodException | SecurityException | NoSuchFieldException e) {
+            throw new IllegalStateException(e);
         }
         ResolvedJavaType[] signatureTypes = new ResolvedJavaType[signature.length];
         for (int i = 0; i < signature.length; i++) {
-            signatureTypes[i] = tool.getRuntime().lookupJavaType(signature[i]);
+            signatureTypes[i] = tool.lookupJavaType(signature[i]);
         }
+        final int verifiedEntryPointOffset = HotSpotReplacementsUtil.verifiedEntryPointOffset();
+
+        LoadFieldNode loadCodeBlob = graph().add(new LoadFieldNode(code, codeBlobField));
+        UnsafeLoadNode load = graph().add(new UnsafeLoadNode(loadCodeBlob, verifiedEntryPointOffset, ConstantNode.forLong(0, graph()), graalRuntime().getTarget().wordKind));
+
+        LoadFieldNode loadMethod = graph().add(new LoadFieldNode(code, methodField));
+        LoadFieldNode loadmetaspaceMethod = graph().add(new LoadFieldNode(loadMethod, metaspaceMethodField));
+
         HotSpotIndirectCallTargetNode callTarget = graph().add(
-                        new HotSpotIndirectCallTargetNode(metaspaceObject, targetAddress, arguments, stamp(), signatureTypes, method, CallingConvention.Type.JavaCall));
+                        new HotSpotIndirectCallTargetNode(loadmetaspaceMethod, load, arguments, stamp(), signatureTypes, method, CallingConvention.Type.JavaCall));
+
         InvokeNode invoke = graph().add(new InvokeNode(callTarget, 0));
+
         invoke.setStateAfter(stateAfter());
+        graph().replaceFixedWithFixed(this, invoke);
+
+        graph().addBeforeFixed(invoke, loadmetaspaceMethod);
+        graph().addBeforeFixed(loadmetaspaceMethod, loadMethod);
+        graph().addBeforeFixed(invoke, load);
+        graph().addBeforeFixed(load, loadCodeBlob);
+
         return invoke;
     }
 
@@ -82,6 +112,6 @@ public class HotSpotInstalledCodeExecuteNode extends AbstractCallNode implements
     }
 
     @NodeIntrinsic
-    public static native <T> T call(@ConstantNodeParameter Kind kind, Word targetAddress, long metaspaceObject, @ConstantNodeParameter Class[] signature, Object arg1, Object arg2, Object arg3);
+    public static native <T> T call(@ConstantNodeParameter Kind kind, @ConstantNodeParameter Class[] signature, Object code, Object arg1, Object arg2, Object arg3);
 
 }

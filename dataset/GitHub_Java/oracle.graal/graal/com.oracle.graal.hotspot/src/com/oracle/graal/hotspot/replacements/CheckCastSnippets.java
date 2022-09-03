@@ -31,7 +31,6 @@ import static com.oracle.graal.replacements.SnippetTemplate.*;
 import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.meta.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.Node.NodeIntrinsic;
 import com.oracle.graal.hotspot.meta.*;
@@ -95,7 +94,7 @@ public class CheckCastSnippets implements Snippets {
             isNull.inc();
         } else {
             Word objectHub = loadHub(object);
-            if (objectHub.readWord(superCheckOffset, LocationIdentity.FINAL_LOCATION).notEqual(hub)) {
+            if (objectHub.readWord(superCheckOffset, FINAL_LOCATION).notEqual(hub)) {
                 displayMiss.inc();
                 DeoptimizeNode.deopt(InvalidateReprofile, ClassCastException);
             }
@@ -188,7 +187,7 @@ public class CheckCastSnippets implements Snippets {
                 args = new Arguments(secondary);
                 args.add("hub", hub);
                 args.add("object", object);
-                args.addVarargs("hints", Word.class, StampFactory.forKind(getWordKind()), hints);
+                args.addVarargs("hints", Word.class, StampFactory.forKind(wordKind()), hints);
             }
             args.addConst("checkNull", !object.stamp().nonNull());
 

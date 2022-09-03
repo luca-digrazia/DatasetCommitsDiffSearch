@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.util.*;
 
 import com.oracle.graal.debug.*;
@@ -82,7 +80,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
     public static final TailDuplicationDecision DEFAULT_DECISION = new TailDuplicationDecision() {
 
         public boolean doTransform(MergeNode merge, int fixedNodeCount) {
-            if (fixedNodeCount < TailDuplicationTrivialSize.getValue()) {
+            if (fixedNodeCount < GraalOptions.TailDuplicationTrivialSize) {
                 return true;
             }
             HashSet<PhiNode> improvements = new HashSet<>();
@@ -138,7 +136,7 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
         // A snapshot is taken here, so that new MergeNode instances aren't considered for tail
         // duplication.
         for (MergeNode merge : graph.getNodes(MergeNode.class).snapshot()) {
-            if (!(merge instanceof LoopBeginNode) && nodeProbabilities.get(merge) >= TailDuplicationProbability.getValue()) {
+            if (!(merge instanceof LoopBeginNode) && nodeProbabilities.get(merge) >= GraalOptions.TailDuplicationProbability) {
                 tailDuplicate(merge, DEFAULT_DECISION, null, phaseContext);
             }
         }
@@ -284,6 +282,11 @@ public class TailDuplicationPhase extends BasePhase<PhaseContext> {
                 // re-wire the phi duplicates to the correct input
                 for (PhiNode phi : phiSnapshot) {
                     PhiNode phiDuplicate = (PhiNode) duplicates.get(phi);
+                    for (Node usage : phiDuplicate.usages()) {
+                        if (usage instanceof ValueNode) {
+                            ((ValueNode) usage).dependencies().add(prevBegin);
+                        }
+                    }
                     phiDuplicate.replaceAtUsages(phi.valueAt(forwardEnd));
                     phiDuplicate.safeDelete();
                 }

@@ -27,6 +27,7 @@ import static com.oracle.graal.graph.UnsafeAccess.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.*;
 
 /**
@@ -37,13 +38,13 @@ public final class CStringNode extends FloatingNode implements Lowerable {
 
     private final String string;
 
-    private CStringNode(String string) {
-        super(null);
+    public CStringNode(String string) {
+        super(StampFactory.forWord());
         this.string = string;
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         byte[] formatBytes = string.getBytes();
         long cstring = unsafe.allocateMemory(formatBytes.length + 1);
         for (int i = 0; i < formatBytes.length; i++) {
@@ -54,6 +55,6 @@ public final class CStringNode extends FloatingNode implements Lowerable {
         graph().replaceFloating(this, replacement);
     }
 
-    @NodeIntrinsic(setStampFromReturnType = true)
+    @NodeIntrinsic
     public static native Word cstring(@ConstantNodeParameter String string);
 }

@@ -22,12 +22,10 @@
  */
 package com.oracle.graal.nodes.java;
 
-import static com.oracle.graal.api.meta.LocationIdentity.*;
-
-import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
+import com.oracle.graal.nodes.extended.LocationNode.LocationIdentity;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 
@@ -43,7 +41,7 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
 
     @Override
     public LocationIdentity[] getLocationIdentities() {
-        return new LocationIdentity[]{ANY_LOCATION};
+        return new LocationIdentity[]{LocationNode.ANY_LOCATION};
     }
 
     @Override
@@ -55,13 +53,6 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
         return (stamp() == StampFactory.forVoid());
     }
 
-    /**
-     * The frame state upon entry to an exception handler is such that it is a
-     * {@link BytecodeFrame#rethrowException rethrow exception} state and the stack contains exactly
-     * the exception object (per the JVM spec) to rethrow. This means that the code creating this
-     * state (i.e. the {@link LoadExceptionObjectNode}) cannot cause a deoptimization as the
-     * runtime/interpreter would not have a valid location for the exception object to be rethrown.
-     */
     @Override
     public void lower(LoweringTool tool, LoweringType loweringType) {
         if (isLowered()) {

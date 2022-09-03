@@ -25,12 +25,10 @@ package com.oracle.graal.nodes.calc;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
- * Returns -1, 0, or 1 if either x &lt; y, x == y, or x &gt; y. If the comparison is undecided (one
- * of the inputs is NaN), the result is 1 if isUnorderedLess is false and -1 if isUnorderedLess is
- * true.
+ * Returns -1, 0, or 1 if either x < y, x == y, or x > y. If the comparison is undecided (one of the
+ * inputs is NaN), the result is 1 if isUnorderedLess is false and -1 if isUnorderedLess is true.
  */
 public final class NormalizeCompareNode extends BinaryNode implements Lowerable {
 
@@ -38,22 +36,22 @@ public final class NormalizeCompareNode extends BinaryNode implements Lowerable 
 
     /**
      * Creates a new compare operation.
-     *
+     * 
      * @param x the first input
      * @param y the second input
      * @param isUnorderedLess true when an unordered floating point comparison is interpreted as
      *            less, false when greater.
      */
     public NormalizeCompareNode(ValueNode x, ValueNode y, boolean isUnorderedLess) {
-        super(StampFactory.forKind(Kind.Int), x, y);
+        super(Kind.Int, x, y);
         this.isUnorderedLess = isUnorderedLess;
     }
 
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         LogicNode equalComp;
         LogicNode lessComp;
-        if (x().stamp() instanceof FloatStamp) {
+        if (x().kind() == Kind.Double || x().kind() == Kind.Float) {
             equalComp = graph().unique(new FloatEqualsNode(x(), y()));
             lessComp = graph().unique(new FloatLessThanNode(x(), y(), isUnorderedLess));
         } else {

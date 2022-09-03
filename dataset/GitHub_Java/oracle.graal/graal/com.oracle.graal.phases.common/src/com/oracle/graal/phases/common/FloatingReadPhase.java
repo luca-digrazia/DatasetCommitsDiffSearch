@@ -88,13 +88,12 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        protected Set<LocationIdentity> processNode(FixedNode node, Set<LocationIdentity> currentState) {
+        protected void processNode(FixedNode node, Set<LocationIdentity> currentState) {
             if (node instanceof MemoryCheckpoint) {
                 for (LocationIdentity identity : ((MemoryCheckpoint) node).getLocationIdentities()) {
                     currentState.add(identity);
                 }
             }
-            return currentState;
         }
 
         @Override
@@ -138,13 +137,12 @@ public class FloatingReadPhase extends Phase {
         }
 
         @Override
-        protected MemoryMap processNode(FixedNode node, MemoryMap state) {
+        protected void processNode(FixedNode node, MemoryMap state) {
             if (node instanceof FloatableAccessNode) {
                 processFloatable((FloatableAccessNode) node, state);
             } else if (node instanceof MemoryCheckpoint) {
                 processCheckpoint((MemoryCheckpoint) node, state);
             }
-            return state;
         }
 
         private static void processCheckpoint(MemoryCheckpoint checkpoint, MemoryMap state) {

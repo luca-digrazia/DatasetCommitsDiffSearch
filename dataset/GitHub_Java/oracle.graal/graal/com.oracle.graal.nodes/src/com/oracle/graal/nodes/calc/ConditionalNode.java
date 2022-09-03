@@ -28,7 +28,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
-import com.oracle.graal.nodes.type.*;
 
 /**
  * The {@code ConditionalNode} class represents a comparison that yields one of two values. Note
@@ -40,10 +39,6 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
 
     public LogicNode condition() {
         return condition;
-    }
-
-    public ConditionalNode(LogicNode condition) {
-        this(condition, ConstantNode.forInt(1, condition.graph()), ConstantNode.forInt(0, condition.graph()));
     }
 
     public ConditionalNode(LogicNode condition, ValueNode trueValue, ValueNode falseValue) {
@@ -70,9 +65,8 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
         // this optimizes the case where a value that can only be 0 or 1 is materialized to 0 or 1
         if (x().isConstant() && y().isConstant() && condition instanceof IntegerEqualsNode) {
             IntegerEqualsNode equals = (IntegerEqualsNode) condition;
-            if (equals.y().isConstant() && equals.y().asConstant().equals(Constant.INT_0) && equals.x().stamp() instanceof IntegerStamp) {
-                IntegerStamp equalsXStamp = (IntegerStamp) equals.x().stamp();
-                if (equalsXStamp.mask() == 1) {
+            if (equals.y().isConstant() && equals.y().asConstant().equals(Constant.INT_0)) {
+                if (equals.x().integerStamp().mask() == 1) {
                     if (x().asConstant().equals(Constant.INT_0) && y().asConstant().equals(Constant.INT_1)) {
                         return equals.x();
                     }
@@ -108,11 +102,11 @@ public final class ConditionalNode extends BinaryNode implements Canonicalizable
     }
 
     private ConditionalNode(Condition condition, ValueNode x, ValueNode y) {
-        this(createCompareNode(condition, x, y));
+        this(createCompareNode(condition, x, y), ConstantNode.forInt(1, x.graph()), ConstantNode.forInt(0, x.graph()));
     }
 
     private ConditionalNode(ValueNode type, ValueNode object) {
-        this(type.graph().add(new InstanceOfDynamicNode(type, object)));
+        this(type.graph().add(new InstanceOfDynamicNode(type, object)), ConstantNode.forInt(1, type.graph()), ConstantNode.forInt(0, type.graph()));
     }
 
     @NodeIntrinsic

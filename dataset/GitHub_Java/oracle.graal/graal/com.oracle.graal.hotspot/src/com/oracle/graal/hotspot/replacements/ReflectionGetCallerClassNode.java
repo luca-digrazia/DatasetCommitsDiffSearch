@@ -22,13 +22,12 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.meta.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.nodes.*;
 
 public class ReflectionGetCallerClassNode extends MacroNode implements Canonicalizable, Lowerable {
@@ -65,7 +64,7 @@ public class ReflectionGetCallerClassNode extends MacroNode implements Canonical
      * @return ConstantNode of the caller class, or null
      */
     private ConstantNode getCallerClassNode(MetaAccessProvider runtime) {
-        if (!IntrinsifyReflectionMethods.getValue()) {
+        if (!GraalOptions.IntrinsifyReflectionMethods) {
             return null;
         }
 

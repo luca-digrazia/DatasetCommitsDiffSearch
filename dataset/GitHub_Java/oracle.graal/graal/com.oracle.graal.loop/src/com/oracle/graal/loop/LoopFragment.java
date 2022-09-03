@@ -145,11 +145,11 @@ public abstract class LoopFragment {
         }
     }
 
-    protected static NodeBitMap computeNodes(Graph graph, Iterable<AbstractBeginNode> blocks) {
+    protected static NodeBitMap computeNodes(Graph graph, Collection<AbstractBeginNode> blocks) {
         return computeNodes(graph, blocks, Collections.<AbstractBeginNode> emptyList());
     }
 
-    protected static NodeBitMap computeNodes(Graph graph, Iterable<AbstractBeginNode> blocks, Iterable<AbstractBeginNode> earlyExits) {
+    protected static NodeBitMap computeNodes(Graph graph, Collection<AbstractBeginNode> blocks, Collection<AbstractBeginNode> earlyExits) {
         final NodeBitMap nodes = graph.createNodeBitMap(true);
         for (AbstractBeginNode b : blocks) {
             for (Node n : b.getBlockNodes()) {
@@ -229,28 +229,12 @@ public abstract class LoopFragment {
         return false;
     }
 
-    public static NodeIterable<AbstractBeginNode> toHirBlocks(final Iterable<Block> blocks) {
-        return new AbstractNodeIterable<AbstractBeginNode>() {
-
-            public Iterator<AbstractBeginNode> iterator() {
-                final Iterator<Block> it = blocks.iterator();
-                return new Iterator<AbstractBeginNode>() {
-
-                    public void remove() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    public AbstractBeginNode next() {
-                        return it.next().getBeginNode();
-                    }
-
-                    public boolean hasNext() {
-                        return it.hasNext();
-                    }
-                };
-            }
-
-        };
+    public static Collection<AbstractBeginNode> toHirBlocks(Collection<Block> blocks) {
+        List<AbstractBeginNode> hir = new ArrayList<>(blocks.size());
+        for (Block b : blocks) {
+            hir.add(b.getBeginNode());
+        }
+        return hir;
     }
 
     /**
@@ -295,7 +279,7 @@ public abstract class LoopFragment {
                 final ValueNode replaceWith;
                 ProxyNode newVpn = getDuplicatedNode(vpn);
                 if (newVpn != null) {
-                    PhiNode phi = graph.addWithoutUnique(vpn.type() == PhiType.Value ? new PhiNode(vpn.kind(), merge) : new PhiNode(vpn.type(), merge, vpn.getIdentity()));
+                    PhiNode phi = graph.add(vpn.type() == PhiType.Value ? new PhiNode(vpn.kind(), merge) : new PhiNode(vpn.type(), merge, vpn.getIdentity()));
                     phi.addInput(vpn);
                     phi.addInput(newVpn);
                     replaceWith = phi;

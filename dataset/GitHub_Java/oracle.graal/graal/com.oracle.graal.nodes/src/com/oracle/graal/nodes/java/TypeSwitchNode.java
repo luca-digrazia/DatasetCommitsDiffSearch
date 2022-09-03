@@ -26,7 +26,6 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ResolvedJavaType.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
@@ -86,7 +85,7 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
             for (int i = 0; i < keyCount(); i++) {
                 Constant typeHub = keyAt(i);
                 assert constant.getKind() == typeHub.getKind();
-                if (tool.getConstantReflection().constantEquals(constant, typeHub)) {
+                if (tool.runtime().constantEquals(constant, typeHub)) {
                     survivingEdge = keySuccessorIndex(i);
                 }
             }
@@ -98,8 +97,8 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
             tool.addToWorkList(blockSuccessor(survivingEdge));
             graph().removeSplit(this, blockSuccessor(survivingEdge));
         }
-        if (value() instanceof LoadHubNode && ((LoadHubNode) value()).object().stamp() instanceof ObjectStamp) {
-            ObjectStamp stamp = (ObjectStamp) ((LoadHubNode) value()).object().stamp();
+        if (value() instanceof LoadHubNode) {
+            ObjectStamp stamp = ((LoadHubNode) value()).object().objectStamp();
             if (stamp.type() != null) {
                 int validKeys = 0;
                 for (int i = 0; i < keyCount(); i++) {
@@ -136,10 +135,6 @@ public final class TypeSwitchNode extends SwitchNode implements LIRLowerable, Si
                     if (totalProbability > 0) {
                         for (int i = 0; i < current; i++) {
                             newKeyProbabilities[i] /= totalProbability;
-                        }
-                    } else {
-                        for (int i = 0; i < current; i++) {
-                            newKeyProbabilities[i] = 1.0 / current;
                         }
                     }
 

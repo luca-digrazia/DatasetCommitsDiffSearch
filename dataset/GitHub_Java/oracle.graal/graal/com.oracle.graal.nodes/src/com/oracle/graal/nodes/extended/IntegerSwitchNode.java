@@ -25,7 +25,6 @@ package com.oracle.graal.nodes.extended;
 import java.util.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -54,15 +53,6 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         assert keySuccessors.length == keys.length + 1;
         assert keySuccessors.length == keyProbabilities.length;
         this.keys = keys;
-        assert assertValues();
-        assert assertSorted();
-    }
-
-    private boolean assertSorted() {
-        for (int i = 1; i < keys.length; i++) {
-            assert keys[i - 1] < keys[i];
-        }
-        return true;
     }
 
     /**
@@ -77,11 +67,6 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
      */
     public IntegerSwitchNode(ValueNode value, int successorCount, int[] keys, double[] keyProbabilities, int[] keySuccessors) {
         this(value, new AbstractBeginNode[successorCount], keys, keyProbabilities, keySuccessors);
-    }
-
-    @Override
-    public boolean isSorted() {
-        return true;
     }
 
     /**
@@ -126,8 +111,8 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
             }
             tool.addToWorkList(blockSuccessor(survivingEdge));
             graph().removeSplit(this, blockSuccessor(survivingEdge));
-        } else if (value().stamp() instanceof IntegerStamp) {
-            IntegerStamp stamp = (IntegerStamp) value().stamp();
+        } else if (value() != null) {
+            IntegerStamp stamp = value().integerStamp();
             if (!stamp.isUnrestricted()) {
                 int validKeys = 0;
                 for (int i = 0; i < keyCount(); i++) {
@@ -164,10 +149,6 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
                     if (totalProbability > 0) {
                         for (int i = 0; i < current; i++) {
                             newKeyProbabilities[i] /= totalProbability;
-                        }
-                    } else {
-                        for (int i = 0; i < current; i++) {
-                            newKeyProbabilities[i] = 1.0 / current;
                         }
                     }
 

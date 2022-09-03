@@ -25,14 +25,10 @@ package com.oracle.graal.nodes.debug;
 import java.io.*;
 import java.util.*;
 
-import sun.misc.*;
-
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.HeapAccess.WriteBarrierType;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
@@ -48,7 +44,7 @@ import com.oracle.graal.nodes.type.*;
 public class DynamicCounterNode extends FixedWithNextNode implements Lowerable {
 
     private static final int MAX_COUNTERS = 10 * 1024;
-    public static final long[] COUNTERS = new long[MAX_COUNTERS];
+    private static final long[] COUNTERS = new long[MAX_COUNTERS];
     private static final long[] STATIC_COUNTERS = new long[MAX_COUNTERS];
     private static final String[] GROUPS = new String[MAX_COUNTERS];
     private static final HashMap<String, Integer> INDEXES = new HashMap<>();
@@ -99,10 +95,8 @@ public class DynamicCounterNode extends FixedWithNextNode implements Lowerable {
 
     public static synchronized void dump(PrintStream out, double seconds) {
         for (String group : new HashSet<>(Arrays.asList(GROUPS))) {
-            if (group != null) {
-                dumpCounters(out, seconds, true, group);
-                dumpCounters(out, seconds, false, group);
-            }
+            dumpCounters(out, seconds, true, group);
+            dumpCounters(out, seconds, false, group);
         }
         out.println("============================");
 
@@ -122,42 +116,28 @@ public class DynamicCounterNode extends FixedWithNextNode implements Lowerable {
             }
         }
 
-        if (sum > 0) {
-            long cutoff = sum / 1000;
-            long sum2 = 0;
-            if (staticCounter) {
-                out.println("=========== " + group + " static counters: ");
-                for (Map.Entry<Long, String> entry : sorted.entrySet()) {
-                    long counter = entry.getKey() / MAX_COUNTERS;
-                    sum2 += counter;
-                    if (sum2 >= cutoff) {
-                        out.println(counter + " \t" + ((counter * 200 + 1) / sum / 2) + "% \t" + entry.getValue());
-                    }
-                }
-                out.println(sum + ": total");
-            } else {
-                if (group.startsWith("~")) {
-                    out.println("=========== " + group + " dynamic counters");
-                    for (Map.Entry<Long, String> entry : sorted.entrySet()) {
-                        long counter = entry.getKey() / MAX_COUNTERS;
-                        sum2 += counter;
-                        if (sum2 >= cutoff) {
-                            out.println(counter + " \t" + ((counter * 200 + 1) / sum / 2) + "% \t" + entry.getValue());
-                        }
-                    }
-                    out.println(sum + "/s: total");
-                } else {
-                    out.println("=========== " + group + " dynamic counters, time = " + seconds + " s");
-                    for (Map.Entry<Long, String> entry : sorted.entrySet()) {
-                        long counter = entry.getKey() / MAX_COUNTERS;
-                        sum2 += counter;
-                        if (sum2 >= cutoff) {
-                            out.println((long) (counter / seconds) + "/s \t" + ((counter * 200 + 1) / sum / 2) + "% \t" + entry.getValue());
-                        }
-                    }
-                    out.println((long) (sum / seconds) + "/s: total");
+        long cutoff = sum / 1000;
+        long sum2 = 0;
+        if (staticCounter) {
+            out.println("=========== " + group + " static counters: ");
+            for (Map.Entry<Long, String> entry : sorted.entrySet()) {
+                long counter = entry.getKey() / MAX_COUNTERS;
+                sum2 += counter;
+                if (sum2 >= cutoff) {
+                    out.println(counter + " \t" + ((counter * 200 + 1) / sum / 2) + "% \t" + entry.getValue());
                 }
             }
+            out.println(sum + ": total");
+        } else {
+            out.println("=========== " + group + " dynamic counters, time = " + seconds + " s");
+            for (Map.Entry<Long, String> entry : sorted.entrySet()) {
+                long counter = entry.getKey() / MAX_COUNTERS;
+                sum2 += counter;
+                if (sum2 >= cutoff) {
+                    out.println((int) (counter / seconds) + "/s \t" + ((counter * 200 + 1) / sum / 2) + "% \t" + entry.getValue());
+                }
+            }
+            out.println((int) (sum / seconds) + "/s: total");
         }
     }
 
@@ -185,28 +165,6 @@ public class DynamicCounterNode extends FixedWithNextNode implements Lowerable {
             graph().addBeforeFixed(this, store);
         }
         graph().removeFixed(this);
-    }
-
-    public static void addLowLevel(String group, String name, long increment, boolean addContext, FixedNode position, MetaAccessProvider runtime) {
-        if (!enabled) {
-            throw new GraalInternalError("counter nodes shouldn't exist when not enabled");
-        }
-        StructuredGraph graph = position.graph();
-        if (excludedClassPrefix == null || !graph.method().getDeclaringClass().getName().startsWith(excludedClassPrefix)) {
-            int index = addContext ? getIndex(name + " @ " + MetaUtil.format("%h.%n", graph.method())) : getIndex(name);
-            STATIC_COUNTERS[index] += increment;
-            GROUPS[index] = group;
-
-            ConstantNode arrayConstant = ConstantNode.forObject(COUNTERS, runtime, graph);
-            ConstantLocationNode location = ConstantLocationNode.create(NamedLocationIdentity.getArrayLocation(Kind.Long), Kind.Long, Unsafe.ARRAY_LONG_BASE_OFFSET + Unsafe.ARRAY_LONG_INDEX_SCALE *
-                            index, graph);
-            ReadNode read = graph.add(new ReadNode(arrayConstant, location, StampFactory.forKind(Kind.Long), WriteBarrierType.NONE, false));
-            IntegerAddNode add = graph.add(new IntegerAddNode(Kind.Long, read, ConstantNode.forLong(increment, graph)));
-            WriteNode write = graph.add(new WriteNode(arrayConstant, add, location, WriteBarrierType.NONE, false));
-
-            graph.addBeforeFixed(position, read);
-            graph.addBeforeFixed(position, write);
-        }
     }
 
     public static void addCounterBefore(String group, String name, long increment, boolean addContext, FixedNode position) {

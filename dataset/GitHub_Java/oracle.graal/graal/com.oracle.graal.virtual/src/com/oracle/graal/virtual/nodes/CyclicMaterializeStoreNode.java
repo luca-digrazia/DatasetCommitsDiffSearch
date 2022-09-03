@@ -28,12 +28,10 @@ import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
+import com.oracle.graal.nodes.virtual.*;
 
-/**
- * The {@code StoreFieldNode} represents a write to a static or instance field.
- */
 @NodeInfo(nameTemplate = "MaterializeStore#{p#target/s}")
-public final class CyclicMaterializeStoreNode extends FixedWithNextNode implements Lowerable {
+public final class CyclicMaterializeStoreNode extends FixedWithNextNode implements Lowerable, Virtualizable {
 
     @Input private ValueNode object;
     @Input private ValueNode value;
@@ -70,16 +68,28 @@ public final class CyclicMaterializeStoreNode extends FixedWithNextNode implemen
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        StructuredGraph graph = (StructuredGraph) graph();
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         ResolvedJavaType type = object.objectStamp().type();
         FixedWithNextNode store;
         if (target instanceof Integer) {
-            store = graph.add(new StoreIndexedNode(object, ConstantNode.forInt((int) target, graph), type.componentType().kind(), value, -1));
+            store = graph().add(new StoreIndexedNode(object, ConstantNode.forInt((int) target, graph()), type.getComponentType().getKind(), value));
         } else {
             assert target instanceof ResolvedJavaField;
-            store = graph.add(new StoreFieldNode(object, (ResolvedJavaField) target, value, -1));
+            store = graph().add(new StoreFieldNode(object, (ResolvedJavaField) target, value));
         }
-        graph.replaceFixedWithFixed(this, store);
+        graph().replaceFixedWithFixed(this, store);
+    }
+
+    @Override
+    public void virtualize(VirtualizerTool tool) {
+        State state = tool.getObjectState(object);
+        if (state != null && state.getState() == EscapeState.Virtual) {
+            if (state.getVirtualObject() instanceof VirtualArrayNode) {
+                tool.setVirtualEntry(state, targetIndex(), value());
+            } else {
+                tool.setVirtualEntry(state, ((VirtualInstanceNode) state.getVirtualObject()).fieldIndex(targetField()), value());
+            }
+            tool.delete();
+        }
     }
 }

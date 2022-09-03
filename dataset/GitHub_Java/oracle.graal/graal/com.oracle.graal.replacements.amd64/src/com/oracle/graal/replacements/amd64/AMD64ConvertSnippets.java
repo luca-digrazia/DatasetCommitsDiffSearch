@@ -22,8 +22,8 @@
  */
 package com.oracle.graal.replacements.amd64;
 
-import static com.oracle.graal.nodes.extended.BranchProbabilityNode.*;
 import static com.oracle.graal.replacements.SnippetTemplate.*;
+import static com.oracle.graal.replacements.nodes.BranchProbabilityNode.*;
 
 import java.util.*;
 
@@ -172,11 +172,11 @@ public class AMD64ConvertSnippets implements Snippets {
             // Convert node are replaced by the placeholder which in turn is replaced by the
             // snippet.
 
-            LocalNode replacee = graph.addWithoutUnique(new LocalNode(Integer.MAX_VALUE, convert.stamp()));
+            LocalNode replacee = graph.add(new LocalNode(Integer.MAX_VALUE, convert.stamp()));
             convert.replaceAtUsages(replacee);
             Arguments args = new Arguments(key);
             args.add("input", convert.value());
-            args.add("result", convert.graph().unique(new AMD64ConvertNode(convert.opcode, convert.value())));
+            args.add("result", convert);
 
             SnippetTemplate template = template(args);
             Debug.log("Lowering %s in %s: node=%s, template=%s, arguments=%s", convert.opcode, graph, convert, template, args);

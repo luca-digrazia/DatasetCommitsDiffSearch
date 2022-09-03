@@ -132,12 +132,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     @Override
-    public void setProbability(AbstractBeginNode successor, double value) {
-        assert successor == trueSuccessor || successor == falseSuccessor;
-        setTrueSuccessorProbability(successor == trueSuccessor ? value : 1 - value);
-    }
-
-    @Override
     public void generate(LIRGeneratorTool gen) {
         gen.emitIf(this);
     }

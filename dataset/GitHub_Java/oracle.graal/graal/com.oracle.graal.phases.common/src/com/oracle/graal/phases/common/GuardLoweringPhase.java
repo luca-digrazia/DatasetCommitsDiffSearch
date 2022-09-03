@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.phases.common;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -116,7 +114,8 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
         private void processAccess(Access access) {
             GuardNode guard = nullGuarded.get(access.object());
             if (guard != null && isImplicitNullCheck(access.nullCheckLocation())) {
-                access.setGuard(guard.getGuard());
+                NodeInputList<ValueNode> dependencies = ((ValueNode) access).dependencies();
+                dependencies.remove(guard);
                 Access fixedAccess = access;
                 if (access instanceof FloatingAccessNode) {
                     fixedAccess = ((FloatingAccessNode) access).asFixedNode();
@@ -222,7 +221,7 @@ public class GuardLoweringPhase extends BasePhase<MidTierContext> {
 
     private static void processBlock(Block block, SchedulePhase schedule, int implicitNullCheckLimit) {
         List<ScheduledNode> nodes = schedule.nodesFor(block);
-        if (OptImplicitNullChecks.getValue() && implicitNullCheckLimit > 0) {
+        if (GraalOptions.OptImplicitNullChecks && implicitNullCheckLimit > 0) {
             new UseImplicitNullChecks(implicitNullCheckLimit).processNodes(nodes, block.getBeginNode());
         }
         new LowerGuards(block).processNodes(nodes, block.getBeginNode());

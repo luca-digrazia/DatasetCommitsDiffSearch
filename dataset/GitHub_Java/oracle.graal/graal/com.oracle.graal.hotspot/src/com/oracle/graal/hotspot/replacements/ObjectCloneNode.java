@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.hotspot.replacements;
 
-import static com.oracle.graal.phases.GraalOptions.*;
-
 import java.lang.reflect.*;
 
 import com.oracle.graal.api.code.*;
@@ -33,6 +31,7 @@ import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.nodes.virtual.*;
+import com.oracle.graal.phases.*;
 import com.oracle.graal.replacements.nodes.*;
 
 public class ObjectCloneNode extends MacroNode implements VirtualizableAllocation, ArrayLengthProvider {
@@ -52,7 +51,7 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
 
     @Override
     protected StructuredGraph getSnippetGraph(LoweringTool tool) {
-        if (!IntrinsifyObjectClone.getValue()) {
+        if (!GraalOptions.IntrinsifyObjectClone) {
             return null;
         }
 
@@ -78,7 +77,7 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
     }
 
     private static boolean isCloneableType(ResolvedJavaType type, MetaAccessProvider metaAccess) {
-        return type != null && metaAccess.lookupJavaType(Cloneable.class).isAssignableFrom(type);
+        return metaAccess.lookupJavaType(Cloneable.class).isAssignableFrom(type);
     }
 
     private static ResolvedJavaType getConcreteType(ObjectStamp stamp, Assumptions assumptions) {
@@ -124,8 +123,16 @@ public class ObjectCloneNode extends MacroNode implements VirtualizableAllocatio
                     final LoadFieldNode[] loads = new LoadFieldNode[fields.length];
                     for (int i = 0; i < fields.length; i++) {
                         state[i] = loads[i] = new LoadFieldNode(obj, fields[i]);
-                        tool.addNode(loads[i]);
                     }
+
+                    tool.customAction(new Runnable() {
+
+                        public void run() {
+                            for (LoadFieldNode load : loads) {
+                                graph().addBeforeFixed(ObjectCloneNode.this, graph().add(load));
+                            }
+                        }
+                    });
                     tool.createVirtualObject(newVirtual, state, null);
                     tool.replaceWithVirtual(newVirtual);
                 }
