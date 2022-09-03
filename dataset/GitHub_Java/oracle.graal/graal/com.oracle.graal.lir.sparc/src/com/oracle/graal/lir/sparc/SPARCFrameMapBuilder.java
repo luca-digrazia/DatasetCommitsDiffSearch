@@ -20,30 +20,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.graal.lir.amd64;
+package com.oracle.graal.lir.sparc;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.lir.framemap.*;
 
-public class AMD64FrameMapBuilder extends FrameMapBuilderImpl {
+public class SPARCFrameMapBuilder extends FrameMapBuilderImpl {
 
-    public AMD64FrameMapBuilder(FrameMap frameMap, CodeCacheProvider codeCache, RegisterConfig registerConfig) {
+    public SPARCFrameMapBuilder(FrameMap frameMap, CodeCacheProvider codeCache, RegisterConfig registerConfig) {
         super(frameMap, codeCache, registerConfig);
     }
 
-    /**
-     * For non-leaf methods, RBP is preserved in the special stack slot required by the HotSpot
-     * runtime for walking/inspecting frames of such methods.
-     */
-    public StackSlot allocateRBPSpillSlot() {
-        return ((AMD64FrameMap) getFrameMap()).allocateRBPSpillSlot();
-    }
-
-    public void freeRBPSpillSlot() {
-        ((AMD64FrameMap) getFrameMap()).freeRBPSpillSlot();
-    }
-
     public StackSlot allocateDeoptimizationRescueSlot() {
-        return ((AMD64FrameMap) getFrameMap()).allocateDeoptimizationRescueSlot();
+        return ((SPARCFrameMap) getFrameMap()).allocateDeoptimizationRescueSlot();
     }
 }
