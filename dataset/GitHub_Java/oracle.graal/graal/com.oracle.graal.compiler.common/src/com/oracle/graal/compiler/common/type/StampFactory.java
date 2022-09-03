@@ -248,10 +248,32 @@ public class StampFactory {
     }
 
     public static Stamp exact(ResolvedJavaType type) {
-        if (ObjectStamp.isConcreteType(type)) {
-            return new ObjectStamp(type, true, false, false);
-        } else {
-            return illegal(Kind.Object);
+        return new ObjectStamp(type, true, false, false);
+    }
+
+    public static Stamp[] createParameterStamps(ResolvedJavaMethod method) {
+        Signature sig = method.getSignature();
+        Stamp[] result = new Stamp[sig.getParameterCount(!method.isStatic())];
+        int index = 0;
+
+        if (!method.isStatic()) {
+            result[index++] = StampFactory.declaredNonNull(method.getDeclaringClass());
         }
+
+        int max = sig.getParameterCount(false);
+        ResolvedJavaType accessingClass = method.getDeclaringClass();
+        for (int i = 0; i < max; i++) {
+            JavaType type = sig.getParameterType(i, accessingClass);
+            Kind kind = type.getKind();
+            Stamp stamp;
+            if (kind == Kind.Object && type instanceof ResolvedJavaType) {
+                stamp = StampFactory.declared((ResolvedJavaType) type);
+            } else {
+                stamp = StampFactory.forKind(kind);
+            }
+            result[index++] = stamp;
+        }
+
+        return result;
     }
 }
