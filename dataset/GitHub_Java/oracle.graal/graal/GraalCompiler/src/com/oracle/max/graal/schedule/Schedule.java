@@ -55,6 +55,7 @@ public class Schedule {
     }
 
     private Block assignBlock(Node n) {
+        assert n instanceof BlockBegin : n;
         Block curBlock = nodeToBlock.get(n);
         if (curBlock == null) {
             curBlock = createBlock();

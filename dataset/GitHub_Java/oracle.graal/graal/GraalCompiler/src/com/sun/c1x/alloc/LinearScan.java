@@ -27,6 +27,7 @@ import static java.lang.reflect.Modifier.*;
 
 import java.util.*;
 
+import com.oracle.graal.graph.*;
 import com.sun.c1x.*;
 import com.sun.c1x.alloc.Interval.*;
 import com.sun.c1x.debug.*;
