@@ -23,11 +23,12 @@
 package com.oracle.graal.virtual.phases.ea;
 
 import static com.oracle.graal.phases.common.DeadCodeEliminationPhase.Optionality.*;
-import static com.oracle.graal.debug.Debug.*;
+import static jdk.internal.jvmci.debug.Debug.*;
 
 import java.util.*;
 
-import com.oracle.graal.debug.*;
+import jdk.internal.jvmci.debug.*;
+
 import com.oracle.graal.graph.Graph.NodeEventScope;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
@@ -68,7 +69,6 @@ public abstract class EffectsPhase<PhaseContextT extends PhaseContext> extends B
         runAnalysis(graph, context);
     }
 
-    @SuppressWarnings("try")
     public boolean runAnalysis(final StructuredGraph graph, final PhaseContextT context) {
         boolean changed = false;
         for (int iteration = 0; iteration < maxIterations; iteration++) {
