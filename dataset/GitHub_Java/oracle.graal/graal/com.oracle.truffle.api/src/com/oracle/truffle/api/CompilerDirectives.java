@@ -117,25 +117,4 @@ public class CompilerDirectives {
     @Target({ElementType.FIELD})
     public @interface CompilationFinal {
     }
-
-    /**
-     * Marks methods that are considered unsafe. Wrong usage of those methods can lead to unexpected
-     * behavior including a crash of the runtime. Therefore, special care should be taken.
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.METHOD})
-    public @interface Unsafe {
-    }
-
-    /**
-     * Treats the given value as a value of the given class. The class must evaluate to a constant.
-     * 
-     * @param value the value that is known to have the specified type
-     * @param clazz the specified type of the value
-     * @return the value
-     */
-    @Unsafe
-    public static Object unsafeCast(Object value, Class clazz) {
-        return value;
-    }
 }
