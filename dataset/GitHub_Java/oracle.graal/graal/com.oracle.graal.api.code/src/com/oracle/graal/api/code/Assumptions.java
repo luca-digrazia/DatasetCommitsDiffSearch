@@ -281,12 +281,10 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
 
             int index;
 
-            @Override
             public void remove() {
                 throw new UnsupportedOperationException();
             }
 
-            @Override
             public Assumption next() {
                 if (index >= count) {
                     throw new NoSuchElementException();
@@ -294,7 +292,6 @@ public final class Assumptions implements Serializable, Iterable<Assumptions.Ass
                 return list[index++];
             }
 
-            @Override
             public boolean hasNext() {
                 return index < count;
             }

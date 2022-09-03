@@ -254,8 +254,6 @@ public class PartialEvaluator {
                     if (arg.isConstant()) {
                         Constant constant = arg.asConstant();
                         local.replaceAndDelete(ConstantNode.forConstant(constant, metaAccessProvider, graph));
-                    } else {
-                        local.setStamp(arg.stamp());
                     }
                 }
 
