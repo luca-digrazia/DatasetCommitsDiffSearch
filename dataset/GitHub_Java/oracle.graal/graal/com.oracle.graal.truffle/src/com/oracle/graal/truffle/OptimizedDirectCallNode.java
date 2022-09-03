@@ -22,14 +22,11 @@
  */
 package com.oracle.graal.truffle;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.*;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.api.frame.*;
+import com.oracle.truffle.api.nodes.*;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
@@ -49,7 +46,11 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
     public OptimizedDirectCallNode(GraalTruffleRuntime runtime, OptimizedCallTarget target) {
         super(target);
         this.runtime = runtime;
-        this.splittingStrategy = new DefaultTruffleSplittingStrategy(this);
+        if (TruffleCompilerOptions.TruffleSplittingNew.getValue()) {
+            this.splittingStrategy = new DefaultTruffleSplittingStrategyNew(this);
+        } else {
+            this.splittingStrategy = new DefaultTruffleSplittingStrategy(this);
+        }
     }
 
     @Override
@@ -57,7 +58,16 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Mat
         if (CompilerDirectives.inInterpreter()) {
             onInterpreterCall(arguments);
         }
-        return callProxy(this, getCurrentCallTarget(), frame, arguments, true);
+        Object result = callProxy(this, getCurrentCallTarget(), frame, arguments, true);
+
+        if (CompilerDirectives.inInterpreter()) {
+            afterInterpreterCall(result);
+        }
+        return result;
+    }
+
+    private void afterInterpreterCall(Object result) {
+        splittingStrategy.afterCall(result);
     }
 
     public static Object callProxy(MaterializedFrameNotify notify, CallTarget callTarget, VirtualFrame frame, Object[] arguments, boolean direct) {
