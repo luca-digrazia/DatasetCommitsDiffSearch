@@ -30,31 +30,36 @@ import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TraceTruffleTr
 import static org.graalvm.compiler.truffle.TruffleCompilerOptions.getOptions;
 import static org.graalvm.compiler.truffle.hotspot.UnsafeAccess.UNSAFE;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.code.CompilationResult;
+import org.graalvm.compiler.core.CompilationWrapper.ExceptionAction;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.CompilationRequestIdentifier;
 import org.graalvm.compiler.core.target.Backend;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Activation;
+import org.graalvm.compiler.debug.DebugHandlersFactory;
+import org.graalvm.compiler.debug.DiagnosticsOutputDirectory;
 import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotBackend;
 import org.graalvm.compiler.hotspot.HotSpotCompilationIdentifier;
 import org.graalvm.compiler.hotspot.HotSpotCompiledCodeBuilder;
 import org.graalvm.compiler.hotspot.HotSpotGraalOptionValues;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.HotSpotRetryableCompilation;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.java.GraphBuilderPhase;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
@@ -76,18 +81,13 @@ import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.compiler.truffle.CancellableCompileTask;
-import org.graalvm.compiler.truffle.DefaultTruffleCompiler;
 import org.graalvm.compiler.truffle.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.TruffleCallBoundary;
 import org.graalvm.compiler.truffle.TruffleCompiler;
 import org.graalvm.compiler.truffle.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.TruffleTreeDebugHandlersFactory;
-import org.graalvm.compiler.truffle.hotspot.nfi.HotSpotNativeFunctionInterface;
-import org.graalvm.compiler.truffle.hotspot.nfi.RawNativeCallNodeFactory;
 
-import com.oracle.nfi.api.NativeFunctionInterface;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
@@ -187,32 +187,35 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         return truffleCompiler;
     }
 
+    protected boolean reportedTruffleCompilerInitializationFailure;
+
     private void initializeTruffleCompiler() {
         synchronized (this) {
             // might occur for multiple compiler threads at the same time.
             if (truffleCompiler == null) {
-                truffleCompiler = DefaultTruffleCompiler.create(this);
+                try {
+                    truffleCompiler = HotSpotTruffleCompiler.create(this);
+                } catch (Throwable e) {
+                    if (!reportedTruffleCompilerInitializationFailure) {
+                        // This should never happen so report it (once)
+                        reportedTruffleCompilerInitializationFailure = true;
+                        e.printStackTrace(TTY.out);
+                    }
+                }
             }
         }
     }
 
     @Override
-    protected void compileMethod(DebugContext initialDebug, TruffleCompiler compiler, OptimizedCallTarget optimizedCallTarget, ResolvedJavaMethod rootMethod, CompilationIdentifier compilationId,
-                    CancellableCompileTask task) {
+    protected DiagnosticsOutputDirectory getDebugOutputDirectory() {
         HotSpotGraalRuntimeProvider runtime = (HotSpotGraalRuntimeProvider) getRequiredGraalCapability(RuntimeProvider.class);
-        HotSpotRetryableCompilation<Void> compilation = new HotSpotRetryableCompilation<Void>(runtime) {
-            @Override
-            protected Void run(DebugContext debug, Throwable failure) {
-                HotSpotTruffleRuntime.super.compileMethod(debug, compiler, optimizedCallTarget, rootMethod, compilationId, task);
-                return null;
-            }
+        return runtime.getOutputDirectory();
+    }
 
-            @Override
-            public String toString() {
-                return optimizedCallTarget.toString();
-            }
-        };
-        compilation.runWithRetry(initialDebug);
+    @Override
+    protected Map<ExceptionAction, Integer> getCompilationProblemsPerAction() {
+        HotSpotGraalRuntimeProvider runtime = (HotSpotGraalRuntimeProvider) getRequiredGraalCapability(RuntimeProvider.class);
+        return runtime.getCompilationProblemsPerAction();
     }
 
     @Override
@@ -231,9 +234,28 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         ResolvedJavaType type = metaAccess.lookupJavaType(OptimizedCallTarget.class);
         for (ResolvedJavaMethod method : type.getDeclaredMethods()) {
             if (method.getAnnotation(TruffleCallBoundary.class) != null) {
-                ((HotSpotResolvedJavaMethod) method).setNotInlineable();
+                setNotInlinableOrCompilable(method);
             }
         }
+    }
+
+    /**
+     * Informs the VM to never compile or inline {@code method}.
+     */
+    private static void setNotInlinableOrCompilable(ResolvedJavaMethod method) {
+        // JDK-8180487 and JDK-8186478 introduced breaking API changes so reflection is required.
+        Method[] methods = HotSpotResolvedJavaMethod.class.getMethods();
+        for (Method m : methods) {
+            if (m.getName().equals("setNotInlineable") || m.getName().equals("setNotInlinableOrCompilable") || m.getName().equals("setNotInlineableOrCompileable")) {
+                try {
+                    m.invoke(method);
+                    return;
+                } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                    throw new GraalError(e);
+                }
+            }
+        }
+        throw new GraalError("Could not find setNotInlineable, setNotInlinableOrCompilable or setNotInlineableOrCompileable in %s", HotSpotResolvedJavaMethod.class);
     }
 
     /**
@@ -302,14 +324,15 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         Plugins plugins = new Plugins(new InvocationPlugins());
         HotSpotCodeCacheProvider codeCache = providers.getCodeCache();
         boolean infoPoints = codeCache.shouldDebugNonSafepoints();
-        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true).withNodeSourcePosition(infoPoints);
+        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true).withUnresolvedIsError(true).withNodeSourcePosition(infoPoints);
         new GraphBuilderPhase.Instance(metaAccess, providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), config, OptimisticOptimizations.ALL,
                         null).apply(graph);
 
         PhaseSuite<HighTierContext> graphBuilderSuite = getGraphBuilderSuite(codeCache, suitesProvider);
         Backend backend = getHotSpotBackend();
         CompilationResultBuilderFactory factory = getOptimizedCallTargetInstrumentationFactory(backend.getTarget().arch.getName());
-        return compileGraph(graph, javaMethod, providers, backend, graphBuilderSuite, OptimisticOptimizations.ALL, graph.getProfilingInfo(), suites, lirSuites, new CompilationResult(), factory);
+        return compileGraph(graph, javaMethod, providers, backend, graphBuilderSuite, OptimisticOptimizations.ALL, graph.getProfilingInfo(), suites, lirSuites, new CompilationResult(compilationId),
+                        factory);
     }
 
     private HotSpotBackend getHotSpotBackend() {
@@ -391,27 +414,6 @@ public final class HotSpotTruffleRuntime extends GraalTruffleRuntime {
         if (TruffleCompilerOptions.getValue(TraceTruffleTransferToInterpreter)) {
             TraceTransferToInterpreterHelper.traceTransferToInterpreter(this, getVMConfig());
         }
-    }
-
-    private static RawNativeCallNodeFactory getRawNativeCallNodeFactory(String arch) {
-        for (RawNativeCallNodeFactory factory : GraalServices.load(RawNativeCallNodeFactory.class)) {
-            if (factory.getArchitecture().equals(arch)) {
-                return factory;
-            }
-        }
-        // No RawNativeCallNodeFactory on this platform.
-        return null;
-    }
-
-    NativeFunctionInterface createNativeFunctionInterface() {
-        GraalHotSpotVMConfig config = getVMConfig();
-        Backend backend = getHotSpotBackend();
-        RawNativeCallNodeFactory factory = getRawNativeCallNodeFactory(backend.getTarget().arch.getName());
-        if (factory == null) {
-            return null;
-        }
-
-        return new HotSpotNativeFunctionInterface(getOptions(), getHotSpotProviders(), factory, backend, config.dllLoad, config.dllLookup, config.rtldDefault);
     }
 
     private static class TraceTransferToInterpreterHelper {
