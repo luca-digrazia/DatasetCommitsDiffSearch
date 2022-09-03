@@ -53,16 +53,6 @@ final class JavaInteropAccessor extends Accessor {
             public Object toJavaGuestObject(Object obj, Object languageContext) {
                 return JavaInterop.asTruffleObject(obj, languageContext);
             }
-
-            @Override
-            public boolean isJavaFunction(Object object) {
-                return JavaInterop.isJavaFunction(object);
-            }
-
-            @Override
-            public String javaFunctionToString(Object object) {
-                return ((JavaFunctionObject) object).getDescription();
-            }
         };
     }
 
