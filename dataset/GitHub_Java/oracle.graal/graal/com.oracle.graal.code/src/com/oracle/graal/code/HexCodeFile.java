@@ -46,23 +46,23 @@ import jdk.vm.ci.code.CodeUtil;
  *
  * <pre>
  *     HexCodeFile ::= Platform Delim HexCode Delim (OptionalSection Delim)*
- *
+ * 
  *     OptionalSection ::= Comment | OperandComment | JumpTable | LookupTable
- *
+ * 
  *     Platform ::= "Platform" ISA WordWidth
- *
+ * 
  *     HexCode ::= "HexCode" StartAddress HexDigits
- *
+ * 
  *     Comment ::= "Comment" Position String
- *
+ * 
  *     OperandComment ::= "OperandComment" Position String
- *
+ * 
  *     JumpTable ::= "JumpTable" Position EntrySize Low High
- *
+ * 
  *     LookupTable ::= "LookupTable" Position NPairs KeySize OffsetSize
- *
+ * 
  *     Position, EntrySize, Low, High, NPairs KeySize OffsetSize ::= int
- *
+ * 
  *     Delim := "&lt;||@"
  * </pre>
  *
@@ -327,7 +327,7 @@ public class HexCodeFile {
             final int line;
             final int col;
 
-            public InputPos(int line, int col) {
+            InputPos(int line, int col) {
                 this.line = line;
                 this.col = col;
             }

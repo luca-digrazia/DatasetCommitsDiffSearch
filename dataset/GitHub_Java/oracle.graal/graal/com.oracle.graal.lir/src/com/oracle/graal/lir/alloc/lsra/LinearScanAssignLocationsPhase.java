@@ -33,6 +33,10 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
+import jdk.vm.ci.code.TargetDescription;
+import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Value;
+
 import com.oracle.graal.compiler.common.cfg.AbstractBlockBase;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.debug.Indent;
@@ -49,10 +53,6 @@ import com.oracle.graal.lir.Variable;
 import com.oracle.graal.lir.gen.LIRGenerationResult;
 import com.oracle.graal.lir.phases.AllocationPhase;
 
-import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.AllocatableValue;
-import jdk.vm.ci.meta.Value;
-
 /**
  * Phase 7: Assign register numbers back to LIR.
  */
@@ -65,8 +65,7 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
     }
 
     @Override
-    protected void run(TargetDescription target, LIRGenerationResult lirGenRes, List<? extends AbstractBlockBase<?>> codeEmittingOrder, List<? extends AbstractBlockBase<?>> linearScanOrder,
-                    AllocationContext context) {
+    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, AllocationContext context) {
         assignLocations();
     }
 
@@ -137,13 +136,13 @@ public class LinearScanAssignLocationsPhase extends AllocationPhase {
              * is a branch, spill moves are inserted before this branch and so the wrong operand
              * would be returned (spill moves at block boundaries are not considered in the live
              * ranges of intervals).
-             *
+             * 
              * Solution: use the first opId of the branch target block instead.
              */
             final LIRInstruction instr = allocator.getLIR().getLIRforBlock(block).get(allocator.getLIR().getLIRforBlock(block).size() - 1);
             if (instr instanceof StandardOp.JumpOp) {
                 if (allocator.getBlockData(block).liveOut.get(allocator.operandNumber(operand))) {
-                    tempOpId = allocator.getFirstLirInstructionId(block.getSuccessors()[0]);
+                    tempOpId = allocator.getFirstLirInstructionId(block.getSuccessors().iterator().next());
                     mode = OperandMode.DEF;
                 }
             }

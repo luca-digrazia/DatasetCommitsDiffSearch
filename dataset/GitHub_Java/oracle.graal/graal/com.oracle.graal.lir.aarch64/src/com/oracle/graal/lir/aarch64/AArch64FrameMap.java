@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.lir.aarch64;
 
+import com.oracle.graal.lir.framemap.FrameMap;
+
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.RegisterConfig;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.meta.LIRKind;
-
-import com.oracle.graal.asm.NumUtil;
-import com.oracle.graal.lir.framemap.FrameMap;
 
 /**
  * AArch64 specific frame map.
@@ -39,7 +38,7 @@ import com.oracle.graal.lir.framemap.FrameMap;
  *
  * <pre>
  *   Base       Contents
- *
+ * 
  *            :                                :  -----
  *   caller   | incoming overflow argument n   |    ^
  *   frame    :     ...                        :    | positive
@@ -96,21 +95,10 @@ public class AArch64FrameMap extends FrameMap {
 
     @Override
     public int currentFrameSize() {
-        return alignFrameSize(spillSize + outgoingSize - frameSetupSize());
-    }
-
-    @Override
-    protected int alignFrameSize(int size) {
-        return NumUtil.roundUp(size, getTarget().stackAlignment);
-    }
-
-    @Override
-    protected StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset) {
-        return StackSlot.get(kind, -spillSize + additionalOffset, true);
+        return alignFrameSize(outgoingSize + spillSize);
     }
 
     public StackSlot allocateDeoptimizationRescueSlot() {
-        // XXX This is very likely not correct.
         assert spillSize == initialSpillSize : "Deoptimization rescue slot must be the first stack slot";
         return allocateSpillSlot(LIRKind.value(AArch64Kind.QWORD));
     }

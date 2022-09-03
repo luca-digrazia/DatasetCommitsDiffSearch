@@ -125,13 +125,6 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
             }
 
             if (isIllegal(interval.location()) && interval.canMaterialize()) {
-                if (op instanceof LabelOp) {
-                    /*
-                     * Spilled materialized value in a LabelOp (i.e. incoming): no need for move
-                     * resolution so we can ignore it.
-                     */
-                    return Value.ILLEGAL;
-                }
                 assert mode != OperandMode.DEF;
                 return new ConstantValue(interval.kind(), interval.getMaterializedValue());
             }
@@ -158,7 +151,7 @@ final class TraceLinearScanAssignLocationsPhase extends TraceLinearScanAllocatio
                  * instruction is a branch, spill moves are inserted before this branch and so the
                  * wrong operand would be returned (spill moves at block boundaries are not
                  * considered in the live ranges of intervals).
-                 *
+                 * 
                  * Solution: use the first opId of the branch target block instead.
                  */
                 final LIRInstruction instr = allocator.getLIR().getLIRforBlock(block).get(allocator.getLIR().getLIRforBlock(block).size() - 1);

@@ -41,7 +41,6 @@ import com.oracle.graal.api.replacements.SnippetReflectionProvider;
 import com.oracle.graal.compiler.common.calc.Condition;
 import com.oracle.graal.compiler.common.type.Stamp;
 import com.oracle.graal.compiler.common.type.StampFactory;
-import com.oracle.graal.compiler.common.type.StampPair;
 import com.oracle.graal.compiler.common.type.TypeReference;
 import com.oracle.graal.debug.Debug;
 import com.oracle.graal.graph.Node;
@@ -230,13 +229,13 @@ public class TruffleGraphBuilderPlugins {
                      * and constant folding could still eliminate the call to bailout(). However, we
                      * also want to stop parsing, since we are sure that we will never need the
                      * graph beyond the bailout point.
-                     *
+                     * 
                      * Therefore, we manually emit the call to bailout, which will be intrinsified
                      * later when intrinsifications can no longer be delayed. The call is followed
                      * by a NeverPartOfCompilationNode, which is a control sink and therefore stops
                      * any further parsing.
                      */
-                    StampPair returnStamp = b.getInvokeReturnStamp(b.getAssumptions());
+                    Stamp returnStamp = b.getInvokeReturnStamp(b.getAssumptions());
                     CallTargetNode callTarget = b.add(new MethodCallTargetNode(InvokeKind.Static, targetMethod, new ValueNode[]{message}, returnStamp, null));
                     b.add(new InvokeNode(callTarget, b.bci()));
 

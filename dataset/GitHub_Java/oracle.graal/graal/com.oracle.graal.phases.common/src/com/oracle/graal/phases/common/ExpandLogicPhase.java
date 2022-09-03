@@ -22,7 +22,8 @@
  */
 package com.oracle.graal.phases.common;
 
-import com.oracle.graal.debug.GraalError;
+import jdk.vm.ci.common.JVMCIError;
+
 import com.oracle.graal.graph.Graph;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.nodes.AbstractBeginNode;
@@ -58,7 +59,7 @@ public class ExpandLogicPhase extends Phase {
             } else if (usage instanceof ConditionalNode) {
                 processConditional(binary.getX(), binary.isXNegated(), binary.getY(), binary.isYNegated(), (ConditionalNode) usage);
             } else {
-                throw GraalError.shouldNotReachHere();
+                throw JVMCIError.shouldNotReachHere();
             }
         }
         binary.safeDelete();
@@ -70,9 +71,9 @@ public class ExpandLogicPhase extends Phase {
         double firstIfProbability = shortCircuitProbability;
         /*
          * P(Y | not(X)) = P(Y inter not(X)) / P(not(X)) = (P(X union Y) - P(X)) / (1 - P(X))
-         *
+         * 
          * P(X) = shortCircuitProbability
-         *
+         * 
          * P(X union Y) = ifNode.probability(trueTarget)
          */
         double secondIfProbability = (ifNode.probability(trueTarget) - shortCircuitProbability) / (1 - shortCircuitProbability);
@@ -103,10 +104,5 @@ public class ExpandLogicPhase extends Phase {
         ConditionalNode secondConditional = graph.unique(new ConditionalNode(y, yNegated ? falseTarget : trueTarget, yNegated ? trueTarget : falseTarget));
         ConditionalNode firstConditional = graph.unique(new ConditionalNode(x, xNegated ? secondConditional : trueTarget, xNegated ? trueTarget : secondConditional));
         conditional.replaceAndDelete(firstConditional);
-    }
-
-    @Override
-    public boolean checkContract() {
-        return false;
     }
 }
