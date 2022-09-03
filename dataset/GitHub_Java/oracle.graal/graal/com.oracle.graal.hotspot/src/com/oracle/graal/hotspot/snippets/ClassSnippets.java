@@ -30,7 +30,6 @@ import java.lang.reflect.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.snippets.*;
 import com.oracle.graal.snippets.ClassSubstitution.MethodSubstitution;
-import com.oracle.graal.word.*;
 
 /**
  * Snippets for {@link java.lang.Class} methods.
@@ -112,6 +111,7 @@ public class ClassSnippets implements SnippetsInterface {
 
     @MethodSubstitution(isStatic = false)
     public static boolean isInstance(final Class<?> thisObj, Object obj) {
-        return !thisObj.isPrimitive() && MaterializeNode.isInstance(thisObj, obj);
+        return MaterializeNode.isInstance(thisObj, obj);
     }
+
 }

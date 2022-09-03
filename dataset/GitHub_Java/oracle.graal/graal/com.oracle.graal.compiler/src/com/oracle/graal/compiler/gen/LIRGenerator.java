@@ -459,7 +459,7 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     }
 
     protected CallingConvention createCallingConvention() {
-        return frameMap.registerConfig.getCallingConvention(JavaCallee, method.getSignature().getReturnType(null), MetaUtil.signatureToTypes(method), target, false);
+        return frameMap.registerConfig.getCallingConvention(JavaCallee, method.getSignature().getReturnKind(), MetaUtil.signatureToKinds(method), target, false);
     }
 
     protected void emitPrologue() {
@@ -711,7 +711,8 @@ public abstract class LIRGenerator extends LIRGeneratorTool {
     @Override
     public void emitInvoke(Invoke x) {
         AbstractCallTargetNode callTarget = (AbstractCallTargetNode) x.callTarget();
-        CallingConvention cc = frameMap.registerConfig.getCallingConvention(callTarget.callType(), x.node().stamp().javaType(runtime), callTarget.signature(), target(), false);
+        Kind[] signature = callTarget.signature();
+        CallingConvention cc = frameMap.registerConfig.getCallingConvention(callTarget.callType(), x.node().kind(), signature, target(), false);
         frameMap.callsMethod(cc);
 
         Value[] parameters = visitInvokeArguments(cc, callTarget.arguments());

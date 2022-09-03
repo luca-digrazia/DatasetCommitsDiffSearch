@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.jtt.jdk;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
 
 
-public class IntegerBits extends JTTTest {
+public class IntegerBits {
     @SuppressWarnings("unused")
     private static int init = Integer.reverseBytes(42);
     private static int original = 0x01020304;
+    private static int reversed = 0x04030201;
     private static int v = 0b1000;
     private static int zero = 0;
 
@@ -51,56 +51,56 @@ public class IntegerBits extends JTTTest {
 
     @Test
     public void run0() {
-        runTest("test", original);
+        Assert.assertEquals(reversed, test(original));
     }
 
     @Test
     public void run1() {
-        runTest("test3", v);
+        Assert.assertEquals(3, test3(v));
     }
 
     @Test
     public void run2() {
-        runTest("test2", v);
+        Assert.assertEquals(28, test2(v));
     }
 
     @Test
     public void run3() {
-        runTest("test3", zero);
+        Assert.assertEquals(32, test3(zero));
     }
 
     @Test
     public void run4() {
-        runTest("test2", zero);
+        Assert.assertEquals(32, test2(zero));
     }
 
     @Test
     public void run5() {
-        runTest("test", 0x01020304);
+        Assert.assertEquals(reversed, test(0x01020304));
     }
 
     @Test
     public void run6() {
-        runTest("test3", 0b1000);
+        Assert.assertEquals(3, test3(0b1000));
     }
 
     @Test
     public void run7() {
-        runTest("test2", 0b1000);
+        Assert.assertEquals(28, test2(0b1000));
     }
 
     @Test
     public void run8() {
-        runTest("test3", 0);
+        Assert.assertEquals(32, test3(0));
     }
 
     @Test
     public void run9() {
-        runTest("test2", 0);
+        Assert.assertEquals(32, test2(0));
     }
 
     @Test
     public void run10() {
-        runTest("test4", 0xffffffff);
+        Assert.assertEquals(32, test4(0xffffffff));
     }
 }

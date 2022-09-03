@@ -22,14 +22,14 @@
  */
 package com.oracle.graal.jtt.jdk;
 
-import com.oracle.graal.jtt.*;
 import org.junit.*;
 
 
-public class LongBits extends JTTTest {
+public class LongBits {
     @SuppressWarnings("unused")
     private static long init = Long.reverseBytes(42);
     private static long original = 0x0102030405060708L;
+    private static long reversed = 0x0807060504030201L;
     private static long v = 0b1000L;
     private static long v2 = 0x0100000000L;
     private static long zero = 0L;
@@ -52,82 +52,82 @@ public class LongBits extends JTTTest {
 
     @Test
     public void run0() {
-        runTest("test", original);
+        Assert.assertEquals(reversed, test(original));
     }
 
     @Test
     public void run1() {
-        runTest("test3", v);
+        Assert.assertEquals(3, test3(v));
     }
 
     @Test
     public void run2() {
-        runTest("test2", v);
+        Assert.assertEquals(60, test2(v));
     }
 
     @Test
     public void run3() {
-        runTest("test3", zero);
+        Assert.assertEquals(64, test3(zero));
     }
 
     @Test
     public void run4() {
-        runTest("test2", zero);
+        Assert.assertEquals(64, test2(zero));
     }
 
     @Test
     public void run5() {
-        runTest("test", 0x0102030405060708L);
+        Assert.assertEquals(reversed, test(0x0102030405060708L));
     }
 
     @Test
     public void run6() {
-        runTest("test3", 0b1000L);
+        Assert.assertEquals(3, test3(0b1000L));
     }
 
     @Test
     public void run7() {
-        runTest("test2", 0b1000L);
+        Assert.assertEquals(60, test2(0b1000L));
     }
 
     @Test
     public void run8() {
-        runTest("test3", 0L);
+        Assert.assertEquals(64, test3(0L));
     }
 
     @Test
     public void run9() {
-        runTest("test2", 0L);
+        Assert.assertEquals(64, test2(0L));
     }
 
     @Test
     public void run10() {
-        runTest("test2", v2);
+        Assert.assertEquals(31, test2(v2));
     }
 
     @Test
     public void run11() {
-        runTest("test3", v2);
+        Assert.assertEquals(32, test3(v2));
     }
 
     @Test
     public void run12() {
-        runTest("test2", 0x0100000000L);
+        Assert.assertEquals(31, test2(0x0100000000L));
     }
 
     @Test
     public void run13() {
-        runTest("test3", 0x0100000000L);
+        Assert.assertEquals(32, test3(0x0100000000L));
     }
 
     @Test
     public void run14() {
-        runTest("test4", 0L);
-        runTest("test4", 1L);
-        runTest("test4", 0xffff00ffL);
-        runTest("test4", 0xffffffffL);
-        runTest("test4", 0x3ffffffffL);
-        runTest("test4", 0xffffffff3L);
-        runTest("test4", 0xffffffffffffffffL);
+        Assert.assertEquals(0, test4(0L));
+        Assert.assertEquals(1, test4(1L));
+        Assert.assertEquals(24, test4(0xffff00ffL));
+        Assert.assertEquals(32, test4(0xffffffffL));
+        Assert.assertEquals(34, test4(0x3ffffffffL));
+        Assert.assertEquals(34, test4(0xffffffff3L));
+        Assert.assertEquals(64, test4(0xffffffffffffffffL));
     }
 }
