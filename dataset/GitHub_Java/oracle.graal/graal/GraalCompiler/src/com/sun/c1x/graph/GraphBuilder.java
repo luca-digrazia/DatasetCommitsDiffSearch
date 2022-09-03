@@ -182,7 +182,8 @@ public final class GraphBuilder {
             flags |= Flag.HasHandler.mask;
         }
 
-        startBlock.mergeOrClone(frameState, rootMethod);
+        FrameState initialState = frameState.create(-1);
+        startBlock.mergeOrClone(initialState, rootMethod);
         BlockBegin syncHandler = null;
 
         // 3. setup internal state for appending instructions
@@ -192,7 +193,7 @@ public final class GraphBuilder {
 
         if (isSynchronized(rootMethod.accessFlags())) {
             // 4A.1 add a monitor enter to the start block
-            rootMethodSynchronizedObject = synchronizedObject(frameState, compilation.method);
+            rootMethodSynchronizedObject = synchronizedObject(initialState, compilation.method);
             genMonitorEnter(rootMethodSynchronizedObject, Instruction.SYNCHRONIZATION_ENTRY_BCI);
             // 4A.2 finish the start block
             finishStartBlock(startBlock, stdEntry);
@@ -250,12 +251,84 @@ public final class GraphBuilder {
         return stream.nextBCI();
     }
 
+    private void ipush(Value x) {
+        frameState.ipush(x);
+    }
+
+    private void lpush(Value x) {
+        frameState.lpush(x);
+    }
+
+    private void fpush(Value x) {
+        frameState.fpush(x);
+    }
+
+    private void dpush(Value x) {
+        frameState.dpush(x);
+    }
+
+    private void apush(Value x) {
+        frameState.apush(x);
+    }
+
+    private void wpush(Value x) {
+        frameState.wpush(x);
+    }
+
+    private void push(CiKind kind, Value x) {
+        frameState.push(kind, x);
+    }
+
+    private void pushReturn(CiKind kind, Value x) {
+        if (kind != CiKind.Void) {
+            frameState.push(kind.stackKind(), x);
+        }
+    }
+
+    private Value ipop() {
+        return frameState.ipop();
+    }
+
+    private Value lpop() {
+        return frameState.lpop();
+    }
+
+    private Value fpop() {
+        return frameState.fpop();
+    }
+
+    private Value dpop() {
+        return frameState.dpop();
+    }
+
+    private Value apop() {
+        return frameState.apop();
+    }
+
+    private Value wpop() {
+        return frameState.wpop();
+    }
+
+    private Value pop(CiKind kind) {
+        return frameState.pop(kind);
+    }
+
+    private CiKind peekKind() {
+        Value top = frameState.stackAt(frameState.stackSize() - 1);
+        if (top == null) {
+            top = frameState.stackAt(frameState.stackSize() - 2);
+            assert top != null;
+            assert top.kind.isDoubleWord();
+        }
+        return top.kind;
+    }
+
     private void loadLocal(int index, CiKind kind) {
-        frameState.push(kind, frameState.loadLocal(index));
+        push(kind, frameState.loadLocal(index));
     }
 
     private void storeLocal(CiKind kind, int index) {
-        frameState.storeLocal(index, frameState.pop(kind));
+        frameState.storeLocal(index, pop(kind));
     }
 
     List<ExceptionHandler> handleException(Instruction x, int bci) {
@@ -307,7 +380,7 @@ public final class GraphBuilder {
         assert entryState == null || curState.locksSize() == entryState.locksSize() : "locks do not match : cur:" + curState.locksSize() + " entry:" + entryState.locksSize();
 
         // exception handler starts with an empty expression stack
-        curState = curState.duplicateWithEmptyStack();
+        curState = curState.copyWithEmptyStack();
 
         entry.mergeOrClone(curState, method());
 
@@ -349,13 +422,13 @@ public final class GraphBuilder {
             // this is a load of class constant which might be unresolved
             RiType riType = (RiType) con;
             if (!riType.isResolved() || C1XOptions.TestPatching) {
-                frameState.push(CiKind.Object, append(new ResolveClass(riType, RiType.Representation.JavaClass, null, graph)));
+                push(CiKind.Object, append(new ResolveClass(riType, RiType.Representation.JavaClass, null, graph)));
             } else {
-                frameState.push(CiKind.Object, append(new Constant(riType.getEncoding(Representation.JavaClass), graph)));
+                push(CiKind.Object, append(new Constant(riType.getEncoding(Representation.JavaClass), graph)));
             }
         } else if (con instanceof CiConstant) {
             CiConstant constant = (CiConstant) con;
-            frameState.push(constant.kind.stackKind(), appendConstant(constant));
+            push(constant.kind.stackKind(), appendConstant(constant));
         } else {
             throw new Error("lookupConstant returned an object of incorrect type");
         }
@@ -363,21 +436,21 @@ public final class GraphBuilder {
 
     void genLoadIndexed(CiKind kind) {
         FrameState stateBefore = frameState.create(bci());
-        Value index = frameState.ipop();
-        Value array = frameState.apop();
+        Value index = ipop();
+        Value array = apop();
         Value length = null;
         if (cseArrayLength(array)) {
             length = append(new ArrayLength(array, stateBefore, graph));
         }
         Value v = append(new LoadIndexed(array, index, length, kind, stateBefore, graph));
-        frameState.push(kind.stackKind(), v);
+        push(kind.stackKind(), v);
     }
 
     void genStoreIndexed(CiKind kind) {
         FrameState stateBefore = frameState.create(bci());
-        Value value = frameState.pop(kind.stackKind());
-        Value index = frameState.ipop();
-        Value array = frameState.apop();
+        Value value = pop(kind.stackKind());
+        Value index = ipop();
+        Value array = apop();
         Value length = null;
         if (cseArrayLength(array)) {
             length = append(new ArrayLength(array, stateBefore, graph));
@@ -479,41 +552,41 @@ public final class GraphBuilder {
     }
 
     void genArithmeticOp(CiKind result, int opcode, CiKind x, CiKind y, FrameState state) {
-        Value yValue = frameState.pop(y);
-        Value xValue = frameState.pop(x);
+        Value yValue = pop(y);
+        Value xValue = pop(x);
         Value result1 = append(new ArithmeticOp(opcode, result, xValue, yValue, isStrict(method().accessFlags()), state, graph));
-        frameState.push(result, result1);
+        push(result, result1);
     }
 
     void genNegateOp(CiKind kind) {
-        frameState.push(kind, append(new NegateOp(frameState.pop(kind), graph)));
+        push(kind, append(new NegateOp(pop(kind), graph)));
     }
 
     void genShiftOp(CiKind kind, int opcode) {
-        Value s = frameState.ipop();
-        Value x = frameState.pop(kind);
+        Value s = ipop();
+        Value x = pop(kind);
         // note that strength reduction of e << K >>> K is correctly handled in canonicalizer now
-        frameState.push(kind, append(new ShiftOp(opcode, x, s, graph)));
+        push(kind, append(new ShiftOp(opcode, x, s, graph)));
     }
 
     void genLogicOp(CiKind kind, int opcode) {
-        Value y = frameState.pop(kind);
-        Value x = frameState.pop(kind);
-        frameState.push(kind, append(new LogicOp(opcode, x, y, graph)));
+        Value y = pop(kind);
+        Value x = pop(kind);
+        push(kind, append(new LogicOp(opcode, x, y, graph)));
     }
 
     void genCompareOp(CiKind kind, int opcode, CiKind resultKind) {
-        Value y = frameState.pop(kind);
-        Value x = frameState.pop(kind);
+        Value y = pop(kind);
+        Value x = pop(kind);
         Value value = append(new CompareOp(opcode, resultKind, x, y, graph));
         if (!resultKind.isVoid()) {
-            frameState.ipush(value);
+            ipush(value);
         }
     }
 
     void genConvert(int opcode, CiKind from, CiKind to) {
         CiKind tt = to.stackKind();
-        frameState.push(tt, append(new Convert(opcode, frameState.pop(from.stackKind()), tt, graph)));
+        push(tt, append(new Convert(opcode, pop(from.stackKind()), tt, graph)));
     }
 
     void genIncrement() {
@@ -540,27 +613,27 @@ public final class GraphBuilder {
     void genIfZero(Condition cond) {
         Value y = appendConstant(CiConstant.INT_0);
         FrameState stateBefore = frameState.create(bci());
-        Value x = frameState.ipop();
+        Value x = ipop();
         ifNode(x, cond, y, stateBefore);
     }
 
     void genIfNull(Condition cond) {
         FrameState stateBefore = frameState.create(bci());
         Value y = appendConstant(CiConstant.NULL_OBJECT);
-        Value x = frameState.apop();
+        Value x = apop();
         ifNode(x, cond, y, stateBefore);
     }
 
     void genIfSame(CiKind kind, Condition cond) {
         FrameState stateBefore = frameState.create(bci());
-        Value y = frameState.pop(kind);
-        Value x = frameState.pop(kind);
+        Value y = pop(kind);
+        Value x = pop(kind);
         ifNode(x, cond, y, stateBefore);
     }
 
     void genThrow(int bci) {
         FrameState stateBefore = frameState.create(bci());
-        Throw t = new Throw(frameState.apop(), stateBefore, !noSafepoints(), graph);
+        Throw t = new Throw(apop(), stateBefore, !noSafepoints(), graph);
         appendWithoutOptimization(t, bci);
     }
 
@@ -569,8 +642,8 @@ public final class GraphBuilder {
         RiType type = constantPool().lookupType(cpi, CHECKCAST);
         boolean isInitialized = !C1XOptions.TestPatching && type.isResolved() && type.isInitialized();
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
-        CheckCast c = new CheckCast(type, typeInstruction, frameState.apop(), null, graph);
-        frameState.apush(append(c));
+        CheckCast c = new CheckCast(type, typeInstruction, apop(), null, graph);
+        apush(append(c));
         checkForDirectCompare(c);
     }
 
@@ -579,8 +652,8 @@ public final class GraphBuilder {
         RiType type = constantPool().lookupType(cpi, INSTANCEOF);
         boolean isInitialized = !C1XOptions.TestPatching && type.isResolved() && type.isInitialized();
         Value typeInstruction = genResolveClass(RiType.Representation.ObjectHub, type, isInitialized, cpi);
-        InstanceOf i = new InstanceOf(type, typeInstruction, frameState.apop(), null, graph);
-        frameState.ipush(append(i));
+        InstanceOf i = new InstanceOf(type, typeInstruction, apop(), null, graph);
+        ipush(append(i));
         checkForDirectCompare(i);
     }
 
@@ -598,21 +671,21 @@ public final class GraphBuilder {
         if (memoryMap != null) {
             memoryMap.newInstance(n);
         }
-        frameState.apush(append(n));
+        apush(append(n));
     }
 
     void genNewTypeArray(int typeCode) {
         FrameState stateBefore = frameState.create(bci());
         CiKind kind = CiKind.fromArrayTypeCode(typeCode);
         RiType elementType = compilation.runtime.asRiType(kind);
-        frameState.apush(append(new NewTypeArray(frameState.ipop(), elementType, stateBefore, graph)));
+        apush(append(new NewTypeArray(ipop(), elementType, stateBefore, graph)));
     }
 
     void genNewObjectArray(int cpi) {
         RiType type = constantPool().lookupType(cpi, ANEWARRAY);
         FrameState stateBefore = frameState.create(bci());
-        NewArray n = new NewObjectArray(type, frameState.ipop(), stateBefore, graph);
-        frameState.apush(append(n));
+        NewArray n = new NewObjectArray(type, ipop(), stateBefore, graph);
+        apush(append(n));
     }
 
     void genNewMultiArray(int cpi) {
@@ -621,24 +694,24 @@ public final class GraphBuilder {
         int rank = stream().readUByte(bci() + 3);
         Value[] dims = new Value[rank];
         for (int i = rank - 1; i >= 0; i--) {
-            dims[i] = frameState.ipop();
+            dims[i] = ipop();
         }
         NewArray n = new NewMultiArray(type, dims, stateBefore, cpi, constantPool(), graph);
-        frameState.apush(append(n));
+        apush(append(n));
     }
 
     void genGetField(int cpi, RiField field) {
         // Must copy the state here, because the field holder must still be on the stack.
         FrameState stateBefore = frameState.create(bci());
-        LoadField load = new LoadField(frameState.apop(), field, stateBefore, graph);
+        LoadField load = new LoadField(apop(), field, stateBefore, graph);
         appendOptimizedLoadField(field.kind(), load);
     }
 
     void genPutField(int cpi, RiField field) {
         // Must copy the state here, because the field holder must still be on the stack.
         FrameState stateBefore = frameState.create(bci());
-        Value value = frameState.pop(field.kind().stackKind());
-        appendOptimizedStoreField(new StoreField(frameState.apop(), field, value, stateBefore, graph));
+        Value value = pop(field.kind().stackKind());
+        appendOptimizedStoreField(new StoreField(apop(), field, value, stateBefore, graph));
     }
 
     void genGetStatic(int cpi, RiField field) {
@@ -649,7 +722,7 @@ public final class GraphBuilder {
             constantValue = field.constantValue(null);
         }
         if (constantValue != null) {
-            frameState.push(constantValue.kind.stackKind(), appendConstant(constantValue));
+            push(constantValue.kind.stackKind(), appendConstant(constantValue));
         } else {
             Value container = genResolveClass(RiType.Representation.StaticFields, holder, field.isResolved(), cpi);
             LoadField load = new LoadField(container, field, null, graph);
@@ -660,7 +733,7 @@ public final class GraphBuilder {
     void genPutStatic(int cpi, RiField field) {
         RiType holder = field.holder();
         Value container = genResolveClass(RiType.Representation.StaticFields, holder, field.isResolved(), cpi);
-        Value value = frameState.pop(field.kind().stackKind());
+        Value value = pop(field.kind().stackKind());
         StoreField store = new StoreField(container, field, value, null, graph);
         appendOptimizedStoreField(store);
     }
@@ -691,7 +764,7 @@ public final class GraphBuilder {
             Value replacement = memoryMap.load(load);
             if (replacement != load) {
                 // the memory buffer found a replacement for this load (no need to append)
-                frameState.push(kind.stackKind(), replacement);
+                push(kind.stackKind(), replacement);
                 return;
             }
         }
@@ -701,7 +774,7 @@ public final class GraphBuilder {
             // local optimization happened, replace its value in the memory map
             memoryMap.setResult(load, optimized);
         }
-        frameState.push(kind.stackKind(), optimized);
+        push(kind.stackKind(), optimized);
     }
 
     void genInvokeStatic(RiMethod target, int cpi, RiConstantPool constantPool) {
@@ -831,7 +904,7 @@ public final class GraphBuilder {
     private void appendInvoke(int opcode, RiMethod target, Value[] args, int cpi, RiConstantPool constantPool, FrameState stateBefore) {
         CiKind resultType = returnKind(target);
         Value result = append(new Invoke(opcode, resultType.stackKind(), args, target, target.signature().returnType(compilation.method.holder()), stateBefore, graph));
-        frameState.pushReturn(resultType, result);
+        pushReturn(resultType, result);
     }
 
     private RiType getExactType(RiType staticType, Value receiver) {
@@ -1019,7 +1092,7 @@ public final class GraphBuilder {
         list.add(blockAt(bci + offset));
         boolean isSafepoint = isBackwards && !noSafepoints();
         FrameState stateBefore = isSafepoint ? frameState.create(bci()) : null;
-        append(new TableSwitch(frameState.ipop(), list, ts.lowKey(), stateBefore, isSafepoint, graph));
+        append(new TableSwitch(ipop(), list, ts.lowKey(), stateBefore, isSafepoint, graph));
     }
 
     void genLookupswitch() {
@@ -1041,7 +1114,7 @@ public final class GraphBuilder {
         list.add(blockAt(bci + offset));
         boolean isSafepoint = isBackwards && !noSafepoints();
         FrameState stateBefore = isSafepoint ? frameState.create(bci()) : null;
-        append(new LookupSwitch(frameState.ipop(), list, keys, stateBefore, isSafepoint, graph));
+        append(new LookupSwitch(ipop(), list, keys, stateBefore, isSafepoint, graph));
     }
 
     /**
@@ -1144,7 +1217,7 @@ public final class GraphBuilder {
         return result;
     }
 
-    private Value synchronizedObject(FrameStateAccess curState2, RiMethod target) {
+    private Value synchronizedObject(FrameState curState2, RiMethod target) {
         if (isStatic(target.accessFlags())) {
             Constant classConstant = new Constant(target.holder().getEncoding(Representation.JavaClass), graph);
             return appendWithoutOptimization(classConstant, Instruction.SYNCHRONIZATION_ENTRY_BCI);
@@ -1179,7 +1252,7 @@ public final class GraphBuilder {
         // exit the monitor
         genMonitorExit(lock, Instruction.SYNCHRONIZATION_ENTRY_BCI);
 
-        frameState.apush(exception);
+        apush(exception);
         genThrow(bci);
         BlockEnd end = (BlockEnd) lastInstr;
         curBlock.setEnd(end);
@@ -1187,7 +1260,6 @@ public final class GraphBuilder {
 
         curBlock = origBlock;
         frameState.initializeFrom(origState);
-        origState.delete();
         lastInstr = origLast;
     }
 
@@ -1242,7 +1314,7 @@ public final class GraphBuilder {
             // push an exception object onto the stack if we are parsing an exception handler
             if (pushException) {
                 FrameState stateBefore = frameState.create(bci());
-                frameState.apush(append(new ExceptionObject(stateBefore, graph)));
+                apush(append(new ExceptionObject(stateBefore, graph)));
                 pushException = false;
             }
 
@@ -1310,23 +1382,23 @@ public final class GraphBuilder {
         // Checkstyle: stop
         switch (opcode) {
             case NOP            : /* nothing to do */ break;
-            case ACONST_NULL    : frameState.apush(appendConstant(CiConstant.NULL_OBJECT)); break;
-            case ICONST_M1      : frameState.ipush(appendConstant(CiConstant.INT_MINUS_1)); break;
-            case ICONST_0       : frameState.ipush(appendConstant(CiConstant.INT_0)); break;
-            case ICONST_1       : frameState.ipush(appendConstant(CiConstant.INT_1)); break;
-            case ICONST_2       : frameState.ipush(appendConstant(CiConstant.INT_2)); break;
-            case ICONST_3       : frameState.ipush(appendConstant(CiConstant.INT_3)); break;
-            case ICONST_4       : frameState.ipush(appendConstant(CiConstant.INT_4)); break;
-            case ICONST_5       : frameState.ipush(appendConstant(CiConstant.INT_5)); break;
-            case LCONST_0       : frameState.lpush(appendConstant(CiConstant.LONG_0)); break;
-            case LCONST_1       : frameState.lpush(appendConstant(CiConstant.LONG_1)); break;
-            case FCONST_0       : frameState.fpush(appendConstant(CiConstant.FLOAT_0)); break;
-            case FCONST_1       : frameState.fpush(appendConstant(CiConstant.FLOAT_1)); break;
-            case FCONST_2       : frameState.fpush(appendConstant(CiConstant.FLOAT_2)); break;
-            case DCONST_0       : frameState.dpush(appendConstant(CiConstant.DOUBLE_0)); break;
-            case DCONST_1       : frameState.dpush(appendConstant(CiConstant.DOUBLE_1)); break;
-            case BIPUSH         : frameState.ipush(appendConstant(CiConstant.forInt(s.readByte()))); break;
-            case SIPUSH         : frameState.ipush(appendConstant(CiConstant.forInt(s.readShort()))); break;
+            case ACONST_NULL    : apush(appendConstant(CiConstant.NULL_OBJECT)); break;
+            case ICONST_M1      : ipush(appendConstant(CiConstant.INT_MINUS_1)); break;
+            case ICONST_0       : ipush(appendConstant(CiConstant.INT_0)); break;
+            case ICONST_1       : ipush(appendConstant(CiConstant.INT_1)); break;
+            case ICONST_2       : ipush(appendConstant(CiConstant.INT_2)); break;
+            case ICONST_3       : ipush(appendConstant(CiConstant.INT_3)); break;
+            case ICONST_4       : ipush(appendConstant(CiConstant.INT_4)); break;
+            case ICONST_5       : ipush(appendConstant(CiConstant.INT_5)); break;
+            case LCONST_0       : lpush(appendConstant(CiConstant.LONG_0)); break;
+            case LCONST_1       : lpush(appendConstant(CiConstant.LONG_1)); break;
+            case FCONST_0       : fpush(appendConstant(CiConstant.FLOAT_0)); break;
+            case FCONST_1       : fpush(appendConstant(CiConstant.FLOAT_1)); break;
+            case FCONST_2       : fpush(appendConstant(CiConstant.FLOAT_2)); break;
+            case DCONST_0       : dpush(appendConstant(CiConstant.DOUBLE_0)); break;
+            case DCONST_1       : dpush(appendConstant(CiConstant.DOUBLE_1)); break;
+            case BIPUSH         : ipush(appendConstant(CiConstant.forInt(s.readByte()))); break;
+            case SIPUSH         : ipush(appendConstant(CiConstant.forInt(s.readShort()))); break;
             case LDC            : // fall through
             case LDC_W          : // fall through
             case LDC2_W         : genLoadConstant(s.readCPI()); break;
@@ -1474,18 +1546,18 @@ public final class GraphBuilder {
             case IF_ICMPGE      : genIfSame(CiKind.Int, Condition.GE); break;
             case IF_ICMPGT      : genIfSame(CiKind.Int, Condition.GT); break;
             case IF_ICMPLE      : genIfSame(CiKind.Int, Condition.LE); break;
-            case IF_ACMPEQ      : genIfSame(frameState.peekKind(), Condition.EQ); break;
-            case IF_ACMPNE      : genIfSame(frameState.peekKind(), Condition.NE); break;
+            case IF_ACMPEQ      : genIfSame(peekKind(), Condition.EQ); break;
+            case IF_ACMPNE      : genIfSame(peekKind(), Condition.NE); break;
             case GOTO           : genGoto(s.currentBCI(), s.readBranchDest()); break;
             case JSR            : genJsr(s.readBranchDest()); break;
             case RET            : genRet(s.readLocalIndex()); break;
             case TABLESWITCH    : genTableswitch(); break;
             case LOOKUPSWITCH   : genLookupswitch(); break;
-            case IRETURN        : genReturn(frameState.ipop()); break;
-            case LRETURN        : genReturn(frameState.lpop()); break;
-            case FRETURN        : genReturn(frameState.fpop()); break;
-            case DRETURN        : genReturn(frameState.dpop()); break;
-            case ARETURN        : genReturn(frameState.apop()); break;
+            case IRETURN        : genReturn(ipop()); break;
+            case LRETURN        : genReturn(lpop()); break;
+            case FRETURN        : genReturn(fpop()); break;
+            case DRETURN        : genReturn(dpop()); break;
+            case ARETURN        : genReturn(apop()); break;
             case RETURN         : genReturn(null  ); break;
             case GETSTATIC      : cpi = s.readCPI(); genGetStatic(cpi, constantPool().lookupField(cpi, opcode)); break;
             case PUTSTATIC      : cpi = s.readCPI(); genPutStatic(cpi, constantPool().lookupField(cpi, opcode)); break;
@@ -1502,8 +1574,8 @@ public final class GraphBuilder {
             case ATHROW         : genThrow(s.currentBCI()); break;
             case CHECKCAST      : genCheckCast(); break;
             case INSTANCEOF     : genInstanceOf(); break;
-            case MONITORENTER   : genMonitorEnter(frameState.apop(), s.currentBCI()); break;
-            case MONITOREXIT    : genMonitorExit(frameState.apop(), s.currentBCI()); break;
+            case MONITORENTER   : genMonitorEnter(apop(), s.currentBCI()); break;
+            case MONITOREXIT    : genMonitorExit(apop(), s.currentBCI()); break;
             case MULTIANEWARRAY : genNewMultiArray(s.readCPI()); break;
             case IFNULL         : genIfNull(Condition.EQ); break;
             case IFNONNULL      : genIfNull(Condition.NE); break;
@@ -1536,7 +1608,7 @@ public final class GraphBuilder {
 
     private void genArrayLength() {
         FrameState stateBefore = frameState.create(bci());
-        frameState.ipush(append(new ArrayLength(frameState.apop(), stateBefore, graph)));
+        ipush(append(new ArrayLength(apop(), stateBefore, graph)));
     }
 
     void killMemoryMap() {
