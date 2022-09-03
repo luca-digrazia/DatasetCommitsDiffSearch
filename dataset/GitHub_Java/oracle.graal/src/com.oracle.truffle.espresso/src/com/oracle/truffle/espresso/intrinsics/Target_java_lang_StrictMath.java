@@ -44,4 +44,29 @@ public class Target_java_lang_StrictMath {
     public static double sqrt(double a) {
         return StrictMath.sqrt(a);
     }
+
+    @Intrinsic
+    public static double tan(double a) {
+        return StrictMath.tan(a);
+    }
+
+    @Intrinsic
+    public static double exp(double a) {
+        return StrictMath.exp(a);
+    }
+
+    @Intrinsic
+    public static double log10(double a) {
+        return StrictMath.log10(a);
+    }
+
+    @Intrinsic
+    public static double pow(double a, double b) {
+        return StrictMath.pow(a, b);
+    }
+
+    @Intrinsic
+    public static double atan2(double a, double b) {
+        return StrictMath.atan2(a, b);
+    }
 }
