@@ -42,7 +42,7 @@ package com.oracle.truffle.sl.test;
 
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tck.TruffleTCK;
-import com.oracle.truffle.api.vm.Portaal;
+import com.oracle.truffle.api.vm.TruffleVM;
 import static org.junit.Assert.*;
 import org.junit.Test;
 
@@ -53,13 +53,13 @@ import org.junit.Test;
 public class SLTckTest extends TruffleTCK {
     @Test
     public void testVerifyPresence() {
-        Portaal vm = Portaal.createNew().build();
+        TruffleVM vm = TruffleVM.newVM().build();
         assertTrue("Our language is present", vm.getLanguages().containsKey("application/x-sl"));
     }
 
     @Override
-    protected Portaal prepareVM() throws Exception {
-        Portaal vm = Portaal.createNew().build();
+    protected TruffleVM prepareVM() throws Exception {
+        TruffleVM vm = TruffleVM.newVM().build();
         // @formatter:off
         vm.eval(
             Source.fromText(
