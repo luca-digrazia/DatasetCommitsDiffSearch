@@ -115,33 +115,4 @@ public abstract class Stamp {
     public Constant asConstant() {
         return null;
     }
-
-    /**
-     * Read a value of this stamp from memory.
-     */
-    public abstract Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement);
-
-    /**
-     * Tries to improve this stamp with the stamp given as parameter. If successful, returns the new
-     * improved stamp. Otherwise, returns null.
-     *
-     * @param other the stamp that should be used to improve this stamp
-     * @return the newly improved stamp of null if an improvement was not possible
-     */
-    public Stamp tryImprove(Stamp other) {
-        Stamp newStamp = this.join(other);
-        if (newStamp.equals(this)) {
-            return null;
-        }
-        return newStamp;
-    }
-
-    public boolean neverDistinct(Stamp other) {
-        Constant constant = this.asConstant();
-        if (constant != null) {
-            Constant otherConstant = other.asConstant();
-            return otherConstant != null && constant.equals(otherConstant);
-        }
-        return false;
-    }
 }
