@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@ import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.compiler.common.spi.*;
 import com.oracle.graal.lir.*;
 
-public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCounterFactory {
+public interface LIRGeneratorTool extends ArithmeticLIRGenerator {
 
     public interface SpillMoveFactory {
 
@@ -47,17 +47,17 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
 
     ForeignCallsProvider getForeignCalls();
 
-    AbstractBlockBase<?> getCurrentBlock();
+    AbstractBlock<?> getCurrentBlock();
 
     LIRGenerationResult getResult();
 
-    boolean hasBlockEnd(AbstractBlockBase<?> block);
-
     SpillMoveFactory getSpillMoveFactory();
 
-    void doBlockStart(AbstractBlockBase<?> block);
+    boolean hasBlockEnd(AbstractBlock<?> block);
 
-    void doBlockEnd(AbstractBlockBase<?> block);
+    void doBlockStart(AbstractBlock<?> block);
+
+    void doBlockEnd(AbstractBlock<?> block);
 
     Value emitLoadConstant(LIRKind kind, Constant constant);
 
@@ -159,7 +159,7 @@ public interface LIRGeneratorTool extends ArithmeticLIRGenerator, BenchmarkCount
      */
     AllocatableValue resultOperandFor(LIRKind kind);
 
-    <I extends LIRInstruction> I append(I op);
+    void append(LIRInstruction op);
 
     void emitJump(LabelRef label);
 

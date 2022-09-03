@@ -57,7 +57,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
     }
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, LIRGeneratorTool lirGen) {
+    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, LIRGeneratorTool lirGen) {
         new Optimization(lirGenRes.getLIR(), lirGen).apply();
     }
 
@@ -135,7 +135,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
                     assert !operand.equals(var) : "constant usage through variable in frame state " + var;
                 }
             };
-            for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
+            for (AbstractBlock<?> block : lir.getControlFlowGraph().getBlocks()) {
                 for (LIRInstruction inst : lir.getLIRforBlock(block)) {
                     // set instruction id to the index in the lir instruction list
                     inst.visitEachState(stateConsumer);
@@ -152,7 +152,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
         }
 
         private void addUsageToBlockMap(UseEntry entry) {
-            AbstractBlockBase<?> block = entry.getBlock();
+            AbstractBlock<?> block = entry.getBlock();
             List<UseEntry> list = blockMap.get(block);
             if (list == null) {
                 list = new ArrayList<>();
@@ -164,7 +164,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
         /**
          * Collects def-use information for a {@code block}.
          */
-        private void analyzeBlock(AbstractBlockBase<?> block) {
+        private void analyzeBlock(AbstractBlock<?> block) {
             try (Indent indent = Debug.logAndIndent("Block: %s", block)) {
 
                 InstructionValueConsumer loadConsumer = (instruction, value, mode, flags) -> {
@@ -267,17 +267,17 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
             Debug.dump(constTree, "ConstantTree for " + tree.getVariable());
         }
 
-        private void createLoads(DefUseTree tree, ConstantTree constTree, AbstractBlockBase<?> startBlock) {
-            Deque<AbstractBlockBase<?>> worklist = new ArrayDeque<>();
+        private void createLoads(DefUseTree tree, ConstantTree constTree, AbstractBlock<?> startBlock) {
+            Deque<AbstractBlock<?>> worklist = new ArrayDeque<>();
             worklist.add(startBlock);
             while (!worklist.isEmpty()) {
-                AbstractBlockBase<?> block = worklist.pollLast();
+                AbstractBlock<?> block = worklist.pollLast();
                 if (constTree.get(Flags.CANDIDATE, block)) {
                     constTree.set(Flags.MATERIALIZE, block);
                     // create and insert load
                     insertLoad(tree.getConstant(), tree.getVariable().getLIRKind(), block, constTree.getCost(block).getUsages());
                 } else {
-                    for (AbstractBlockBase<?> dominated : block.getDominated()) {
+                    for (AbstractBlock<?> dominated : block.getDominated()) {
                         if (constTree.isMarked(dominated)) {
                             worklist.addLast(dominated);
                         }
@@ -286,7 +286,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
             }
         }
 
-        private void insertLoad(JavaConstant constant, LIRKind kind, AbstractBlockBase<?> block, List<UseEntry> usages) {
+        private void insertLoad(JavaConstant constant, LIRKind kind, AbstractBlock<?> block, List<UseEntry> usages) {
             assert usages != null && usages.size() > 0 : String.format("No usages %s %s %s", constant, block, usages);
             // create variable
             Variable variable = lirGen.newVariable(kind);
@@ -297,7 +297,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
             Debug.log("new move (%s) and inserted in block %s", move, block);
             // update usages
             for (UseEntry u : usages) {
-                u.setValue(variable);
+                u.getPosition().set(u.getInstruction(), variable);
                 Debug.log("patched instruction %s", u.getInstruction());
             }
         }
@@ -306,7 +306,7 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
          * Inserts the constant loads created in {@link #createConstantTree} and deletes the
          * original definition.
          */
-        private void rewriteBlock(AbstractBlockBase<?> block) {
+        private void rewriteBlock(AbstractBlock<?> block) {
             // insert moves
             LIRInsertionBuffer buffer = insertionBuffers.get(block);
             if (buffer != null) {
@@ -331,13 +331,13 @@ public final class ConstantLoadOptimization extends PreAllocationOptimizationPha
         }
 
         private void deleteInstruction(DefUseTree tree) {
-            AbstractBlockBase<?> block = tree.getBlock();
+            AbstractBlock<?> block = tree.getBlock();
             LIRInstruction instruction = tree.getInstruction();
             Debug.log("deleting instruction %s from block %s", instruction, block);
             lir.getLIRforBlock(block).set(instruction.id(), null);
         }
 
-        private LIRInsertionBuffer getInsertionBuffer(AbstractBlockBase<?> block) {
+        private LIRInsertionBuffer getInsertionBuffer(AbstractBlock<?> block) {
             LIRInsertionBuffer insertionBuffer = insertionBuffers.get(block);
             if (insertionBuffer == null) {
                 insertionBuffer = new LIRInsertionBuffer();

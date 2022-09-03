@@ -40,13 +40,13 @@ import com.oracle.graal.lir.phases.*;
 public class SimpleStackSlotAllocator extends AllocationPhase implements StackSlotAllocator {
 
     @Override
-    protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
+    protected <B extends AbstractBlock<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder, SpillMoveFactory spillMoveFactory) {
         lirGenRes.buildFrameMap(this);
     }
 
     public void allocateStackSlots(FrameMapBuilderTool builder, LIRGenerationResult res) {
         StackSlot[] mapping = new StackSlot[builder.getNumberOfStackSlots()];
-        long currentFrameSize = allocatedFramesize.isEnabled() ? builder.getFrameMap().currentFrameSize() : 0;
+        long currentFrameSize = Debug.isMeterEnabled() ? builder.getFrameMap().currentFrameSize() : 0;
         for (VirtualStackSlot virtualSlot : builder.getStackSlots()) {
             final StackSlot slot;
             if (virtualSlot instanceof SimpleVirtualStackSlot) {
@@ -63,9 +63,7 @@ public class SimpleStackSlotAllocator extends AllocationPhase implements StackSl
             mapping[virtualSlot.getId()] = slot;
         }
         updateLIR(res, mapping);
-        if (allocatedFramesize.isEnabled()) {
-            allocatedFramesize.add(builder.getFrameMap().currentFrameSize() - currentFrameSize);
-        }
+        allocatedFramesize.add(builder.getFrameMap().currentFrameSize() - currentFrameSize);
     }
 
     protected void updateLIR(LIRGenerationResult res, StackSlot[] mapping) {
@@ -78,7 +76,7 @@ public class SimpleStackSlotAllocator extends AllocationPhase implements StackSl
                 }
                 return value;
             };
-            for (AbstractBlockBase<?> block : res.getLIR().getControlFlowGraph().getBlocks()) {
+            for (AbstractBlock<?> block : res.getLIR().getControlFlowGraph().getBlocks()) {
                 try (Indent indent0 = Debug.logAndIndent("block: %s", block)) {
                     for (LIRInstruction inst : res.getLIR().getLIRforBlock(block)) {
                         try (Indent indent1 = Debug.logAndIndent("Inst: %d: %s", inst.id(), inst)) {
