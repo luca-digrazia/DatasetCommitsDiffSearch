@@ -57,6 +57,7 @@ import java.util.TreeSet;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.TypeParameterElement;
@@ -76,7 +77,6 @@ import com.oracle.truffle.dsl.processor.java.model.CodeImport;
 import com.oracle.truffle.dsl.processor.java.model.CodeTree;
 import com.oracle.truffle.dsl.processor.java.model.CodeTreeKind;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
-import com.oracle.truffle.dsl.processor.java.model.GeneratedTypeMirror;
 
 public final class OrganizedImports {
 
@@ -100,7 +100,7 @@ public final class OrganizedImports {
         topLevelClass.accept(reference, null);
     }
 
-    public String createTypeReference(Element enclosedElement, TypeMirror type, boolean raw) {
+    public String createTypeReference(Element enclosedElement, TypeMirror type) {
         switch (type.getKind()) {
             case BOOLEAN:
             case BYTE:
@@ -113,17 +113,41 @@ public final class OrganizedImports {
             case VOID:
                 return ElementUtils.getSimpleName(type);
             case DECLARED:
-                return createDeclaredTypeName(enclosedElement, (DeclaredType) type, raw);
+                return createDeclaredTypeName(enclosedElement, (DeclaredType) type);
             case ARRAY:
-                return createTypeReference(enclosedElement, ((ArrayType) type).getComponentType(), raw) + "[]";
+                return createTypeReference(enclosedElement, ((ArrayType) type).getComponentType()) + "[]";
             case WILDCARD:
                 return createWildcardName(enclosedElement, (WildcardType) type);
             case TYPEVAR:
                 TypeVariable var = (TypeVariable) type;
-                return var.asElement().getSimpleName().toString();
+                String name;
+                if (isTypeVariableDeclared(enclosedElement, var.asElement().getSimpleName().toString())) {
+                    // can be resolved with parent element
+                    name = var.asElement().getSimpleName().toString();
+                } else {
+                    // cannot be resolved
+                    name = "?";
+                }
+                return name;
             default:
                 throw new RuntimeException("Unknown type specified " + type.getKind() + " mirror: " + type);
         }
+    }
+
+    private static boolean isTypeVariableDeclared(Element enclosedElement, String refName) {
+        Element element = enclosedElement;
+        while (element != null) {
+            if (element.getKind() == ElementKind.METHOD) {
+                for (TypeParameterElement typeParam : ((ExecutableElement) element).getTypeParameters()) {
+                    String paramName = typeParam.getSimpleName().toString();
+                    if (paramName.equals(refName)) {
+                        return true;
+                    }
+                }
+            }
+            element = element.getEnclosingElement();
+        }
+        return false;
     }
 
     public String createStaticFieldReference(Element enclosedElement, TypeMirror type, String fieldName) {
@@ -136,26 +160,24 @@ public final class OrganizedImports {
 
     private String createStaticReference(Element enclosedElement, TypeMirror type, String name) {
         // ambiguous import
-        return createTypeReference(enclosedElement, type, true) + "." + name;
+        return createTypeReference(enclosedElement, type) + "." + name;
     }
 
     private String createWildcardName(Element enclosedElement, WildcardType type) {
         StringBuilder b = new StringBuilder();
         if (type.getExtendsBound() != null) {
-            b.append("? extends ").append(createTypeReference(enclosedElement, type.getExtendsBound(), false));
+            b.append("? extends ").append(createTypeReference(enclosedElement, type.getExtendsBound()));
         } else if (type.getSuperBound() != null) {
-            b.append("? super ").append(createTypeReference(enclosedElement, type.getExtendsBound(), false));
+            b.append("? super ").append(createTypeReference(enclosedElement, type.getExtendsBound()));
         } else {
             b.append("?");
         }
         return b.toString();
     }
 
-    private String createDeclaredTypeName(Element enclosedElement, DeclaredType type, boolean raw) {
+    private String createDeclaredTypeName(Element enclosedElement, DeclaredType type) {
         String name = ElementUtils.fixECJBinaryNameIssue(type.asElement().getSimpleName().toString());
-        if (ElementUtils.isDeprecated((TypeElement) type.asElement())) {
-            name = ElementUtils.getQualifiedName(type);
-        } else if (classImportUsage.containsKey(name)) {
+        if (classImportUsage.containsKey(name)) {
             String qualifiedImport = classImportUsage.get(name);
             String qualifiedName = ElementUtils.getEnclosedQualifiedName(type);
 
@@ -163,28 +185,23 @@ public final class OrganizedImports {
                 name = ElementUtils.getQualifiedName(type);
             }
         }
-        if (raw) {
-            return name;
-        }
 
-        List<? extends TypeMirror> typeArguments = type.getTypeArguments();
-        List<? extends TypeParameterElement> parameters = ((TypeElement) type.asElement()).getTypeParameters();
-        if (parameters.isEmpty()) {
+        List<? extends TypeMirror> genericTypes = type.getTypeArguments();
+        if (genericTypes.size() == 0) {
             return name;
         }
 
         StringBuilder b = new StringBuilder(name);
         b.append("<");
-        for (int i = 0; i < parameters.size(); i++) {
-            TypeMirror genericType = i < typeArguments.size() ? typeArguments.get(i) : null;
-            TypeMirror parameterGenericType = parameters.get(i).asType();
-            if (genericType != null && !ElementUtils.typeEquals(genericType, parameterGenericType)) {
-                b.append(createTypeReference(enclosedElement, genericType, false));
+        for (int i = 0; i < genericTypes.size(); i++) {
+            TypeMirror genericType = i < genericTypes.size() ? genericTypes.get(i) : null;
+            if (genericType != null) {
+                b.append(createTypeReference(enclosedElement, genericType));
             } else {
                 b.append("?");
             }
 
-            if (i < typeArguments.size() - 1) {
+            if (i < genericTypes.size() - 1) {
                 b.append(", ");
             }
         }
@@ -202,28 +219,22 @@ public final class OrganizedImports {
 
     private boolean needsImport(Element enclosed, TypeMirror importType) {
         String importPackagName = getPackageName(importType);
-        TypeElement enclosedType = findNearestEnclosingType(enclosed).orElse(null);
-
+        TypeElement enclosedElement = findNearestEnclosingType(enclosed);
         if (importPackagName == null) {
             return false;
         } else if (importPackagName.equals("java.lang")) {
             return false;
-        } else if (importPackagName.equals(getPackageName(topLevelClass)) &&
-                        ElementUtils.elementEquals(enclosed.getEnclosingElement(), ElementUtils.castTypeElement(importType).getEnclosingElement())) {
-            return false; // same enclosing element -> no import
-        } else if (importType instanceof GeneratedTypeMirror && ElementUtils.getPackageName(importType).isEmpty()) {
-            return false;
-        } else if (ElementUtils.isDeprecated(importType)) {
-            return false;
+        } else if (importPackagName.equals(getPackageName(topLevelClass)) && ElementUtils.isTopLevelClass(importType)) {
+            return false; // same package name -> no import
         }
 
-        String enclosedElementId = ElementUtils.getUniqueIdentifier(enclosedType.asType());
+        String enclosedElementId = ElementUtils.getUniqueIdentifier(enclosedElement.asType());
         Set<String> autoImportedTypes = autoImportCache.get(enclosedElementId);
         if (autoImportedTypes == null) {
-            List<Element> elements = ElementUtils.getElementHierarchy(enclosedType);
+            List<Element> elements = ElementUtils.getElementHierarchy(enclosedElement);
             autoImportedTypes = new HashSet<>();
             for (Element element : elements) {
-                if (element.getKind().isClass() || element.getKind().isInterface()) {
+                if (element.getKind().isClass()) {
                     collectSuperTypeImports((TypeElement) element, autoImportedTypes);
                     collectInnerTypeImports((TypeElement) element, autoImportedTypes);
                 }
@@ -253,7 +264,7 @@ public final class OrganizedImports {
     private static void collectInnerTypeImports(TypeElement e, Set<String> autoImportedTypes) {
         autoImportedTypes.add(getQualifiedName(e));
         for (TypeElement innerClass : ElementFilter.typesIn(e.getEnclosedElements())) {
-            autoImportedTypes.add(getQualifiedName(innerClass));
+            collectInnerTypeImports(innerClass, autoImportedTypes);
         }
     }
 
@@ -285,9 +296,6 @@ public final class OrganizedImports {
 
         @Override
         public Void visitExecutable(CodeExecutableElement e, Void p) {
-            if (e.getDocTree() != null) {
-                visitTree(e.getDocTree(), null, e);
-            }
             visitAnnotations(e, e.getAnnotationMirrors());
             if (e.getReturnType() != null) {
                 visitTypeReference(e, e.getReturnType());
@@ -301,10 +309,6 @@ public final class OrganizedImports {
         @Override
         public Void visitType(CodeTypeElement e, Void p) {
             visitAnnotations(e, e.getAnnotationMirrors());
-
-            if (e.getDocTree() != null) {
-                visitTree(e.getDocTree(), null, e);
-            }
 
             visitTypeReference(e, e.getSuperclass());
             for (TypeMirror type : e.getImplements()) {
@@ -470,11 +474,9 @@ public final class OrganizedImports {
                     case VOID:
                         return;
                     case DECLARED:
-                        DeclaredType declared = (DeclaredType) type;
                         if (needsImport(enclosedType, type)) {
-                            String declaredName = ElementUtils.getDeclaredName(declared, false);
-                            String enclosedQualifiedName = ElementUtils.getEnclosedQualifiedName(declared);
-                            registerSymbol(classImportUsage, enclosedQualifiedName, declaredName);
+                            DeclaredType declard = (DeclaredType) type;
+                            registerSymbol(classImportUsage, ElementUtils.getEnclosedQualifiedName(declard), ElementUtils.getDeclaredName(declard, false));
                         }
                         for (TypeMirror argument : ((DeclaredType) type).getTypeArguments()) {
                             visitTypeReference(enclosedType, argument);
