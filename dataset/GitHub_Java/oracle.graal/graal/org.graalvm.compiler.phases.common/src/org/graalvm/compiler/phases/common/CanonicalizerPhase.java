@@ -69,7 +69,6 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
     private static final DebugCounter COUNTER_SIMPLIFICATION_CONSIDERED_NODES = Debug.counter("SimplificationConsideredNodes");
     private static final DebugCounter COUNTER_GLOBAL_VALUE_NUMBERING_HITS = Debug.counter("GlobalValueNumberingHits");
 
-    private boolean globalValueNumber = true;
     private boolean canonicalizeReads = true;
     private boolean simplify = true;
     private final CustomCanonicalizer customCanonicalizer;
@@ -91,10 +90,6 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
 
     public CanonicalizerPhase(CustomCanonicalizer customCanonicalizer) {
         this.customCanonicalizer = customCanonicalizer;
-    }
-
-    public void disableGVN() {
-        globalValueNumber = false;
     }
 
     public void disableReadCanonicalization() {
@@ -246,7 +241,7 @@ public class CanonicalizerPhase extends BasePhase<PhaseContext> {
             if (tryCanonicalize(node, nodeClass)) {
                 return true;
             }
-            if (globalValueNumber && tryGlobalValueNumbering(node, nodeClass)) {
+            if (tryGlobalValueNumbering(node, nodeClass)) {
                 return true;
             }
             if (node instanceof ValueNode) {
