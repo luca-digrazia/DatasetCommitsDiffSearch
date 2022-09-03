@@ -50,11 +50,6 @@ class ExecWithTimeOut extends EventConsumer<SuspendedEvent> //
         super(SuspendedEvent.class);
     }
 
-    void registerEventHandler(PolyglotEngine.Builder builder) {
-        // register as handler of SuspendedEvent
-        builder.onEvent(this);
-    }
-
     private void initTimeOut(ScheduledExecutorService executor) {
         // schedule pausing actions after a timeout
         executor.schedule(this, 10, TimeUnit.SECONDS);
@@ -80,7 +75,7 @@ class ExecWithTimeOut extends EventConsumer<SuspendedEvent> //
     void executeWithTimeOut(
                     ScheduledExecutorService executor, // run us later
                     PolyglotEngine.Value function, // unknown function
-                    Object parameter // parameter of the function
+                    Object parameter // parameter for the function
     ) throws IOException {
         initTimeOut(executor);
         Throwable caught = null;
