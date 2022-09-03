@@ -1,25 +1,3 @@
-/*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.truffle.api.test.polyglot;
 
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.ARRAY_ELEMENTS;
@@ -47,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.graalvm.polyglot.Context;
@@ -90,10 +67,6 @@ public class ValueAssert {
         assertValue(context, value, null, detectSupportedTypes(value));
     }
 
-    public static void assertValue(Context context, Value value, Trait... expectedTypes) {
-        assertValue(context, value, null, expectedTypes);
-    }
-
     public static void assertValue(Context context, Value value, Object[] arguments, Trait... expectedTypes) {
         assertNotNull(value.toString());
         assertNotNull(value.getMetaObject());
@@ -101,19 +74,21 @@ public class ValueAssert {
 
         assertSame(value, value.as(Value.class));
 
+        Set<Trait> supported = new HashSet<>();
         for (Trait supportedType : expectedTypes) {
+            supported.add(supportedType);
             switch (supportedType) {
                 case NULL:
-                    assertTrue("expected " + supportedType.name(), value.isNull());
+                    assertTrue(value.isNull());
                     break;
                 case BOOLEAN:
-                    assertTrue("expected " + supportedType.name(), value.isBoolean());
+                    assertTrue(value.isBoolean());
                     boolean booleanValue = value.asBoolean();
                     assertEquals(booleanValue, value.as(Boolean.class));
                     assertEquals(booleanValue, value.as(boolean.class));
                     break;
                 case STRING:
-                    assertTrue("expected " + supportedType.name(), value.isString());
+                    assertTrue(value.isString());
                     String stringValue = value.asString();
                     assertEquals(stringValue, value.as(String.class));
                     if (stringValue.length() == 1) {
@@ -125,11 +100,10 @@ public class ValueAssert {
                     assertValueNumber(value);
                     break;
                 case ARRAY_ELEMENTS:
-                    assertTrue("expected " + supportedType.name(), value.hasArrayElements());
                     assertValueArrayElements(context, value);
                     break;
                 case EXECUTABLE:
-                    assertTrue("expected " + supportedType.name(), value.canExecute());
+                    assertTrue(value.canExecute());
                     assertFunctionalInterfaceMapping(context, value, arguments);
                     if (arguments != null) {
                         Value result = value.execute(arguments);
@@ -137,11 +111,11 @@ public class ValueAssert {
                     }
                     break;
                 case INSTANTIABLE:
-                    assertTrue("expected " + supportedType.name(), value.canInstantiate());
+                    assertTrue(value.canInstantiate());
                     value.as(Function.class);
                     if (arguments != null) {
                         Value result = value.newInstance(arguments);
-                        assertValue(context, result);
+                        assertValue(context, result, null);
                     }
                     // otherwise its ambiguous with the executable semantics.
                     if (!value.canExecute()) {
@@ -150,18 +124,13 @@ public class ValueAssert {
                     break;
 
                 case HOST_OBJECT:
-                    assertTrue("expected " + supportedType.name(), value.isHostObject());
+                    assertTrue(value.isHostObject());
                     Object hostObject = value.asHostObject();
                     assertTrue(!(hostObject instanceof Proxy));
                     // TODO assert mapping to interfaces
                     break;
-                case PROXY_OBJECT:
-                    assertTrue("expected " + supportedType.name(), value.isProxyObject());
-                    Object proxyObject = value.asProxyObject();
-                    assertTrue(proxyObject instanceof Proxy);
-                    break;
                 case MEMBERS:
-                    assertTrue("expected " + supportedType.name(), value.hasMembers());
+                    assertTrue(value.hasMembers());
 
                     for (String key : value.getMemberKeys()) {
                         assertValue(context, value.getMember(key));
@@ -170,29 +139,15 @@ public class ValueAssert {
                     // TODO virify setting and getting
                     break;
                 case NATIVE:
-                    assertTrue("expected " + supportedType.name(), value.isNativePointer());
+                    assertTrue(value.isNativePointer());
                     value.asNativePointer();
                     break;
+
             }
         }
 
-        assertUnsupported(value, expectedTypes);
-
-        if ((!value.isHostObject() || !(value.asHostObject() instanceof Map)) && !value.isNull()) {
-            for (TypeLiteral<?> literal : NEVER_SUPPORTED_MAPS) {
-                try {
-                    value.as(literal);
-                    fail(literal.toString());
-                } catch (ClassCastException e) {
-                }
-            }
-        }
-    }
-
-    static void assertUnsupported(Value value, Trait... supported) {
-        Set<Trait> supportedSet = new HashSet<>(Arrays.asList(supported));
         for (Trait unsupportedType : Trait.values()) {
-            if (supportedSet.contains(unsupportedType)) {
+            if (supported.contains(unsupportedType)) {
                 continue;
             }
 
@@ -273,10 +228,6 @@ public class ValueAssert {
                     assertFalse(value.isHostObject());
                     assertFails(() -> value.asHostObject(), ClassCastException.class);
                     break;
-                case PROXY_OBJECT:
-                    assertFalse(value.isProxyObject());
-                    assertFails(() -> value.asProxyObject(), ClassCastException.class);
-                    break;
                 case NATIVE:
                     assertFalse(value.isNativePointer());
                     assertFails(() -> value.asNativePointer(), ClassCastException.class);
@@ -284,6 +235,16 @@ public class ValueAssert {
 
             }
 
+        }
+
+        if ((!value.isHostObject() || !(value.asHostObject() instanceof Map)) && !value.isNull()) {
+            for (TypeLiteral<?> literal : NEVER_SUPPORTED_MAPS) {
+                try {
+                    value.as(literal);
+                    fail(literal.toString());
+                } catch (ClassCastException e) {
+                }
+            }
         }
     }
 
@@ -336,36 +297,14 @@ public class ValueAssert {
         }
     }
 
-    static void assertFails(Runnable runnable, Class<? extends Throwable> exceptionType) {
+    private static void assertFails(Runnable runnable, Class<? extends Throwable> exceptionType) {
         assertFails(() -> {
             runnable.run();
             return null;
         }, exceptionType);
     }
 
-    static <T extends Throwable> void assertFails(Callable<?> callable, Class<T> exceptionType, Consumer<T> verfier) {
-        try {
-            callable.call();
-        } catch (Throwable t) {
-            if (!exceptionType.isInstance(t)) {
-                throw new AssertionError("expected instanceof " + exceptionType + " was " + t.getClass(), t);
-            }
-            verfier.accept(exceptionType.cast(t));
-        }
-    }
-
-    static <T extends Throwable> void assertFails(Runnable run, Class<T> exceptionType, Consumer<T> verfier) {
-        try {
-            run.run();
-        } catch (Throwable t) {
-            if (!exceptionType.isInstance(t)) {
-                throw new AssertionError("expected instanceof " + exceptionType + " was " + t.getClass(), t);
-            }
-            verfier.accept(exceptionType.cast(t));
-        }
-    }
-
-    static void assertFails(Callable<?> callable, Class<? extends Throwable> exceptionType) {
+    private static void assertFails(Callable<?> callable, Class<? extends Throwable> exceptionType) {
         try {
             callable.call();
         } catch (Throwable t) {
@@ -438,13 +377,7 @@ public class ValueAssert {
 
     @SuppressWarnings("unchecked")
     private static void assertFunctionalInterfaceMapping(Context context, Value value, Object[] arguments) {
-        Function<Object, Object> f1;
-        if (value.isHostObject()) {
-            f1 = value.as(Function.class);
-        } else {
-            f1 = (Function<Object, Object>) value.as(Object.class);
-        }
-
+        Function<Object, Object> f1 = (Function<Object, Object>) value.as(Object.class);
         Function<Object[], Object> f2 = value.as(Function.class);
         IsFunctionalInterfaceVarArgs f3 = value.as(IsFunctionalInterfaceVarArgs.class);
 
@@ -503,7 +436,6 @@ public class ValueAssert {
 
         NULL,
         HOST_OBJECT,
-        PROXY_OBJECT,
         NUMBER,
         STRING,
         BOOLEAN,
