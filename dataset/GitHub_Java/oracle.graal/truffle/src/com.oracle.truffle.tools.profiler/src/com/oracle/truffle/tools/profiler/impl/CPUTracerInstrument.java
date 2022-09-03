@@ -54,7 +54,7 @@ public class CPUTracerInstrument extends TruffleInstrument {
      *
      * @since 0.30
      */
-    public static final String ID = "cputracer";
+    static final String ID = "cputracer";
     private CPUTracer tracer;
     private static ProfilerToolFactory<CPUTracer> factory;
 
