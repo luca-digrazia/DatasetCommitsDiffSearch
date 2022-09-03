@@ -24,9 +24,12 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleBackgroundCompilation;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleCompileImmediately;
+
+import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.junit.AfterClass;
+import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,7 +42,7 @@ import com.oracle.truffle.sl.test.SLTestSuite;
 @SLTestSuite(value = {"tests"}, testCaseDirectory = SLSimpleTestSuite.class)
 public class SLCompileImmediatelyTestSuite {
 
-    private static TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope overrideScope;
+    private static TruffleCompilerOptions.TruffleOptionsOverrideScope overrideScope;
 
     @BeforeClass
     public static void beforeClass() {
@@ -52,8 +55,11 @@ public class SLCompileImmediatelyTestSuite {
          * it has all nodes in the uninitialized specialization. This means that most methods are
          * compiled multiple times, in different specialization states.
          */
-        overrideScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleCompileImmediately, true, SharedTruffleRuntimeOptions.TruffleBackgroundCompilation, false);
+        overrideScope = TruffleCompilerOptions.overrideOptions(TruffleCompileImmediately, true, TruffleBackgroundCompilation, false);
 
+        Assume.assumeFalse("Crashes on AArch64 in C2 (GR-8733)", System.getProperty("os.arch").equalsIgnoreCase("aarch64"));
+
+        TruffleTestUtil.assumeJavaDesktopModuleIsAvailable();
     }
 
     @AfterClass
