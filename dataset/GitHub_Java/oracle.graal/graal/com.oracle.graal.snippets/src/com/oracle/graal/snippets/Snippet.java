@@ -48,61 +48,54 @@ public @interface Snippet {
 
     /**
      * Specifies the class defining the inlining policy for this snippet.
-     * A {@linkplain DefaultSnippetInliningPolicy default} policy is used if none is supplied.
+     * A {@linkplain InliningPolicy#Default default} policy is used if none is supplied.
      */
-    Class<? extends SnippetInliningPolicy> inlining() default SnippetInliningPolicy.class;
+    Class<? extends InliningPolicy> inlining() default InliningPolicy.class;
 
     /**
      * Guides inlining decisions used when installing a snippet.
      */
-    public interface SnippetInliningPolicy {
+    public interface InliningPolicy {
         /**
          * Determines if {@code method} should be inlined into {@code caller}.
          */
         boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller);
-    }
 
-    /**
-     * The default inlining policy which inlines everything except for methods
-     * in any of the following categories.
-     * <ul>
-     * <li>{@linkplain Fold foldable} methods</li>
-     * <li>{@linkplain NodeIntrinsic node intrinsics}</li>
-     * <li>native methods</li>
-     * <li>constructors of {@link Throwable} classes</li>
-     * </ul>
-     */
-    public static class DefaultSnippetInliningPolicy implements SnippetInliningPolicy {
-        private final BoxingMethodPool pool;
-
-        public DefaultSnippetInliningPolicy(BoxingMethodPool pool) {
-            this.pool = pool;
-        }
-
-        @Override
-        public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
-            if (Modifier.isNative(method.getModifiers())) {
-                return false;
-            }
-            if (method.getAnnotation(Fold.class) != null) {
-                return false;
-            }
-            if (method.getAnnotation(NodeIntrinsic.class) != null) {
-                return false;
-            }
-            if (Throwable.class.isAssignableFrom(getMirrorOrFail(method.getDeclaringClass(), null))) {
-                if (method.getName().equals("<init>")) {
+        /**
+         * The default inlining policy which inlines everything except for methods
+         * in any of the following categories.
+         * <ul>
+         * <li>{@linkplain Fold foldable} methods</li>
+         * <li>{@linkplain NodeIntrinsic node intrinsics}</li>
+         * <li>native methods</li>
+         * <li>constructors of {@link Throwable} classes</li>
+         * </ul>
+         */
+        InliningPolicy Default = new InliningPolicy() {
+            public boolean shouldInline(ResolvedJavaMethod method, ResolvedJavaMethod caller) {
+                if (Modifier.isNative(method.getModifiers())) {
                     return false;
                 }
+                if (method.getAnnotation(Fold.class) != null) {
+                    return false;
+                }
+                if (method.getAnnotation(NodeIntrinsic.class) != null) {
+                    return false;
+                }
+                if (Throwable.class.isAssignableFrom(getMirrorOrFail(method.getDeclaringClass(), null))) {
+                    if (method.getName().equals("<init>")) {
+                        return false;
+                    }
+                }
+                if (method.getAnnotation(Operation.class) != null) {
+                    return false;
+                }
+                if (BoxingMethodPool.isSpecialMethodStatic(method)) {
+                    return false;
+                }
+                return true;
             }
-            if (method.getAnnotation(Operation.class) != null) {
-                return false;
-            }
-            if (pool.isSpecialMethod(method)) {
-                return false;
-            }
-            return true;
-        }
+        };
     }
 
     /**
