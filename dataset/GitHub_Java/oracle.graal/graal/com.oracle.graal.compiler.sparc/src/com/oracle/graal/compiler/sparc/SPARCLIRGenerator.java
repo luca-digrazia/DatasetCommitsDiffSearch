@@ -32,11 +32,12 @@ import static com.oracle.graal.lir.sparc.SPARCMathIntrinsicOp.IntrinsicOpcode.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.asm.sparc.*;
-import com.oracle.graal.asm.sparc.SPARCAssembler.CC;
 import com.oracle.graal.asm.sparc.SPARCAssembler.ConditionFlag;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.calc.*;
+import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.lir.*;
+import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.gen.*;
 import com.oracle.graal.lir.sparc.*;
 import com.oracle.graal.lir.sparc.SPARCArithmetic.BinaryRegConst;
@@ -47,6 +48,7 @@ import com.oracle.graal.lir.sparc.SPARCArithmetic.Unary2Op;
 import com.oracle.graal.lir.sparc.SPARCCompare.CompareOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.BranchOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.CondMoveOp;
+import com.oracle.graal.lir.sparc.SPARCControlFlow.FloatCondMoveOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.ReturnOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.StrategySwitchOp;
 import com.oracle.graal.lir.sparc.SPARCControlFlow.TableSwitchOp;
@@ -225,49 +227,29 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitJump(LabelRef label) {
-        append(new SPARCJumpOp(label));
+        append(new JumpOp(label));
     }
 
     @Override
-    public void emitCompareBranch(PlatformKind cmpKind, Value x, Value y, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
+    public void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
                     double trueDestinationProbability) {
-        Variable left;
-        Value right;
-        Condition actualCondition = null;
-        if (isConstant(x)) {
-            left = load(y);
-            right = loadNonConst(x);
-            actualCondition = cond.mirror();
-        } else {
-            left = load(x);
-            right = loadNonConst(y);
-            actualCondition = cond;
-        }
-        SPARCCompare opcode = null;
+        boolean mirrored = emitCompare(cmpKind, left, right);
+        Condition finalCondition = mirrored ? cond.mirror() : cond;
+
         Kind kind = left.getKind().getStackKind();
         switch (kind) {
-            case Object:
-                opcode = ACMP;
-                break;
-            case Long:
-                opcode = LCMP;
-                break;
             case Int:
-            case Short:
-            case Char:
-            case Byte:
-                opcode = ICMP;
+            case Long:
+            case Object:
+                append(new BranchOp(finalCondition, trueDestination, falseDestination, kind));
                 break;
             case Float:
-                opcode = FCMP;
-                break;
             case Double:
-                opcode = DCMP;
+                append(new BranchOp(finalCondition, trueDestination, falseDestination, kind, unorderedIsTrue));
                 break;
             default:
-                GraalInternalError.shouldNotReachHere(kind.toString());
+                throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
-        append(new SPARCControlFlow.CompareBranchOp(opcode, left, right, actualCondition, trueDestination, falseDestination, kind, unorderedIsTrue, trueDestinationProbability));
     }
 
     @Override
@@ -290,52 +272,26 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         }
     }
 
-    private Value loadSimm11(Value value) {
-        if (isConstant(value)) {
-            Constant c = asConstant(value);
-            if (c.isNull() || SPARCAssembler.isSimm11(c)) {
-                return value;
-            } else {
-                return load(c);
-            }
-        }
-        return emitMove(value);
-    }
-
     @Override
     public Variable emitConditionalMove(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue) {
         boolean mirrored = emitCompare(cmpKind, left, right);
-        CC conditionFlags;
-        Value actualTrueValue = trueValue;
-        Value actualFalseValue = falseValue;
-        switch ((Kind) left.getLIRKind().getPlatformKind()) {
-            case Byte:
-            case Short:
-            case Char:
+        Condition finalCondition = mirrored ? cond.mirror() : cond;
+
+        Variable result = newVariable(trueValue.getLIRKind());
+        Kind kind = left.getKind().getStackKind();
+        switch (kind) {
             case Int:
-                conditionFlags = CC.Icc;
-                actualTrueValue = loadSimm11(trueValue);
-                actualFalseValue = loadSimm11(falseValue);
-                break;
-            case Object:
             case Long:
-                conditionFlags = CC.Xcc;
-                actualTrueValue = loadSimm11(trueValue);
-                actualFalseValue = loadSimm11(falseValue);
+            case Object:
+                append(new CondMoveOp(kind, result, finalCondition, load(trueValue), loadNonConst(falseValue)));
                 break;
             case Float:
             case Double:
-                conditionFlags = CC.Fcc0;
-                actualTrueValue = load(trueValue); // Floats cannot be immediate at all
-                actualFalseValue = load(falseValue);
+                append(new FloatCondMoveOp(kind, result, finalCondition, unorderedIsTrue, load(trueValue), load(falseValue)));
                 break;
             default:
-                throw GraalInternalError.shouldNotReachHere();
+                throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
-        Variable result = newVariable(trueValue.getLIRKind());
-        ConditionFlag finalCondition = ConditionFlag.fromCondtition(conditionFlags, mirrored ? cond.mirror() : cond, unorderedIsTrue);
-        Kind kind = result.getKind().getStackKind();
-        append(new CondMoveOp(kind, result, conditionFlags, finalCondition, actualTrueValue, actualFalseValue));
         return result;
     }
 
@@ -395,23 +351,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         emitIntegerTest(left, right);
         Variable result = newVariable(trueValue.getLIRKind());
         Kind kind = left.getKind().getStackKind();
-        CC conditionCode;
-        switch (kind) {
-            case Object:
-            case Long:
-                conditionCode = CC.Xcc;
-                break;
-            case Int:
-            case Short:
-            case Char:
-            case Byte:
-                conditionCode = CC.Icc;
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-        ConditionFlag flag = ConditionFlag.fromCondtition(conditionCode, Condition.EQ, false);
-        append(new CondMoveOp(kind, result, conditionCode, flag, loadSimm11(trueValue), loadSimm11(falseValue)));
+        append(new CondMoveOp(kind, result, Condition.EQ, load(trueValue), loadNonConst(falseValue)));
         return result;
     }
 
@@ -996,13 +936,13 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
         } else if (fromBits > 32) {
             assert inputVal.getKind() == Kind.Long;
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Long));
-            long mask = CodeUtil.mask(fromBits);
+            long mask = IntegerStamp.defaultMask(fromBits);
             append(new BinaryRegConst(SPARCArithmetic.LAND, result, asAllocatable(inputVal), Constant.forLong(mask), null));
             return result;
         } else {
             assert inputVal.getKind() == Kind.Int || inputVal.getKind() == Kind.Short || inputVal.getKind() == Kind.Byte || inputVal.getKind() == Kind.Char : inputVal.getKind();
             Variable result = newVariable(LIRKind.derive(inputVal).changeType(Kind.Int));
-            long mask = CodeUtil.mask(fromBits);
+            long mask = IntegerStamp.defaultMask(fromBits);
             Constant constant = Constant.forInt((int) mask);
             if (fromBits == 32) {
                 append(new BinaryRegConst(IUSHR, result, inputVal, Constant.forInt(0)));
