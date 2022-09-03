@@ -291,7 +291,7 @@ final class ProtocolImpl<Graph, Node, NodeClass, Port, Block, ResolvedJavaMethod
     }
 
     @Override
-    protected Iterable<Location> findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos) {
+    protected Location findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos) {
         return locations.methodStackTraceElement(method, bci, pos);
     }
 
