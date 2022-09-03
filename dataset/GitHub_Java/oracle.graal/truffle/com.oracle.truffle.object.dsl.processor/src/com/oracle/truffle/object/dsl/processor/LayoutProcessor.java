@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,27 +22,24 @@
  */
 package com.oracle.truffle.object.dsl.processor;
 
-import com.oracle.truffle.api.object.dsl.Layout;
-import com.oracle.truffle.object.dsl.processor.layout.LayoutGenerator;
-import com.oracle.truffle.object.dsl.processor.layout.LayoutParser;
-import com.oracle.truffle.object.dsl.processor.layout.model.LayoutModel;
-
-import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
-import javax.lang.model.SourceVersion;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
-import javax.tools.JavaFileObject;
-import javax.tools.Diagnostic.Kind;
-
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Set;
 
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.tools.Diagnostic.Kind;
+import javax.tools.JavaFileObject;
+
+import com.oracle.truffle.api.object.dsl.Layout;
+import com.oracle.truffle.object.dsl.processor.model.LayoutModel;
+
 @SupportedAnnotationTypes("com.oracle.truffle.api.object.dsl.Layout")
-@SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class LayoutProcessor extends AbstractProcessor {
 
     @Override
@@ -54,6 +49,15 @@ public class LayoutProcessor extends AbstractProcessor {
         }
 
         return true;
+    }
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latest();
+    }
+
+    public ProcessingEnvironment getProcessingEnv() {
+        return processingEnv;
     }
 
     private void processLayout(TypeElement layoutElement) {
