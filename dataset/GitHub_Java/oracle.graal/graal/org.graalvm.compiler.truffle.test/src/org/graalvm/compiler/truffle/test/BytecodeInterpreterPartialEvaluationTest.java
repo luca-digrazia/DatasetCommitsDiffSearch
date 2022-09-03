@@ -106,7 +106,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         @CompilationFinal(dimensions = 1) private final FrameSlot[] stack;
 
         public Program(String name, byte[] bytecodes, int maxLocals, int maxStack) {
-            super(null);
+            super(MockLanguage.class, null, null);
             this.name = name;
             this.bytecodes = bytecodes;
             locals = new FrameSlot[maxLocals];
@@ -541,7 +541,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         assertPartialEvalEqualsAndRunsCorrect(new Program("irreducibleLoop04", bytecodes, 0, 3));
     }
 
-    @Test(timeout = 5000)
+    @Test(timeout = 2000)
     public void manyIfsProgram() {
         initializeForTimeout();
         byte[] bytecodes = new byte[]{
@@ -711,7 +711,7 @@ public class BytecodeInterpreterPartialEvaluationTest extends PartialEvaluationT
         protected final FrameSlot returnSlot;
 
         public InstArrayProgram(String name, Inst[] inst, FrameSlot returnSlot, FrameDescriptor fd) {
-            super(null, fd);
+            super(MockLanguage.class, null, fd);
             this.name = name;
             this.inst = inst;
             this.returnSlot = returnSlot;
