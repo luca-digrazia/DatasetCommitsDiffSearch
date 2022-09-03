@@ -1910,8 +1910,8 @@ public class BytecodeParser implements GraphBuilderContext {
 
     /**
      * Weaves a test of the receiver type to ensure the dispatch will select {@code targetMethod}
-     * and not another method that overrides it. This should only be called if there is an
-     * {@link InvocationPlugin} for {@code targetMethod} and the invocation is indirect.
+     * and not another method that overrides it. This should only be called if there is an intrinsic
+     * (i.e., an {@link InvocationPlugin}) for {@code targetMethod} and the invocation is indirect.
      *
      * The control flow woven around the intrinsic is as follows:
      *
@@ -2066,9 +2066,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (plugin != null) {
 
             if (intrinsicContext != null && intrinsicContext.isCallToOriginal(targetMethod)) {
-                // Self recursive intrinsic means the original
-                // method should be called.
-                assert !targetMethod.hasBytecodes() : "TODO: when does this happen?";
+                // Self recursive intrinsic means the original method should be called.
                 return false;
             }
 
@@ -2088,7 +2086,7 @@ public class BytecodeParser implements GraphBuilderContext {
             try (DebugCloseable context = openNodeContext(targetMethod)) {
                 if (plugin.execute(this, targetMethod, pluginReceiver, args)) {
                     afterInvocationPluginExecution(true, assertions, intrinsicGuard, invokeKind, args, targetMethod, resultType, returnType);
-                    return !plugin.isDecorator();
+                    return true;
                 } else {
                     afterInvocationPluginExecution(false, assertions, intrinsicGuard, invokeKind, args, targetMethod, resultType, returnType);
                 }
@@ -2911,87 +2909,75 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    @SuppressWarnings("try")
     private void createUnwind() {
         assert frameState.stackSize() == 1 : frameState;
         synchronizedEpilogue(BytecodeFrame.AFTER_EXCEPTION_BCI, null, null);
-        try (DebugCloseable context = openNodeContext(frameState, BytecodeFrame.UNWIND_BCI)) {
-            ValueNode exception = frameState.pop(JavaKind.Object);
-            append(new UnwindNode(exception));
-        }
+        ValueNode exception = frameState.pop(JavaKind.Object);
+        append(new UnwindNode(exception));
     }
 
-    @SuppressWarnings("try")
     private void synchronizedEpilogue(int bci, ValueNode currentReturnValue, JavaKind currentReturnValueKind) {
-        try (DebugCloseable context = openNodeContext(frameState, bci)) {
-            if (method.isSynchronized()) {
-                if (currentReturnValue != null) {
-                    frameState.push(currentReturnValueKind, currentReturnValue);
-                }
-                genMonitorExit(methodSynchronizedObject, currentReturnValue, bci);
-                assert !frameState.rethrowException();
-                finishPrepare(lastInstr, bci);
+        if (method.isSynchronized()) {
+            if (currentReturnValue != null) {
+                frameState.push(currentReturnValueKind, currentReturnValue);
             }
-            if (frameState.lockDepth(false) != 0) {
-                throw bailout("unbalanced monitors: too few exits exiting frame");
-            }
+            genMonitorExit(methodSynchronizedObject, currentReturnValue, bci);
+            assert !frameState.rethrowException();
+            finishPrepare(lastInstr, bci);
+        }
+        if (frameState.lockDepth(false) != 0) {
+            throw bailout("unbalanced monitors: too few exits exiting frame");
         }
     }
 
-    @SuppressWarnings("try")
     private void createExceptionDispatch(ExceptionDispatchBlock block) {
-        try (DebugCloseable context = openNodeContext(frameState, BytecodeFrame.AFTER_EXCEPTION_BCI)) {
-            lastInstr = finishInstruction(lastInstr, frameState);
+        lastInstr = finishInstruction(lastInstr, frameState);
 
-            assert frameState.stackSize() == 1 : frameState;
-            if (block.handler.isCatchAll()) {
-                assert block.getSuccessorCount() == 1;
-                appendGoto(block.getSuccessor(0));
-                return;
-            }
+        assert frameState.stackSize() == 1 : frameState;
+        if (block.handler.isCatchAll()) {
+            assert block.getSuccessorCount() == 1;
+            appendGoto(block.getSuccessor(0));
+            return;
+        }
 
-            JavaType catchType = block.handler.getCatchType();
-            if (graphBuilderConfig.eagerResolving()) {
-                catchType = lookupType(block.handler.catchTypeCPI(), INSTANCEOF);
-            }
-            if (catchType instanceof ResolvedJavaType) {
-                TypeReference checkedCatchType = TypeReference.createTrusted(graph.getAssumptions(), (ResolvedJavaType) catchType);
+        JavaType catchType = block.handler.getCatchType();
+        if (graphBuilderConfig.eagerResolving()) {
+            catchType = lookupType(block.handler.catchTypeCPI(), INSTANCEOF);
+        }
+        if (catchType instanceof ResolvedJavaType) {
+            TypeReference checkedCatchType = TypeReference.createTrusted(graph.getAssumptions(), (ResolvedJavaType) catchType);
 
-                if (graphBuilderConfig.getSkippedExceptionTypes() != null) {
-                    for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
-                        if (skippedType.isAssignableFrom(checkedCatchType.getType())) {
-                            BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
-                            ValueNode exception = frameState.stack[0];
-                            FixedNode trueSuccessor = graph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
-                            FixedNode nextDispatch = createTarget(nextBlock, frameState);
-                            append(new IfNode(graph.addOrUniqueWithInputs(createInstanceOf(checkedCatchType, exception)), trueSuccessor, nextDispatch, 0));
-                            return;
-                        }
+            if (graphBuilderConfig.getSkippedExceptionTypes() != null) {
+                for (ResolvedJavaType skippedType : graphBuilderConfig.getSkippedExceptionTypes()) {
+                    if (skippedType.isAssignableFrom(checkedCatchType.getType())) {
+                        BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
+                        ValueNode exception = frameState.stack[0];
+                        FixedNode trueSuccessor = graph.add(new DeoptimizeNode(InvalidateReprofile, UnreachedCode));
+                        FixedNode nextDispatch = createTarget(nextBlock, frameState);
+                        append(new IfNode(graph.addOrUniqueWithInputs(createInstanceOf(checkedCatchType, exception)), trueSuccessor, nextDispatch, 0));
+                        return;
                     }
                 }
-
-                BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
-                ValueNode exception = frameState.stack[0];
-                /*
-                 * Anchor for the piNode, which must be before any LoopExit inserted by
-                 * createTarget.
-                 */
-                BeginNode piNodeAnchor = graph.add(new BeginNode());
-                ObjectStamp checkedStamp = StampFactory.objectNonNull(checkedCatchType);
-                PiNode piNode = graph.addWithoutUnique(new PiNode(exception, checkedStamp));
-                frameState.pop(JavaKind.Object);
-                frameState.push(JavaKind.Object, piNode);
-                FixedNode catchSuccessor = createTarget(block.getSuccessor(0), frameState);
-                frameState.pop(JavaKind.Object);
-                frameState.push(JavaKind.Object, exception);
-                FixedNode nextDispatch = createTarget(nextBlock, frameState);
-                piNodeAnchor.setNext(catchSuccessor);
-                IfNode ifNode = append(new IfNode(graph.unique(createInstanceOf(checkedCatchType, exception)), piNodeAnchor, nextDispatch, 0.5));
-                assert ifNode.trueSuccessor() == piNodeAnchor;
-                piNode.setGuard(ifNode.trueSuccessor());
-            } else {
-                handleUnresolvedExceptionType(catchType);
             }
+
+            BciBlock nextBlock = block.getSuccessorCount() == 1 ? blockMap.getUnwindBlock() : block.getSuccessor(1);
+            ValueNode exception = frameState.stack[0];
+            /* Anchor for the piNode, which must be before any LoopExit inserted by createTarget. */
+            BeginNode piNodeAnchor = graph.add(new BeginNode());
+            ObjectStamp checkedStamp = StampFactory.objectNonNull(checkedCatchType);
+            PiNode piNode = graph.addWithoutUnique(new PiNode(exception, checkedStamp));
+            frameState.pop(JavaKind.Object);
+            frameState.push(JavaKind.Object, piNode);
+            FixedNode catchSuccessor = createTarget(block.getSuccessor(0), frameState);
+            frameState.pop(JavaKind.Object);
+            frameState.push(JavaKind.Object, exception);
+            FixedNode nextDispatch = createTarget(nextBlock, frameState);
+            piNodeAnchor.setNext(catchSuccessor);
+            IfNode ifNode = append(new IfNode(graph.unique(createInstanceOf(checkedCatchType, exception)), piNodeAnchor, nextDispatch, 0.5));
+            assert ifNode.trueSuccessor() == piNodeAnchor;
+            piNode.setGuard(ifNode.trueSuccessor());
+        } else {
+            handleUnresolvedExceptionType(catchType);
         }
     }
 
@@ -3300,13 +3286,9 @@ public class BytecodeParser implements GraphBuilderContext {
                 condition = genUnique(condition);
             }
 
-            NodeSourcePosition currentPosition = graph.currentNodeSourcePosition();
             if (isNeverExecutedCode(probability)) {
                 if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != trueBlock.startBci) {
-                    NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
-                                    ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), falseBlock.startBci)
-                                    : null;
-                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true, survivingSuccessorPosition));
+                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, true));
                     if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
                         profilingPlugin.profileGoto(this, method, bci(), falseBlock.startBci, stateBefore);
                     }
@@ -3315,10 +3297,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
             } else if (isNeverExecutedCode(1 - probability)) {
                 if (!graph.isOSR() || getParent() != null || graph.getEntryBCI() != falseBlock.startBci) {
-                    NodeSourcePosition survivingSuccessorPosition = graph.trackNodeSourcePosition()
-                                    ? new NodeSourcePosition(currentPosition.getCaller(), currentPosition.getMethod(), trueBlock.startBci)
-                                    : null;
-                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false, survivingSuccessorPosition));
+                    append(new FixedGuardNode(condition, UnreachedCode, InvalidateReprofile, false));
                     if (profilingPlugin != null && profilingPlugin.shouldProfile(this, method)) {
                         profilingPlugin.profileGoto(this, method, bci(), trueBlock.startBci, stateBefore);
                     }
