@@ -73,7 +73,9 @@ public class AsyncExecutorTest {
             // this way you can crash arbitrary languages.
             try {
                 final int result = values.get(i).as(Integer.class);
-                Assert.assertTrue("We obtained a result", result >= 0);
+                if (!atLeastOneIsOK) {
+                    Assert.assertEquals(i, result);
+                }
                 atLeastOneIsOK = true;
             } catch (IllegalStateException ex) {
                 assertTrue(ex.getMessage(), ex.getMessage().contains("Currently executing in Thread"));
