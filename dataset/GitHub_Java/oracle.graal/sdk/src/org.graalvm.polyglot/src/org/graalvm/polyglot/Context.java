@@ -221,10 +221,10 @@ import org.graalvm.polyglot.io.MessageTransport;
  * JavaRecord record = new JavaRecord();
  * context.getBindings("js").putMember("javaRecord", record);
  *
- * context.eval("js", "javaRecord.x = 42");
+ * context.eval("js", "record.x = 42");
  * assert record.x == 42;
  *
- * context.eval("js", "javaRecord.name()").asString().equals("foo");
+ * context.eval("js", "record.name()").asString().equals("foo");
  * </pre>
  *
  * <h3>Error Handling</h3>
@@ -704,7 +704,7 @@ public final class Context implements AutoCloseable {
         private Boolean allowHostClassLoading;
         private FileSystem customFileSystem;
         private MessageTransport messageTransport;
-        private Object customLogHandler;
+        private Handler customLogHandler;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -996,48 +996,13 @@ public final class Context implements AutoCloseable {
          * If the {@code logHandler} is not set on {@link Engine} nor on {@link Context}, the log
          * messages are printed to {@link #err(java.io.OutputStream) Context's error output stream}.
          *
-         * @param logHandler the {@link Handler} to use for logging in built {@link Context}. The
-         *            passed {@code logHandler} is closed when the context is {@link Context#close()
-         *            closed}.
+         * @param logHandler the {@link Handler} to use for logging in built {@link Context}.
          * @return the {@link Builder}
          * @since 1.0
          */
         public Builder logHandler(final Handler logHandler) {
-            Objects.requireNonNull(logHandler, "Handler must be non null.");
+            Objects.requireNonNull(logHandler, "Hanlder must be non null.");
             this.customLogHandler = logHandler;
-            return this;
-        }
-
-        /**
-         * Installs a new logging {@link Handler} using given {@link OutputStream}. The logger's
-         * {@link Level} configuration is done using the {@link #options(java.util.Map) Context's
-         * options}. The level option key has the following format:
-         * {@code log.languageId.loggerName.level} or {@code log.instrumentId.loggerName.level}. The
-         * value is either the name of pre-defined {@link Level} constant or a numeric {@link Level}
-         * value. If not explicitly set in options the level is inherited from the parent logger.
-         * <p>
-         * <b>Examples</b> of setting log level options:<br>
-         * {@code builder.option("log.level","FINE");} sets the {@link Level#FINE FINE level} to all
-         * {@code TruffleLogger}s.<br>
-         * {@code builder.option("log.js.level","FINE");} sets the {@link Level#FINE FINE level} to
-         * JavaScript {@code TruffleLogger}s.<br>
-         * {@code builder.option("log.js.com.oracle.truffle.js.parser.JavaScriptLanguage.level","FINE");}
-         * sets the {@link Level#FINE FINE level} to {@code TruffleLogger} for the
-         * {@code JavaScriptLanguage} class.<br>
-         * <p>
-         * If the {@code logHandler} is not set on {@link Engine} nor on {@link Context} the log
-         * messages are printed to {@link #out(java.io.OutputStream) Context's standard output
-         * stream}.
-         *
-         * @param logOut the {@link OutputStream} to use for logging in built {@link Context}. The
-         *            passed {@code logOut} stream is closed when the context is
-         *            {@link Context#close() closed}.
-         * @return the {@link Builder}
-         * @since 1.0
-         */
-        public Builder logHandler(final OutputStream logOut) {
-            Objects.requireNonNull(logOut, "LogOut must be non null.");
-            this.customLogHandler = logOut;
             return this;
         }
 
@@ -1077,6 +1042,9 @@ public final class Context implements AutoCloseable {
                 }
                 if (in != null) {
                     engineBuilder.in(in);
+                }
+                if (customLogHandler != null) {
+                    engineBuilder.logHandler(customLogHandler);
                 }
                 if (messageTransport != null) {
                     engineBuilder.serverTransport(messageTransport);
