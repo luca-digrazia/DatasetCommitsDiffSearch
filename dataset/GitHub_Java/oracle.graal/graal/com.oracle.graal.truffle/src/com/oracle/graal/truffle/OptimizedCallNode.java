@@ -64,11 +64,6 @@ abstract class OptimizedCallNode extends DefaultCallNode {
         return new OptimizedCallNodeProfile(target, this);
     }
 
-    @SuppressWarnings("unused")
-    public void nodeReplaced(Node oldNode, Node newNode, String reason) {
-
-    }
-
     @Override
     public final OptimizedCallTarget getCurrentCallTarget() {
         return (OptimizedCallTarget) super.getCurrentCallTarget();
@@ -108,11 +103,6 @@ abstract class OptimizedCallNode extends DefaultCallNode {
                 }
             }
             return callTarget.call(caller, arguments);
-        }
-
-        @Override
-        public void nodeReplaced(Node oldNode, Node newNode, String reason) {
-
         }
 
         private Object trySplit(PackedFrame caller, Arguments arguments) {
