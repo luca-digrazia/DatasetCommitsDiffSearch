@@ -32,8 +32,4 @@ public abstract class BooleanNode extends FloatingNode {
         super(kind, inputCount, successorCount, graph);
     }
 
-
-    public BooleanNode negate() {
-        throw new IllegalStateException();
-    }
 }
