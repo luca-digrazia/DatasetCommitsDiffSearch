@@ -63,6 +63,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class CPUSampler implements Closeable {
 
+
     /**
      * Wrapper for information on how many times an element was seen on the shadow stack. Used as a
      * template parameter of {@link ProfilerNode}. Differentiates between an execution in compiled
@@ -282,7 +283,7 @@ public final class CPUSampler implements Closeable {
 
     /**
      * Sets the {@link Mode mode} for the sampler.
-     *
+     * 
      * @param mode the new mode for the sampler.
      * @since 0.30
      */
@@ -439,7 +440,7 @@ public final class CPUSampler implements Closeable {
     /**
      * Sets whether or not to gather timestamp information for the element at the top of the stack
      * for each sample.
-     *
+     * 
      * @param gatherSelfHitTimes new value for whether or not to gather timestamps
      *
      * @since 0.30

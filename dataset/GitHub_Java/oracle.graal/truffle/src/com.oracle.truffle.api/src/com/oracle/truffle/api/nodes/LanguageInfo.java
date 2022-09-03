@@ -65,7 +65,7 @@ public final class LanguageInfo {
 
     /**
      * Returns the unique name of the language. This name is equivalent to the name returned by
-     * {@link Registration#name()}.
+     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Language#getName()}.
      *
      * @since 0.25
      */
@@ -75,7 +75,7 @@ public final class LanguageInfo {
 
     /**
      * Returns the version of the language. This version is equivalent to the name returned by
-     * {@link Registration#version()}.
+     * {@link com.oracle.truffle.api.vm.PolyglotEngine.Language#getVersion()}.
      *
      * @since 0.25
      */
@@ -84,8 +84,8 @@ public final class LanguageInfo {
     }
 
     /**
-     * Returns the MIME types supported by this language. This set is equivalent to the set provided
-     * by {@link Registration#mimeType()}.
+     * Returns the MIME types supported by this language. This set is equivalent to the set returned
+     * by {@link com.oracle.truffle.api.vm.PolyglotEngine.Language#getMimeTypes()}.
      *
      * @since 0.25
      */
