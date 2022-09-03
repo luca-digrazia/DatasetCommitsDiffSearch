@@ -39,8 +39,7 @@ import com.oracle.truffle.api.utilities.*;
 /**
  * A <em>binding</em> between:
  * <ol>
- * <li>A program location in an executing Truffle AST (corresponding to a {@link SourceSection}),
- * and</li>
+ * <li>A program location in an executing Truffle AST (defined by a {@link SourceSection}), and</li>
  * <li>A dynamically managed collection of "attached" {@linkplain Instrument Instruments} that
  * receive event notifications on behalf of external clients.</li>
  * </ol>
@@ -98,7 +97,7 @@ import com.oracle.truffle.api.utilities.*;
  * @see ProbeListener
  * @see SyntaxTag
  */
-public final class Probe {
+public final class Probe implements SyntaxTagged {
 
     private static final List<ASTProber> astProbers = new ArrayList<>();
 
@@ -252,18 +251,11 @@ public final class Probe {
         }
     }
 
-    /**
-     * Is this node tagged as belonging to a particular human-sensible category of language
-     * constructs?
-     */
     public boolean isTaggedAs(SyntaxTag tag) {
         assert tag != null;
         return tags.contains(tag);
     }
 
-    /**
-     * In which user-sensible categories has this node been tagged (<em>empty set</em> if none).
-     */
     public Collection<SyntaxTag> getSyntaxTags() {
         return Collections.unmodifiableCollection(tags);
     }
