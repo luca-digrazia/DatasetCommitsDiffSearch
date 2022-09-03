@@ -32,8 +32,6 @@ final class CachedObjectAccessNode extends ObjectAccessNode {
     @Child private ObjectAccessNode next;
     private final ForeignAccess languageCheck;
 
-    @Child private ForeignAccessArguments accessArguments = new ForeignAccessArguments();
-
     protected CachedObjectAccessNode(DirectCallNode callTarget, ObjectAccessNode next, ForeignAccess languageCheck) {
         this.callTarget = callTarget;
         this.next = next;
@@ -52,7 +50,7 @@ final class CachedObjectAccessNode extends ObjectAccessNode {
 
     private Object doAccess(VirtualFrame frame, TruffleObject receiver, Object[] arguments) {
         if (languageCheck.canHandle(receiver)) {
-            return callTarget.call(frame, accessArguments.executeCreate(receiver, arguments));
+            return callTarget.call(frame, ForeignAccessArguments.create(receiver, arguments));
         } else {
             return doNext(frame, receiver, arguments);
         }

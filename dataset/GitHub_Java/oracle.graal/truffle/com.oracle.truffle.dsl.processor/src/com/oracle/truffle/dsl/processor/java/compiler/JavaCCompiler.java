@@ -22,14 +22,12 @@
  */
 package com.oracle.truffle.dsl.processor.java.compiler;
 
-import com.oracle.truffle.dsl.processor.java.ElementUtils;
-import java.util.List;
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.TypeElement;
+import java.util.*;
+
+import javax.annotation.processing.*;
+import javax.lang.model.element.*;
+
+import com.oracle.truffle.dsl.processor.java.*;
 
 public class JavaCCompiler extends AbstractCompiler {
 
