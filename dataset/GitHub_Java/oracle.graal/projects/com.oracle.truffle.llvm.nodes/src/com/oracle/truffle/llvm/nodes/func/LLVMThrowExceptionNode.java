@@ -31,39 +31,44 @@ package com.oracle.truffle.llvm.nodes.func;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMException;
-import com.oracle.truffle.llvm.runtime.memory.LLVMNativeFunctions;
+import com.oracle.truffle.llvm.runtime.LLVMNativeFunctions;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNodeGen;
 
 public final class LLVMThrowExceptionNode extends LLVMExpressionNode {
 
-    @Child private LLVMExpressionNode exceptionInfo;
-    @Child private LLVMExpressionNode thrownTypeID;
-    @Child private LLVMExpressionNode destructor;
+    @Child private LLVMToNativeNode exceptionInfo;
+    @Child private LLVMToNativeNode thrownTypeID;
+    @Child private LLVMToNativeNode destructor;
     @Child private LLVMNativeFunctions.SulongThrowNode exceptionInitializaton;
 
     public LLVMThrowExceptionNode(LLVMExpressionNode arg1, LLVMExpressionNode arg2, LLVMExpressionNode arg3) {
-        this.exceptionInfo = arg1;
-        this.thrownTypeID = arg2;
-        this.destructor = arg3;
+        this.exceptionInfo = LLVMToNativeNodeGen.create(arg1);
+        this.thrownTypeID = LLVMToNativeNodeGen.create(arg2);
+        this.destructor = LLVMToNativeNodeGen.create(arg3);
     }
 
     public LLVMNativeFunctions.SulongThrowNode getExceptionInitializaton() {
         if (exceptionInitializaton == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.exceptionInitializaton = insert(getContext().getNativeFunctions().createSulongThrow());
+            LLVMContext context = getContextReference().get();
+            NFIContextExtension nfiContextExtension = context.getContextExtension(NFIContextExtension.class);
+            this.exceptionInitializaton = insert(nfiContextExtension.getNativeSulongFunctions().createSulongThrow(context));
         }
         return exceptionInitializaton;
     }
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
-        LLVMAddress thrownObject = exceptionInfo.enforceLLVMAddress(frame);
-        LLVMAddress thrownType = thrownTypeID.enforceLLVMAddress(frame);
-        LLVMAddress dest = destructor.enforceLLVMAddress(frame);
+        LLVMAddress thrownObject = exceptionInfo.execute(frame);
+        LLVMAddress thrownType = thrownTypeID.execute(frame);
+        LLVMAddress dest = destructor.execute(frame);
         getExceptionInitializaton().throvv(thrownObject, thrownType, dest, LLVMAddress.nullPointer(), LLVMAddress.nullPointer());
         throw new LLVMException(thrownObject);
     }
-
 }

@@ -300,7 +300,6 @@ import com.oracle.truffle.llvm.nodes.vars.LLVMReadVectorNodeFactory.LLVMI32Vecto
 import com.oracle.truffle.llvm.nodes.vars.LLVMReadVectorNodeFactory.LLVMI64VectorReadNodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMReadVectorNodeFactory.LLVMI8VectorReadNodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMSetInteropTypeNode;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNode;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWrite80BitFloatingNodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteAddressNodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteDoubleNodeGen;
@@ -312,7 +311,7 @@ import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI32NodeG
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI64NodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteI8NodeGen;
 import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteIVarBitNodeGen;
-import com.oracle.truffle.llvm.nodes.vars.LLVMWriteNodeFactory.LLVMWriteVectorNodeGen;
+import com.oracle.truffle.llvm.nodes.vars.LLVMWriteVectorNodeGen;
 import com.oracle.truffle.llvm.nodes.vars.StructLiteralNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMDoubleExtractElementNodeGen;
 import com.oracle.truffle.llvm.nodes.vector.LLVMExtractElementNodeFactory.LLVMFloatExtractElementNodeGen;
@@ -372,7 +371,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypesGen;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -922,9 +920,9 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMWriteNode createFrameWrite(LLVMParserRuntime runtime, Type llvmType, LLVMExpressionNode result, FrameSlot slot, SourceSection sourceSection) {
+    public LLVMExpressionNode createFrameWrite(LLVMParserRuntime runtime, Type llvmType, LLVMExpressionNode result, FrameSlot slot, SourceSection sourceSection) {
         if (llvmType instanceof VectorType) {
-            return LLVMWriteVectorNodeGen.create(result, slot, sourceSection);
+            return LLVMWriteVectorNodeGen.create(sourceSection, result, slot);
         } else if (llvmType instanceof PrimitiveType) {
             switch (((PrimitiveType) llvmType).getPrimitiveKind()) {
                 case I1:
@@ -1675,7 +1673,6 @@ public class BasicNodeFactory implements NodeFactory {
             case "@llvm.fabs.f32":
             case "@llvm.fabs.f64":
             case "@llvm.fabs.f80":
-            case "@llvm.fabs.v2f64":
                 return LLVMFAbsNodeGen.create(args[1], sourceSection);
             case "@llvm.returnaddress":
                 return LLVMReturnAddressNodeGen.create(args[1], sourceSection);
@@ -1713,17 +1710,17 @@ public class BasicNodeFactory implements NodeFactory {
             case "@llvm.eh.typeid.for":
                 return new LLVMTypeIdForExceptionNode(args[1], sourceSection);
             case "@llvm.expect.i1": {
-                boolean expectedValue = LLVMTypesGen.asBoolean(args[2].executeGeneric(null));
+                boolean expectedValue = args[2].executeI1(null);
                 LLVMExpressionNode actualValueNode = args[1];
                 return LLVMExpectI1NodeGen.create(expectedValue, actualValueNode, sourceSection);
             }
             case "@llvm.expect.i32": {
-                int expectedValue = LLVMTypesGen.asInteger(args[2].executeGeneric(null));
+                int expectedValue = args[2].executeI32(null);
                 LLVMExpressionNode actualValueNode = args[1];
                 return LLVMExpectI32NodeGen.create(expectedValue, actualValueNode, sourceSection);
             }
             case "@llvm.expect.i64": {
-                long expectedValue = LLVMTypesGen.asLong(args[2].executeGeneric(null));
+                long expectedValue = args[2].executeI64(null);
                 LLVMExpressionNode actualValueNode = args[1];
                 return LLVMExpectI64NodeGen.create(expectedValue, actualValueNode, sourceSection);
             }
@@ -1860,12 +1857,8 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createPhi(LLVMParserRuntime runtime, LLVMExpressionNode[] from, FrameSlot[] to, Type[] types) {
-        LLVMWriteNode[] writes = new LLVMWriteNode[to.length];
-        for (int i = 0; i < writes.length; i++) {
-            writes[i] = createFrameWrite(runtime, types[i], null, to[i], null);
-        }
-        return new LLVMWritePhisNode(from, writes);
+    public LLVMExpressionNode createPhi(LLVMExpressionNode[] from, FrameSlot[] to, Type[] types) {
+        return new LLVMWritePhisNode(from, to, types);
     }
 
     @Override
