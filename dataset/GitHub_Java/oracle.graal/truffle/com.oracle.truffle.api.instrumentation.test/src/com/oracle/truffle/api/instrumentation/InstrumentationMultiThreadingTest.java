@@ -115,7 +115,7 @@ public class InstrumentationMultiThreadingTest {
 
     }
 
-    static final AtomicInteger createDisposeCount = new AtomicInteger(0);
+    final static AtomicInteger createDisposeCount = new AtomicInteger(0);
 
     @Registration(id = "testAsyncAttachement2")
     public static class TestAsyncAttachement2 extends TruffleInstrument {

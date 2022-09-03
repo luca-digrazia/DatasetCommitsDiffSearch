@@ -1016,34 +1016,37 @@ public class PolyglotEngine {
             if (disposed) {
                 throw new IllegalStateException("Engine has already been disposed");
             }
-            if (executor == null) {
-                setEnabledImpl(enabled, true);
-            } else {
-                ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor) {
-                    @Override
-                    protected Void compute() throws IOException {
-                        setEnabledImpl(enabled, true);
-                        return null;
+
+            if (this.enabled != enabled) {
+                synchronized (instrumentLock) {
+                    if (this.enabled != enabled) {
+                        if (executor == null) {
+                            setEnabledImpl(enabled, true);
+                        } else {
+                            ComputeInExecutor<Void> compute = new ComputeInExecutor<Void>(executor) {
+                                @Override
+                                protected Void compute() throws IOException {
+                                    setEnabledImpl(enabled, true);
+                                    return null;
+                                }
+                            };
+                            try {
+                                compute.perform();
+                            } catch (IOException ex) {
+                                throw new IllegalStateException(ex);
+                            }
+                        }
+                        this.enabled = enabled;
                     }
-                };
-                try {
-                    compute.perform();
-                } catch (IOException ex) {
-                    throw new IllegalStateException(ex);
                 }
             }
         }
 
         void setEnabledImpl(final boolean enabled, boolean cleanup) {
-            synchronized (instrumentLock) {
-                if (this.enabled != enabled) {
-                    if (enabled) {
-                        Access.INSTRUMENT.addInstrument(instrumentationHandler, this, getCache().getInstrumentationClass());
-                    } else {
-                        Access.INSTRUMENT.disposeInstrument(instrumentationHandler, this, cleanup);
-                    }
-                    this.enabled = enabled;
-                }
+            if (enabled) {
+                Access.INSTRUMENT.addInstrument(instrumentationHandler, this, getCache().getInstrumentationClass());
+            } else {
+                Access.INSTRUMENT.disposeInstrument(instrumentationHandler, this, cleanup);
             }
         }
 
@@ -1179,7 +1182,6 @@ public class PolyglotEngine {
         public String toString() {
             return "[" + getName() + "@ " + getVersion() + " for " + getMimeTypes() + "]";
         }
-
     } // end of Language
 
     //
