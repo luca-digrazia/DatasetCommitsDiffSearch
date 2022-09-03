@@ -64,7 +64,7 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
      * runtime/interpreter would not have a valid location for the exception object to be rethrown.
      */
     @Override
-    public void lower(LoweringTool tool) {
+    public void lower(LoweringTool tool, LoweringType loweringType) {
         if (isLowered()) {
             return;
         }
@@ -89,7 +89,6 @@ public class ExceptionObjectNode extends DispatchBeginNode implements Lowerable,
         graph().addAfterFixed(this, loadException);
         setStateAfter(null);
         setStamp(StampFactory.forVoid());
-        loadException.lower(tool);
     }
 
     @Override
