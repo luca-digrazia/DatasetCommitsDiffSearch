@@ -22,11 +22,7 @@
  */
 package com.oracle.graal.compiler.common.cfg;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 public interface AbstractControlFlowGraph<T extends AbstractBlockBase<T>> {
 
@@ -81,7 +77,7 @@ public interface AbstractControlFlowGraph<T extends AbstractBlockBase<T>> {
             Iterator<T> dominated;
             Frame parent;
 
-            Frame(int myNumber, T block, Iterator<T> dominated, Frame parent) {
+            public Frame(int myNumber, T block, Iterator<T> dominated, Frame parent) {
                 super();
                 this.myNumber = myNumber;
                 this.maxNumber = myNumber;
