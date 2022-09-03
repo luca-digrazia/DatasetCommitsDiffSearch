@@ -49,7 +49,7 @@ final class SPARCHotspotDirectVirtualCallOp extends DirectCallOp {
         super(target, result, parameters, temps, state);
         this.invokeKind = invokeKind;
         this.config = config;
-        assert invokeKind.isIndirect();
+        assert invokeKind == InvokeKind.Interface || invokeKind == InvokeKind.Virtual;
     }
 
     @Override
