@@ -24,6 +24,7 @@ package com.oracle.graal.nodes.calc;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
+import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodes.*;
 
 
@@ -68,6 +69,19 @@ public abstract class IntegerArithmeticNode extends ArithmeticNode {
                 return graph.unique(new IntegerSubNode(Kind.Int, v1, v2));
             case Long:
                 return graph.unique(new IntegerSubNode(Kind.Long, v1, v2));
+            default:
+                throw ValueNodeUtil.shouldNotReachHere();
+        }
+    }
+
+    public static IntegerDivNode div(ValueNode v1, ValueNode v2) {
+        assert v1.kind() == v2.kind() && v1.graph() == v2.graph();
+        Graph graph = v1.graph();
+        switch(v1.kind()) {
+            case Int:
+                return graph.unique(new IntegerDivNode(Kind.Int, v1, v2));
+            case Long:
+                return graph.unique(new IntegerDivNode(Kind.Long, v1, v2));
             default:
                 throw ValueNodeUtil.shouldNotReachHere();
         }
