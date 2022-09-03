@@ -54,15 +54,21 @@ public class TruffleConstantFieldProvider implements ConstantFieldProvider {
                 } else if (!field.isStatic() && field.getAnnotation(Children.class) != null) {
                     int stableDimensions = field.getType().isArray() ? 1 : 0;
                     return tool.foldStableArray(verifyFieldValue(field, tool.readValue()), stableDimensions, true);
-                } else if (field.isFinal() || (!field.isStatic() && field.getAnnotation(Child.class) != null)) {
+                } else if (!field.isStatic() && field.getAnnotation(Child.class) != null) {
                     return tool.foldConstant(verifyFieldValue(field, tool.readValue()));
                 }
-            } else if (field.isFinal() || (field.getAnnotation(CompilationFinal.class)) != null) {
+            } else if (field.getAnnotation(CompilationFinal.class) != null) {
                 return tool.foldConstant(tool.readValue());
             }
         }
 
-        return graalConstantFieldProvider.readConstantField(field, tool);
+        T ret = graalConstantFieldProvider.readConstantField(field, tool);
+        if (ret == null) {
+            if (field.isFinal() && (field.isStatic() || receiver.isNonNull())) {
+                return tool.foldConstant(tool.readValue());
+            }
+        }
+        return ret;
     }
 
     private static int actualStableDimensions(ResolvedJavaField field, int dimensions) {
@@ -71,11 +77,15 @@ public class TruffleConstantFieldProvider implements ConstantFieldProvider {
         }
         int arrayDim = getArrayDimensions(field.getType());
         if (dimensions < 0) {
-            assert dimensions == -1 : "Negative @CompilationFinal dimensions";
+            if (dimensions != -1) {
+                throw new IllegalArgumentException("Negative @CompilationFinal dimensions");
+            }
             return arrayDim;
         }
-        assert dimensions <= arrayDim : String.format("@CompilationFinal(dimensions=%d) exceeds declared array dimensions (%d) of field %s", dimensions, arrayDim, field);
-        return Math.min(dimensions, arrayDim);
+        if (dimensions > arrayDim) {
+            throw new IllegalArgumentException(String.format("@CompilationFinal(dimensions=%d) exceeds declared array dimensions (%d) of field %s", dimensions, arrayDim, field));
+        }
+        return dimensions;
     }
 
     private static int getArrayDimensions(JavaType type) {
