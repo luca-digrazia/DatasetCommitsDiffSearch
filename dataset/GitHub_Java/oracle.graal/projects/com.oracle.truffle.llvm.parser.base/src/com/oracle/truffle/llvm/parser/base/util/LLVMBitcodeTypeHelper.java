@@ -285,7 +285,7 @@ public class LLVMBitcodeTypeHelper {
     public static LLVMFunctionDescriptor.LLVMRuntimeType[] toRuntimeTypes(Type[] types) {
         final LLVMFunctionDescriptor.LLVMRuntimeType[] llvmtypes = new LLVMFunctionDescriptor.LLVMRuntimeType[types.length];
         for (int i = 0; i < types.length; i++) {
-            llvmtypes[i] = types[i].getType().getRuntimeType();
+            llvmtypes[i] = toRuntimeType(types[i].getType());
         }
         return llvmtypes;
     }

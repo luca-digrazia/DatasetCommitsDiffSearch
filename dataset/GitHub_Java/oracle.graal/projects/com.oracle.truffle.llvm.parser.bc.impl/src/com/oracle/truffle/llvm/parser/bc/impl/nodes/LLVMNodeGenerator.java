@@ -319,14 +319,14 @@ public final class LLVMNodeGenerator {
 
             final Integer constantIndex = LLVMNodeGenerator.evaluateIntegerConstant(symbol);
             if (constantIndex == null) {
-                final int indexedTypeLength = currentType.getIndexOffsetByte(1, typeHelper.getTargetDataLayout());
-                currentType = currentType.getIndexType(1);
+                final int indexedTypeLength = typeHelper.goIntoTypeGetLength(currentType, 1);
+                currentType = LLVMBitcodeTypeHelper.goIntoType(currentType, 1);
                 final LLVMExpressionNode valueref = resolve(symbol);
                 currentAddress = LLVMGetElementPtrFactory.create(type.getLLVMBaseType(), (LLVMAddressNode) currentAddress, valueref, indexedTypeLength);
 
             } else {
-                final int indexedTypeLength = currentType.getIndexOffsetByte(constantIndex, typeHelper.getTargetDataLayout());
-                currentType = currentType.getIndexType(constantIndex);
+                final int indexedTypeLength = typeHelper.goIntoTypeGetLength(currentType, constantIndex);
+                currentType = LLVMBitcodeTypeHelper.goIntoType(currentType, constantIndex);
                 if (indexedTypeLength != 0) {
                     final LLVMExpressionNode constantNode;
                     switch (type.getLLVMBaseType()) {
@@ -547,9 +547,9 @@ public final class LLVMNodeGenerator {
                 throw new IllegalStateException("Invalid index: " + index);
             }
 
-            currentOffset += currentType.getIndexOffsetByte(indexVal, typeHelper.getTargetDataLayout());
+            currentOffset += typeHelper.goIntoTypeGetLength(currentType, indexVal);
             parentType = currentType;
-            currentType = currentType.getIndexType(indexVal);
+            currentType = LLVMBitcodeTypeHelper.goIntoType(currentType, indexVal);
         }
 
         if (currentType != null && !((parentType instanceof StructureType) && (((StructureType) parentType).isPacked()))) {
