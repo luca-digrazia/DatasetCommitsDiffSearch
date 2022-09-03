@@ -302,8 +302,6 @@ public abstract class Accessor {
         public abstract String getLanguageHome(Object engineObject);
 
         public abstract void addToHostClassPath(Object vmObject, TruffleFile entries);
-
-        public abstract boolean isInstrumentExceptionsAreThrown(Object vmObject);
     }
 
     public abstract static class LanguageSupport {

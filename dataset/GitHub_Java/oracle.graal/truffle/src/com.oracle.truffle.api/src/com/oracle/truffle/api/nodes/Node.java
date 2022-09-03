@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.api.nodes;
 
@@ -49,7 +33,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -57,17 +40,12 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ReplaceObserver;
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.Accessor.InstrumentSupport;
-import com.oracle.truffle.api.nodes.ExecutableNode.ReferenceCache;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
@@ -176,25 +154,9 @@ public abstract class Node implements NodeInterface, Cloneable {
             if (currentSection != null) {
                 return currentSection;
             }
-            current = current.getParent();
+            current = current.parent;
         }
         return null;
-    }
-
-    /**
-     * Returns <code>true</code> if this node can be adopated by a parent. This method is intended
-     * to be overriden by subclasses. If nodes need to be statically shared that they must not be
-     * adoptable, because otherwise the parent reference might cause a memory leak. If a node is not
-     * adoptable then then it is guaranteed that the {@link #getParent() parent} pointer remains
-     * <code>null</code> at all times, even if the node is tried to be adopted by a parent.
-     * <p>
-     * Implementations of {@link #isAdoptable()} are required to fold to a constant result when
-     * compiled with a constant receiver.
-     *
-     * @since 1.0
-     */
-    public boolean isAdoptable() {
-        return true;
     }
 
     /**
@@ -265,9 +227,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     /** @since 0.8 or earlier */
     public final void adoptChildren() {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        if (isAdoptable()) {
-            NodeUtil.adoptChildrenHelper(this);
-        }
+        NodeUtil.adoptChildrenHelper(this);
     }
 
     @SuppressWarnings("deprecation")
@@ -276,14 +236,12 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
         }
-        if (newChild.isAdoptable()) {
-            assert checkSameLanguages(newChild);
-            newChild.parent = this;
-            if (TruffleOptions.TraceASTJSON) {
-                dump(this, newChild, null);
-            }
-            NodeUtil.adoptChildrenHelper(newChild);
+        assert checkSameLanguages(newChild);
+        newChild.parent = this;
+        if (TruffleOptions.TraceASTJSON) {
+            dump(this, newChild, null);
         }
+        NodeUtil.adoptChildrenHelper(newChild);
     }
 
     int adoptChildrenAndCount() {
@@ -297,16 +255,12 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
         }
-        int count = 1;
-        if (newChild.isAdoptable()) {
-            assert checkSameLanguages(newChild);
-            newChild.parent = this;
-            if (TruffleOptions.TraceASTJSON) {
-                dump(this, newChild, null);
-            }
-            count += NodeUtil.adoptChildrenAndCountHelper(newChild);
+        assert checkSameLanguages(newChild);
+        newChild.parent = this;
+        if (TruffleOptions.TraceASTJSON) {
+            dump(this, newChild, null);
         }
-        return count;
+        return 1 + NodeUtil.adoptChildrenAndCountHelper(newChild);
     }
 
     private boolean checkSameLanguages(final Node newChild) {
@@ -334,7 +288,6 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     private void adoptUnadoptedHelper(final Node newChild) {
-        assert isAdoptable();
         assert newChild != null;
         if (newChild == this) {
             throw new IllegalStateException("The parent of a node can never be the node itself.");
@@ -411,9 +364,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         }
         // (aw) need to set parent *before* replace, so that (unsynchronized) getRootNode()
         // will always find the root node
-        if (newNode.isAdoptable()) {
-            newNode.parent = this.parent;
-        }
+        newNode.parent = this.parent;
         if (!NodeUtil.replaceChild(this.parent, this, newNode, true)) {
             this.parent.adoptUnadoptedHelper(newNode);
         }
@@ -611,6 +562,23 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /**
+     * Returns a lock object that can be used to synchronize modifications to the AST. Only use it
+     * as part of a synchronized block, do not call {@link Object#wait()} or {@link Object#notify()}
+     * manually.
+     *
+     * @since 0.17
+     * @deprecated replaced with {@link #getLock()}
+     */
+    @Deprecated
+    protected final Object getAtomicLock() {
+        // Major Assumption: parent is never null after a node got adopted
+        // it is never reset to null, and thus, rootNode is always reachable.
+        // GIL: used for nodes that are replace in ASTs that are not yet adopted
+        RootNode root = getRootNode();
+        return root == null ? GIL : root;
+    }
+
+    /**
      * Returns a lock object that can be used to synchronize modifications to the AST. Don't lock if
      * you call into foreign code with potential recursions to avoid deadlocks. Use responsibly.
      *
@@ -648,205 +616,28 @@ public abstract class Node implements NodeInterface, Cloneable {
         return "";
     }
 
-    private static final Map<Class<?>, LanguageReference<?>> UNCACHED_LANGUAGE_REFERENCES = new ConcurrentHashMap<>();
-
     /**
-     * Returns a reference that returns the current language instance. The returned language
-     * reference is intended to be cached in the currently adopted AST. If this node is
-     * {@link #isAdoptable() adoptable} then the method must be invoked after the AST was adopted
-     * otherwise an {@link IllegalStateException} is thrown. The reference lookup decides which
-     * lookup method is the best given the parent {@link ExecutableNode} or {@link RootNode} and the
-     * provided languageClass. It is recommended to use
-     * {@link com.oracle.truffle.api.dsl.CachedLanguage @CachedLanguage} instead whenever possible.
-     * The given language class must not be <code>null</code>. If the given language class is not
-     * known to the current engine then an {@link IllegalArgumentException} is thrown.
-     * <p>
-     * Usage example:
+     * Returns a string representing the language this node has been implemented for. If the
+     * language is unknown, returns "".
      *
-     * <pre>
-     * class ExampleNode extends Node {
-     *
-     *     &#64;CompilationFinal private LanguageReference<MyLanguage> reference;
-     *
-     *     void execute() {
-     *         if (reference == null) {
-     *             CompilerDirectives.transferToInterpreterAndInvalidate();
-     *             this.reference = lookupLanguageReference(MyLanguage.class);
-     *         }
-     *         MyLanguage language = this.reference.get();
-     *         // use language
-     *     }
-     * }
-     *
-     * </pre>
-     * <p>
-     * The current language might vary between {@link ExecutableNode#execute(VirtualFrame)
-     * executions} if resources or code was shared between multiple contexts and the node was
-     * inserted into an AST that was not associated with this language. It is not recommended to
-     * cache the language in the AST directly.
-     * <p>
-     * This method is designed for partial evaluation and will reliably return a constant when
-     * called with a class literal and the number of accessed languages does not exceed the limit of
-     * 5 per root executable node. If possible the reference should be cached in the AST in order to
-     * avoid the repeated lookup of the parent executable or root node.
-     *
-     * @see com.oracle.truffle.api.dsl.CachedContext @CachedContext to use the context reference in
-     *      specializations or exported messages.
-     * @since 1.0
+     * @since 0.8 or earlier
+     * @deprecated in 0.25 use {@link #getRootNode() getRootNode()}.
+     *             {@link RootNode#getLanguageInfo() getLanguageInfo()}.
+     *             {@link LanguageInfo#getName() getName()} instead
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    protected final <T extends TruffleLanguage> LanguageReference<T> lookupLanguageReference(Class<T> languageClass) {
-        if (languageClass == null) {
-            CompilerDirectives.transferToInterpreter();
-            throw new NullPointerException();
+    @Deprecated
+    public String getLanguage() {
+        NodeInfo info = getClass().getAnnotation(NodeInfo.class);
+        if (info != null && info.language() != null && info.language().length() > 0) {
+            return info.language();
         }
-        ExecutableNode executableNode = getExecutableNode();
-        if (executableNode != null) {
-            if (executableNode.language != null && executableNode.language.getClass() == languageClass) {
-                return Node.ACCESSOR.engineSupport().getDirectLanguageReference(executableNode.sourceVM,
-                                executableNode.language, languageClass);
-            } else {
-                ReferenceCache cache = executableNode.lookupReferenceCache(languageClass);
-                if (cache != null) {
-                    return (LanguageReference<T>) cache.languageReference;
-                } else {
-                    return Node.ACCESSOR.engineSupport().lookupLanguageReference(executableNode.sourceVM,
-                                    executableNode.language, languageClass);
-                }
-            }
+        if (parent != null) {
+            return parent.getLanguage();
         }
-        return lookupUncachedLanguageReference(languageClass);
+        return "";
     }
 
-    @SuppressWarnings("unchecked")
-    @TruffleBoundary
-    private static <T extends TruffleLanguage<?>> LanguageReference<T> lookupUncachedLanguageReference(Class<T> languageClass) {
-        LanguageReference<?> result = UNCACHED_LANGUAGE_REFERENCES.get(languageClass);
-        if (result == null) {
-            result = new LanguageReference<TruffleLanguage<?>>() {
-                @Override
-                @TruffleBoundary
-                public TruffleLanguage<?> get() {
-                    return Node.ACCESSOR.engineSupport().getCurrentLanguage(languageClass);
-                }
-            };
-            UNCACHED_LANGUAGE_REFERENCES.put(languageClass, result);
-        }
-        return (LanguageReference<T>) result;
-    }
-
-    @ExplodeLoop
-    private ExecutableNode getExecutableNode() {
-        Node node = this;
-        while (node != null) {
-            if (node instanceof ExecutableNode) {
-                return (ExecutableNode) node;
-            }
-            node = node.getParent();
-        }
-        if (node == null) {
-            checkAdoptable();
-        }
-        return null;
-    }
-
-    /*
-     * Better to call this on a boundary to not pull in more methods.
-     */
-    @TruffleBoundary
-    private void checkAdoptable() {
-        if (isAdoptable()) {
-            throw new IllegalStateException("Node must be adopted before a reference can be looked up.");
-        }
-    }
-
-    /**
-     * Returns a reference that returns the current execution context associated with the given
-     * language. The returned context reference is intended to be cached in the currently adopted
-     * AST. If this node is {@link #isAdoptable() adoptable} then the method must be invoked after
-     * the AST was adopted otherwise an {@link IllegalStateException} is thrown. The reference
-     * lookup decides which lookup method is the best given the parent {@link ExecutableNode} or
-     * {@link RootNode} and the provided languageClass. It is recommended to use
-     * {@link com.oracle.truffle.api.dsl.CachedContext @CachedContext} instead whenever possible.
-     * The given language class must not be null. If the given language class is not known to the
-     * current engine then an {@link IllegalArgumentException} is thrown.
-     * <p>
-     * Usage example:
-     *
-     * <pre>
-     * class ExampleNode extends Node {
-     *
-     *     &#64;CompilationFinal private ContextReference<MyContext> reference;
-     *
-     *     void execute() {
-     *         if (reference == null) {
-     *             CompilerDirectives.transferToInterpreterAndInvalidate();
-     *             this.reference = lookupContextReference(MyLanguage.class);
-     *         }
-     *         MyContext context = this.reference.get();
-     *         // use context
-     *     }
-     * }
-     *
-     * </pre>
-     * <p>
-     * The current context might vary between {@link ExecutableNode#execute(VirtualFrame)
-     * executions} if resources or code is shared between multiple contexts. It is not recommended
-     * to cache the context in the AST directly.
-     * <p>
-     * This method is designed for partial evaluation and will reliably return a constant when
-     * called with a class literal and the number of accessed languages does not exceed the limit of
-     * 5 per root executable node. If possible the reference should be cached in the AST in order to
-     * avoid the repeated lookup of the parent executable or root node.
-     * <p>
-     *
-     * @see com.oracle.truffle.api.dsl.CachedContext @CachedContext to use the context reference in
-     *      specializations or exported messages.
-     * @since 1.0
-     */
-    @SuppressWarnings("unchecked")
-    protected final <C, T extends TruffleLanguage<C>> ContextReference<C> lookupContextReference(Class<T> languageClass) {
-        if (languageClass == null) {
-            CompilerDirectives.transferToInterpreter();
-            throw new NullPointerException();
-        }
-        ExecutableNode executableNode = getExecutableNode();
-        if (executableNode != null) {
-            if (executableNode.language != null && executableNode.language.getClass() == languageClass) {
-                return Node.ACCESSOR.engineSupport().getDirectContextReference(executableNode.sourceVM,
-                                executableNode.language, languageClass);
-            } else {
-                ReferenceCache cache = executableNode.lookupReferenceCache(languageClass);
-                if (cache != null) {
-                    return (ContextReference<C>) cache.contextReference;
-                } else {
-                    return Node.ACCESSOR.engineSupport().lookupContextReference(executableNode.sourceVM,
-                                    executableNode.language, languageClass);
-                }
-            }
-        }
-        return lookupUncachedContextReference(languageClass);
-    }
-
-    private static final Map<Class<?>, ContextReference<?>> UNCACHED_CONTEXT_REFERENCES = new ConcurrentHashMap<>();
-
-    @SuppressWarnings("unchecked")
-    @TruffleBoundary
-    private static <T extends TruffleLanguage<C>, C> ContextReference<C> lookupUncachedContextReference(Class<T> language) {
-        ContextReference<?> result = UNCACHED_CONTEXT_REFERENCES.get(language);
-        if (result == null) {
-            result = new ContextReference<Object>() {
-                @Override
-                @TruffleBoundary
-                public Object get() {
-                    return Node.ACCESSOR.engineSupport().getCurrentContext(language);
-                }
-            };
-            UNCACHED_CONTEXT_REFERENCES.put(language, result);
-        }
-        return (ContextReference<C>) result;
-    }
-
+    private static final Object GIL = new Object();
     private static final ReentrantLock GIL_LOCK = new ReentrantLock(false);
 
     private boolean inAtomicBlock() {
@@ -856,20 +647,8 @@ public abstract class Node implements NodeInterface, Cloneable {
     static final class AccessorNodes extends Accessor {
 
         @Override
-        protected ThreadLocal<Object> createFastThreadLocal() {
-            return super.createFastThreadLocal();
-        }
-
-        @Override
         protected void onLoopCount(Node source, int iterations) {
             super.onLoopCount(source, iterations);
-        }
-
-        @Override
-        protected IndirectCallNode createUncachedIndirectCall() {
-            IndirectCallNode callNode = super.createUncachedIndirectCall();
-            assert !callNode.isAdoptable();
-            return callNode;
         }
 
         @Override
@@ -897,21 +676,11 @@ public abstract class Node implements NodeInterface, Cloneable {
             return super.instrumentSupport();
         }
 
-        @Override
-        protected Frames framesSupport() {
-            return super.framesSupport();
-        }
-
         static final class AccessNodes extends Accessor.Nodes {
 
             @Override
             public boolean isInstrumentable(RootNode rootNode) {
                 return rootNode.isInstrumentable();
-            }
-
-            @Override
-            public void setCallTarget(RootNode rootNode, RootCallTarget callTarget) {
-                rootNode.setCallTarget(callTarget);
             }
 
             @Override
@@ -940,18 +709,23 @@ public abstract class Node implements NodeInterface, Cloneable {
             }
 
             @Override
-            public LanguageInfo createLanguage(Object vmObject, String id, String name, String version, String defaultMimeType, Set<String> mimeTypes, boolean internal, boolean interactive) {
-                return new LanguageInfo(vmObject, id, name, version, defaultMimeType, mimeTypes, internal, interactive);
+            public TruffleLanguage<?> getLanguageSpi(LanguageInfo languageInfo) {
+                return languageInfo.getSpi();
+            }
+
+            @Override
+            public void setLanguageSpi(LanguageInfo languageInfo, TruffleLanguage<?> spi) {
+                languageInfo.setSpi(spi);
+            }
+
+            @Override
+            public LanguageInfo createLanguage(Object vmObject, String id, String name, String version, Set<String> mimeTypes, boolean internal) {
+                return new LanguageInfo(vmObject, id, name, version, mimeTypes, internal);
             }
 
             @Override
             public Object getSourceVM(RootNode rootNode) {
                 return rootNode.sourceVM;
-            }
-
-            @Override
-            public TruffleLanguage<?> getLanguage(RootNode rootNode) {
-                return rootNode.language;
             }
 
             @Override
@@ -968,11 +742,6 @@ public abstract class Node implements NodeInterface, Cloneable {
             @Override
             public Lock getLock(Node node) {
                 return node.getLock();
-            }
-
-            @Override
-            public void makeSharableRoot(RootNode rootNode) {
-                rootNode.sourceVM = null;
             }
 
         }
