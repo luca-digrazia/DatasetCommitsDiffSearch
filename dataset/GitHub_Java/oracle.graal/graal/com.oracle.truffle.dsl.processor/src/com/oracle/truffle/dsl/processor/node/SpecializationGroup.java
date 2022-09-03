@@ -24,6 +24,10 @@ package com.oracle.truffle.dsl.processor.node;
 
 import java.util.*;
 
+import javax.lang.model.type.*;
+
+import com.oracle.truffle.dsl.processor.*;
+import com.oracle.truffle.dsl.processor.template.*;
 import com.oracle.truffle.dsl.processor.template.TemplateMethod.Signature;
 import com.oracle.truffle.dsl.processor.typesystem.*;
 
@@ -34,15 +38,17 @@ import com.oracle.truffle.dsl.processor.typesystem.*;
 public final class SpecializationGroup {
 
     private final List<String> assumptions;
-    private final List<TypeData> typeGuards;
+    private final List<TypeGuard> typeGuards;
     private final List<GuardData> guards;
 
+    private final NodeData node;
     private final SpecializationData specialization;
     private final List<SpecializationGroup> children = new ArrayList<>();
 
     private SpecializationGroup parent;
 
     private SpecializationGroup(SpecializationData data) {
+        this.node = data.getNode();
         this.assumptions = new ArrayList<>();
         this.typeGuards = new ArrayList<>();
         this.guards = new ArrayList<>();
@@ -51,17 +57,78 @@ public final class SpecializationGroup {
         this.assumptions.addAll(data.getAssumptions());
         Signature sig = data.getSignature();
         for (int i = 1; i < sig.size(); i++) {
-            typeGuards.add(sig.get(i));
+            typeGuards.add(new TypeGuard(sig.get(i), i - 1));
         }
         this.guards.addAll(data.getGuards());
     }
 
-    public SpecializationGroup(List<SpecializationGroup> children, List<String> assumptionMatches, List<TypeData> typeGuardsMatches, List<GuardData> guardMatches) {
+    public SpecializationGroup(List<SpecializationGroup> children, List<String> assumptionMatches, List<TypeGuard> typeGuardsMatches, List<GuardData> guardMatches) {
+        assert !children.isEmpty() : "children must not be empty";
         this.assumptions = assumptionMatches;
         this.typeGuards = typeGuardsMatches;
         this.guards = guardMatches;
+        this.node = children.get(0).node;
         this.specialization = null;
         updateChildren(children);
+    }
+
+    public List<TypeGuard> getAllGuards() {
+        List<TypeGuard> collectedGuards = new ArrayList<>();
+        collectedGuards.addAll(typeGuards);
+        if (parent != null) {
+            collectedGuards.addAll(parent.getAllGuards());
+        }
+        return collectedGuards;
+    }
+
+    public TypeGuard findTypeGuard(int signatureIndex) {
+        for (TypeGuard guard : typeGuards) {
+            if (guard.getSignatureIndex() == signatureIndex) {
+                return guard;
+            }
+        }
+        return null;
+    }
+
+    public List<GuardData> getElseConnectableGuards() {
+        if (!getTypeGuards().isEmpty() || !getAssumptions().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        if (getGuards().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<GuardData> elseConnectableGuards = new ArrayList<>();
+        int guardIndex = 0;
+        while (guardIndex < getGuards().size() && findNegatedGuardInPrevious(getGuards().get(guardIndex)) != null) {
+            elseConnectableGuards.add(getGuards().get(guardIndex));
+            guardIndex++;
+        }
+
+        return elseConnectableGuards;
+    }
+
+    private GuardData findNegatedGuardInPrevious(GuardData guard) {
+        SpecializationGroup previous = this.getPreviousGroup();
+        if (previous == null) {
+            return null;
+        }
+        List<GuardData> elseConnectedGuards = previous.getElseConnectableGuards();
+
+        if (previous == null || previous.getGuards().size() != elseConnectedGuards.size() + 1) {
+            return null;
+        }
+
+        if (elseConnectedGuards.contains(guard)) {
+            return guard;
+        }
+
+        GuardData previousGuard = previous.getGuards().get(elseConnectedGuards.size());
+        if (guard.getMethod().equals(previousGuard.getMethod()) && guard.isNegated() != previousGuard.isNegated()) {
+            return guard;
+        }
+        return null;
     }
 
     private void updateChildren(List<SpecializationGroup> childs) {
@@ -74,14 +141,6 @@ public final class SpecializationGroup {
         }
     }
 
-    public int getTypeGuardOffset() {
-        return (parent != null ? parent.getTypeGuardOffsetRec() : 0);
-    }
-
-    private int getTypeGuardOffsetRec() {
-        return typeGuards.size() + (parent != null ? parent.getTypeGuardOffsetRec() : 0);
-    }
-
     public SpecializationGroup getParent() {
         return parent;
     }
@@ -90,7 +149,7 @@ public final class SpecializationGroup {
         return assumptions;
     }
 
-    public List<TypeData> getTypeGuards() {
+    public List<TypeGuard> getTypeGuards() {
         return typeGuards;
     }
 
@@ -115,7 +174,7 @@ public final class SpecializationGroup {
         }
 
         List<String> assumptionMatches = new ArrayList<>();
-        List<TypeData> typeGuardsMatches = new ArrayList<>();
+        List<TypeGuard> typeGuardsMatches = new ArrayList<>();
         List<GuardData> guardMatches = new ArrayList<>();
 
         SpecializationGroup first = groups.get(0);
@@ -131,19 +190,14 @@ public final class SpecializationGroup {
             assumptionMatches.add(assumption);
         }
 
-        int typeGuardIndex = 0;
-        outer: for (TypeData typeGuard : first.typeGuards) {
+        outer: for (TypeGuard typeGuard : first.typeGuards) {
             for (SpecializationGroup other : others) {
-                if (typeGuardIndex >= other.typeGuards.size()) {
-                    break outer;
-                }
-
-                if (!other.typeGuards.get(typeGuardIndex).equals(typeGuard)) {
-                    break outer;
+                if (!other.typeGuards.contains(typeGuard)) {
+                    // type guards can be combined unordered
+                    continue outer;
                 }
             }
             typeGuardsMatches.add(typeGuard);
-            typeGuardIndex++;
         }
 
         outer: for (GuardData guard : first.guards) {
@@ -156,13 +210,50 @@ public final class SpecializationGroup {
             guardMatches.add(guard);
         }
 
+        // check for guards for required type casts
+        for (Iterator<GuardData> iterator = guardMatches.iterator(); iterator.hasNext();) {
+            GuardData guardMatch = iterator.next();
+
+            int signatureIndex = 0;
+            for (ActualParameter parameter : guardMatch.getParameters()) {
+                signatureIndex++;
+                if (!parameter.getSpecification().isSignature()) {
+                    continue;
+                }
+
+                TypeMirror guardType = parameter.getType();
+
+                // object guards can be safely moved up
+                if (Utils.isObject(guardType)) {
+                    continue;
+                }
+
+                // generic guards can be safely moved up
+                SpecializationData generic = first.node.getGenericSpecialization();
+                if (generic != null) {
+                    ActualParameter genericParameter = generic.findParameter(parameter.getLocalName());
+                    if (genericParameter != null && Utils.typeEquals(genericParameter.getType(), guardType)) {
+                        continue;
+                    }
+                }
+
+                // signature index required for moving up guards
+                if (containsIndex(typeGuardsMatches, signatureIndex) || (first.getParent() != null && first.getParent().containsTypeGuardIndex(signatureIndex))) {
+                    continue;
+                }
+
+                iterator.remove();
+                break;
+            }
+        }
+
         if (assumptionMatches.isEmpty() && typeGuardsMatches.isEmpty() && guardMatches.isEmpty()) {
             return null;
         }
 
         for (SpecializationGroup group : groups) {
             group.assumptions.removeAll(assumptionMatches);
-            group.typeGuards.subList(0, typeGuardIndex).clear();
+            group.typeGuards.removeAll(typeGuardsMatches);
             group.guards.removeAll(guardMatches);
         }
 
@@ -170,12 +261,35 @@ public final class SpecializationGroup {
         return new SpecializationGroup(newChildren, assumptionMatches, typeGuardsMatches, guardMatches);
     }
 
-    public static List<SpecializationGroup> create(List<SpecializationData> specializations) {
+    private boolean containsTypeGuardIndex(int index) {
+        if (containsIndex(typeGuards, index)) {
+            return true;
+        }
+        if (parent != null) {
+            return parent.containsTypeGuardIndex(index);
+        }
+        return false;
+    }
+
+    private static boolean containsIndex(List<TypeGuard> typeGuards, int signatureIndex) {
+        for (TypeGuard guard : typeGuards) {
+            if (guard.signatureIndex == signatureIndex) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static SpecializationGroup create(SpecializationData specialization) {
+        return new SpecializationGroup(specialization);
+    }
+
+    public static SpecializationGroup create(List<SpecializationData> specializations) {
         List<SpecializationGroup> groups = new ArrayList<>();
         for (SpecializationData specialization : specializations) {
             groups.add(new SpecializationGroup(specialization));
         }
-        return createCombinationalGroups(groups);
+        return new SpecializationGroup(createCombinationalGroups(groups), Collections.<String> emptyList(), Collections.<TypeGuard> emptyList(), Collections.<GuardData> emptyList());
     }
 
     @Override
@@ -236,6 +350,53 @@ public final class SpecializationGroup {
                 max = Math.max(max, childGroup.getMaxSpecializationIndex());
             }
             return max;
+        }
+    }
+
+    public static final class TypeGuard {
+
+        private final int signatureIndex;
+        private final TypeData type;
+
+        public TypeGuard(TypeData type, int signatureIndex) {
+            this.type = type;
+            this.signatureIndex = signatureIndex;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + signatureIndex;
+            result = prime * result + type.hashCode();
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            } else if (obj == null) {
+                return false;
+            } else if (getClass() != obj.getClass()) {
+                return false;
+            }
+
+            TypeGuard other = (TypeGuard) obj;
+            if (signatureIndex != other.signatureIndex) {
+                return false;
+            } else if (!type.equals(other.type)) {
+                return false;
+            }
+            return true;
+        }
+
+        public int getSignatureIndex() {
+            return signatureIndex;
+        }
+
+        public TypeData getType() {
+            return type;
         }
     }
 }

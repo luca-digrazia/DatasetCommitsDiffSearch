@@ -48,11 +48,6 @@ public class TypeSystemTest {
             return (int) value;
         }
 
-        @ImplicitCast
-        Str castStr(String strvalue) {
-            return new Str(strvalue);
-        }
-
     }
 
     @TypeSystemReference(SimpleTypes.class)
