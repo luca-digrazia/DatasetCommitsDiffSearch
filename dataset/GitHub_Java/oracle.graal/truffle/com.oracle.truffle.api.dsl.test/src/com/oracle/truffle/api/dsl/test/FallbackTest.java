@@ -22,19 +22,39 @@
  */
 package com.oracle.truffle.api.dsl.test;
 
-import static com.oracle.truffle.api.dsl.test.TestHelper.*;
+import static com.oracle.truffle.api.dsl.test.TestHelper.array;
+import static com.oracle.truffle.api.dsl.test.TestHelper.assertRuns;
+import static com.oracle.truffle.api.dsl.test.TestHelper.createRoot;
+import static com.oracle.truffle.api.dsl.test.TestHelper.executeWith;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 
-import com.oracle.truffle.api.dsl.*;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.ExactMath;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.Introspectable;
+import com.oracle.truffle.api.dsl.Introspection;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback10NodeGen;
 import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback1Factory;
 import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback2Factory;
 import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback3Factory;
 import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback4Factory;
+import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback6Factory;
+import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback7Factory;
+import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback8NodeGen;
+import com.oracle.truffle.api.dsl.test.FallbackTestFactory.Fallback9NodeGen;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
+import com.oracle.truffle.api.dsl.test.examples.ExampleTypes;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
 
 public class FallbackTest {
 
@@ -186,6 +206,261 @@ public class FallbackTest {
         String f1(int a) {
             return "(int)";
         }
+    }
+
+    @Test
+    public void testFallback6() {
+        TestRootNode<Fallback6> node = createRoot(Fallback6Factory.getInstance());
+        Assert.assertEquals(2, executeWith(node, 1));
+        try {
+            Assert.assertEquals(2, executeWith(node, "foobar"));
+            Assert.fail();
+        } catch (FallbackException e) {
+        }
+
+        Assert.assertEquals((long) Integer.MAX_VALUE + (long) Integer.MAX_VALUE, executeWith(node, Integer.MAX_VALUE));
+        try {
+            executeWith(node, "foobar");
+            Assert.fail();
+        } catch (FallbackException e) {
+        }
+    }
+
+    @SuppressWarnings("serial")
+    private static class FallbackException extends RuntimeException {
+    }
+
+    @NodeChild("a")
+    abstract static class Fallback6 extends ValueNode {
+
+        @Specialization(rewriteOn = ArithmeticException.class)
+        int f1(int a) throws ArithmeticException {
+            return ExactMath.addExact(a, a);
+        }
+
+        @Specialization
+        long f2(int a) {
+            return (long) a + (long) a;
+        }
+
+        @Specialization
+        boolean f3(boolean a) {
+            return a;
+        }
+
+        @Fallback
+        Object f2(@SuppressWarnings("unused") Object a) {
+            throw new FallbackException();
+        }
+    }
+
+    @Test
+    public void testFallback7() {
+        TestRootNode<Fallback7> node = createRoot(Fallback7Factory.getInstance());
+        Assert.assertEquals(2, executeWith(node, 1));
+        Assert.assertEquals(2, executeWith(node, "asdf"));
+        Assert.assertEquals(2, executeWith(node, "asdf"));
+    }
+
+    @NodeChild("a")
+    @SuppressWarnings("unused")
+    abstract static class Fallback7 extends ValueNode {
+
+        public abstract Object execute(VirtualFrame frame, Object arg);
+
+        protected boolean guard(int value) {
+            return true;
+        }
+
+        @Specialization(guards = {"guard(arg)"})
+        protected static int access(int arg) {
+            return 2;
+        }
+
+        @Fallback
+        protected static Object access(Object arg) {
+            return 2;
+        }
+
+    }
+
+    @Test
+    public void testFallback8() {
+        Fallback8 node = Fallback8NodeGen.create();
+        node.execute(1L);
+        Assert.assertEquals(0, node.s0count);
+        Assert.assertEquals(0, node.s1count);
+        Assert.assertEquals(1, node.guard0count);
+        Assert.assertEquals(1, node.guard1count);
+        Assert.assertEquals(1, node.fcount);
+        node.execute(1L);
+        Assert.assertEquals(0, node.s0count);
+        Assert.assertEquals(0, node.s1count);
+        Assert.assertEquals(2, node.guard0count);
+        Assert.assertEquals(2, node.guard1count);
+        Assert.assertEquals(2, node.fcount);
+
+        node = Fallback8NodeGen.create();
+        node.execute(1L);
+        Assert.assertEquals(0, node.s0count);
+        Assert.assertEquals(0, node.s1count);
+        Assert.assertEquals(1, node.guard0count);
+        Assert.assertEquals(1, node.guard1count);
+        Assert.assertEquals(1, node.fcount);
+        node.execute(1);
+        Assert.assertEquals(1, node.s0count);
+        Assert.assertEquals(0, node.s1count);
+        Assert.assertEquals(3, node.guard0count);
+        Assert.assertEquals(1, node.guard1count);
+        Assert.assertEquals(1, node.fcount);
+        node.execute(1L);
+        Assert.assertEquals(1, node.s0count);
+        Assert.assertEquals(0, node.s1count);
+        Assert.assertEquals(4, node.guard0count);
+        Assert.assertEquals(2, node.guard1count);
+        Assert.assertEquals(2, node.fcount);
+    }
+
+    @TypeSystemReference(ExampleTypes.class)
+    abstract static class Fallback8 extends Node {
+
+        private int s0count;
+        private int s1count;
+        private int guard0count;
+        private int guard1count;
+        private int fcount;
+
+        public abstract Object execute(Object arg);
+
+        @Specialization(guards = "guard0(arg)")
+        protected Object s0(Object arg) {
+            s0count++;
+            return arg;
+        }
+
+        @Specialization(guards = "guard1(arg)")
+        protected Object s1(Object arg) {
+            s1count++;
+            return arg;
+        }
+
+        protected boolean guard0(Object arg) {
+            guard0count++;
+            return arg instanceof Integer;
+        }
+
+        protected boolean guard1(Object arg) {
+            guard1count++;
+            return arg instanceof String;
+        }
+
+        @Fallback
+        protected Object f(Object arg) {
+            fcount++;
+            return arg;
+        }
+
+    }
+
+    @Test
+    public void testFallback9() {
+        Fallback9 node = Fallback9NodeGen.create();
+        Assert.assertEquals(0, node.s0count);
+        Assert.assertEquals(0, node.fcount);
+        node.execute(1);
+        Assert.assertEquals(1, node.s0count);
+        Assert.assertEquals(0, node.fcount);
+        node.execute("");
+        Assert.assertEquals(1, node.s0count);
+        Assert.assertEquals(1, node.fcount);
+
+        /*
+         * The fallback is now active and the new implicit casted type (double) must use the
+         * specialization instead of the fall back case even if double is not an active implicit
+         * cast type.
+         */
+        node.execute(1d);
+        Assert.assertEquals(2, node.s0count);
+        Assert.assertEquals(1, node.fcount);
+    }
+
+    @TypeSystemReference(ExampleTypes.class)
+    abstract static class Fallback9 extends Node {
+
+        public abstract Object execute(Object arg);
+
+        int s0count = 0;
+        int fcount = 0;
+
+        @Specialization
+        protected Object s0(double arg) {
+            s0count++;
+            return arg;
+        }
+
+        @Fallback
+        protected Object f(Object arg) {
+            fcount++;
+            return arg;
+        }
+
+    }
+
+    @Test
+    public void testFallback10() {
+        Fallback10 node = Fallback10NodeGen.create();
+
+        Assert.assertFalse(Introspection.getSpecialization(node, "s0").isActive());
+        Assert.assertFalse(Introspection.getSpecialization(node, "f0").isActive());
+        Assert.assertEquals("s0", node.execute(1, 1));
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getInstances());
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getCachedData(0).get(0));
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getCachedData(0).get(1));
+        Assert.assertFalse(Introspection.getSpecialization(node, "f0").isActive());
+
+        Assert.assertEquals("f0", node.execute(1, ""));
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getInstances());
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getCachedData(0).get(0));
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getCachedData(0).get(1));
+        Assert.assertTrue(Introspection.getSpecialization(node, "f0").isActive());
+
+        /*
+         * Without a generic specialization that covers (int, int), once fallback is triggered it
+         * will always trigger instead of adding new cache entries.
+         */
+        Assert.assertEquals("f0", node.execute(1, 2));
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getInstances());
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getCachedData(0).get(0));
+        Assert.assertEquals(1, Introspection.getSpecialization(node, "s0").getCachedData(0).get(1));
+        Assert.assertTrue(Introspection.getSpecialization(node, "f0").isActive());
+
+    }
+
+    /*
+     * Tests that fallback behavior with cached guards that do not have a generic case.
+     */
+    @TypeSystemReference(ExampleTypes.class)
+    @Introspectable
+    @SuppressWarnings("unused")
+    public abstract static class Fallback10 extends Node {
+
+        public abstract String execute(Object left, Object right);
+
+        @Specialization(limit = "2", guards = {"left == cachedLeft", "right == cachedRight"})
+        protected String s0(
+                        int left,
+                        int right,
+                        @Cached("left") int cachedLeft,
+                        @Cached("right") int cachedRight) {
+            return "s0";
+        }
+
+        @Fallback
+        @TruffleBoundary
+        protected String f0(Object left, Object right) {
+            return "f0";
+        }
+
     }
 
 }
