@@ -522,8 +522,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                  * to call it again.
                  */
                 PEMethodScope peMethodScope = (PEMethodScope) methodScope;
-                Invoke invoke = peMethodScope.invokeData != null ? peMethodScope.invokeData.invoke : null;
-                InliningUtil.handleMissingAfterExceptionFrameState(frameState, invoke, null, true);
+                InliningUtil.handleMissingAfterExceptionFrameState(frameState, peMethodScope.invokeData.invoke, null, true);
 
                 /*
                  * The frameState must be gone now, because it is not a valid deoptimization point.
