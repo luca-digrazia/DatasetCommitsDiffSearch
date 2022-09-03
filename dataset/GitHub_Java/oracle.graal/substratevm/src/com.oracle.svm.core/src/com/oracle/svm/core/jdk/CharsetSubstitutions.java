@@ -32,12 +32,15 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
+
+import sun.misc.ASCIICaseInsensitiveComparator;
 
 @TargetClass(java.nio.charset.Charset.class)
 @SuppressWarnings({"unused"})
@@ -56,7 +59,7 @@ final class Target_java_nio_charset_Charset {
 
     @Substitute
     private static SortedMap<String, Charset> availableCharsets() {
-        TreeMap<String, Charset> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        TreeMap<String, Charset> result = new TreeMap<>(ASCIICaseInsensitiveComparator.CASE_INSENSITIVE_ORDER);
         Map<String, Charset> charsets = ImageSingletons.lookup(LocalizationSupport.class).charsets;
         for (Charset charset : charsets.values()) {
             result.put(charset.name(), charset);
