@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -20,21 +22,19 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.api.dsl.test.interop;
+package com.oracle.truffle.tck;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.AcceptMessage;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.tck.impl.TckLanguage;
 
-@AcceptMessage(value = "WRITE", receiverType = ExampleTruffleObject.class, language = TestTruffleLanguage.class)
-public final class ExampleWriteNode extends ExampleWriteBaseNode {
+@AcceptMessage(value = "READ", receiverType = StructuredData.class, language = TckLanguage.class)
+final class StructuredDataReadNode extends StructuredDataReadBaseNode {
 
     @Override
-    protected int access(VirtualFrame vf, ExampleTruffleObject receiver, String name, int value) {
-        if (ExampleTruffleObject.MEMBER_NAME.equals(name)) {
-            receiver.setValue(value);
-            return value;
-        }
-        throw UnknownIdentifierException.raise(name);
+    public Object access(VirtualFrame frame, StructuredData data, Number index) {
+        int idx = TckLanguage.checkBounds(index.intValue(), data.getSchema().length());
+        return new StructuredDataEntry(data.getBuffer(), data.getSchema(), idx);
     }
+
 }
