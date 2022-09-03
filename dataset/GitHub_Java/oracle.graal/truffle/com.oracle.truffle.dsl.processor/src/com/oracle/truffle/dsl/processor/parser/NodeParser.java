@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,88 @@
  */
 package com.oracle.truffle.dsl.processor.parser;
 
-import java.lang.annotation.*;
-import java.util.*;
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
-import javax.lang.model.element.*;
-import javax.lang.model.type.*;
-import javax.lang.model.util.*;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic.Kind;
 
-import com.oracle.truffle.api.*;
-import com.oracle.truffle.api.dsl.*;
-import com.oracle.truffle.api.dsl.internal.*;
-import com.oracle.truffle.api.frame.*;
-import com.oracle.truffle.api.nodes.*;
-import com.oracle.truffle.dsl.processor.*;
-import com.oracle.truffle.dsl.processor.expression.*;
-import com.oracle.truffle.dsl.processor.java.*;
-import com.oracle.truffle.dsl.processor.java.compiler.*;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CreateCast;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateNodeFactory;
+import com.oracle.truffle.api.dsl.GeneratedBy;
+import com.oracle.truffle.api.dsl.ImportStatic;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeChildren;
+import com.oracle.truffle.api.dsl.NodeField;
+import com.oracle.truffle.api.dsl.NodeFields;
+import com.oracle.truffle.api.dsl.Introspectable;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.dsl.internal.DSLOptions;
+import com.oracle.truffle.api.dsl.internal.DSLOptions.DSLGenerator;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.nodes.NodeInfo;
+import com.oracle.truffle.dsl.processor.CompileErrorException;
+import com.oracle.truffle.dsl.processor.Log;
+import com.oracle.truffle.dsl.processor.expression.DSLExpression;
+import com.oracle.truffle.dsl.processor.expression.DSLExpressionResolver;
+import com.oracle.truffle.dsl.processor.expression.InvalidExpressionException;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
+import com.oracle.truffle.dsl.processor.java.compiler.CompilerFactory;
+import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.ArrayCodeTypeMirror;
-import com.oracle.truffle.dsl.processor.java.model.*;
-import com.oracle.truffle.dsl.processor.model.*;
+import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
+import com.oracle.truffle.dsl.processor.model.AssumptionExpression;
+import com.oracle.truffle.dsl.processor.model.CacheExpression;
+import com.oracle.truffle.dsl.processor.model.ExecutableTypeData;
+import com.oracle.truffle.dsl.processor.model.GuardExpression;
+import com.oracle.truffle.dsl.processor.model.MethodSpec;
+import com.oracle.truffle.dsl.processor.model.NodeChildData;
 import com.oracle.truffle.dsl.processor.model.NodeChildData.Cardinality;
+import com.oracle.truffle.dsl.processor.model.NodeData;
+import com.oracle.truffle.dsl.processor.model.NodeExecutionData;
+import com.oracle.truffle.dsl.processor.model.NodeFieldData;
+import com.oracle.truffle.dsl.processor.model.Parameter;
+import com.oracle.truffle.dsl.processor.model.ParameterSpec;
+import com.oracle.truffle.dsl.processor.model.ShortCircuitData;
+import com.oracle.truffle.dsl.processor.model.SpecializationData;
 import com.oracle.truffle.dsl.processor.model.SpecializationData.SpecializationKind;
+import com.oracle.truffle.dsl.processor.model.SpecializationThrowsData;
+import com.oracle.truffle.dsl.processor.model.TemplateMethod;
+import com.oracle.truffle.dsl.processor.model.TypeSystemData;
 
 @DSLOptions
 public class NodeParser extends AbstractParser<NodeData> {
 
-    public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(Fallback.class, TypeSystemReference.class, ShortCircuit.class, Specialization.class, NodeChild.class,
+    @SuppressWarnings("deprecation") public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(Fallback.class, TypeSystemReference.class,
+                    com.oracle.truffle.api.dsl.ShortCircuit.class, Specialization.class,
+                    NodeChild.class,
                     NodeChildren.class);
 
     @Override
@@ -145,6 +200,14 @@ public class NodeParser extends AbstractParser<NodeData> {
             return node;
         }
 
+        AnnotationMirror reflectable = findFirstAnnotation(lookupTypes, Introspectable.class);
+        if (reflectable != null) {
+            node.setReflectable(true);
+            if (node.getTypeSystem().getOptions().defaultGenerator() != DSLGenerator.FLAT) {
+                node.addError(reflectable, null, "Reflection is not supported by the used DSL layout. Only the flat DSL layout supports reflection.");
+            }
+        }
+
         node.getFields().addAll(parseFields(lookupTypes, members));
         node.getChildren().addAll(parseChildren(lookupTypes, members));
         node.getChildExecutions().addAll(parseExecutions(node.getFields(), node.getChildren(), members));
@@ -153,10 +216,6 @@ public class NodeParser extends AbstractParser<NodeData> {
         initializeExecutableTypes(node);
         initializeImportGuards(node, lookupTypes, members);
         initializeChildren(node);
-
-        if (node.hasErrors()) {
-            return node; // error sync point
-        }
 
         if (node.hasErrors()) {
             return node; // error sync point
@@ -256,9 +315,7 @@ public class NodeParser extends AbstractParser<NodeData> {
     }
 
     private List<Element> loadMembers(TypeElement templateType) {
-        List<Element> members = new ArrayList<>(CompilerFactory.getCompiler(templateType).getAllMembersInDeclarationOrder(context.getEnvironment(), templateType));
-
-        return members;
+        return newElementList(CompilerFactory.getCompiler(templateType).getAllMembersInDeclarationOrder(context.getEnvironment(), templateType));
     }
 
     private boolean containsSpecializations(List<Element> elements) {
@@ -300,13 +357,22 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    private List<? extends Element> importPublicStaticMembers(TypeElement importGuardClass, boolean includeConstructors) {
+    @SuppressWarnings("unchecked")
+    private List<Element> importPublicStaticMembers(TypeElement importGuardClass, boolean includeConstructors) {
         // hack to reload type is necessary for incremental compiling in eclipse.
         // otherwise methods inside of import guard types are just not found.
         TypeElement typeElement = ElementUtils.fromTypeMirror(context.reloadType(importGuardClass.asType()));
 
         List<Element> members = new ArrayList<>();
-        for (Element importElement : processingEnv.getElementUtils().getAllMembers(typeElement)) {
+        List<Element> typeElementMembers = (List<Element>) processingEnv.getElementUtils().getAllMembers(typeElement);
+
+        // add default constructor
+        if (typeElement.getModifiers().contains(Modifier.PUBLIC) && ElementFilter.constructorsIn(typeElementMembers).isEmpty()) {
+            typeElementMembers = new ArrayList<>(typeElementMembers);
+            typeElementMembers.add(new CodeExecutableElement(ElementUtils.modifiers(Modifier.PUBLIC), typeElement.asType(), null));
+        }
+
+        for (Element importElement : typeElementMembers) {
             if (!importElement.getModifiers().contains(Modifier.PUBLIC)) {
                 continue;
             }
@@ -324,6 +390,36 @@ public class NodeParser extends AbstractParser<NodeData> {
                 members.add(importElement);
             }
         }
+
+        /*
+         * Sort elements by enclosing type to ensure that duplicate static methods are used from the
+         * most concrete subtype.
+         */
+        Collections.sort(members, new Comparator<Element>() {
+            Map<TypeMirror, Set<String>> cachedQualifiedNames = new HashMap<>();
+
+            public int compare(Element o1, Element o2) {
+                TypeMirror e1 = o1.getEnclosingElement() != null ? o1.getEnclosingElement().asType() : null;
+                TypeMirror e2 = o2.getEnclosingElement() != null ? o2.getEnclosingElement().asType() : null;
+
+                Set<String> e1SuperTypes = getCachedSuperTypes(e1);
+                Set<String> e2SuperTypes = getCachedSuperTypes(e2);
+                return ElementUtils.compareByTypeHierarchy(e1, e1SuperTypes, e2, e2SuperTypes);
+            }
+
+            private Set<String> getCachedSuperTypes(TypeMirror e) {
+                if (e == null) {
+                    return Collections.emptySet();
+                }
+                Set<String> superTypes = cachedQualifiedNames.get(e);
+                if (superTypes == null) {
+                    superTypes = new HashSet<>(ElementUtils.getQualifiedSuperTypeNames(ElementUtils.fromTypeMirror(e)));
+                    cachedQualifiedNames.put(e, superTypes);
+                }
+                return superTypes;
+            }
+        });
+
         return members;
     }
 
@@ -377,15 +473,21 @@ public class NodeParser extends AbstractParser<NodeData> {
                 String name = ElementUtils.firstLetterLowerCase(ElementUtils.getAnnotationValue(String.class, mirror, "name"));
                 TypeMirror type = ElementUtils.getAnnotationValue(TypeMirror.class, mirror, "type");
 
-                NodeFieldData field = new NodeFieldData(typeElement, mirror, new CodeVariableElement(type, name), true);
-                if (name.isEmpty()) {
-                    field.addError(ElementUtils.getAnnotationValue(mirror, "name"), "Field name cannot be empty.");
-                } else if (names.contains(name)) {
-                    field.addError(ElementUtils.getAnnotationValue(mirror, "name"), "Duplicate field name '%s'.", name);
-                }
-                names.add(name);
+                if (type != null) {
+                    NodeFieldData field = new NodeFieldData(typeElement, mirror, new CodeVariableElement(type, name), true);
+                    if (name.isEmpty()) {
+                        field.addError(ElementUtils.getAnnotationValue(mirror, "name"), "Field name cannot be empty.");
+                    } else if (names.contains(name)) {
+                        field.addError(ElementUtils.getAnnotationValue(mirror, "name"), "Duplicate field name '%s'.", name);
+                    }
 
-                fields.add(field);
+                    names.add(name);
+
+                    fields.add(field);
+                } else {
+                    // Type is null here. This indicates that the type could not be resolved.
+                    // The Java compiler will subsequently raise the appropriate error.
+                }
             }
         }
 
@@ -396,10 +498,11 @@ public class NodeParser extends AbstractParser<NodeData> {
         return fields;
     }
 
+    @SuppressWarnings("deprecation")
     private List<NodeChildData> parseChildren(final List<TypeElement> typeHierarchy, List<? extends Element> elements) {
         Set<String> shortCircuits = new HashSet<>();
         for (ExecutableElement method : ElementFilter.methodsIn(elements)) {
-            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, ShortCircuit.class);
+            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, com.oracle.truffle.api.dsl.ShortCircuit.class);
             if (mirror != null) {
                 shortCircuits.add(ElementUtils.getAnnotationValue(String.class, mirror, "value"));
             }
@@ -478,12 +581,13 @@ public class NodeParser extends AbstractParser<NodeData> {
         return filteredChildren;
     }
 
+    @SuppressWarnings("deprecation")
     private List<NodeExecutionData> parseExecutions(List<NodeFieldData> fields, List<NodeChildData> children, List<? extends Element> elements) {
         // pre-parse short circuits
         Set<String> shortCircuits = new HashSet<>();
         List<ExecutableElement> methods = ElementFilter.methodsIn(elements);
         for (ExecutableElement method : methods) {
-            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, ShortCircuit.class);
+            AnnotationMirror mirror = ElementUtils.findAnnotationMirror(processingEnv, method, com.oracle.truffle.api.dsl.ShortCircuit.class);
             if (mirror != null) {
                 shortCircuits.add(ElementUtils.getAnnotationValue(String.class, mirror, "value"));
             }
@@ -681,8 +785,8 @@ public class NodeParser extends AbstractParser<NodeData> {
 
         // no generic executes
         if (!genericFound) {
-            node.addError("No accessible and overridable generic execute method found. Generic execute methods usually have the "
-                            + "signature 'public abstract {Type} execute(VirtualFrame)' and must not throw any checked exceptions.");
+            node.addError("No accessible and overridable generic execute method found. Generic execute methods usually have the " +
+                            "signature 'public abstract {Type} execute(VirtualFrame)' and must not throw any checked exceptions.");
         }
 
         int nodeChildDeclarations = 0;
@@ -704,8 +808,8 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
 
         if (!requireNodeChildDeclarations.isEmpty()) {
-            node.addError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. "
-                            + "The following execute methods do not provide all evaluated values for the expected signature size %s: %s.", executions.size(), requireNodeChildDeclarations);
+            node.addError("Not enough child node declarations found. Please annotate the node class with addtional @NodeChild annotations or remove all execute methods that do not provide all evaluated values. " +
+                            "The following execute methods do not provide all evaluated values for the expected signature size %s: %s.", executions.size(), requireNodeChildDeclarations);
         }
 
         if (nodeChildDeclarations > 0 && executions.size() == node.getMinimalEvaluatedParameters()) {
@@ -829,12 +933,12 @@ public class NodeParser extends AbstractParser<NodeData> {
         initializeOrder(node);
         initializePolymorphism(node); // requires specializations
         initializeReachability(node);
-        initializeContains(node);
-        resolveContains(node);
+        initializeReplaces(node);
+        resolveReplaces(node);
 
         List<SpecializationData> specializations = node.getSpecializations();
         for (SpecializationData cur : specializations) {
-            for (SpecializationData contained : cur.getContains()) {
+            for (SpecializationData contained : cur.getReplaces()) {
                 if (contained != cur) {
                     contained.getExcludedBy().add(cur);
                 }
@@ -892,25 +996,27 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    private static void initializeContains(NodeData node) {
+    private static void initializeReplaces(NodeData node) {
         for (SpecializationData specialization : node.getSpecializations()) {
-            Set<SpecializationData> resolvedSpecializations = specialization.getContains();
+            Set<SpecializationData> resolvedSpecializations = specialization.getReplaces();
             resolvedSpecializations.clear();
-            Set<String> includeNames = specialization.getContainsNames();
+            Set<String> includeNames = specialization.getReplacesNames();
             for (String includeName : includeNames) {
                 // TODO reduce complexity of this lookup.
                 SpecializationData foundSpecialization = lookupSpecialization(node, includeName);
 
+                AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "replaces");
+                if (value == null) {
+                    // TODO remove if deprecated api was removed.
+                    value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
+                }
                 if (foundSpecialization == null) {
-                    AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
                     specialization.addError(value, "The referenced specialization '%s' could not be found.", includeName);
                 } else {
                     if (foundSpecialization.compareTo(specialization) > 0) {
-                        AnnotationValue value = ElementUtils.getAnnotationValue(specialization.getMarkerAnnotation(), "contains");
                         if (foundSpecialization.compareTo(specialization) > 0) {
-                            specialization.addError(value, "The contained specialization '%s' must be declared before the containing specialization.", includeName);
+                            specialization.addError(value, "The replaced specialization '%s' must be declared before the replacing specialization.", includeName);
                         }
-
                     }
                     resolvedSpecializations.add(foundSpecialization);
                 }
@@ -918,15 +1024,15 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
-    private void resolveContains(NodeData node) {
+    private void resolveReplaces(NodeData node) {
         // flatten transitive includes
         for (SpecializationData specialization : node.getSpecializations()) {
-            if (specialization.getContains().isEmpty()) {
+            if (specialization.getReplaces().isEmpty()) {
                 continue;
             }
             Set<SpecializationData> foundSpecializations = new HashSet<>();
             collectIncludes(specialization, foundSpecializations, new HashSet<SpecializationData>());
-            specialization.getContains().addAll(foundSpecializations);
+            specialization.getReplaces().addAll(foundSpecializations);
         }
     }
 
@@ -944,12 +1050,12 @@ public class NodeParser extends AbstractParser<NodeData> {
     private void collectIncludes(SpecializationData specialization, Set<SpecializationData> found, Set<SpecializationData> visited) {
         if (visited.contains(specialization)) {
             // circle found
-            specialization.addError("Circular contained specialization '%s' found.", specialization.createReferenceName());
+            specialization.addError("Circular replaced specialization '%s' found.", specialization.createReferenceName());
             return;
         }
         visited.add(specialization);
 
-        for (SpecializationData included : specialization.getContains()) {
+        for (SpecializationData included : specialization.getReplaces()) {
             collectIncludes(included, found, new HashSet<>(visited));
             found.add(included);
         }
@@ -1084,6 +1190,7 @@ public class NodeParser extends AbstractParser<NodeData> {
             initializeLimit(specialization, resolver);
             initializeAssumptions(specialization, resolver);
         }
+
     }
 
     private void initializeAssumptions(SpecializationData specialization, DSLExpressionResolver resolver) {
@@ -1111,6 +1218,7 @@ public class NodeParser extends AbstractParser<NodeData> {
                 assumptionExpression.addError("Error parsing expression '%s': %s", assumption, e.getMessage());
             }
             assumptionExpressions.add(assumptionExpression);
+            assumptionId++;
         }
         specialization.setAssumptionExpressions(assumptionExpressions);
     }
@@ -1227,7 +1335,7 @@ public class NodeParser extends AbstractParser<NodeData> {
 
     private static List<Element> filterNotAccessibleElements(TypeElement templateType, List<? extends Element> elements) {
         String packageName = ElementUtils.getPackageName(templateType);
-        List<Element> filteredElements = new ArrayList<>(elements);
+        List<Element> filteredElements = newElementList(elements);
         for (Element element : elements) {
             Modifier visibility = ElementUtils.getVisibility(element.getModifiers());
             if (visibility == Modifier.PRIVATE) {
@@ -1404,6 +1512,7 @@ public class NodeParser extends AbstractParser<NodeData> {
         node.getSpecializations().add(polymorphic);
     }
 
+    @SuppressWarnings("deprecation")
     private void initializeShortCircuits(NodeData node) {
         Map<String, List<ShortCircuitData>> groupedShortCircuits = groupShortCircuits(node.getShortCircuits());
 
@@ -1418,7 +1527,7 @@ public class NodeParser extends AbstractParser<NodeData> {
             List<ShortCircuitData> availableCircuits = groupedShortCircuits.get(valueName);
 
             if (availableCircuits == null || availableCircuits.isEmpty()) {
-                node.addError("@%s method for short cut value '%s' required.", ShortCircuit.class.getSimpleName(), valueName);
+                node.addError("@%s method for short cut value '%s' required.", com.oracle.truffle.api.dsl.ShortCircuit.class.getSimpleName(), valueName);
                 valid = false;
                 continue;
             }
@@ -1448,7 +1557,7 @@ public class NodeParser extends AbstractParser<NodeData> {
             }
 
             if (genericCircuit == null) {
-                node.addError("No generic @%s method available for short cut value '%s'.", ShortCircuit.class.getSimpleName(), valueName);
+                node.addError("No generic @%s method available for short cut value '%s'.", com.oracle.truffle.api.dsl.ShortCircuit.class.getSimpleName(), valueName);
                 valid = false;
                 continue;
             }
@@ -1550,6 +1659,15 @@ public class NodeParser extends AbstractParser<NodeData> {
         }
     }
 
+    /**
+     * @see "https://bugs.openjdk.java.net/browse/JDK-8039214"
+     */
+    @SuppressWarnings("unused")
+    private static List<Element> newElementList(List<? extends Element> src) {
+        List<Element> workaround = new ArrayList<Element>(src);
+        return workaround;
+    }
+
     private static void verifyMissingAbstractMethods(NodeData nodeData, List<? extends Element> originalElements) {
         if (!nodeData.needsFactory()) {
             // missing abstract methods only needs to be implemented
@@ -1557,7 +1675,7 @@ public class NodeParser extends AbstractParser<NodeData> {
             return;
         }
 
-        List<Element> elements = new ArrayList<>(originalElements);
+        List<Element> elements = newElementList(originalElements);
         Set<Element> unusedElements = new HashSet<>(elements);
         for (ExecutableElement method : nodeData.getAllTemplateMethods()) {
             unusedElements.remove(method);
