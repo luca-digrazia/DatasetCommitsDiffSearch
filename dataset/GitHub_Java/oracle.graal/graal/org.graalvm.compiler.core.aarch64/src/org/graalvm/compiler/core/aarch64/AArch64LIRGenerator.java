@@ -59,6 +59,7 @@ import org.graalvm.compiler.lir.gen.LIRGenerator;
 import org.graalvm.compiler.phases.util.Providers;
 
 import jdk.vm.ci.aarch64.AArch64Kind;
+import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
@@ -124,13 +125,21 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
+    public Variable emitLogicCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
         Variable prevValue = newVariable(expectedValue.getValueKind());
         Variable scratch = newVariable(LIRKind.value(AArch64Kind.DWORD));
         append(new CompareAndSwapOp(prevValue, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
         assert trueValue.getValueKind().equals(falseValue.getValueKind());
         Variable result = newVariable(trueValue.getValueKind());
         append(new CondMoveOp(result, ConditionFlag.EQ, asAllocatable(trueValue), asAllocatable(falseValue)));
+        return result;
+    }
+
+    @Override
+    public Variable emitValueCompareAndSwap(Value address, Value expectedValue, Value newValue) {
+        Variable result = newVariable(newValue.getValueKind());
+        Variable scratch = newVariable(LIRKind.value(AArch64Kind.WORD));
+        append(new CompareAndSwapOp(result, loadNonCompareConst(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
         return result;
     }
 
@@ -277,23 +286,25 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         boolean mirrored;
         AArch64Kind kind = (AArch64Kind) cmpKind;
         if (kind.isInteger()) {
+            Value aExt = a;
+            Value bExt = b;
 
             int compareBytes = cmpKind.getSizeInBytes();
-            // AArch64 compares 32 or 64 bits
+            // AArch64 compares 32 or 64 bits: sign extend a and b as required.
             if (compareBytes < a.getPlatformKind().getSizeInBytes()) {
-                a = arithmeticLIRGen.emitSignExtend(a, compareBytes * 8, 64);
+                aExt = arithmeticLIRGen.emitSignExtend(a, compareBytes * 8, 64);
             }
             if (compareBytes < b.getPlatformKind().getSizeInBytes()) {
-                b = arithmeticLIRGen.emitSignExtend(b, compareBytes * 8, 64);
+                bExt = arithmeticLIRGen.emitSignExtend(b, compareBytes * 8, 64);
             }
 
-            if (LIRValueUtil.isVariable(b)) {
-                left = load(b);
-                right = loadNonConst(a);
+            if (LIRValueUtil.isVariable(bExt)) {
+                left = load(bExt);
+                right = loadNonConst(aExt);
                 mirrored = true;
             } else {
-                left = load(a);
-                right = loadNonConst(b);
+                left = load(aExt);
+                right = loadNonConst(bExt);
                 mirrored = false;
             }
             append(new AArch64Compare.CompareOp(left, loadNonCompareConst(right)));
@@ -458,4 +469,6 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     public void emitPause() {
         append(new AArch64PauseOp());
     }
+
+    public abstract void emitCCall(long address, CallingConvention nativeCallingConvention, Value[] args);
 }

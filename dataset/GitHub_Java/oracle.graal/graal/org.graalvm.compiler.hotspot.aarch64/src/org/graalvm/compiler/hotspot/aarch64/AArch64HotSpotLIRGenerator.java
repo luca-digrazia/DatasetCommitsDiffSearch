@@ -29,18 +29,17 @@ import static org.graalvm.compiler.lir.LIRValueUtil.isConstantValue;
 import java.util.function.Function;
 
 import org.graalvm.compiler.asm.Label;
+import org.graalvm.compiler.asm.NumUtil;
 import org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler.ConditionFlag;
 import org.graalvm.compiler.core.aarch64.AArch64ArithmeticLIRGenerator;
 import org.graalvm.compiler.core.aarch64.AArch64LIRGenerator;
-import org.graalvm.compiler.core.aarch64.AArch64LIRKindTool;
-import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.LIRKind;
-import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.spi.ForeignCallLinkage;
 import org.graalvm.compiler.core.common.spi.LIRKindTool;
 import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.compiler.hotspot.CompressEncoding;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotBackend;
 import org.graalvm.compiler.hotspot.HotSpotDebugInfoBuilder;
@@ -94,7 +93,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     private HotSpotDebugInfoBuilder debugInfoBuilder;
 
     protected AArch64HotSpotLIRGenerator(HotSpotProviders providers, GraalHotSpotVMConfig config, LIRGenerationResult lirGenRes) {
-        this(new AArch64LIRKindTool(), new AArch64ArithmeticLIRGenerator(), new AArch64HotSpotMoveFactory(), providers, config, lirGenRes);
+        this(new AArch64HotSpotLIRKindTool(), new AArch64ArithmeticLIRGenerator(), new AArch64HotSpotMoveFactory(), providers, config, lirGenRes);
     }
 
     protected AArch64HotSpotLIRGenerator(LIRKindTool lirKindTool, AArch64ArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, HotSpotProviders providers, GraalHotSpotVMConfig config,
@@ -145,6 +144,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
         append(new AArch64CCall(nativeCallingConvention.getReturn(), ptr, argLocations));
     }
 
+    @Override
     public SaveRegistersOp emitSaveAllRegisters() {
         throw GraalError.unimplemented();
     }
@@ -209,8 +209,8 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
             // metaspace pointer
             Variable result = newVariable(LIRKind.value(AArch64Kind.DWORD));
             AllocatableValue base = Value.ILLEGAL;
-            if (encoding.hasBase()) {
-                base = emitLoadConstant(LIRKind.value(AArch64Kind.QWORD), JavaConstant.forLong(encoding.getBase()));
+            if (encoding.base != 0) {
+                base = emitLoadConstant(LIRKind.value(AArch64Kind.QWORD), JavaConstant.forLong(encoding.base));
             }
             append(new AArch64HotSpotMove.CompressPointer(result, asAllocatable(pointer), base, encoding, nonNull));
             return result;
@@ -230,8 +230,8 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
             // metaspace pointer
             Variable result = newVariable(LIRKind.value(AArch64Kind.QWORD));
             AllocatableValue base = Value.ILLEGAL;
-            if (encoding.hasBase()) {
-                base = emitLoadConstant(LIRKind.value(AArch64Kind.QWORD), JavaConstant.forLong(encoding.getBase()));
+            if (encoding.base != 0) {
+                base = emitLoadConstant(LIRKind.value(AArch64Kind.QWORD), JavaConstant.forLong(encoding.base));
             }
             append(new AArch64HotSpotMove.UncompressPointer(result, asAllocatable(pointer), base, encoding, nonNull));
             return result;
