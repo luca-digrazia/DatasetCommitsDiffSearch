@@ -81,7 +81,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
     private static final RegisterValue RCX_I = AMD64.rcx.asValue(LIRKind.value(Kind.Int));
 
-    private class AMD64SpillMoveFactory implements LIRGeneratorTool.SpillMoveFactory {
+    private class AMD64SpillMoveFactory implements LIR.SpillMoveFactory {
 
         @Override
         public LIRInstruction createMove(AllocatableValue result, Value input) {
@@ -89,15 +89,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    private final SpillMoveFactory spillMoveFactory;
-
     public AMD64LIRGenerator(LIRKindTool lirKindTool, Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
         super(lirKindTool, providers, cc, lirGenRes);
-        spillMoveFactory = new AMD64SpillMoveFactory();
-    }
-
-    public SpillMoveFactory getSpillMoveFactory() {
-        return spillMoveFactory;
+        lirGenRes.getLIR().setSpillMoveFactory(new AMD64SpillMoveFactory());
     }
 
     @Override
