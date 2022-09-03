@@ -38,7 +38,7 @@ public abstract class DebugValue implements Comparable<DebugValue> {
         this.conditional = conditional;
     }
 
-    public long getCurrentValue() {
+    protected long getCurrentValue() {
         ensureInitialized();
         return DebugScope.getInstance().getCurrentValue(index);
     }
@@ -81,7 +81,6 @@ public abstract class DebugValue implements Comparable<DebugValue> {
         return name;
     }
 
-    @Override
     public int compareTo(DebugValue o) {
         return name.compareTo(o.name);
     }
@@ -92,14 +91,4 @@ public abstract class DebugValue implements Comparable<DebugValue> {
     }
 
     public abstract String toString(long value);
-
-    /**
-     * The raw unit of the value (e.g. 'us', 'ms'). Use {@code null} if there is no unit.
-     */
-    public abstract String rawUnit();
-
-    /**
-     * The raw value.
-     */
-    public abstract String toRawString(long value);
 }
