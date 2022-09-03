@@ -298,7 +298,7 @@ public final class JavaInterop {
         private final TruffleObject symbol;
         private CallTarget target;
 
-        SingleHandler(TruffleObject obj) {
+        public SingleHandler(TruffleObject obj) {
             this.symbol = obj;
         }
 
@@ -318,7 +318,7 @@ public final class JavaInterop {
     private static final class TruffleHandler implements InvocationHandler {
         private final TruffleObject obj;
 
-        TruffleHandler(TruffleObject obj) {
+        public TruffleHandler(TruffleObject obj) {
             this.obj = obj;
         }
 
@@ -502,7 +502,7 @@ public final class JavaInterop {
         private final TruffleObject function;
 
         @SuppressWarnings("rawtypes")
-        TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function) {
+        public TemporaryRoot(Class<? extends TruffleLanguage> lang, Node foreignAccess, TruffleObject function) {
             super(lang, null, null);
             this.foreignAccess = foreignAccess;
             this.function = function;
@@ -519,7 +519,7 @@ public final class JavaInterop {
         final Method method;
         final Object obj;
 
-        JavaFunctionObject(Method method, Object obj) {
+        public JavaFunctionObject(Method method, Object obj) {
             this.method = method;
             this.obj = obj;
         }
@@ -537,7 +537,7 @@ public final class JavaInterop {
         final Object obj;
         final Class<?> clazz;
 
-        JavaObject(Object obj, Class<?> clazz) {
+        public JavaObject(Object obj, Class<?> clazz) {
             this.obj = obj;
             this.clazz = clazz;
         }
