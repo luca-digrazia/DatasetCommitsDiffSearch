@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,134 +27,103 @@ import static com.oracle.graal.api.code.ValueUtil.*;
 import java.util.*;
 
 import com.oracle.graal.api.code.*;
-import com.oracle.graal.api.code.CallingConvention.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.max.asm.*;
+import com.oracle.graal.asm.*;
 
 /**
- * This class is used to build the stack frame layout for a compiled method.
- * A {@link StackSlot} is used to index slots of the frame relative to the stack pointer.
- * The frame size is only fixed after register allocation when all spill slots have
- * been allocated. Both the outgoing argument area and the spill are can grow until then.
- * Therefore, outgoing arguments are indexed from the stack pointer, while spill slots
- * are indexed from the beginning of the frame (and the total frame size has to be added
- * to get the actual offset from the stack pointer).
- * <br>
- * This is the format of a stack frame:
- * <pre>
- *   Base       Contents
- *
- *            :                                :  -----
- *   caller   | incoming overflow argument n   |    ^
- *   frame    :     ...                        :    | positive
- *            | incoming overflow argument 0   |    | offsets
- *   ---------+--------------------------------+---------------------
- *            | return address                 |    |            ^
- *   current  +--------------------------------+    |            |    -----
- *   frame    |                                |    |            |      ^
- *            : callee save area               :    |            |      |
- *            |                                |    |            |      |
- *            +--------------------------------+    |            |      |
- *            | spill slot 0                   |    | negative   |      |
- *            :     ...                        :    v offsets    |      |
- *            | spill slot n                   |  -----        total  frame
- *            +--------------------------------+               frame  size
- *            | alignment padding              |               size     |
- *            +--------------------------------+  -----          |      |
- *            | outgoing overflow argument n   |    ^            |      |
- *            :     ...                        :    | positive   |      |
- *            | outgoing overflow argument 0   |    | offsets    v      v
- *    %sp-->  +--------------------------------+---------------------------
- *
- * </pre>
- * The spill slot area also includes stack allocated memory blocks (ALLOCA blocks). The size
- * of such a block may be greater than the size of a normal spill slot or the word size.
- * <br>
- * A runtime has two ways to reserve space in the stack frame for its own use: <ul>
- * <li>A memory block somewhere in the frame of size {@link CodeCacheProvider#getCustomStackAreaSize()}. The offset
- *     to this block is returned in {@link CompilationResult#customStackAreaOffset()}.
- * <li>At the beginning of the overflow argument area: The calling convention can specify that the first
- *     overflow stack argument is not at offset 0, but at a specified offset o. Use
- *     {@link CodeCacheProvider#getMinimumOutgoingSize()} to make sure that call-free methods also have this space
- *     reserved. Then the VM can use memory the memory at offset 0 relative to the stack pointer.
- * </ul>
+ * This class is used to build the stack frame layout for a compiled method. A {@link StackSlot} is
+ * used to index slots of the frame relative to the stack pointer. The frame size is only fixed
+ * after register allocation when all spill slots have been allocated. Both the outgoing argument
+ * area and the spill are can grow until then. Therefore, outgoing arguments are indexed from the
+ * stack pointer, while spill slots are indexed from the beginning of the frame (and the total frame
+ * size has to be added to get the actual offset from the stack pointer).
  */
-public final class FrameMap {
-    public final CodeCacheProvider runtime;
-    public final TargetDescription target;
-    public final RegisterConfig registerConfig;
+public abstract class FrameMap {
+
+    private final TargetDescription target;
+    private final RegisterConfig registerConfig;
 
     /**
-     * The initial frame size, not including the size of the return address.
-     * This is the constant space reserved by the runtime for all compiled methods.
-     */
-    public final int initialFrameSize;
-
-    /**
-     * The final frame size, not including the size of the return address.
-     * The value is only set after register allocation is complete, i.e., after all spill slots have been allocated.
+     * The final frame size, not including the size of the
+     * {@link Architecture#getReturnAddressSize() return address slot}. The value is only set after
+     * register allocation is complete, i.e., after all spill slots have been allocated.
      */
     private int frameSize;
 
     /**
+     * Initial size of the area occupied by spill slots and other stack-allocated memory blocks.
+     */
+    protected int initialSpillSize;
+
+    /**
      * Size of the area occupied by spill slots and other stack-allocated memory blocks.
      */
-    private int spillSize;
+    protected int spillSize;
 
     /**
-     * Size of the area occupied by outgoing overflow arguments.
-     * This value is adjusted as calling conventions for outgoing calls are retrieved.
+     * Size of the area occupied by outgoing overflow arguments. This value is adjusted as calling
+     * conventions for outgoing calls are retrieved. On some platforms, there is a minimum outgoing
+     * size even if no overflow arguments are on the stack.
      */
-    private int outgoingSize;
+    protected int outgoingSize;
 
     /**
-     * The list of stack areas allocated in this frame that are present in every reference map.
+     * Determines if this frame has values on the stack for outgoing calls.
      */
-    private final List<StackSlot> objectStackBlocks;
+    private boolean hasOutgoingStackArguments;
 
     /**
-     * The stack area reserved for use by the VM, or {@code null} if the VM does not request stack space.
+     * The list of stack slots allocated in this frame that are present in every reference map.
      */
-    private final StackSlot customArea;
+    private final List<StackSlot> objectStackSlots;
 
     /**
-     * Records whether an offset to an incoming stack argument was ever returned by {@link #offsetForStackSlot(StackSlot)}.
+     * Records whether an offset to an incoming stack argument was ever returned by
+     * {@link #offsetForStackSlot(StackSlot)}.
      */
     private boolean accessesCallerFrame;
 
     /**
-     * Creates a new frame map for the specified method.
+     * Creates a new frame map for the specified method. The given registerConfig is optional, in
+     * case null is passed the default RegisterConfig from the CodeCacheProvider will be used.
      */
-    public FrameMap(CodeCacheProvider runtime, TargetDescription target, RegisterConfig registerConfig) {
-        this.runtime = runtime;
-        this.target = target;
-        this.registerConfig = registerConfig;
+    public FrameMap(CodeCacheProvider codeCache, RegisterConfig registerConfig) {
+        this.target = codeCache.getTarget();
+        this.registerConfig = registerConfig == null ? codeCache.getRegisterConfig() : registerConfig;
         this.frameSize = -1;
-        this.spillSize = returnAddressSize() + calleeSaveAreaSize();
-        this.outgoingSize = runtime.getMinimumOutgoingSize();
-        this.objectStackBlocks = new ArrayList<>();
-        this.customArea = allocateStackBlock(runtime.getCustomStackAreaSize(), false);
-        this.initialFrameSize = currentFrameSize();
+        this.outgoingSize = codeCache.getMinimumOutgoingSize();
+        this.objectStackSlots = new ArrayList<>();
     }
 
-    private int returnAddressSize() {
-        return target.arch.returnAddressSize;
+    public RegisterConfig getRegisterConfig() {
+        return registerConfig;
     }
 
-    private int calleeSaveAreaSize() {
-        CalleeSaveLayout csl = registerConfig.getCalleeSaveLayout();
+    public TargetDescription getTarget() {
+        return target;
+    }
+
+    protected int returnAddressSize() {
+        return getTarget().arch.getReturnAddressSize();
+    }
+
+    protected int calleeSaveAreaSize() {
+        CalleeSaveLayout csl = getRegisterConfig().getCalleeSaveLayout();
         return csl != null ? csl.size : 0;
     }
 
     /**
-     * Determines if an offset to an incoming stack argument was ever returned by {@link #offsetForStackSlot(StackSlot)}.
+     * Determines if an offset to an incoming stack argument was ever returned by
+     * {@link #offsetForStackSlot(StackSlot)}.
      */
     public boolean accessesCallerFrame() {
         return accessesCallerFrame;
     }
 
     /**
-     * Gets the frame size of the compiled frame, not including the size of the return address.
+     * Gets the frame size of the compiled frame, not including the size of the
+     * {@link Architecture#getReturnAddressSize() return address slot}.
+     *
      * @return The size of the frame (in bytes).
      */
     public int frameSize() {
@@ -162,156 +131,232 @@ public final class FrameMap {
         return frameSize;
     }
 
+    public int outgoingSize() {
+        return outgoingSize;
+    }
+
     /**
-     * Gets the total frame size of the compiled frame, including the size of the return address.
+     * Determines if any space is used in the frame apart from the
+     * {@link Architecture#getReturnAddressSize() return address slot}.
+     */
+    public boolean frameNeedsAllocating() {
+        int unalignedFrameSize = spillSize - returnAddressSize();
+        return hasOutgoingStackArguments || unalignedFrameSize != 0;
+    }
+
+    /**
+     * Gets the total frame size of the compiled frame, including the size of the
+     * {@link Architecture#getReturnAddressSize() return address slot}.
+     *
      * @return The total size of the frame (in bytes).
      */
-    public int totalFrameSize() {
-        return frameSize() + returnAddressSize();
-    }
+    public abstract int totalFrameSize();
 
     /**
      * Gets the current size of this frame. This is the size that would be returned by
      * {@link #frameSize()} if {@link #finish()} were called now.
      */
-    public int currentFrameSize() {
-        return target.alignFrameSize(outgoingSize + spillSize - returnAddressSize());
-    }
+    public abstract int currentFrameSize();
 
     /**
-     * Computes the final size of this frame. After this method has been called, methods that change the
-     * frame size cannot be called anymore, e.g., no more spill slots or outgoing arguments can be requested.
+     * Aligns the given frame size to the stack alignment size and return the aligned size.
+     *
+     * @param size the initial frame size to be aligned
+     * @return the aligned frame size
+     */
+    protected abstract int alignFrameSize(int size);
+
+    /**
+     * Computes the final size of this frame. After this method has been called, methods that change
+     * the frame size cannot be called anymore, e.g., no more spill slots or outgoing arguments can
+     * be requested.
      */
     public void finish() {
         assert this.frameSize == -1 : "must only be set once";
+        if (freedSlots != null) {
+            // If the freed slots cover the complete spill area (except for the return
+            // address slot), then the spill size is reset to its initial value.
+            // Without this, frameNeedsAllocating() would never return true.
+            int total = 0;
+            for (StackSlot s : freedSlots) {
+                total += getTarget().getSizeInBytes(s.getKind());
+            }
+            if (total == spillSize - initialSpillSize) {
+                // reset spill area size
+                spillSize = initialSpillSize;
+            }
+            freedSlots = null;
+        }
         frameSize = currentFrameSize();
+        if (frameSize > getRegisterConfig().getMaximumFrameSize()) {
+            throw new BailoutException("Frame size (%d) exceeded maximum allowed frame size (%d).", frameSize, getRegisterConfig().getMaximumFrameSize());
+        }
     }
 
     /**
      * Computes the offset of a stack slot relative to the frame register.
-     * This is also the bit index of stack slots in the reference map.
      *
      * @param slot a stack slot
      * @return the offset of the stack slot
      */
     public int offsetForStackSlot(StackSlot slot) {
-        assert (!slot.rawAddFrameSize() && slot.rawOffset() < outgoingSize) ||
-            (slot.rawAddFrameSize() && slot.rawOffset() < 0 && -slot.rawOffset() <= spillSize) ||
-            (slot.rawAddFrameSize() && slot.rawOffset() >= 0);
-        if (slot.inCallerFrame()) {
+        // @formatter:off
+        assert (!slot.getRawAddFrameSize() && slot.getRawOffset() <  outgoingSize) ||
+               ( slot.getRawAddFrameSize() && slot.getRawOffset() <  0 && -slot.getRawOffset() <= spillSize) ||
+               ( slot.getRawAddFrameSize() && slot.getRawOffset() >= 0) :
+                   String.format("RawAddFrameSize: %b RawOffset: 0x%x spillSize: 0x%x outgoingSize: 0x%x", slot.getRawAddFrameSize(), slot.getRawOffset(), spillSize, outgoingSize);
+        // @formatter:on
+        if (slot.isInCallerFrame()) {
             accessesCallerFrame = true;
         }
-        return slot.offset(totalFrameSize());
+        return slot.getOffset(totalFrameSize());
     }
 
     /**
-     * Gets the offset to the stack area where callee-saved registers are stored.
+     * Gets the offset from the stack pointer to the stack area where callee-saved registers are
+     * stored.
+     *
      * @return The offset to the callee save area (in bytes).
      */
-    public int offsetToCalleeSaveArea() {
-        return frameSize() - calleeSaveAreaSize();
-    }
+    public abstract int offsetToCalleeSaveArea();
 
     /**
-     * Gets the offset of the stack area stack block reserved for use by the VM, or -1 if the VM does not request stack space.
-     * @return The offset to the custom area (in bytes).
-     */
-    public int offsetToCustomArea() {
-        return customArea == null ? -1 : offsetForStackSlot(customArea);
-    }
-
-    /**
-     * Informs the frame map that the compiled code calls a particular method, which
-     * may need stack space for outgoing arguments.
+     * Informs the frame map that the compiled code calls a particular method, which may need stack
+     * space for outgoing arguments.
+     *
      * @param cc The calling convention for the called method.
-     * @param type The type of calling convention.
      */
-    public void callsMethod(CallingConvention cc, Type type) {
-        // TODO look at the actual stack offsets?
-        assert type.out;
-        reserveOutgoing(cc.stackSize);
+    public void callsMethod(CallingConvention cc) {
+        reserveOutgoing(cc.getStackSize());
     }
 
     /**
      * Reserves space for stack-based outgoing arguments.
+     *
      * @param argsSize The amount of space (in bytes) to reserve for stack-based outgoing arguments.
      */
     public void reserveOutgoing(int argsSize) {
         assert frameSize == -1 : "frame size must not yet be fixed";
         outgoingSize = Math.max(outgoingSize, argsSize);
-    }
-
-    private StackSlot getSlot(Kind kind, int additionalOffset) {
-        return StackSlot.get(kind, -spillSize + additionalOffset, true);
+        hasOutgoingStackArguments = hasOutgoingStackArguments || argsSize > 0;
     }
 
     /**
-     * Reserves a spill slot in the frame of the method being compiled. The returned slot is aligned on its natural alignment,
-     * i.e., an 8-byte spill slot is aligned at an 8-byte boundary.
+     * Reserves a new spill slot in the frame of the method being compiled. The returned slot is
+     * aligned on its natural alignment, i.e., an 8-byte spill slot is aligned at an 8-byte
+     * boundary.
+     *
+     * @param kind The kind of the spill slot to be reserved.
+     * @param additionalOffset
+     * @return A spill slot denoting the reserved memory area.
+     */
+    protected abstract StackSlot allocateNewSpillSlot(LIRKind kind, int additionalOffset);
+
+    /**
+     * Returns the spill slot size for the given {@link LIRKind}. The default value is the size in
+     * bytes for the target architecture.
+     *
+     * @param kind the {@link LIRKind} to be stored in the spill slot.
+     * @return the size in bytes
+     */
+    public int spillSlotSize(LIRKind kind) {
+        return getTarget().getSizeInBytes(kind.getPlatformKind());
+    }
+
+    /**
+     * Reserves a spill slot in the frame of the method being compiled. The returned slot is aligned
+     * on its natural alignment, i.e., an 8-byte spill slot is aligned at an 8-byte boundary, unless
+     * overridden by a subclass.
+     *
      * @param kind The kind of the spill slot to be reserved.
      * @return A spill slot denoting the reserved memory area.
      */
-    public StackSlot allocateSpillSlot(Kind kind) {
+    public StackSlot allocateSpillSlot(LIRKind kind) {
         assert frameSize == -1 : "frame size must not yet be fixed";
-        int size = target.sizeInBytes(kind);
+        if (freedSlots != null) {
+            for (Iterator<StackSlot> iter = freedSlots.iterator(); iter.hasNext();) {
+                StackSlot s = iter.next();
+                if (s.getLIRKind().equals(kind)) {
+                    iter.remove();
+                    if (freedSlots.isEmpty()) {
+                        freedSlots = null;
+                    }
+                    return s;
+                }
+            }
+        }
+        int size = spillSlotSize(kind);
         spillSize = NumUtil.roundUp(spillSize + size, size);
-        return getSlot(kind, 0);
+        return allocateNewSpillSlot(kind, 0);
+    }
+
+    private Set<StackSlot> freedSlots;
+
+    /**
+     * Frees a spill slot that was obtained via {@link #allocateSpillSlot(LIRKind)} such that it can
+     * be reused for the next allocation request for the same kind of slot.
+     */
+    public void freeSpillSlot(StackSlot slot) {
+        if (freedSlots == null) {
+            freedSlots = new HashSet<>();
+        }
+        freedSlots.add(slot);
     }
 
     /**
-     * Reserves a block of memory in the frame of the method being compiled. The returned block is aligned on a word boundary.
-     * If the requested size is 0, the method returns {@code null}.
+     * Reserves a number of contiguous slots in the frame of the method being compiled. If the
+     * requested number of slots is 0, this method returns {@code null}.
      *
-     * @param size The size to reserve (in bytes).
-     * @param refs Specifies if the block is all references. If true, the block will be in all reference maps for this method.
-     *             The caller is responsible to initialize the memory block before the first instruction that uses a reference map.
-     * @return A stack slot describing the begin of the memory block.
+     * @param slots the number of slots to reserve
+     * @param objects specifies the indexes of the object pointer slots. The caller is responsible
+     *            for guaranteeing that each such object pointer slot is initialized before any
+     *            instruction that uses a reference map. Without this guarantee, the garbage
+     *            collector could see garbage object values.
+     * @param outObjectStackSlots if non-null, the object pointer slots allocated are added to this
+     *            list
+     * @return the first reserved stack slot (i.e., at the lowest address)
      */
-    public StackSlot allocateStackBlock(int size, boolean refs) {
+    public StackSlot allocateStackSlots(int slots, BitSet objects, List<StackSlot> outObjectStackSlots) {
         assert frameSize == -1 : "frame size must not yet be fixed";
-        if (size == 0) {
+        if (slots == 0) {
             return null;
         }
-        spillSize = NumUtil.roundUp(spillSize + size, target.wordSize);
+        spillSize += (slots * getTarget().wordSize);
 
-        if (refs) {
-            assert size % target.wordSize == 0;
-            StackSlot result = getSlot(Kind.Object, 0);
-            objectStackBlocks.add(result);
-            for (int i = target.wordSize; i < size; i += target.wordSize) {
-                objectStackBlocks.add(getSlot(Kind.Object, i));
+        if (!objects.isEmpty()) {
+            assert objects.length() <= slots;
+            StackSlot result = null;
+            for (int slotIndex = 0; slotIndex < slots; slotIndex++) {
+                StackSlot objectSlot = null;
+                if (objects.get(slotIndex)) {
+                    objectSlot = allocateNewSpillSlot(LIRKind.reference(Kind.Object), slotIndex * getTarget().wordSize);
+                    objectStackSlots.add(objectSlot);
+                    if (outObjectStackSlots != null) {
+                        outObjectStackSlots.add(objectSlot);
+                    }
+                }
+                if (slotIndex == 0) {
+                    if (objectSlot != null) {
+                        result = objectSlot;
+                    } else {
+                        result = allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
+                    }
+                }
             }
+            assert result != null;
             return result;
 
         } else {
-            return getSlot(target.wordKind, 0);
+            return allocateNewSpillSlot(LIRKind.value(getTarget().wordKind), 0);
         }
     }
 
-
-    private int frameRefMapIndex(StackSlot slot) {
-        assert offsetForStackSlot(slot) % target.wordSize == 0;
-        return offsetForStackSlot(slot) / target.wordSize;
-    }
-
-    /**
-     * Initializes a reference map that covers all registers of the target architecture.
-     */
-    public BitSet initRegisterRefMap() {
-        return new BitSet(target.arch.registerReferenceMapBitCount);
-    }
-
-    /**
-     * Initializes a reference map. Initially, the size is large enough to cover all the
-     * slots in the frame. If the method has incoming reference arguments on the stack,
-     * the reference map might grow later when such a reference is set.
-     */
-    public BitSet initFrameRefMap() {
-        BitSet frameRefMap = new BitSet(frameSize() / target.wordSize);
-        for (StackSlot slot : objectStackBlocks) {
-            setReference(slot, null, frameRefMap);
+    public ReferenceMap initReferenceMap(boolean hasRegisters) {
+        ReferenceMap refMap = getTarget().createReferenceMap(hasRegisters, frameSize() / getTarget().wordSize);
+        for (StackSlot slot : objectStackSlots) {
+            setReference(slot, refMap);
         }
-        return frameRefMap;
+        return refMap;
     }
 
     /**
@@ -320,43 +365,17 @@ public final class FrameMap {
      * {@link Constant} is automatically tracked.
      *
      * @param location The location to be added to the reference map.
-     * @param registerRefMap A register reference map, as created by {@link #initRegisterRefMap()}.
-     * @param frameRefMap A frame reference map, as created by {@link #initFrameRefMap()}.
+     * @param refMap A reference map, as created by {@link #initReferenceMap(boolean)}.
      */
-    public void setReference(Value location, BitSet registerRefMap, BitSet frameRefMap) {
-        if (location.kind == Kind.Object) {
-            if (isRegister(location)) {
-                registerRefMap.set(asRegister(location).number);
-            } else if (isStackSlot(location)) {
-                int index = frameRefMapIndex(asStackSlot(location));
-                frameRefMap.set(index);
-            } else {
-                assert isConstant(location);
-            }
-        }
-    }
-
-    /**
-     * Clears the specified location as a reference in the reference map of the debug information.
-     * The tracked location can be a {@link RegisterValue} or a {@link StackSlot}. Note that a
-     * {@link Constant} is automatically tracked.
-     *
-     * @param location The location to be removed from the reference map.
-     * @param registerRefMap A register reference map, as created by {@link #initRegisterRefMap()}.
-     * @param frameRefMap A frame reference map, as created by {@link #initFrameRefMap()}.
-     */
-    public void clearReference(Value location, BitSet registerRefMap, BitSet frameRefMap) {
-        if (location.kind == Kind.Object) {
-            if (location instanceof RegisterValue) {
-                registerRefMap.clear(asRegister(location).number);
-            } else if (isStackSlot(location)) {
-                int index = frameRefMapIndex(asStackSlot(location));
-                if (index < frameRefMap.size()) {
-                    frameRefMap.clear(index);
-                }
-            } else {
-                assert isConstant(location);
-            }
+    public void setReference(Value location, ReferenceMap refMap) {
+        LIRKind kind = location.getLIRKind();
+        if (isRegister(location)) {
+            refMap.setRegister(asRegister(location).getReferenceMapIndex(), kind);
+        } else if (isStackSlot(location)) {
+            int offset = offsetForStackSlot(asStackSlot(location));
+            refMap.setStackSlot(offset, kind);
+        } else {
+            assert isConstant(location);
         }
     }
 }

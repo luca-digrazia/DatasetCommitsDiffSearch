@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,33 +22,21 @@
  */
 package com.oracle.graal.lir.amd64;
 
-import static com.oracle.graal.lir.LIRInstruction.OperandFlag.STACK;
-import static jdk.vm.ci.code.ValueUtil.asStackSlot;
-import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static com.oracle.graal.lir.LIRInstruction.OperandFlag.*;
 
-import java.util.Arrays;
-import java.util.Set;
+import java.util.*;
 
-import jdk.vm.ci.amd64.AMD64Kind;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterSaveLayout;
-import jdk.vm.ci.code.StackSlot;
-import jdk.vm.ci.meta.AllocatableValue;
-
-import com.oracle.graal.asm.amd64.AMD64MacroAssembler;
-import com.oracle.graal.lir.LIRInstructionClass;
-import com.oracle.graal.lir.LIRValueUtil;
-import com.oracle.graal.lir.Opcode;
+import com.oracle.graal.api.code.*;
+import com.oracle.graal.asm.amd64.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.SaveRegistersOp;
-import com.oracle.graal.lir.asm.CompilationResultBuilder;
-import com.oracle.graal.lir.framemap.FrameMap;
+import com.oracle.graal.lir.asm.*;
 
 /**
  * Saves registers to stack slots.
  */
 @Opcode("SAVE_REGISTER")
 public class AMD64SaveRegistersOp extends AMD64LIRInstruction implements SaveRegistersOp {
-    public static final LIRInstructionClass<AMD64SaveRegistersOp> TYPE = LIRInstructionClass.create(AMD64SaveRegistersOp.class);
 
     /**
      * The registers (potentially) saved by this operation.
@@ -58,7 +46,7 @@ public class AMD64SaveRegistersOp extends AMD64LIRInstruction implements SaveReg
     /**
      * The slots to which the registers are saved.
      */
-    @Def(STACK) protected final AllocatableValue[] slots;
+    @Def(STACK) protected final StackSlot[] slots;
 
     /**
      * Specifies if {@link #remove(Set)} should have an effect.
@@ -69,36 +57,30 @@ public class AMD64SaveRegistersOp extends AMD64LIRInstruction implements SaveReg
      *
      * @param savedRegisters the registers saved by this operation which may be subject to
      *            {@linkplain #remove(Set) pruning}
-     * @param savedRegisterLocations the slots to which the registers are saved
+     * @param slots the slots to which the registers are saved
      * @param supportsRemove determines if registers can be {@linkplain #remove(Set) pruned}
      */
-    public AMD64SaveRegistersOp(Register[] savedRegisters, AllocatableValue[] savedRegisterLocations, boolean supportsRemove) {
-        this(TYPE, savedRegisters, savedRegisterLocations, supportsRemove);
-    }
-
-    public AMD64SaveRegistersOp(LIRInstructionClass<? extends AMD64SaveRegistersOp> c, Register[] savedRegisters, AllocatableValue[] savedRegisterLocations, boolean supportsRemove) {
-        super(c);
-        assert Arrays.asList(savedRegisterLocations).stream().allMatch(LIRValueUtil::isVirtualStackSlot);
+    public AMD64SaveRegistersOp(Register[] savedRegisters, StackSlot[] slots, boolean supportsRemove) {
         this.savedRegisters = savedRegisters;
-        this.slots = savedRegisterLocations;
+        this.slots = slots;
         this.supportsRemove = supportsRemove;
     }
 
-    protected void saveRegister(CompilationResultBuilder crb, AMD64MacroAssembler masm, StackSlot result, Register input) {
-        AMD64Move.reg2stack((AMD64Kind) result.getPlatformKind(), crb, masm, result, input);
+    protected void saveRegister(CompilationResultBuilder crb, AMD64MacroAssembler masm, StackSlot result, Register register) {
+        RegisterValue input = register.asValue(result.getLIRKind());
+        AMD64Move.move(crb, masm, result, input);
     }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         for (int i = 0; i < savedRegisters.length; i++) {
             if (savedRegisters[i] != null) {
-                assert isStackSlot(slots[i]) : "not a StackSlot: " + slots[i];
-                saveRegister(crb, masm, asStackSlot(slots[i]), savedRegisters[i]);
+                saveRegister(crb, masm, slots[i], savedRegisters[i]);
             }
         }
     }
 
-    public AllocatableValue[] getSlots() {
+    public StackSlot[] getSlots() {
         return slots;
     }
 
@@ -140,8 +122,7 @@ public class AMD64SaveRegistersOp extends AMD64LIRInstruction implements SaveReg
             for (int i = 0; i < savedRegisters.length; i++) {
                 if (savedRegisters[i] != null) {
                     keys[mapIndex] = savedRegisters[i];
-                    assert isStackSlot(slots[i]) : "not a StackSlot: " + slots[i];
-                    StackSlot slot = asStackSlot(slots[i]);
+                    StackSlot slot = slots[i];
                     values[mapIndex] = indexForStackSlot(frameMap, slot);
                     mapIndex++;
                 }

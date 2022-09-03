@@ -32,7 +32,6 @@ import com.oracle.graal.asm.*;
 import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.lir.asm.*;
-import com.oracle.graal.lir.framemap.*;
 
 /**
  * A collection of machine-independent LIR operations, as well as interfaces to be implemented for
@@ -44,24 +43,23 @@ public class StandardOp {
      * A block delimiter. Every well formed block must contain exactly one such operation and it
      * must be the last operation in the block.
      */
-    public interface BlockEndOp {
+    public interface BlockEndOp extends LIRInstruction {
     }
 
-    public interface NullCheck {
+    public interface NullCheck extends LIRInstruction {
         Value getCheckedValue();
 
         LIRFrameState getState();
     }
 
-    public interface ImplicitNullCheck {
+    public interface ImplicitNullCheck extends LIRInstruction {
         boolean makeNullCheckFor(Value value, LIRFrameState nullCheckState, int implicitNullCheckLimit);
     }
 
     /**
      * LIR operation that defines the position of a label.
      */
-    public static final class LabelOp extends LIRInstruction {
-        public static final LIRInstructionClass<LabelOp> TYPE = LIRInstructionClass.create(LabelOp.class);
+    public static class LabelOp extends LIRInstructionBase {
 
         private static final Value[] NO_VALUES = new Value[0];
 
@@ -79,7 +77,6 @@ public class StandardOp {
         private final boolean align;
 
         public LabelOp(Label label, boolean align) {
-            super(TYPE);
             this.label = label;
             this.align = align;
             this.incomingValues = NO_VALUES;
@@ -88,18 +85,6 @@ public class StandardOp {
         public void setIncomingValues(Value[] values) {
             assert incomingValues.length == 0;
             incomingValues = values;
-        }
-
-        public int getIncomingSize() {
-            return incomingValues.length;
-        }
-
-        public Value getIncomingValue(int idx) {
-            return incomingValues[idx];
-        }
-
-        public void clearIncomingValues() {
-            incomingValues = NO_VALUES;
         }
 
         @Override
@@ -118,40 +103,12 @@ public class StandardOp {
     /**
      * LIR operation that is an unconditional jump to a {@link #destination()}.
      */
-    public static class JumpOp extends LIRInstruction implements BlockEndOp {
-        public static final LIRInstructionClass<JumpOp> TYPE = LIRInstructionClass.create(JumpOp.class);
-
-        private static final Value[] NO_VALUES = new Value[0];
-
-        @Alive({REG, STACK, CONST}) private Value[] outgoingValues;
+    public static class JumpOp extends LIRInstructionBase implements BlockEndOp {
 
         private final LabelRef destination;
 
         public JumpOp(LabelRef destination) {
-            this(TYPE, destination);
-            this.outgoingValues = NO_VALUES;
-        }
-
-        protected JumpOp(LIRInstructionClass<? extends JumpOp> c, LabelRef destination) {
-            super(c);
             this.destination = destination;
-        }
-
-        public void setOutgoingValues(Value[] values) {
-            assert outgoingValues.length == 0;
-            outgoingValues = values;
-        }
-
-        public int getOutgoingSize() {
-            return outgoingValues.length;
-        }
-
-        public Value getOutgoingValue(int idx) {
-            return outgoingValues[idx];
-        }
-
-        public void clearOutgoingValues() {
-            outgoingValues = NO_VALUES;
         }
 
         @Override
@@ -176,7 +133,7 @@ public class StandardOp {
      * Marker interface for a LIR operation that moves a value from {@link #getInput()} to
      * {@link #getResult()}.
      */
-    public interface MoveOp {
+    public interface MoveOp extends LIRInstruction {
 
         Value getInput();
 
@@ -188,7 +145,7 @@ public class StandardOp {
      * {@linkplain #remove(Set) pruned} and a mapping from registers to the frame slots in which
      * they are saved can be {@linkplain #getMap(FrameMap) retrieved}.
      */
-    public interface SaveRegistersOp {
+    public interface SaveRegistersOp extends LIRInstruction {
 
         /**
          * Determines if the {@link #remove(Set)} operation is supported for this object.
@@ -220,29 +177,25 @@ public class StandardOp {
      * A LIR operation that does nothing. If the operation records its position, it can be
      * subsequently {@linkplain #replace(LIR, LIRInstruction) replaced}.
      */
-    public static final class NoOp extends LIRInstruction {
-        public static final LIRInstructionClass<NoOp> TYPE = LIRInstructionClass.create(NoOp.class);
+    public static class NoOp extends LIRInstructionBase {
 
         /**
          * The block in which this instruction is located.
          */
-        final AbstractBlockBase<?> block;
+        final AbstractBlock<?> block;
 
         /**
          * The block index of this instruction.
          */
         final int index;
 
-        public NoOp(AbstractBlockBase<?> block, int index) {
-            super(TYPE);
+        public NoOp(AbstractBlock<?> block, int index) {
             this.block = block;
             this.index = index;
         }
 
         public void replace(LIR lir, LIRInstruction replacement) {
-            List<LIRInstruction> instructions = lir.getLIRforBlock(block);
-            assert instructions.get(index).equals(this) : String.format("Replacing the wrong instruction: %s instead of %s", instructions.get(index), this);
-            instructions.set(index, replacement);
+            lir.getLIRforBlock(block).set(index, replacement);
         }
 
         @Override
@@ -252,50 +205,4 @@ public class StandardOp {
             }
         }
     }
-
-    @Opcode("BLACKHOLE")
-    public static final class BlackholeOp extends LIRInstruction {
-        public static final LIRInstructionClass<BlackholeOp> TYPE = LIRInstructionClass.create(BlackholeOp.class);
-
-        @Use({REG, STACK}) private Value value;
-
-        public BlackholeOp(Value value) {
-            super(TYPE);
-            this.value = value;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb) {
-            // do nothing, just keep value alive until at least here
-        }
-    }
-
-    public static final class StackMove extends LIRInstruction implements MoveOp {
-        public static final LIRInstructionClass<StackMove> TYPE = LIRInstructionClass.create(StackMove.class);
-
-        @Def({STACK, HINT}) protected AllocatableValue result;
-        @Use({STACK}) protected Value input;
-
-        public StackMove(AllocatableValue result, Value input) {
-            super(TYPE);
-            this.result = result;
-            this.input = input;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb) {
-            throw new GraalInternalError(this + " should have been removed");
-        }
-
-        @Override
-        public Value getInput() {
-            return input;
-        }
-
-        @Override
-        public AllocatableValue getResult() {
-            return result;
-        }
-    }
-
 }
