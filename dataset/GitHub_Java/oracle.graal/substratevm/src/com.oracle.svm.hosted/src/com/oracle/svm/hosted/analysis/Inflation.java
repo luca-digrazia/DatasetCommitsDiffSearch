@@ -81,6 +81,7 @@ import com.oracle.svm.hosted.analysis.flow.SVMMethodTypeFlowBuilder;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl;
 
@@ -113,20 +114,22 @@ public class Inflation extends BigBang {
     private void setupForbiddenTypes() {
         String[] forbiddenTypesOptionValues = PointstoOptions.ReportAnalysisForbiddenType.getValue(universe.getHostVM().options());
         Map<String, EnumSet<AnalysisType.UsageKind>> forbiddenTypes = new HashMap<>();
+        MetaAccessProvider wrappedMetaAccess = metaAccess.getWrapped();
         for (String forbiddenTypesOptionValue : forbiddenTypesOptionValues) {
-            String[] typeNameUsageKind = forbiddenTypesOptionValue.split(":", 2);
+            String[] splitted = forbiddenTypesOptionValue.split(":", 2);
+            ResolvedJavaType forbiddenType = null;
             EnumSet<AnalysisType.UsageKind> usageKinds;
-            if (typeNameUsageKind.length == 1) {
+            if (splitted.length == 1) {
                 usageKinds = EnumSet.allOf(AnalysisType.UsageKind.class);
             } else {
                 usageKinds = EnumSet.noneOf(AnalysisType.UsageKind.class);
-                String[] usageKindValues = typeNameUsageKind[1].split(",");
+                String[] usageKindValues = splitted[1].split(",");
                 for (String usageKindValue : usageKindValues) {
                     usageKinds.add(AnalysisType.UsageKind.valueOf(usageKindValue));
                 }
 
             }
-            forbiddenTypes.put(typeNameUsageKind[0], usageKinds);
+            forbiddenTypes.put(splitted[0], usageKinds);
         }
         if (!forbiddenTypes.isEmpty()) {
             AnalysisType.setForbiddenTypes(forbiddenTypes);
