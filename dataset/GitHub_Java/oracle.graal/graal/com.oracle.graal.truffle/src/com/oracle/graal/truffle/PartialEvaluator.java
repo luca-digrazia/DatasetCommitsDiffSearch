@@ -294,9 +294,9 @@ public class PartialEvaluator {
             for (ParameterNode param : graphCopy.getNodes(ParameterNode.class).snapshot()) {
                 ValueNode arg = arguments.get(param.index());
                 if (arg.isConstant()) {
-                    Constant constant = arg.asConstant();
+                    JavaConstant constant = arg.asJavaConstant();
                     param.usages().snapshotTo(modifiedNodes);
-                    param.replaceAndDelete(ConstantNode.forConstant(arg.stamp(), constant, phaseContext.getMetaAccess(), graphCopy));
+                    param.replaceAndDelete(ConstantNode.forConstant(constant, phaseContext.getMetaAccess(), graphCopy));
                 } else {
                     ValueNode length = GraphUtil.arrayLength(arg);
                     if (length != null && length.isConstant()) {
@@ -433,7 +433,7 @@ public class PartialEvaluator {
         }
 
         JavaConstant constantCallNode = node.asJavaConstant();
-        Object value = snippetReflection.asObject(Object.class, constantCallNode);
+        Object value = snippetReflection.asObject(constantCallNode);
 
         if (!(value instanceof OptimizedDirectCallNode)) {
             // might be an indirect call.
