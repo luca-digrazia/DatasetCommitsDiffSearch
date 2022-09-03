@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@ import static org.graalvm.compiler.nodes.PiNode.piCastNonNull;
 
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.hotspot.HotSpotBackend;
 import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
@@ -61,6 +60,7 @@ public class CounterModeSubstitutions {
 
         int cntOffset = counterOffset(INJECTED_INTRINSIC_CONTEXT);
         int encCntOffset = encCounterOffset(INJECTED_INTRINSIC_CONTEXT);
+        int usedOffset = usedOffset(INJECTED_INTRINSIC_CONTEXT);
         Object kObject = RawLoadNode.load(aesCipher, AESCryptSubstitutions.kOffset(INJECTED_INTRINSIC_CONTEXT), JavaKind.Object, LocationIdentity.any());
         Object cntObj = RawLoadNode.load(realReceiver, cntOffset, JavaKind.Object, LocationIdentity.any());
         Object encCntObj = RawLoadNode.load(realReceiver, encCntOffset, JavaKind.Object, LocationIdentity.any());
@@ -72,22 +72,23 @@ public class CounterModeSubstitutions {
         return HotSpotBackend.counterModeAESCrypt(srcAddr, dstAddr, kPtr, cntPtr, len, encCntPtr, usedPtr);
     }
 
-    static ResolvedJavaType counterModeType(IntrinsicContext context) {
+    @Fold
+    static ResolvedJavaType counterModeType(@Fold.InjectedParameter IntrinsicContext context) {
         return HotSpotReplacementsUtil.getType(context, "Lcom/sun/crypto/provider/CounterMode;");
     }
 
     @Fold
-    static int counterOffset(@InjectedParameter IntrinsicContext context) {
+    static int counterOffset(@Fold.InjectedParameter IntrinsicContext context) {
         return HotSpotReplacementsUtil.getFieldOffset(counterModeType(context), "counter");
     }
 
     @Fold
-    static int encCounterOffset(@InjectedParameter IntrinsicContext context) {
+    static int encCounterOffset(@Fold.InjectedParameter IntrinsicContext context) {
         return HotSpotReplacementsUtil.getFieldOffset(counterModeType(context), "encryptedCounter");
     }
 
     @Fold
-    static int usedOffset(@InjectedParameter IntrinsicContext context) {
+    static int usedOffset(@Fold.InjectedParameter IntrinsicContext context) {
         return HotSpotReplacementsUtil.getFieldOffset(counterModeType(context), "used");
     }
 }
