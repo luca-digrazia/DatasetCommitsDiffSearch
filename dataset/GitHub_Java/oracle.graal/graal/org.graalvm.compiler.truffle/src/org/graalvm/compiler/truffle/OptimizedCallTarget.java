@@ -42,7 +42,6 @@ import java.util.function.UnaryOperator;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.debug.GraalError;
-import org.graalvm.compiler.truffle.GraalTruffleRuntime.LazyFrameBoxingQuery;
 import org.graalvm.compiler.truffle.debug.AbstractDebugCompilationListener;
 import org.graalvm.compiler.truffle.substitutions.TruffleGraphBuilderPlugins;
 
@@ -89,7 +88,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private volatile int cachedNonTrivialNodeCount = -1;
     private volatile SpeculationLog speculationLog;
     private volatile int callSitesKnown;
-    private volatile CancellableCompileTask compilationTask;
+    private volatile Future<?> compilationTask;
     /**
      * When this call target is inlined, the inlining {@link InstalledCode} registers this
      * assumption. It gets invalidated when a node rewriting is performed. This ensures that all
@@ -242,7 +241,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private synchronized void initialize() {
         if (compilationProfile == null) {
-            if (sourceCallTarget == null && rootNode.isCloningAllowed() && !rootNode.isCloneUninitializedSupported()) {
+            if (sourceCallTarget == null && rootNode.isCloningAllowed()) {
                 // We are the source CallTarget, so make a copy.
                 this.uninitializedRootNode = cloneRootNode(rootNode);
             }
@@ -269,32 +268,23 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
                 return;
             }
 
-            CancellableCompileTask task = null;
+            Future<?> submitted = null;
             // Do not try to compile this target concurrently,
             // but do not block other threads if compilation is not asynchronous.
             synchronized (this) {
                 if (!isCompiling()) {
-                    compilationTask = task = runtime().submitForCompilation(this);
+                    compilationTask = submitted = runtime().submitForCompilation(this);
                 }
             }
-            if (task != null) {
-                Future<?> submitted = task.getFuture();
-                if (submitted != null) {
-                    boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
-                    runtime().finishCompilation(this, submitted, mayBeAsynchronous);
-                }
+            if (submitted != null) {
+                boolean mayBeAsynchronous = TruffleCompilerOptions.getValue(TruffleBackgroundCompilation) && !TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreThrown);
+                runtime().finishCompilation(this, submitted, mayBeAsynchronous);
             }
         }
     }
 
     public final boolean isCompiling() {
-        CancellableCompileTask task = getCompilationTask();
-        if (task != null) {
-            if (task.getFuture() != null) {
-                return true;
-            }
-        }
-        return false;
+        return getCompilationTask() != null;
     }
 
     @Override
@@ -312,12 +302,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     private static RootNode cloneRootNode(RootNode root) {
         assert root.isCloningAllowed();
-        if (root.isCloneUninitializedSupported()) {
-            assert root == null;
-            return root.cloneUninitialized();
-        } else {
-            return NodeUtil.cloneNode(root);
-        }
+        return NodeUtil.cloneNode(root);
     }
 
     OptimizedCallTarget cloneUninitialized() {
@@ -442,7 +427,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
 
     /** Intrinsified in {@link TruffleGraphBuilderPlugins}. */
     public static VirtualFrame createFrame(FrameDescriptor descriptor, Object[] args) {
-        if (LazyFrameBoxingQuery.useFrameWithoutBoxing) {
+        if (GraalTruffleRuntime.useFrameWithoutBoxing) {
             return new FrameWithoutBoxing(descriptor, args);
         } else {
             return new FrameWithBoxing(descriptor, args);
@@ -569,7 +554,7 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
         return System.identityHashCode(this);
     }
 
-    CancellableCompileTask getCompilationTask() {
+    Future<?> getCompilationTask() {
         return compilationTask;
     }
 
