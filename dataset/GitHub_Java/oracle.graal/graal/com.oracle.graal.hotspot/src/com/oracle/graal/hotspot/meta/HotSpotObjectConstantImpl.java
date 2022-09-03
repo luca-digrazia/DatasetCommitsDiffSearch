@@ -117,13 +117,6 @@ public final class HotSpotObjectConstantImpl extends JavaConstant implements Hot
         return null;
     }
 
-    public JavaConstant getComponentType() {
-        if (object instanceof Class) {
-            return HotSpotObjectConstantImpl.forObject(((Class<?>) object).getComponentType());
-        }
-        return null;
-    }
-
     @Override
     public boolean isNull() {
         return false;
