@@ -75,11 +75,6 @@ public class Graph {
     NodeChangedListener usagesDroppedToZeroListener;
     private final HashMap<CacheEntry, Node> cachedNodes = new HashMap<>();
 
-    /**
-     * Determines if external nodes will use {@link Graph}'s canonicalization cache.
-     */
-    public static final boolean CacheExternalNodesInGraph = Boolean.parseBoolean(System.getProperty("graal.cacheExternalNodesInGraph", "false"));
-
     private static final class CacheEntry {
 
         private final Node node;
@@ -348,7 +343,7 @@ public class Graph {
     }
 
     /**
-     * Looks for a node <i>similar</i> to {@code node}. If not found, {@code node} is added to a
+     * Looks for a node <i>similar</i> to {@code node}. If not found, {@code node} is added to the
      * cache in this graph used to canonicalize nodes.
      * <p>
      * Note that node must implement {@link ValueNumberable} and must be an
@@ -356,12 +351,9 @@ public class Graph {
      * 
      * @return a node similar to {@code node} if one exists, otherwise {@code node}
      */
-    public <T extends Node> T uniqueExternal(T node) {
+    public <T extends Node> T uniqueWithoutAdd(T node) {
         assert node.isExternal() : node;
         assert node instanceof ValueNumberable : node;
-        if (!CacheExternalNodesInGraph) {
-            return node;
-        }
         return uniqueHelper(node, false);
     }
 
@@ -388,7 +380,6 @@ public class Graph {
     }
 
     Node findNodeInCache(Node node) {
-        assert !node.isExternal() || CacheExternalNodesInGraph;
         CacheEntry key = new CacheEntry(node);
         Node result = cachedNodes.get(key);
         if (result != null && result.isDeleted()) {
