@@ -54,7 +54,6 @@ import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.SpeculationLog;
 
 import com.oracle.graal.truffle.debug.AbstractDebugCompilationListener;
-import com.oracle.graal.truffle.substitutions.TruffleGraphBuilderPlugins;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -537,15 +536,12 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     /**
-     * Intrinsified in {@link TruffleGraphBuilderPlugins}.
-     *
      * @param length avoid warning
      */
     private static Object castArrayFixedLength(Object[] args, int length) {
         return args;
     }
 
-    /** Intrinsified in {@link TruffleGraphBuilderPlugins}. */
     public static VirtualFrame createFrame(FrameDescriptor descriptor, Object[] args) {
         if (TruffleCompilerOptions.TruffleUseFrameWithoutBoxing.getValue()) {
             return new FrameWithoutBoxing(descriptor, args);
@@ -661,8 +657,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     /**
-     * Intrinsified in {@link TruffleGraphBuilderPlugins}.
-     *
      * @param type avoid warning
      * @param condition avoid warning
      * @param nonNull avoid warning
