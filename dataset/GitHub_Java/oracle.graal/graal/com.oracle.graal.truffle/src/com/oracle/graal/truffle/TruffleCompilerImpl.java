@@ -81,24 +81,14 @@ public class TruffleCompilerImpl {
         this.compilationNotify = graalTruffleRuntime.getCompilationNotify();
         this.backend = runtime.getHostBackend();
         Replacements truffleReplacements = graalTruffleRuntime.getReplacements();
-        Providers backendProviders = backend.getProviders();
-        ConstantReflectionProvider constantReflection = new TruffleConstantReflectionProvider(backendProviders.getConstantReflection(), backendProviders.getMetaAccess());
-        if (!TruffleCompilerOptions.FastPE.getValue()) {
-            backendProviders = backendProviders.copyWith(truffleReplacements);
-        }
-        this.providers = backendProviders.copyWith(constantReflection);
+        ConstantReflectionProvider constantReflection = new TruffleConstantReflectionProvider(backend.getProviders().getConstantReflection(), backend.getProviders().getMetaAccess());
+        this.providers = backend.getProviders().copyWith(truffleReplacements).copyWith(constantReflection);
         this.suites = backend.getSuites().getDefaultSuites();
         this.lirSuites = backend.getSuites().getDefaultLIRSuites();
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(providers.getMetaAccess());
         GraphBuilderConfiguration eagerConfig = GraphBuilderConfiguration.getEagerDefault().withSkippedExceptionTypes(skippedExceptionTypes);
-
         this.config = GraphBuilderConfiguration.getDefault().withSkippedExceptionTypes(skippedExceptionTypes);
-        if (TruffleCompilerOptions.FastPE.getValue()) {
-            GraphBuilderPhase phase = (GraphBuilderPhase) backend.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
-            this.config.getInvocationPlugins().setDefaults(phase.getGraphBuilderConfig().getInvocationPlugins());
-        }
-
         this.truffleCache = new TruffleCacheImpl(providers, eagerConfig, TruffleCompilerImpl.Optimizations);
 
         this.partialEvaluator = new PartialEvaluator(providers, config, truffleCache, Graal.getRequiredCapability(SnippetReflectionProvider.class));
@@ -142,7 +132,7 @@ public class TruffleCompilerImpl {
 
             if (!TruffleCompilerOptions.TruffleInlineAcrossTruffleBoundary.getValue()) {
                 // Do not inline across Truffle boundaries.
-                for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.TYPE)) {
+                for (MethodCallTargetNode mct : graph.getNodes(MethodCallTargetNode.class)) {
                     mct.invoke().setUseForInlining(false);
                 }
             }
