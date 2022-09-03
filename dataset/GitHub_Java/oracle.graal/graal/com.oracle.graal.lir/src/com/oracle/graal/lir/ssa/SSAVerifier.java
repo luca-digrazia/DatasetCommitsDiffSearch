@@ -23,13 +23,11 @@
 
 package com.oracle.graal.lir.ssa;
 
-import static com.oracle.graal.lir.LIRValueUtil.*;
-import static jdk.internal.jvmci.code.ValueUtil.*;
+import static com.oracle.graal.api.code.ValueUtil.*;
 
 import java.util.*;
 
-import jdk.internal.jvmci.meta.*;
-
+import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -59,7 +57,6 @@ final class SSAVerifier {
         this.defined = new HashMap<>();
     }
 
-    @SuppressWarnings("try")
     public boolean verify() {
         try (Scope s = Debug.scope("SSAVerifier", lir)) {
             for (AbstractBlockBase<?> block : lir.getControlFlowGraph().getBlocks()) {
@@ -71,7 +68,6 @@ final class SSAVerifier {
         return true;
     }
 
-    @SuppressWarnings("try")
     private void doBlock(AbstractBlockBase<?> b) {
         if (visited.get(b.getId())) {
             return;
@@ -129,7 +125,7 @@ final class SSAVerifier {
     }
 
     private static boolean shouldProcess(Value value) {
-        return !value.equals(Value.ILLEGAL) && !isJavaConstant(value) && !isRegister(value) && !isStackSlotValue(value);
+        return !value.equals(Value.ILLEGAL) && !isConstant(value) && !isRegister(value) && !isStackSlotValue(value);
     }
 
 }
