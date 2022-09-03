@@ -23,6 +23,7 @@
 package com.oracle.max.graal.hotspot.ri;
 
 import com.oracle.max.cri.ri.*;
+import com.oracle.max.graal.debug.*;
 import com.oracle.max.graal.hotspot.*;
 import com.oracle.max.graal.hotspot.Compiler;
 
@@ -33,6 +34,7 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
      *
      */
     private static final long serialVersionUID = -8307682725047864875L;
+    private static final DebugMetric metricInsufficentSpace = Debug.metric("InsufficientSpaceForProfilingData");
 
     private int position;
     private int hintPosition;
@@ -66,9 +68,9 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
     }
 
     @Override
-    public boolean getImplicitExceptionSeen(int bci) {
+    public RiExceptionSeen getExceptionSeen(int bci) {
         findBCI(bci, true);
-        return dataAccessor.getImplicitExceptionSeen(methodData, position);
+        return dataAccessor.getExceptionSeen(methodData, position);
     }
 
     @Override
@@ -95,8 +97,9 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
             }
         }
 
+        boolean exceptionPossiblyNotRecorded = false;
         if (searchExtraData && methodData.hasExtraData()) {
-            int currentPosition = 0;
+            int currentPosition = methodData.getExtraDataBeginOffset();
             HotSpotMethodDataAccessor currentAccessor;
             while ((currentAccessor = methodData.getExtraData(currentPosition)) != null) {
                 int currentBCI = currentAccessor.getBCI(methodData, currentPosition);
@@ -106,9 +109,14 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
                 }
                 currentPosition = currentPosition + currentAccessor.getSize(methodData, currentPosition);
             }
+
+            if (!methodData.isWithin(currentPosition)) {
+                exceptionPossiblyNotRecorded = true;
+                metricInsufficentSpace.increment();
+            }
         }
 
-        noDataFound();
+        noDataFound(exceptionPossiblyNotRecorded);
     }
 
     private void normalDataFound(HotSpotMethodDataAccessor data, int pos, int bci) {
@@ -121,8 +129,9 @@ public final class HotSpotProfilingInfo extends CompilerObject implements RiProf
         setCurrentData(data, pos);
     }
 
-    private void noDataFound() {
-        setCurrentData(HotSpotMethodData.getNoMethodData(), -1);
+    private void noDataFound(boolean exceptionPossiblyNotRecorded) {
+        HotSpotMethodDataAccessor accessor = HotSpotMethodData.getNoDataAccessor(exceptionPossiblyNotRecorded);
+        setCurrentData(accessor, -1);
     }
 
     private void setCurrentData(HotSpotMethodDataAccessor dataAccessor, int position) {
