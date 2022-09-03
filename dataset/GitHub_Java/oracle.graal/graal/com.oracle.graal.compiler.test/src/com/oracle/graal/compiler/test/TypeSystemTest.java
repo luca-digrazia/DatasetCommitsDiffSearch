@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.graal.debug.Debug;
@@ -42,7 +41,7 @@ import com.oracle.graal.nodes.StructuredGraph;
 import com.oracle.graal.nodes.StructuredGraph.AllowAssumptions;
 import com.oracle.graal.nodes.StructuredGraph.ScheduleResult;
 import com.oracle.graal.nodes.cfg.Block;
-import com.oracle.graal.nodes.java.InstanceOfNode;
+import com.oracle.graal.nodes.java.CheckCastNode;
 import com.oracle.graal.phases.common.CanonicalizerPhase;
 import com.oracle.graal.phases.common.DominatorConditionalEliminationPhase;
 import com.oracle.graal.phases.schedule.SchedulePhase;
@@ -100,7 +99,6 @@ public class TypeSystemTest extends GraalCompilerTest {
     }
 
     @Test
-    @Ignore
     public void test5() {
         test("test5Snippet", "referenceSnippet5");
     }
@@ -146,7 +144,7 @@ public class TypeSystemTest extends GraalCompilerTest {
 
     @Test
     public void test6() {
-        testHelper("test6Snippet", InstanceOfNode.class);
+        testHelper("test6Snippet", CheckCastNode.class);
     }
 
     public static int test6Snippet(int i) throws IOException {
