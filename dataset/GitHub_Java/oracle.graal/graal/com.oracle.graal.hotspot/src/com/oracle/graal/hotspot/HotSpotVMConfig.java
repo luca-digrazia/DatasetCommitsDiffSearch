@@ -22,27 +22,19 @@
  */
 package com.oracle.graal.hotspot;
 
-import java.lang.reflect.*;
-
-import com.oracle.graal.hotspot.bridge.*;
 import com.sun.management.HotSpotDiagnosticMXBean;
-
 import sun.management.ManagementFactoryHelper;
 
 /**
- * Used to access native configuration details.
- * 
- * All non-static, public fields in this class are final so that they can be compiled as constants.
+ * Used to communicate configuration details, runtime offsets, etc. to Graal upon compileMethod.
  */
 public final class HotSpotVMConfig extends CompilerObject {
 
     private static final long serialVersionUID = -4744897993263044184L;
 
-    private static final HotSpotDiagnosticMXBean diagnostic = ManagementFactoryHelper.getDiagnosticMXBean();
+    private final HotSpotDiagnosticMXBean diagnostic = ManagementFactoryHelper.getDiagnosticMXBean();
 
-    HotSpotVMConfig(CompilerToVM c2vm) {
-        c2vm.initializeConfiguration(this);
-        assert check();
+    HotSpotVMConfig() {
     }
 
     /**
@@ -52,9 +44,9 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @return value of option
      * @throws IllegalArgumentException if option doesn't exist
      */
-    public static int getVMOptionInt(String name) {
+    private int getVMOptionInt(String name) {
         String value = diagnostic.getVMOption(name).getValue();
-        return Integer.valueOf(value).intValue();
+        return new Integer(value).intValue();
     }
 
     /**
@@ -64,7 +56,7 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @param defaultValue default value if option is not exists (e.g. development options)
      * @return value of option or defaultValue if option doesn't exist
      */
-    public static int getVMOption(String name, int defaultValue) {
+    private int getVMOption(String name, int defaultValue) {
         try {
             return getVMOptionInt(name);
         } catch (IllegalArgumentException e) {
@@ -79,9 +71,9 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @return value of option
      * @throws IllegalArgumentException if option doesn't exist
      */
-    public static boolean getVMOption(String name) {
+    private boolean getVMOption(String name) {
         String value = diagnostic.getVMOption(name).getValue();
-        return Boolean.valueOf(value).booleanValue();
+        return new Boolean(value).booleanValue();
     }
 
     /**
@@ -91,7 +83,7 @@ public final class HotSpotVMConfig extends CompilerObject {
      * @param defaultValue default value if option is not exists (e.g. development options)
      * @return value of option or defaultValue if option doesn't exist
      */
-    public static boolean getVMOption(String name, boolean defaultValue) {
+    private boolean getVMOption(String name, boolean defaultValue) {
         try {
             return getVMOption(name);
         } catch (IllegalArgumentException e) {
@@ -99,28 +91,10 @@ public final class HotSpotVMConfig extends CompilerObject {
         }
     }
 
-    // Using systenm properties ensures the Java source compilers can never
-    // optimize away an access to a config field
-    private static final boolean UNINITIALIZED_BOOLEAN = Boolean.getBoolean("graal.config.uninitializedBoolean");
-    private static final long UNINITIALIZED_LONG = Long.getLong("graal.config.uninitializedLong", 0L);
-    private static final int UNINITIALIZED_INT = Integer.getInteger("graal.config.uninitializedInt", 0);
-
-    private static int getUninitializedInt() {
-        return UNINITIALIZED_INT;
-    }
-
-    private static long getUninitializedLong() {
-        return UNINITIALIZED_LONG;
-    }
-
-    private static boolean getUninitializedBoolean() {
-        return UNINITIALIZED_BOOLEAN;
-    }
-
     // os information, register layout, code generation, ...
-    public final boolean cAssertions = getUninitializedBoolean();
+    public boolean cAssertions;
     public final boolean windowsOs = System.getProperty("os.name", "").startsWith("Windows");
-    public final int codeEntryAlignment = getUninitializedInt();
+    public int codeEntryAlignment;
     public final boolean verifyOops = getVMOption("VerifyOops", false);
     public final boolean ciTime = getVMOption("CITime");
     public final int compileThreshold = getVMOptionInt("CompileThreshold");
@@ -134,19 +108,18 @@ public final class HotSpotVMConfig extends CompilerObject {
     public final boolean useBiasedLocking = getVMOption("UseBiasedLocking");
     public final boolean usePopCountInstruction = getVMOption("UsePopCountInstruction");
     public final boolean useAESIntrinsics = getVMOption("UseAESIntrinsics");
-    public final boolean useCRC32Intrinsics = getVMOption("UseCRC32Intrinsics");
     public final boolean useG1GC = getVMOption("UseG1GC");
-    public final long gcTotalCollectionsAddress = getUninitializedLong();
+    public long gcTotalCollectionsAddress;
 
     // Compressed Oops related values.
-    public final boolean useCompressedOops = getVMOption("UseCompressedOops");
-    public final boolean useCompressedKlassPointers = getVMOption("UseCompressedKlassPointers");
-    public final long narrowOopBase = getUninitializedLong();
-    public final int narrowOopShift = getUninitializedInt();
+    public boolean useCompressedOops = getVMOption("UseCompressedOops");
+    public boolean useCompressedKlassPointers = getVMOption("UseCompressedKlassPointers");
+    public long narrowOopBase;
+    public int narrowOopShift;
     public final int logMinObjAlignment = (int) (Math.log(getVMOptionInt("ObjectAlignmentInBytes")) / Math.log(2));
-    public final long narrowKlassBase = getUninitializedLong();
-    public final int narrowKlassShift = getUninitializedInt();
-    public final int logKlassAlignment = getUninitializedInt();
+    public long narrowKlassBase;
+    public int narrowKlassShift;
+    public int logKlassAlignment;
 
     // CPU capabilities
     public final int useSSE = getVMOptionInt("UseSSE");
@@ -158,137 +131,127 @@ public final class HotSpotVMConfig extends CompilerObject {
     /**
      * The offset of the mark word in an object's header.
      */
-    public final int markOffset = getUninitializedInt();
+    public int markOffset;
 
     /**
      * The offset of the hub (i.e. Klass*) in an object's header.
      */
-    public final int hubOffset = getUninitializedInt();
+    public int hubOffset;
 
     /**
      * The offset of the _prototype_header field in a Klass.
      */
-    public final int prototypeMarkWordOffset = getUninitializedInt();
+    public int prototypeMarkWordOffset;
 
     /**
      * The offset of the _subklass field in a Klass.
      */
-    public final int subklassOffset = getUninitializedInt();
+    public int subklassOffset;
 
     /**
      * The offset of the _next_sibling field in a Klass.
      */
-    public final int nextSiblingOffset = getUninitializedInt();
+    public int nextSiblingOffset;
 
     /**
      * The offset of the array length word in an array object's header.
      */
-    public final int arrayLengthOffset = getUninitializedInt();
+    public int arrayLengthOffset;
 
     /**
      * The offset of the _length field in an Array metaspace object (see array.hpp).
      */
-    public final int metaspaceArrayLengthOffset = getUninitializedInt();
+    public int metaspaceArrayLengthOffset;
 
     /**
      * The offset of the _data field in an Array metaspace object (see array.hpp).
      */
-    public final int metaspaceArrayBaseOffset = getUninitializedInt();
+    public int metaspaceArrayBaseOffset;
 
     /**
      * The offset of the _super_check_offset field in a Klass.
      */
-    public final int superCheckOffsetOffset = getUninitializedInt();
+    public int superCheckOffsetOffset;
 
     /**
      * The offset of the _secondary_super_cache field in a Klass.
      */
-    public final int secondarySuperCacheOffset = getUninitializedInt();
+    public int secondarySuperCacheOffset;
 
     /**
      * The offset of the _secondary_supers field in a Klass.
      */
-    public final int secondarySupersOffset = getUninitializedInt();
+    public int secondarySupersOffset;
 
     /**
      * The offset of the _init_state field in an instanceKlass.
      */
-    public final int klassStateOffset = getUninitializedInt();
+    public int klassStateOffset;
 
     /**
      * The value of instanceKlass::fully_initialized.
      */
-    public final int klassStateFullyInitialized = getUninitializedInt();
+    public int klassStateFullyInitialized;
 
     /**
      * The value of objArrayKlass::element_klass_offset().
      */
-    public final int arrayClassElementOffset = getUninitializedInt();
+    public int arrayClassElementOffset;
 
     /**
      * The value of JavaThread::tlab_top_offset().
      */
-    public final int threadTlabTopOffset = getUninitializedInt();
+    public int threadTlabTopOffset;
 
     /**
      * The value of JavaThread::tlab_end_offset().
      */
-    public final int threadTlabEndOffset = getUninitializedInt();
+    public int threadTlabEndOffset;
 
     /**
      * The value of JavaThread::threadObj_offset().
      */
-    public final int threadObjectOffset = getUninitializedInt();
+    public int threadObjectOffset;
 
     /**
      * The value of JavaThread::osthread_offset().
      */
-    public final int osThreadOffset = getUninitializedInt();
-
-    /**
-     * The value of JavaThread::graal_counters_offset().
-     */
-    public final int graalCountersThreadOffset = getUninitializedInt();
-
-    /**
-     * The length of the JavaThread::_graal_counters array.
-     */
-    public final int graalCountersSize = getUninitializedInt();
+    public int osThreadOffset;
 
     /**
      * The value of OSThread::interrupted_offset().
      */
-    public final int osThreadInterruptedOffset = getUninitializedInt();
+    public int osThreadInterruptedOffset;
 
     /**
      * The value of markOopDesc::unlocked_value.
      */
-    public final int unlockedMask = getUninitializedInt();
+    public int unlockedMask;
 
     /**
      * The value of markOopDesc::biased_lock_mask_in_place.
      */
-    public final int biasedLockMaskInPlace = getUninitializedInt();
+    public int biasedLockMaskInPlace;
 
     /**
      * The value of markOopDesc::age_mask_in_place.
      */
-    public final int ageMaskInPlace = getUninitializedInt();
+    public int ageMaskInPlace;
 
     /**
      * The value of markOopDesc::epoch_mask_in_place.
      */
-    public final int epochMaskInPlace = getUninitializedInt();
+    public int epochMaskInPlace;
 
     /**
      * The value of markOopDesc::biased_lock_pattern.
      */
-    public final int biasedLockPattern = getUninitializedInt();
+    public int biasedLockPattern;
 
     /**
      * Identity hash code value when uninitialized.
      */
-    public final int uninitializedIdentityHashCodeValue = getUninitializedInt();
+    public int uninitializedIdentityHashCodeValue;
 
     /**
      * Offset of the _pending_exception field in ThreadShadow (defined in exceptions.hpp). This
@@ -296,83 +259,83 @@ public final class HotSpotVMConfig extends CompilerObject {
      * <p>
      * <b>NOTE: This is not the same as {@link #threadExceptionOopOffset}.</b>
      */
-    public final int pendingExceptionOffset = getUninitializedInt();
+    public int pendingExceptionOffset;
 
     /**
      * Offset of the pending deoptimization field.
      */
-    public final int pendingDeoptimizationOffset = getUninitializedInt();
+    public int pendingDeoptimizationOffset;
 
     /**
      * Mark word right shift to get identity hash code.
      */
-    public final int identityHashCodeShift = getUninitializedInt();
+    public int identityHashCodeShift;
 
     /**
      * Offset of _access_flags in a metaspace Method object.
      */
-    public final int methodAccessFlagsOffset = getUninitializedInt();
+    public int methodAccessFlagsOffset;
 
     /**
      * JVM_ACC_QUEUED defined in accessFlags.hpp and used for marking a Method object as queued for
      * compilation.
      */
-    public final int methodQueuedForCompilationBit = getUninitializedInt();
+    public int methodQueuedForCompilationBit;
 
     /**
      * Offset of _intrinsic_id in a metaspace Method object.
      */
-    public final int methodIntrinsicIdOffset = getUninitializedInt();
+    public int methodIntrinsicIdOffset;
 
     /**
      * Offset of _max_locals in a metaspace Method object.
      */
-    public final int methodMaxLocalsOffset = getUninitializedInt();
+    public int methodMaxLocalsOffset;
 
     /**
      * Offset of _constMethod in a metaspace Method object.
      */
-    public final int methodConstMethodOffset = getUninitializedInt();
+    public int methodConstMethodOffset;
 
     /**
      * Offset of _max_stack in a metaspace ConstMethod object.
      */
-    public final int constMethodMaxStackOffset = getUninitializedInt();
+    public int constMethodMaxStackOffset;
 
     /**
      * Offset of _constants in a metaspace ConstMethod object.
      */
-    public final int constMethodConstantsOffset = getUninitializedInt();
+    public int constMethodConstantsOffset;
 
     /**
      * Offset of _pool_holder in a metaspace ConstantPool object.
      */
-    public final int constantPoolHolderOffset = getUninitializedInt();
+    public int constantPoolHolderOffset;
 
     /**
      * Value of extra_stack_entries() in method.hpp.
      */
-    public final int extraStackEntries = getUninitializedInt();
+    public int extraStackEntries;
 
     /**
      * Value of JVM_ACC_HAS_FINALIZER in accessFlags.hpp.
      */
-    public final int klassHasFinalizerFlag = getUninitializedInt();
+    public int klassHasFinalizerFlag;
 
     /**
      * The value of JavaThread::is_method_handle_return_offset().
      */
-    public final int threadIsMethodHandleReturnOffset = getUninitializedInt();
+    public int threadIsMethodHandleReturnOffset;
 
     /**
      * Bit pattern that represents a non-oop. Neither the high bits nor the low bits of this value
      * are allowed to look like (respectively) the high or low bits of a real oop.
      */
-    public final long nonOopBits = getUninitializedLong();
+    public long nonOopBits;
 
-    public final long verifyOopCounterAddress = getUninitializedLong();
-    public final long verifyOopMask = getUninitializedLong();
-    public final long verifyOopBits = getUninitializedLong();
+    public long verifyOopCounterAddress;
+    public long verifyOopMask;
+    public long verifyOopBits;
 
     /**
      * Offset of the _exception_oop field in Thread (defined in thread.hpp). This field is used to
@@ -381,216 +344,205 @@ public final class HotSpotVMConfig extends CompilerObject {
      * <p>
      * <b>NOTE: This is not the same as {@link #pendingExceptionOffset}.</b>
      */
-    public final int threadExceptionOopOffset = getUninitializedInt();
+    public int threadExceptionOopOffset;
 
-    public final int threadExceptionPcOffset = getUninitializedInt();
-    public final long cardtableStartAddress = getUninitializedLong();
-    public final int cardtableShift = getUninitializedInt();
-    public final long safepointPollingAddress = getUninitializedLong();
-    public final boolean isPollingPageFar = getUninitializedBoolean();
+    public int threadExceptionPcOffset;
+    public long cardtableStartAddress;
+    public int cardtableShift;
+    public long safepointPollingAddress;
+    public boolean isPollingPageFar;
 
     /**
      * G1 Collector Related Values.
      */
-    public final int g1CardQueueIndexOffset = getUninitializedInt();
-    public final int g1CardQueueBufferOffset = getUninitializedInt();
-    public final int logOfHRGrainBytes = getUninitializedInt();
-    public final int g1SATBQueueMarkingOffset = getUninitializedInt();
-    public final int g1SATBQueueIndexOffset = getUninitializedInt();
-    public final int g1SATBQueueBufferOffset = getUninitializedInt();
+    public int g1CardQueueIndexOffset;
+    public int g1CardQueueBufferOffset;
+    public int logOfHRGrainBytes;
+    public int g1SATBQueueMarkingOffset;
+    public int g1SATBQueueIndexOffset;
+    public int g1SATBQueueBufferOffset;
 
     /**
      * The offset of the _java_mirror field (of type {@link Class}) in a Klass.
      */
-    public final int classMirrorOffset = getUninitializedInt();
+    public int classMirrorOffset;
 
-    public final int runtimeCallStackSize = getUninitializedInt();
+    public int runtimeCallStackSize;
 
     /**
      * The offset of the _modifier_flags field in a Klass.
      */
-    public final int klassModifierFlagsOffset = getUninitializedInt();
+    public int klassModifierFlagsOffset;
 
     /**
      * The offset of the _access_flags field in a Klass.
      */
-    public final int klassAccessFlagsOffset = getUninitializedInt();
+    public int klassAccessFlagsOffset;
 
     /**
      * The offset of the _layout_helper field in a Klass.
      */
-    public final int klassLayoutHelperOffset = getUninitializedInt();
+    public int klassLayoutHelperOffset;
 
     /**
      * Bit pattern in the klass layout helper that can be used to identify arrays.
      */
-    public final int arrayKlassLayoutHelperIdentifier = getUninitializedInt();
+    public int arrayKlassLayoutHelperIdentifier;
 
     /**
      * The offset of the _componentMirror field in an ArrayKlass.
      */
-    public final int arrayKlassComponentMirrorOffset = getUninitializedInt();
+    public int arrayKlassComponentMirrorOffset;
 
     /**
      * The offset of the _super field in a Klass.
      */
-    public final int klassSuperKlassOffset = getUninitializedInt();
+    public int klassSuperKlassOffset;
 
     /**
      * The offset of the injected klass field in a {@link Class}.
      */
-    public final int klassOffset = getUninitializedInt();
+    public int klassOffset;
 
     /**
      * The offset of the injected array klass field in a {@link Class}.
      */
-    public final int arrayKlassOffset = getUninitializedInt();
+    public int arrayKlassOffset;
 
     /**
      * The offset of the injected graal_mirror field in a {@link Class}.
      */
-    public final int graalMirrorInClassOffset = getUninitializedInt();
+    public int graalMirrorInClassOffset;
 
     /**
      * The offset of the _method_data field in a metaspace Method.
      */
-    public final int methodDataOffset = getUninitializedInt();
+    public int methodDataOffset;
 
-    public final int nmethodEntryOffset = getUninitializedInt();
-    public final int methodCompiledEntryOffset = getUninitializedInt();
-    public final int basicLockSize = getUninitializedInt();
-    public final int basicLockDisplacedHeaderOffset = getUninitializedInt();
-    public final long tlabIntArrayMarkWord = getUninitializedLong();
-    public final long heapEndAddress = getUninitializedLong();
-    public final long heapTopAddress = getUninitializedLong();
-    public final int threadTlabStartOffset = getUninitializedInt();
-    public final int threadTlabSizeOffset = getUninitializedInt();
-    public final int threadAllocatedBytesOffset = getUninitializedInt();
-    public final int threadLastJavaSpOffset = getUninitializedInt();
-    public final int threadLastJavaPcOffset = getUninitializedInt();
+    public int nmethodEntryOffset;
+    public int methodCompiledEntryOffset;
+    public int basicLockSize;
+    public int basicLockDisplacedHeaderOffset;
+    public long tlabIntArrayMarkWord;
+    public long heapEndAddress;
+    public long heapTopAddress;
+    public int threadTlabStartOffset;
+    public int threadTlabSizeOffset;
+    public int threadAllocatedBytesOffset;
+    public int threadLastJavaSpOffset;
+    public int threadLastJavaPcOffset;
 
     /**
      * This value is only valid on AMD64.
      */
-    public final int threadLastJavaFpOffset = getUninitializedInt();
+    public int threadLastJavaFpOffset;
 
     /**
      * This value is only valid on SPARC.
      */
-    public final int threadJavaFrameAnchorFlagsOffset = getUninitializedInt();
+    public int threadJavaFrameAnchorFlagsOffset;
 
-    public final int threadObjectResultOffset = getUninitializedInt();
-    public final int tlabRefillWasteLimitOffset = getUninitializedInt();
-    public final int tlabRefillWasteIncrement = getUninitializedInt();
-    public final int tlabAlignmentReserve = getUninitializedInt();
-    public final int tlabSlowAllocationsOffset = getUninitializedInt();
-    public final int tlabFastRefillWasteOffset = getUninitializedInt();
-    public final int tlabNumberOfRefillsOffset = getUninitializedInt();
+    public int threadObjectResultOffset;
+    public int tlabRefillWasteLimitOffset;
+    public int tlabRefillWasteIncrement;
+    public int tlabAlignmentReserve;
+    public int tlabSlowAllocationsOffset;
+    public int tlabFastRefillWasteOffset;
+    public int tlabNumberOfRefillsOffset;
     public final boolean tlabStats = getVMOption("TLABStats");
-    public final int klassInstanceSizeOffset = getUninitializedInt();
-    public final boolean inlineContiguousAllocationSupported = getUninitializedBoolean();
-    public final long arrayPrototypeMarkWord = getUninitializedLong();
-    public final int layoutHelperLog2ElementSizeShift = getUninitializedInt();
-    public final int layoutHelperLog2ElementSizeMask = getUninitializedInt();
-    public final int layoutHelperElementTypeShift = getUninitializedInt();
-    public final int layoutHelperElementTypeMask = getUninitializedInt();
-    public final int layoutHelperElementTypePrimitiveInPlace = getUninitializedInt();
-    public final int layoutHelperHeaderSizeShift = getUninitializedInt();
-    public final int layoutHelperHeaderSizeMask = getUninitializedInt();
-    public final int layoutHelperOffset = getUninitializedInt();
+    public int klassInstanceSizeOffset;
+    public boolean inlineContiguousAllocationSupported;
+    public long arrayPrototypeMarkWord;
+    public int layoutHelperLog2ElementSizeShift;
+    public int layoutHelperLog2ElementSizeMask;
+    public int layoutHelperElementTypeShift;
+    public int layoutHelperElementTypeMask;
+    public int layoutHelperElementTypePrimitiveInPlace;
+    public int layoutHelperHeaderSizeShift;
+    public int layoutHelperHeaderSizeMask;
+    public int layoutHelperOffset;
 
     // methodData information
-    public final int methodDataOopDataOffset = getUninitializedInt();
-    public final int methodDataOopTrapHistoryOffset = getUninitializedInt();
-    public final int dataLayoutHeaderSize = getUninitializedInt();
-    public final int dataLayoutTagOffset = getUninitializedInt();
-    public final int dataLayoutFlagsOffset = getUninitializedInt();
-    public final int dataLayoutBCIOffset = getUninitializedInt();
-    public final int dataLayoutCellsOffset = getUninitializedInt();
-    public final int dataLayoutCellSize = getUninitializedInt();
-
-    // develop flag; might change
-    public final int bciProfileWidth = getVMOption("BciProfileWidth", 2);
-
+    public int methodDataOopDataOffset;
+    public int methodDataOopTrapHistoryOffset;
+    public int dataLayoutHeaderSize;
+    public int dataLayoutTagOffset;
+    public int dataLayoutFlagsOffset;
+    public int dataLayoutBCIOffset;
+    public int dataLayoutCellsOffset;
+    public int dataLayoutCellSize;
+    public final int bciProfileWidth = getVMOption("BciProfileWidth", 2);  // develop flag; might
+// change
     public final int typeProfileWidth = getVMOptionInt("TypeProfileWidth");
     public final int methodProfileWidth = getVMOptionInt("MethodProfileWidth");
 
-    public final long inlineCacheMissStub = getUninitializedLong();
-    public final long handleDeoptStub = getUninitializedLong();
-    public final long uncommonTrapStub = getUninitializedLong();
+    public long inlineCacheMissStub;
+    public long handleDeoptStub;
+    public long uncommonTrapStub;
 
-    public final long aescryptEncryptBlockStub = getUninitializedLong();
-    public final long aescryptDecryptBlockStub = getUninitializedLong();
-    public final long cipherBlockChainingEncryptAESCryptStub = getUninitializedLong();
-    public final long cipherBlockChainingDecryptAESCryptStub = getUninitializedLong();
-    public final long updateBytesCRC32Stub = getUninitializedLong();
+    public long aescryptEncryptBlockStub;
+    public long aescryptDecryptBlockStub;
+    public long cipherBlockChainingEncryptAESCryptStub;
+    public long cipherBlockChainingDecryptAESCryptStub;
 
-    public final long newInstanceAddress = getUninitializedLong();
-    public final long newArrayAddress = getUninitializedLong();
-    public final long newMultiArrayAddress = getUninitializedLong();
-    public final long dynamicNewArrayAddress = getUninitializedLong();
-    public final long registerFinalizerAddress = getUninitializedLong();
-    public final long threadIsInterruptedAddress = getUninitializedLong();
-    public final long vmMessageAddress = getUninitializedLong();
-    public final long identityHashCodeAddress = getUninitializedLong();
-    public final long exceptionHandlerForPcAddress = getUninitializedLong();
-    public final long exceptionHandlerForReturnAddressAddress = getUninitializedLong();
-    public final long osrMigrationEndAddress = getUninitializedLong();
-    public final long monitorenterAddress = getUninitializedLong();
-    public final long monitorexitAddress = getUninitializedLong();
-    public final long createNullPointerExceptionAddress = getUninitializedLong();
-    public final long createOutOfBoundsExceptionAddress = getUninitializedLong();
-    public final long logPrimitiveAddress = getUninitializedLong();
-    public final long logObjectAddress = getUninitializedLong();
-    public final long logPrintfAddress = getUninitializedLong();
-    public final long vmErrorAddress = getUninitializedLong();
-    public final long writeBarrierPreAddress = getUninitializedLong();
-    public final long writeBarrierPostAddress = getUninitializedLong();
-    public final long validateObject = getUninitializedLong();
-    public final long javaTimeMillisAddress = getUninitializedLong();
-    public final long javaTimeNanosAddress = getUninitializedLong();
-    public final long arithmeticSinAddress = getUninitializedLong();
-    public final long arithmeticCosAddress = getUninitializedLong();
-    public final long arithmeticTanAddress = getUninitializedLong();
-    public final long loadAndClearExceptionAddress = getUninitializedLong();
-    public final long crcTableAddress = getUninitializedLong();
+    public long newInstanceAddress;
+    public long newArrayAddress;
+    public long newMultiArrayAddress;
+    public long dynamicNewArrayAddress;
+    public long registerFinalizerAddress;
+    public long threadIsInterruptedAddress;
+    public long vmMessageAddress;
+    public long identityHashCodeAddress;
+    public long exceptionHandlerForPcAddress;
+    public long exceptionHandlerForReturnAddressAddress;
+    public long osrMigrationEndAddress;
+    public long monitorenterAddress;
+    public long monitorexitAddress;
+    public long createNullPointerExceptionAddress;
+    public long createOutOfBoundsExceptionAddress;
+    public long logPrimitiveAddress;
+    public long logObjectAddress;
+    public long logPrintfAddress;
+    public long vmErrorAddress;
+    public long writeBarrierPreAddress;
+    public long writeBarrierPostAddress;
+    public long validateObject;
+    public long javaTimeMillisAddress;
+    public long javaTimeNanosAddress;
+    public long arithmeticSinAddress;
+    public long arithmeticCosAddress;
+    public long arithmeticTanAddress;
+    public long loadAndClearExceptionAddress;
 
-    public final int deoptReasonNone = getUninitializedInt();
-    public final int deoptReasonNullCheck = getUninitializedInt();
-    public final int deoptReasonRangeCheck = getUninitializedInt();
-    public final int deoptReasonClassCheck = getUninitializedInt();
-    public final int deoptReasonArrayCheck = getUninitializedInt();
-    public final int deoptReasonUnreached0 = getUninitializedInt();
-    public final int deoptReasonTypeCheckInlining = getUninitializedInt();
-    public final int deoptReasonOptimizedTypeCheck = getUninitializedInt();
-    public final int deoptReasonNotCompiledExceptionHandler = getUninitializedInt();
-    public final int deoptReasonUnresolved = getUninitializedInt();
-    public final int deoptReasonJsrMismatch = getUninitializedInt();
-    public final int deoptReasonDiv0Check = getUninitializedInt();
-    public final int deoptReasonConstraint = getUninitializedInt();
-    public final int deoptReasonLoopLimitCheck = getUninitializedInt();
+    public int deoptReasonNone;
+    public int deoptReasonNullCheck;
+    public int deoptReasonRangeCheck;
+    public int deoptReasonClassCheck;
+    public int deoptReasonArrayCheck;
+    public int deoptReasonUnreached0;
+    public int deoptReasonTypeCheckInlining;
+    public int deoptReasonOptimizedTypeCheck;
+    public int deoptReasonNotCompiledExceptionHandler;
+    public int deoptReasonUnresolved;
+    public int deoptReasonJsrMismatch;
+    public int deoptReasonDiv0Check;
+    public int deoptReasonConstraint;
+    public int deoptReasonLoopLimitCheck;
 
-    public final int deoptActionNone = getUninitializedInt();
-    public final int deoptActionMaybeRecompile = getUninitializedInt();
-    public final int deoptActionReinterpret = getUninitializedInt();
-    public final int deoptActionMakeNotEntrant = getUninitializedInt();
-    public final int deoptActionMakeNotCompilable = getUninitializedInt();
+    public int deoptActionNone;
+    public int deoptActionMaybeRecompile;
+    public int deoptActionReinterpret;
+    public int deoptActionMakeNotEntrant;
+    public int deoptActionMakeNotCompilable;
 
-    public final int vmIntrinsicInvokeBasic = getUninitializedInt();
-    public final int vmIntrinsicLinkToVirtual = getUninitializedInt();
-    public final int vmIntrinsicLinkToStatic = getUninitializedInt();
-    public final int vmIntrinsicLinkToSpecial = getUninitializedInt();
-    public final int vmIntrinsicLinkToInterface = getUninitializedInt();
+    public int vmIntrinsicInvokeBasic;
+    public int vmIntrinsicLinkToVirtual;
+    public int vmIntrinsicLinkToStatic;
+    public int vmIntrinsicLinkToSpecial;
+    public int vmIntrinsicLinkToInterface;
 
-    public boolean check() {
-        assert codeEntryAlignment > 0 : codeEntryAlignment;
+    public void check() {
+        assert codeEntryAlignment > 0;
         assert stackShadowPages > 0;
-        for (Field f : getClass().getDeclaredFields()) {
-            int modifiers = f.getModifiers();
-            if (Modifier.isPublic(modifiers) && !Modifier.isStatic(modifiers)) {
-                assert Modifier.isFinal(modifiers) : "field should be final: " + f;
-            }
-        }
-        return true;
     }
 }
