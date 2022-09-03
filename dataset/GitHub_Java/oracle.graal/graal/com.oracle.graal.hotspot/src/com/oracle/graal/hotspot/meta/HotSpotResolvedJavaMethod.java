@@ -34,6 +34,7 @@ import java.util.concurrent.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.api.meta.ProfilingInfo.TriState;
+import com.oracle.graal.bytecode.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.hotspot.*;
 import com.oracle.graal.hotspot.debug.*;
@@ -63,37 +64,9 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
     private Map<Object, Object> compilerStorage;
     private HotSpotMethodData methodData;
     private byte[] code;
+    private int compilationComplexity;
     private CompilationTask currentTask;
     private SpeculationLog speculationLog;
-
-    /**
-     * Gets the holder of a HotSpot metaspace method native object.
-     * 
-     * @param metaspaceMethod a metaspace Method object
-     * @return the {@link ResolvedJavaType} corresponding to the holder of the
-     *         {@code metaspaceMethod}
-     */
-    public static HotSpotResolvedObjectType getHolder(long metaspaceMethod) {
-        HotSpotVMConfig config = graalRuntime().getConfig();
-        long constMethod = unsafe.getLong(metaspaceMethod + config.methodConstMethodOffset);
-        assert constMethod != 0;
-        long constantPool = unsafe.getLong(constMethod + config.constMethodConstantsOffset);
-        assert constantPool != 0;
-        long holder = unsafe.getLong(constantPool + config.constantPoolHolderOffset);
-        assert holder != 0;
-        return (HotSpotResolvedObjectType) HotSpotResolvedObjectType.fromMetaspaceKlass(holder);
-    }
-
-    /**
-     * Gets the {@link ResolvedJavaMethod} for a HotSpot metaspace method native object.
-     * 
-     * @param metaspaceMethod a metaspace Method object
-     * @return the {@link ResolvedJavaMethod} corresponding to {@code metaspaceMethod}
-     */
-    public static HotSpotResolvedJavaMethod fromMetaspace(long metaspaceMethod) {
-        HotSpotResolvedObjectType holder = getHolder(metaspaceMethod);
-        return holder.createMethod(metaspaceMethod);
-    }
 
     HotSpotResolvedJavaMethod(HotSpotResolvedObjectType holder, long metaspaceMethod) {
         this.metaspaceMethod = metaspaceMethod;
@@ -270,6 +243,22 @@ public final class HotSpotResolvedJavaMethod extends HotSpotMethod implements Re
 
     public int invocationCount() {
         return graalRuntime().getCompilerToVM().getInvocationCount(metaspaceMethod);
+    }
+
+    @Override
+    public int getCompilationComplexity() {
+        if (compilationComplexity <= 0 && getCodeSize() > 0) {
+            BytecodeStream s = new BytecodeStream(getCode());
+            int result = 0;
+            int currentBC;
+            while ((currentBC = s.currentBC()) != Bytecodes.END) {
+                result += Bytecodes.compilationComplexity(currentBC);
+                s.next();
+            }
+            assert result > 0;
+            compilationComplexity = result;
+        }
+        return compilationComplexity;
     }
 
     @Override
