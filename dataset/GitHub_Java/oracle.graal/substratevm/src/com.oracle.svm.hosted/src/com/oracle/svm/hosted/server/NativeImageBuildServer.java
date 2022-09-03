@@ -213,10 +213,7 @@ public final class NativeImageBuildServer {
             serverSocket.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
 
             /* NOTE: the following command line gets parsed externally */
-            String portLogMessage = PORT_LOG_MESSAGE_PREFIX + serverSocket.getLocalPort();
-            System.out.println(portLogMessage);
-            System.out.flush();
-            log(portLogMessage);
+            log(PORT_LOG_MESSAGE_PREFIX + serverSocket.getLocalPort());
 
             while (true) {
                 Socket socket = serverSocket.accept();
