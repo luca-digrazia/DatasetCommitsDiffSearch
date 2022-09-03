@@ -4,9 +4,7 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,11 +27,11 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.IterativeConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 import org.junit.Assert;
 import org.junit.Test;
@@ -48,7 +46,7 @@ public class ConditionalEliminationTest15 extends ConditionalEliminationTestBase
         StructuredGraph graph = parseEager(methodName, AllowAssumptions.YES);
 
         CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        CoreProviders context = getProviders();
+        PhaseContext context = new PhaseContext(getProviders());
 
         new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
         canonicalizer.apply(graph, context);
