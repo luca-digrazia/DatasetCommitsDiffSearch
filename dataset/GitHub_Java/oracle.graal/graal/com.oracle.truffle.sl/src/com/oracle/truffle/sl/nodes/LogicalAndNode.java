@@ -24,7 +24,26 @@ package com.oracle.truffle.sl.nodes;
 
 import com.oracle.truffle.api.codegen.*;
 
-@NodeChildren({@NodeChild("leftNode"), @NodeChild("rightNode")})
-public abstract class BinaryNode extends TypedNode {
+@SuppressWarnings("unused")
+public abstract class LogicalAndNode extends BinaryNode {
 
+    @ShortCircuit("rightNode")
+    public boolean needsRightNode(boolean left) {
+        return left;
+    }
+
+    @ShortCircuit("rightNode")
+    public boolean needsRightNode(Object left) {
+        return left instanceof Boolean && (Boolean) left;
+    }
+
+    @Specialization
+    public boolean doBoolean(boolean left, boolean hasRight, boolean right) {
+        return hasRight && right;
+    }
+
+    @Generic
+    public Object doGeneric(Object left, boolean hasRight, Object right) {
+        throw new RuntimeException("operation not defined for type " + left.getClass().getSimpleName());
+    }
 }

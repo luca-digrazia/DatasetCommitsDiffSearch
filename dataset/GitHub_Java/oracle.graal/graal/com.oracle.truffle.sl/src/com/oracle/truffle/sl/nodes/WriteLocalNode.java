@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.sl.nodes;
 
+import java.math.*;
+
 import com.oracle.truffle.api.codegen.*;
 import com.oracle.truffle.api.frame.*;
 
@@ -36,26 +38,40 @@ public abstract class WriteLocalNode extends FrameSlotNode {
         this(node.slot);
     }
 
-    @Specialization(rewriteOn = FrameSlotTypeException.class)
-    public int write(VirtualFrame frame, int right) throws FrameSlotTypeException {
+    @Specialization
+    public int write(VirtualFrame frame, int right) {
         frame.setInt(slot, right);
         return right;
     }
 
-    @Specialization(rewriteOn = FrameSlotTypeException.class)
-    public boolean write(VirtualFrame frame, boolean right) throws FrameSlotTypeException {
+    @Specialization
+    public BigInteger write(VirtualFrame frame, BigInteger right) {
+        frame.setObject(slot, right);
+        return right;
+    }
+
+    @Specialization
+    public boolean write(VirtualFrame frame, boolean right) {
         frame.setBoolean(slot, right);
+        return right;
+    }
+
+    @Specialization
+    public String write(VirtualFrame frame, String right) {
+        frame.setObject(slot, right);
         return right;
     }
 
     @Generic(useSpecializations = false)
     public Object writeGeneric(VirtualFrame frame, Object right) {
-        try {
-            frame.setObject(slot, right);
-        } catch (FrameSlotTypeException e) {
-            FrameUtil.setObjectSafe(frame, slot, right);
-        }
+        frame.setObject(slot, right);
         return right;
+    }
+
+    @SpecializationListener
+    protected void onSpecialize(VirtualFrame frame, Object value) {
+        slot.setType(value.getClass());
+        frame.updateToLatestVersion();
     }
 
     @Override
