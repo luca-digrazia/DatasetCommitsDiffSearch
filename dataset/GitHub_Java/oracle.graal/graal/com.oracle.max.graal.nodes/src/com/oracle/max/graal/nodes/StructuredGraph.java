@@ -24,8 +24,11 @@ package com.oracle.max.graal.nodes;
 
 import java.util.*;
 
+import com.oracle.max.cri.ri.*;
 import com.oracle.max.graal.graph.*;
+import com.oracle.max.graal.nodes.calc.*;
 import com.oracle.max.graal.nodes.java.*;
+import com.oracle.max.graal.nodes.util.*;
 
 
 /**
@@ -34,24 +37,38 @@ import com.oracle.max.graal.nodes.java.*;
  */
 public class StructuredGraph extends Graph {
     private final BeginNode start;
+    private final RiResolvedMethod method;
 
     /**
      * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
     public StructuredGraph(String name) {
+        this(name, null);
+    }
+
+    public StructuredGraph(String name, RiResolvedMethod method) {
         super(name);
         this.start = add(new BeginNode());
+        this.method = method;
     }
 
     /**
      * Creates a new Graph containing a single {@link BeginNode} as the {@link #start() start} node.
      */
     public StructuredGraph() {
-        this(null);
+        this((String) null);
+    }
+
+    public StructuredGraph(RiResolvedMethod method) {
+        this(null, method);
     }
 
     public BeginNode start() {
         return start;
+    }
+
+    public RiResolvedMethod method() {
+        return method;
     }
 
     @Override
@@ -60,9 +77,9 @@ public class StructuredGraph extends Graph {
     }
 
     @Override
-    public StructuredGraph copy(String name) {
-        StructuredGraph copy = new StructuredGraph(name);
-        HashMap<Node, Node> replacements = new HashMap<Node, Node>();
+    public StructuredGraph copy(String newName) {
+        StructuredGraph copy = new StructuredGraph(newName);
+        HashMap<Node, Node> replacements = new HashMap<>();
         replacements.put(start, copy.start);
         copy.addDuplicates(getNodes(), replacements);
         return copy;
@@ -122,5 +139,195 @@ public class StructuredGraph extends Graph {
 
     public boolean hasLoops() {
         return getNodes(LoopBeginNode.class).iterator().hasNext();
+    }
+
+    public void removeFloating(FloatingNode node) {
+        assert node != null && node.isAlive() : "cannot remove " + node;
+        node.safeDelete();
+    }
+
+    public void replaceFloating(FloatingNode node, ValueNode replacement) {
+        assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
+        node.replaceAtUsages(replacement);
+        node.safeDelete();
+    }
+
+    public void removeFixed(FixedWithNextNode node) {
+        assert node != null;
+        assert node.usages().isEmpty() : node + " " + node.usages();
+        FixedNode next = node.next();
+        node.setNext(null);
+        node.replaceAtPredecessors(next);
+        node.safeDelete();
+    }
+
+    public void replaceFixed(FixedWithNextNode node, Node replacement) {
+        if (replacement instanceof FixedWithNextNode) {
+            replaceFixedWithFixed(node, (FixedWithNextNode) replacement);
+        } else {
+            assert replacement != null : "cannot replace " + node + " with null";
+            assert replacement instanceof FloatingNode : "cannot replace " + node + " with " + replacement;
+            replaceFixedWithFloating(node, (FloatingNode) replacement);
+        }
+    }
+
+    public void replaceFixedWithFixed(FixedWithNextNode node, FixedWithNextNode replacement) {
+        assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
+        replacement.setProbability(node.probability());
+        FixedNode next = node.next();
+        node.setNext(null);
+        replacement.setNext(next);
+        node.replaceAndDelete(replacement);
+    }
+
+    public void replaceFixedWithFloating(FixedWithNextNode node, FloatingNode replacement) {
+        assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
+        FixedNode next = node.next();
+        node.setNext(null);
+        node.replaceAtPredecessors(next);
+        node.replaceAtUsages(replacement);
+        node.safeDelete();
+    }
+
+    public void removeSplit(ControlSplitNode node, int survivingSuccessor) {
+        assert node != null;
+        assert node.usages().isEmpty();
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        begin.evacuateGuards();
+        FixedNode next = begin.next();
+        begin.setNext(null);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            node.setBlockSuccessor(i, null);
+        }
+        node.replaceAtPredecessors(next);
+        node.safeDelete();
+        begin.safeDelete();
+    }
+
+    public void removeSplitPropagate(ControlSplitNode node, int survivingSuccessor) {
+        assert node != null;
+        assert node.usages().isEmpty();
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        begin.evacuateGuards();
+        FixedNode next = begin.next();
+        begin.setNext(null);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            BeginNode successor = node.blockSuccessor(i);
+            node.setBlockSuccessor(i, null);
+            if (successor != begin && successor.isAlive()) {
+                GraphUtil.killCFG(successor);
+            }
+        }
+        if (next.isAlive()) {
+            node.replaceAtPredecessors(next);
+            node.safeDelete();
+            begin.safeDelete();
+        } else {
+            assert node.isDeleted();
+        }
+    }
+
+    public void replaceSplit(ControlSplitNode node, Node replacement, int survivingSuccessor) {
+        if (replacement instanceof FixedWithNextNode) {
+            replaceSplitWithFixed(node, (FixedWithNextNode) replacement, survivingSuccessor);
+        } else {
+            assert replacement != null : "cannot replace " + node + " with null";
+            assert replacement instanceof FloatingNode : "cannot replace " + node + " with " + replacement;
+            replaceSplitWithFloating(node, (FloatingNode) replacement, survivingSuccessor);
+        }
+    }
+
+    public void replaceSplitWithFixed(ControlSplitNode node, FixedWithNextNode replacement, int survivingSuccessor) {
+        assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        begin.evacuateGuards();
+        FixedNode next = begin.next();
+        begin.setNext(null);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            node.setBlockSuccessor(i, null);
+        }
+        replacement.setNext(next);
+        node.replaceAndDelete(replacement);
+        begin.safeDelete();
+    }
+
+    public void replaceSplitWithFloating(ControlSplitNode node, FloatingNode replacement, int survivingSuccessor) {
+        assert node != null && replacement != null && node.isAlive() && replacement.isAlive() : "cannot replace " + node + " with " + replacement;
+        assert survivingSuccessor >= 0 && survivingSuccessor < node.blockSuccessorCount() : "invalid surviving successor " + survivingSuccessor + " for " + node;
+        BeginNode begin = node.blockSuccessor(survivingSuccessor);
+        begin.evacuateGuards();
+        FixedNode next = begin.next();
+        begin.setNext(null);
+        for (int i = 0; i < node.blockSuccessorCount(); i++) {
+            node.setBlockSuccessor(i, null);
+        }
+        node.replaceAtPredecessors(next);
+        node.replaceAtUsages(replacement);
+        node.safeDelete();
+        begin.safeDelete();
+    }
+
+    public void addAfterFixed(FixedWithNextNode node, FixedWithNextNode newNode) {
+        assert node != null && newNode != null && node.isAlive() && newNode.isAlive() : "cannot add " + newNode + " after " + node;
+        assert newNode.next() == null;
+        newNode.setProbability(node.probability());
+        FixedNode next = node.next();
+        node.setNext(newNode);
+        newNode.setNext(next);
+    }
+
+    public void addBeforeFixed(FixedNode node, FixedWithNextNode newNode) {
+        assert node != null && newNode != null && node.isAlive() && newNode.isAlive() : "cannot add " + newNode + " before " + node;
+        assert node.predecessor() != null && node.predecessor() instanceof FixedWithNextNode : "cannot add " + newNode + " before " + node;
+        assert newNode.next() == null;
+        newNode.setProbability(node.probability());
+        FixedWithNextNode pred = (FixedWithNextNode) node.predecessor();
+        pred.setNext(newNode);
+        newNode.setNext(node);
+    }
+
+    public void reduceDegenerateLoopBegin(LoopBeginNode begin) {
+        assert begin.loopEnds().isEmpty() : "Loop begin still has backedges";
+        if (begin.forwardEndCount() == 1) { // bypass merge and remove
+            reduceTrivialMerge(begin);
+        } else { // convert to merge
+            MergeNode merge = this.add(new MergeNode());
+            this.replaceFixedWithFixed(begin, merge);
+        }
+    }
+
+    public void reduceTrivialMerge(MergeNode merge) {
+        assert merge.forwardEndCount() == 1;
+        assert !(merge instanceof LoopBeginNode) || ((LoopBeginNode) merge).loopEnds().isEmpty();
+        for (PhiNode phi : merge.phis().snapshot()) {
+            assert phi.valueCount() == 1;
+            ValueNode singleValue = phi.valueAt(0);
+            phi.replaceAtUsages(singleValue);
+            phi.safeDelete();
+        }
+        EndNode singleEnd = merge.forwardEndAt(0);
+        FixedNode sux = merge.next();
+        FrameState stateAfter = merge.stateAfter();
+        // evacuateGuards
+        Node prevBegin = singleEnd.predecessor();
+        assert prevBegin != null;
+        while (!(prevBegin instanceof BeginNode)) {
+            prevBegin = prevBegin.predecessor();
+        }
+        merge.replaceAtUsages(prevBegin);
+
+        merge.safeDelete();
+        if (stateAfter != null && stateAfter.usages().isEmpty()) {
+            stateAfter.safeDelete();
+        }
+        if (sux == null) {
+            singleEnd.replaceAtPredecessors(null);
+            singleEnd.safeDelete();
+        } else {
+            singleEnd.replaceAndDelete(sux);
+        }
     }
 }
