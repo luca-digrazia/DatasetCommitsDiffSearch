@@ -261,7 +261,7 @@ public class SpecializationData extends TemplateMethod {
         if (getParameters().isEmpty() || !Utils.typeEquals(getParameters().get(0).getType(), frameType)) {
             ParameterSpec frameSpec = getSpecification().findParameterSpec("frame");
             if (frameSpec != null) {
-                getParameters().add(0, new ActualParameter(frameSpec, frameType, -1, -1, false));
+                getParameters().add(0, new ActualParameter(frameSpec, frameType, -1, false));
             }
         }
     }
@@ -269,15 +269,6 @@ public class SpecializationData extends TemplateMethod {
     public boolean equalsGuards(SpecializationData specialization) {
         if (assumptions.equals(specialization.getAssumptions()) && guards.equals(specialization.getGuards()) && getSignature().equalsParameters(specialization.getSignature())) {
             return true;
-        }
-        return false;
-    }
-
-    public boolean hasFrame(ProcessorContext context) {
-        for (ActualParameter param : getParameters()) {
-            if (Utils.typeEquals(param.getType(), context.getTruffleTypes().getFrame())) {
-                return true;
-            }
         }
         return false;
     }

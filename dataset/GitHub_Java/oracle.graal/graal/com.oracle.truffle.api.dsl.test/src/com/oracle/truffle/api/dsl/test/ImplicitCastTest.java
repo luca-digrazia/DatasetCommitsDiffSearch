@@ -28,13 +28,14 @@ import com.oracle.truffle.api.dsl.*;
 import com.oracle.truffle.api.dsl.test.ImplicitCastTestFactory.ImplicitCast0NodeFactory;
 import com.oracle.truffle.api.dsl.test.ImplicitCastTestFactory.ImplicitCast1NodeFactory;
 import com.oracle.truffle.api.dsl.test.ImplicitCastTestFactory.ImplicitCast2NodeFactory;
+import com.oracle.truffle.api.dsl.test.NodeContainerTest.Str;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.TestRootNode;
 import com.oracle.truffle.api.dsl.test.TypeSystemTest.ValueNode;
 import com.oracle.truffle.api.frame.*;
 
 public class ImplicitCastTest {
 
-    @TypeSystem({int.class, boolean.class, String.class})
+    @TypeSystem({int.class, boolean.class, String.class, Str.class})
     static class ImplicitCast0Types {
 
         @ImplicitCast
@@ -71,7 +72,6 @@ public class ImplicitCastTest {
     public void testImplicitCast0() {
         ImplicitCast0Node node = ImplicitCast0NodeFactory.create(null);
         TestRootNode<ImplicitCast0Node> root = new TestRootNode<>(node);
-        root.adoptChildren();
         Assert.assertEquals("2", root.getNode().executeEvaluated(null, "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1));
         Assert.assertEquals("1", root.getNode().executeEvaluated(null, "1"));
@@ -107,7 +107,6 @@ public class ImplicitCastTest {
     public void testImplicitCast1() {
         ImplicitCast1Node node = ImplicitCast1NodeFactory.create(null);
         TestRootNode<ImplicitCast1Node> root = new TestRootNode<>(node);
-        root.adoptChildren();
         Assert.assertEquals("2", root.getNode().executeEvaluated(null, "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1));
         Assert.assertEquals("1", root.getNode().executeEvaluated(null, "1"));
@@ -148,7 +147,6 @@ public class ImplicitCastTest {
     public void testImplicitCast2() {
         ImplicitCast2Node node = ImplicitCast2NodeFactory.create(null, null);
         TestRootNode<ImplicitCast2Node> root = new TestRootNode<>(node);
-        root.adoptChildren();
         Assert.assertEquals("42", root.getNode().executeEvaluated(null, "4", "2"));
         Assert.assertEquals(true, root.getNode().executeEvaluated(null, 1, 1));
         Assert.assertEquals("42", root.getNode().executeEvaluated(null, "4", "2"));
