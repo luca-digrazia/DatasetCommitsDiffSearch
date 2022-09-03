@@ -24,15 +24,10 @@
  */
 package com.oracle.truffle.tck;
 
-final class ConstantFunction implements ObjectBinaryOperation {
-    private final Object constant;
-
-    public ConstantFunction(Object constant) {
-        this.constant = constant;
-    }
-
-    @Override
-    public Object compute(Object ignore1, Object ignore2) {
-        return constant;
-    }
+/**
+ * Binary operation on any objects. Mimics "functional interface" - e.g. has just a single method,
+ * so it should be easily usable with lamdas.
+ */
+public interface ObjectBinaryOperation {
+    Object compute(Object a, Object b);
 }
