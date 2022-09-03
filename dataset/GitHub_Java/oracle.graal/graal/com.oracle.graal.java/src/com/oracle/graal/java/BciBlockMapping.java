@@ -30,7 +30,6 @@ import java.util.*;
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.bytecode.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.compiler.common.cfg.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
@@ -84,7 +83,7 @@ public final class BciBlockMapping {
         public int loopId;
 
         /**
-         * XXX to be removed - currently only used by baseline compiler.
+         * XXX to be removed - currently only used by baseline compiler
          */
         public Loop<BciBlock> loop;
         public boolean isLoopEnd;
@@ -602,7 +601,7 @@ public final class BciBlockMapping {
         }
     }
 
-    private HashMap<ExceptionHandler, ExceptionDispatchBlock> initialExceptionDispatch = CollectionsFactory.newMap();
+    private HashMap<ExceptionHandler, ExceptionDispatchBlock> initialExceptionDispatch = new HashMap<>();
 
     private ExceptionDispatchBlock handleExceptions(int bci) {
         ExceptionDispatchBlock lastHandler = null;

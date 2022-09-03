@@ -472,42 +472,42 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
 
             @Override
             protected ValueNode genIntegerAdd(Kind kind, ValueNode x, ValueNode y) {
-                return AddNode.create(x, y);
+                return IntegerAddNode.create(x, y);
             }
 
             @Override
             protected ValueNode genIntegerSub(Kind kind, ValueNode x, ValueNode y) {
-                return SubNode.create(x, y);
+                return IntegerSubNode.create(x, y);
             }
 
             @Override
             protected ValueNode genIntegerMul(Kind kind, ValueNode x, ValueNode y) {
-                return MulNode.create(x, y);
+                return IntegerMulNode.create(x, y);
             }
 
             @Override
             protected ValueNode genFloatAdd(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-                return AddNode.create(x, y);
+                return FloatAddNode.create(x, y, isStrictFP);
             }
 
             @Override
             protected ValueNode genFloatSub(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-                return SubNode.create(x, y);
+                return FloatSubNode.create(x, y, isStrictFP);
             }
 
             @Override
             protected ValueNode genFloatMul(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-                return MulNode.create(x, y);
+                return FloatMulNode.create(x, y, isStrictFP);
             }
 
             @Override
             protected ValueNode genFloatDiv(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-                return DivNode.create(x, y);
+                return FloatDivNode.create(x, y, isStrictFP);
             }
 
             @Override
             protected ValueNode genFloatRem(Kind kind, ValueNode x, ValueNode y, boolean isStrictFP) {
-                return RemNode.create(x, y);
+                return FloatRemNode.create(x, y, isStrictFP);
             }
 
             @Override
