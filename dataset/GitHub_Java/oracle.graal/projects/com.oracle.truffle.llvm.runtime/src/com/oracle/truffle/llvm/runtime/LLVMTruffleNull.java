@@ -27,24 +27,35 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.nodes.intrinsics.interop;
+package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
 
-@MessageResolution(receiverType = LLVMTruffleAddress.class, language = LLVMLanguage.class)
-public class LLVMNullMessageResolution {
+public final class LLVMTruffleNull implements TruffleObject {
 
-    @Resolve(message = "IS_NULL")
-    public abstract static class ForeignNullIsNull extends Node {
-        @SuppressWarnings("unused")
-        protected boolean access(VirtualFrame frame, LLVMTruffleNull receiver) {
-            return true;
+    public static boolean isInstance(TruffleObject object) {
+        return object instanceof LLVMTruffleNull;
+    }
+
+    @CompilationFinal private static ForeignAccess ACCESS;
+
+    @Override
+    public ForeignAccess getForeignAccess() {
+        if (ACCESS == null) {
+            try {
+                Class<?> accessor = getLLVMAddressMessageResolutionAccessorClass();
+                ACCESS = (ForeignAccess) accessor.getField("ACCESS").get(null);
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
         }
+        return ACCESS;
+    }
+
+    // needed by SVM
+    private static Class<?> getLLVMAddressMessageResolutionAccessorClass() throws ClassNotFoundException {
+        return Class.forName("com.oracle.truffle.llvm.nodes.intrinsics.interop.LLVMNullMessageResolutionAccessor");
     }
 }

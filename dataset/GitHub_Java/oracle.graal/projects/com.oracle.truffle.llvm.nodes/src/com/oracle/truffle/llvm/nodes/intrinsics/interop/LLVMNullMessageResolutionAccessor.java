@@ -29,22 +29,10 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleAddress;
-import com.oracle.truffle.llvm.runtime.LLVMTruffleNull;
+import com.oracle.truffle.api.interop.ForeignAccess;
 
-@MessageResolution(receiverType = LLVMTruffleAddress.class, language = LLVMLanguage.class)
-public class LLVMNullMessageResolution {
+public class LLVMNullMessageResolutionAccessor {
 
-    @Resolve(message = "IS_NULL")
-    public abstract static class ForeignNullIsNull extends Node {
-        @SuppressWarnings("unused")
-        protected boolean access(VirtualFrame frame, LLVMTruffleNull receiver) {
-            return true;
-        }
-    }
+    public static final ForeignAccess ACCESS = LLVMNullMessageResolutionForeign.ACCESS;
+
 }
