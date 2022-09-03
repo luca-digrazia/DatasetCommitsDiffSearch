@@ -124,12 +124,7 @@ public class StandardGraphBuilderPlugins {
 
     private static void registerArrayPlugins(InvocationPlugins plugins) {
         Registration r = new Registration(plugins, Array.class);
-        r.register2("newInstance", Class.class, int.class, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unused, ValueNode componentType, ValueNode length) {
-                b.addPush(Kind.Object, new DynamicNewArrayNode(componentType, length, true, null));
-                return true;
-            }
-        });
+        r.registerMethodSubstitution(ArraySubstitutions.class, "newInstance", Class.class, int.class);
         r.registerMethodSubstitution(ArraySubstitutions.class, "getLength", Object.class);
     }
 
@@ -174,15 +169,6 @@ public class StandardGraphBuilderPlugins {
                 }
             });
         }
-
-        r.register2("allocateInstance", Receiver.class, Class.class, new InvocationPlugin() {
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode clazz) {
-                // Emits a null-check for the otherwise unused receiver
-                unsafe.get();
-                b.addPush(Kind.Object, new DynamicNewInstanceNode(clazz, true));
-                return true;
-            }
-        });
     }
 
     private static void registerIntegerLongPlugins(InvocationPlugins plugins, Kind kind) {
