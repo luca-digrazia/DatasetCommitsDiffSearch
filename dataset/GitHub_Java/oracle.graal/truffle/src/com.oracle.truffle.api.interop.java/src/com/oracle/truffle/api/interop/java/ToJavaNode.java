@@ -82,10 +82,10 @@ abstract class ToJavaNode extends Node {
                 return convertedValue;
             }
         }
-        if (JavaObject.isJavaInstance(targetType, value)) {
-            convertedValue = JavaObject.valueOf(value);
-        } else if (targetType == Value.class && languageContext != null) {
+        if (targetType == Value.class && languageContext != null) {
             convertedValue = value instanceof Value ? value : JavaInterop.toHostValue(value, languageContext);
+        } else if (JavaObject.isJavaInstance(targetType, value)) {
+            convertedValue = JavaObject.valueOf(value);
         } else if (value instanceof TruffleObject) {
             TruffleObject tValue = (TruffleObject) value;
             if (ForeignAccess.sendIsNull(isNull, tValue)) {
@@ -117,6 +117,9 @@ abstract class ToJavaNode extends Node {
 
     @SuppressWarnings("unused")
     boolean canConvert(Object value, Class<?> targetType, Type genericType, Object languageContext, boolean strict) {
+        if (strict) {
+            return false;
+        }
         Object convertedValue;
         if (isAssignableFromTrufflePrimitiveType(targetType)) {
             convertedValue = toPrimitive(value, targetType);
@@ -124,13 +127,9 @@ abstract class ToJavaNode extends Node {
                 return true;
             }
         }
-        if (JavaObject.isJavaInstance(targetType, value)) {
-            return true;
-        }
-        if (strict) {
-            return false;
-        }
         if (targetType == Value.class && languageContext != null) {
+            return true;
+        } else if (JavaObject.isJavaInstance(targetType, value)) {
             return true;
         } else if (value instanceof TruffleObject) {
             TruffleObject tValue = (TruffleObject) value;
