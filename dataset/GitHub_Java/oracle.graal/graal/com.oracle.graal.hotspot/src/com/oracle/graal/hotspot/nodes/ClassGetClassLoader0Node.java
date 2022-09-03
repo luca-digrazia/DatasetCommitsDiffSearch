@@ -40,7 +40,11 @@ import com.oracle.graal.replacements.nodes.*;
 @NodeInfo
 public class ClassGetClassLoader0Node extends MacroStateSplitNode implements Canonicalizable {
 
-    public ClassGetClassLoader0Node(Invoke invoke) {
+    public static ClassGetClassLoader0Node create(Invoke invoke) {
+        return new ClassGetClassLoader0Node(invoke);
+    }
+
+    protected ClassGetClassLoader0Node(Invoke invoke) {
         super(invoke);
     }
 
@@ -52,7 +56,7 @@ public class ClassGetClassLoader0Node extends MacroStateSplitNode implements Can
     public Node canonical(CanonicalizerTool tool) {
         ValueNode javaClass = getJavaClass();
         if (javaClass.isConstant()) {
-            HotSpotObjectConstant c = (HotSpotObjectConstant) javaClass.asConstant();
+            HotSpotObjectConstant c = (HotSpotObjectConstant) javaClass.asJavaConstant();
             JavaConstant classLoader = c.getClassLoader();
             if (classLoader != null) {
                 return ConstantNode.forConstant(classLoader, tool.getMetaAccess());
