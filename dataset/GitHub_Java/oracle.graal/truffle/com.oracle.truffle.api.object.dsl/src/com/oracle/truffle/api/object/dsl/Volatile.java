@@ -35,8 +35,6 @@ import java.lang.annotation.Target;
  * are not volatile.
  *
  * @see Layout
- *
- * @since 0.8 or earlier
  */
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.SOURCE)
