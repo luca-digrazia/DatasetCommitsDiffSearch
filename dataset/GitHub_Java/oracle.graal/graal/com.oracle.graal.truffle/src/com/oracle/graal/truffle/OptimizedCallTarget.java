@@ -187,7 +187,6 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     }
 
     OptimizedCallTarget cloneUninitialized() {
-        assert sourceCallTarget == null;
         if (!initialized) {
             initialize();
         }
@@ -200,13 +199,20 @@ public class OptimizedCallTarget extends InstalledCode implements RootCallTarget
     private void initialize() {
         synchronized (this) {
             if (!initialized) {
-                if (sourceCallTarget == null && rootNode.isCloningAllowed()) {
-                    // We are the source CallTarget, so make a copy.
-                    this.uninitializedRootNode = cloneRootNode(rootNode);
-                }
+                ensureCloned();
                 runtime().getTvmci().onFirstExecution(this);
                 initialized = true;
             }
+        }
+    }
+
+    /** Must only be called by initialize() with the lock. */
+    private void ensureCloned() {
+        if (sourceCallTarget != null) {
+            // sourceCallTarget is initialized before cloning
+            this.uninitializedRootNode = sourceCallTarget.uninitializedRootNode;
+        } else if (rootNode.isCloningAllowed()) {
+            this.uninitializedRootNode = cloneRootNode(rootNode);
         }
     }
 
