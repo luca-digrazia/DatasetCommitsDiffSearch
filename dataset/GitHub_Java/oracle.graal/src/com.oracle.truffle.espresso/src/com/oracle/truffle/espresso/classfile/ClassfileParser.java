@@ -44,7 +44,6 @@ import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.runtime.AttributeInfo;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.types.TypeDescriptor;
 
 public class ClassfileParser {
@@ -102,7 +101,7 @@ public class ClassfileParser {
 
     public ClassfileParser(Object classLoader, ClasspathFile classpathFile, String requestedClassName, Klass hostClass, EspressoContext context) {
         this.requestedClassName = requestedClassName;
-        this.classLoader = classLoader == StaticObject.NULL ? null : classLoader; // The BCL is SO.NULL on the guest, we store as null on the host.
+        this.classLoader = classLoader;
         this.className = requestedClassName;
         this.hostClass = hostClass;
         this.context = context;
@@ -112,7 +111,7 @@ public class ClassfileParser {
 
     public ClassfileParser(Object classLoader, ClassfileStream stream, String requestedClassName, Klass hostClass, EspressoContext context) {
         this.requestedClassName = requestedClassName;
-        this.classLoader = classLoader == StaticObject.NULL ? null : classLoader; // The BCL is SO.NULL on the guest, we store as null on the host.
+        this.classLoader = classLoader;
         this.className = requestedClassName;
         this.hostClass = hostClass;
         this.context = context;
@@ -195,7 +194,7 @@ public class ClassfileParser {
 
         // Update className which could be null previously
         // to reflect the name in the constant pool
-        className = TypeDescriptor.slashified(typeDescriptor.toJavaName());
+        className = typeDescriptor.toJavaName();
 
         // Checks if name in class file matches requested name
         if (requestedClassName != null && !requestedClassName.equals(className)) {
@@ -375,9 +374,8 @@ public class ClassfileParser {
         final int descriptorIndex = stream.readU2();
         String name = pool.utf8At(nameIndex).getValue();
         TypeDescriptor type = context.getTypeDescriptors().make(pool.utf8At(descriptorIndex).getValue());
-        AttributeInfo[] fieldAttributes = parseAttributes();
-        Optional<AttributeInfo> optVisibleAnnotations = Arrays.stream(fieldAttributes).filter(a -> a.getName().equals("RuntimeVisibleAnnotations")).findAny();
-        return new FieldInfo.Builder().setName(name).setType(type).setModifiers(flags).setRuntimeVisibleAnnotations(optVisibleAnnotations.orElse(null));
+        parseAttributes();
+        return new FieldInfo.Builder().setName(name).setType(type).setModifiers(flags);
     }
 
     private FieldInfo.Builder[] parseFields() {
@@ -397,7 +395,7 @@ public class ClassfileParser {
     private int parseSuperClass() {
         int index = stream.readU2();
         if (index == 0) {
-            if (!className.equals("java/lang/Object")) {
+            if (!className.equals("java.lang.Object")) {
                 throw classfile.classFormatError("Invalid superclass index 0");
             }
         }
