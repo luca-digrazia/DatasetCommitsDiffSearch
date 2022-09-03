@@ -1837,13 +1837,15 @@ class LinearScan {
         try (Indent indent = Debug.logAndIndent("LinearScan allocate")) {
             AllocationContext context = new AllocationContext(spillMoveFactory);
 
-            new LifetimeAnalysis().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
-            new RegisterAllocation().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
-
+            new LifetimeAnalysis().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
+            new RegisterAllocation().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
             if (LinearScan.Options.LSRAOptimizeSpillPosition.getValue()) {
-                new OptimizeSpillPosition().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context, false);
+                new OptimizeSpillPosition().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
             }
             new ResolveDataFlow().apply(target, lirGenRes, codeEmittingOrder, linearScanOrder, context);
+
+            printIntervals("After register allocation");
+            printLir("After register allocation", true);
 
             sortIntervalsAfterAllocation();
 
@@ -1857,6 +1859,8 @@ class LinearScan {
             if (DetailedAsserts.getValue()) {
                 verifyIntervals();
             }
+
+            printLir("After register number assignment", true);
         }
     }
 
@@ -1882,7 +1886,6 @@ class LinearScan {
                         SpillMoveFactory spillMoveFactory) {
             printIntervals("Before register allocation");
             allocateRegisters();
-            printIntervals("After register allocation");
         }
 
     }
@@ -1893,7 +1896,6 @@ class LinearScan {
         protected <B extends AbstractBlockBase<B>> void run(TargetDescription target, LIRGenerationResult lirGenRes, List<B> codeEmittingOrder, List<B> linearScanOrder,
                         SpillMoveFactory spillMoveFactory) {
             optimizeSpillPosition();
-            printIntervals("After optimize spill position");
         }
 
     }
@@ -1915,6 +1917,7 @@ class LinearScan {
                         SpillMoveFactory spillMoveFactory) {
             beforeSpillMoveElimination();
             eliminateSpillMoves();
+            printLir("After spill move elimination", true);
         }
 
     }
