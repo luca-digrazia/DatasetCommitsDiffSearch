@@ -26,11 +26,9 @@ import java.util.*;
 
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
-import com.oracle.graal.graph.iterators.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.util.*;
 import com.oracle.graal.phases.*;
 import com.oracle.graal.phases.tiers.*;
 
@@ -58,38 +56,20 @@ public class VerifyNoNodeClassLiteralIdentityTests extends VerifyPhase<PhaseCont
 
     @Override
     protected boolean verify(StructuredGraph graph, PhaseContext context) {
-        Map<String, String> errors = new HashMap<>();
-
+        List<String> literals = new ArrayList<>();
         for (ConstantNode c : ConstantNode.getConstantNodes(graph)) {
             ResolvedJavaType nodeClassType = context.getMetaAccess().lookupJavaType(Node.class);
             ResolvedJavaType nodeType = context.getConstantReflection().asJavaType(c.asConstant());
             if (nodeType != null && nodeClassType.isAssignableFrom(nodeType)) {
-                NodeIterable<Node> usages = c.usages();
-                for (Node n : usages) {
-                    if (!(n instanceof ObjectEqualsNode)) {
-                        continue;
-                    }
-                    String loc = GraphUtil.approxSourceLocation(n);
-                    if (loc == null) {
-                        loc = graph.method().asStackTraceElement(0).toString() + "  " + n;
-                    }
-                    errors.put(nodeType.toJavaName(false), loc);
+                if (c.usages().filter(ObjectEqualsNode.class).isNotEmpty()) {
+                    literals.add(nodeType.toJavaName(false));
                 }
             }
         }
-        if (errors.isEmpty()) {
+        if (literals.isEmpty()) {
             return true;
         }
-        Formatter f = new Formatter();
-        boolean first = true;
-        for (Map.Entry<String, String> e : errors.entrySet()) {
-            if (!first) {
-                f.format("%n");
-            } else {
-                first = false;
-            }
-            f.format("Found illegal use of Node class literal %s near:%n    %s", e.getKey(), e.getValue());
-        }
-        throw new VerificationError(f.toString());
+        StackTraceElement ste = graph.method().asStackTraceElement(0);
+        throw new VerificationError("Found illegal identity test against following Node class literals in " + graph.method().format("%h.%n(%p)") + ": " + String.join(", ", literals) + "\n    " + ste);
     }
 }

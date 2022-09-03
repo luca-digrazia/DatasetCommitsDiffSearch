@@ -189,7 +189,11 @@ public class CheckGraalInvariants extends GraalTest {
                     throw new AssertionError(String.format("Node subclass %s requires %s annotation", c.getName(), NodeClass.class.getSimpleName()));
                 }
                 if (!Modifier.isAbstract(c.getModifiers())) {
-                    NodeClass.get(c).getGenClass();
+                    try {
+                        Class.forName(c.getName().replace('$', '_') + "Gen");
+                    } catch (ClassNotFoundException e) {
+                        throw new AssertionError(String.format("Missing generated Node class %s", c.getName() + "Gen"));
+                    }
                 }
             }
         }
