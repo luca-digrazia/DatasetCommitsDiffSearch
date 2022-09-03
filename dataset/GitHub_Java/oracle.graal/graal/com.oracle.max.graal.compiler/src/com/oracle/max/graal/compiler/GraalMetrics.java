@@ -64,10 +64,6 @@ public final class GraalMetrics {
     public static int NodesCanonicalized;
     public static int LoopsPeeled;
     public static int LoopsInverted;
-    public static int PartialUsageProbability;
-    public static int FullUsageProbability;
-    public static int Rematerializations;
-    public static int GlobalValueNumberingHits;
 
     public static void print() {
         for (Entry<String, GraalMetrics> m : map.entrySet()) {
