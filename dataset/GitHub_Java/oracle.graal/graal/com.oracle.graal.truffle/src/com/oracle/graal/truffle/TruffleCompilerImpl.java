@@ -36,6 +36,8 @@ import com.oracle.graal.api.runtime.*;
 import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
+import com.oracle.graal.debug.DebugMemUseTracker.Closeable;
+import com.oracle.graal.debug.internal.*;
 import com.oracle.graal.java.*;
 import com.oracle.graal.lir.asm.*;
 import com.oracle.graal.lir.phases.*;
@@ -93,7 +95,7 @@ public class TruffleCompilerImpl {
         this.config = GraphBuilderConfiguration.getDefault().withSkippedExceptionTypes(skippedExceptionTypes);
         if (TruffleCompilerOptions.FastPE.getValue()) {
             GraphBuilderPhase phase = (GraphBuilderPhase) backend.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
-            this.config.getPlugins().getInvocationPlugins().setDefaults(phase.getGraphBuilderConfig().getPlugins().getInvocationPlugins());
+            this.config.getInvocationPlugins().setDefaults(phase.getGraphBuilderConfig().getInvocationPlugins());
         }
 
         this.truffleCache = new TruffleCacheImpl(providers, eagerConfig, TruffleCompilerImpl.Optimizations);
@@ -129,7 +131,7 @@ public class TruffleCompilerImpl {
         try {
             PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite();
 
-            try (DebugCloseable a = PartialEvaluationTime.start(); DebugCloseable c = PartialEvaluationMemUse.start()) {
+            try (TimerCloseable a = PartialEvaluationTime.start(); Closeable c = PartialEvaluationMemUse.start()) {
                 graph = partialEvaluator.createGraph(compilable, AllowAssumptions.YES);
             }
 
@@ -155,7 +157,7 @@ public class TruffleCompilerImpl {
         }
 
         CompilationResult result = null;
-        try (DebugCloseable a = CompilationTime.start(); Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache()); DebugCloseable c = CompilationMemUse.start()) {
+        try (TimerCloseable a = CompilationTime.start(); Scope s = Debug.scope("TruffleGraal.GraalCompiler", graph, providers.getCodeCache()); Closeable c = CompilationMemUse.start()) {
             CodeCacheProvider codeCache = providers.getCodeCache();
             CallingConvention cc = getCallingConvention(codeCache, Type.JavaCallee, graph.method(), false);
             CompilationResult compilationResult = new CompilationResult(name);
@@ -188,7 +190,7 @@ public class TruffleCompilerImpl {
         result.setAssumptions(newAssumptions.toArray(new Assumption[newAssumptions.size()]));
 
         InstalledCode installedCode;
-        try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); DebugCloseable a = CodeInstallationTime.start(); DebugCloseable c = CodeInstallationMemUse.start()) {
+        try (Scope s = Debug.scope("CodeInstall", providers.getCodeCache()); TimerCloseable a = CodeInstallationTime.start(); Closeable c = CodeInstallationMemUse.start()) {
             installedCode = providers.getCodeCache().addMethod(graph.method(), result, speculationLog, predefinedInstalledCode);
         } catch (Throwable e) {
             throw Debug.handle(e);
