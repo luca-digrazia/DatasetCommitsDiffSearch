@@ -26,7 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 
 /* TODO (thomaswue/gdub) For high-level optimization purpose the compare node should be a boolean *value* (it is currently only a helper node)
@@ -35,7 +34,7 @@ import com.oracle.graal.nodes.spi.*;
  * Compare should probably be made a value (so that it can be canonicalized for example) and in later stages some Compare usage should be transformed
  * into variants that do not materialize the value (CompareIf, CompareGuard...)
  */
-public abstract class CompareNode extends LogicNode implements Canonicalizable, LIRLowerable, MemoryArithmeticLIRLowerable {
+public abstract class CompareNode extends LogicNode implements Canonicalizable, LIRLowerable {
 
     @Input private ValueNode x;
     @Input private ValueNode y;
@@ -75,7 +74,7 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
     public abstract boolean unorderedIsTrue();
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
     }
 
     private LogicNode optimizeConditional(Constant constant, ConditionalNode conditionalNode, ConstantReflectionProvider constantReflection, Condition cond) {
@@ -192,15 +191,5 @@ public abstract class CompareNode extends LogicNode implements Canonicalizable, 
         }
 
         return graph.unique(comparison);
-    }
-
-    public boolean generate(MemoryArithmeticLIRLowerer gen, Access access) {
-        return false;
-    }
-
-    @Override
-    public boolean verify() {
-        assertTrue(x.stamp().isCompatible(y.stamp()), "stamps not compatible: %s, %s", x.stamp(), y.stamp());
-        return super.verify();
     }
 }

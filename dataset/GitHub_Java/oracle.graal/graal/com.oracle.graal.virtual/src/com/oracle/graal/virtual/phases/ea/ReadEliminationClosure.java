@@ -29,6 +29,7 @@ import java.util.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
+import com.oracle.graal.nodes.PhiNode.PhiType;
 import com.oracle.graal.nodes.cfg.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.java.*;
@@ -93,9 +94,6 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                 ReadCacheEntry identifier = new ReadCacheEntry(object, read.location());
                 ValueNode cachedValue = state.getCacheEntry(identifier);
                 if (cachedValue != null) {
-                    if (read.getGuard() != null && !(read.getGuard() instanceof FixedNode)) {
-                        effects.addFixedNodeBefore(new ValueAnchorNode((ValueNode) read.getGuard()), read);
-                    }
                     effects.replaceAtUsages(read, cachedValue);
                     addScalarAlias(read, cachedValue);
                     deleted = true;
@@ -174,7 +172,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
     protected void processLoopExit(LoopExitNode exitNode, ReadEliminationBlockState initialState, ReadEliminationBlockState exitState, GraphEffectList effects) {
         for (Map.Entry<CacheEntry<?>, ValueNode> entry : exitState.getReadCache().entrySet()) {
             if (initialState.getReadCache().get(entry.getKey()) != entry.getValue()) {
-                ProxyNode proxy = new ValueProxyNode(exitState.getCacheEntry(entry.getKey()), exitNode);
+                ProxyNode proxy = new ProxyNode(exitState.getCacheEntry(entry.getKey()), exitNode, PhiType.Value);
                 effects.addFloatingNode(proxy, "readCacheProxy");
                 entry.setValue(proxy);
             }
@@ -193,16 +191,16 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
 
     private class ReadEliminationMergeProcessor extends EffectsClosure<ReadEliminationBlockState>.MergeProcessor {
 
-        private final HashMap<Object, ValuePhiNode> materializedPhis = new HashMap<>();
+        private final HashMap<Object, PhiNode> materializedPhis = new HashMap<>();
 
         public ReadEliminationMergeProcessor(Block mergeBlock) {
             super(mergeBlock);
         }
 
         protected <T> PhiNode getCachedPhi(T virtual, Stamp stamp) {
-            ValuePhiNode result = materializedPhis.get(virtual);
+            PhiNode result = materializedPhis.get(virtual);
             if (result == null) {
-                result = new ValuePhiNode(stamp, merge);
+                result = new PhiNode(stamp, merge);
                 materializedPhis.put(virtual, result);
             }
             return result;

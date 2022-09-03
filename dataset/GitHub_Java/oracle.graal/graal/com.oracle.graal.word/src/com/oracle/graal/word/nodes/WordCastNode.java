@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,11 +23,11 @@
 package com.oracle.graal.word.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 import com.oracle.graal.word.phases.*;
 
 /**
@@ -35,8 +35,6 @@ import com.oracle.graal.word.phases.*;
  * impact on the pointer maps for the GC, so it must not be scheduled or optimized away.
  */
 public final class WordCastNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable {
-
-    @Input private ValueNode input;
 
     public static WordCastNode wordToObject(ValueNode input, Kind wordKind) {
         assert input.getKind() == wordKind;
@@ -47,6 +45,8 @@ public final class WordCastNode extends FixedWithNextNode implements LIRLowerabl
         assert input.getKind() == Kind.Object;
         return new WordCastNode(StampFactory.forKind(wordKind), input);
     }
+
+    @Input private ValueNode input;
 
     private WordCastNode(Stamp stamp, ValueNode input) {
         super(stamp);
@@ -67,17 +67,12 @@ public final class WordCastNode extends FixedWithNextNode implements LIRLowerabl
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool generator) {
+    public void generate(LIRGeneratorTool generator) {
         assert getKind() != input.getKind();
-        assert generator.getLIRGeneratorTool().target().getSizeInBytes(getKind()) == generator.getLIRGeneratorTool().target().getSizeInBytes(input.getKind());
+        assert generator.target().getSizeInBytes(getKind()) == generator.target().getSizeInBytes(input.getKind());
 
-        LIRKind kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
-        if (kind.isValue()) {
-            kind = kind.makeDerivedReference();
-        }
-
-        AllocatableValue result = generator.getLIRGeneratorTool().newVariable(kind);
-        generator.getLIRGeneratorTool().emitMove(result, generator.operand(input));
+        AllocatableValue result = generator.newVariable(getKind());
+        generator.emitMove(result, generator.operand(input));
         generator.setResult(this, result);
     }
 }

@@ -41,7 +41,6 @@ import com.oracle.graal.lir.*;
 import com.oracle.graal.lir.StandardOp.JumpOp;
 import com.oracle.graal.lir.amd64.*;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryCommutative;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryMemory;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegConst;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegReg;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegStack;
@@ -49,9 +48,7 @@ import com.oracle.graal.lir.amd64.AMD64Arithmetic.BinaryRegStackConst;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.DivRemOp;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.FPDivRemOp;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.Unary1Op;
-import com.oracle.graal.lir.amd64.AMD64Arithmetic.Unary2MemoryOp;
 import com.oracle.graal.lir.amd64.AMD64Arithmetic.Unary2Op;
-import com.oracle.graal.lir.amd64.AMD64Compare.CompareMemoryOp;
 import com.oracle.graal.lir.amd64.AMD64Compare.CompareOp;
 import com.oracle.graal.lir.amd64.AMD64ControlFlow.BranchOp;
 import com.oracle.graal.lir.amd64.AMD64ControlFlow.CondMoveOp;
@@ -60,13 +57,11 @@ import com.oracle.graal.lir.amd64.AMD64ControlFlow.FloatCondMoveOp;
 import com.oracle.graal.lir.amd64.AMD64ControlFlow.ReturnOp;
 import com.oracle.graal.lir.amd64.AMD64ControlFlow.StrategySwitchOp;
 import com.oracle.graal.lir.amd64.AMD64ControlFlow.TableSwitchOp;
-import com.oracle.graal.lir.amd64.AMD64Move.LeaDataOp;
 import com.oracle.graal.lir.amd64.AMD64Move.LeaOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MembarOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveFromRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.MoveToRegOp;
 import com.oracle.graal.lir.amd64.AMD64Move.StackLeaOp;
-import com.oracle.graal.lir.amd64.AMD64Move.ZeroExtendLoadOp;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.calc.FloatConvertNode.FloatConvert;
@@ -92,9 +87,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    public AMD64LIRGenerator(Providers providers, CallingConvention cc, LIRGenerationResult lirGenRes) {
-        super(providers, cc, lirGenRes);
-        lirGenRes.getLIR().setSpillMoveFactory(new AMD64SpillMoveFactory());
+    public AMD64LIRGenerator(StructuredGraph graph, Providers providers, FrameMap frameMap, CallingConvention cc, LIR lir) {
+        super(graph, providers, frameMap, cc, lir);
+        lir.setSpillMoveFactory(new AMD64SpillMoveFactory());
     }
 
     @Override
@@ -156,10 +151,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void emitMove(AllocatableValue dst, Value src) {
         append(createMove(dst, src));
-    }
-
-    public void emitData(AllocatableValue dst, byte[] data) {
-        append(new LeaDataOp(dst, data));
     }
 
     @Override
@@ -224,7 +215,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return new AMD64AddressValue(target().wordKind, baseRegister, indexRegister, scaleEnum, displacementInt);
     }
 
-    public AMD64AddressValue asAddressValue(Value address) {
+    protected AMD64AddressValue asAddressValue(Value address) {
         if (address instanceof AMD64AddressValue) {
             return (AMD64AddressValue) address;
         } else {
@@ -262,6 +253,13 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             default:
                 throw GraalInternalError.shouldNotReachHere("" + left.getKind());
         }
+    }
+
+    @Override
+    protected void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState) {
+        AllocatableValue targetAddress = AMD64.rax.asValue();
+        emitMove(targetAddress, operand(callTarget.computedAddress()));
+        append(new AMD64Call.IndirectCallOp(callTarget.target(), result, parameters, temps, targetAddress, callState));
     }
 
     @Override
@@ -336,48 +334,10 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    protected void emitCompareMemoryConOp(Kind kind, AMD64AddressValue address, Value value, LIRFrameState state) {
-        assert kind == value.getKind();
-        switch (kind) {
-            case Int:
-                append(new CompareMemoryOp(ICMP, kind, address, value, state));
-                break;
-            case Long:
-                append(new CompareMemoryOp(LCMP, kind, address, value, state));
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-    }
-
-    protected void emitCompareRegMemoryOp(Kind kind, Value value, AMD64AddressValue address, LIRFrameState state) {
-        AMD64Compare opcode = null;
-        switch (kind) {
-            case Int:
-                opcode = ICMP;
-                break;
-            case Long:
-                opcode = LCMP;
-                break;
-            case Object:
-                opcode = ACMP;
-                break;
-            case Float:
-                opcode = FCMP;
-                break;
-            case Double:
-                opcode = DCMP;
-                break;
-            default:
-                throw GraalInternalError.shouldNotReachHere();
-        }
-        append(new CompareMemoryOp(opcode, kind, address, value, state));
-    }
-
     /**
      * This method emits the compare instruction, and may reorder the operands. It returns true if
      * it did so.
-     *
+     * 
      * @param a the left operand of the comparison
      * @param b the right operand of the comparison
      * @return true if the left and right operands were switched, false otherwise
@@ -397,6 +357,12 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
         emitCompareOp(left, right);
         return mirrored;
+    }
+
+    @Override
+    public void emitNullCheck(ValueNode v, DeoptimizingNode deopt) {
+        assert v.getKind() == Kind.Object : v + " - " + v.stamp() + " @ " + deopt;
+        append(new AMD64Move.NullCheckOp(load(operand(v)), state(deopt)));
     }
 
     @Override
@@ -539,24 +505,31 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         }
     }
 
-    protected Value emitBinaryMemory(AMD64Arithmetic op, Kind kind, AllocatableValue a, AMD64AddressValue location, LIRFrameState state) {
-        Variable result = newVariable(a.getKind());
-        append(new BinaryMemory(op, kind, result, a, location, state));
-        return result;
-    }
-
-    protected Value emitConvert2MemoryOp(PlatformKind kind, AMD64Arithmetic op, AMD64AddressValue address, LIRFrameState state) {
-        Variable result = newVariable(kind);
-        append(new Unary2MemoryOp(op, result, (Kind) null, address, state));
-        return result;
-    }
-
-    protected Value emitZeroExtendMemory(Kind memoryKind, int resultBits, AMD64AddressValue address, LIRFrameState state) {
-        // Issue a zero extending load of the proper bit size and set the result to
-        // the proper kind.
-        Variable result = newVariable(resultBits == 32 ? Kind.Int : Kind.Long);
-        append(new ZeroExtendLoadOp(memoryKind, result, address, state));
-        return result;
+    @Override
+    protected boolean peephole(ValueNode valueNode) {
+        if ((valueNode instanceof IntegerDivNode) || (valueNode instanceof IntegerRemNode)) {
+            FixedBinaryNode divRem = (FixedBinaryNode) valueNode;
+            FixedNode node = divRem.next();
+            while (node instanceof FixedWithNextNode) {
+                FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) node;
+                if (((fixedWithNextNode instanceof IntegerDivNode) || (fixedWithNextNode instanceof IntegerRemNode)) && fixedWithNextNode.getClass() != divRem.getClass()) {
+                    FixedBinaryNode otherDivRem = (FixedBinaryNode) fixedWithNextNode;
+                    if (otherDivRem.x() == divRem.x() && otherDivRem.y() == divRem.y() && operand(otherDivRem) == null) {
+                        Value[] results = emitIntegerDivRem(operand(divRem.x()), operand(divRem.y()), (DeoptimizingNode) valueNode);
+                        if (divRem instanceof IntegerDivNode) {
+                            setResult(divRem, results[0]);
+                            setResult(otherDivRem, results[1]);
+                        } else {
+                            setResult(divRem, results[1]);
+                            setResult(otherDivRem, results[0]);
+                        }
+                        return true;
+                    }
+                }
+                node = fixedWithNextNode.next();
+            }
+        }
+        return false;
     }
 
     private void emitDivRem(AMD64Arithmetic op, Value a, Value b, LIRFrameState state) {
@@ -986,7 +959,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitReturn(Value input) {
+    protected void emitReturn(Value input) {
         append(new ReturnOp(input));
     }
 
@@ -1002,4 +975,19 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         append(new TableSwitchOp(lowKey, defaultTarget, targets, key, newVariable(target().wordKind), newVariable(key.getPlatformKind())));
     }
 
+    @Override
+    public void visitBreakpointNode(BreakpointNode node) {
+        JavaType[] sig = new JavaType[node.arguments().size()];
+        for (int i = 0; i < sig.length; i++) {
+            sig[i] = node.arguments().get(i).stamp().javaType(getMetaAccess());
+        }
+
+        Value[] parameters = visitInvokeArguments(frameMap.registerConfig.getCallingConvention(CallingConvention.Type.JavaCall, null, sig, target(), false), node.arguments());
+        append(new AMD64BreakpointOp(parameters));
+    }
+
+    @Override
+    public void visitInfopointNode(InfopointNode i) {
+        append(new InfopointOp(stateFor(i.getState()), i.reason));
+    }
 }

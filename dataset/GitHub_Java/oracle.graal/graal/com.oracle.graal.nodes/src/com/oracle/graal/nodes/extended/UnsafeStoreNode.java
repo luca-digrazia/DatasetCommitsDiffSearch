@@ -22,14 +22,13 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Store of a value at a location specified as an offset relative to an object. No null check is
@@ -38,17 +37,12 @@ import com.oracle.graal.nodes.spi.*;
 public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
 
     @Input private ValueNode value;
-    @OptionalInput(InputType.State) private FrameState stateAfter;
+    @Input(notDataflow = true) private FrameState stateAfter;
 
     public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity) {
-        this(object, offset, value, accessKind, locationIdentity, null);
-    }
-
-    public UnsafeStoreNode(ValueNode object, ValueNode offset, ValueNode value, Kind accessKind, LocationIdentity locationIdentity, FrameState stateAfter) {
         super(StampFactory.forVoid(), object, offset, accessKind, locationIdentity);
-        this.value = value;
-        this.stateAfter = stateAfter;
         assert accessKind != Kind.Void && accessKind != Kind.Illegal;
+        this.value = value;
     }
 
     public FrameState stateAfter() {
@@ -108,12 +102,9 @@ public class UnsafeStoreNode extends UnsafeAccessNode implements StateSplit, Low
 
     @Override
     protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
-        return new StoreFieldNode(object(), field, value(), stateAfter());
-    }
-
-    @Override
-    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return new UnsafeStoreNode(object(), location, value, accessKind(), identity);
+        StoreFieldNode storeFieldNode = graph().add(new StoreFieldNode(object(), field, value()));
+        storeFieldNode.setStateAfter(stateAfter());
+        return storeFieldNode;
     }
 
     public FrameState getState() {

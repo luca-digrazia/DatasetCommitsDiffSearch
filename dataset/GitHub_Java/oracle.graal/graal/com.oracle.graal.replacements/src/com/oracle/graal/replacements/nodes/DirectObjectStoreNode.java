@@ -23,18 +23,16 @@
 package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.HeapAccess.BarrierType;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * A special purpose store node that differs from {@link UnsafeStoreNode} in that it is not a
  * {@link StateSplit} and does not include a write barrier.
  */
-@NodeInfo
 public class DirectObjectStoreNode extends FixedWithNextNode implements Lowerable {
 
     @Input private ValueNode object;
@@ -61,9 +59,7 @@ public class DirectObjectStoreNode extends FixedWithNextNode implements Lowerabl
     @Override
     public void lower(LoweringTool tool) {
         IndexedLocationNode location = IndexedLocationNode.create(locationIdentity, value.getKind(), displacement, offset, graph(), 1);
-        JavaWriteNode write = graph().add(new JavaWriteNode(object, value, location, BarrierType.NONE, value.getKind() == Kind.Object, false));
+        WriteNode write = graph().add(new WriteNode(object, value, location, BarrierType.NONE, value.getKind() == Kind.Object));
         graph().replaceFixedWithFixed(this, write);
-
-        tool.getLowerer().lower(write, tool);
     }
 }

@@ -57,7 +57,13 @@ public final class RightShiftNode extends ShiftNode implements Canonicalizable {
         } else if (y().isConstant()) {
             int amount = y().asConstant().asInt();
             int originalAmout = amount;
-            int mask = getShiftAmountMask();
+            int mask;
+            if (getKind() == Kind.Int) {
+                mask = 0x1f;
+            } else {
+                assert getKind() == Kind.Long;
+                mask = 0x3f;
+            }
             amount &= mask;
             if (amount == 0) {
                 return x();
@@ -98,7 +104,7 @@ public final class RightShiftNode extends ShiftNode implements Canonicalizable {
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        gen.setResult(this, gen.getLIRGeneratorTool().emitShr(gen.operand(x()), gen.operand(y())));
+    public void generate(ArithmeticLIRGenerator gen) {
+        gen.setResult(this, gen.emitShr(gen.operand(x()), gen.operand(y())));
     }
 }

@@ -22,10 +22,11 @@
  */
 package com.oracle.graal.virtual.phases.ea;
 
-import static com.oracle.graal.compiler.common.GraalOptions.*;
+import static com.oracle.graal.phases.GraalOptions.*;
 
 import java.util.*;
 
+import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
@@ -39,12 +40,12 @@ import com.oracle.graal.nodes.virtual.*;
 class VirtualizerToolImpl implements VirtualizerTool {
 
     private final MetaAccessProvider metaAccess;
-    private final ConstantReflectionProvider constantReflection;
+    private final Assumptions assumptions;
     private final PartialEscapeClosure<?> closure;
 
-    VirtualizerToolImpl(MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, PartialEscapeClosure<?> closure) {
+    VirtualizerToolImpl(MetaAccessProvider metaAccess, Assumptions assumptions, PartialEscapeClosure<?> closure) {
         this.metaAccess = metaAccess;
-        this.constantReflection = constantReflection;
+        this.assumptions = assumptions;
         this.closure = closure;
     }
 
@@ -59,11 +60,12 @@ class VirtualizerToolImpl implements VirtualizerTool {
         return metaAccess;
     }
 
-    public ConstantReflectionProvider getConstantReflectionProvider() {
-        return constantReflection;
+    @Override
+    public Assumptions getAssumptions() {
+        return assumptions;
     }
 
-    public void reset(PartialEscapeBlockState<?> newState, ValueNode newCurrent, FixedNode newPosition, GraphEffectList newEffects) {
+    public void reset(PartialEscapeBlockState newState, ValueNode newCurrent, FixedNode newPosition, GraphEffectList newEffects) {
         deleted = false;
         state = newState;
         current = newCurrent;
@@ -117,7 +119,9 @@ class VirtualizerToolImpl implements VirtualizerTool {
     @Override
     public void replaceWithVirtual(VirtualObjectNode virtual) {
         closure.addAndMarkAlias(virtual, current);
-        effects.deleteNode(current);
+        if (current instanceof FixedWithNextNode) {
+            effects.deleteFixedNode((FixedWithNextNode) current);
+        }
         deleted = true;
     }
 
@@ -130,7 +134,7 @@ class VirtualizerToolImpl implements VirtualizerTool {
 
     @Override
     public void delete() {
-        effects.deleteNode(current);
+        effects.deleteFixedNode((FixedWithNextNode) current);
         deleted = true;
     }
 

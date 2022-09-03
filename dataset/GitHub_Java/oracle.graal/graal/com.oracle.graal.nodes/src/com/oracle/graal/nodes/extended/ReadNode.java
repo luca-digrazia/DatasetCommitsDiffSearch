@@ -53,17 +53,13 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
+    public void generate(LIRGeneratorTool gen) {
         Value address = location().generateAddress(gen, gen.operand(object()));
-        PlatformKind readKind = gen.getLIRGeneratorTool().getPlatformKind(stamp());
-        gen.setResult(this, gen.getLIRGeneratorTool().emitLoad(readKind, address, this));
+        gen.setResult(this, gen.emitLoad(location().getValueKind(), address, this));
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (object() instanceof PiNode && ((PiNode) object()).getGuard() == getGuard()) {
-            return graph().add(new ReadNode(((PiNode) object()).getOriginalValue(), location(), stamp(), getGuard(), getBarrierType(), isCompressible()));
-        }
         return canonicalizeRead(this, location(), object(), tool, isCompressible());
     }
 
@@ -75,14 +71,8 @@ public final class ReadNode extends FloatableAccessNode implements LIRLowerable,
     public static ValueNode canonicalizeRead(ValueNode read, LocationNode location, ValueNode object, CanonicalizerTool tool, boolean compressible) {
         MetaAccessProvider metaAccess = tool.getMetaAccess();
         if (read.usages().isEmpty()) {
-            GuardingNode guard = ((Access) read).getGuard();
-            if (guard != null && !(guard instanceof FixedNode)) {
-                // The guard is necessary even if the read goes away.
-                return read.graph().add(new ValueAnchorNode((ValueNode) guard));
-            } else {
-                // Read without usages or guard can be safely removed.
-                return null;
-            }
+            // Read without usages can be safely removed.
+            return null;
         }
         if (tool.canonicalizeReads()) {
             if (metaAccess != null && object != null && object.isConstant()) {

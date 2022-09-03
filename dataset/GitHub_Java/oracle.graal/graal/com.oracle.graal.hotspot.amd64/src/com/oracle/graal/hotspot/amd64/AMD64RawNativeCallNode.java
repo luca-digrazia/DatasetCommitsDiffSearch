@@ -26,13 +26,13 @@ import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.code.CallingConvention.Type;
 import com.oracle.graal.api.meta.*;
 import com.oracle.graal.compiler.amd64.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-@NodeInfo
-public class AMD64RawNativeCallNode extends FixedWithNextNode implements LIRLowerable {
+public class AMD64RawNativeCallNode extends FixedWithNextNode implements LIRGenLowerable {
 
     private final Constant functionPointer;
     @Input private final NodeInputList<ValueNode> args;
@@ -44,20 +44,19 @@ public class AMD64RawNativeCallNode extends FixedWithNextNode implements LIRLowe
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool generator) {
-        AMD64NodeLIRBuilder gen = (AMD64NodeLIRBuilder) generator;
+    public void generate(LIRGenerator generator) {
+        AMD64LIRGenerator gen = (AMD64LIRGenerator) generator;
         Value[] parameter = new Value[args.count()];
         JavaType[] parameterTypes = new JavaType[args.count()];
         for (int i = 0; i < args.count(); i++) {
             parameter[i] = generator.operand(args.get(i));
-            parameterTypes[i] = args.get(i).stamp().javaType(gen.getLIRGeneratorTool().getMetaAccess());
+            parameterTypes[i] = args.get(i).stamp().javaType(gen.getMetaAccess());
         }
-        ResolvedJavaType returnType = stamp().javaType(gen.getLIRGeneratorTool().getMetaAccess());
-        CallingConvention cc = generator.getLIRGeneratorTool().getCodeCache().getRegisterConfig().getCallingConvention(Type.NativeCall, returnType, parameterTypes,
-                        generator.getLIRGeneratorTool().target(), false);
-        gen.getLIRGeneratorTool().emitCCall(functionPointer.asLong(), cc, parameter, countFloatingTypeArguments(args));
+        ResolvedJavaType returnType = stamp().javaType(gen.getMetaAccess());
+        CallingConvention cc = generator.getCodeCache().getRegisterConfig().getCallingConvention(Type.NativeCall, returnType, parameterTypes, generator.target(), false);
+        gen.emitCCall(functionPointer.asLong(), cc, parameter, countFloatingTypeArguments(args));
         if (this.getKind() != Kind.Void) {
-            generator.setResult(this, gen.getLIRGeneratorTool().emitMove(cc.getReturn()));
+            generator.setResult(this, gen.emitMove(cc.getReturn()));
         }
     }
 

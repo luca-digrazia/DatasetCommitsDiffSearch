@@ -27,7 +27,6 @@ import java.util.Map.Entry;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.*;
 import com.oracle.graal.debug.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.lir.*;
@@ -129,7 +128,7 @@ public class DebugInfoBuilder {
         if (state.outerFrameState() != null) {
             caller = computeFrameForState(state.outerFrameState());
         }
-        assert state.bci >= BytecodeFrame.BEFORE_BCI : "bci == " + state.bci;
+        assert state.bci >= FrameState.BEFORE_BCI : "bci == " + state.bci;
         return new BytecodeFrame(caller, state.method(), state.bci, state.rethrowException(), state.duringCall(), values, numLocals, numStack, numLocks);
     }
 

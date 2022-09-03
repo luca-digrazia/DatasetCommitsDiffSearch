@@ -99,8 +99,8 @@ public class SnippetTemplate {
 
         protected SnippetInfo(ResolvedJavaMethod method) {
             this.method = method;
-            instantiationCounter = Debug.metric("SnippetInstantiationCount[%s]", method);
-            instantiationTimer = Debug.timer("SnippetInstantiationTime[%s]", method);
+            instantiationCounter = Debug.metric("SnippetInstantiationCount[%#s]", method);
+            instantiationTimer = Debug.timer("SnippetInstantiationTime[%#s]", method);
             assert Modifier.isStatic(method.getModifiers()) : "snippet method must be static: " + MetaUtil.format("%H.%n", method);
             int count = method.getSignature().getParameterCount(false);
             constantParameters = new boolean[count];
@@ -728,8 +728,8 @@ public class SnippetTemplate {
     private final ArrayList<StateSplit> sideEffectNodes;
 
     /**
-     * Nodes that inherit a deoptimization {@link FrameState} from the replacee during
-     * instantiation.
+     * Nodes that inherit the {@link DeoptimizingNode#getDeoptimizationState()} from the replacee
+     * during instantiation.
      */
     private final ArrayList<DeoptimizingNode> deoptNodes;
 
@@ -994,7 +994,7 @@ public class SnippetTemplate {
      * @param replacee the node that will be replaced
      * @param replacer object that replaces the usages of {@code replacee}
      * @param args the arguments to be bound to the flattened positional parameters of the snippet
-     * @return the map of duplicated nodes (original -&gt; duplicate)
+     * @return the map of duplicated nodes (original -> duplicate)
      */
     public Map<Node, Node> instantiate(MetaAccessProvider metaAccess, FixedNode replacee, UsageReplacer replacer, Arguments args) {
         assert checkSnippetKills(replacee);
@@ -1024,50 +1024,11 @@ public class SnippetTemplate {
 
             if (replacee instanceof DeoptimizingNode) {
                 DeoptimizingNode replaceeDeopt = (DeoptimizingNode) replacee;
-
-                FrameState stateBefore = null;
-                FrameState stateDuring = null;
-                FrameState stateAfter = null;
-                if (replaceeDeopt.canDeoptimize()) {
-                    if (replaceeDeopt instanceof DeoptimizingNode.DeoptBefore) {
-                        stateBefore = ((DeoptimizingNode.DeoptBefore) replaceeDeopt).stateBefore();
-                    }
-                    if (replaceeDeopt instanceof DeoptimizingNode.DeoptDuring) {
-                        stateDuring = ((DeoptimizingNode.DeoptDuring) replaceeDeopt).stateDuring();
-                    }
-                    if (replaceeDeopt instanceof DeoptimizingNode.DeoptAfter) {
-                        stateAfter = ((DeoptimizingNode.DeoptAfter) replaceeDeopt).stateAfter();
-                    }
-                }
-
+                FrameState state = replaceeDeopt.getDeoptimizationState();
                 for (DeoptimizingNode deoptNode : deoptNodes) {
                     DeoptimizingNode deoptDup = (DeoptimizingNode) duplicates.get(deoptNode);
-                    if (deoptDup.canDeoptimize()) {
-                        if (deoptDup instanceof DeoptimizingNode.DeoptBefore) {
-                            ((DeoptimizingNode.DeoptBefore) deoptDup).setStateBefore(stateBefore);
-                        }
-                        if (deoptDup instanceof DeoptimizingNode.DeoptDuring) {
-                            DeoptimizingNode.DeoptDuring deoptDupDuring = (DeoptimizingNode.DeoptDuring) deoptDup;
-                            if (stateDuring != null) {
-                                deoptDupDuring.setStateDuring(stateDuring);
-                            } else if (stateAfter != null) {
-                                deoptDupDuring.computeStateDuring(stateAfter);
-                            } else if (stateBefore != null) {
-                                assert !deoptDupDuring.hasSideEffect() : "can't use stateBefore as stateDuring for state split " + deoptDupDuring;
-                                deoptDupDuring.setStateDuring(stateBefore);
-                            }
-                        }
-                        if (deoptDup instanceof DeoptimizingNode.DeoptAfter) {
-                            DeoptimizingNode.DeoptAfter deoptDupAfter = (DeoptimizingNode.DeoptAfter) deoptDup;
-                            if (stateAfter != null) {
-                                deoptDupAfter.setStateAfter(stateAfter);
-                            } else {
-                                assert !deoptDupAfter.hasSideEffect() : "can't use stateBefore as stateAfter for state split " + deoptDupAfter;
-                                deoptDupAfter.setStateAfter(stateBefore);
-                            }
-
-                        }
-                    }
+                    assert replaceeDeopt.canDeoptimize() || !deoptDup.canDeoptimize();
+                    deoptDup.setDeoptimizationState(state);
                 }
             }
 

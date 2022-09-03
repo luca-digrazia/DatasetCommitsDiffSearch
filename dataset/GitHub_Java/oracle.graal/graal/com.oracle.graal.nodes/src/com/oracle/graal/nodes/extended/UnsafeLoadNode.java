@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,20 @@
  */
 package com.oracle.graal.nodes.extended;
 
-import static com.oracle.graal.compiler.common.UnsafeAccess.*;
+import static com.oracle.graal.graph.UnsafeAccess.*;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.java.*;
 import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Load of a value from a location specified as an offset relative to an object. No null check is
  * performed before the load.
  */
 public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtualizable {
-    @OptionalInput(InputType.Condition) private LogicNode guardingCondition;
+    @Input private LogicNode guardingCondition;
 
     public UnsafeLoadNode(ValueNode object, ValueNode offset, Kind accessKind, LocationIdentity locationIdentity) {
         this(object, offset, accessKind, locationIdentity, null);
@@ -76,12 +75,7 @@ public class UnsafeLoadNode extends UnsafeAccessNode implements Lowerable, Virtu
 
     @Override
     protected ValueNode cloneAsFieldAccess(ResolvedJavaField field) {
-        return new LoadFieldNode(object(), field);
-    }
-
-    @Override
-    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return new UnsafeLoadNode(object(), location, accessKind(), identity);
+        return this.graph().add(new LoadFieldNode(object(), field));
     }
 
     @SuppressWarnings({"unchecked", "unused"})

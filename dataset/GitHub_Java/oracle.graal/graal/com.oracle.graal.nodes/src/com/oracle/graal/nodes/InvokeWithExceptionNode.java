@@ -39,7 +39,7 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     @Successor private AbstractBeginNode next;
     @Successor private DispatchBeginNode exceptionEdge;
     @Input private CallTargetNode callTarget;
-    @Input private FrameState stateDuring;
+    @Input private FrameState deoptState;
     @Input private FrameState stateAfter;
     @Input private GuardingNode guard;
     private final int bci;
@@ -155,6 +155,13 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
         return LocationIdentity.ANY_LOCATION;
     }
 
+    public FrameState stateDuring() {
+        FrameState tempStateAfter = stateAfter();
+        FrameState stateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), getKind());
+        stateDuring.setDuringCall(true);
+        return stateDuring;
+    }
+
     @Override
     public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
         Map<Object, Object> debugProperties = super.getDebugProperties(map);
@@ -212,21 +219,18 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     }
 
     @Override
-    public FrameState stateDuring() {
-        return stateDuring;
+    public FrameState getDeoptimizationState() {
+        if (deoptState == null) {
+            FrameState stateDuring = stateDuring();
+            updateUsages(deoptState, stateDuring);
+            deoptState = stateDuring;
+        }
+        return deoptState;
     }
 
     @Override
-    public void setStateDuring(FrameState stateDuring) {
-        updateUsages(this.stateDuring, stateDuring);
-        this.stateDuring = stateDuring;
-    }
-
-    @Override
-    public void computeStateDuring(FrameState tempStateAfter) {
-        FrameState newStateDuring = tempStateAfter.duplicateModified(bci(), tempStateAfter.rethrowException(), getKind());
-        newStateDuring.setDuringCall(true);
-        setStateDuring(newStateDuring);
+    public void setDeoptimizationState(FrameState f) {
+        throw new IllegalStateException();
     }
 
     @Override
@@ -238,6 +242,16 @@ public class InvokeWithExceptionNode extends ControlSplitNode implements Invoke,
     public void setGuard(GuardingNode guard) {
         updateUsages(this.guard == null ? null : this.guard.asNode(), guard == null ? null : guard.asNode());
         this.guard = guard;
+    }
+
+    @Override
+    public FrameState getState() {
+        if (deoptState != null) {
+            assert stateAfter() == null;
+            return deoptState;
+        } else {
+            return stateAfter();
+        }
     }
 
     public MemoryCheckpoint asMemoryCheckpoint() {

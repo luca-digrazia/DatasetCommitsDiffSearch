@@ -192,7 +192,7 @@ public class PTXWrapperBuilder extends GraphKit {
             }
         }
 
-        InvokeNode kernelStart = createInvoke(getClass(), "getKernelStart", ConstantNode.forConstant(HotSpotObjectConstant.forObject(kernel), providers.getMetaAccess(), getGraph()));
+        InvokeNode kernelStart = createInvoke(getClass(), "getKernelStart", ConstantNode.forObject(kernel, providers.getMetaAccess(), getGraph()));
 
         AllocaNode buf = append(new AllocaNode(bufSize / wordSize, new BitSet()));
         ValueNode objectParametersOffsets;
@@ -244,13 +244,13 @@ public class PTXWrapperBuilder extends GraphKit {
             append(new WriteNode(buf, nullWord, location, BarrierType.NONE, false, false));
         }
 
-        HIRFrameStateBuilder fsb = new HIRFrameStateBuilder(method, getGraph(), true);
+        FrameStateBuilder fsb = new FrameStateBuilder(method, getGraph(), true);
         FrameState fs = fsb.create(0);
         getGraph().start().setStateAfter(fs);
 
         ValueNode[] launchArgsArray = args.values().toArray(new ValueNode[args.size()]);
         ForeignCallNode result = append(new ForeignCallNode(providers.getForeignCalls(), CALL_KERNEL, launchArgsArray));
-        result.setStateAfter(fs);
+        result.setDeoptimizationState(fs);
 
         InvokeNode getObjectResult = null;
         ValueNode returnValue;
@@ -290,8 +290,8 @@ public class PTXWrapperBuilder extends GraphKit {
             Debug.dump(getGraph(), "Initial kernel launch graph");
         }
 
-        rewriteWordTypes(providers.getSnippetReflection());
-        inlineInvokes(providers.getSnippetReflection());
+        rewriteWordTypes();
+        inlineInvokes();
 
         if (Debug.isDumpEnabled()) {
             Debug.dump(getGraph(), "Kernel launch graph before compilation");

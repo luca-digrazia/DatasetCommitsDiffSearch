@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,16 +24,17 @@ package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.code.*;
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
 /**
  * Access the value of a specific register.
  */
 @NodeInfo(nameTemplate = "ReadRegister %{p#register}")
-public class ReadRegisterNode extends FixedWithNextNode implements LIRLowerable {
+public final class ReadRegisterNode extends FixedWithNextNode implements LIRGenLowerable {
 
     /**
      * The fixed register to access.
@@ -74,14 +75,13 @@ public class ReadRegisterNode extends FixedWithNextNode implements LIRLowerable 
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool generator) {
-        LIRKind kind = generator.getLIRGeneratorTool().getLIRKind(stamp());
-        Value result = register.asValue(kind);
+    public void generate(LIRGenerator generator) {
+        Value result = register.asValue(getKind());
         if (incoming) {
-            generator.getLIRGeneratorTool().emitIncomingValues(new Value[]{result});
+            generator.emitIncomingValues(new Value[]{result});
         }
         if (!directUse) {
-            result = generator.getLIRGeneratorTool().emitMove(result);
+            result = generator.emitMove(result);
         }
         generator.setResult(this, result);
     }

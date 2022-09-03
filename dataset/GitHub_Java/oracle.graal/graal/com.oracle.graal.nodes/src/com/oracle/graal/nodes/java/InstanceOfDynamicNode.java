@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,8 +34,7 @@ import com.oracle.graal.nodes.type.*;
  * known at compile time. This is used, for instance, to intrinsify {@link Class#isInstance(Object)}
  * .
  */
-@NodeInfo
-public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.Binary<ValueNode>, Lowerable {
+public final class InstanceOfDynamicNode extends LogicNode implements Canonicalizable, Lowerable {
 
     @Input private ValueNode object;
     @Input private ValueNode mirror;
@@ -48,8 +47,8 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
         this.mirror = mirror;
         this.object = object;
         assert mirror.getKind() == Kind.Object : mirror.getKind();
-        assert StampTool.isExactType(mirror);
-        assert StampTool.typeOrNull(mirror).getName().equals("Ljava/lang/Class;");
+        assert ObjectStamp.isExactType(mirror);
+        assert ObjectStamp.typeOrNull(mirror).getName().equals("Ljava/lang/Class;");
     }
 
     @Override
@@ -57,15 +56,16 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
         tool.getLowerer().lower(this, tool);
     }
 
-    public ValueNode canonical(CanonicalizerTool tool, ValueNode forObject, ValueNode forMirror) {
-        if (forMirror.isConstant()) {
-            ResolvedJavaType t = tool.getConstantReflection().asJavaType(forMirror.asConstant());
-            if (t != null) {
-                if (t.isPrimitive()) {
-                    return LogicConstantNode.contradiction();
-                } else {
-                    return new InstanceOfNode(t, forObject, null);
-                }
+    @Override
+    public Node canonical(CanonicalizerTool tool) {
+        assert object() != null : this;
+        if (mirror().isConstant()) {
+            Class clazz = (Class) mirror().asConstant().asObject();
+            ResolvedJavaType t = tool.getMetaAccess().lookupJavaType(clazz);
+            if (t.isPrimitive()) {
+                return LogicConstantNode.contradiction(graph());
+            } else {
+                return graph().unique(new InstanceOfNode(t, object(), null));
             }
         }
         return this;
@@ -76,14 +76,6 @@ public class InstanceOfDynamicNode extends LogicNode implements Canonicalizable.
     }
 
     public ValueNode mirror() {
-        return mirror;
-    }
-
-    public ValueNode getX() {
-        return object;
-    }
-
-    public ValueNode getY() {
         return mirror;
     }
 }

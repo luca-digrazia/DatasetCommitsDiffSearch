@@ -173,10 +173,7 @@ public class InliningUtil {
 
     public static void logInliningDecision(final String msg, final Object... args) {
         try (Scope s = Debug.scope(inliningDecisionsScopeString)) {
-            // Can't use log here since we are varargs
-            if (Debug.isLogEnabled()) {
-                Debug.logv(msg, args);
-            }
+            Debug.log(msg, args);
         }
     }
 

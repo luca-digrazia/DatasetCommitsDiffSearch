@@ -2098,7 +2098,7 @@ public class GraphBuilderPhase extends BasePhase<HighTierContext> {
                 if (!currentBlock.jsrScope.isEmpty()) {
                     sb.append(' ').append(currentBlock.jsrScope);
                 }
-                Debug.log("%s", sb);
+                Debug.log(sb.toString());
             }
         }
 

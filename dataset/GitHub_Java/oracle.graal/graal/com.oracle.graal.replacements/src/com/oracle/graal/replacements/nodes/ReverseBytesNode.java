@@ -23,24 +23,29 @@
 package com.oracle.graal.replacements.nodes;
 
 import com.oracle.graal.api.meta.*;
-import com.oracle.graal.compiler.common.type.*;
+import com.oracle.graal.compiler.gen.*;
+import com.oracle.graal.compiler.target.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
+import com.oracle.graal.lir.*;
 import com.oracle.graal.nodes.*;
 import com.oracle.graal.nodes.calc.*;
-import com.oracle.graal.nodes.spi.*;
+import com.oracle.graal.nodes.type.*;
 
-public class ReverseBytesNode extends UnaryNode implements LIRLowerable, Canonicalizable {
+public class ReverseBytesNode extends FloatingNode implements LIRGenLowerable, Canonicalizable {
+
+    @Input private ValueNode value;
 
     public ReverseBytesNode(ValueNode value) {
-        super(StampFactory.forKind(value.getKind()), value);
+        super(StampFactory.forKind(value.getKind()));
         assert getKind().isNumericInteger();
+        this.value = value;
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (getValue().isConstant()) {
-            long v = getValue().asConstant().asLong();
+        if (value.isConstant()) {
+            long v = value.asConstant().asLong();
             if (getKind().getStackKind() == Kind.Int) {
                 return ConstantNode.forInt(Integer.reverseBytes((int) v), graph());
             } else if (getKind() == Kind.Long) {
@@ -61,8 +66,9 @@ public class ReverseBytesNode extends UnaryNode implements LIRLowerable, Canonic
     }
 
     @Override
-    public void generate(NodeLIRBuilderTool gen) {
-        Value result = gen.getLIRGeneratorTool().emitByteSwap(gen.operand(getValue()));
+    public void generate(LIRGenerator gen) {
+        Variable result = gen.newVariable(value.getKind());
+        gen.emitByteSwap(result, gen.operand(value));
         gen.setResult(this, result);
     }
 }

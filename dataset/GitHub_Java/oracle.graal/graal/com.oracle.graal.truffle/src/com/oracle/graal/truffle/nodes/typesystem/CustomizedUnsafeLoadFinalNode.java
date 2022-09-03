@@ -30,12 +30,11 @@ import com.oracle.graal.nodes.calc.*;
 import com.oracle.graal.nodes.extended.*;
 import com.oracle.graal.nodes.spi.*;
 import com.oracle.graal.nodes.type.*;
-import com.oracle.graal.truffle.nodes.*;
 import com.oracle.truffle.api.*;
 
 /**
  * Load of a final value from a location specified as an offset relative to an object.
- *
+ * 
  * Substitution for method {@link CompilerDirectives#unsafeGetFinalObject} and friends.
  */
 public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements Canonicalizable, Virtualizable, Lowerable {
@@ -57,7 +56,7 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (object.isConstant() && !object.isNullConstant() && offset.isConstant()) {
-            Constant constant = tool.getConstantReflection().readUnsafeConstant(accessKind, object.asConstant(), offset.asConstant().asLong());
+            Constant constant = tool.getConstantReflection().readUnsafeConstant(accessKind, object.asConstant().asObject(), offset.asConstant().asLong(), accessKind == Kind.Object);
             return ConstantNode.forConstant(constant, tool.getMetaAccess(), graph());
         }
         return this;
@@ -87,11 +86,12 @@ public class CustomizedUnsafeLoadFinalNode extends FixedWithNextNode implements 
     @Override
     public void lower(LoweringTool tool) {
         CompareNode compare = CompareNode.createCompareNode(graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, graph()));
+        Object locationIdentityObject = location.asConstant().asObject();
         LocationIdentity locationIdentity;
-        if (location.asConstant().isNull()) {
+        if (locationIdentityObject == null) {
             locationIdentity = LocationIdentity.ANY_LOCATION;
         } else {
-            locationIdentity = ObjectLocationIdentity.create(location.asConstant());
+            locationIdentity = ObjectLocationIdentity.create(locationIdentityObject);
         }
         UnsafeLoadNode result = graph().add(new UnsafeLoadNode(object, offset, accessKind, locationIdentity, compare));
         graph().replaceFixedWithFixed(this, result);
