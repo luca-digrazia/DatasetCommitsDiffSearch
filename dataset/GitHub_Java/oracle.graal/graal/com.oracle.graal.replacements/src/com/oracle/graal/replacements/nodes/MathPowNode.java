@@ -22,18 +22,15 @@
  */
 package com.oracle.graal.replacements.nodes;
 
-import com.oracle.graal.graph.*;
 import com.oracle.graal.graph.spi.*;
 import com.oracle.graal.nodeinfo.*;
 import com.oracle.graal.nodes.*;
 
 @NodeInfo
-public final class MathPowNode extends MacroStateSplitNode implements Canonicalizable.Binary<ValueNode> {
-
-    public static final NodeClass TYPE = NodeClass.get(MathPowNode.class);
+public class MathPowNode extends MacroStateSplitNode implements Canonicalizable.Binary<ValueNode> {
 
     public MathPowNode(Invoke i) {
-        super(TYPE, i);
+        super(i);
     }
 
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
