@@ -439,9 +439,8 @@ public final class LLVMVisitor implements LLVMParserRuntime {
     private final List<LLVMNode> globalDeallocations = new ArrayList<>();
     private boolean isGlobalScope;
 
-    @SuppressWarnings("deprecation")
     private Object findOrAllocateGlobal(GlobalVariable globalVariable) {
-        return factoryFacade.allocateGlobalVariable(LLVMToBitcodeAdapter.resolveGlobalVariable(factoryFacade.getRuntime(), globalVariable));
+        return factoryFacade.allocateGlobalVariable(globalVariable);
     }
 
     private LLVMExpressionNode visitArrayConstantStore(ArrayConstant constant) {

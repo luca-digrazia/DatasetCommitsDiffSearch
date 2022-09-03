@@ -67,6 +67,8 @@ public interface LLVMParserRuntime {
      */
     FrameSlot getReturnSlot();
 
+    LLVMExpressionNode allocateVectorResult(EObject type);
+
     Object getGlobalAddress(GlobalVariable var);
 
     FrameSlot getStackPointerSlot();
