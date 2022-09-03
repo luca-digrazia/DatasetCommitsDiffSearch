@@ -32,14 +32,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import com.oracle.graal.api.replacements.MethodSubstitution;
 import com.oracle.graal.api.replacements.MethodSubstitutionRegistry;
-import com.oracle.graal.bytecode.BytecodeProvider;
 import com.oracle.graal.debug.GraalError;
 import com.oracle.graal.graph.Node;
 import com.oracle.graal.graph.iterators.NodeIterable;
@@ -137,7 +134,6 @@ public class InvocationPlugins {
 
         private final InvocationPlugins plugins;
         private final Type declaringType;
-        private final BytecodeProvider methodSubstitutionBytecodeProvider;
         private boolean allowOverwrite;
 
         @Override
@@ -156,23 +152,6 @@ public class InvocationPlugins {
         public Registration(InvocationPlugins plugins, Type declaringType) {
             this.plugins = plugins;
             this.declaringType = declaringType;
-            this.methodSubstitutionBytecodeProvider = null;
-        }
-
-        /**
-         * Creates an object for registering {@link InvocationPlugin}s for methods declared by a
-         * given class.
-         *
-         * @param plugins where to register the plugins
-         * @param declaringType the class declaring the methods for which plugins will be registered
-         *            via this object
-         * @param methodSubstitutionBytecodeProvider provider used to get the bytecodes to parse for
-         *            method substitutions
-         */
-        public Registration(InvocationPlugins plugins, Type declaringType, BytecodeProvider methodSubstitutionBytecodeProvider) {
-            this.plugins = plugins;
-            this.declaringType = declaringType;
-            this.methodSubstitutionBytecodeProvider = methodSubstitutionBytecodeProvider;
         }
 
         /**
@@ -182,13 +161,10 @@ public class InvocationPlugins {
          * @param plugins where to register the plugins
          * @param declaringClassName the name of the class class declaring the methods for which
          *            plugins will be registered via this object
-         * @param methodSubstitutionBytecodeProvider provider used to get the bytecodes to parse for
-         *            method substitutions
          */
-        public Registration(InvocationPlugins plugins, String declaringClassName, BytecodeProvider methodSubstitutionBytecodeProvider) {
+        public Registration(InvocationPlugins plugins, String declaringClassName) {
             this.plugins = plugins;
             this.declaringType = new OptionalLazySymbol(declaringClassName);
-            this.methodSubstitutionBytecodeProvider = methodSubstitutionBytecodeProvider;
         }
 
         /**
@@ -337,8 +313,7 @@ public class InvocationPlugins {
          */
         @Override
         public void registerMethodSubstitution(Class<?> substituteDeclaringClass, String name, String substituteName, Type... argumentTypes) {
-            assert methodSubstitutionBytecodeProvider != null : "Registration used for method substitutions requires a non-null methodSubstitutionBytecodeProvider";
-            MethodSubstitutionPlugin plugin = new MethodSubstitutionPlugin(methodSubstitutionBytecodeProvider, substituteDeclaringClass, substituteName, argumentTypes);
+            MethodSubstitutionPlugin plugin = new MethodSubstitutionPlugin(substituteDeclaringClass, substituteName, argumentTypes);
             plugins.register(plugin, false, allowOverwrite, declaringType, name, argumentTypes);
         }
     }
@@ -376,11 +351,6 @@ public class InvocationPlugins {
         @Override
         public int hashCode() {
             return this.method.getName().hashCode();
-        }
-
-        @Override
-        public String toString() {
-            return "ResolvedJavaMethodKey<" + method + ">";
         }
     }
 
@@ -469,7 +439,7 @@ public class InvocationPlugins {
                 } else {
                     res = declaringClass.getDeclaredMethod(name, parameterTypes);
                 }
-                assert Modifier.isStatic(res.getModifiers()) == isStatic : res;
+                assert Modifier.isStatic(res.getModifiers()) == isStatic;
                 return res;
             } catch (NoSuchMethodException | SecurityException e) {
                 if (isOptional) {
@@ -531,7 +501,7 @@ public class InvocationPlugins {
         private volatile Map<ResolvedJavaMethodKey, InvocationPlugin> entries;
 
         void initializeMap() {
-            if (!isClosed()) {
+            if (entries == null) {
                 if (registrations.isEmpty()) {
                     entries = Collections.emptyMap();
                 } else {
@@ -558,14 +528,14 @@ public class InvocationPlugins {
         }
 
         public InvocationPlugin get(ResolvedJavaMethod method) {
-            if (!isClosed()) {
+            if (entries == null) {
                 initializeMap();
             }
             return entries.get(new ResolvedJavaMethodKey(method));
         }
 
         public void register(MethodKey methodKey, boolean allowOverwrite) {
-            assert !isClosed() : "registration is closed: " + methodKey + " " + Arrays.toString(entries.keySet().toArray());
+            assert entries == null : "registration is closed";
             if (allowOverwrite) {
                 int index = registrations.indexOf(methodKey);
                 if (index >= 0) {
@@ -576,10 +546,6 @@ public class InvocationPlugins {
                 assert !registrations.contains(methodKey) : "a value is already registered for " + declaringType + "." + methodKey;
             }
             registrations.add(methodKey);
-        }
-
-        public boolean isClosed() {
-            return entries != null;
         }
     }
 
@@ -762,24 +728,6 @@ public class InvocationPlugins {
             }
         }
         return get(method);
-    }
-
-    /**
-     * Gets the set of methods for which invocation plugins have been registered. Once this method
-     * is called, no further registrations can be made.
-     */
-    public Set<ResolvedJavaMethod> getMethods() {
-        Set<ResolvedJavaMethod> res = new HashSet<>();
-        if (parent != null) {
-            res.addAll(parent.getMethods());
-        }
-        flushDeferrables();
-        for (ClassPlugins cp : registrations.values()) {
-            for (ResolvedJavaMethodKey key : cp.entries.keySet()) {
-                res.add(key.method);
-            }
-        }
-        return res;
     }
 
     /**
