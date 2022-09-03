@@ -44,8 +44,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMAddress;
 import com.oracle.truffle.llvm.runtime.LLVMTruffleObject;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
-import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.interop.ToLLVMNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -72,7 +71,7 @@ public abstract class LLVMTruffleReadNString extends LLVMIntrinsic {
     @Specialization
     public Object interop(LLVMTruffleObject objectWithOffset, int n,
                     @Cached("createForeignReadNode()") Node foreignRead,
-                    @Cached("createToByteNode()") ForeignToLLVM toLLVM) {
+                    @Cached("createToByteNode()") ToLLVMNode toLLVM) {
         long offset = objectWithOffset.getOffset();
         TruffleObject object = objectWithOffset.getObject();
         char[] chars = new char[n];
@@ -90,8 +89,8 @@ public abstract class LLVMTruffleReadNString extends LLVMIntrinsic {
         return new String(chars);
     }
 
-    protected ForeignToLLVM createToByteNode() {
-        return ForeignToLLVM.create(ForeignToLLVMType.I8);
+    protected ToLLVMNode createToByteNode() {
+        return ToLLVMNode.createNode(byte.class);
     }
 
     protected Node createForeignReadNode() {
