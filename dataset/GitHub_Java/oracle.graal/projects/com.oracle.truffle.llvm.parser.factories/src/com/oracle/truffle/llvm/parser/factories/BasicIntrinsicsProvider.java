@@ -1264,17 +1264,13 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider, ContextEx
                 return LLVMSignalNodeGen.create(LLVMArgNodeGen.create(1), LLVMArgNodeGen.create(2));
             }
         });
-
-        LLVMIntrinsicFactory syscall = new LLVMIntrinsicFactory(true, false) {
+        add("@syscall", new LLVMIntrinsicFactory(true, false) {
 
             @Override
             protected LLVMExpressionNode generate(FunctionType type) {
                 return new LLVMSyscall();
             }
-        };
-
-        add("@syscall", syscall);
-        add("@__syscall", syscall);
+        });
     }
 
     protected void registerRustIntrinsics() {
