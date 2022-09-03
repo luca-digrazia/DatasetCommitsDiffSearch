@@ -22,8 +22,6 @@
  */
 package com.oracle.graal.phases.graph;
 
-import static com.oracle.graal.graph.util.CollectionsAccess.*;
-
 import java.util.*;
 
 import com.oracle.graal.graph.NodeClass.NodeClassIterator;
@@ -33,13 +31,8 @@ public final class ReentrantNodeIterator {
 
     public static class LoopInfo<StateT> {
 
-        public final Map<LoopEndNode, StateT> endStates;
-        public final Map<LoopExitNode, StateT> exitStates;
-
-        public LoopInfo(int endCount, int exitCount) {
-            endStates = newNodeIdentityMap(endCount);
-            exitStates = newNodeIdentityMap(exitCount);
-        }
+        public final Map<LoopEndNode, StateT> endStates = new IdentityHashMap<>(4);
+        public final Map<LoopExitNode, StateT> exitStates = new IdentityHashMap<>(2);
     }
 
     public abstract static class NodeIteratorClosure<StateT> {
@@ -48,13 +41,13 @@ public final class ReentrantNodeIterator {
 
         protected abstract StateT merge(MergeNode merge, List<StateT> states);
 
-        protected abstract StateT afterSplit(BeginNode node, StateT oldState);
+        protected abstract StateT afterSplit(AbstractBeginNode node, StateT oldState);
 
         protected abstract Map<LoopExitNode, StateT> processLoop(LoopBeginNode loop, StateT initialState);
 
         /**
          * Determine whether iteration should continue in the current state.
-         *
+         * 
          * @param currentState
          */
         protected boolean continueIteration(StateT currentState) {
@@ -67,9 +60,13 @@ public final class ReentrantNodeIterator {
     }
 
     public static <StateT> LoopInfo<StateT> processLoop(NodeIteratorClosure<StateT> closure, LoopBeginNode loop, StateT initialState) {
-        Map<FixedNode, StateT> blockEndStates = apply(closure, loop, initialState, loop);
+        HashSet<FixedNode> boundary = new HashSet<>();
+        for (LoopExitNode exit : loop.loopExits()) {
+            boundary.add(exit);
+        }
+        Map<FixedNode, StateT> blockEndStates = apply(closure, loop, initialState, boundary);
 
-        LoopInfo<StateT> info = new LoopInfo<>(loop.loopEnds().count(), loop.loopExits().count());
+        LoopInfo<StateT> info = new LoopInfo<>();
         for (LoopEndNode end : loop.loopEnds()) {
             if (blockEndStates.containsKey(end)) {
                 info.endStates.put(end, blockEndStates.get(end));
@@ -83,20 +80,15 @@ public final class ReentrantNodeIterator {
         return info;
     }
 
-    public static <StateT> void apply(NodeIteratorClosure<StateT> closure, FixedNode start, StateT initialState) {
-        apply(closure, start, initialState, null);
-    }
-
-    private static <StateT> Map<FixedNode, StateT> apply(NodeIteratorClosure<StateT> closure, FixedNode start, StateT initialState, LoopBeginNode boundary) {
-        assert start != null;
-        Deque<BeginNode> nodeQueue = new ArrayDeque<>();
-        Map<FixedNode, StateT> blockEndStates = newNodeIdentityMap();
+    public static <StateT> Map<FixedNode, StateT> apply(NodeIteratorClosure<StateT> closure, FixedNode start, StateT initialState, Set<FixedNode> boundary) {
+        Deque<AbstractBeginNode> nodeQueue = new ArrayDeque<>();
+        IdentityHashMap<FixedNode, StateT> blockEndStates = new IdentityHashMap<>();
 
         StateT state = initialState;
         FixedNode current = start;
         do {
             while (current instanceof FixedWithNextNode) {
-                if (boundary != null && current instanceof LoopExitNode && ((LoopExitNode) current).loopBegin() == boundary) {
+                if (boundary != null && boundary.contains(current)) {
                     blockEndStates.put(current, state);
                     current = null;
                 } else {
@@ -124,9 +116,11 @@ public final class ReentrantNodeIterator {
                                     nodeQueue.add(entry.getKey());
                                 }
                             } else {
+                                assert !blockEndStates.containsKey(current);
+                                blockEndStates.put(current, state);
                                 boolean endsVisited = true;
                                 for (AbstractEndNode forwardEnd : merge.forwardEnds()) {
-                                    if (forwardEnd != current && !blockEndStates.containsKey(forwardEnd)) {
+                                    if (!blockEndStates.containsKey(forwardEnd)) {
                                         endsVisited = false;
                                         break;
                                     }
@@ -135,16 +129,13 @@ public final class ReentrantNodeIterator {
                                     ArrayList<StateT> states = new ArrayList<>(merge.forwardEndCount());
                                     for (int i = 0; i < merge.forwardEndCount(); i++) {
                                         AbstractEndNode forwardEnd = merge.forwardEndAt(i);
-                                        assert forwardEnd == current || blockEndStates.containsKey(forwardEnd);
-                                        StateT other = forwardEnd == current ? state : blockEndStates.remove(forwardEnd);
+                                        assert blockEndStates.containsKey(forwardEnd);
+                                        StateT other = blockEndStates.get(forwardEnd);
                                         states.add(other);
                                     }
                                     state = closure.merge(merge, states);
                                     current = closure.continueIteration(state) ? merge : null;
                                     continue;
-                                } else {
-                                    assert !blockEndStates.containsKey(current);
-                                    blockEndStates.put(current, state);
                                 }
                             }
                         }
@@ -154,16 +145,15 @@ public final class ReentrantNodeIterator {
                             current = firstSuccessor;
                             continue;
                         } else {
-                            do {
-                                BeginNode successor = (BeginNode) successors.next();
+                            while (successors.hasNext()) {
+                                AbstractBeginNode successor = (AbstractBeginNode) successors.next();
                                 StateT successorState = closure.afterSplit(successor, state);
                                 if (closure.continueIteration(successorState)) {
                                     blockEndStates.put(successor, successorState);
                                     nodeQueue.add(successor);
                                 }
-                            } while (successors.hasNext());
-
-                            state = closure.afterSplit((BeginNode) firstSuccessor, state);
+                            }
+                            state = closure.afterSplit((AbstractBeginNode) firstSuccessor, state);
                             current = closure.continueIteration(state) ? firstSuccessor : null;
                             continue;
                         }
@@ -176,9 +166,8 @@ public final class ReentrantNodeIterator {
                 return blockEndStates;
             } else {
                 current = nodeQueue.removeFirst();
-                assert blockEndStates.containsKey(current);
-                state = blockEndStates.remove(current);
-                assert !(current instanceof MergeNode) && current instanceof BeginNode;
+                state = blockEndStates.get(current);
+                assert !(current instanceof MergeNode) && current instanceof AbstractBeginNode;
             }
         } while (true);
     }
