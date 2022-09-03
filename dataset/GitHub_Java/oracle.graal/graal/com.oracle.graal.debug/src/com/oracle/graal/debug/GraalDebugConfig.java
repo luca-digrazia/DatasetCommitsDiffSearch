@@ -22,16 +22,21 @@
  */
 package com.oracle.graal.debug;
 
+import static com.oracle.graal.options.OptionValues.GLOBAL;
+
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.oracle.graal.options.Option;
 import com.oracle.graal.options.OptionType;
-import com.oracle.graal.options.OptionValue;
+import com.oracle.graal.options.OptionValues;
+import com.oracle.graal.options.OptionKey;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.JavaMethod;
@@ -47,67 +52,144 @@ public class GraalDebugConfig implements DebugConfig {
     public static class Options {
         // @formatter:off
         @Option(help = "Pattern for scope(s) in which dumping is enabled (see DebugFilter and Debug.dump)", type = OptionType.Debug)
-        public static final OptionValue<String> Dump = new OptionValue<>(null);
-        @Option(help = "Pattern for scope(s) in which metering is enabled (see DebugFilter and Debug.metric). " +
-                       "An empty value enables all metrics unconditionally.", type = OptionType.Debug)
-        public static final OptionValue<String> Meter = new OptionValue<>(null);
+        public static final OptionKey<String> Dump = new OptionKey<>(null);
+        @Option(help = "Pattern for scope(s) in which counting is enabled (see DebugFilter and Debug.counter). " +
+                       "An empty value enables all counters unconditionally.", type = OptionType.Debug)
+        public static final OptionKey<String> Count = new OptionKey<>(null);
         @Option(help = "Pattern for scope(s) in which verification is enabled (see DebugFilter and Debug.verify).", type = OptionType.Debug)
-        public static final OptionValue<String> Verify = new OptionValue<String>() {
+        public static final OptionKey<String> Verify = new OptionKey<String>() {
             @Override
             protected String defaultValue() {
                 return assertionsEnabled() ? "" : null;
             }
         };
-        @Option(help = "Pattern for scope(s) in which memory use tracking is enabled (see DebugFilter and Debug.metric). " +
+        @Option(help = "Pattern for scope(s) in which memory use tracking is enabled (see DebugFilter and Debug.counter). " +
                        "An empty value enables all memory use trackers unconditionally.", type = OptionType.Debug)
-        public static final OptionValue<String> TrackMemUse = new OptionValue<>(null);
+        public static final OptionKey<String> TrackMemUse = new OptionKey<>(null);
         @Option(help = "Pattern for scope(s) in which timing is enabled (see DebugFilter and Debug.timer). " +
                        "An empty value enables all timers unconditionally.", type = OptionType.Debug)
-        public static final OptionValue<String> Time = new OptionValue<>(null);
+        public static final OptionKey<String> Time = new OptionKey<>(null);
         @Option(help = "Pattern for scope(s) in which logging is enabled (see DebugFilter and Debug.log)", type = OptionType.Debug)
-        public static final OptionValue<String> Log = new OptionValue<>(null);
+        public static final OptionKey<String> Log = new OptionKey<>(null);
         @Option(help = "Pattern for filtering debug scope output based on method context (see MethodFilter)", type = OptionType.Debug)
-        public static final OptionValue<String> MethodFilter = new OptionValue<>(null);
+        public static final OptionKey<String> MethodFilter = new OptionKey<>(null);
         @Option(help = "Only check MethodFilter against the root method in the context if true, otherwise check all methods", type = OptionType.Debug)
-        public static final OptionValue<Boolean> MethodFilterRootOnly = new OptionValue<>(false);
+        public static final OptionKey<Boolean> MethodFilterRootOnly = new OptionKey<>(false);
 
-        @Option(help = "How to print metric and timing values:%n" +
+        @Option(help = "How to print counters and timing values:%n" +
                        "Name - aggregate by unqualified name%n" +
                        "Partial - aggregate by partially qualified name (e.g., A.B.C.D.Counter and X.Y.Z.D.Counter will be merged to D.Counter)%n" +
                        "Complete - aggregate by qualified name%n" +
                        "Thread - aggregate by qualified name and thread", type = OptionType.Debug)
-        public static final OptionValue<String> DebugValueSummary = new OptionValue<>("Name");
-        @Option(help = "Omit reporting 0-value metrics", type = OptionType.Debug)
-        public static final OptionValue<Boolean> SuppressZeroDebugValues = new OptionValue<>(true);
+        public static final OptionKey<String> DebugValueSummary = new OptionKey<>("Name");
+        @Option(help = "Print counters and timers in a human readable form.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> DebugValueHumanReadable = new OptionKey<>(true);
+        @Option(help = "Omit reporting 0-value counters", type = OptionType.Debug)
+        public static final OptionKey<Boolean> SuppressZeroDebugValues = new OptionKey<>(true);
         @Option(help = "Only report debug values for maps which match the regular expression.", type = OptionType.Debug)
-        public static final OptionValue<String> DebugValueThreadFilter = new OptionValue<>(null);
-        @Option(help = "Send JVMCI compiler IR to dump handlers on error", type = OptionType.Debug)
-        public static final OptionValue<Boolean> DumpOnError = new OptionValue<>(false);
+        public static final OptionKey<String> DebugValueThreadFilter = new OptionKey<>(null);
+        @Option(help = "Write debug values into a file instead of the terminal. " +
+                       "If DebugValueSummary is Thread, the thread name will be prepended.", type = OptionType.Debug)
+        public static final OptionKey<String> DebugValueFile = new OptionKey<>(null);
+        @Option(help = "Send Graal compiler IR to dump handlers on error", type = OptionType.Debug)
+        public static final OptionKey<Boolean> DumpOnError = new OptionKey<>(false);
         @Option(help = "Intercept also bailout exceptions", type = OptionType.Debug)
-        public static final OptionValue<Boolean> InterceptBailout = new OptionValue<>(false);
+        public static final OptionKey<Boolean> InterceptBailout = new OptionKey<>(false);
         @Option(help = "Enable more verbose log output when available", type = OptionType.Debug)
-        public static final OptionValue<Boolean> LogVerbose = new OptionValue<>(false);
+        public static final OptionKey<Boolean> LogVerbose = new OptionKey<>(false);
+
+        @Option(help = "The directory where various Graal dump files are written.")
+        public static final OptionKey<String> DumpPath = new OptionKey<>(".");
+
+        @Option(help = "Enable dumping to the C1Visualizer. Enabling this option implies PrintBackendCFG.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintCFG = new OptionKey<>(false);
+        @Option(help = "Enable dumping LIR, register allocation and code generation info to the C1Visualizer.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintBackendCFG = new OptionKey<>(true);
+        @Option(help = "Base filename when dumping C1Visualizer output to files.", type = OptionType.Debug)
+        public static final OptionKey<String> PrintCFGFileName = new OptionKey<>("compilations");
+
+        @Option(help = "Output probabilities for fixed nodes during binary graph dumping", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintGraphProbabilities = new OptionKey<>(false);
+        @Option(help = "Enable dumping to the IdealGraphVisualizer.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintIdealGraph = new OptionKey<>(true);
+        @Option(help = "Dump IdealGraphVisualizer output in binary format", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintBinaryGraphs = new OptionKey<>(true);
+        @Option(help = "Print Ideal graphs as opposed to sending them over the network.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintIdealGraphFile = new OptionKey<>(false);
+        @Option(help = "Base filename when dumping Ideal graphs to files.", type = OptionType.Debug)
+        public static final OptionKey<String> PrintIdealGraphFileName = new OptionKey<>("runtime-graphs");
+
+        @Option(help = "", type = OptionType.Debug)
+        public static final OptionKey<String> PrintIdealGraphAddress = new OptionKey<>("127.0.0.1");
+        @Option(help = "", type = OptionType.Debug)
+        public static final OptionKey<Integer> PrintIdealGraphPort = new OptionKey<>(4444);
+        @Option(help = "", type = OptionType.Debug)
+        public static final OptionKey<Integer> PrintBinaryGraphPort = new OptionKey<>(4445);
+        @Option(help = "", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintIdealGraphSchedule = new OptionKey<>(false);
+        @Option(help = "Enable dumping Truffle ASTs to the IdealGraphVisualizer.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintTruffleTrees = new OptionKey<>(true);
+
+        @Option(help = "Enable dumping canonical text from for graphs.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> PrintCanonicalGraphStrings = new OptionKey<>(false);
+        @Option(help = "Base directory when dumping graphs strings to files.", type = OptionType.Debug)
+        public static final OptionKey<String> PrintCanonicalGraphStringsDirectory = new OptionKey<>("graph-strings");
+        @Option(help = "Choose format used when dumping canonical text for graphs: " +
+                "0 gives a scheduled graph (better for spotting changes involving the schedule)" +
+                "while 1 gives a CFG containing expressions rooted at fixed nodes (better for spotting small structure differences)", type = OptionType.Debug)
+        public static final OptionKey<Integer> PrintCanonicalGraphStringFlavor = new OptionKey<>(0);
+        @Option(help = "Exclude virtual nodes when dumping canonical text for graphs.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> CanonicalGraphStringsExcludeVirtuals = new OptionKey<>(true);
+        @Option(help = "Exclude virtual nodes when dumping canonical text for graphs.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> CanonicalGraphStringsCheckConstants = new OptionKey<>(false);
+        @Option(help = "Attempts to remove object identity hashes when dumping canonical text for graphs.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> CanonicalGraphStringsRemoveIdentities = new OptionKey<>(true);
+
+        @Option(help = "Enable per method metrics that are collected across all compilations of a method." +
+                       "Pattern for scope(s) in which method metering is enabled (see DebugFilter and Debug.metric).", type = OptionType.Debug)
+        public static final OptionKey<String> MethodMeter = new OptionKey<>(null);
+        @Option(help = "If a global metric (DebugTimer, DebugCounter or DebugMemUseTracker) is enabled in the same scope as a method metric, " +
+                       "use the global metric to update the method metric for the current compilation. " +
+                       "This option enables the re-use of global metrics on per-compilation basis. " +
+                       "Whenever a value is added to a global metric, the value is also added to a MethodMetric under the same name " +
+                       "as the global metric. " +
+                       "This option incurs a small but constant overhead due to the context method lookup at each metric update. " +
+                       "Format to specify GlobalMetric interception:(Timers|Counters|MemUseTrackers)(,Timers|,Counters|,MemUseTrackers)*", type = OptionType.Debug)
+        public static final OptionKey<String> GlobalMetricsInterceptedByMethodMetrics = new OptionKey<>(null);
+        @Option(help = "Force-enable debug code paths", type = OptionType.Debug)
+        public static final OptionKey<Boolean> ForceDebugEnable = new OptionKey<>(false);
+        @Option(help = "Clear the debug metrics after bootstrap.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> ClearMetricsAfterBootstrap = new OptionKey<>(false);
+        @Option(help = "Do not compile anything on bootstrap but just initialize the compiler.", type = OptionType.Debug)
+        public static final OptionKey<Boolean> BootstrapInitializeOnly = new OptionKey<>(false);
         // @formatter:on
     }
 
-    static boolean isNotEmpty(OptionValue<String> option) {
-        return option.getValue() != null && !option.getValue().isEmpty();
+    public static boolean isNotEmpty(OptionKey<String> option, OptionValues options) {
+        return option.getValue(options) != null && !option.getValue(options).isEmpty();
     }
 
-    public static boolean areDebugScopePatternsEnabled() {
-        return Options.DumpOnError.getValue() || Options.Dump.getValue() != null || Options.Log.getValue() != null || areScopedMetricsOrTimersEnabled();
+    public static boolean areDebugScopePatternsEnabled(OptionValues options) {
+        return Options.DumpOnError.getValue(options) || Options.Dump.getValue(options) != null || Options.Log.getValue(options) != null || areScopedGlobalMetricsEnabled(options);
+    }
+
+    public static boolean isGlobalMetricsInterceptedByMethodMetricsEnabled(OptionValues options) {
+        return isNotEmpty(Options.GlobalMetricsInterceptedByMethodMetrics, options);
     }
 
     /**
-     * Determines if any of {@link Options#Meter}, {@link Options#Time} or
+     * Determines if any of {@link Options#Count}, {@link Options#Time} or
      * {@link Options#TrackMemUse} has a non-null, non-empty value.
+     *
+     * @param options
      */
-    public static boolean areScopedMetricsOrTimersEnabled() {
-        return isNotEmpty(Options.Meter) || isNotEmpty(Options.Time) || isNotEmpty(Options.TrackMemUse);
+    public static boolean areScopedGlobalMetricsEnabled(OptionValues options) {
+        return isNotEmpty(Options.Count, options) || isNotEmpty(Options.Time, options) || isNotEmpty(Options.TrackMemUse, options) || isNotEmpty(Options.MethodMeter, options);
     }
 
+    private final DebugFilter countFilter;
     private final DebugFilter logFilter;
-    private final DebugFilter meterFilter;
+    private final DebugFilter methodMetricsFilter;
     private final DebugFilter trackMemUseFilter;
     private final DebugFilter timerFilter;
     private final DebugFilter dumpFilter;
@@ -116,16 +198,19 @@ public class GraalDebugConfig implements DebugConfig {
     private final List<DebugDumpHandler> dumpHandlers;
     private final List<DebugVerifyHandler> verifyHandlers;
     private final PrintStream output;
-    private final Set<Object> extraFilters = new HashSet<>();
 
-    public GraalDebugConfig(String logFilter, String meterFilter, String trackMemUseFilter, String timerFilter, String dumpFilter, String verifyFilter, String methodFilter, PrintStream output,
-                    List<DebugDumpHandler> dumpHandlers, List<DebugVerifyHandler> verifyHandlers) {
+    // Use an identity set to handle context objects that don't support hashCode().
+    private final Set<Object> extraFilters = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    public GraalDebugConfig(String logFilter, String countFilter, String trackMemUseFilter, String timerFilter, String dumpFilter, String verifyFilter, String methodFilter,
+                    String methodMetricsFilter, PrintStream output, List<DebugDumpHandler> dumpHandlers, List<DebugVerifyHandler> verifyHandlers) {
         this.logFilter = DebugFilter.parse(logFilter);
-        this.meterFilter = DebugFilter.parse(meterFilter);
+        this.countFilter = DebugFilter.parse(countFilter);
         this.trackMemUseFilter = DebugFilter.parse(trackMemUseFilter);
         this.timerFilter = DebugFilter.parse(timerFilter);
         this.dumpFilter = DebugFilter.parse(dumpFilter);
         this.verifyFilter = DebugFilter.parse(verifyFilter);
+        this.methodMetricsFilter = DebugFilter.parse(methodMetricsFilter);
         if (methodFilter == null || methodFilter.isEmpty()) {
             this.methodFilter = null;
         } else {
@@ -133,7 +218,7 @@ public class GraalDebugConfig implements DebugConfig {
         }
 
         // Report the filters that have been configured so the user can verify it's what they expect
-        if (logFilter != null || meterFilter != null || timerFilter != null || dumpFilter != null || methodFilter != null) {
+        if (logFilter != null || countFilter != null || timerFilter != null || dumpFilter != null || methodFilter != null) {
             // TTY.println(Thread.currentThread().getName() + ": " + toString());
         }
         this.dumpHandlers = dumpHandlers;
@@ -141,42 +226,57 @@ public class GraalDebugConfig implements DebugConfig {
         this.output = output;
     }
 
+    @Override
     public int getLogLevel() {
         return getLevel(logFilter);
     }
 
+    @Override
     public boolean isLogEnabledForMethod() {
         return isEnabledForMethod(logFilter);
     }
 
-    public boolean isMeterEnabled() {
-        return isEnabled(meterFilter);
+    @Override
+    public boolean isCountEnabled() {
+        return isEnabled(countFilter);
     }
 
+    @Override
     public boolean isMemUseTrackingEnabled() {
         return isEnabled(trackMemUseFilter);
     }
 
+    @Override
     public int getDumpLevel() {
         return getLevel(dumpFilter);
     }
 
+    @Override
     public boolean isDumpEnabledForMethod() {
         return isEnabledForMethod(dumpFilter);
     }
 
+    @Override
     public boolean isVerifyEnabled() {
         return isEnabled(verifyFilter);
     }
 
+    @Override
     public boolean isVerifyEnabledForMethod() {
         return isEnabledForMethod(verifyFilter);
     }
 
+    @Override
+    public boolean isMethodMeterEnabled() {
+        return isEnabled(methodMetricsFilter);
+    }
+
+    @Override
     public boolean isTimeEnabled() {
         return isEnabled(timerFilter);
     }
 
+    @Override
     public PrintStream output() {
         return output;
     }
@@ -211,6 +311,9 @@ public class GraalDebugConfig implements DebugConfig {
         if (context instanceof JavaMethodContext) {
             return ((JavaMethodContext) context).asJavaMethod();
         }
+        if (context instanceof JavaMethod) {
+            return (JavaMethod) context;
+        }
         return null;
     }
 
@@ -225,7 +328,7 @@ public class GraalDebugConfig implements DebugConfig {
                 } else if (methodFilter != null) {
                     JavaMethod method = asJavaMethod(o);
                     if (method != null) {
-                        if (!Options.MethodFilterRootOnly.getValue()) {
+                        if (!Options.MethodFilterRootOnly.getValue(GLOBAL)) {
                             if (com.oracle.graal.debug.MethodFilter.matches(methodFilter, method)) {
                                 return true;
                             }
@@ -252,7 +355,8 @@ public class GraalDebugConfig implements DebugConfig {
         StringBuilder sb = new StringBuilder();
         sb.append("Debug config:");
         add(sb, "Log", logFilter);
-        add(sb, "Meter", meterFilter);
+        add(sb, "Count", countFilter);
+        add(sb, "MethodMeter", methodMetricsFilter);
         add(sb, "Time", timerFilter);
         add(sb, "Dump", dumpFilter);
         add(sb, "MethodFilter", methodFilter);
@@ -274,17 +378,18 @@ public class GraalDebugConfig implements DebugConfig {
 
     @Override
     public RuntimeException interceptException(Throwable e) {
-        if (e instanceof BailoutException && !Options.InterceptBailout.getValue()) {
+        if (e instanceof BailoutException && !Options.InterceptBailout.getValue(GLOBAL)) {
             return null;
         }
-        Debug.setConfig(Debug.fixedConfig(Debug.DEFAULT_LOG_LEVEL, Debug.DEFAULT_LOG_LEVEL, false, false, false, false, dumpHandlers, verifyHandlers, output));
-        Debug.log(String.format("Exception occurred in scope: %s", Debug.currentScope()));
-        HashSet<Object> firstSeen = new HashSet<>();
+        Debug.setConfig(Debug.fixedConfig(Debug.BASIC_LOG_LEVEL, Debug.BASIC_LOG_LEVEL, false, false, false, false, false, dumpHandlers, verifyHandlers, output));
+        Debug.log("Exception occurred in scope: %s", Debug.currentScope());
+        Map<Object, Object> firstSeen = new IdentityHashMap<>();
         for (Object o : Debug.context()) {
             // Only dump a context object once.
-            if (firstSeen.add(o)) {
-                if (Options.DumpOnError.getValue()) {
-                    Debug.dump(o, "Exception: " + e.toString());
+            if (!firstSeen.containsKey(o)) {
+                firstSeen.put(o, o);
+                if (Options.DumpOnError.getValue(GLOBAL) || Options.Dump.getValue(GLOBAL) != null) {
+                    Debug.dump(Debug.BASIC_LOG_LEVEL, o, "Exception: %s", e);
                 } else {
                     Debug.log("Context obj %s", o);
                 }
@@ -312,4 +417,5 @@ public class GraalDebugConfig implements DebugConfig {
     public void removeFromContext(Object o) {
         extraFilters.remove(o);
     }
+
 }
