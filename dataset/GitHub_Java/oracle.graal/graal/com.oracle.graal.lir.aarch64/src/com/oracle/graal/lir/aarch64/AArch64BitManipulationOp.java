@@ -39,7 +39,7 @@ import jdk.vm.ci.meta.AllocatableValue;
  */
 public class AArch64BitManipulationOp extends AArch64LIRInstruction {
     public enum BitManipulationOpCode {
-        CTZ,
+        BSF,
         BSR,
         BSWP,
         CLZ,
@@ -73,8 +73,8 @@ public class AArch64BitManipulationOp extends AArch64LIRInstruction {
                 masm.neg(size, dst, dst);
                 masm.add(size, dst, dst, size - 1);
                 break;
-            case CTZ:
-                // CTZ == CLZ(rbit(input))
+            case BSF:
+                // BSF == CLZ(rbit(input))
                 masm.rbit(size, dst, src);
                 masm.clz(size, dst, dst);
                 break;

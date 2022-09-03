@@ -24,13 +24,14 @@
 package com.oracle.graal.lir.aarch64;
 
 import static jdk.vm.ci.code.ValueUtil.asRegister;
-import jdk.vm.ci.code.Register;
-import jdk.vm.ci.meta.AllocatableValue;
 
 import com.oracle.graal.asm.aarch64.AArch64MacroAssembler;
 import com.oracle.graal.lir.LIRInstructionClass;
 import com.oracle.graal.lir.Opcode;
 import com.oracle.graal.lir.asm.CompilationResultBuilder;
+
+import jdk.vm.ci.code.Register;
+import jdk.vm.ci.meta.AllocatableValue;
 
 @Opcode("SIGNEXTEND")
 public class AArch64SignExtendOp extends AArch64LIRInstruction {
@@ -38,19 +39,21 @@ public class AArch64SignExtendOp extends AArch64LIRInstruction {
 
     @Def protected AllocatableValue resultValue;
     @Use protected AllocatableValue inputValue;
+    private final int fromBits;
+    private final int toBits;
 
-    public AArch64SignExtendOp(AllocatableValue resultValue, AllocatableValue inputValue) {
+    public AArch64SignExtendOp(AllocatableValue resultValue, AllocatableValue inputValue, int fromBits, int toBits) {
         super(TYPE);
         this.resultValue = resultValue;
         this.inputValue = inputValue;
+        this.fromBits = fromBits;
+        this.toBits = toBits;
     }
 
     @Override
     public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
         Register result = asRegister(resultValue);
         Register input = asRegister(inputValue);
-        int to = resultValue.getPlatformKind().getSizeInBytes() * Byte.SIZE;
-        int from = inputValue.getPlatformKind().getSizeInBytes() * Byte.SIZE;
-        masm.sxt(to, from, result, input);
+        masm.sxt(toBits <= 32 ? 32 : 64, fromBits, result, input);
     }
 }
