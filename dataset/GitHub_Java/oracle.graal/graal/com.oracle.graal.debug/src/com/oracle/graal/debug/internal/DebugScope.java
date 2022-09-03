@@ -28,7 +28,7 @@ import java.util.concurrent.*;
 
 import com.oracle.graal.debug.*;
 
-public final class DebugScope implements Debug.Scope {
+public final class DebugScope implements AutoCloseable {
 
     private final class IndentImpl implements Indent {
 
@@ -95,7 +95,6 @@ public final class DebugScope implements Debug.Scope {
     }
 
     private static ThreadLocal<DebugScope> instanceTL = new ThreadLocal<>();
-    private static ThreadLocal<DebugScope> lastClosedTL = new ThreadLocal<>();
     private static ThreadLocal<DebugConfig> configTL = new ThreadLocal<>();
     private static ThreadLocal<Throwable> lastExceptionThrownTL = new ThreadLocal<>();
 
@@ -105,7 +104,7 @@ public final class DebugScope implements Debug.Scope {
     private IndentImpl lastUsedIndent;
     private boolean logScopeName;
 
-    private final Object[] context;
+    private Object[] context;
 
     private final DebugValueMap valueMap;
     private final String qualifiedName;
@@ -168,9 +167,9 @@ public final class DebugScope implements Debug.Scope {
     }
 
     public void close() {
+        context = null;
         instanceTL.set(parent);
         setConfig(parentConfig);
-        lastClosedTL.set(this);
     }
 
     public boolean isDumpEnabled() {
@@ -232,24 +231,29 @@ public final class DebugScope implements Debug.Scope {
     }
 
     /**
-     * Creates and enters a new debug scope which is either a child of the current scope or a
-     * disjoint top level scope.
+     * Runs a task in a new debug scope which is either a child of the current scope or a disjoint
+     * top level scope.
      * 
-     * @param name the name of the new scope
-     * @param sandbox specifies if the scope is a child of the current scope or a top level scope
-     * @param sandboxConfig the configuration to use for a new top level scope (ignored if
-     *            {@code sandbox == false})
-     * @param context objects to be appended to the debug context
-     * @return the new scope which will be exited when its {@link #close()} method is called
+     * @param newName the name of the new scope
+     * @param runnable the task to run (must be null iff {@code callable} is not null)
+     * @param callable the task to run (must be null iff {@code runnable} is not null)
+     * @param sandboxConfig if non-null, a new top level scope is entered with this configuration
+     * @param newContext context objects of the new scope
+     * @return the value returned by the task
      */
-    @SuppressWarnings("hiding")
-    public DebugScope scope(String name, boolean sandbox, DebugConfig sandboxConfig, Object... context) {
+    public <T> T scope(String newName, Runnable runnable, Callable<T> callable, DebugConfig sandboxConfig, Object[] newContext) {
+        try (DebugScope s = openScope(newName, sandboxConfig, newContext)) {
+            return executeScope(runnable, callable);
+        }
+    }
+
+    public DebugScope openScope(String newName, DebugConfig sandboxConfig, Object... newContext) {
         DebugScope newScope = null;
-        if (sandbox) {
-            newScope = new DebugScope(name, name, this, true, context);
+        if (sandboxConfig != null) {
+            newScope = new DebugScope(newName, newName, this, true, newContext);
             setConfig(sandboxConfig);
         } else {
-            newScope = this.createChild(name, context);
+            newScope = this.createChild(newName, newContext);
         }
         instanceTL.set(newScope);
         newScope.setLogEnabled(this.isLogEnabled());
@@ -257,31 +261,30 @@ public final class DebugScope implements Debug.Scope {
         return newScope;
     }
 
-    public RuntimeException handle(Throwable e) {
-        DebugScope lastClosed = lastClosedTL.get();
-        assert lastClosed.parent == this : "Debug.handle() used with no matching Debug.scope(...) or Debug.sandbox(...)";
-        if (e != lastExceptionThrownTL.get()) {
-            RuntimeException newException = null;
-            instanceTL.set(lastClosed);
-            try (DebugScope s = lastClosed) {
-                newException = s.interceptException(e);
+    private <T> T executeScope(Runnable runnable, Callable<T> callable) {
+
+        try {
+            if (runnable != null) {
+                runnable.run();
             }
-            assert instanceTL.get() == this;
-            assert lastClosed == lastClosedTL.get();
-            if (newException == null) {
-                lastExceptionThrownTL.set(e);
+            if (callable != null) {
+                return call(callable);
+            }
+        } catch (Throwable e) {
+            if (e == lastExceptionThrownTL.get()) {
+                throw e;
             } else {
-                lastExceptionThrownTL.set(newException);
-                throw newException;
+                RuntimeException newException = interceptException(e);
+                if (newException == null) {
+                    lastExceptionThrownTL.set(e);
+                    throw e;
+                } else {
+                    lastExceptionThrownTL.set(newException);
+                    throw newException;
+                }
             }
         }
-        if (e instanceof Error) {
-            throw (Error) e;
-        }
-        if (e instanceof RuntimeException) {
-            throw (RuntimeException) e;
-        }
-        throw new RuntimeException(e);
+        return null;
     }
 
     private void updateFlags() {
@@ -308,11 +311,17 @@ public final class DebugScope implements Debug.Scope {
     private RuntimeException interceptException(final Throwable e) {
         final DebugConfig config = getConfig();
         if (config != null) {
-            try (DebugScope s = scope("InterceptException", false, null, e)) {
-                return config.interceptException(e);
-            } catch (Throwable t) {
-                return new RuntimeException("Exception while intercepting exception", t);
-            }
+            return scope("InterceptException", null, new Callable<RuntimeException>() {
+
+                @Override
+                public RuntimeException call() throws Exception {
+                    try {
+                        return config.interceptException(e);
+                    } catch (Throwable t) {
+                        return new RuntimeException("Exception while intercepting exception", t);
+                    }
+                }
+            }, null, new Object[]{e});
         }
         return null;
     }
