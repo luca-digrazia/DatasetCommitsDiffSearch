@@ -415,8 +415,7 @@ public abstract class SPARCLIRGenerator extends LIRGenerator {
     protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
         // Making a copy of the switch value is necessary because jump table destroys the input
         // value
-        Variable tmp = newVariable(key.getLIRKind());
-        emitMove(tmp, key);
+        Variable tmp = emitMove(key);
         append(new TableSwitchOp(lowKey, defaultTarget, targets, tmp, newVariable(LIRKind.value(target().wordKind))));
     }
 
