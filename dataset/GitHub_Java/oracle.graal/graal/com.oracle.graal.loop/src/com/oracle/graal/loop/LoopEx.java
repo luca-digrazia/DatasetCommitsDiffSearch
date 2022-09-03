@@ -126,7 +126,7 @@ public class LoopEx {
 
     public void reassociateInvariants() {
         InvariantPredicate invariant = new InvariantPredicate();
-        StructuredGraph graph = loopBegin().graph();
+        StructuredGraph graph = (StructuredGraph) loopBegin().graph();
         for (BinaryNode binary : whole().nodes().filter(BinaryNode.class)) {
             if (!BinaryNode.canTryReassociate(binary)) {
                 continue;

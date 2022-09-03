@@ -41,11 +41,6 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
     }
 
     @Override
-    public StructuredGraph graph() {
-        return base.graph();
-    }
-
-    @Override
     public Direction direction() {
         return base.direction();
     }
@@ -86,7 +81,7 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
     @Override
     public ValueNode strideNode() {
         if (value instanceof IntegerSubNode && base.valueNode() == value.y()) {
-            return graph().unique(new NegateNode(base.strideNode()));
+            return value.graph().unique(new NegateNode(base.strideNode()));
         }
         return base.strideNode();
     }
@@ -94,11 +89,6 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
     @Override
     public ValueNode extremumNode(boolean assumePositiveTripCount, Kind kind) {
         return op(base.extremumNode(assumePositiveTripCount, kind), ConvertNode.convert(kind, offset));
-    }
-
-    @Override
-    public ValueNode exitValueNode() {
-        return op(base.exitValueNode(), offset);
     }
 
     @Override
@@ -128,14 +118,14 @@ public class DerivedOffsetInductionVariable extends InductionVariable {
 
     private ValueNode op(ValueNode b, ValueNode o) {
         if (value instanceof IntegerAddNode) {
-            return IntegerArithmeticNode.add(graph(), b, o);
+            return IntegerArithmeticNode.add(b, o);
         }
         if (value instanceof IntegerSubNode) {
             if (base.valueNode() == value.x()) {
-                return IntegerArithmeticNode.sub(graph(), b, o);
+                return IntegerArithmeticNode.sub(b, o);
             } else {
                 assert base.valueNode() == value.y();
-                return IntegerArithmeticNode.sub(graph(), o, b);
+                return IntegerArithmeticNode.sub(o, b);
             }
         }
         throw GraalInternalError.shouldNotReachHere();

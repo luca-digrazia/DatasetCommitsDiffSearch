@@ -26,9 +26,6 @@ import com.oracle.graal.api.meta.*;
 import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
-/**
- * This class describes a value node that is an induction variable in a counted loop.
- */
 public abstract class InductionVariable {
 
     public enum Direction {
@@ -46,8 +43,6 @@ public abstract class InductionVariable {
         }
     }
 
-    public abstract StructuredGraph graph();
-
     protected final LoopEx loop;
 
     public InductionVariable(LoopEx loop) {
@@ -60,20 +55,10 @@ public abstract class InductionVariable {
 
     public abstract Direction direction();
 
-    /**
-     * Returns the value node that is described by this InductionVariable instance.
-     */
     public abstract ValueNode valueNode();
 
-    /**
-     * Returns the node that gives the initial value of this induction variable.
-     */
     public abstract ValueNode initNode();
 
-    /**
-     * Returns the stride of the induction variable. The stride is the value that is added to the
-     * induction variable at each iteration.
-     */
     public abstract ValueNode strideNode();
 
     public abstract boolean isConstantInit();
@@ -84,10 +69,6 @@ public abstract class InductionVariable {
 
     public abstract long constantStride();
 
-    /**
-     * Returns the extremum value of the induction variable. The extremum value is the value of the
-     * induction variable in the loop body of the last iteration.
-     */
     public ValueNode extremumNode() {
         return extremumNode(false, valueNode().kind());
     }
@@ -97,10 +78,4 @@ public abstract class InductionVariable {
     public abstract boolean isConstantExtremum();
 
     public abstract long constantExtremum();
-
-    /**
-     * Returns the exit value of the induction variable. The exit value is the value of the
-     * induction variable at the loop exit.
-     */
-    public abstract ValueNode exitValueNode();
 }

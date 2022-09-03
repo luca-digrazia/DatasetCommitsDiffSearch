@@ -48,11 +48,6 @@ public class DerivedScaledInductionVariable extends InductionVariable {
     }
 
     @Override
-    public StructuredGraph graph() {
-        return base.graph();
-    }
-
-    @Override
     public Direction direction() {
         Stamp stamp = scale.stamp();
         if (stamp instanceof IntegerStamp) {
@@ -73,12 +68,12 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public ValueNode initNode() {
-        return IntegerArithmeticNode.mul(graph(), base.initNode(), scale);
+        return IntegerArithmeticNode.mul(base.initNode(), scale);
     }
 
     @Override
     public ValueNode strideNode() {
-        return IntegerArithmeticNode.mul(graph(), base.strideNode(), scale);
+        return IntegerArithmeticNode.mul(base.strideNode(), scale);
     }
 
     @Override
@@ -103,12 +98,7 @@ public class DerivedScaledInductionVariable extends InductionVariable {
 
     @Override
     public ValueNode extremumNode(boolean assumePositiveTripCount, Kind kind) {
-        return IntegerArithmeticNode.mul(graph(), base.extremumNode(assumePositiveTripCount, kind), ConvertNode.convert(kind, scale));
-    }
-
-    @Override
-    public ValueNode exitValueNode() {
-        return IntegerArithmeticNode.mul(graph(), base.exitValueNode(), scale);
+        return IntegerArithmeticNode.mul(base.extremumNode(assumePositiveTripCount, kind), ConvertNode.convert(kind, scale));
     }
 
     @Override
