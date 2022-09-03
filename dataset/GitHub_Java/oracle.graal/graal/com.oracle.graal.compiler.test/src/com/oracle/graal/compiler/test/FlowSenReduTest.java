@@ -61,7 +61,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
 
     @Test
     public void redundantCheckCastTest() {
-        assertDeepEquals(i7, redundantCheckCastSnippet(i7));
+        assertEquals(i7, redundantCheckCastSnippet(i7));
         StructuredGraph result = afterFlowSensitiveReduce("redundantCheckCastSnippet");
         nodeCountEquals(result, CheckCastNode.class, 0);
         nodeCountEquals(result, InstanceOfNode.class, 1);
@@ -79,7 +79,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
     @Test
     public void redundantInstanceOfTest01() {
         String snippet = "redundantInstanceOfSnippet01";
-        assertDeepEquals(true, redundantInstanceOfSnippet01(i7));
+        assertEquals(true, redundantInstanceOfSnippet01(i7));
         nodeCountEquals(afterFlowSensitiveReduce(snippet), InstanceOfNode.class, 1);
     }
 
@@ -100,9 +100,9 @@ public class FlowSenReduTest extends GraalCompilerTest {
     @Test
     public void redundantInstanceOfTest02() {
         String snippet = "redundantInstanceOfSnippet02";
-        assertDeepEquals(i7, redundantInstanceOfSnippet02(i7));
+        assertEquals(i7, redundantInstanceOfSnippet02(i7));
         int ioAfter = getNodes(afterFlowSensitiveReduce(snippet), InstanceOfNode.class).size();
-        assertDeepEquals(ioAfter, 1);
+        assertEquals(ioAfter, 1);
     }
 
     /*
@@ -121,18 +121,18 @@ public class FlowSenReduTest extends GraalCompilerTest {
     @Test
     public void devirtualizationTest() {
         String snippet = "devirtualizationSnippet";
-        assertDeepEquals(i7, devirtualizationSnippet(i7, i7));
+        assertEquals(i7, devirtualizationSnippet(i7, i7));
         nodeCountEquals(afterFlowSensitiveReduce(snippet), CheckCastNode.class, 0);
 
         StructuredGraph graph = afterFlowSensitiveReduce(snippet);
-        assertDeepEquals(0, graph.getNodes().filter(CheckCastNode.class).count());
+        assertEquals(0, graph.getNodes().filter(CheckCastNode.class).count());
 
         List<InvokeNode> invokeNodes = getNodes(afterFlowSensitiveReduce(snippet), InvokeNode.class);
-        assertDeepEquals(1, invokeNodes.size());
+        assertEquals(1, invokeNodes.size());
 
         MethodCallTargetNode target = (MethodCallTargetNode) invokeNodes.get(0).callTarget();
-        assertDeepEquals(MethodCallTargetNode.InvokeKind.Special, target.invokeKind());
-        assertDeepEquals("HotSpotMethod<Integer.intValue()>", target.targetMethod().toString());
+        assertEquals(MethodCallTargetNode.InvokeKind.Special, target.invokeKind());
+        assertEquals("HotSpotMethod<Integer.intValue()>", target.targetMethod().toString());
     }
 
     /*
@@ -154,7 +154,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
     @Test
     public void t5a() {
         String snippet = "t5Snippet";
-        assertDeepEquals(false, t5Snippet(null, true));
+        assertEquals(false, t5Snippet(null, true));
         StructuredGraph resultGraph = canonicalize(afterFlowSensitiveReduce(snippet));
         nodeCountEquals(resultGraph, ReturnNode.class, 2);
 
@@ -164,8 +164,8 @@ public class FlowSenReduTest extends GraalCompilerTest {
         ConstantNode c1 = (ConstantNode) iter.next().result();
         ConstantNode c2 = (ConstantNode) iter.next().result();
 
-        assertDeepEquals(c1, c2);
-        assertDeepEquals(0, c1.getValue().asInt());
+        assertEquals(c1, c2);
+        assertEquals(0, c1.getValue().asInt());
     }
 
     @Test
@@ -215,16 +215,16 @@ public class FlowSenReduTest extends GraalCompilerTest {
         StructuredGraph graph = afterFlowSensitiveReduce(snippet);
         graph = dce(canonicalize(graph));
         // TODO how to simplify IfNode(false)
-        assertDeepEquals(1, getNodes(graph, InstanceOfNode.class).size());
+        assertEquals(1, getNodes(graph, InstanceOfNode.class).size());
 
         List<ReturnNode> returnNodes = getNodes(graph, ReturnNode.class);
-        assertDeepEquals(2, returnNodes.size());
+        assertEquals(2, returnNodes.size());
         Iterator<ReturnNode> iter = returnNodes.iterator();
 
         ConstantNode c1 = (ConstantNode) iter.next().result();
         ConstantNode c2 = (ConstantNode) iter.next().result();
 
-        assertDeepEquals(c1, c2);
+        assertEquals(c1, c2);
         Assert.assertTrue(c1.getValue().isNull());
     }
 
@@ -253,14 +253,14 @@ public class FlowSenReduTest extends GraalCompilerTest {
         String snippet = "devirtualizationSnippet02";
         StructuredGraph graph = afterFlowSensitiveReduce(snippet);
 
-        assertDeepEquals(1, getNodes(graph, InvokeNode.class).size());
+        assertEquals(1, getNodes(graph, InvokeNode.class).size());
 
         List<InvokeNode> invokeNodes = getNodes(graph, InvokeNode.class);
-        assertDeepEquals(1, invokeNodes.size());
+        assertEquals(1, invokeNodes.size());
 
         MethodCallTargetNode target = (MethodCallTargetNode) invokeNodes.get(0).callTarget();
-        assertDeepEquals(MethodCallTargetNode.InvokeKind.Special, target.invokeKind());
-        assertDeepEquals("HotSpotMethod<Integer.intValue()>", target.targetMethod().toString());
+        assertEquals(MethodCallTargetNode.InvokeKind.Special, target.invokeKind());
+        assertEquals("HotSpotMethod<Integer.intValue()>", target.targetMethod().toString());
     }
 
     /*
@@ -312,7 +312,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
         dce(graph);
 
         List<ReturnNode> returnNodes = getNodes(graph, ReturnNode.class);
-        assertDeepEquals(2, returnNodes.size());
+        assertEquals(2, returnNodes.size());
         Iterator<ReturnNode> iter = returnNodes.iterator();
 
         ValueNode c1 = GraphUtil.unproxify(iter.next().result());
@@ -339,7 +339,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
         String snippet = "deduplicateInstanceOfSnippet";
         StructuredGraph graph = afterFlowSensitiveReduce(snippet);
         List<InstanceOfNode> ioNodes = getNodes(graph, InstanceOfNode.class);
-        assertDeepEquals(1, ioNodes.size());
+        assertEquals(1, ioNodes.size());
 
     }
 
@@ -371,7 +371,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
     }
 
     public <N extends Node> void nodeCountEquals(StructuredGraph graph, Class<N> nodeClass, int expected) {
-        assertDeepEquals(expected, getNodes(graph, nodeClass).size());
+        assertEquals(expected, getNodes(graph, nodeClass).size());
     }
 
     public StructuredGraph afterFlowSensitiveReduce(String snippet) {
@@ -384,7 +384,7 @@ public class FlowSenReduTest extends GraalCompilerTest {
 
     public StructuredGraph visualize(StructuredGraph graph, String title) {
         DebugConfig debugConfig = DebugScope.getConfig();
-        DebugConfig fixedConfig = Debug.fixedConfig(false, true, false, false, false, false, debugConfig.dumpHandlers(), debugConfig.verifyHandlers(), debugConfig.output());
+        DebugConfig fixedConfig = Debug.fixedConfig(false, true, false, false, false, debugConfig.dumpHandlers(), debugConfig.output());
         try (DebugConfigScope s = Debug.setConfig(fixedConfig)) {
             Debug.dump(graph, title);
 

@@ -69,16 +69,6 @@ public interface DebugConfig {
     boolean isDumpEnabledForMethod();
 
     /**
-     * @see Debug#isVerifyEnabled()
-     */
-    boolean isVerifyEnabled();
-
-    /**
-     * @see Debug#isVerifyEnabledForMethod()
-     */
-    boolean isVerifyEnabledForMethod();
-
-    /**
      * Adds an object the context used by this configuration to do filtering.
      */
     void addToContext(Object o);
@@ -104,14 +94,9 @@ public interface DebugConfig {
     RuntimeException interceptException(Throwable e);
 
     /**
-     * Gets the modifiable collection of dump handlers registered with this configuration.
+     * Gets the modifiable collection dump handlers registered with this configuration.
      */
     Collection<DebugDumpHandler> dumpHandlers();
 
     PrintStream output();
-
-    /**
-     * Gets the modifiable collection of verify handlers registered with this configuration.
-     */
-    Collection<DebugVerifyHandler> verifyHandlers();
 }

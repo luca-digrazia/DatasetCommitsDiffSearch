@@ -28,7 +28,6 @@ import com.oracle.graal.debug.*;
 import com.oracle.graal.debug.Debug.Scope;
 import com.oracle.graal.debug.DebugMemUseTracker.Closeable;
 import com.oracle.graal.debug.internal.*;
-import com.oracle.graal.graph.*;
 import com.oracle.graal.nodes.*;
 
 /**
@@ -40,26 +39,9 @@ public abstract class BasePhase<C> {
 
     private CharSequence name;
 
-    /**
-     * Records time spent in {@link #apply(StructuredGraph, Object, boolean)}.
-     */
-    private final DebugTimer timer;
-
-    /**
-     * Counts calls to {@link #apply(StructuredGraph, Object, boolean)}.
-     */
-    private final DebugMetric executionCount;
-
-    /**
-     * Accumulates the {@linkplain Graph#getNodeCount() live node count} of all graphs sent to
-     * {@link #apply(StructuredGraph, Object, boolean)}.
-     */
-    private final DebugMetric inputNodesCount;
-
-    /**
-     * Records memory usage within {@link #apply(StructuredGraph, Object, boolean)}.
-     */
-    private final DebugMemUseTracker memUseTracker;
+    private final DebugTimer phaseTimer;
+    private final DebugMetric phaseMetric;
+    private final DebugMemUseTracker phaseMemUseTracker;
 
     private static final Pattern NAME_PATTERN = Pattern.compile("[A-Z][A-Za-z0-9]+");
 
@@ -69,19 +51,17 @@ public abstract class BasePhase<C> {
     }
 
     protected BasePhase() {
-        timer = Debug.timer("PhaseTime_%s", getClass());
-        executionCount = Debug.metric("PhaseCount_%s", getClass());
-        memUseTracker = Debug.memUseTracker("PhaseMemUse_%s", getClass());
-        inputNodesCount = Debug.metric("PhaseNodes_%s", getClass());
+        phaseTimer = Debug.timer("PhaseTime_%s", getClass());
+        phaseMetric = Debug.metric("PhaseCount_%s", getClass());
+        phaseMemUseTracker = Debug.memUseTracker("PhaseMemUse_%s", getClass());
     }
 
     protected BasePhase(String name) {
         assert checkName(name);
         this.name = name;
-        timer = Debug.timer("PhaseTime_%s", getClass());
-        executionCount = Debug.metric("PhaseCount_%s", getClass());
-        memUseTracker = Debug.memUseTracker("PhaseMemUse_%s", getClass());
-        inputNodesCount = Debug.metric("PhaseNodes_%s", getClass());
+        phaseTimer = Debug.timer("PhaseTime_%s", getClass());
+        phaseMetric = Debug.metric("PhaseCount_%s", getClass());
+        phaseMemUseTracker = Debug.memUseTracker("PhaseMemUse_%s", getClass());
     }
 
     protected CharSequence getDetailedName() {
@@ -93,15 +73,11 @@ public abstract class BasePhase<C> {
     }
 
     public final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
-        try (TimerCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); Closeable c = memUseTracker.start()) {
+        try (TimerCloseable a = phaseTimer.start(); Scope s = Debug.scope(getClass(), this); Closeable c = phaseMemUseTracker.start()) {
             BasePhase.this.run(graph, context);
-            executionCount.increment();
-            inputNodesCount.add(graph.getNodeCount());
+            phaseMetric.increment();
             if (dumpGraph && Debug.isDumpEnabled()) {
                 Debug.dump(graph, "After phase %s", getName());
-            }
-            if (Debug.isVerifyEnabled()) {
-                Debug.verify(graph, "After phase %s", getName());
             }
             assert graph.verify();
         } catch (Throwable t) {
